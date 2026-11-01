@@ -61,7 +61,7 @@ export function createNotesController({
         roles: user.roles,
       });
 
-      reply.status(201).send(note);
+      await reply.status(201).send(note);
     },
 
     async getNote(request, reply) {
@@ -73,7 +73,7 @@ export function createNotesController({
         noteId,
         discussionActor(user),
       );
-      reply.status(200).send(note);
+      await reply.status(200).send(note);
     },
 
     async listNotes(request, reply) {
@@ -85,7 +85,7 @@ export function createNotesController({
         discussionActor(user),
         query,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async getCourseNotesOverview(request, reply) {
@@ -97,7 +97,7 @@ export function createNotesController({
         courseId,
         discussionActor(user),
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async updateNote(request, reply) {
@@ -111,7 +111,7 @@ export function createNotesController({
         discussionActor(user),
         body,
       );
-      reply.status(200).send(updated);
+      await reply.status(200).send(updated);
     },
 
     async deleteNote(request, reply) {
@@ -119,7 +119,7 @@ export function createNotesController({
       const { noteId } = request.params;
 
       await service.deleteNote(database, noteId, discussionActor(user));
-      reply.status(200).send({ message: "Note deleted successfully." });
+      await reply.status(200).send({ message: "Note deleted successfully." });
     },
   };
 }

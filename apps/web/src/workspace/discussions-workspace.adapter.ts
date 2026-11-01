@@ -1,4 +1,5 @@
 import type { WorkspaceDiscussionItem } from "@veolms/contracts";
+import { formatTimeAgo } from "../lib/timeAgo";
 
 export type DiscussionWorkspaceStatus =
   "answered" | "mentioned" | "solved" | "open";
@@ -28,10 +29,11 @@ export interface DiscussionWorkspaceCard {
   isLocked?: boolean;
   replies: number;
   likes: number;
-  isLiked?: boolean;
   isBookmarked?: boolean;
   isFollowing?: boolean;
-  isMentioned?: boolean;
+  isLiked?: boolean;
+  /** When `activity` happened, for its exact-time tooltip. */
+  activityAt: string;
   activity: string;
   mentionedAt?: string;
   mentionActivity?: string;
@@ -45,27 +47,7 @@ export interface DiscussionWorkspaceCard {
 }
 
 function formatRelativeTime(dateValue: string): string {
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return "Recently";
-
-  const diffSeconds = Math.max(
-    0,
-    Math.floor((Date.now() - date.getTime()) / 1000),
-  );
-  if (diffSeconds < 60) return "Just now";
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) {
-    return `${diffMinutes}${diffMinutes === 1 ? " minute" : " minutes"} ago`;
-  }
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `${diffHours}${diffHours === 1 ? " hour" : " hours"} ago`;
-  }
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) {
-    return `${diffDays}${diffDays === 1 ? " day" : " days"} ago`;
-  }
-  return date.toLocaleDateString();
+  return formatTimeAgo(dateValue) || "Recently";
 }
 
 function getExcerpt(item: WorkspaceDiscussionItem): string {
@@ -119,12 +101,16 @@ export function adaptDiscussionWorkspaceItem(
     course: item.courseTitle?.trim() || "",
     courseTitle: item.courseTitle ?? null,
     lessonId: item.lessonId,
-    lesson: item.lessonTitle?.trim() || "",
+    // "12. Lesson name": the lesson's number across the whole course.
+    lesson:
+      item.lessonTitle?.trim() && item.lessonNumber
+        ? `${item.lessonNumber}. ${item.lessonTitle.trim()}`
+        : item.lessonTitle?.trim() || "",
     lessonTitle: item.lessonTitle ?? null,
     parentThreadId: item.parentThreadId ?? null,
     parentThreadTitle: item.parentThreadTitle?.trim() || null,
     timestampSeconds: item.timestampSeconds ?? null,
-    author: item.author.displayName || item.author.username,
+    author: item.author.displayName || item.author.username || "",
     authorUsername: item.author.username?.trim() || "",
     avatar: item.author.avatarUrl ?? "",
     isOwn: item.isOwn === true,
@@ -133,10 +119,10 @@ export function adaptDiscussionWorkspaceItem(
     isLocked: item.isLocked,
     replies: item.repliesCount,
     likes: item.likesCount,
-    isLiked: item.isLiked,
     isBookmarked: item.isBookmarked,
+    isLiked: item.isLiked,
     isFollowing: item.isFollowing,
-    isMentioned: item.isMentioned,
+    activityAt: isFollowing ? item.updatedAt : item.updatedAt || item.createdAt,
     activity: formatRelativeTime(
       isFollowing ? item.updatedAt : item.updatedAt || item.createdAt,
     ),

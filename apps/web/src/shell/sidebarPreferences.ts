@@ -23,10 +23,10 @@ import {
   SIDEBAR_RESPONSIVE_COLLAPSE_QUERY,
 } from "./sidebarVisibility";
 
-export const SIDEBAR_MIN_WIDTH = 220;
+export const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH_LIMIT = 520;
-export const SIDEBAR_DEFAULT_WIDTH = 300;
+export const SIDEBAR_DEFAULT_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH_DEFAULT_VERSION = "300px-v1";
 const SIDEBAR_ICON_DEFAULT_VERSION = "monochrome-theme-v1";
 const SIDEBAR_DOCK_DEFAULT_VERSION = "fixed-three-controls-v4";

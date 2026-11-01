@@ -1,22 +1,19 @@
-import type {
-  DatabaseExecutor,
-  LearningAttachmentTable,
-} from "@veolms/database";
-import type { Selectable } from "kysely";
-import { sql } from "kysely";
+import { cacheTags, createCache } from "@veolms/api-core";
+import type { DatabaseExecutor } from "@veolms/database";
 import type {
   CreateLearningThreadRequest,
   DiscussionAttachmentSummary,
   DiscussionsWorkspaceResponse,
   LearningThread,
+  LearningThreadEditResponse,
   LearningThreadsListResponse,
   ListLearningThreadsQuery,
-  QuestionFilterStatus,
   PublicPopularDiscussionsResponse,
   UpdateLearningThreadRequest,
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { clampText } from "../../../../lib/text.ts";
 import { avatarSrcSetFromUrl } from "../../../avatars/index.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
@@ -24,19 +21,27 @@ import {
   syncMentionsAndNotify,
   withWriteTransaction,
 } from "../shared/discussion.mentions.ts";
+import { createDiscussionRepository } from "../shared/discussion.repository.ts";
 import {
-  authorRoleSql,
-  createdAtIdDescSql,
   decodeDiscussionCursor,
   encodeDiscussionCursor,
   extractPlainText,
-  mapAuthorRole,
   normalizeThreadSort,
   resolveAcademyId,
   takePage,
   toDate,
-  updatedAtIdDescSql,
 } from "../shared/discussion.utils.ts";
+import {
+  presentDiscussionAuthor,
+  presentWorkspaceAuthor,
+  threadQaStatus,
+  toIsoString,
+} from "../shared/discussion.presenters.ts";
+import {
+  listReadyAttachments,
+  presentDiscussionAttachment,
+  type DiscussionAttachmentRow,
+} from "../shared/discussion-attachments.ts";
 import {
   createDiscussionAccess,
   type DiscussionAccess,
@@ -46,9 +51,7 @@ import {
   createLessonDiscussionAccess,
   type LessonDiscussionAccess,
 } from "../shared/lesson-discussion-access.ts";
-import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type {
-  MentionWorkspaceRow,
   PublicPopularThreadRow,
   ThreadsRepository,
   ThreadRowWithAuthor,
@@ -64,11 +67,20 @@ import type {
   AttachmentSummaryRow,
 } from "../attachments/attachments.repository.ts";
 import type { S3StorageService } from "@veolms/storage";
-import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
-
-type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
 const MENTIONS_WORKSPACE_SORT = "mentions";
+
+/**
+ * The public popular discussions (the home page, the discussions page): the
+ * same for every visitor. Activity is not tracked here, so the list follows
+ * it within this time, as the guest home page that shows it always has.
+ */
+const popularDiscussions = createCache<PublicPopularDiscussionsResponse>({
+  name: "discussions.public-popular",
+  ttlMs: 30_000,
+  maxEntries: 100,
+  maxBytes: 4 * 1024 * 1024,
+});
 
 export type ThreadsListQuery = ListLearningThreadsQuery & {
   currentUserId?: string;
@@ -129,7 +141,7 @@ export interface ThreadsService {
     threadId: string,
     actor: DiscussionActor,
     updates: UpdateLearningThreadRequest,
-  ): Promise<LearningThread>;
+  ): Promise<LearningThreadEditResponse>;
 
   deleteThread(
     db: DatabaseExecutor,
@@ -147,6 +159,14 @@ export interface ThreadsService {
 
   listPublicPopularDiscussions(
     db: DatabaseExecutor,
+    options?: {
+      /** At most 40; 20 when left out. */
+      limit?: number;
+      /** Keep only each author's most popular discussion. */
+      onePerAuthor?: boolean;
+      /** Read only these discussions (see the repository), in any order. */
+      threadIds?: readonly string[];
+    },
   ): Promise<PublicPopularDiscussionsResponse>;
 }
 
@@ -159,6 +179,7 @@ export function createThreadsService(
   storage?: S3StorageService,
 ): ThreadsService {
   const outbox = createDiscussionOutbox();
+  const discussionRepo = createDiscussionRepository();
 
   const emptyAttachmentSummary = (): DiscussionAttachmentSummary => ({
     count: 0,
@@ -174,32 +195,57 @@ export function createThreadsService(
       summaries.map((summary) => [summary.targetId, summary.attachmentSummary]),
     );
 
-  function resolveAttachmentUrl(attachment: LearningAttachmentRow): string {
-    return storage
-      ? getCdnDeliveryUrl(storage, attachment.storage_key).url
-      : attachment.file_url;
+  // What the viewer has done with the threads on a page. Each read is one
+  // indexed lookup by (user, thread ids); an anonymous viewer has none.
+  async function listLikedThreadIds(
+    db: DatabaseExecutor,
+    userId: string | null | undefined,
+    threadIds: readonly string[],
+  ): Promise<Set<string>> {
+    if (!userId || threadIds.length === 0) return new Set();
+    const rows = await threadsRepo.listThreadLikes(db, userId, threadIds);
+    return new Set(rows.map((row) => row.target_id));
+  }
+
+  async function listBookmarkedThreadIds(
+    db: DatabaseExecutor,
+    userId: string | null | undefined,
+    threadIds: readonly string[],
+  ): Promise<Set<string>> {
+    if (!userId || threadIds.length === 0) return new Set();
+    const rows = await threadsRepo.listThreadBookmarks(db, userId, threadIds);
+    return new Set(
+      rows.flatMap((row) => (row.thread_id ? [row.thread_id] : [])),
+    );
+  }
+
+  async function listFollowedThreadIds(
+    db: DatabaseExecutor,
+    userId: string | null | undefined,
+    threadIds: readonly string[],
+  ): Promise<Set<string>> {
+    if (!userId || threadIds.length === 0) return new Set();
+    const rows = await threadsRepo.listThreadFollows(db, userId, threadIds);
+    return new Set(rows.map((row) => row.thread_id));
+  }
+
+  async function listBookmarkedNoteIds(
+    db: DatabaseExecutor,
+    userId: string | null | undefined,
+    noteIds: readonly string[],
+  ): Promise<Set<string>> {
+    if (!userId || noteIds.length === 0) return new Set();
+    const rows = await threadsRepo.listNoteBookmarks(db, userId, noteIds);
+    return new Set(rows.flatMap((row) => (row.note_id ? [row.note_id] : [])));
   }
 
   function mapBookmarkWorkspaceItem(
     row: BookmarkWorkspaceRow,
     attachmentSummary: DiscussionAttachmentSummary,
-    engagements: {
-      likedThreadIds: Set<string>;
-      likedNoteIds: Set<string>;
-      followedThreadIds: Set<string>;
-      mentionedThreadIds: Set<string>;
-    },
+    followedThreadIds: Set<string>,
     currentUserId: string,
   ): WorkspaceDiscussionItem {
     const isThread = row.itemType === "thread";
-    const isQuestion = row.kind === "question" || row.kind === "qna";
-    const status = isQuestion
-      ? row.acceptedAnswerId
-        ? "solved"
-        : Number(row.repliesCount || 0) > 0
-          ? "answered"
-          : "open"
-      : undefined;
 
     const item: WorkspaceDiscussionItem = {
       id: row.id,
@@ -213,32 +259,22 @@ export function createThreadsService(
       lessonId: row.lessonId ?? null,
       lessonTitle: row.lessonTitle ?? null,
       timestampSeconds: row.timestampSeconds ?? null,
-      author: {
-        id: row.userId,
-        displayName: row.authorName || "Anonymous Learner",
-        username: row.authorUsername || `user-${row.userId.slice(0, 8)}`,
-        avatarUrl: row.authorAvatarUrl,
-        role: mapAuthorRole(row.authorRole),
-      },
+      author: presentWorkspaceAuthor(row),
       visibility: row.visibility,
       repliesCount: isThread ? Number(row.repliesCount || 0) : 0,
       likesCount: Number(row.likesCount || 0),
-      isLiked: isThread
-        ? engagements.likedThreadIds.has(row.id)
-        : engagements.likedNoteIds.has(row.id),
       isBookmarked: true,
       isOwn: row.userId === currentUserId,
       attachmentSummary,
-      createdAt: toDate(row.createdAt).toISOString(),
-      updatedAt: toDate(row.updatedAt).toISOString(),
-      bookmarkedAt: toDate(row.bookmarkedAt).toISOString(),
+      createdAt: toIsoString(row.createdAt),
+      updatedAt: toIsoString(row.updatedAt),
+      bookmarkedAt: toIsoString(row.bookmarkedAt),
     };
 
     if (isThread) {
-      item.status = status;
+      item.status = threadQaStatus(row);
       item.isLocked = Boolean(row.isLocked);
-      item.isFollowing = engagements.followedThreadIds.has(row.id);
-      item.isMentioned = engagements.mentionedThreadIds.has(row.id);
+      item.isFollowing = followedThreadIds.has(row.id);
     }
 
     return item;
@@ -250,82 +286,38 @@ export function createThreadsService(
 
   function mapThreadRow(
     row: ThreadRowWithAuthor,
-    currentUserId?: string,
-    attachments: LearningAttachmentRow[] = [],
-    engagements?: {
-      likedThreadIds?: Set<string>;
-      bookmarkedThreadIds?: Set<string>;
-      followedThreadIds?: Set<string>;
-      mentionedThreadIds?: Set<string>;
+    currentUserId?: string | null,
+    attachments: DiscussionAttachmentRow[] = [],
+    viewer?: {
+      likedThreadIds: Set<string>;
+      bookmarkedThreadIds: Set<string>;
+      followedThreadIds: Set<string>;
     },
   ): LearningThread {
-    const isOwn = currentUserId ? row.userId === currentUserId : false;
-    const isLiked = engagements?.likedThreadIds
-      ? engagements.likedThreadIds.has(row.id)
-      : false;
-    const isBookmarked = engagements?.bookmarkedThreadIds
-      ? engagements.bookmarkedThreadIds.has(row.id)
-      : false;
-    const isFollowing = engagements?.followedThreadIds
-      ? engagements.followedThreadIds.has(row.id)
-      : false;
-    const isMentioned = engagements?.mentionedThreadIds
-      ? engagements.mentionedThreadIds.has(row.id)
-      : false;
-
     return {
       id: row.id,
-      academyId: row.academyId,
       courseId: row.courseId,
-      courseTitle: row.courseTitle ?? null,
       lessonId: row.lessonId ?? null,
-      lessonTitle: row.lessonTitle ?? null,
-      userId: row.userId,
-      author: {
-        id: row.userId,
-        displayName: row.authorName || "Anonymous Learner",
-        username: row.authorUsername || `user-${row.userId.slice(0, 8)}`,
-        avatarUrl: row.authorAvatarUrl,
-        role: mapAuthorRole(row.authorRole),
-      },
+      author: presentDiscussionAuthor(row),
       kind: row.kind,
       title: row.title ?? null,
       content: row.content,
       plainText: row.plainText,
       timestampSeconds: row.timestampSeconds ?? null,
       visibility: row.visibility,
-      status: row.status,
       isLocked: Boolean(row.isLocked),
       acceptedAnswerId: row.acceptedAnswerId ?? null,
       likesCount: Number(row.likesCount || 0),
       repliesCount: Number(row.repliesCount || 0),
-      attachments: attachments.map((a) => ({
-        id: a.id,
-        kind: a.kind,
-        fileName: a.file_name,
-        fileUrl: resolveAttachmentUrl(a),
-        mimeType: a.mime_type,
-        fileSize: Number(a.file_size || 0),
-        ...getAttachmentDimensionFields(a.metadata),
-        metadata: a.metadata
-          ? typeof a.metadata === "string"
-            ? JSON.parse(a.metadata)
-            : a.metadata
-          : null,
-      })),
-      isLiked,
-      isBookmarked,
-      isFollowing,
-      isMentioned,
-      isOwn,
-      createdAt:
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : String(row.createdAt),
-      updatedAt:
-        row.updatedAt instanceof Date
-          ? row.updatedAt.toISOString()
-          : String(row.updatedAt),
+      attachments: attachments.map((attachment) =>
+        presentDiscussionAttachment(attachment, storage),
+      ),
+      isLiked: viewer?.likedThreadIds.has(row.id) ?? false,
+      isBookmarked: viewer?.bookmarkedThreadIds.has(row.id) ?? false,
+      isFollowing: viewer?.followedThreadIds.has(row.id) ?? false,
+      isOwn: currentUserId ? row.userId === currentUserId : false,
+      createdAt: toIsoString(row.createdAt),
+      updatedAt: toIsoString(row.updatedAt),
     };
   }
 
@@ -334,11 +326,7 @@ export function createThreadsService(
       const academyId = await resolveAcademyId(db);
 
       // Validate course exists
-      const course = await db
-        .selectFrom("courses")
-        .selectAll()
-        .where("id", "=", input.courseId)
-        .executeTakeFirst();
+      const course = await discussionRepo.findCourseId(db, input.courseId);
 
       if (!course) {
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
@@ -356,6 +344,17 @@ export function createThreadsService(
       const threadKind =
         input.kind === "qna" ? "question" : input.kind || "comment";
 
+      // Notes have their own endpoint and their own list. One created here
+      // was stored as a thread of kind "note", which no feed shows: the
+      // request succeeded and the note was never seen again.
+      if (threadKind === "note") {
+        throw httpError(
+          400,
+          "INVALID_THREAD_KIND",
+          "Notes are created through the notes endpoint.",
+        );
+      }
+
       await courseAccess.assertThreadKindEnabled(
         db,
         input.courseId,
@@ -364,11 +363,12 @@ export function createThreadsService(
 
       // Validate lesson hierarchy
       if (input.lessonId) {
-        const lesson = await db
-          .selectFrom("course_lessons")
-          .selectAll()
-          .where("id", "=", input.lessonId)
-          .executeTakeFirst();
+        // A lesson that has been removed is not one to post under: the
+        // post would be attached to something nobody can open.
+        const lesson = await discussionRepo.findActiveLessonCourseId(
+          db,
+          input.lessonId,
+        );
 
         if (!lesson || lesson.course_id !== input.courseId) {
           throw httpError(
@@ -407,40 +407,30 @@ export function createThreadsService(
           visibility,
         });
 
-        await syncMentionsAndNotify(trx, outbox, {
-          sourceType: "thread",
-          sourceId: id,
-          actorUserId: input.userId,
-          content: input.content,
-          courseId: input.courseId,
-          threadId: id,
-          plainText,
-        });
+        // A private post is visible to its author only, so mentioning
+        // someone in it must not notify them (notes already work this way).
+        // Without the guard a private thread was an invisible, unmoderated
+        // way to send email to other users.
+        if (visibility !== "private") {
+          await syncMentionsAndNotify(trx, outbox, {
+            sourceType: "thread",
+            sourceId: id,
+            actorUserId: input.userId,
+            content: input.content,
+            courseId: input.courseId,
+            threadId: id,
+            plainText,
+          });
+        }
 
-        // Attach any verified attachments owned by the caller
+        // Attach the caller's own ready, still-unattached uploads in one
+        // statement. An id that does not qualify is left as it is.
         if (input.attachmentIds && input.attachmentIds.length > 0) {
-          for (const attachmentId of input.attachmentIds) {
-            const attachment = await trx
-              .selectFrom("learning_attachments")
-              .selectAll()
-              .where("id", "=", attachmentId)
-              .executeTakeFirst();
-
-            if (
-              attachment &&
-              attachment.owner_id === input.userId &&
-              attachment.status === "ready"
-            ) {
-              await trx
-                .updateTable("learning_attachments")
-                .set({
-                  target_type: "thread",
-                  target_id: id,
-                })
-                .where("id", "=", attachmentId)
-                .execute();
-            }
-          }
+          await threadsRepo.attachOwnedUploads(trx, {
+            attachmentIds: input.attachmentIds,
+            ownerId: input.userId,
+            threadId: id,
+          });
         }
 
         const created = await threadsRepo.findThreadById(trx, id);
@@ -452,14 +442,9 @@ export function createThreadsService(
           );
         }
 
-        const attachments = await trx
-          .selectFrom("learning_attachments")
-          .selectAll()
-          .where("target_type", "=", "thread")
-          .where("target_id", "=", id)
-          .execute();
+        const attachments = await listReadyAttachments(trx, "thread", [id]);
 
-        return mapThreadRow(created, input.userId, attachments);
+        return mapThreadRow(created, input.userId, attachments.get(id));
       });
     },
 
@@ -477,7 +462,12 @@ export function createThreadsService(
           })
         : null;
       if (lessonReadAccess?.canReadPrivateState) {
-        await courseAccess.assertCanAccessThread(db, actor!, row);
+        // The lesson check has already established course access.
+        courseAccess.assertThreadVisibleToMember(
+          actor!,
+          row,
+          lessonReadAccess.canModerate,
+        );
       } else if (lessonReadAccess) {
         courseAccess.assertThreadIsActive(row);
         if (row.visibility !== "public") {
@@ -497,70 +487,24 @@ export function createThreadsService(
         ? lessonReadAccess.canReadPrivateState
         : Boolean(actor);
 
-      const attachments = await db
-        .selectFrom("learning_attachments")
-        .selectAll()
-        .where("target_type", "=", "thread")
-        .where("target_id", "=", threadId)
-        .execute();
+      const viewerUserId = actor && canReadPrivateState ? actor.userId : null;
+      const [
+        attachments,
+        likedThreadIds,
+        bookmarkedThreadIds,
+        followedThreadIds,
+      ] = await Promise.all([
+        listReadyAttachments(db, "thread", [threadId]),
+        listLikedThreadIds(db, viewerUserId, [threadId]),
+        listBookmarkedThreadIds(db, viewerUserId, [threadId]),
+        listFollowedThreadIds(db, viewerUserId, [threadId]),
+      ]);
 
-      let isLiked = false;
-      let isBookmarked = false;
-      let isFollowing = false;
-      let isMentioned = false;
-
-      const [like, bookmark, follow, threadMention, replyMention] =
-        actor && canReadPrivateState
-          ? await Promise.all([
-              db
-                .selectFrom("learning_likes")
-                .select("id")
-                .where("user_id", "=", actor.userId)
-                .where("target_type", "=", "thread")
-                .where("target_id", "=", threadId)
-                .executeTakeFirst(),
-              db
-                .selectFrom("learning_bookmarks")
-                .select("id")
-                .where("user_id", "=", actor.userId)
-                .where("thread_id", "=", threadId)
-                .executeTakeFirst(),
-              db
-                .selectFrom("learning_follows")
-                .select("id")
-                .where("user_id", "=", actor.userId)
-                .where("thread_id", "=", threadId)
-                .executeTakeFirst(),
-              db
-                .selectFrom("learning_mentions")
-                .select("id")
-                .where("mentioned_user_id", "=", actor.userId)
-                .where("source_type", "=", "thread")
-                .where("source_id", "=", threadId)
-                .executeTakeFirst(),
-              db
-                .selectFrom("learning_mentions as m")
-                .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
-                .select("m.id")
-                .where("m.mentioned_user_id", "=", actor.userId)
-                .where("m.source_type", "=", "reply")
-                .where("lr.thread_id", "=", threadId)
-                .executeTakeFirst(),
-            ])
-          : [undefined, undefined, undefined, undefined, undefined];
-
-      isLiked = Boolean(like);
-      isBookmarked = Boolean(bookmark);
-      isFollowing = Boolean(follow);
-      isMentioned = Boolean(threadMention || replyMention);
-
-      const mapped = mapThreadRow(row, actor?.userId, attachments);
-      mapped.isLiked = isLiked;
-      mapped.isBookmarked = isBookmarked;
-      mapped.isFollowing = isFollowing;
-      mapped.isMentioned = isMentioned;
-
-      return mapped;
+      return mapThreadRow(row, actor?.userId, attachments.get(threadId), {
+        likedThreadIds,
+        bookmarkedThreadIds,
+        followedThreadIds,
+      });
     },
 
     async listThreads(db, query) {
@@ -569,11 +513,7 @@ export function createThreadsService(
         roles: query.roles || [],
       };
       if (query.courseId && !query.skipCourseAccessCheck) {
-        const course = await db
-          .selectFrom("courses")
-          .select("id")
-          .where("id", "=", query.courseId)
-          .executeTakeFirst();
+        const course = await discussionRepo.findCourseId(db, query.courseId);
         if (!course) {
           throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
         }
@@ -589,7 +529,7 @@ export function createThreadsService(
         accessibleCourseIds !== "all" &&
         accessibleCourseIds.length === 0
       ) {
-        return { threads: [], nextCursor: null, totalCount: 0 };
+        return { threads: [], nextCursor: null };
       }
 
       const academyId = await resolveAcademyId(db);
@@ -612,100 +552,28 @@ export function createThreadsService(
           : {}),
       };
 
-      const [rows, totalCount] = await Promise.all([
-        threadsRepo.listThreads(db, listOptions),
-        threadsRepo.countThreads(db, listOptions),
-      ]);
+      const rows = await threadsRepo.listThreads(db, listOptions);
       const { page, hasMore } = takePage(rows, query.limit);
 
-      let likedThreadIds = new Set<string>();
-      let bookmarkedThreadIds = new Set<string>();
-      let followedThreadIds = new Set<string>();
-      let mentionedThreadIds = new Set<string>();
-      const attachmentsByThreadId = new Map<string, LearningAttachmentRow[]>();
-
-      if (page.length > 0) {
-        const threadIds = page.map((r) => r.id);
-        const [engagements, attachmentRows] = await Promise.all([
-          query.currentUserId
-            ? Promise.all([
-                db
-                  .selectFrom("learning_likes")
-                  .select("target_id")
-                  .where("user_id", "=", query.currentUserId)
-                  .where("target_type", "=", "thread")
-                  .where("target_id", "in", threadIds)
-                  .execute(),
-                db
-                  .selectFrom("learning_bookmarks")
-                  .select("thread_id")
-                  .where("user_id", "=", query.currentUserId)
-                  .where("thread_id", "in", threadIds)
-                  .execute(),
-                db
-                  .selectFrom("learning_follows")
-                  .select("thread_id")
-                  .where("user_id", "=", query.currentUserId)
-                  .where("thread_id", "in", threadIds)
-                  .execute(),
-                db
-                  .selectFrom("learning_mentions")
-                  .select("source_id")
-                  .where("mentioned_user_id", "=", query.currentUserId)
-                  .where("source_type", "=", "thread")
-                  .where("source_id", "in", threadIds)
-                  .execute(),
-                db
-                  .selectFrom("learning_mentions as m")
-                  .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
-                  .select("lr.thread_id as threadId")
-                  .where("m.mentioned_user_id", "=", query.currentUserId)
-                  .where("m.source_type", "=", "reply")
-                  .where("lr.thread_id", "in", threadIds)
-                  .execute(),
-              ])
-            : Promise.resolve([[], [], [], [], []]),
-          db
-            .selectFrom("learning_attachments")
-            .selectAll()
-            .where("target_type", "=", "thread")
-            .where("target_id", "in", threadIds)
-            .where("status", "=", "ready")
-            .execute(),
-        ]);
-
-        const [likes, bookmarks, follows, threadMentions, replyMentions] =
-          engagements;
-        likedThreadIds = new Set(likes.map((l) => l.target_id));
-        bookmarkedThreadIds = new Set(
-          bookmarks.flatMap((b) => (b.thread_id ? [b.thread_id] : [])),
-        );
-        followedThreadIds = new Set(follows.map((f) => f.thread_id));
-        mentionedThreadIds = new Set([
-          ...threadMentions.map((m) => m.source_id),
-          ...replyMentions.map((m) => m.threadId),
-        ]);
-
-        for (const attachment of attachmentRows) {
-          const targetId = attachment.target_id;
-          if (!targetId) continue;
-          const group = attachmentsByThreadId.get(targetId) ?? [];
-          group.push(attachment);
-          attachmentsByThreadId.set(targetId, group);
-        }
-      }
+      const threadIds = page.map((row) => row.id);
+      const [
+        likedThreadIds,
+        bookmarkedThreadIds,
+        followedThreadIds,
+        attachmentsByThreadId,
+      ] = await Promise.all([
+        listLikedThreadIds(db, query.currentUserId, threadIds),
+        listBookmarkedThreadIds(db, query.currentUserId, threadIds),
+        listFollowedThreadIds(db, query.currentUserId, threadIds),
+        listReadyAttachments(db, "thread", threadIds),
+      ]);
 
       const threads = page.map((row) =>
         mapThreadRow(
           row,
           query.currentUserId,
-          attachmentsByThreadId.get(row.id) ?? [],
-          {
-            likedThreadIds,
-            bookmarkedThreadIds,
-            followedThreadIds,
-            mentionedThreadIds,
-          },
+          attachmentsByThreadId.get(row.id),
+          { likedThreadIds, bookmarkedThreadIds, followedThreadIds },
         ),
       );
 
@@ -723,11 +591,7 @@ export function createThreadsService(
         });
       }
 
-      return {
-        threads,
-        nextCursor,
-        totalCount,
-      };
+      return { threads, nextCursor };
     },
 
     async updateThread(db, threadId, actor, updates) {
@@ -785,7 +649,12 @@ export function createThreadsService(
           plainText,
         });
 
-        if (updates.content) {
+        // Same rule as create (and as notes): a private thread carries no
+        // mentions. Turning a thread private drops the ones it had.
+        const finalVisibility = updates.visibility ?? row.visibility;
+        if (finalVisibility === "private") {
+          await discussionRepo.deleteMentionsBySource(trx, "thread", threadId);
+        } else if (updates.content) {
           await syncMentionsAndNotify(trx, outbox, {
             sourceType: "thread",
             sourceId: threadId,
@@ -805,7 +674,15 @@ export function createThreadsService(
             "Failed to load updated discussion thread",
           );
         }
-        return mapThreadRow(updated, actor.userId);
+        return {
+          id: updated.id,
+          title: updated.title ?? null,
+          content: updated.content,
+          plainText: updated.plainText,
+          timestampSeconds: updated.timestampSeconds ?? null,
+          visibility: updated.visibility,
+          updatedAt: toIsoString(updated.updatedAt),
+        };
       });
     },
 
@@ -837,36 +714,53 @@ export function createThreadsService(
       });
     },
 
-    async listPublicPopularDiscussions(db) {
-      const academyId = await resolveAcademyId(db);
-      const rows: PublicPopularThreadRow[] =
-        await threadsRepo.listPublicPopularThreads(db, {
-          academyId,
-          limit: 20,
-        });
+    async listPublicPopularDiscussions(db, options) {
+      // A chosen set of discussions (pinned ones) is read live.
+      if (options?.threadIds) return await read();
+      return await popularDiscussions.fetch(
+        JSON.stringify([options?.limit ?? 20, options?.onePerAuthor ?? false]),
+        read,
+        { tags: [cacheTags.site] },
+      );
 
-      return {
-        discussions: rows.map((row) => ({
-          id: row.id,
-          kind: row.kind,
-          title: row.title,
-          snippet: row.snippet,
-          author: {
-            displayName: row.authorName?.trim() || "Anonymous Learner",
-            avatarUrl: row.authorAvatarUrl,
-            avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
-          },
-          courseId: row.courseId,
-          lessonId: row.lessonId,
-          courseTitle: row.courseTitle,
-          lessonTitle: row.lessonTitle,
-          replyCount: row.replyCount,
-          likeCount: row.likeCount,
-          engagementScore: row.engagementScore,
-          createdAt: toDate(row.createdAt).toISOString(),
-          updatedAt: toDate(row.updatedAt).toISOString(),
-        })),
-      };
+      async function read() {
+        const academyId = await resolveAcademyId(db);
+        const rows: PublicPopularThreadRow[] =
+          await threadsRepo.listPublicPopularThreads(db, {
+            academyId,
+            limit: options?.limit ?? 20,
+            onePerAuthor: options?.onePerAuthor,
+            threadIds: options?.threadIds,
+          });
+
+        return {
+          discussions: rows.map((row) => ({
+            id: row.id,
+            kind: row.kind,
+            // SQL left(…, 500) counts code points; the schema counts UTF-16
+            // units, so one emoji in a long post made this public endpoint
+            // return 500 for everyone.
+            title: row.title === null ? null : clampText(row.title, 255),
+            snippet: clampText(row.snippet ?? "", 500),
+            author: {
+              displayName: clampText(
+                row.authorName?.trim() || "Anonymous Learner",
+                100,
+              ),
+              username: row.authorUsername,
+              avatarUrl: row.authorAvatarUrl,
+              avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
+            },
+            courseId: row.courseId,
+            lessonId: row.lessonId,
+            courseTitle: row.courseTitle,
+            lessonTitle: row.lessonTitle,
+            replyCount: row.replyCount,
+            likeCount: row.likeCount,
+            updatedAt: toIsoString(row.updatedAt),
+          })),
+        };
+      }
     },
 
     async getDiscussionsWorkspace(db, query) {
@@ -875,22 +769,21 @@ export function createThreadsService(
         roles: query.roles || [],
       };
       const tab = query.tab || "q-and-a";
-      const isStaff = actor.roles.some((r) =>
-        ["admin", "instructor", "creator", "staff"].includes(r.toLowerCase()),
-      );
+      // Anyone on the team may have something to moderate; which courses,
+      // if any, is the permission check in listModeratableCourseIds.
+      const isStaff = actor.roles.some((r) => r.toLowerCase() !== "student");
       const isAuthorRestrictedTab =
-        tab === "q-and-a" || tab === "comments" || tab === "notes";
-      const effectiveMine =
-        isAuthorRestrictedTab && !isStaff ? true : query.mine;
+        tab === "all" ||
+        tab === "q-and-a" ||
+        tab === "comments" ||
+        tab === "notes";
 
       // Validate courseId if supplied
       if (query.courseId) {
-        const course = await db
-          .selectFrom("courses")
-          .select("id")
-          .where("id", "=", query.courseId)
-          .where("deleted_at", "is", null)
-          .executeTakeFirst();
+        const course = await discussionRepo.findActiveCourseId(
+          db,
+          query.courseId,
+        );
         if (!course) {
           throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
         }
@@ -902,43 +795,51 @@ export function createThreadsService(
         }
       }
 
-      // Notes use the canonical course-access policy for every role. The
-      // broader staff shortcut remains unchanged for the existing thread and
-      // report tabs below.
+      // The staff view (everyone's threads) covers only the courses the
+      // actor may moderate: all of them for an admin, the courses they
+      // created for anyone else. Asking for a course outside that set drops
+      // the actor back to the ordinary learner view.
+      const moderatableCourseIds = isStaff
+        ? await courseAccess.listModeratableCourseIds(db, actor)
+        : [];
+      const hasStaffView =
+        isStaff &&
+        (moderatableCourseIds === "all" ||
+          !query.courseId ||
+          moderatableCourseIds.includes(query.courseId));
+      const effectiveMine =
+        isAuthorRestrictedTab && !hasStaffView ? true : query.mine;
+
+      // Notes use the canonical course-access policy for every role.
       const accessibleCourseIds =
         tab === "saved" ||
         tab === "following" ||
         tab === "notes" ||
         tab === "mentions" ||
-        !isStaff
+        !hasStaffView
           ? await courseAccess.listAccessibleCourseIds(db, actor)
-          : "all";
+          : moderatableCourseIds;
 
       if (
         accessibleCourseIds !== "all" &&
         accessibleCourseIds.length === 0 &&
         tab !== "saved"
       ) {
-        return { items: [], courses: [], nextCursor: null, totalCount: 0 };
+        return { items: [], courses: [], nextCursor: null };
       }
 
-      // Fetch available courses list for the dropdown
-      let coursesQuery = db
-        .selectFrom("courses")
-        .select(["id", "title", "slug"])
-        .where("status", "=", "published")
-        .where("deleted_at", "is", null);
-
-      if (accessibleCourseIds !== "all") {
-        coursesQuery = coursesQuery.where("id", "in", [...accessibleCourseIds]);
+      // The course options feed the filter dropdown, which the client fills
+      // from the first page; a later page does not repeat them.
+      let courses: DiscussionsWorkspaceResponse["courses"] = [];
+      if (
+        !query.cursor &&
+        (accessibleCourseIds === "all" || accessibleCourseIds.length > 0)
+      ) {
+        courses = await discussionRepo.listPublishedCourseTitles(
+          db,
+          accessibleCourseIds,
+        );
       }
-
-      const coursesRows = await coursesQuery.orderBy("title", "asc").execute();
-      const courses = coursesRows.map((c) => ({
-        id: c.id,
-        title: c.title,
-        slug: c.slug ?? undefined,
-      }));
 
       const academyId = await resolveAcademyId(db);
       const limit = query.limit || 20;
@@ -984,202 +885,29 @@ export function createThreadsService(
             "The pagination cursor does not match the requested Note sort.",
           );
         }
-        let notesQuery = db
-          .selectFrom("learning_notes as n")
-          .innerJoin("users as u", "u.id", "n.user_id")
-          .innerJoin("courses as c", "c.id", "n.course_id")
-          .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
-          .select([
-            "n.id",
-            "n.user_id as userId",
-            "u.display_name as authorName",
-            "u.username as authorUsername",
-            "u.avatar_data_url as authorAvatarUrl",
-            authorRoleSql("n.user_id"),
-            "n.course_id as courseId",
-            "c.title as courseTitle",
-            "n.lesson_id as lessonId",
-            "l.title as lessonTitle",
-            "n.timestamp_seconds as timestampSeconds",
-            "n.title",
-            "n.content",
-            "n.plain_text as plainText",
-            "n.visibility",
-            "n.likes_count as likesCount",
-            "n.created_at as createdAt",
-            "n.updated_at as updatedAt",
-          ]);
-
-        let notesCountQuery = db
-          .selectFrom("learning_notes as n")
-          .select(sql<number>`count(*)::int`.as("count"));
-
-        notesQuery = notesQuery
-          .where("n.academy_id", "=", academyId)
-          .where("c.deleted_at", "is", null)
-          .whereRef("l.course_id", "=", "n.course_id");
-        notesCountQuery = notesCountQuery
-          .innerJoin("courses as c", "c.id", "n.course_id")
-          .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
-          .where("n.academy_id", "=", academyId)
-          .where("c.deleted_at", "is", null)
-          .whereRef("l.course_id", "=", "n.course_id");
-
-        if (query.courseId) {
-          notesQuery = notesQuery.where("n.course_id", "=", query.courseId);
-          notesCountQuery = notesCountQuery.where(
-            "n.course_id",
-            "=",
-            query.courseId,
-          );
-        } else if (accessibleCourseIds !== "all") {
-          notesQuery = notesQuery.where("n.course_id", "in", [
-            ...accessibleCourseIds,
-          ]);
-          notesCountQuery = notesCountQuery.where("n.course_id", "in", [
-            ...accessibleCourseIds,
-          ]);
-        }
-
-        if (query.lessonId) {
-          notesQuery = notesQuery.where("n.lesson_id", "=", query.lessonId);
-          notesCountQuery = notesCountQuery.where(
-            "n.lesson_id",
-            "=",
-            query.lessonId,
-          );
-        }
-
-        if (effectiveMine === true) {
-          // `mine=true` is an ownership constraint for every role.
-          notesQuery = notesQuery.where("n.user_id", "=", actor.userId);
-          notesCountQuery = notesCountQuery.where(
-            "n.user_id",
-            "=",
-            actor.userId,
-          );
-          if (query.visibility) {
-            notesQuery = notesQuery.where(
-              "n.visibility",
-              "=",
-              query.visibility,
-            );
-            notesCountQuery = notesCountQuery.where(
-              "n.visibility",
-              "=",
-              query.visibility,
-            );
-          }
-        } else if (
-          query.visibility === "private" ||
-          query.visibility === "unlisted"
-        ) {
-          // Canonical Note discovery does not list another user's private or
-          // unlisted Notes. Preserve that rule for the workspace feed.
-          notesQuery = notesQuery
-            .where("n.user_id", "=", actor.userId)
-            .where("n.visibility", "=", query.visibility);
-          notesCountQuery = notesCountQuery
-            .where("n.user_id", "=", actor.userId)
-            .where("n.visibility", "=", query.visibility);
-        } else if (query.visibility === "public") {
-          notesQuery = notesQuery.where("n.visibility", "=", "public");
-          notesCountQuery = notesCountQuery.where(
-            "n.visibility",
-            "=",
-            "public",
-          );
-        } else {
-          notesQuery = notesQuery.where((eb) =>
-            eb.or([
-              eb("n.user_id", "=", actor.userId),
-              eb("n.visibility", "=", "public"),
-            ]),
-          );
-          notesCountQuery = notesCountQuery.where((eb) =>
-            eb.or([
-              eb("n.user_id", "=", actor.userId),
-              eb("n.visibility", "=", "public"),
-            ]),
-          );
-        }
-
-        if (query.search) {
-          const pattern = `%${query.search.toLowerCase()}%`;
-          notesQuery = notesQuery.where((eb) =>
-            eb.or([
-              eb(sql`lower(n.title)`, "like", pattern),
-              eb(sql`lower(n.plain_text)`, "like", pattern),
-            ]),
-          );
-          notesCountQuery = notesCountQuery.where((eb) =>
-            eb.or([
-              eb(sql`lower(n.title)`, "like", pattern),
-              eb(sql`lower(n.plain_text)`, "like", pattern),
-            ]),
-          );
-        }
-
-        if (pageCursor) {
-          notesQuery = notesQuery.where(
-            noteSort === "activity"
-              ? updatedAtIdDescSql("n", pageCursor)
-              : createdAtIdDescSql("n", pageCursor),
-          );
-        }
-
-        notesQuery =
-          noteSort === "activity"
-            ? notesQuery
-                .orderBy("n.updated_at", "desc")
-                .orderBy("n.id", "desc")
-                .limit(limit + 1)
-            : notesQuery
-                .orderBy("n.created_at", "desc")
-                .orderBy("n.id", "desc")
-                .limit(limit + 1);
-
-        const [noteRows, countRow] = await Promise.all([
-          notesQuery.execute(),
-          notesCountQuery.executeTakeFirst(),
-        ]);
-
+        const noteRows = await threadsRepo.listWorkspaceNotes(db, {
+          academyId,
+          userId: actor.userId,
+          courseId: query.courseId,
+          accessibleCourseIds,
+          lessonId: query.lessonId,
+          mine: effectiveMine,
+          visibility: query.visibility,
+          search: query.search,
+          pageCursor,
+          sort: noteSort,
+          limit,
+        });
         const { page, hasMore } = takePage(noteRows, limit);
-        const totalCount = Number(countRow?.count ?? 0);
 
-        let likedNoteIds = new Set<string>();
-        let bookmarkedNoteIds = new Set<string>();
-        let attachmentSummariesByNoteId = new Map<
-          string,
-          DiscussionAttachmentSummary
-        >();
-
-        if (page.length > 0 && actor.userId) {
-          const noteIds = page.map((n) => n.id);
-          const [likes, bookmarks, attachmentSummaryRows] = await Promise.all([
-            db
-              .selectFrom("learning_likes")
-              .select("target_id")
-              .where("user_id", "=", actor.userId)
-              .where("target_type", "=", "note")
-              .where("target_id", "in", noteIds)
-              .execute(),
-            db
-              .selectFrom("learning_bookmarks")
-              .select("note_id")
-              .where("user_id", "=", actor.userId)
-              .where("note_id", "in", noteIds)
-              .execute(),
-            attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
-          ]);
-          likedNoteIds = new Set(likes.map((l) => l.target_id));
-          bookmarkedNoteIds = new Set(
-            bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
-          );
-          attachmentSummariesByNoteId = indexAttachmentSummaries(
-            attachmentSummaryRows,
-          );
-        }
+        const noteIds = page.map((n) => n.id);
+        const [bookmarkedNoteIds, attachmentSummaryRows] = await Promise.all([
+          listBookmarkedNoteIds(db, actor.userId, noteIds),
+          attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
+        ]);
+        const attachmentSummariesByNoteId = indexAttachmentSummaries(
+          attachmentSummaryRows,
+        );
 
         const items: WorkspaceDiscussionItem[] = page.map((row) => ({
           id: row.id,
@@ -1194,30 +922,16 @@ export function createThreadsService(
           lessonTitle: row.lessonTitle ?? null,
           timestampSeconds: row.timestampSeconds ?? null,
           visibility: row.visibility,
-          author: {
-            id: row.userId,
-            displayName: row.authorName || "Anonymous Learner",
-            username: row.authorUsername || `user-${row.userId.slice(0, 8)}`,
-            avatarUrl: row.authorAvatarUrl,
-            role: mapAuthorRole(row.authorRole),
-          },
+          author: presentWorkspaceAuthor(row),
           repliesCount: 0,
           likesCount: Number(row.likesCount || 0),
-          isLiked: likedNoteIds.has(row.id),
           isBookmarked: bookmarkedNoteIds.has(row.id),
           isFollowing: false,
-          isMentioned: false,
           isOwn: row.userId === actor.userId,
           attachmentSummary:
             attachmentSummariesByNoteId.get(row.id) ?? emptyAttachmentSummary(),
-          createdAt:
-            row.createdAt instanceof Date
-              ? row.createdAt.toISOString()
-              : String(row.createdAt),
-          updatedAt:
-            row.updatedAt instanceof Date
-              ? row.updatedAt.toISOString()
-              : String(row.updatedAt),
+          createdAt: toIsoString(row.createdAt),
+          updatedAt: toIsoString(row.updatedAt),
         }));
 
         let nextCursor: string | null = null;
@@ -1237,164 +951,12 @@ export function createThreadsService(
           items,
           courses,
           nextCursor,
-          totalCount,
-        };
-      }
-
-      // Tab: Reports (Staff / Admin only)
-      if (tab === "reports") {
-        if (!isStaff) {
-          throw httpError(
-            403,
-            "FORBIDDEN",
-            "Only staff and administrators can view moderation reports.",
-          );
-        }
-
-        let reportsQuery = db
-          .selectFrom("learning_reports as rep")
-          .innerJoin("users as u", "u.id", "rep.reporter_id")
-          .leftJoin("courses as c", "c.id", "rep.course_id")
-          .select([
-            "rep.id as id",
-            "rep.reporter_id as reporterId",
-            "rep.target_type as targetType",
-            "rep.target_id as targetId",
-            "rep.course_id as courseId",
-            "c.title as courseTitle",
-            "rep.reason as reason",
-            "rep.details as details",
-            "rep.status as status",
-            "rep.action_taken as actionTaken",
-            "rep.created_at as createdAt",
-            "rep.updated_at as updatedAt",
-            "u.display_name as reporterName",
-            "u.username as reporterUsername",
-            "u.avatar_data_url as reporterAvatarUrl",
-            authorRoleSql("rep.reporter_id"),
-          ]);
-
-        let reportsCountQuery = db
-          .selectFrom("learning_reports as rep")
-          .select(sql<number>`count(*)::int`.as("count"));
-
-        if (query.courseId) {
-          reportsQuery = reportsQuery.where(
-            "rep.course_id",
-            "=",
-            query.courseId,
-          );
-          reportsCountQuery = reportsCountQuery.where(
-            "rep.course_id",
-            "=",
-            query.courseId,
-          );
-        }
-
-        if (query.search) {
-          const pattern = `%${query.search.toLowerCase()}%`;
-          reportsQuery = reportsQuery.where((eb) =>
-            eb.or([
-              eb(sql`lower(rep.reason)`, "like", pattern),
-              eb(sql`lower(rep.details)`, "like", pattern),
-            ]),
-          );
-          reportsCountQuery = reportsCountQuery.where((eb) =>
-            eb.or([
-              eb(sql`lower(rep.reason)`, "like", pattern),
-              eb(sql`lower(rep.details)`, "like", pattern),
-            ]),
-          );
-        }
-
-        if (pageCursor) {
-          reportsQuery = reportsQuery.where(
-            createdAtIdDescSql("rep", pageCursor),
-          );
-        }
-
-        reportsQuery = reportsQuery
-          .orderBy("rep.created_at", "desc")
-          .orderBy("rep.id", "desc")
-          .limit(limit + 1);
-
-        const [reportRows, countRow] = await Promise.all([
-          reportsQuery.execute(),
-          reportsCountQuery.executeTakeFirst(),
-        ]);
-
-        const { page, hasMore } = takePage(reportRows, limit);
-        const totalCount = Number(countRow?.count ?? 0);
-        const fallbackCourseId =
-          courses[0]?.id || "00000000-0000-0000-0000-000000000000";
-
-        const items: WorkspaceDiscussionItem[] = page.map((row) => ({
-          id: row.id,
-          itemType: "report",
-          kind: "comment",
-          title: `Report: ${row.reason}`,
-          content: row.details || row.reason,
-          plainText: row.details || row.reason,
-          courseId: row.courseId || fallbackCourseId,
-          courseTitle: row.courseTitle ?? null,
-          lessonId: null,
-          lessonTitle: null,
-          timestampSeconds: null,
-          author: {
-            id: row.reporterId,
-            displayName: row.reporterName || "Anonymous Reporter",
-            username:
-              row.reporterUsername || `user-${row.reporterId.slice(0, 8)}`,
-            avatarUrl: row.reporterAvatarUrl,
-            role: mapAuthorRole(row.authorRole),
-          },
-          repliesCount: 0,
-          likesCount: 0,
-          isLiked: false,
-          isBookmarked: false,
-          isFollowing: false,
-          isMentioned: false,
-          isOwn: row.reporterId === actor.userId,
-          attachmentSummary: emptyAttachmentSummary(),
-          reportDetails: {
-            targetType: row.targetType as "thread" | "reply" | "note",
-            targetId: row.targetId,
-            reason: row.reason,
-            details: row.details ?? undefined,
-            status: row.status as
-              "pending" | "reviewed" | "dismissed" | "actioned",
-            actionTaken: row.actionTaken ?? undefined,
-          },
-          createdAt:
-            row.createdAt instanceof Date
-              ? row.createdAt.toISOString()
-              : String(row.createdAt),
-          updatedAt:
-            row.updatedAt instanceof Date
-              ? row.updatedAt.toISOString()
-              : String(row.updatedAt),
-        }));
-
-        let nextCursor: string | null = null;
-        const last = page.at(-1);
-        if (hasMore && last) {
-          nextCursor = encodeDiscussionCursor({
-            id: last.id,
-            createdAt: toDate(last.createdAt),
-          });
-        }
-
-        return {
-          items,
-          courses,
-          nextCursor,
-          totalCount,
         };
       }
 
       // Tab: Mentions (one workspace item per exact mention source)
       if (tab === "mentions") {
-        const mentionOptions = {
+        const mentionRows = await threadsRepo.listMentionItems(db, {
           academyId,
           currentUserId: actor.userId,
           pageCursor,
@@ -1405,12 +967,7 @@ export function createThreadsService(
           ...(query.kind ? { kind: query.kind } : {}),
           ...(query.search ? { search: query.search } : {}),
           ...(query.visibility ? { visibility: query.visibility } : {}),
-        };
-
-        const [mentionRows, totalCount] = await Promise.all([
-          threadsRepo.listMentionItems(db, mentionOptions),
-          threadsRepo.countMentionItems(db, mentionOptions),
-        ]);
+        });
 
         const { page, hasMore } = takePage(mentionRows, limit);
         const threadIds = page
@@ -1422,94 +979,27 @@ export function createThreadsService(
         const noteIds = page
           .filter((row) => row.itemType === "note")
           .map((row) => row.sourceId);
-        const sourceIds = [...threadIds, ...replyIds, ...noteIds];
 
         const [
-          likes,
-          bookmarks,
-          noteBookmarks,
-          follows,
+          bookmarkedThreadIds,
+          bookmarkedNoteIds,
+          followedThreadIds,
           replyCounts,
           threadAttachmentRows,
           replyAttachmentRows,
           noteAttachmentRows,
         ] = await Promise.all([
-          sourceIds.length > 0
-            ? db
-                .selectFrom("learning_likes")
-                .select(["target_type", "target_id"])
-                .where("user_id", "=", actor.userId)
-                .where("target_type", "in", ["thread", "reply", "note"])
-                .where("target_id", "in", sourceIds)
-                .execute()
-            : Promise.resolve([]),
-          threadIds.length > 0
-            ? db
-                .selectFrom("learning_bookmarks")
-                .select("thread_id")
-                .where("user_id", "=", actor.userId)
-                .where("thread_id", "in", threadIds)
-                .execute()
-            : Promise.resolve([]),
-          noteIds.length > 0
-            ? db
-                .selectFrom("learning_bookmarks")
-                .select("note_id")
-                .where("user_id", "=", actor.userId)
-                .where("note_id", "in", noteIds)
-                .execute()
-            : Promise.resolve([]),
-          threadIds.length > 0
-            ? db
-                .selectFrom("learning_follows")
-                .select("thread_id")
-                .where("user_id", "=", actor.userId)
-                .where("thread_id", "in", threadIds)
-                .execute()
-            : Promise.resolve([]),
+          listBookmarkedThreadIds(db, actor.userId, threadIds),
+          listBookmarkedNoteIds(db, actor.userId, noteIds),
+          listFollowedThreadIds(db, actor.userId, threadIds),
           replyIds.length > 0
-            ? db
-                .selectFrom("learning_replies")
-                .select("parent_reply_id")
-                .select(sql<number>`count(*)::int`.as("count"))
-                .where("parent_reply_id", "in", replyIds)
-                .where("status", "=", "active")
-                .groupBy("parent_reply_id")
-                .execute()
+            ? threadsRepo.countActiveRepliesByParent(db, replyIds)
             : Promise.resolve([]),
           attachmentsRepo.listThreadAttachmentSummaries(db, threadIds),
           attachmentsRepo.listReplyAttachmentSummaries(db, replyIds),
           attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
         ]);
 
-        const likedThreadIds = new Set(
-          likes
-            .filter((like) => like.target_type === "thread")
-            .map((like) => like.target_id),
-        );
-        const likedReplyIds = new Set(
-          likes
-            .filter((like) => like.target_type === "reply")
-            .map((like) => like.target_id),
-        );
-        const likedNoteIds = new Set(
-          likes
-            .filter((like) => like.target_type === "note")
-            .map((like) => like.target_id),
-        );
-        const bookmarkedThreadIds = new Set(
-          bookmarks.flatMap((bookmark) =>
-            bookmark.thread_id ? [bookmark.thread_id] : [],
-          ),
-        );
-        const followedThreadIds = new Set(
-          follows.map((follow) => follow.thread_id),
-        );
-        const bookmarkedNoteIds = new Set(
-          noteBookmarks.flatMap((bookmark) =>
-            bookmark.note_id ? [bookmark.note_id] : [],
-          ),
-        );
         const replyReplyCounts = new Map(
           replyCounts.flatMap((row) =>
             row.parent_reply_id
@@ -1527,18 +1017,6 @@ export function createThreadsService(
         const items: WorkspaceDiscussionItem[] = page.map((row) => {
           const isThread = row.itemType === "thread";
           const isNote = row.itemType === "note";
-          const isQna = row.kind === "question" || row.kind === "qna";
-          const statusVal: QuestionFilterStatus | undefined =
-            isThread && isQna
-              ? row.acceptedAnswerId
-                ? "solved"
-                : row.repliesCount && row.repliesCount > 0
-                  ? "answered"
-                  : "open"
-              : undefined;
-          const authorName = row.authorName || "Anonymous Learner";
-          const authorUsername =
-            row.authorUsername || `user-${row.userId.slice(0, 8)}`;
 
           return {
             id: row.sourceId,
@@ -1558,21 +1036,14 @@ export function createThreadsService(
             lessonId: row.lessonId,
             lessonTitle: row.lessonTitle,
             timestampSeconds: row.timestampSeconds,
-            author: {
-              id: row.userId,
-              displayName: authorName,
-              username: authorUsername,
-              avatarUrl: row.authorAvatarUrl,
-              role: mapAuthorRole(row.authorRole),
-            },
+            author: presentWorkspaceAuthor(row),
             ...(isThread
               ? {
-                  status: statusVal,
+                  status: threadQaStatus(row),
                   visibility: row.visibility ?? undefined,
                   isLocked: Boolean(row.isLocked),
                   repliesCount: Number(row.repliesCount || 0),
                   likesCount: Number(row.likesCount || 0),
-                  isLiked: likedThreadIds.has(row.sourceId),
                   isBookmarked: bookmarkedThreadIds.has(row.sourceId),
                   isFollowing: followedThreadIds.has(row.sourceId),
                   attachmentSummary:
@@ -1584,7 +1055,6 @@ export function createThreadsService(
                     visibility: row.visibility ?? undefined,
                     repliesCount: 0,
                     likesCount: Number(row.likesCount || 0),
-                    isLiked: likedNoteIds.has(row.sourceId),
                     isBookmarked: bookmarkedNoteIds.has(row.sourceId),
                     attachmentSummary:
                       noteAttachmentSummaries.get(row.sourceId) ??
@@ -1594,16 +1064,14 @@ export function createThreadsService(
                     visibility: row.visibility ?? undefined,
                     repliesCount: replyReplyCounts.get(row.sourceId) ?? 0,
                     likesCount: Number(row.likesCount || 0),
-                    isLiked: likedReplyIds.has(row.sourceId),
                     attachmentSummary:
                       replyAttachmentSummaries.get(row.sourceId) ??
                       emptyAttachmentSummary(),
                   }),
-            isMentioned: true,
             isOwn: row.userId === actor.userId,
-            mentionedAt: toDate(row.mentionedAt).toISOString(),
-            createdAt: toDate(row.createdAt).toISOString(),
-            updatedAt: toDate(row.updatedAt).toISOString(),
+            mentionedAt: toIsoString(row.mentionedAt),
+            createdAt: toIsoString(row.createdAt),
+            updatedAt: toIsoString(row.updatedAt),
           };
         });
 
@@ -1621,14 +1089,13 @@ export function createThreadsService(
           items,
           courses,
           nextCursor,
-          totalCount,
         };
       }
 
       // Tab: Saved / Bookmarks. The bookmark relationship is the driving
       // dataset so threads and notes share one globally ordered stream.
       if (tab === "saved") {
-        const bookmarkOptions = {
+        const bookmarkRows = await bookmarksRepo.listWorkspaceBookmarks(db, {
           academyId,
           currentUserId: actor.userId,
           accessibleCourseIds,
@@ -1637,16 +1104,9 @@ export function createThreadsService(
           kind: query.kind,
           search: query.search,
           visibility: query.visibility,
-        };
-
-        const [bookmarkRows, totalCount] = await Promise.all([
-          bookmarksRepo.listWorkspaceBookmarks(db, {
-            ...bookmarkOptions,
-            pageCursor,
-            limit,
-          }),
-          bookmarksRepo.countWorkspaceBookmarks(db, bookmarkOptions),
-        ]);
+          pageCursor,
+          limit,
+        });
 
         const { page, hasMore } = takePage(bookmarkRows, limit);
         const threadIds = page
@@ -1656,83 +1116,17 @@ export function createThreadsService(
           .filter((row) => row.itemType === "note")
           .map((row) => row.id);
 
-        const likedThreadsPromise = threadIds.length
-          ? db
-              .selectFrom("learning_likes")
-              .select("target_id")
-              .where("user_id", "=", actor.userId)
-              .where("target_type", "=", "thread")
-              .where("target_id", "in", threadIds)
-              .execute()
-          : Promise.resolve([] as { target_id: string }[]);
-        const likedNotesPromise = noteIds.length
-          ? db
-              .selectFrom("learning_likes")
-              .select("target_id")
-              .where("user_id", "=", actor.userId)
-              .where("target_type", "=", "note")
-              .where("target_id", "in", noteIds)
-              .execute()
-          : Promise.resolve([] as { target_id: string }[]);
-        const followedThreadsPromise = threadIds.length
-          ? db
-              .selectFrom("learning_follows")
-              .select("thread_id")
-              .where("user_id", "=", actor.userId)
-              .where("thread_id", "in", threadIds)
-              .execute()
-          : Promise.resolve([] as { thread_id: string }[]);
-        const mentionedThreadsPromise = threadIds.length
-          ? Promise.all([
-              db
-                .selectFrom("learning_mentions")
-                .select("source_id")
-                .where("mentioned_user_id", "=", actor.userId)
-                .where("source_type", "=", "thread")
-                .where("source_id", "in", threadIds)
-                .execute(),
-              db
-                .selectFrom("learning_mentions as m")
-                .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
-                .select("lr.thread_id as threadId")
-                .where("m.mentioned_user_id", "=", actor.userId)
-                .where("m.source_type", "=", "reply")
-                .where("lr.status", "=", "active")
-                .where("lr.thread_id", "in", threadIds)
-                .execute(),
-            ]).then(([threadMentions, replyMentions]) => [
-              ...threadMentions.map((mention) => mention.source_id),
-              ...replyMentions.map((mention) => mention.threadId),
-            ])
-          : Promise.resolve([] as string[]);
-        const [
-          likedThreads,
-          likedNotes,
-          followedThreads,
-          mentionedThreads,
-          threadAttachmentRows,
-          noteAttachmentRows,
-        ] = await Promise.all([
-          likedThreadsPromise,
-          likedNotesPromise,
-          followedThreadsPromise,
-          mentionedThreadsPromise,
-          attachmentsRepo.listThreadAttachmentSummaries(db, threadIds),
-          attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
-        ]);
+        const [followedThreadIds, threadAttachmentRows, noteAttachmentRows] =
+          await Promise.all([
+            listFollowedThreadIds(db, actor.userId, threadIds),
+            attachmentsRepo.listThreadAttachmentSummaries(db, threadIds),
+            attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
+          ]);
 
         const threadAttachmentSummaries =
           indexAttachmentSummaries(threadAttachmentRows);
         const noteAttachmentSummaries =
           indexAttachmentSummaries(noteAttachmentRows);
-        const engagementSets = {
-          likedThreadIds: new Set(likedThreads.map((like) => like.target_id)),
-          likedNoteIds: new Set(likedNotes.map((like) => like.target_id)),
-          followedThreadIds: new Set(
-            followedThreads.map((follow) => follow.thread_id),
-          ),
-          mentionedThreadIds: new Set(mentionedThreads),
-        };
 
         const items = page.map((row) =>
           mapBookmarkWorkspaceItem(
@@ -1742,7 +1136,7 @@ export function createThreadsService(
                   emptyAttachmentSummary())
               : (noteAttachmentSummaries.get(row.id) ??
                   emptyAttachmentSummary()),
-            engagementSets,
+            followedThreadIds,
             actor.userId,
           ),
         );
@@ -1761,7 +1155,6 @@ export function createThreadsService(
           items,
           courses,
           nextCursor,
-          totalCount,
         };
       }
 
@@ -1797,135 +1190,47 @@ export function createThreadsService(
         ...(accessibleCourseIds !== "all" ? { accessibleCourseIds } : {}),
       };
 
-      const [threadRows, totalCount] = await Promise.all([
-        threadsRepo.listThreads(db, threadOptions),
-        threadsRepo.countThreads(db, threadOptions),
-      ]);
+      const threadRows = await threadsRepo.listThreads(db, threadOptions);
 
       const { page, hasMore } = takePage(threadRows, limit);
 
-      let likedThreadIds = new Set<string>();
-      let bookmarkedThreadIds = new Set<string>();
-      let followedThreadIds = new Set<string>();
-      let mentionedThreadIds = new Set<string>();
-      let attachmentSummariesByThreadId = new Map<
-        string,
-        DiscussionAttachmentSummary
-      >();
-
-      if (page.length > 0) {
-        const threadIds = page.map((r) => r.id);
-        const [engagements, attachmentSummaryRows] = await Promise.all([
-          actor.userId
-            ? Promise.all([
-                db
-                  .selectFrom("learning_likes")
-                  .select("target_id")
-                  .where("user_id", "=", actor.userId)
-                  .where("target_type", "=", "thread")
-                  .where("target_id", "in", threadIds)
-                  .execute(),
-                db
-                  .selectFrom("learning_bookmarks")
-                  .select("thread_id")
-                  .where("user_id", "=", actor.userId)
-                  .where("thread_id", "in", threadIds)
-                  .execute(),
-                db
-                  .selectFrom("learning_follows")
-                  .select("thread_id")
-                  .where("user_id", "=", actor.userId)
-                  .where("thread_id", "in", threadIds)
-                  .execute(),
-                db
-                  .selectFrom("learning_mentions")
-                  .select("source_id")
-                  .where("mentioned_user_id", "=", actor.userId)
-                  .where("source_type", "=", "thread")
-                  .where("source_id", "in", threadIds)
-                  .execute(),
-                db
-                  .selectFrom("learning_mentions as m")
-                  .innerJoin("learning_replies as lr", "lr.id", "m.source_id")
-                  .select("lr.thread_id as threadId")
-                  .where("m.mentioned_user_id", "=", actor.userId)
-                  .where("m.source_type", "=", "reply")
-                  .where("lr.thread_id", "in", threadIds)
-                  .execute(),
-              ])
-            : Promise.resolve([[], [], [], [], []]),
+      const threadIds = page.map((row) => row.id);
+      const [bookmarkedThreadIds, followedThreadIds, attachmentSummaryRows] =
+        await Promise.all([
+          listBookmarkedThreadIds(db, actor.userId, threadIds),
+          listFollowedThreadIds(db, actor.userId, threadIds),
           attachmentsRepo.listThreadAttachmentSummaries(db, threadIds),
         ]);
+      const attachmentSummariesByThreadId = indexAttachmentSummaries(
+        attachmentSummaryRows,
+      );
 
-        const [likes, bookmarks, follows, threadMentions, replyMentions] =
-          engagements;
-
-        likedThreadIds = new Set(likes.map((l) => l.target_id));
-        bookmarkedThreadIds = new Set(
-          bookmarks.flatMap((b) => (b.thread_id ? [b.thread_id] : [])),
-        );
-        followedThreadIds = new Set(follows.map((f) => f.thread_id));
-        mentionedThreadIds = new Set([
-          ...threadMentions.map((m) => m.source_id),
-          ...replyMentions.map((m) => m.threadId),
-        ]);
-        attachmentSummariesByThreadId = indexAttachmentSummaries(
-          attachmentSummaryRows,
-        );
-      }
-
-      const items: WorkspaceDiscussionItem[] = page.map((row) => {
-        const isQna = row.kind === "question" || row.kind === "qna";
-        const statusVal: QuestionFilterStatus | undefined = isQna
-          ? row.acceptedAnswerId
-            ? "solved"
-            : Number(row.repliesCount || 0) > 0
-              ? "answered"
-              : "open"
-          : undefined;
-
-        return {
-          id: row.id,
-          itemType: "thread",
-          kind: row.kind,
-          title: row.title ?? null,
-          content: row.content,
-          plainText: row.plainText,
-          courseId: row.courseId,
-          courseTitle: row.courseTitle ?? null,
-          lessonId: row.lessonId ?? null,
-          lessonTitle: row.lessonTitle ?? null,
-          timestampSeconds: row.timestampSeconds ?? null,
-          author: {
-            id: row.userId,
-            displayName: row.authorName || "Anonymous Learner",
-            username: row.authorUsername || `user-${row.userId.slice(0, 8)}`,
-            avatarUrl: row.authorAvatarUrl,
-            role: mapAuthorRole(row.authorRole),
-          },
-          status: statusVal,
-          visibility: row.visibility,
-          isLocked: Boolean(row.isLocked),
-          repliesCount: Number(row.repliesCount || 0),
-          likesCount: Number(row.likesCount || 0),
-          isLiked: likedThreadIds.has(row.id),
-          isBookmarked: bookmarkedThreadIds.has(row.id),
-          isFollowing: followedThreadIds.has(row.id),
-          isMentioned: mentionedThreadIds.has(row.id),
-          isOwn: row.userId === actor.userId,
-          attachmentSummary:
-            attachmentSummariesByThreadId.get(row.id) ??
-            emptyAttachmentSummary(),
-          createdAt:
-            row.createdAt instanceof Date
-              ? row.createdAt.toISOString()
-              : String(row.createdAt),
-          updatedAt:
-            row.updatedAt instanceof Date
-              ? row.updatedAt.toISOString()
-              : String(row.updatedAt),
-        };
-      });
+      const items: WorkspaceDiscussionItem[] = page.map((row) => ({
+        id: row.id,
+        itemType: "thread",
+        kind: row.kind,
+        title: row.title ?? null,
+        content: row.content,
+        plainText: row.plainText,
+        courseId: row.courseId,
+        courseTitle: row.courseTitle ?? null,
+        lessonId: row.lessonId ?? null,
+        lessonTitle: row.lessonTitle ?? null,
+        timestampSeconds: row.timestampSeconds ?? null,
+        author: presentWorkspaceAuthor(row),
+        status: threadQaStatus(row),
+        visibility: row.visibility,
+        isLocked: Boolean(row.isLocked),
+        repliesCount: Number(row.repliesCount || 0),
+        likesCount: Number(row.likesCount || 0),
+        isBookmarked: bookmarkedThreadIds.has(row.id),
+        isFollowing: followedThreadIds.has(row.id),
+        isOwn: row.userId === actor.userId,
+        attachmentSummary:
+          attachmentSummariesByThreadId.get(row.id) ?? emptyAttachmentSummary(),
+        createdAt: toIsoString(row.createdAt),
+        updatedAt: toIsoString(row.updatedAt),
+      }));
 
       let nextCursor: string | null = null;
       const last = page.at(-1);
@@ -1945,9 +1250,50 @@ export function createThreadsService(
         items,
         courses,
         nextCursor,
-        totalCount,
       };
     },
+  };
+
+  // Every tab of the Discussions page shows a Like button, so each item says
+  // whether the viewer liked it. Added here, in one lookup for the page,
+  // rather than in each tab's own query.
+  const getDiscussionsWorkspaceItems = service.getDiscussionsWorkspace;
+  service.getDiscussionsWorkspace = async (db, query) => {
+    const response = await getDiscussionsWorkspaceItems(db, query);
+    if (response.items.length === 0) return response;
+    const lessonIds = [
+      ...new Set(
+        response.items.flatMap((item) =>
+          item.lessonId ? [item.lessonId] : [],
+        ),
+      ),
+    ];
+    const [likes, lessonNumbers] = await Promise.all([
+      query.currentUserId
+        ? threadsRepo.listViewerLikes(
+            db,
+            query.currentUserId,
+            response.items.map((item) => item.id),
+          )
+        : null,
+      lessonIds.length > 0 ? threadsRepo.listLessonNumbers(db, lessonIds) : [],
+    ]);
+    const liked = new Set(
+      (likes ?? []).map((like) => `${like.target_type}:${like.target_id}`),
+    );
+    const numberByLesson = new Map(
+      lessonNumbers.map((row) => [row.id, row.lessonNumber]),
+    );
+    return {
+      ...response,
+      items: response.items.map((item) => ({
+        ...item,
+        ...(likes ? { isLiked: liked.has(`${item.itemType}:${item.id}`) } : {}),
+        lessonNumber: item.lessonId
+          ? (numberByLesson.get(item.lessonId) ?? null)
+          : null,
+      })),
+    };
   };
 
   return service;

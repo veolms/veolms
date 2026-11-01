@@ -1,4 +1,5 @@
 export { ElasticScroller } from "./ElasticScroller";
+export { LongScrollElasticScroller } from "./LongScrollElasticScroller";
 export { ElasticScrollerGlyph } from "./ElasticScrollerIcon";
 export {
   ElasticScrollerSocket,

@@ -8,8 +8,8 @@ import {
   AVATAR_STYLES,
   buildDicebearSvgUrl,
   type AvatarStyle,
-  type UserAvatar,
-} from "@veolms/contracts";
+} from "@veolms/contracts/auth/avatar-rules";
+import type { UserAvatar } from "@veolms/contracts";
 
 import { GoogleBrandIcon } from "../auth/SocialBrandIcons";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";

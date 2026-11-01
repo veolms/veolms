@@ -5,6 +5,10 @@ import {
   getInitialAcademyTheme,
   persistAcademyTheme,
 } from "../themes.ts";
+import {
+  persistDisplayMode,
+  readInitialDisplayMode,
+} from "../store/appearanceDefaults";
 
 export type ThemeDisplayMode = "light" | "dark" | "device";
 
@@ -50,12 +54,9 @@ function readInitialPalette(): string {
 }
 
 function readInitialThemeMode(): ThemeDisplayMode {
-  const storedTheme = readStoredValue("veolms-theme");
-  return storedTheme === "light" ||
-    storedTheme === "dark" ||
-    storedTheme === "device"
-    ? storedTheme
-    : "dark";
+  if (typeof window === "undefined") return "dark";
+  // The visitor's own mode, or the academy's default.
+  return readInitialDisplayMode();
 }
 
 function resolveThemeMode(themeMode: ThemeDisplayMode): "light" | "dark" {
@@ -86,11 +87,7 @@ export function useAuthAppearance() {
 
   const setThemeMode = useCallback((nextMode: ThemeDisplayMode) => {
     setThemeModeState(nextMode);
-    try {
-      window.localStorage.setItem("veolms-theme", nextMode);
-    } catch {
-      // ignore
-    }
+    persistDisplayMode(nextMode);
     const resolved = resolveThemeMode(nextMode);
     document.documentElement.dataset.theme = resolved;
     document.documentElement.dataset.appearance = nextMode;

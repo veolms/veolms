@@ -1,18 +1,24 @@
 import { createDatabase } from "@veolms/database";
 import { config } from "../config.ts";
-import { expireAbandonedAttempts } from "../modules/quizzes/shared/quiz.repository.ts";
+import { createAttemptCloser } from "../modules/quizzes/attempts/attempt.closing.ts";
 
 const database = createDatabase(config.DATABASE_URL);
 
 try {
-  const expired = await expireAbandonedAttempts(database);
+  // Saved answers are graded; only attempts with nothing saved end as
+  // "expired". No result notification is sent from here.
+  const { closed, failed } = await createAttemptCloser({
+    database,
+  }).closeOverdueAttempts();
   process.stdout.write(
     `${JSON.stringify({
       job: "quiz-attempt-reaper",
-      expiredCount: expired.length,
+      expiredCount: closed.length,
+      failedCount: failed,
       timestamp: new Date().toISOString(),
     })}\n`,
   );
+  if (failed > 0) process.exitCode = 2;
 } catch (error) {
   process.stderr.write(
     `${JSON.stringify({

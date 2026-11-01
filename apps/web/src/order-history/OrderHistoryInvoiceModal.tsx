@@ -4,7 +4,11 @@ import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useBackDismiss } from "../navigation/useBackDismiss";
-import type { OrderHistoryItem } from "./orderHistoryData";
+import { formatMoney } from "@veolms/contracts/commerce/money";
+import {
+  formatOrderHistoryPayment,
+  type OrderHistoryItem,
+} from "./orderHistoryData";
 
 export interface OrderHistoryInvoiceModalProps {
   order: OrderHistoryItem | null;
@@ -25,7 +29,7 @@ export function OrderHistoryInvoiceModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
       aria-labelledby="order-history-receipt-title"
@@ -48,7 +52,9 @@ export function OrderHistoryInvoiceModal({
                 Order Invoice
               </h2>
               <p className="text-xs text-(--muted)">
-                Invoice {order.invoiceNumber}
+                {order.invoiceNumber
+                  ? `Invoice ${order.invoiceNumber}`
+                  : `Order ${order.orderNumber}`}
               </p>
             </div>
           </div>
@@ -93,15 +99,17 @@ export function OrderHistoryInvoiceModal({
           <div className="rounded-xl bg-(--card-surface-raised,var(--hover)) p-3">
             <span className="text-(--muted) block">Payment Method</span>
             <strong className="text-(--text) font-semibold mt-1 block">
-              {order.payment.brand} ({order.payment.label})
+              {formatOrderHistoryPayment(order.payment)}
             </strong>
           </div>
-          <div className="rounded-xl bg-(--card-surface-raised,var(--hover)) p-3 col-span-2 sm:col-span-1">
-            <span className="text-(--muted) block">Transaction ID</span>
-            <strong className="text-(--text) font-mono text-[11px] mt-1 block truncate">
-              {order.transactionId}
-            </strong>
-          </div>
+          {order.transactionId ? (
+            <div className="rounded-xl bg-(--card-surface-raised,var(--hover)) p-3 col-span-2 sm:col-span-1">
+              <span className="text-(--muted) block">Transaction ID</span>
+              <strong className="text-(--text) font-mono text-[11px] mt-1 block truncate">
+                {order.transactionId}
+              </strong>
+            </div>
+          ) : null}
           <div className="rounded-xl bg-(--card-surface-raised,var(--hover)) p-3 col-span-2 sm:col-span-1">
             <span className="text-(--muted) block">Status</span>
             <div className="flex items-center gap-1.5 mt-1">
@@ -121,11 +129,21 @@ export function OrderHistoryInvoiceModal({
         <div className="mt-4 rounded-xl border border-(--border) p-4 text-xs">
           <div className="flex justify-between py-1 text-(--text-secondary)">
             <span>Course Subtotal</span>
-            <span>${order.subtotal.toFixed(2)}</span>
+            <span>
+              {formatMoney(order.subtotal, {
+                currency: order.currency,
+                unit: "major",
+              })}
+            </span>
           </div>
           <div className="flex justify-between py-1 text-(--muted)">
-            <span>Taxes & Processing Fee (18%)</span>
-            <span>${order.tax.toFixed(2)}</span>
+            <span>Taxes</span>
+            <span>
+              {formatMoney(order.tax, {
+                currency: order.currency,
+                unit: "major",
+              })}
+            </span>
           </div>
           <div className="mt-2 pt-2 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] flex justify-between text-sm font-bold text-(--text)">
             <span>Total Paid</span>

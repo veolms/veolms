@@ -9,6 +9,12 @@ import {
   SearchShortcutHint,
 } from "../searchShortcut";
 
+import {
+  FilterBar,
+  filterButtonSizeClasses,
+  filterControlClasses,
+  filterSelectTriggerClasses,
+} from "../components/FilterBar";
 export interface OrderHistoryFiltersBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -22,38 +28,39 @@ export interface OrderHistoryFiltersBarProps {
   onResetFilters?: () => void;
 }
 
+// The year options follow the calendar: fixed years stopped at 2025 and left
+// later purchases with no year to pick.
+const currentYear = new Date().getFullYear();
+
 const dateRangeOptions: readonly [string, string][] = [
   ["all", "All dates"],
   ["30d", "Last 30 days"],
   ["3m", "Last 3 months"],
   ["6m", "Last 6 months"],
-  ["2025", "Year 2025"],
-  ["2024", "Year 2024"],
+  [String(currentYear), `Year ${currentYear}`],
+  [String(currentYear - 1), `Year ${currentYear - 1}`],
 ];
 
+// Only statuses and payment methods an order in this list can actually have:
+// cancelled orders are shown as Failed, and the payment method is known only
+// as UPI or not UPI.
 const statusOptions: readonly [string, string][] = [
   ["all", "All statuses"],
   ["completed", "Completed"],
   ["processing", "Processing"],
   ["refunded", "Refunded"],
   ["failed", "Failed"],
-  ["canceled", "Canceled"],
 ];
 
 const paymentMethodOptions: readonly [string, string][] = [
   ["all", "All payment methods"],
-  ["visa", "Visa"],
-  ["mastercard", "Mastercard"],
   ["upi", "UPI"],
-  ["paypal", "PayPal"],
   ["other", "Other"],
 ];
 
-const selectBoxContainerClass =
-  "flex min-h-9.75 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all";
+const selectBoxContainerClass = filterControlClasses;
 
-const selectTriggerClass =
-  "min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full";
+const selectTriggerClass = `${filterSelectTriggerClasses} w-full`;
 
 export function OrderHistoryFiltersBar({
   searchQuery,
@@ -75,13 +82,12 @@ export function OrderHistoryFiltersBar({
     (paymentMethodFilter !== "all" ? 1 : 0);
 
   return (
-    <div
-      className="flex flex-col gap-2.5 sm:gap-3 rounded-[15px] border border-(--border) bg-(--card-surface) p-2.5 sm:p-3.5 transition-all w-full"
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
+    <FilterBar className="gap-2.5 sm:gap-3 w-full">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2.5">
         {/* Search Input */}
-        <label className="flex min-h-9.75 w-full sm:min-w-56 sm:flex-1 items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all cursor-text">
+        <label
+          className={`${filterControlClasses} w-full sm:min-w-56 sm:flex-1 gap-2.5 cursor-text`}
+        >
           <MagnifyingGlass
             size={17}
             className="text-(--muted) shrink-0"
@@ -118,7 +124,7 @@ export function OrderHistoryFiltersBar({
             aria-label="Toggle order filters"
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((open) => !open)}
-            className={`inline-flex min-h-9.75 shrink-0 items-center gap-2 rounded-[9px] border px-3 text-xs md:text-sm font-medium transition-colors cursor-pointer ${
+            className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs md:text-sm font-medium transition-colors cursor-pointer ${
               filtersOpen || activeFilterCount > 0
                 ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--card-surface))] text-(--accent)"
                 : "border-(--border) bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] text-(--muted) hover:bg-(--hover) hover:text-(--text)"
@@ -137,7 +143,7 @@ export function OrderHistoryFiltersBar({
             <button
               type="button"
               onClick={onResetFilters}
-              className="flex min-h-9.75 items-center gap-1.5 rounded-[9px] bg-(--hover) px-3 py-1.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--surface-strong) hover:text-(--text) transition-colors cursor-pointer"
+              className={`${filterButtonSizeClasses} flex items-center gap-1.5 bg-(--hover) px-3 py-1.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--surface-strong) hover:text-(--text) transition-colors cursor-pointer`}
             >
               <ArrowCounterClockwise size={14} />
               <span className="hidden sm:inline">Reset</span>
@@ -180,6 +186,6 @@ export function OrderHistoryFiltersBar({
           </div>
         </div>
       )}
-    </div>
+    </FilterBar>
   );
 }

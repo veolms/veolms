@@ -1,4 +1,6 @@
+import { SplitFramePane } from "../components/SplitFramePane";
 import "./learning-split-layout.css";
+import { LEARNING_SPLIT_MEDIA } from "./learningShellPreferences";
 import {
   LESSON_SIDE_PLACEHOLDER_SURFACE_CLASS,
   LessonContentPlaceholderBars,
@@ -28,6 +30,7 @@ export function LearningWorkspaceFallback() {
       <div
         className="mx-auto grid w-full max-w-[1840px] grid-cols-[minmax(0,1fr)] min-[1081px]:grid-cols-[minmax(0,1fr)_minmax(0,var(--learning-curriculum-width,400px))]"
         data-learning-split-lesson=""
+        data-split-frame-sized=""
       >
         <div className="min-w-0">
           <div
@@ -43,14 +46,14 @@ export function LearningWorkspaceFallback() {
             <LessonContentPlaceholderBars />
           </div>
         </div>
-        <div
+        <SplitFramePane
+          element="div"
+          media={LEARNING_SPLIT_MEDIA}
           className={`sticky top-0 hidden h-dvh min-w-0 flex-col gap-3 self-start overflow-hidden p-4 min-[1081px]:flex [[data-learning-curriculum-state=collapsed]_&]:hidden ${LESSON_SIDE_PLACEHOLDER_SURFACE_CLASS}`}
           aria-hidden="true"
-          data-learning-split-pane=""
-          data-learning-split-card=""
         >
           <LessonSidePlaceholderBars />
-        </div>
+        </SplitFramePane>
       </div>
     </div>
   );

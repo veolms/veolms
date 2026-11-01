@@ -5,15 +5,6 @@ export type DiscussionWorkspaceSkeletonMode = "loading" | "preview";
 export const DISCUSSION_LOADING_SKELETON_COUNT = 4;
 export const DISCUSSION_PREVIEW_SKELETON_COUNT = 5;
 
-const skeletonVariantClassNames: Readonly<Record<DiscussionTab, string>> = {
-  "q-and-a": "discussion-thread--question",
-  comments: "discussion-thread--comment",
-  notes: "discussion-thread--note",
-  mentions: "discussion-thread--mention",
-  following: "discussion-thread--following",
-  saved: "discussion-thread--bookmark",
-};
-
 export interface DiscussionWorkspaceSkeletonProps {
   mode: DiscussionWorkspaceSkeletonMode;
   variant: DiscussionTab;
@@ -25,72 +16,31 @@ export interface DiscussionWorkspaceSkeletonListProps extends DiscussionWorkspac
   withinFeed?: boolean;
 }
 
+/** A row of the Discussions list while it loads: the same shape, in bars. */
 export function DiscussionWorkspaceSkeleton({
   mode,
-  variant,
 }: DiscussionWorkspaceSkeletonProps) {
   const isLoading = mode === "loading";
 
   return (
     <article
-      className={[
-        "discussion-thread",
-        "discussion-thread--workspace-card",
-        "discussion-workspace-skeleton",
-        skeletonVariantClassNames[variant],
-        "is-static",
-        "is-collapsed",
-        isLoading ? "animate-pulse motion-reduce:animate-none" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      className={`relative flex gap-4 px-4 py-5 after:absolute after:inset-x-4 after:-bottom-px after:h-px after:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] after:content-[""] ${
+        isLoading ? "animate-pulse motion-reduce:animate-none" : ""
+      }`}
       aria-hidden="true"
       data-discussion-skeleton={mode}
     >
-      <div className="discussion-thread__open discussion-thread__open--overview">
-        <div className="discussion-thread__avatar">
-          <span className="block rounded-full bg-(--track)" />
+      <span className="size-10 shrink-0 rounded-full bg-(--track)" />
+      <div className="flex min-w-0 flex-1 flex-col gap-3 pt-1">
+        <div className="flex items-center gap-2">
+          <span className="h-3 w-28 rounded bg-(--track)" />
+          <span className="h-3 w-16 rounded bg-(--track)" />
         </div>
-
-        <div className="discussion-thread__body">
-          <div className="discussion-thread__author">
-            <span className="h-3 w-24 rounded bg-(--track)" />
-            <span className="discussion-thread__author-activity h-3 w-12 rounded bg-(--track)" />
-          </div>
-
-          <div className="discussion-hub__card-content">
-            <div className="discussion-hub__card-preview-row">
-              <div className="discussion-hub__card-preview">
-                <span className="block h-3.5 w-4/5 rounded bg-(--track)" />
-              </div>
-              <div className="discussion-hub__card-content-utility">
-                <span className="block h-3 w-16 rounded bg-(--track)" />
-              </div>
-            </div>
-          </div>
-
-          <div className="discussion-thread__context">
-            <span className="h-3 w-20 rounded bg-(--track)" />
-            <span
-              aria-hidden="true"
-              className="size-1 rounded-full bg-(--track)"
-            />
-            <small className="h-3 w-14 rounded bg-(--track)" />
-          </div>
-        </div>
-
-        <div className="discussion-thread__meta">
-          <div className="discussion-thread__rail-inner">
-            <span className="discussion-thread__rail-slot--top inline-flex">
-              <span className="h-5 w-18 rounded bg-(--track)" />
-            </span>
-            <span className="discussion-thread__rail-slot--middle">
-              <span className="h-3 w-15 rounded bg-(--track)" />
-            </span>
-            <time className="discussion-thread__rail-slot--bottom">
-              <span className="block h-3 w-12 rounded bg-(--track)" />
-            </time>
-          </div>
+        <span className="h-3.5 w-4/5 rounded bg-(--track)" />
+        <span className="h-3 w-1/2 rounded bg-(--track)" />
+        <div className="flex gap-2 pt-1">
+          <span className="h-6 w-12 rounded-lg bg-(--track)" />
+          <span className="h-6 w-16 rounded-lg bg-(--track)" />
         </div>
       </div>
     </article>
@@ -114,7 +64,7 @@ export function DiscussionWorkspaceSkeletonList({
 
   return (
     <div
-      className={withinFeed ? "grid gap-2.5" : "discussion-hub__thread-list"}
+      className={withinFeed ? "grid" : "discussion-hub__thread-list"}
       role={isLoading ? "status" : undefined}
       aria-busy={isLoading ? true : undefined}
       aria-live={isLoading ? "polite" : undefined}

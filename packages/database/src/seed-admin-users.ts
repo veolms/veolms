@@ -1,6 +1,7 @@
 import { sql, type Kysely } from "kysely";
 import type { Database } from "./schema.ts";
 import { ROLES } from "./seed-rbac.ts";
+import { grantPlatformRole } from "./role-grants.ts";
 
 export interface AdminUserSeed {
   readonly id: string;
@@ -127,37 +128,10 @@ export async function seedAdminUsers(
       )
       .execute();
 
-    // Assign the admin role in user_roles
-    await database
-      .insertInto("user_roles")
-      .values({
-        user_id: admin.id,
-        role_id: adminRoleId,
-      })
-      .onConflict((conflict) => conflict.doNothing())
-      .execute();
-
-    // Ensure platform-scoped role_assignment exists
-    const existingAssignment = await database
-      .selectFrom("role_assignments")
-      .select("id")
-      .where("user_id", "=", admin.id)
-      .where("role_id", "=", adminRoleId)
-      .where("scope_type", "=", "platform")
-      .executeTakeFirst();
-
-    if (!existingAssignment) {
-      await database
-        .insertInto("role_assignments")
-        .values({
-          id: crypto.randomUUID(),
-          user_id: admin.id,
-          role_id: adminRoleId,
-          scope_type: "platform",
-          course_id: null,
-        })
-        .execute();
-    }
+    await grantPlatformRole(database, {
+      userId: admin.id,
+      roleId: adminRoleId,
+    });
   }
 
   console.info(

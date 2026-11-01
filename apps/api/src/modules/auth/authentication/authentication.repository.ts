@@ -1,11 +1,48 @@
 import type { Executor } from "../shared/repository.types.ts";
-import type { UserAvatarSource } from "@veolms/database";
+import { grantPlatformRole, type UserAvatarSource } from "@veolms/database";
+import { sql } from "kysely";
 
 export function findUserById(database: Executor, userId: string) {
   return database
     .selectFrom("users")
     .selectAll()
     .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+/**
+ * Name, username and avatar of each of a list of users: what a list that
+ * shows people needs, and no more of the row than that.
+ */
+export function listUserCardsByIds(
+  database: Executor,
+  userIds: readonly string[],
+) {
+  if (userIds.length === 0) {
+    return Promise.resolve(
+      [] as {
+        id: string;
+        username: string;
+        display_name: string;
+        avatar_data_url: string | null;
+      }[],
+    );
+  }
+  return database
+    .selectFrom("users")
+    .select(["id", "username", "display_name", "avatar_data_url"])
+    .where("id", "in", [...userIds])
+    .where("is_deleted", "=", false)
+    .execute();
+}
+
+/** The same of one user, found by their username. */
+export function findUserCardByUsername(database: Executor, username: string) {
+  return database
+    .selectFrom("users")
+    .select(["id", "username", "display_name", "avatar_data_url"])
+    .where("username", "=", username)
     .where("is_deleted", "=", false)
     .executeTakeFirst();
 }
@@ -31,6 +68,27 @@ export function listUserDisplayNamesByIds(
 }
 
 /**
+ * Bulk name and email lookup, for staff lists that find people by either
+ * (the quiz report's student search). Same narrow shape as the name lookup.
+ */
+export function listUserNamesAndEmailsByIds(
+  database: Executor,
+  userIds: readonly string[],
+) {
+  if (userIds.length === 0) {
+    return Promise.resolve(
+      [] as { id: string; display_name: string; email: string }[],
+    );
+  }
+  return database
+    .selectFrom("users")
+    .select(["id", "display_name", "email"])
+    .where("id", "in", [...userIds])
+    .where("is_deleted", "=", false)
+    .execute();
+}
+
+/**
  * Bulk id+email lookup for notification fan-out. Includes soft-deleted
  * users, matching findUserByIdIncludingDeleted's semantics (the per-id
  * variant the notification worker used one query at a time).
@@ -40,11 +98,13 @@ export function listNotificationRecipientsByIds(
   userIds: readonly string[],
 ) {
   if (userIds.length === 0) {
-    return Promise.resolve([] as { id: string; email: string | null }[]);
+    return Promise.resolve(
+      [] as { id: string; email: string | null; isDeleted: boolean }[],
+    );
   }
   return database
     .selectFrom("users")
-    .select(["id", "email"])
+    .select(["id", "email", "is_deleted as isDeleted"])
     .where("id", "in", [...userIds])
     .execute();
 }
@@ -90,17 +150,52 @@ export function findUserByIdIncludingDeleted(
     .executeTakeFirst();
 }
 
-/** Looks a user up by whichever contact channel the flow was started with. */
-export function findUserByIdentifier(
+/** The contact fields the verification flows read, without the whole row. */
+export function findUserContactById(database: Executor, userId: string) {
+  return database
+    .selectFrom("users")
+    .select(["id", "email", "email_verified_at"])
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+export function findUserAvatarUrlById(database: Executor, userId: string) {
+  return database
+    .selectFrom("users")
+    .select("avatar_data_url")
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+/** Which active account, if any, owns a contact channel. */
+export function findUserIdByIdentifier(
   database: Executor,
   identifier: string,
   identifierType: "email" | "phone",
 ) {
   return database
     .selectFrom("users")
-    .selectAll()
+    .select("id")
     .where(identifierType === "email" ? "email" : "phone_no", "=", identifier)
     .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+/**
+ * Whether a contact channel is taken, counting deactivated accounts, for
+ * callers that only branch on existence and the deactivated flag.
+ */
+export function findUserStatusByIdentifier(
+  database: Executor,
+  identifier: string,
+  identifierType: "email" | "phone",
+) {
+  return database
+    .selectFrom("users")
+    .select(["id", "is_deleted"])
+    .where(identifierType === "email" ? "email" : "phone_no", "=", identifier)
     .executeTakeFirst();
 }
 
@@ -114,15 +209,6 @@ export function findUserByIdentifierIncludingDeleted(
     .selectFrom("users")
     .selectAll()
     .where(identifierType === "email" ? "email" : "phone_no", "=", identifier)
-    .executeTakeFirst();
-}
-
-export function findUserByEmail(database: Executor, email: string) {
-  return database
-    .selectFrom("users")
-    .selectAll()
-    .where("email", "=", email)
-    .where("is_deleted", "=", false)
     .executeTakeFirst();
 }
 
@@ -163,6 +249,26 @@ export async function countUsers(database: Executor): Promise<number> {
     .executeTakeFirst();
 
   return Number(row?.count ?? 0);
+}
+
+/**
+ * Serializes account creation for the rest of the transaction, so two
+ * sign-ups cannot both see an empty platform.
+ */
+export async function lockUserBootstrap(transaction: Executor): Promise<void> {
+  await sql`select pg_advisory_xact_lock(hashtext('veolms:user-bootstrap'))`.execute(
+    transaction,
+  );
+}
+
+/** Serializes changes to one user's avatar for the rest of the transaction. */
+export async function lockUserAvatar(
+  transaction: Executor,
+  userId: string,
+): Promise<void> {
+  await sql`select pg_advisory_xact_lock(hashtext(${`veolms:user-avatar:${userId}`}))`.execute(
+    transaction,
+  );
 }
 
 export interface InsertUserInput {
@@ -277,7 +383,7 @@ export function findUserAvatarBySource(
 export function listUserAvatars(database: Executor, userId: string) {
   return database
     .selectFrom("user_avatars")
-    .selectAll()
+    .select(["id", "source", "storage_prefix", "avatar_data_url"])
     .where("user_id", "=", userId)
     .orderBy("last_used_at", "desc")
     .orderBy("created_at", "desc")
@@ -404,7 +510,7 @@ export async function updateUserPhoneNumber(
     })
     .where("id", "=", userId)
     .where("is_deleted", "=", false)
-    .returningAll()
+    .returning("id")
     .executeTakeFirst();
 }
 
@@ -421,10 +527,15 @@ export async function markUserEmailVerified(
     })
     .where("id", "=", userId)
     .where("is_deleted", "=", false)
-    .returningAll()
+    .returning("id")
     .executeTakeFirst();
 }
 
+/**
+ * Names of the roles a user holds platform-wide, from both role tables:
+ * team roles are written to `role_assignments`, and the role-name checks
+ * that remain must see them too.
+ */
 export async function listUserRoleNames(
   database: Executor,
   userId: string,
@@ -434,6 +545,20 @@ export async function listUserRoleNames(
     .innerJoin("roles", "roles.id", "user_roles.role_id")
     .select("roles.name")
     .where("user_roles.user_id", "=", userId)
+    .union((eb) =>
+      eb
+        .selectFrom("role_assignments")
+        .innerJoin("roles", "roles.id", "role_assignments.role_id")
+        .select("roles.name")
+        .where("role_assignments.user_id", "=", userId)
+        .where("role_assignments.scope_type", "=", "platform")
+        .where((inner) =>
+          inner.or([
+            inner("role_assignments.expires_at", "is", null),
+            inner("role_assignments.expires_at", ">", sql<Date>`now()`),
+          ]),
+        ),
+    )
     .execute();
 
   return rows.map((row) => row.name);
@@ -457,8 +582,38 @@ export async function assignRole(
   userId: string,
   roleId: string,
 ): Promise<void> {
-  await database
-    .insertInto("user_roles")
-    .values({ user_id: userId, role_id: roleId })
-    .execute();
+  await grantPlatformRole(database, { userId, roleId });
+}
+
+/**
+ * Replaces an account's email and/or phone number on an admin's behalf. A
+ * replaced channel is unverified and unpublished until its owner confirms it.
+ */
+export async function updateUserContact(
+  database: Executor,
+  userId: string,
+  changes: {
+    email?: string;
+    phoneNo?: string | null;
+  },
+) {
+  return database
+    .updateTable("users")
+    .set({
+      ...(changes.email !== undefined
+        ? { email: changes.email, email_verified_at: null, email_public: false }
+        : {}),
+      ...(changes.phoneNo !== undefined
+        ? {
+            phone_no: changes.phoneNo,
+            phone_verified_at: null,
+            mobile_public: false,
+          }
+        : {}),
+      updated_at: new Date(),
+    })
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .returning(["email", "phone_no"])
+    .executeTakeFirst();
 }

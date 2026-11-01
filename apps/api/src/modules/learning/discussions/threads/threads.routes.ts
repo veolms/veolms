@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   createLearningThreadRequestSchema,
   discussionsWorkspaceResponseSchema,
+  learningThreadEditResponseSchema,
   learningThreadSchema,
   learningThreadsListResponseSchema,
   listLearningThreadsQuerySchema,
@@ -159,7 +160,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads/:threadId",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.optionalAuthenticated,
       schema: {
         operationId: "getLearningThread",
         tags: ["Learning Discussions"],
@@ -187,7 +188,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ threadId: z.uuid() }),
         body: updateLearningThreadRequestSchema,
         response: {
-          200: jsonResponse("Thread updated", learningThreadSchema),
+          200: jsonResponse("Thread updated", learningThreadEditResponseSchema),
           400: errorResponse("Cannot edit locked thread"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Author only"),

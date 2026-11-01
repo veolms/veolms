@@ -11,13 +11,11 @@ export type DashboardQuery = z.infer<typeof dashboardQuerySchema>;
 
 export const dashboardKpiSchema = z.strictObject({
   value: z.number(),
-  previousValue: z.number(),
   changePercent: z.number().nullable(),
 });
 export type DashboardKpi = z.infer<typeof dashboardKpiSchema>;
 
 export const dashboardRevenueOverviewSchema = z.strictObject({
-  range: dashboardRangeSchema,
   currency: z.string().length(3),
   trend: z.array(
     z.strictObject({
@@ -25,6 +23,7 @@ export const dashboardRevenueOverviewSchema = z.strictObject({
       value: z.number(),
     }),
   ),
+  /** grossSales, netRevenue and the trend values are in minor units (paise). */
   grossSales: dashboardKpiSchema,
   netRevenue: dashboardKpiSchema,
   orders: dashboardKpiSchema,
@@ -38,9 +37,9 @@ const dashboardLearningActivityMetricSchema = z.strictObject({
   value: z.number().nonnegative(),
 });
 
+/** One UTC 8-hour window; `start` is its inclusive lower bound. */
 const dashboardEnrollmentActivityBucketSchema = z.strictObject({
   start: z.iso.datetime(),
-  end: z.iso.datetime(),
   value: z.number().int().nonnegative(),
 });
 
@@ -49,13 +48,8 @@ export const dashboardLearningActivitySchema = z.strictObject({
   courseCompletionRate: dashboardLearningActivityMetricSchema,
   newEnrollments: dashboardLearningActivityMetricSchema,
   enrollmentActivity: z.strictObject({
-    currentTotal: z.number().int().nonnegative(),
-    previousTotal: z.number().int().nonnegative(),
+    /** Last seven days against the seven before them. */
     changePercent: z.number().nullable(),
-    from: z.iso.datetime(),
-    to: z.iso.datetime(),
-    bucketHours: z.literal(8),
-    timeZone: z.literal("UTC"),
     buckets: z.array(dashboardEnrollmentActivityBucketSchema).length(21),
   }),
 });
@@ -75,21 +69,31 @@ export const dashboardYourCourseSchema = z.strictObject({
 });
 export type DashboardYourCourse = z.infer<typeof dashboardYourCourseSchema>;
 
+/**
+ * Every signed-in account gets a dashboard. The academy-wide numbers are
+ * null without analytics for every course (analytics.overview.read or the
+ * revenue key), and the money is null without analytics.revenue.read.
+ * "Your courses" is always the caller's own.
+ */
 export const dashboardSummaryResponseSchema = z.strictObject({
-  revenue: z.strictObject({
-    value: z.number(),
-    previousValue: z.number(),
-    changePercent: z.number().nullable(),
-    currency: z.string().length(3),
-  }),
-  students: z.strictObject({
-    total: z.number().int().nonnegative(),
-    newThisMonth: z.number().int().nonnegative(),
-  }),
-  activeLearners: dashboardKpiSchema,
-  watchHours: dashboardKpiSchema,
-  revenueOverview: dashboardRevenueOverviewSchema,
-  learningActivity: dashboardLearningActivitySchema,
+  /** value is in minor units (paise). */
+  revenue: z
+    .strictObject({
+      value: z.number(),
+      changePercent: z.number().nullable(),
+      currency: z.string().length(3),
+    })
+    .nullable(),
+  students: z
+    .strictObject({
+      total: z.number().int().nonnegative(),
+      newThisMonth: z.number().int().nonnegative(),
+    })
+    .nullable(),
+  activeLearners: dashboardKpiSchema.nullable(),
+  watchHours: dashboardKpiSchema.nullable(),
+  revenueOverview: dashboardRevenueOverviewSchema.nullable(),
+  learningActivity: dashboardLearningActivitySchema.nullable(),
   yourCourses: z.array(dashboardYourCourseSchema),
 });
 

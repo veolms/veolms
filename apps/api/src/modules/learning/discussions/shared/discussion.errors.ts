@@ -4,6 +4,16 @@ export const DiscussionErrors = {
   notFound(resource: string = "Discussion thread") {
     return httpError(404, "NOT_FOUND", `${resource} not found`);
   },
+  /**
+   * A thread the viewer may not be shown answers exactly as one that does
+   * not exist: the same code, so the two cannot be told apart.
+   */
+  threadNotFound() {
+    return httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
+  },
+  replyNotFound() {
+    return httpError(404, "REPLY_NOT_FOUND", "Reply not found");
+  },
   noteNotFound() {
     return httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
   },

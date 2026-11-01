@@ -16,7 +16,7 @@ export function findMatchingActiveOtp(
 ) {
   return database
     .selectFrom("otp_codes")
-    .selectAll()
+    .select(["id", "attempts"])
     .where("identifier", "=", input.identifier)
     .where("identifier_type", "=", input.identifierType)
     .where("purpose", "=", input.purpose)
@@ -80,6 +80,46 @@ export async function consumeOtp(
   return Number(result.numUpdatedRows) > 0;
 }
 
+/**
+ * Matches and consumes a valid code in one statement — the success path of
+ * findMatchingActiveOtp + consumeOtp without the second round trip. Returns
+ * false whenever the code cannot be consumed (wrong code, expired, attempts
+ * exhausted, lost a race); the caller then runs the two-step path, which
+ * owns attempt accounting and the exact failure responses.
+ */
+export async function consumeMatchingActiveOtp(
+  database: Executor,
+  input: {
+    identifier: string;
+    identifierType: IdentifierType;
+    purpose: string;
+    codeHash: string;
+    now: Date;
+  },
+): Promise<boolean> {
+  const result = await database
+    .updateTable("otp_codes")
+    .set({ consumed_at: input.now })
+    .where("id", "=", (eb) =>
+      eb
+        .selectFrom("otp_codes")
+        .select("id")
+        .where("identifier", "=", input.identifier)
+        .where("identifier_type", "=", input.identifierType)
+        .where("purpose", "=", input.purpose)
+        .where("code_hash", "=", input.codeHash)
+        .where("consumed_at", "is", null)
+        .where("expires_at", ">", input.now)
+        .limit(1),
+    )
+    .where("consumed_at", "is", null)
+    .where("expires_at", ">", input.now)
+    .where("attempts", "<", OTP_MAX_ATTEMPTS)
+    .executeTakeFirst();
+
+  return Number(result.numUpdatedRows) > 0;
+}
+
 export async function retireOutstandingOtps(
   database: Executor,
   input: {
@@ -135,14 +175,86 @@ export async function countOtpsSince(
     identifierType: IdentifierType;
     purpose: string;
     since: Date;
+    /** Count only sends requested from this address. */
+    requesterIp?: string | undefined;
   },
 ): Promise<number> {
-  const row = await database
+  let query = database
     .selectFrom("otp_codes")
     .select((eb) => eb.fn.count<string>("id").as("count"))
     .where("identifier", "=", input.identifier)
     .where("identifier_type", "=", input.identifierType)
     .where("purpose", "=", input.purpose)
+    .where("created_at", ">", input.since);
+
+  if (input.requesterIp) {
+    query = query.where("requester_ip", "=", input.requesterIp);
+  }
+
+  const row = await query.executeTakeFirst();
+  return Number(row?.count ?? 0);
+}
+
+/** Codes requested from one network address, across every destination. */
+export async function countOtpsRequestedFromIpSince(
+  database: Executor,
+  input: { requesterIp: string; since: Date },
+): Promise<number> {
+  const row = await database
+    .selectFrom("otp_codes")
+    .select((eb) => eb.fn.count<string>("id").as("count"))
+    .where("requester_ip", "=", input.requesterIp)
+    .where("created_at", ">", input.since)
+    .executeTakeFirst();
+
+  return Number(row?.count ?? 0);
+}
+
+/**
+ * How many different destinations one network address asked a sign-up code
+ * for, not counting `excluding` (the one being requested now).
+ */
+export async function countSignupDestinationsFromIpSince(
+  database: Executor,
+  input: {
+    requesterIp: string;
+    since: Date;
+    excluding: { identifier: string; identifierType: IdentifierType };
+  },
+): Promise<number> {
+  const row = await database
+    .selectFrom("otp_codes")
+    .select(
+      sql<string>`count(distinct (identifier_type || ':' || identifier))`.as(
+        "count",
+      ),
+    )
+    .where("requester_ip", "=", input.requesterIp)
+    .where("purpose", "in", ["email_verification", "phone_verification"])
+    .where("requester_user_id", "is", null)
+    .where("created_at", ">", input.since)
+    .where((eb) =>
+      eb.not(
+        eb.and([
+          eb("identifier", "=", input.excluding.identifier),
+          eb("identifier_type", "=", input.excluding.identifierType),
+        ]),
+      ),
+    )
+    .executeTakeFirst();
+
+  return Number(row?.count ?? 0);
+}
+
+/** Sends a signed-in user has requested, across every destination. */
+export async function countOtpsRequestedByUserSince(
+  database: Executor,
+  input: { userId: string; since: Date },
+): Promise<number> {
+  const row = await database
+    .selectFrom("otp_codes")
+    .select((eb) => eb.fn.count<string>("id").as("count"))
+    .where("requester_user_id", "=", input.userId)
     .where("created_at", ">", input.since)
     .executeTakeFirst();
 
@@ -158,6 +270,8 @@ export async function insertOtp(
     purpose: string;
     codeHash: string;
     expiresAt: Date;
+    requesterIp?: string | null | undefined;
+    requesterUserId?: string | null | undefined;
   },
 ): Promise<void> {
   await database
@@ -171,6 +285,8 @@ export async function insertOtp(
       attempts: 0,
       expires_at: input.expiresAt,
       consumed_at: null,
+      requester_ip: input.requesterIp ?? null,
+      requester_user_id: input.requesterUserId ?? null,
     })
     .execute();
 }

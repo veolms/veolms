@@ -16,6 +16,7 @@ import {
   type ReviewTabId,
   type TopReviewer,
 } from "./reviewsData";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 
 export type RatingFilterOption = "all" | "5" | "4" | "3" | "2" | "1";
 export type SortOption = "recent" | "highest" | "lowest" | "helpful";
@@ -163,12 +164,13 @@ export function useReviewsFilter(
 
     // Filter by Search Query
     if (debouncedSearch) {
-      const query = debouncedSearch.toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.authorName.toLowerCase().includes(query) ||
-          item.title.toLowerCase().includes(query) ||
-          item.content.toLowerCase().includes(query),
+      result = result.filter((item) =>
+        fuzzyMatches(
+          debouncedSearch,
+          item.authorName,
+          item.title,
+          item.content,
+        ),
       );
     }
 

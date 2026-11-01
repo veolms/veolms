@@ -2,6 +2,7 @@ import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/Chat
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import type { HighlightItem } from "./reviewsData";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface ReviewHighlightsWidgetProps {
   highlights: readonly HighlightItem[];
@@ -37,10 +38,9 @@ export function ReviewHighlightsWidget({
   };
 
   return (
-    <section
+    <ElevatedCard
       aria-labelledby="review-highlights-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="p-5 md:p-6 transition-all"
     >
       <h3
         id="review-highlights-heading"
@@ -71,6 +71,6 @@ export function ReviewHighlightsWidget({
           </div>
         ))}
       </div>
-    </section>
+    </ElevatedCard>
   );
 }

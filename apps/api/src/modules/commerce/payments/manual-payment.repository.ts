@@ -1,6 +1,12 @@
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import type { ManualPaymentStatus } from "@veolms/database";
 
+/**
+ * What a verified transfer's payment id starts with; the rest is the
+ * buyer's reference without spaces, in upper case.
+ */
+export const MANUAL_PAYMENT_ID_PREFIX = "manual_pay_";
+
 export async function findManualPaymentRequestById(
   database: Executor,
   requestId: string,
@@ -21,6 +27,48 @@ export async function findManualPaymentRequestByOrderId(
     .selectAll()
     .where("order_id", "=", orderId)
     .executeTakeFirst();
+}
+
+/**
+ * A transfer reported for the order that staff have not answered yet. With
+ * `reportedAfter`, only one reported since then: an older one no longer
+ * keeps the gateway closed (shared/open-orders.ts's
+ * manualPaymentBlockingSince).
+ */
+export async function findPendingManualPaymentRequestByOrderId(
+  database: Executor,
+  orderId: string,
+  reportedAfter?: Date,
+) {
+  let query = database
+    .selectFrom("manual_payment_requests")
+    .select("id")
+    .where("order_id", "=", orderId)
+    .where("status", "=", "pending");
+  if (reportedAfter) {
+    query = query.where("created_at", ">", reportedAfter);
+  }
+  return await query.executeTakeFirst();
+}
+
+/**
+ * The buyer takes back every transfer report of the order that staff have
+ * not answered. Returns the rows withdrawn, newest first; none when nothing
+ * was waiting.
+ */
+export async function withdrawPendingManualPaymentRequests(
+  database: Executor,
+  orderId: string,
+  now: Date,
+) {
+  const rows = await database
+    .updateTable("manual_payment_requests")
+    .set({ status: "withdrawn", updated_at: now })
+    .where("order_id", "=", orderId)
+    .where("status", "=", "pending")
+    .returningAll()
+    .execute();
+  return rows.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
 }
 
 export async function listManualPaymentRequestsByUser(

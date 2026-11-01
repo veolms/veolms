@@ -1,40 +1,44 @@
-import type { Database, DatabaseExecutor } from "@veolms/database";
-import type { ExpressionBuilder } from "kysely";
+import { cacheTags, createCache } from "@veolms/api-core";
+import type { DatabaseExecutor } from "@veolms/database";
 import type { DiscussionVisibility } from "@veolms/contracts";
-import { findSettingsByCourseId } from "../../../courses/configuration/configuration.repository.ts";
-import { createAccessService } from "../../../access/index.ts";
-import { ADMIN_ROLE } from "../../../auth/index.ts";
+import { findCourseSettings } from "../../../courses/index.ts";
+import {
+  createAccessService,
+  isOpenFreeCourse,
+} from "../../../access/index.ts";
+import { hasAcademyPermission } from "../../../authorization/index.ts";
 import { httpError } from "../../../../lib/errors.ts";
 import { DiscussionErrors } from "./discussion.errors.ts";
+import { createDiscussionRepository } from "./discussion.repository.ts";
 
-// Kysely represents the `"courses as c"` + `"course_access_rules as ar"` +
-// `"course_pricing as p"` aliased join as its own entry on the DB generic,
-// not the bare table names.
-type CourseAccessAliasedDB = Database & {
-  c: Database["courses"];
-  ar: Database["course_access_rules"];
-  p: Database["course_pricing"];
-};
+/**
+ * Every published course with its price and access rule: read by every
+ * notes, threads, workspace and bookmarks listing to find the free courses
+ * a learner may read. The same for everyone; any course change clears it
+ * (`catalog`).
+ */
+const publishedCourseOpenness = createCache<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof createDiscussionRepository
+      >["listPublishedCourseOpenness"]
+    >
+  >
+>({
+  name: "discussions.published-course-openness",
+  ttlMs: 5 * 60_000,
+  maxBytes: 4 * 1024 * 1024,
+});
 
-// Single source of truth for "is this course open to anyone with course
-// access, without needing an explicit grant" — a published course that is
-// neither access-restricted nor paid. Shared by the single-course check in
-// `canAccessCourse` and the bulk listing in `listAccessibleCourseIds` so the
-// two can't drift apart.
-function isOpenCourseAccess(
-  eb: ExpressionBuilder<CourseAccessAliasedDB, "c" | "ar" | "p">,
-) {
-  return eb.and([
-    eb.or([
-      eb("ar.access_type", "is", null),
-      eb("ar.access_type", "!=", "restricted"),
-    ]),
-    eb.or([
-      eb("p.pricing_type", "is", null),
-      eb("p.pricing_type", "!=", "paid"),
-    ]),
-  ]);
-}
+// "Is this course open to a signed-in learner who holds no grant" is asked
+// of `isOpenFreeCourse`, the rule lesson playback, quizzes and the course
+// overview use: free and not access-restricted. It used to be written out
+// here as "not restricted and not paid", which also opened a published
+// course that has no pricing row; the shared rule does not. Both the
+// single-course check in `canAccessCourse` and the bulk listing in
+// `listAccessibleCourseIds` read the two columns and ask the same function,
+// so they cannot drift from each other or from the rest of the API.
 
 export interface DiscussionActor {
   userId: string;
@@ -72,23 +76,26 @@ export interface DiscussionAccess {
     courseId: string,
   ): Promise<void>;
   assertNotesEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
-  assertCommentsEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
-  assertQaEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
   assertThreadKindEnabled(
     db: DatabaseExecutor,
     courseId: string,
     kind: string,
-  ): Promise<void>;
-  assertCanAccessThreadCourse(
-    db: DatabaseExecutor,
-    actor: DiscussionActor,
-    courseId: string,
   ): Promise<void>;
   assertCanAccessThread(
     db: DatabaseExecutor,
     actor: DiscussionActor,
     thread: ThreadAccessTarget,
   ): Promise<void>;
+  /**
+   * The thread-level half of `assertCanAccessThread`, for a caller that has
+   * already established the actor's access to the thread's course and knows
+   * whether the actor moderates it. Reads nothing.
+   */
+  assertThreadVisibleToMember(
+    actor: DiscussionActor,
+    thread: ThreadAccessTarget,
+    canModerate: boolean,
+  ): void;
   assertCanAccessNote(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -108,9 +115,14 @@ export interface DiscussionAccess {
     db: DatabaseExecutor,
     actor: DiscussionActor,
   ): Promise<readonly string[] | "all">;
-  listCourseParticipantIds(
+  /**
+   * Courses whose discussions the actor may see as staff (everyone's
+   * threads, moderation reports): every course for an admin, otherwise only
+   * the courses the actor created.
+   */
+  listModeratableCourseIds(
     db: DatabaseExecutor,
-    courseId: string,
+    actor: DiscussionActor,
   ): Promise<readonly string[] | "all">;
   canModerateCourse(
     db: DatabaseExecutor,
@@ -122,14 +134,27 @@ export interface DiscussionAccess {
     actor: DiscussionActor,
     courseId: string,
   ): Promise<void>;
-  assertCanModeratePlatform(actor: DiscussionActor): void;
+  assertCanModeratePlatform(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+  ): Promise<void>;
 }
 
 export function createDiscussionAccess(): DiscussionAccess {
   const access = createAccessService();
+  const discussionRepo = createDiscussionRepository();
 
-  function isAdmin(actor: DiscussionActor): boolean {
-    return actor.roles.includes(ADMIN_ROLE);
+  /**
+   * Discussion permissions held through a role that reaches every course
+   * (admin, or a team role): what "is admin" used to mean here. A course's
+   * creator is handled separately, course by course.
+   */
+  function readsEveryCourse(db: DatabaseExecutor, actor: DiscussionActor) {
+    return hasAcademyPermission(db, actor.userId, "discussion.read");
+  }
+
+  function moderatesEveryCourse(db: DatabaseExecutor, actor: DiscussionActor) {
+    return hasAcademyPermission(db, actor.userId, "discussion.moderate");
   }
 
   async function isCourseCreator(
@@ -137,11 +162,7 @@ export function createDiscussionAccess(): DiscussionAccess {
     userId: string,
     courseId: string,
   ): Promise<boolean> {
-    const course = await db
-      .selectFrom("courses")
-      .select("creator_id")
-      .where("id", "=", courseId)
-      .executeTakeFirst();
+    const course = await discussionRepo.findCourseCreatorId(db, courseId);
     return course?.creator_id === userId;
   }
 
@@ -150,21 +171,17 @@ export function createDiscussionAccess(): DiscussionAccess {
     actor: DiscussionActor,
     courseId: string,
   ): Promise<boolean> {
-    if (isAdmin(actor)) return true;
-    if (await isCourseCreator(db, actor.userId, courseId)) return true;
+    if (await readsEveryCourse(db, actor)) return true;
 
-    const course = await db
-      .selectFrom("courses as c")
-      .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
-      .leftJoin("course_pricing as p", "p.course_id", "c.id")
-      .select((eb) => ["c.id", "c.status", isOpenCourseAccess(eb).as("isOpen")])
-      .where("c.id", "=", courseId)
-      .where("c.deleted_at", "is", null)
-      .executeTakeFirst();
+    // One read answers both "is the actor the creator" and "is the course
+    // open". The creator keeps access to a deleted course; nobody else does.
+    const course = await discussionRepo.findCourseAccessState(db, courseId);
 
     if (!course) return false;
+    if (course.creator_id === actor.userId) return true;
+    if (course.deleted_at !== null) return false;
 
-    if (course.status === "published" && course.isOpen) {
+    if (course.status === "published" && isOpenFreeCourse(course)) {
       return true;
     }
 
@@ -176,7 +193,7 @@ export function createDiscussionAccess(): DiscussionAccess {
     actor: DiscussionActor,
     courseId: string,
   ): Promise<boolean> {
-    if (isAdmin(actor)) return true;
+    if (await moderatesEveryCourse(db, actor)) return true;
     return isCourseCreator(db, actor.userId, courseId);
   }
 
@@ -197,75 +214,66 @@ export function createDiscussionAccess(): DiscussionAccess {
     },
 
     async assertCanParticipateInCourse(db, actor, courseId) {
-      if (isAdmin(actor)) return;
+      if (await readsEveryCourse(db, actor)) return;
       if (await isCourseCreator(db, actor.userId, courseId)) return;
       if (await access.hasActiveAccess(db, actor.userId, courseId)) return;
       throw DiscussionErrors.courseAccessDenied();
     },
 
     async assertNotesEnabled(db, courseId) {
-      const settings = await findSettingsByCourseId(db, courseId);
+      const settings = await findCourseSettings(db, courseId);
       if (settings && settings.allow_notes === false) {
         throw DiscussionErrors.notesDisabled();
-      }
-    },
-
-    async assertCommentsEnabled(db, courseId) {
-      const settings = await findSettingsByCourseId(db, courseId);
-      if (settings && settings.allow_comments === false) {
-        throw DiscussionErrors.commentsDisabled();
-      }
-    },
-
-    async assertQaEnabled(db, courseId) {
-      const settings = await findSettingsByCourseId(db, courseId);
-      if (settings && settings.allow_qa === false) {
-        throw DiscussionErrors.qaDisabled();
       }
     },
 
     async assertThreadKindEnabled(db, courseId, kind) {
       const normalized = kind === "qna" ? "question" : kind;
       if (normalized === "question") {
-        const settings = await findSettingsByCourseId(db, courseId);
+        const settings = await findCourseSettings(db, courseId);
         if (settings && settings.allow_qa === false) {
           throw DiscussionErrors.qaDisabled();
         }
       } else if (normalized === "comment") {
-        const settings = await findSettingsByCourseId(db, courseId);
+        const settings = await findCourseSettings(db, courseId);
         if (settings && settings.allow_comments === false) {
           throw DiscussionErrors.commentsDisabled();
         }
       } else if (normalized === "note") {
-        const settings = await findSettingsByCourseId(db, courseId);
+        const settings = await findCourseSettings(db, courseId);
         if (settings && settings.allow_notes === false) {
           throw DiscussionErrors.notesDisabled();
         }
       }
     },
 
-    async assertCanAccessThreadCourse(db, actor, courseId) {
-      const allowed = await canAccessCourse(db, actor, courseId);
-      if (!allowed) {
-        throw DiscussionErrors.notFound("Discussion thread");
+    assertThreadVisibleToMember(actor, thread, canModerate) {
+      if (thread.visibility === "private" && thread.userId !== actor.userId) {
+        throw DiscussionErrors.threadNotFound();
+      }
+      if (
+        (thread.status === "hidden" || thread.status === "deleted") &&
+        !canModerate
+      ) {
+        throw DiscussionErrors.threadNotFound();
       }
     },
 
     async assertCanAccessThread(db, actor, thread) {
       const allowed = await canAccessCourse(db, actor, thread.courseId);
       if (!allowed) {
-        throw DiscussionErrors.notFound("Discussion thread");
+        throw DiscussionErrors.threadNotFound();
       }
 
       const isOwner = thread.userId === actor.userId;
       if (thread.visibility === "private" && !isOwner) {
-        throw DiscussionErrors.notFound("Discussion thread");
+        throw DiscussionErrors.threadNotFound();
       }
 
       if (thread.status === "hidden" || thread.status === "deleted") {
         const staff = await canModerateCourse(db, actor, thread.courseId);
         if (!staff) {
-          throw DiscussionErrors.notFound("Discussion thread");
+          throw DiscussionErrors.threadNotFound();
         }
       }
     },
@@ -288,13 +296,13 @@ export function createDiscussionAccess(): DiscussionAccess {
 
     assertThreadIsActive(thread) {
       if (thread.status && thread.status !== "active") {
-        throw DiscussionErrors.notFound("Discussion thread");
+        throw DiscussionErrors.threadNotFound();
       }
     },
 
     assertReplyIsActive(reply) {
       if (reply.status && reply.status !== "active") {
-        throw DiscussionErrors.notFound("Reply");
+        throw DiscussionErrors.replyNotFound();
       }
     },
 
@@ -305,22 +313,11 @@ export function createDiscussionAccess(): DiscussionAccess {
     },
 
     async assertNotSuspended(db, userId, courseId, kind) {
-      const activeSuspension = await db
-        .selectFrom("learning_suspensions")
-        .selectAll()
-        .where("user_id", "=", userId)
-        .where("is_active", "=", true)
-        .where("scope", "in", scopesForKind(kind))
-        .where((eb) =>
-          eb.or([eb("course_id", "is", null), eb("course_id", "=", courseId)]),
-        )
-        .where((eb) =>
-          eb.or([
-            eb("expires_at", "is", null),
-            eb("expires_at", ">", new Date()),
-          ]),
-        )
-        .executeTakeFirst();
+      const activeSuspension = await discussionRepo.findActiveSuspension(db, {
+        userId,
+        courseId,
+        scopes: scopesForKind(kind),
+      });
 
       if (activeSuspension) {
         throw DiscussionErrors.suspended(
@@ -331,9 +328,22 @@ export function createDiscussionAccess(): DiscussionAccess {
     },
 
     async listAccessibleCourseIds(db, actor) {
-      if (isAdmin(actor)) return "all";
+      if (await readsEveryCourse(db, actor)) return "all";
 
-      const grants = await access.listUserGrants(db, actor.userId);
+      // Three independent reads: one parallel round trip instead of three
+      // serial ones on every notes, threads, workspace and bookmarks listing.
+      const [grants, created, publishedCourses] = await Promise.all([
+        access.listUserGrants(db, actor.userId),
+        discussionRepo.listCreatedCourseIds(db, actor.userId),
+        db.isTransaction
+          ? discussionRepo.listPublishedCourseOpenness(db)
+          : publishedCourseOpenness.fetch(
+              "all",
+              () => discussionRepo.listPublishedCourseOpenness(db),
+              { tags: [cacheTags.catalog, cacheTags.site] },
+            ),
+      ]);
+
       const now = new Date();
       const ids = new Set<string>();
       for (const grant of grants) {
@@ -341,94 +351,21 @@ export function createDiscussionAccess(): DiscussionAccess {
         if (grant.validUntil && now > new Date(grant.validUntil)) continue;
         ids.add(grant.courseId);
       }
-
-      const created = await db
-        .selectFrom("courses")
-        .select("id")
-        .where("creator_id", "=", actor.userId)
-        .execute();
       for (const course of created) ids.add(course.id);
-
-      const openCourses = await db
-        .selectFrom("courses as c")
-        .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
-        .leftJoin("course_pricing as p", "p.course_id", "c.id")
-        .select("c.id")
-        .where("c.status", "=", "published")
-        .where("c.deleted_at", "is", null)
-        .where((eb) => isOpenCourseAccess(eb))
-        .execute();
-
-      for (const course of openCourses) ids.add(course.id);
+      for (const course of publishedCourses) {
+        if (isOpenFreeCourse(course)) ids.add(course.id);
+      }
 
       return [...ids];
     },
 
-    async listCourseParticipantIds(db, courseId) {
-      const course = await db
-        .selectFrom("courses as c")
-        .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
-        .leftJoin("course_pricing as p", "p.course_id", "c.id")
-        .select((eb) => [
-          "c.id",
-          "c.creator_id",
-          "c.status",
-          isOpenCourseAccess(eb).as("isOpen"),
-        ])
-        .where("c.id", "=", courseId)
-        .where("c.deleted_at", "is", null)
-        .executeTakeFirst();
-
-      if (course && course.status === "published" && course.isOpen) {
-        return "all";
-      }
-
-      const ids = new Set<string>();
-      if (course?.creator_id) {
-        ids.add(course.creator_id);
-      }
-
-      const grantMemberIds = await access.listActiveUserIdsForCourse(
+    async listModeratableCourseIds(db, actor) {
+      if (await moderatesEveryCourse(db, actor)) return "all";
+      const rows = await discussionRepo.listActiveCreatedCourseIds(
         db,
-        courseId,
+        actor.userId,
       );
-      for (const id of grantMemberIds) ids.add(id);
-
-      const now = new Date();
-      const enrollments = await db
-        .selectFrom("enrollments")
-        .select("user_id")
-        .where("course_id", "=", courseId)
-        .where("status", "=", "active")
-        .where((eb) =>
-          eb.or([
-            eb("access_expires_at", "is", null),
-            eb("access_expires_at", ">", now),
-          ]),
-        )
-        .execute();
-      for (const row of enrollments) ids.add(row.user_id);
-
-      const roles = await db
-        .selectFrom("role_assignments")
-        .select("user_id")
-        .where((eb) =>
-          eb.or([
-            eb("course_id", "=", courseId),
-            eb("scope_type", "=", "platform"),
-          ]),
-        )
-        .execute();
-      for (const row of roles) ids.add(row.user_id);
-
-      const threadAuthors = await db
-        .selectFrom("learning_threads")
-        .select("user_id")
-        .where("course_id", "=", courseId)
-        .execute();
-      for (const row of threadAuthors) ids.add(row.user_id);
-
-      return [...ids];
+      return rows.map((row) => row.id);
     },
 
     async canModerateCourse(db, actor, courseId) {
@@ -436,16 +373,14 @@ export function createDiscussionAccess(): DiscussionAccess {
     },
 
     async assertCanModerateCourse(db, actor, courseId) {
-      const course = await db
-        .selectFrom("courses")
-        .select("id")
-        .where("id", "=", courseId)
-        .executeTakeFirst();
+      const course = await discussionRepo.findCourseCreatorId(db, courseId);
       if (!course) {
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
-      const allowed = await canModerateCourse(db, actor, courseId);
-      if (!allowed) {
+      if (
+        course.creator_id !== actor.userId &&
+        !(await moderatesEveryCourse(db, actor))
+      ) {
         throw httpError(
           403,
           "FORBIDDEN",
@@ -454,8 +389,8 @@ export function createDiscussionAccess(): DiscussionAccess {
       }
     },
 
-    assertCanModeratePlatform(actor) {
-      if (!isAdmin(actor)) {
+    async assertCanModeratePlatform(db, actor) {
+      if (!(await moderatesEveryCourse(db, actor))) {
         throw httpError(
           403,
           "FORBIDDEN",

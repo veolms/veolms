@@ -3,6 +3,11 @@ import { sql } from "kysely";
 import type { Json } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 
+/**
+ * Whether this provider event was already received. Only the id is read:
+ * the dedupe check runs on every delivery and has no use for the stored
+ * payload.
+ */
 export async function findWebhookEvent(
   database: Executor,
   provider: string,
@@ -10,7 +15,7 @@ export async function findWebhookEvent(
 ) {
   return await database
     .selectFrom("webhook_events")
-    .selectAll()
+    .select("id")
     .where("provider", "=", provider)
     .where("event_id", "=", eventId)
     .executeTakeFirst();
@@ -29,11 +34,7 @@ export async function insertWebhookEvent(
     created_at?: Date;
   },
 ) {
-  return await database
-    .insertInto("webhook_events")
-    .values(values)
-    .returningAll()
-    .executeTakeFirstOrThrow();
+  await database.insertInto("webhook_events").values(values).execute();
 }
 
 /**
@@ -140,15 +141,14 @@ export async function markWebhookEventProcessed(
   database: Executor,
   id: string,
 ) {
-  return await database
+  await database
     .updateTable("webhook_events")
     .set({
       processed_at: new Date(),
       error: null,
     })
     .where("id", "=", id)
-    .returningAll()
-    .executeTakeFirst();
+    .execute();
 }
 
 /**
@@ -168,7 +168,7 @@ export async function markWebhookEventFailed(
   error: string,
   options?: { nextAttemptAt?: Date; deadAt?: Date },
 ) {
-  return await database
+  await database
     .updateTable("webhook_events")
     .set({
       error,
@@ -178,6 +178,5 @@ export async function markWebhookEventFailed(
       ...(options?.deadAt ? { dead_at: options.deadAt } : {}),
     })
     .where("id", "=", id)
-    .returningAll()
-    .executeTakeFirst();
+    .execute();
 }

@@ -135,12 +135,20 @@ export function writeLearningProgress(
   }
 }
 
+/**
+ * Pure: the time of the change is given, never read here, because this runs
+ * inside a React state updater, and React may apply an updater more than
+ * once (it replays updates it skipped). A clock read here made every replay
+ * a different state.
+ */
 export function recordLearningProgress(
   state: LocalLearningProgressState,
   input: {
     lessonId?: string;
     lessonNumber: number;
     progressPercent: number;
+    /** When the progress was made (ISO 8601). */
+    clientUpdatedAt: string;
   },
 ): LocalLearningProgressState {
   const progressPercent = clampProgress(input.progressPercent);
@@ -168,7 +176,7 @@ export function recordLearningProgress(
     lessonId: nextLessonId,
     lessonNumber: input.lessonNumber,
     progressPercent: nextProgress,
-    clientUpdatedAt: new Date().toISOString(),
+    clientUpdatedAt: input.clientUpdatedAt,
     pending: true,
   };
   const nextItems = [...state.items];

@@ -5,6 +5,7 @@ import {
   type CouponSortOption,
   type CouponTabFilter,
 } from "./couponHelpers";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 
 export type {
   CouponStatus,
@@ -12,6 +13,9 @@ export type {
   CouponSortOption,
 } from "./couponHelpers";
 export { getCouponStatus } from "./couponHelpers";
+
+/** How often coupon statuses are re-read against the clock. */
+const STATUS_CLOCK_INTERVAL_MS = 60_000;
 
 export function useCouponsFilter(options?: {
   courseId?: string | null;
@@ -34,11 +38,15 @@ export function useCouponsFilter(options?: {
     [data],
   );
 
+  // "Now" decides each coupon's status (scheduled, active, expired), and
+  // those turn over on the minute. Ticking every five seconds re-filtered
+  // and re-sorted the whole list, and redrew the table, twelve times as
+  // often as anything could change.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
-    }, 5000);
+    }, STATUS_CLOCK_INTERVAL_MS);
     return () => clearInterval(timer);
   }, []);
 
@@ -49,73 +57,32 @@ export function useCouponsFilter(options?: {
     "all" | "percentage" | "fixed"
   >("all");
 
+  // The library-wide summary arrives with the first page only.
   const serverSummary = data?.pages[0]?.summary;
-  const serverTotalCount = data?.pages[0]?.totalCount;
 
-  const counts = useMemo(() => {
-    if (serverSummary) {
-      return {
-        all: serverSummary.totalCount,
-        active: serverSummary.activeCount,
-        scheduled: serverSummary.scheduledCount,
-        expired: serverSummary.expiredCount,
-        draft: serverSummary.inactiveCount,
-      };
-    }
+  const counts = useMemo(
+    () => ({
+      all: serverSummary?.totalCount ?? 0,
+      active: serverSummary?.activeCount ?? 0,
+      scheduled: serverSummary?.scheduledCount ?? 0,
+      expired: serverSummary?.expiredCount ?? 0,
+      draft: serverSummary?.inactiveCount ?? 0,
+    }),
+    [serverSummary],
+  );
 
-    let active = 0;
-    let scheduled = 0;
-    let expired = 0;
-    let draft = 0;
-
-    for (const coupon of coupons) {
-      const status = getCouponStatus(coupon, now);
-      if (status === "active") active += 1;
-      else if (status === "scheduled") scheduled += 1;
-      else if (status === "expired") expired += 1;
-      else draft += 1;
-    }
-
-    return {
-      all: serverTotalCount ?? coupons.length,
-      active,
-      scheduled,
-      expired,
-      draft,
-    };
-  }, [serverSummary, serverTotalCount, coupons, now]);
-
-  const summaryMetrics = useMemo(() => {
-    if (serverSummary) {
-      return {
-        totalCoupons: serverSummary.totalCount,
-        totalRedemptions: serverSummary.totalRedemptions,
-        totalDiscountGiven: serverSummary.totalDiscountGiven,
-        activeCoupons: serverSummary.activeCount,
-        expiredCoupons: serverSummary.expiredCount,
-        draftCoupons: serverSummary.inactiveCount,
-        scheduledCoupons: serverSummary.scheduledCount,
-      };
-    }
-
-    let totalRedemptions = 0;
-    let totalDiscountGiven = 0;
-
-    for (const coupon of coupons) {
-      totalRedemptions += coupon.redemptionCount ?? 0;
-      totalDiscountGiven += coupon.totalDiscountGiven ?? 0;
-    }
-
-    return {
-      totalCoupons: serverTotalCount ?? coupons.length,
-      totalRedemptions,
-      totalDiscountGiven,
-      activeCoupons: counts.active,
-      expiredCoupons: counts.expired,
-      draftCoupons: counts.draft,
-      scheduledCoupons: counts.scheduled,
-    };
-  }, [serverSummary, serverTotalCount, coupons, counts]);
+  const summaryMetrics = useMemo(
+    () => ({
+      totalCoupons: serverSummary?.totalCount ?? 0,
+      totalRedemptions: serverSummary?.totalRedemptions ?? 0,
+      totalDiscountGiven: serverSummary?.totalDiscountGiven ?? 0,
+      activeCoupons: serverSummary?.activeCount ?? 0,
+      expiredCoupons: serverSummary?.expiredCount ?? 0,
+      draftCoupons: serverSummary?.inactiveCount ?? 0,
+      scheduledCoupons: serverSummary?.scheduledCount ?? 0,
+    }),
+    [serverSummary],
+  );
 
   const filteredCoupons = useMemo(() => {
     return coupons
@@ -134,11 +101,7 @@ export function useCouponsFilter(options?: {
         }
 
         if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase().trim();
-          const matchCode = coupon.code.toLowerCase().includes(query);
-          const matchDesc =
-            coupon.description?.toLowerCase().includes(query) ?? false;
-          if (!matchCode && !matchDesc) {
+          if (!fuzzyMatches(searchQuery, coupon.code, coupon.description)) {
             return false;
           }
         }
@@ -165,24 +128,12 @@ export function useCouponsFilter(options?: {
       });
   }, [coupons, now, activeTab, discountTypeFilter, searchQuery, sortBy]);
 
-  useEffect(() => {
-    if (
-      filteredCoupons.length === 0 &&
-      hasNextPage &&
-      !isFetchingNextPage &&
-      !isLoading &&
-      !isError
-    ) {
-      void fetchNextPage();
-    }
-  }, [
-    filteredCoupons.length,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isError,
-    fetchNextPage,
-  ]);
+  // Nothing here asks for the next page on its own. When a search or filter
+  // matched none of the coupons loaded so far, an effect used to fetch the
+  // next page, and the next, until something matched or the library ran
+  // out: a search with no match downloaded every coupon there is, and each
+  // of those pages then refetched on the list's timer. The table offers
+  // "Load more" instead.
 
   return {
     coupons: filteredCoupons,

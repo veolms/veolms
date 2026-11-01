@@ -1,6 +1,6 @@
 import type { LessonDiscussionCountsResponse } from "@veolms/contracts";
 import type { DatabaseExecutor } from "@veolms/database";
-import { findSettingsByCourseId } from "../../../courses/configuration/configuration.repository.ts";
+import { findCourseSettings } from "../../../courses/index.ts";
 import type { DiscussionActor } from "../shared/discussion.access.ts";
 import {
   createLessonDiscussionAccess,
@@ -39,7 +39,7 @@ export function createLessonDiscussionCountsService(options?: {
         actor,
       });
 
-      const settings = await findSettingsByCourseId(db, courseId);
+      const settings = await findCourseSettings(db, courseId);
       const capabilities = {
         allowComments: settings?.allow_comments !== false,
         allowQa: settings?.allow_qa !== false,

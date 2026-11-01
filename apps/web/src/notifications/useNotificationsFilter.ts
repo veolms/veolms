@@ -166,18 +166,30 @@ export function useNotificationsFilter(
     sortBy,
     setSortBy,
     tabCounts,
+    // A failed action used to show nothing at all: the notification simply
+    // stayed as it was, with no hint that the request had been refused.
     markAllAsRead: () =>
       markAllReadMutation.mutate(undefined, {
         onSuccess: () => setNotice?.("All notifications marked as read."),
+        onError: () =>
+          setNotice?.("Couldn't mark notifications as read. Please try again."),
       }),
-    markAsRead: (id) => markReadMutation.mutate(id),
+    markAsRead: (id) =>
+      markReadMutation.mutate(id, {
+        onError: () =>
+          setNotice?.("Couldn't mark this as read. Please try again."),
+      }),
     markAsUnread: (id) =>
       markUnreadMutation.mutate(id, {
         onSuccess: () => setNotice?.("Notification marked as unread."),
+        onError: () =>
+          setNotice?.("Couldn't mark this as unread. Please try again."),
       }),
     archiveNotification: (id) =>
       archiveMutation.mutate(id, {
         onSuccess: () => setNotice?.("Notification archived."),
+        onError: () =>
+          setNotice?.("Couldn't archive this notification. Please try again."),
       }),
     resetFilters,
     isLoading: feed.isPending,

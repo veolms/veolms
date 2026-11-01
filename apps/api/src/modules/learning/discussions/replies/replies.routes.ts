@@ -4,6 +4,7 @@ import {
   acceptReplyResponseSchema,
   createLearningReplyRequestSchema,
   learningRepliesListResponseSchema,
+  learningReplyEditResponseSchema,
   learningReplySchema,
   listLearningRepliesQuerySchema,
   updateLearningReplyRequestSchema,
@@ -35,7 +36,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads/:threadId/replies",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.optionalAuthenticated,
       schema: {
         operationId: "listLearningReplies",
         tags: ["Learning Discussions"],
@@ -90,7 +91,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ replyId: z.uuid() }),
         body: updateLearningReplyRequestSchema,
         response: {
-          200: jsonResponse("Reply updated", learningReplySchema),
+          200: jsonResponse("Reply updated", learningReplyEditResponseSchema),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Author only"),
           404: errorResponse("Reply not found"),

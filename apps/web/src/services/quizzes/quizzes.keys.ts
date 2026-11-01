@@ -13,6 +13,18 @@ export const quizKeys = {
   history: () => [...quizKeys.all, "history"] as const,
   analytics: (assignmentId: string) =>
     [...quizKeys.all, "analytics", assignmentId] as const,
+  submission: (
+    assignmentId: string,
+    studentId: string,
+    attemptId: string | null,
+  ) =>
+    [
+      ...quizKeys.all,
+      "submission",
+      assignmentId,
+      studentId,
+      attemptId ?? "latest",
+    ] as const,
   courseAnalytics: (courseId: string) =>
     [...quizKeys.all, "course-analytics", courseId] as const,
   studentReport: (studentId: string) =>

@@ -5,13 +5,15 @@ import type { Kysely } from "kysely";
 import { z } from "zod";
 
 import * as outboxRepository from "../../events/outbox.repository.ts";
-import type { EmailService } from "@veolms/services/email";
+import type { EmailAttachment, EmailService } from "@veolms/services/email";
 import {
   createNotificationIntents,
   UnknownNotificationEventError,
 } from "./notifications.handlers.ts";
 import * as notificationRepository from "./notifications.repository.ts";
 import type {
+  NotificationAttachmentResolver,
+  NotificationEmailAttachment,
   NotificationHandlerDependencies,
   NotificationRecipientDirectory,
 } from "./notifications.types.ts";
@@ -21,6 +23,11 @@ const emailDeliveryPayloadSchema = z.strictObject({
   subject: z.string().min(1),
   text: z.string().min(1),
   html: z.string().min(1),
+  attachments: z
+    .array(
+      z.strictObject({ kind: z.literal("order-invoice"), orderId: z.uuid() }),
+    )
+    .optional(),
 });
 
 export interface NotificationProcessorResult {
@@ -56,9 +63,15 @@ export function createNotificationProcessor({
   config,
   handlers,
   recipients,
+  attachments,
 }: {
   database: Kysely<Database>;
   email: EmailService;
+  /**
+   * Fetches the files an email carries (an order's invoice). Without it,
+   * such emails go out without their files.
+   */
+  attachments?: NotificationAttachmentResolver;
   logger: FastifyBaseLogger;
   config: Pick<
     ServerConfig,
@@ -159,6 +172,37 @@ export function createNotificationProcessor({
     return result;
   }
 
+  /**
+   * The files an email carries. A file that cannot be had throws, so the
+   * email is tried again later, unless `lastTry`: then it is left out.
+   */
+  async function resolveAttachments(
+    wanted: readonly NotificationEmailAttachment[],
+    deliveryId: string,
+    lastTry: boolean,
+  ): Promise<EmailAttachment[]> {
+    const files: EmailAttachment[] = [];
+    for (const attachment of wanted) {
+      if (!attachments) {
+        log.warn(
+          { deliveryId, attachment },
+          "No attachment resolver; email sent without its file",
+        );
+        continue;
+      }
+      try {
+        files.push(await attachments.resolve(attachment));
+      } catch (error) {
+        if (!lastTry) throw error;
+        log.warn(
+          { err: error, deliveryId, attachment },
+          "Email attachment unavailable on the last try; sent without it",
+        );
+      }
+    }
+    return files;
+  }
+
   async function processEmail() {
     const now = new Date();
     const leaseUntil = new Date(
@@ -180,8 +224,18 @@ export function createNotificationProcessor({
         if (!delivery.destination) {
           throw new Error("Email delivery has no destination.");
         }
-        const payload = emailDeliveryPayloadSchema.parse(delivery.payload);
-        const sendResult = await email.send(delivery.destination, payload);
+        const { attachments: wanted = [], ...content } =
+          emailDeliveryPayloadSchema.parse(delivery.payload);
+        const files = await resolveAttachments(
+          wanted,
+          delivery.id,
+          // The last try sends the email without a file it cannot get,
+          // rather than not at all.
+          delivery.attempt_count >= config.NOTIFICATION_EMAIL_MAX_ATTEMPTS,
+        );
+        const sendResult = await email.send(delivery.destination, content, {
+          attachments: files,
+        });
         if (sendResult.status === "failed") throw sendResult.error;
 
         await notificationRepository.markDeliverySent(database, {

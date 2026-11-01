@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import {
   createContext,
@@ -9,28 +10,43 @@ import {
 import {
   Outlet,
   useLocation,
+  useMatches,
   useNavigate,
   useSearchParams,
 } from "react-router";
 import type { MfaGateUser } from "../auth/mfaGate";
 import { AppLoadingScreen } from "../bootstrap/AppLoadingScreen";
 import { useCapabilities } from "../services/authorization";
-import { useCurrentUser } from "../services/auth";
+import {
+  cancelPendingLogin,
+  useCurrentUser,
+  wasSignedOutHere,
+} from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
+import { isPendingMfaLoginAbandoned } from "../store/pendingMfaLogin";
+import { canOpenNavigationPath } from "../shell/navigationPermissions";
+import {
+  hasAdminRole,
+  hasTeamRole,
+  readSavedWorkspaceView,
+  resolveWorkspaceRole,
+} from "../shell/workspaceRole";
 import {
   APP_HOME_PATH,
   buildMfaChallengePath,
-  buildLoginPath,
+  buildLoginDialogPath,
   resolveCourseAuthorRouteFallback,
   shouldRedirectFromCourseAuthorPath,
+  guestMayView,
   isGuestLandingPath,
+  isUnknownAddress,
   normalizeAppPath,
-  requiresAcademyAuth,
   resolveAuthenticatedDestination,
   resolveSessionAccess,
   hasCourseAuthorRole,
   hasDashboardAnalyticsPermission,
   shouldBlockAcademyRender,
+  shouldPromptLoginFor,
 } from "./routeAccess";
 
 const useIsomorphicLayoutEffect =
@@ -46,7 +62,7 @@ function hasMfaSessionState(user: unknown): user is MfaGateUser {
   );
 }
 
-function useSessionAccess() {
+export function useSessionAccess() {
   const { data: user, isPending, isFetched } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -70,13 +86,24 @@ function useSessionAccess() {
 interface AcademyRouteGuardState {
   canAccessDashboard: boolean;
   dashboardCapabilitiesResolved: boolean;
+  /**
+   * The home page is held back only until it is known whether this account
+   * may see the dashboard. The shell shows the dashboard's placeholder
+   * meanwhile, or the learner's home when that is the view the account is
+   * in, rather than a spinner in place of either.
+   */
+  dashboardPermissionPending: boolean;
   routeContentBlocked: boolean;
+  /** The account's permissions; null until they have loaded. */
+  permissions: readonly string[] | null;
 }
 
 const defaultAcademyRouteGuardState: AcademyRouteGuardState = {
   canAccessDashboard: false,
   dashboardCapabilitiesResolved: false,
+  dashboardPermissionPending: false,
   routeContentBlocked: false,
+  permissions: null,
 };
 
 const AcademyRouteGuardContext = createContext<AcademyRouteGuardState>(
@@ -89,12 +116,26 @@ export function useAcademyRouteGuardState(): AcademyRouteGuardState {
 
 export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const matches = useMatches();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { access, user, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
-  const authenticationRequired = requiresAcademyAuth(path);
+  // An address no page answers to shows the not-found screen to everyone.
+  const addressUnknown = isUnknownAddress(matches, location.pathname);
+  const authenticationRequired = !guestMayView(path, addressUnknown);
+  // The home is the dashboard only in the creator view. A team member in
+  // the student view (their own choice, or by default for every team role
+  // but admin) is shown the learner home, and was sent to the courses a
+  // moment later when they lacked the dashboard's permission.
   const isDashboardPath =
-    path === "/" && access.isAuthenticated && hasCourseAuthorRole(user?.roles);
+    path === "/" &&
+    access.isAuthenticated &&
+    hasCourseAuthorRole(user?.roles) &&
+    resolveWorkspaceRole(
+      user?.roles,
+      readSavedWorkspaceView(user?.id, user?.roles),
+    ) === "creator";
   const dashboardCapabilities = useCapabilities({
     enabled: access.isSessionReady,
   });
@@ -106,14 +147,34 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const canAccessDashboard =
     dashboardCapabilitiesResolved &&
     hasDashboardAnalyticsPermission(dashboardCapabilities.permissions);
+  // Denied only on an answer that says so: a request that failed (offline,
+  // a deploy restarting the API) is not "no permission", and used to send
+  // the account away from its home.
   const dashboardRouteDenied =
     isDashboardPath &&
     access.isSessionReady &&
-    dashboardCapabilities.isFetched &&
+    dashboardCapabilities.isSuccess &&
     !canAccessDashboard;
+  // A team member on a staff page their permissions do not open (typed
+  // in, or an old link) goes home instead, as the sidebar never offers it.
+  // The home is left to the check above: it is a staff page only as the
+  // dashboard. In the student view it is the learner home the menu offers,
+  // and judging it here sent a team member without the revenue permission
+  // back to the courses each time they opened Home.
+  const staffPageDenied =
+    path !== APP_HOME_PATH &&
+    access.isSessionReady &&
+    dashboardCapabilities.isSuccess &&
+    hasTeamRole(user?.roles) &&
+    !hasAdminRole(user?.roles) &&
+    !canOpenNavigationPath(
+      `${path}${location.search}`,
+      new Set(dashboardCapabilities.permissions),
+    );
   const courseAuthorRouteDenied =
     access.isSessionReady &&
     (dashboardRouteDenied ||
+      staffPageDenied ||
       shouldRedirectFromCourseAuthorPath(path, user?.roles));
 
   useEffect(() => {
@@ -122,11 +183,13 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (!access.isAuthenticated) {
-      if (requiresAcademyAuth(path) && !isGuestLandingPath(path)) {
+      if (authenticationRequired && !isGuestLandingPath(path)) {
         const returnPath = `${location.pathname}${location.search}`;
+        // Someone who has just signed out here is not asked to sign in
+        // again; their page needed the session, so they go home.
         const destination =
-          path === "/discussions" || path.startsWith("/discussions/")
-            ? buildLoginPath(returnPath)
+          shouldPromptLoginFor(path) && !wasSignedOutHere()
+            ? buildLoginDialogPath(returnPath)
             : APP_HOME_PATH;
         navigate(destination, { replace: true });
       }
@@ -134,6 +197,13 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (access.needsMfaChallenge && path !== "/logout") {
+      // A visitor who turned away from the two-factor step is not sent back
+      // to it: the sign-in is called off, and this page is then a signed-out
+      // visitor's (the branch above takes over once the session is gone).
+      if (isPendingMfaLoginAbandoned(user)) {
+        void cancelPendingLogin(queryClient);
+        return;
+      }
       navigate(
         buildMfaChallengePath(`${location.pathname}${location.search}`),
         { replace: true },
@@ -148,28 +218,44 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     access.isAuthenticated,
     access.isSessionReady,
     access.needsMfaChallenge,
+    authenticationRequired,
     courseAuthorRouteDenied,
     location.pathname,
     location.search,
     navigate,
     path,
     pending,
+    queryClient,
+    user,
   ]);
 
+  const dashboardPermissionPending =
+    isDashboardPath && dashboardCapabilityPending;
   const routeContentBlocked =
-    (isDashboardPath && dashboardCapabilityPending) ||
+    dashboardPermissionPending ||
     (!isGuestLandingPath(path) &&
       ((pending && authenticationRequired) ||
-        shouldBlockAcademyRender(path, access) ||
+        shouldBlockAcademyRender(path, access, addressUnknown) ||
         courseAuthorRouteDenied));
 
+  const permissions = dashboardCapabilities.isFetched
+    ? dashboardCapabilities.permissions
+    : null;
   const academyRouteGuardState = useMemo(
     () => ({
       canAccessDashboard,
       dashboardCapabilitiesResolved,
+      dashboardPermissionPending,
       routeContentBlocked,
+      permissions,
     }),
-    [canAccessDashboard, dashboardCapabilitiesResolved, routeContentBlocked],
+    [
+      canAccessDashboard,
+      dashboardCapabilitiesResolved,
+      dashboardPermissionPending,
+      routeContentBlocked,
+      permissions,
+    ],
   );
 
   return (
@@ -182,8 +268,9 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
 export function AuthRouteGuard() {
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { access, pending } = useSessionAccess();
+  const { access, user, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
 
   useIsomorphicLayoutEffect(() => {
@@ -193,7 +280,11 @@ export function AuthRouteGuard() {
 
     if (path === "/mfa-setup") {
       if (!access.isAuthenticated) {
-        navigate(buildLoginPath(), { replace: true });
+        // Signed out on the two-factor step: the session ran out, or the
+        // sign-in was just called off with Back.
+        navigate(buildLoginDialogPath(searchParams.get("returnTo")), {
+          replace: true,
+        });
         return;
       }
 
@@ -204,6 +295,15 @@ export function AuthRouteGuard() {
     }
 
     if (access.needsMfaChallenge) {
+      // Here by turning away from the two-factor step: the sign-in is
+      // called off, and the visitor gets the login pop-up to start again.
+      if (isPendingMfaLoginAbandoned(user)) {
+        void cancelPendingLogin(queryClient);
+        navigate(buildLoginDialogPath(searchParams.get("returnTo")), {
+          replace: true,
+        });
+        return;
+      }
       if (path !== "/login") {
         navigate(
           buildMfaChallengePath(`${location.pathname}${location.search}`),
@@ -228,7 +328,9 @@ export function AuthRouteGuard() {
     navigate,
     path,
     pending,
+    queryClient,
     searchParams,
+    user,
   ]);
 
   if (pending) {

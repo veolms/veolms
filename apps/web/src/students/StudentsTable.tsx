@@ -15,9 +15,11 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
+import { PhoneIcon as Phone } from "@phosphor-icons/react/Phone";
 import type { StudentListItem } from "@veolms/contracts";
 import type { NavigateTo } from "../routing/navigation";
 import { getApplicationScrollElement } from "../shell/applicationScroll";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 const STUDENT_ROW_ESTIMATE = 78;
 const STUDENT_ROW_OVERSCAN = 8;
@@ -256,6 +258,16 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
           </button>
         ) : (
           <span className="pl-2 text-xs text-(--muted)">—</span>
+        )}
+        {student.phoneNo && (
+          // Tucked into the email button's bottom padding so a row with a
+          // phone is no taller than one without.
+          <span className="-mt-1 flex max-w-full items-center gap-1.5 px-2 text-xs text-(--text-secondary)">
+            <Phone size={14} className="shrink-0 text-(--muted)" />
+            <span className="truncate font-mono text-[12px]">
+              {student.phoneNo}
+            </span>
+          </span>
         )}
       </div>
 
@@ -563,10 +575,7 @@ export function StudentsTable({
 
   return (
     <div className="w-full">
-      <div
-        className="overflow-hidden rounded-[18px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface))"
-        style={{ boxShadow: "var(--card-shadow)" }}
-      >
+      <ElevatedCard as="div" className="overflow-hidden">
         <div className="@container/students overflow-x-auto">
           <div
             role="table"
@@ -582,7 +591,7 @@ export function StudentsTable({
                 Learner
               </div>
               <div role="columnheader" className="px-4 py-3.5">
-                Email
+                Contact
               </div>
               <div role="columnheader" className="px-4 py-3.5">
                 Enrolled Courses
@@ -608,7 +617,7 @@ export function StudentsTable({
             )}
           </div>
         </div>
-      </div>
+      </ElevatedCard>
 
       {isFetchingNextPage && (
         <div

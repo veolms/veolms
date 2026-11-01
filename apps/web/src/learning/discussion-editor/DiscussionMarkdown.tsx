@@ -5,8 +5,14 @@ import type {
   HighlighterCore,
 } from "@shikijs/core";
 import type { DescriptionChapterDeclaration } from "@veolms/video-player";
-import React, { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DiscussionContent } from "./types";
 import {
@@ -14,55 +20,13 @@ import {
   tokenizeInlineTimestamps,
 } from "./inlineTimestamp";
 import type { DiscussionAttachmentItem } from "../discussion-attachments";
-import { LinkPreviewCard } from "../LinkPreviewCard";
-import {
-  extractFirstUrl,
-  useLinkPreview,
-} from "../../services/learning-interactions";
+import { normalizePreviewUrl } from "@veolms/contracts";
 
-const MENTION_PATTERN =
-  /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})(?=[^A-Za-z0-9_]|$)/g;
+import { renderContentWithMentions } from "./MentionLink";
+import { tabSeparatedTablesToMarkdown } from "./tabSeparatedTables";
+import { textDiagramsToCodeBlocks } from "./textDiagrams";
 
-export function renderContentWithMentions(text: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  const regex = new RegExp(MENTION_PATTERN.source, "g");
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(text)) !== null) {
-    const prefix = match[1] ?? "";
-    const username = match[2];
-    const matchStart = match.index;
-    const mentionStart = matchStart + prefix.length;
-    const matchEnd = match.index + match[0].length;
-
-    if (mentionStart > lastIndex) {
-      parts.push(text.slice(lastIndex, mentionStart));
-    }
-
-    parts.push(
-      <span
-        key={`mention-${mentionStart}-${username}`}
-        data-mention={username}
-        className="inline-flex items-center rounded bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-1 py-0.5 font-medium text-(--accent)"
-      >
-        @{username}
-      </span>,
-    );
-
-    lastIndex = matchEnd;
-  }
-
-  if (lastIndex === 0) {
-    return text;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
-  return parts;
-}
+export { renderContentWithMentions };
 
 export function highlightMentionsInNode(
   node: React.ReactNode,
@@ -245,8 +209,6 @@ interface DiscussionMarkdownProps {
   label: string;
   /** Linked attachments allow safe suppression of legacy generated Markdown. */
   linkedAttachments?: readonly DiscussionAttachmentItem[];
-  /** Controls metadata lookups while keeping Markdown links visible. */
-  enableLinkPreview?: boolean;
   /** Enables Learning Space-only inline video timestamp controls. */
   enableInlineTimestamps?: boolean;
   /** Seeks the current lesson player when an inline timestamp is activated. */
@@ -261,8 +223,164 @@ interface DiscussionMarkdownProps {
 type MarkdownNode = {
   type: string;
   value?: string;
+  url?: string;
   children?: MarkdownNode[];
+  data?: { hName?: string };
 };
+
+interface HighlightDelimiter {
+  canOpen: boolean;
+  canClose: boolean;
+}
+
+const HIGHLIGHT_MARKER = "==";
+const HIGHLIGHT_PUNCTUATION = /[\p{S}\p{P}]/u;
+
+// Same flanking rules as the editor's `==` syntax, so a posted highlight is
+// exactly what the editor showed: `a == b` and `x===y` stay plain text.
+function highlightDelimiterFlags(
+  before: string,
+  after: string,
+): HighlightDelimiter {
+  const spacedBefore = /\s|^$/.test(before);
+  const spacedAfter = /\s|^$/.test(after);
+  const punctBefore = HIGHLIGHT_PUNCTUATION.test(before);
+  const punctAfter = HIGHLIGHT_PUNCTUATION.test(after);
+  return {
+    canOpen: !spacedAfter && (!punctAfter || spacedBefore || punctBefore),
+    canClose: !spacedBefore && (!punctBefore || spacedAfter || punctAfter),
+  };
+}
+
+// The character a marker touches across a node boundary. Inline markup
+// (bold, code, links) starts and ends with punctuation in the source.
+function highlightBoundaryCharacter(
+  sibling: MarkdownNode | undefined,
+  side: "before" | "after",
+) {
+  if (!sibling) return "";
+  if (sibling.type === "break") return "\n";
+  if (sibling.type !== "text") return "*";
+  const value = sibling.value ?? "";
+  return side === "before" ? value.slice(-1) : value.slice(0, 1);
+}
+
+function isHighlightDelimiter(
+  piece: MarkdownNode | HighlightDelimiter,
+): piece is HighlightDelimiter {
+  return "canOpen" in piece;
+}
+
+function mergeAdjacentTextNodes(nodes: MarkdownNode[]): MarkdownNode[] {
+  const merged: MarkdownNode[] = [];
+  for (const node of nodes) {
+    const previous = merged.at(-1);
+    if (node.type === "text" && previous?.type === "text") {
+      merged[merged.length - 1] = {
+        type: "text",
+        value: `${previous.value ?? ""}${node.value ?? ""}`,
+      };
+    } else {
+      merged.push(node);
+    }
+  }
+  return merged;
+}
+
+function wrapHighlightedChildren(children: MarkdownNode[]): MarkdownNode[] {
+  const pieces: (MarkdownNode | HighlightDelimiter)[] = [];
+  children.forEach((child, index) => {
+    const text = child.type === "text" ? (child.value ?? "") : "";
+    if (!text.includes(HIGHLIGHT_MARKER)) {
+      pieces.push(child);
+      return;
+    }
+
+    let textStart = 0;
+    for (const run of text.matchAll(/=+/g)) {
+      if (run[0].length !== HIGHLIGHT_MARKER.length) continue;
+      const start = run.index ?? 0;
+      const end = start + HIGHLIGHT_MARKER.length;
+      if (start > textStart) {
+        pieces.push({ type: "text", value: text.slice(textStart, start) });
+      }
+      pieces.push(
+        highlightDelimiterFlags(
+          start > 0
+            ? text.slice(start - 1, start)
+            : highlightBoundaryCharacter(children[index - 1], "before"),
+          end < text.length
+            ? text.slice(end, end + 1)
+            : highlightBoundaryCharacter(children[index + 1], "after"),
+        ),
+      );
+      textStart = end;
+    }
+    if (textStart < text.length) {
+      pieces.push({ type: "text", value: text.slice(textStart) });
+    }
+  });
+
+  const result: MarkdownNode[] = [];
+  const openers: number[] = [];
+  let wrapped = false;
+  for (const piece of pieces) {
+    if (!isHighlightDelimiter(piece)) {
+      result.push(piece);
+      continue;
+    }
+
+    const opener = openers.at(-1);
+    if (piece.canClose && opener !== undefined && opener < result.length - 1) {
+      openers.pop();
+      const content = result.splice(opener + 1);
+      result[opener] = {
+        type: "highlight",
+        data: { hName: "mark" },
+        children: mergeAdjacentTextNodes(content),
+      };
+      wrapped = true;
+      continue;
+    }
+
+    if (piece.canOpen) openers.push(result.length);
+    result.push({ type: "text", value: HIGHLIGHT_MARKER });
+  }
+
+  // Without a matched pair the block is returned untouched.
+  return wrapped ? mergeAdjacentTextNodes(result) : children;
+}
+
+// A bare URL becomes a link whose label is the URL itself; its text must
+// stay as written.
+function isBareUrlLink(node: MarkdownNode) {
+  const label = node.children?.length === 1 ? node.children[0] : undefined;
+  return (
+    node.type === "link" &&
+    label?.type === "text" &&
+    Boolean(label.value) &&
+    Boolean(node.url?.endsWith(label.value ?? ""))
+  );
+}
+
+/**
+ * The editor's Highlight button writes `==text==` and shows it highlighted,
+ * but Markdown has no such syntax, so posted content showed the raw markers.
+ * A matched pair inside one block becomes a `<mark>` through the syntax tree
+ * (raw HTML stays skipped). Inline code and code blocks are not text nodes,
+ * so markers inside them are left alone.
+ */
+function remarkHighlightMarks() {
+  return (tree: MarkdownNode) => {
+    const visit = (node: MarkdownNode) => {
+      if (!node.children || isBareUrlLink(node)) return;
+      node.children.forEach(visit);
+      node.children = wrapHighlightedChildren(node.children);
+    };
+
+    visit(tree);
+  };
+}
 
 function remarkLessonDescriptionSoftBreaks() {
   return (tree: MarkdownNode) => {
@@ -349,47 +467,318 @@ function preparePlainChapterMarkdown(
   return output.join("\n");
 }
 
+/** What differs from one piece of Markdown to the next. */
+interface MarkdownRenderOptions extends InlineTimestampRenderOptions {
+  linkedAttachments?: readonly DiscussionAttachmentItem[];
+  chapterDeclarations?: readonly DescriptionChapterDeclaration[];
+}
+
+const MarkdownRenderOptionsContext = createContext<MarkdownRenderOptions>({
+  enableInlineTimestamps: false,
+});
+
+function isGeneratedAttachmentMarkdown(
+  linkedAttachments: MarkdownRenderOptions["linkedAttachments"],
+  url: string | undefined,
+  label: string | undefined,
+) {
+  return Boolean(
+    url &&
+    label &&
+    linkedAttachments?.some(
+      (attachment) =>
+        attachment.fileUrl === url && attachment.fileName === label,
+    ),
+  );
+}
+
+/** The text of a Markdown element, with its timestamps and mentions live. */
+function MarkdownInlineContent({
+  children,
+  mentions = false,
+}: {
+  children: React.ReactNode;
+  mentions?: boolean;
+}) {
+  const options = useContext(MarkdownRenderOptionsContext);
+  return mentions
+    ? renderInlineContent(children, options)
+    : renderInlineTimestampsInNode(children, options);
+}
+
+function MarkdownLink({ href, children }: React.ComponentProps<"a">) {
+  const { chapterDeclarations, linkedAttachments, onSeekToTimestamp } =
+    useContext(MarkdownRenderOptionsContext);
+  const chapterIndex = chapterMarkerIndex(href);
+  const chapter =
+    chapterIndex === null ? undefined : chapterDeclarations?.[chapterIndex];
+  if (chapter) {
+    const value = flattenMarkdownText(children) ?? "";
+    return (
+      <InlineTimestampButton
+        value={value}
+        seconds={chapter.startTime}
+        ariaLabel={`Seek to ${value} — ${chapter.title}`}
+        onSeekToTimestamp={onSeekToTimestamp}
+      />
+    );
+  }
+
+  const linkLabel = flattenMarkdownText(children);
+  if (isGeneratedAttachmentMarkdown(linkedAttachments, href, linkLabel)) {
+    return null;
+  }
+  const isHashOrMailto =
+    href?.startsWith("#") || href?.toLowerCase().startsWith("mailto:");
+  const resolvedHref =
+    href && !isHashOrMailto ? normalizePreviewUrl(href) : href;
+  return (
+    <a
+      href={resolvedHref}
+      target={isHashOrMailto ? undefined : "_blank"}
+      rel={isHashOrMailto ? undefined : "noopener noreferrer"}
+      className="font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+    >
+      {children}
+    </a>
+  );
+}
+
+function MarkdownImage({ src, alt }: React.ComponentProps<"img">) {
+  const { linkedAttachments } = useContext(MarkdownRenderOptionsContext);
+  if (!src) return null;
+  const linkedImageAttachment = linkedAttachments?.find(
+    (attachment) =>
+      attachment.fileUrl === src &&
+      (attachment.mediaType === "image" ||
+        attachment.kind === "image" ||
+        attachment.kind === "screenshot" ||
+        attachment.mimeType.startsWith("image/")),
+  );
+  const imageWidth = linkedImageAttachment?.width;
+  const imageHeight = linkedImageAttachment?.height;
+  const hasTrustedDimensions =
+    typeof imageWidth === "number" &&
+    Number.isInteger(imageWidth) &&
+    imageWidth > 0 &&
+    typeof imageHeight === "number" &&
+    Number.isInteger(imageHeight) &&
+    imageHeight > 0;
+  const attachmentLabel = alt?.toLowerCase().startsWith("video:")
+    ? alt.slice(6).trim()
+    : alt;
+  if (isGeneratedAttachmentMarkdown(linkedAttachments, src, attachmentLabel)) {
+    return null;
+  }
+  if (alt?.toLowerCase().startsWith("video:")) {
+    return (
+      <video
+        src={src}
+        title={alt.slice(6).trim() || "Attached video"}
+        controls
+        playsInline
+        preload="metadata"
+        className="my-3 max-h-96 w-full rounded-xl bg-black object-contain"
+      />
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt ?? ""}
+      loading="lazy"
+      width={hasTrustedDimensions ? imageWidth : undefined}
+      height={hasTrustedDimensions ? imageHeight : undefined}
+      style={
+        hasTrustedDimensions
+          ? { aspectRatio: `${imageWidth} / ${imageHeight}` }
+          : undefined
+      }
+      className="my-3 max-h-96 max-w-full rounded-xl object-contain"
+    />
+  );
+}
+
+// How each Markdown element is drawn. These are made once, here, and not
+// inside `DiscussionMarkdown`: React treats a renderer that is a new function
+// as a different kind of element, so it threw away and rebuilt every
+// paragraph, link, image, video and code block of every comment each time
+// anything above them rendered. What differs per comment (its attachments,
+// chapters and timestamp handler) reaches the renderers through context.
+const MARKDOWN_COMPONENTS: Components = {
+  a: MarkdownLink,
+  blockquote: ({ children }) => (
+    <blockquote className="my-3 border-l-3 border-(--accent) pl-4 text-(--muted)">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </blockquote>
+  ),
+  code: ({ className: codeClassName, children }) => {
+    const code = String(children).replace(/\n$/, "");
+    const language = /language-([^\s]+)/.exec(codeClassName ?? "")?.[1];
+    if (!language && !code.includes("\n")) {
+      return (
+        <code className="rounded bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em] text-(--text)">
+          {children}
+        </code>
+      );
+    }
+    return <HighlightedCodeBlock code={code} language={language} />;
+  },
+  h1: ({ children }) => (
+    <h1 className="my-3 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="my-2.5 text-lg font-bold tracking-tight text-(--text) sm:text-xl">
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="my-2 text-base font-semibold text-(--text) sm:text-lg">
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </h3>
+  ),
+  hr: () => (
+    <hr className="my-4 border-t [border-color:color-mix(in_srgb,var(--text)_12%,transparent)]" />
+  ),
+  img: MarkdownImage,
+  li: ({ children }) => (
+    <li className="pl-1">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </li>
+  ),
+  ol: ({ children }) => (
+    <ol className="my-2 list-decimal space-y-1 pl-6">{children}</ol>
+  ),
+  p: ({ children }) => (
+    <p className="my-1.5 first:mt-0 last:mb-0">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </p>
+  ),
+  pre: ({ children }) => <>{children}</>,
+  table: ({ children }) => (
+    <div className="my-3 max-w-full overflow-x-auto rounded-lg shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
+      {/* Words keep whole in a cell: the text around it may break anywhere,
+          which let columns shrink to a letter instead of the box scrolling. */}
+      <table className="w-full border-collapse text-left text-sm wrap-normal">
+        {children}
+      </table>
+    </div>
+  ),
+  td: ({ children }) => (
+    <td className="border-t px-3 py-2 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)]">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </td>
+  ),
+  th: ({ children }) => (
+    <th className="border-b px-3 py-2 font-semibold text-(--text) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)]">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </th>
+  ),
+  strong: ({ children }) => (
+    <strong>
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </strong>
+  ),
+  em: ({ children }) => (
+    <em>
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </em>
+  ),
+  del: ({ children }) => (
+    <del>
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </del>
+  ),
+  mark: ({ children }) => (
+    <mark className="rounded-[0.2em] bg-[color-mix(in_srgb,var(--accent)_22%,transparent)] box-decoration-clone px-0.5 text-inherit">
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </mark>
+  ),
+  ul: ({ children }) => (
+    <ul className="my-2 list-disc space-y-1 pl-6">{children}</ul>
+  ),
+};
+
+/**
+ * A line of "=" or "-" under text is Markdown's underlined heading. Nobody
+ * writes headings that way in a comment, but plain text does it by chance:
+ * a comment brought over from the old platform listed "const", "age", ":",
+ * "number", "=" one per line, and the lone "=" turned the lines above it
+ * into a large heading. Headings are written with "#" only.
+ */
+function remarkNoUnderlinedHeadings(this: {
+  data(): { micromarkExtensions?: unknown[] };
+}) {
+  const data = this.data();
+  data.micromarkExtensions = [
+    ...(data.micromarkExtensions ?? []),
+    { disable: { null: ["setextUnderline"] } },
+  ];
+}
+
+const MARKDOWN_PLUGINS = [
+  remarkGfm,
+  remarkNoUnderlinedHeadings,
+  remarkHighlightMarks,
+];
+const MARKDOWN_SOFT_BREAK_PLUGINS = [
+  remarkGfm,
+  remarkNoUnderlinedHeadings,
+  remarkHighlightMarks,
+  remarkLessonDescriptionSoftBreaks,
+];
+
 export function DiscussionMarkdown({
   content,
   label,
   linkedAttachments,
-  enableLinkPreview = true,
   enableInlineTimestamps = false,
   onSeekToTimestamp,
   chapterDeclarations,
   preserveSoftBreaks = false,
   className = "",
 }: DiscussionMarkdownProps) {
-  const isGeneratedAttachmentMarkdown = (
-    url: string | undefined,
-    label: string | undefined,
-  ) =>
-    Boolean(
-      url &&
-      label &&
-      linkedAttachments?.some(
-        (attachment) =>
-          attachment.fileUrl === url && attachment.fileName === label,
-      ),
-    );
-
-  const rawText =
-    typeof content === "string"
-      ? content
-      : content.plainText || content.markdown || "";
-  const markdown =
-    typeof content === "string" ? content : content.markdown || "";
+  const markdown = textDiagramsToCodeBlocks(
+    tabSeparatedTablesToMarkdown(
+      typeof content === "string" ? content : content.markdown || "",
+    ),
+  );
   const chapterMarkdown = chapterDeclarations
     ? preparePlainChapterMarkdown(markdown, chapterDeclarations)
     : markdown;
-  const detectedUrl = extractFirstUrl(rawText);
-  const { data: linkPreview } = useLinkPreview(detectedUrl, {
-    enabled: enableLinkPreview,
-  });
-  const inlineTimestampOptions = {
-    enableInlineTimestamps,
-    onSeekToTimestamp,
-  } satisfies InlineTimestampRenderOptions;
+  const renderOptions = useMemo<MarkdownRenderOptions>(
+    () => ({
+      enableInlineTimestamps,
+      onSeekToTimestamp,
+      linkedAttachments,
+      chapterDeclarations,
+    }),
+    [
+      chapterDeclarations,
+      enableInlineTimestamps,
+      linkedAttachments,
+      onSeekToTimestamp,
+    ],
+  );
+  // The text is parsed again only when it changes, not on every render of
+  // the comment around it.
+  const renderedMarkdown = useMemo(
+    () => (
+      <ReactMarkdown
+        remarkPlugins={
+          preserveSoftBreaks ? MARKDOWN_SOFT_BREAK_PLUGINS : MARKDOWN_PLUGINS
+        }
+        skipHtml
+        urlTransform={safeMarkdownUrl}
+        components={MARKDOWN_COMPONENTS}
+      >
+        {chapterMarkdown}
+      </ReactMarkdown>
+    ),
+    [chapterMarkdown, preserveSoftBreaks],
+  );
 
   return (
     <div
@@ -397,193 +786,9 @@ export function DiscussionMarkdown({
       aria-label={label}
       className={`max-w-[72ch] wrap-anywhere text-sm leading-6 text-(--text-secondary) sm:text-[15px] ${className}`}
     >
-      <ReactMarkdown
-        remarkPlugins={
-          preserveSoftBreaks
-            ? [remarkGfm, remarkLessonDescriptionSoftBreaks]
-            : [remarkGfm]
-        }
-        skipHtml
-        urlTransform={safeMarkdownUrl}
-        components={{
-          a: ({ href, children }) => {
-            const chapterIndex = chapterMarkerIndex(href);
-            const chapter =
-              chapterIndex === null
-                ? undefined
-                : chapterDeclarations?.[chapterIndex];
-            if (chapter) {
-              const value = flattenMarkdownText(children) ?? "";
-              return (
-                <InlineTimestampButton
-                  value={value}
-                  seconds={chapter.startTime}
-                  ariaLabel={`Seek to ${value} — ${chapter.title}`}
-                  onSeekToTimestamp={onSeekToTimestamp}
-                />
-              );
-            }
-
-            const linkLabel = flattenMarkdownText(children);
-            if (isGeneratedAttachmentMarkdown(href, linkLabel)) return null;
-            return (
-              <a
-                href={href}
-                target={href?.startsWith("#") ? undefined : "_blank"}
-                rel={href?.startsWith("#") ? undefined : "noopener noreferrer"}
-                className="font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-              >
-                {children}
-              </a>
-            );
-          },
-          blockquote: ({ children }) => (
-            <blockquote className="my-3 border-l-3 border-(--accent) pl-4 text-(--muted)">
-              {renderInlineContent(children, inlineTimestampOptions)}
-            </blockquote>
-          ),
-          code: ({ className: codeClassName, children }) => {
-            const code = String(children).replace(/\n$/, "");
-            const language = /language-([^\s]+)/.exec(codeClassName ?? "")?.[1];
-            if (!language && !code.includes("\n")) {
-              return (
-                <code className="rounded bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em] text-(--text)">
-                  {children}
-                </code>
-              );
-            }
-            return <HighlightedCodeBlock code={code} language={language} />;
-          },
-          h1: ({ children }) => (
-            <h1 className="my-3 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
-              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
-            </h1>
-          ),
-          h2: ({ children }) => (
-            <h2 className="my-2.5 text-lg font-bold tracking-tight text-(--text) sm:text-xl">
-              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
-            </h2>
-          ),
-          h3: ({ children }) => (
-            <h3 className="my-2 text-base font-semibold text-(--text) sm:text-lg">
-              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
-            </h3>
-          ),
-          hr: () => (
-            <hr className="my-4 border-t [border-color:color-mix(in_srgb,var(--text)_12%,transparent)]" />
-          ),
-          img: ({ src, alt }) => {
-            if (!src) return null;
-            const linkedImageAttachment = linkedAttachments?.find(
-              (attachment) =>
-                attachment.fileUrl === src &&
-                (attachment.mediaType === "image" ||
-                  attachment.kind === "image" ||
-                  attachment.kind === "screenshot" ||
-                  attachment.mimeType.startsWith("image/")),
-            );
-            const imageWidth = linkedImageAttachment?.width;
-            const imageHeight = linkedImageAttachment?.height;
-            const hasTrustedDimensions =
-              typeof imageWidth === "number" &&
-              Number.isInteger(imageWidth) &&
-              imageWidth > 0 &&
-              typeof imageHeight === "number" &&
-              Number.isInteger(imageHeight) &&
-              imageHeight > 0;
-            const attachmentLabel = alt?.toLowerCase().startsWith("video:")
-              ? alt.slice(6).trim()
-              : alt;
-            if (isGeneratedAttachmentMarkdown(src, attachmentLabel)) {
-              return null;
-            }
-            if (alt?.toLowerCase().startsWith("video:")) {
-              return (
-                <video
-                  src={src}
-                  title={alt.slice(6).trim() || "Attached video"}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  className="my-3 max-h-96 w-full rounded-xl bg-black object-contain"
-                />
-              );
-            }
-            return (
-              <img
-                src={src}
-                alt={alt ?? ""}
-                loading="lazy"
-                width={hasTrustedDimensions ? imageWidth : undefined}
-                height={hasTrustedDimensions ? imageHeight : undefined}
-                style={
-                  hasTrustedDimensions
-                    ? { aspectRatio: `${imageWidth} / ${imageHeight}` }
-                    : undefined
-                }
-                className="my-3 max-h-96 max-w-full rounded-xl object-contain"
-              />
-            );
-          },
-          li: ({ children }) => (
-            <li className="pl-1">
-              {renderInlineContent(children, inlineTimestampOptions)}
-            </li>
-          ),
-          ol: ({ children }) => (
-            <ol className="my-2 list-decimal space-y-1 pl-6">{children}</ol>
-          ),
-          p: ({ children }) => (
-            <p className="my-1.5 first:mt-0 last:mb-0">
-              {renderInlineContent(children, inlineTimestampOptions)}
-            </p>
-          ),
-          pre: ({ children }) => <>{children}</>,
-          table: ({ children }) => (
-            <div className="my-3 max-w-full overflow-x-auto rounded-lg shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
-              <table className="w-full border-collapse text-left text-sm">
-                {children}
-              </table>
-            </div>
-          ),
-          td: ({ children }) => (
-            <td className="border-t px-3 py-2 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)]">
-              {renderInlineContent(children, inlineTimestampOptions)}
-            </td>
-          ),
-          th: ({ children }) => (
-            <th className="border-b px-3 py-2 font-semibold text-(--text) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)]">
-              {renderInlineContent(children, inlineTimestampOptions)}
-            </th>
-          ),
-          strong: ({ children }) => (
-            <strong>
-              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
-            </strong>
-          ),
-          em: ({ children }) => (
-            <em>
-              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
-            </em>
-          ),
-          del: ({ children }) => (
-            <del>
-              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
-            </del>
-          ),
-          ul: ({ children }) => (
-            <ul className="my-2 list-disc space-y-1 pl-6">{children}</ul>
-          ),
-        }}
-      >
-        {chapterMarkdown}
-      </ReactMarkdown>
-
-      {linkPreview && (
-        <div className="mt-3">
-          <LinkPreviewCard preview={linkPreview} compact />
-        </div>
-      )}
+      <MarkdownRenderOptionsContext.Provider value={renderOptions}>
+        {renderedMarkdown}
+      </MarkdownRenderOptionsContext.Provider>
     </div>
   );
 }

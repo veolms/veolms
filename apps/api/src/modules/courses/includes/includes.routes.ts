@@ -25,6 +25,12 @@ const includesRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/courses/:id/includes",
     {
+      // Optional auth: anonymous for published courses; a draft's includes
+      // are returned only to its creator or an admin (checked in the service).
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
       schema: {
         operationId: "listCourseIncludes",
         tags: ["Course Includes"],
@@ -60,7 +66,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Course not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.details.update", "course"),
     },
     controller.createCourseInclude,
   );
@@ -83,7 +89,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Include item not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.details.update", "course"),
     },
     controller.updateCourseInclude,
   );
@@ -105,7 +111,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Include item not found"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.details.update", "course"),
     },
     controller.deleteCourseInclude,
   );
@@ -128,7 +134,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
           403: errorResponse("Forbidden - not course owner"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.details.update", "course"),
     },
     controller.reorderCourseIncludes,
   );

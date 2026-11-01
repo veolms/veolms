@@ -1,9 +1,12 @@
+import { cacheTags, createCache } from "@veolms/api-core";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 import type {
+  AnalyticsCoursesResponse,
   AnalyticsFilterQuery,
   AnalyticsKpi,
   AnalyticsOverviewResponse,
+  AnalyticsRevenueResponse,
   CoursePerformanceRow,
   DashboardSummaryResponse,
   DashboardLearningActivity,
@@ -16,11 +19,10 @@ import type { EnrollmentService } from "../commerce/enrollments/enrollment.servi
 import type { StudentsService } from "../students/students.service.ts";
 import type { CourseService } from "../courses/course/course.service.ts";
 import type { LearningProgressService } from "../learning-progress/learning-progress.service.ts";
-import type {
-  AnalyticsActor,
-  AnalyticsDashboardScope,
-} from "./analytics.types.ts";
-import { isAdmin } from "./analytics.types.ts";
+import type { AnalyticsActor } from "./analytics.types.ts";
+import { hasAcademyPermission } from "../authorization/index.ts";
+import { AppError } from "../../lib/errors.ts";
+import * as analyticsRepo from "./analytics.repository.ts";
 
 export interface AnalyticsServiceOptions {
   database: Kysely<Database>;
@@ -34,9 +36,6 @@ export interface AnalyticsServiceOptions {
 interface ScopedCourse {
   id: string;
   title: string;
-  status: string;
-  createdAt: string;
-  publishedAt: string | null;
 }
 
 type DashboardCourse = Pick<
@@ -47,6 +46,7 @@ type DashboardCourse = Pick<
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RANGE_DAYS = 30;
 const TOP_COURSES_LIMIT = 8;
+const TOP_PRODUCTS_LIMIT = 10;
 const DASHBOARD_RANGE_DAYS: Record<DashboardRange, number> = {
   "7d": 7,
   "30d": 30,
@@ -96,13 +96,21 @@ function kpi(value: number, previousValue: number): AnalyticsKpi {
   } else {
     changePercent = ((value - previousValue) / Math.abs(previousValue)) * 100;
   }
-  return { value, previousValue, changePercent };
+  return { value, changePercent };
 }
+
+/** Longest span one request may cover; the dashboard's widest is a year. */
+const MAX_RANGE_DAYS = 366;
 
 function resolveDateRange(query: AnalyticsFilterQuery) {
   const to = query.to ?? new Date();
-  const from =
+  const requestedFrom =
     query.from ?? new Date(to.getTime() - DEFAULT_RANGE_DAYS * DAY_MS);
+  // The span was whatever the client asked for, and every extra day is
+  // scanned twice — once for the range and once for the period before it.
+  const from = new Date(
+    Math.max(requestedFrom.getTime(), to.getTime() - MAX_RANGE_DAYS * DAY_MS),
+  );
   const spanMs = Math.max(to.getTime() - from.getTime(), DAY_MS);
   const prevTo = from;
   const prevFrom = new Date(from.getTime() - spanMs);
@@ -141,46 +149,16 @@ function resolveInclusiveEnd(exclusiveEnd: Date) {
   return new Date(exclusiveEnd.getTime() - 1);
 }
 
-function createEnrollmentActivityBucketWindow(from: Date) {
+/** Inclusive start of each UTC 8-hour bucket in the activity window. */
+function createEnrollmentActivityBucketStarts(from: Date) {
   return Array.from(
     { length: ENROLLMENT_ACTIVITY_BUCKET_COUNT },
-    (_, index) => {
-      const start = new Date(
+    (_, index) =>
+      new Date(
         from.getTime() +
           index * ENROLLMENT_ACTIVITY_BUCKET_HOURS * 60 * 60 * 1000,
-      );
-      const end = new Date(
-        start.getTime() + ENROLLMENT_ACTIVITY_BUCKET_HOURS * 60 * 60 * 1000,
-      );
-      return { start, end };
-    },
-  );
-}
-
-function emptyLearningActivity(
-  window: EnrollmentActivityWindow,
-): DashboardLearningActivity {
-  return {
-    averageCourseProgress: { value: 0 },
-    courseCompletionRate: { value: 0 },
-    newEnrollments: { value: 0 },
-    enrollmentActivity: {
-      currentTotal: 0,
-      previousTotal: 0,
-      changePercent: 0,
-      from: window.from.toISOString(),
-      to: window.to.toISOString(),
-      bucketHours: ENROLLMENT_ACTIVITY_BUCKET_HOURS,
-      timeZone: "UTC",
-      buckets: createEnrollmentActivityBucketWindow(window.from).map(
-        ({ start, end }) => ({
-          start: start.toISOString(),
-          end: end.toISOString(),
-          value: 0,
-        }),
       ),
-    },
-  };
+  );
 }
 
 function normalizeRevenueTrend(
@@ -207,8 +185,22 @@ function normalizeRevenueTrend(
   return trend;
 }
 
+/**
+ * Analytics answers: aggregate snapshots, served up to 30 s old. Without
+ * this every dashboard poll re-ran ~15 full-table aggregates, and one admin
+ * tab was measured slowing all other traffic ~10x. Concurrent identical
+ * requests share one computation; failures are not kept.
+ */
+const analyticsResponses = createCache<unknown>({
+  name: "analytics.responses",
+  ttlMs: 30_000,
+  maxEntries: 100,
+  maxBytes: 8 * 1024 * 1024,
+});
+
 export function createAnalyticsService(options: AnalyticsServiceOptions) {
   const {
+    database,
     orderService,
     enrollmentService,
     studentsService,
@@ -222,6 +214,58 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
    * courses/shared/courses.utils.ts). With none given: an admin sees every
    * course on the platform (isPlatformWide), an instructor sees their own.
    */
+  /**
+   * Analytics held through a role that reaches every course (admin, or a
+   * team role) covers the whole academy; an instructor's covers their own.
+   */
+  /** Which analytics keys the actor holds for every course. */
+  async function academyAnalytics(actor: AnalyticsActor) {
+    const [overview, course, revenue] = await Promise.all([
+      hasAcademyPermission(database, actor.id, "analytics.overview.read"),
+      hasAcademyPermission(database, actor.id, "analytics.course.read"),
+      hasAcademyPermission(database, actor.id, "analytics.revenue.read"),
+    ]);
+    return { overview, course, revenue };
+  }
+
+  async function seesEveryCourse(actor: AnalyticsActor): Promise<boolean> {
+    const held = await academyAnalytics(actor);
+    return held.overview || held.course || held.revenue;
+  }
+
+  /**
+   * Money reaches the holders of the revenue permission, and an instructor
+   * looking at their own courses. Analytics held for every course without
+   * the revenue key (a team role) stop short of it.
+   */
+  async function seesRevenue(actor: AnalyticsActor): Promise<boolean> {
+    const held = await academyAnalytics(actor);
+    return held.revenue || !(held.overview || held.course);
+  }
+
+  /** The overview with every money figure taken out. */
+  function withoutRevenue(
+    response: AnalyticsOverviewResponse,
+  ): AnalyticsOverviewResponse {
+    const emptyKpi = kpi(0, 0);
+    return {
+      ...response,
+      includesRevenue: false,
+      overview: {
+        ...response.overview,
+        netRevenue: emptyKpi,
+        orders: emptyKpi,
+        refundRate: emptyKpi,
+        dailyOrders: [],
+        coursePerformance: response.overview.coursePerformance.map((row) => ({
+          ...row,
+          orders: 0,
+          netRevenue: 0,
+        })),
+      },
+    };
+  }
+
   async function resolveCoursesInScope(
     actor: AnalyticsActor,
     courseId: string | undefined,
@@ -230,47 +274,40 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     courses: ScopedCourse[];
     isPlatformWide: boolean;
   }> {
+    const everyCourse = await seesEveryCourse(actor);
     if (courseId) {
-      if (!isAdmin(actor)) {
-        await courseService.getCourseAndVerifyOwner(courseId, actor.id);
-      }
-      const course = await courseService.findCourseById(courseId);
+      const course = everyCourse
+        ? await courseService.findCourseById(courseId)
+        : await courseService.getCourseAndVerifyOwner(
+            courseId,
+            actor.id,
+            actor.roles,
+            "analytics.course.read",
+          );
       if (!course) {
         return { courseIds: [], courses: [], isPlatformWide: false };
       }
       return {
         courseIds: [courseId],
-        courses: [
-          {
-            id: course.id,
-            title: course.title,
-            status: course.status,
-            createdAt: course.created_at.toISOString(),
-            publishedAt: course.published_at
-              ? course.published_at.toISOString()
-              : null,
-          },
-        ],
+        courses: [{ id: course.id, title: course.title }],
         isPlatformWide: false,
       };
     }
 
-    if (isAdmin(actor)) {
+    if (everyCourse) {
       // Summaries, not listMyCourses: scope resolution only needs ids and
       // titles, and listMyCourses hydrates media URLs at up to ~5 queries
       // per course before a single aggregate has run.
       const mine = await courseService.listMyCourseSummaries(
         actor.id,
         actor.roles,
+        { everyCourse: true },
       );
       return {
         courseIds: mine.courses.map((course) => course.id),
         courses: mine.courses.map((course) => ({
           id: course.id,
           title: course.title,
-          status: course.status,
-          createdAt: course.createdAt,
-          publishedAt: course.publishedAt,
         })),
         isPlatformWide: true,
       };
@@ -282,9 +319,6 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       courses: mine.courses.map((course) => ({
         id: course.id,
         title: course.title,
-        status: course.status,
-        createdAt: course.createdAt,
-        publishedAt: course.publishedAt,
       })),
       isPlatformWide: false,
     };
@@ -305,18 +339,6 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         thumbnailSrcSet: course.thumbnailSrcSet,
         status: course.status,
       }));
-  }
-
-  async function resolveDashboardAnalyticsCourseIds(
-    actor: AnalyticsActor,
-  ): Promise<string[]> {
-    const scoped = await courseService.listMyCourseScope(actor.id, actor.roles);
-
-    // Preserve the existing course-scoped analytics eligibility rule while
-    // using the collaborative course population for instructors.
-    return scoped.courses
-      .filter((course) => course.status === "published")
-      .map((course) => course.id);
   }
 
   async function buildYourCourses(
@@ -343,6 +365,26 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       students: studentsByCourse.get(course.id) ?? 0,
       averageProgressPercent: progressByCourse.get(course.id) ?? null,
     }));
+  }
+
+  /** Shared by every tab: the range, the period before it, the course
+   * scope and the academy order scope. */
+  async function resolveTabContext(
+    actor: AnalyticsActor,
+    query: AnalyticsFilterQuery,
+  ) {
+    const scopeInfo = await resolveCoursesInScope(actor, query.courseId);
+    const range = resolveDateRange(query);
+    const courseIdFilter: string | string[] | undefined =
+      scopeInfo.isPlatformWide
+        ? undefined
+        : scopeInfo.courseIds.length === 1
+          ? scopeInfo.courseIds[0]
+          : scopeInfo.courseIds;
+    const isEmpty =
+      !scopeInfo.isPlatformWide && scopeInfo.courseIds.length === 0;
+    const scope = await orderService.getAcademyScope();
+    return { ...scopeInfo, ...range, courseIdFilter, isEmpty, scope };
   }
 
   async function buildCoursePerformance(
@@ -374,26 +416,32 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     // run the scalar aggregate once per course); order stats stay per
     // course because each is a cheap filtered aggregate and the currency
     // must be pinned per row — see the comment below.
-    const [progressByCourse, orderStatsList] = await Promise.all([
-      learningProgressService
-        .getAverageProgressAndCompletionRateByCourse(targetIds)
-        .then((rows) => new Map(rows.map((row) => [row.courseId, row]))),
-      Promise.all(
-        targetIds.map((courseId) =>
-          // `currency` pinned so every row in the table is expressed in the
-          // same currency as the headline totals — without it, each course
-          // would independently resolve to whichever currency it sells the
-          // most in, and a mixed-currency deployment would show inconsistent
-          // per-course revenue next to a single-currency column header.
-          orderService.getRawStatsForCourses(scope, {
-            courseId,
-            from,
-            to,
-            currency,
-          }),
+    const [progressByCourse, orderStatsList, ordersByCourse] =
+      await Promise.all([
+        learningProgressService
+          .getAverageProgressAndCompletionRateByCourse(targetIds)
+          .then((rows) => new Map(rows.map((row) => [row.courseId, row]))),
+        Promise.all(
+          targetIds.map((courseId) =>
+            // `currency` pinned so every row in the table is expressed in the
+            // same currency as the headline totals — without it, each course
+            // would independently resolve to whichever currency it sells the
+            // most in, and a mixed-currency deployment would show inconsistent
+            // per-course revenue next to a single-currency column header.
+            orderService.getRawStatsForCourses(scope, {
+              courseId,
+              from,
+              to,
+              currency,
+            }),
+          ),
         ),
-      ),
-    ]);
+        analyticsRepo.getOrderCountsByCourse(database, scope, {
+          courseIds: targetIds,
+          from,
+          to,
+        }),
+      ]);
 
     return targetIds.map((courseId, index) => {
       const orderStats = orderStatsList[index]!;
@@ -402,6 +450,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         courseId,
         title: titleById.get(courseId) ?? "Untitled course",
         enrollments: enrollmentByCourse.get(courseId) ?? 0,
+        orders: ordersByCourse.get(courseId) ?? 0,
         netRevenue: orderStats.grossPaid - orderStats.refundedAgainstPaid,
         completionRate: progress?.completionRate ?? 0,
         averageProgressPercent: progress?.averageProgressPercent ?? 0,
@@ -409,41 +458,62 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     });
   }
 
+  /** Every UTC day of the range, in order, a zero row where nothing happened. */
+  function fillDays<T extends { date: string }>(
+    points: T[],
+    from: Date,
+    to: Date,
+    empty: (date: string) => T,
+  ): T[] {
+    const byDate = new Map(points.map((point) => [point.date, point]));
+    const start = Date.UTC(
+      from.getUTCFullYear(),
+      from.getUTCMonth(),
+      from.getUTCDate(),
+    );
+    const filled: T[] = [];
+    for (let time = start; time < to.getTime(); time += DAY_MS) {
+      const date = new Date(time).toISOString().slice(0, 10);
+      filled.push(byDate.get(date) ?? empty(date));
+    }
+    return filled;
+  }
+
+  const emptyDailyOrders = (date: string) => ({
+    date,
+    grossSales: 0,
+    netRevenue: 0,
+    orders: 0,
+    refundedAmount: 0,
+    refunds: 0,
+  });
+  const emptyTrendPoint = (date: string) => ({ date, value: 0 });
+
+  function refundRateOf(funnel: { paid: number; refunded: number }): number {
+    return funnel.paid > 0 ? (funnel.refunded / funnel.paid) * 100 : 0;
+  }
+
   async function buildOverview(
     actor: AnalyticsActor,
     query: AnalyticsFilterQuery,
   ): Promise<AnalyticsOverviewResponse> {
-    const { courseIds, courses, isPlatformWide } = await resolveCoursesInScope(
-      actor,
-      query.courseId,
-    );
-    const { from, to, prevFrom, prevTo } = resolveDateRange(query);
-
-    if (!isPlatformWide && courseIds.length === 0) {
-      return buildEmptyResponse(query);
-    }
-
-    const courseIdFilter: string | string[] | undefined = isPlatformWide
-      ? undefined
-      : courseIds.length === 1
-        ? courseIds[0]
-        : courseIds;
-
-    const scope = await orderService.getAcademyScope();
+    const context = await resolveTabContext(actor, query);
+    if (context.isEmpty) return buildEmptyOverview();
+    const { courses, courseIdFilter, from, to, prevFrom, prevTo, scope } =
+      context;
 
     const [
       rawStatsCurrent,
       rawStatsPrev,
       enrollmentStatsCurrent,
       enrollmentStatsPrev,
-      activeLearnersCurrent,
-      activeLearnersPrev,
-      estWatchHoursCurrent,
-      estWatchHoursPrev,
-      startedCompletedCurrent,
+      studentsCurrent,
+      studentsPrev,
       progressCompletionCurrent,
       progressCompletionPrev,
-      orderFunnel,
+      funnelCurrent,
+      funnelPrev,
+      dailyEnrollments,
     ] = await Promise.all([
       orderService.getRawStatsForCourses(scope, {
         courseId: courseIdFilter,
@@ -465,30 +535,13 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         from: prevFrom,
         to: prevTo,
       }),
-      studentsService.getActiveLearnerCount({
+      analyticsRepo.countEnrolledLearnersAsOf(database, {
         courseId: courseIdFilter,
-        from,
-        to,
+        asOf: to,
       }),
-      studentsService.getActiveLearnerCount({
+      analyticsRepo.countEnrolledLearnersAsOf(database, {
         courseId: courseIdFilter,
-        from: prevFrom,
-        to: prevTo,
-      }),
-      learningProgressService.getEstimatedWatchHours({
-        courseId: courseIdFilter,
-        from,
-        to,
-      }),
-      learningProgressService.getEstimatedWatchHours({
-        courseId: courseIdFilter,
-        from: prevFrom,
-        to: prevTo,
-      }),
-      learningProgressService.getStartedAndCompletedCounts({
-        courseId: courseIdFilter,
-        from,
-        to,
+        asOf: prevTo,
       }),
       learningProgressService.getAverageProgressAndCompletionRate({
         courseId: courseIdFilter,
@@ -503,6 +556,16 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         to,
         courseId: courseIdFilter,
       }),
+      orderService.getOrderStatusFunnel(scope, {
+        from: prevFrom,
+        to: prevTo,
+        courseId: courseIdFilter,
+      }),
+      analyticsRepo.getDailyEnrollments(database, {
+        courseId: courseIdFilter,
+        from,
+        to,
+      }),
     ]);
 
     const currency = rawStatsCurrent.currency;
@@ -511,8 +574,8 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const netRevenuePrev =
       rawStatsPrev.grossPaid - rawStatsPrev.refundedAgainstPaid;
 
-    const [revenueTrend, coursePerformance] = await Promise.all([
-      orderService.getRevenueTrend(scope, {
+    const [dailyOrders, coursePerformance] = await Promise.all([
+      analyticsRepo.getDailyOrderSeries(database, scope, {
         courseId: courseIdFilter,
         from,
         to,
@@ -528,25 +591,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       ),
     ]);
 
-    // `started` counts anyone active in the window regardless of when they
-    // originally enrolled, while `totalEnrollments` only counts enrollments
-    // created in this same window — different cohorts, so the ratio can
-    // legitimately exceed 100%. Clamped so the funnel never widens.
-    const learningFunnelStarted = Math.min(
-      startedCompletedCurrent.started,
-      enrollmentStatsCurrent.totalEnrollments,
-    );
-    const learningFunnelCompleted = Math.min(
-      startedCompletedCurrent.completed,
-      learningFunnelStarted,
-    );
-
     return {
-      scope: {
-        type: isPlatformWide ? "platform" : "course",
-        courseId: query.courseId ?? null,
-        courseIds,
-      },
       currency,
       overview: {
         netRevenue: kpi(netRevenueCurrent, netRevenuePrev),
@@ -555,40 +600,287 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
           enrollmentStatsCurrent.totalEnrollments,
           enrollmentStatsPrev.totalEnrollments,
         ),
-        activeLearners: kpi(activeLearnersCurrent, activeLearnersPrev),
-        estimatedWatchHours: kpi(estWatchHoursCurrent, estWatchHoursPrev),
+        totalStudents: kpi(studentsCurrent, studentsPrev),
+        refundRate: kpi(refundRateOf(funnelCurrent), refundRateOf(funnelPrev)),
         completionRate: kpi(
           progressCompletionCurrent.completionRate,
           progressCompletionPrev.completionRate,
         ),
-        revenueTrend,
-        orderFunnel,
-        learningFunnel: {
-          enrolled: enrollmentStatsCurrent.totalEnrollments,
-          started: learningFunnelStarted,
-          completed: learningFunnelCompleted,
-        },
+        dailyOrders: fillDays(dailyOrders, from, to, emptyDailyOrders),
+        dailyEnrollments: fillDays(dailyEnrollments, from, to, emptyTrendPoint),
         coursePerformance,
+      },
+    };
+  }
+
+  async function buildRevenue(
+    actor: AnalyticsActor,
+    query: AnalyticsFilterQuery,
+  ): Promise<AnalyticsRevenueResponse> {
+    if (!(await seesRevenue(actor))) {
+      throw new AppError(
+        403,
+        "FORBIDDEN",
+        "Revenue analytics need the analytics.revenue.read permission.",
+      );
+    }
+    const context = await resolveTabContext(actor, query);
+    if (context.isEmpty) return buildEmptyRevenue();
+    const { courseIdFilter, from, to, prevFrom, prevTo, scope } = context;
+
+    const [current, funnelCurrent, funnelPrev, inCarts] = await Promise.all([
+      orderService.getRawStatsForCourses(scope, {
+        courseId: courseIdFilter,
+        from,
+        to,
+      }),
+      orderService.getOrderStatusFunnel(scope, {
+        from,
+        to,
+        courseId: courseIdFilter,
+      }),
+      orderService.getOrderStatusFunnel(scope, {
+        from: prevFrom,
+        to: prevTo,
+        courseId: courseIdFilter,
+      }),
+      analyticsRepo.countItemsInCarts(database, {
+        courseId: courseIdFilter,
+        from,
+        to,
+      }),
+    ]);
+    const currency = current.currency;
+    const window = { courseId: courseIdFilter, from, to, currency };
+
+    const [
+      previous,
+      daily,
+      byProduct,
+      sources,
+      paymentMethods,
+      coupons,
+      topCourses,
+    ] = await Promise.all([
+      orderService.getRawStatsForCourses(scope, {
+        courseId: courseIdFilter,
+        from: prevFrom,
+        to: prevTo,
+        currency,
+      }),
+      analyticsRepo.getDailyOrderSeries(database, scope, window),
+      analyticsRepo.getRevenueByProduct(database, scope, {
+        ...window,
+        limit: TOP_PRODUCTS_LIMIT,
+      }),
+      analyticsRepo.getRevenueSources(database, scope, window),
+      analyticsRepo.getPaymentMethods(database, scope, window),
+      analyticsRepo.getCouponPerformance(database, scope, {
+        ...window,
+        limit: TOP_PRODUCTS_LIMIT,
+      }),
+      analyticsRepo.getTopRevenueCourses(database, scope, {
+        ...window,
+        limit: TOP_COURSES_LIMIT,
+      }),
+    ]);
+
+    const net = (row: typeof current) =>
+      row.grossPaid - row.refundedAgainstPaid;
+    const aov = (row: typeof current) =>
+      row.totalOrders > 0 ? Math.round(row.grossPaid / row.totalOrders) : 0;
+
+    return {
+      currency,
+      revenue: {
+        grossSales: kpi(current.grossPaid, previous.grossPaid),
+        netRevenue: kpi(net(current), net(previous)),
+        orders: kpi(current.totalOrders, previous.totalOrders),
+        uniqueBuyers: kpi(current.uniqueBuyers, previous.uniqueBuyers),
+        averageOrderValue: kpi(aov(current), aov(previous)),
+        refundRate: kpi(refundRateOf(funnelCurrent), refundRateOf(funnelPrev)),
+        refundedAmount: kpi(
+          current.refundedAgainstPaid,
+          previous.refundedAgainstPaid,
+        ),
+        refundCount: kpi(funnelCurrent.refunded, funnelPrev.refunded),
+        funnel: {
+          inCarts,
+          checkoutStarted: funnelCurrent.created,
+          paid: funnelCurrent.paid,
+          refunded: funnelCurrent.refunded,
+        },
+        daily: fillDays(daily, from, to, emptyDailyOrders),
+        byProduct,
+        sources,
+        paymentMethods,
+        coupons,
+        topCourses,
+      },
+    };
+  }
+
+  async function buildCourses(
+    actor: AnalyticsActor,
+    query: AnalyticsFilterQuery,
+  ): Promise<AnalyticsCoursesResponse> {
+    const context = await resolveTabContext(actor, query);
+    if (context.isEmpty) return buildEmptyCourses();
+    const { courses, courseIdFilter, from, to, prevFrom, prevTo } = context;
+
+    const [
+      snapshotCurrent,
+      snapshotPrev,
+      enrollmentsCurrent,
+      enrollmentsPrev,
+      progressCurrent,
+      progressPrev,
+      quizzesCurrent,
+      quizzesPrev,
+      dailyEnrollments,
+      content,
+      topByEnrollment,
+    ] = await Promise.all([
+      analyticsRepo.getContentSnapshotAsOf(database, {
+        courseId: courseIdFilter,
+        asOf: to,
+      }),
+      analyticsRepo.getContentSnapshotAsOf(database, {
+        courseId: courseIdFilter,
+        asOf: prevTo,
+      }),
+      enrollmentService.getEnrollmentStats({
+        courseId: courseIdFilter,
+        from,
+        to,
+      }),
+      enrollmentService.getEnrollmentStats({
+        courseId: courseIdFilter,
+        from: prevFrom,
+        to: prevTo,
+      }),
+      learningProgressService.getAverageProgressAndCompletionRate({
+        courseId: courseIdFilter,
+        asOf: to,
+      }),
+      learningProgressService.getAverageProgressAndCompletionRate({
+        courseId: courseIdFilter,
+        asOf: prevTo,
+      }),
+      analyticsRepo.getQuizSummary(database, {
+        courseId: courseIdFilter,
+        from,
+        to,
+      }),
+      analyticsRepo.getQuizSummary(database, {
+        courseId: courseIdFilter,
+        from: prevFrom,
+        to: prevTo,
+      }),
+      analyticsRepo.getDailyEnrollments(database, {
+        courseId: courseIdFilter,
+        from,
+        to,
+      }),
+      analyticsRepo.getContentInsights(database, {
+        courseId: courseIdFilter,
+      }),
+      enrollmentService.listTopCoursesByEnrollment({
+        limit: TOP_COURSES_LIMIT,
+        from,
+        to,
+        courseId: courseIdFilter,
+      }),
+    ]);
+
+    const titleById = new Map(
+      courses.map((course) => [course.id, course.title]),
+    );
+    const targetIds =
+      topByEnrollment.length > 0
+        ? topByEnrollment.map((row) => row.courseId)
+        : courses.map((course) => course.id).slice(0, TOP_COURSES_LIMIT);
+    const enrollmentByCourse = new Map(
+      topByEnrollment.map((row) => [row.courseId, row.enrollmentCount]),
+    );
+    const [progressByCourse, countsByCourse] = await Promise.all([
+      learningProgressService
+        .getAverageProgressAndCompletionRateByCourse(targetIds)
+        .then((rows) => new Map(rows.map((row) => [row.courseId, row]))),
+      analyticsRepo
+        .listCourseContentCounts(database, targetIds)
+        .then((rows) => new Map(rows.map((row) => [row.courseId, row]))),
+    ]);
+
+    const hours = (seconds: number) => seconds / 3600;
+
+    return {
+      courses: {
+        activeCourses: kpi(
+          snapshotCurrent.publishedCourses,
+          snapshotPrev.publishedCourses,
+        ),
+        enrollments: kpi(
+          enrollmentsCurrent.totalEnrollments,
+          enrollmentsPrev.totalEnrollments,
+        ),
+        averageCompletion: kpi(
+          progressCurrent.completionRate,
+          progressPrev.completionRate,
+        ),
+        lessonsPublished: kpi(
+          snapshotCurrent.publishedLessons,
+          snapshotPrev.publishedLessons,
+        ),
+        totalDurationHours: kpi(
+          hours(snapshotCurrent.videoSeconds),
+          hours(snapshotPrev.videoSeconds),
+        ),
+        quizAttempts: kpi(quizzesCurrent.attempts, quizzesPrev.attempts),
+        dailyEnrollments: fillDays(dailyEnrollments, from, to, emptyTrendPoint),
+        topCourses: targetIds.map((courseId) => {
+          const progress = progressByCourse.get(courseId);
+          const counts = countsByCourse.get(courseId);
+          return {
+            courseId,
+            title: titleById.get(courseId) ?? "Untitled course",
+            enrollments: enrollmentByCourse.get(courseId) ?? 0,
+            learners: counts?.learners ?? 0,
+            completionRate: progress?.completionRate ?? 0,
+            averageProgressPercent: progress?.averageProgressPercent ?? 0,
+            lessons: counts?.lessons ?? 0,
+            durationHours: hours(counts?.videoSeconds ?? 0),
+          };
+        }),
+        content: {
+          courses: content.courses,
+          publishedCourses: content.publishedCourses,
+          sections: content.sections,
+          lessons: content.lessons,
+          videoLessons: content.videoLessons,
+          documentLessons: content.documentLessons,
+          quizLessons: content.quizLessons,
+          resources: content.resources,
+          durationHours: hours(content.videoSeconds),
+        },
+        quizzes: quizzesCurrent,
       },
     };
   }
 
   async function buildRevenueOverview(
     scope: OrderScope,
-    courseIdFilter: string | string[] | undefined,
     range: DashboardRange,
   ) {
     const { from, to, prevFrom, prevTo, days } =
       resolveDashboardRevenueRange(range);
     const current = await orderService.getRawStatsForCourses(scope, {
-      courseId: courseIdFilter,
       from,
       toExclusive: to,
     });
 
     const [previous, currentFunnel, previousFunnel, trend] = await Promise.all([
       orderService.getRawStatsForCourses(scope, {
-        courseId: courseIdFilter,
         from: prevFrom,
         toExclusive: prevTo,
         currency: current.currency,
@@ -596,15 +888,12 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       orderService.getOrderStatusFunnel(scope, {
         from,
         toExclusive: to,
-        courseId: courseIdFilter,
       }),
       orderService.getOrderStatusFunnel(scope, {
         from: prevFrom,
         toExclusive: prevTo,
-        courseId: courseIdFilter,
       }),
       orderService.getRevenueTrend(scope, {
-        courseId: courseIdFilter,
         from,
         toExclusive: to,
         currency: current.currency,
@@ -615,7 +904,6 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const previousNetRevenue = previous.grossPaid - previous.refundedAmount;
 
     return {
-      range,
       currency: current.currency,
       trend: normalizeRevenueTrend(trend, from, days),
       grossSales: kpi(current.grossPaid, previous.grossPaid),
@@ -626,26 +914,20 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
   }
 
   async function buildLearningActivity(
-    courseIdFilter: string | string[] | undefined,
     window: EnrollmentActivityWindow,
   ): Promise<DashboardLearningActivity> {
     const [progress, currentEnrollments, previousEnrollments, activityRows] =
       await Promise.all([
-        learningProgressService.getAverageProgressAndCompletionRate({
-          courseId: courseIdFilter,
-        }),
+        learningProgressService.getAverageProgressAndCompletionRate(),
         enrollmentService.getEnrollmentStats({
-          courseId: courseIdFilter,
           from: window.from,
           to: resolveInclusiveEnd(window.to),
         }),
         enrollmentService.getEnrollmentStats({
-          courseId: courseIdFilter,
           from: window.previousFrom,
           to: resolveInclusiveEnd(window.previousTo),
         }),
         enrollmentService.getEnrollmentActivityBuckets({
-          courseId: courseIdFilter,
           from: window.from,
           to: window.to,
         }),
@@ -654,10 +936,9 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const activityByStart = new Map(
       activityRows.map((row) => [row.start.toISOString(), row.value]),
     );
-    const buckets = createEnrollmentActivityBucketWindow(window.from).map(
-      ({ start, end }) => ({
+    const buckets = createEnrollmentActivityBucketStarts(window.from).map(
+      (start) => ({
         start: start.toISOString(),
-        end: end.toISOString(),
         value: activityByStart.get(start.toISOString()) ?? 0,
       }),
     );
@@ -667,67 +948,53 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       courseCompletionRate: { value: progress.completionRate },
       newEnrollments: { value: currentEnrollments.totalEnrollments },
       enrollmentActivity: {
-        currentTotal: currentEnrollments.totalEnrollments,
-        previousTotal: previousEnrollments.totalEnrollments,
         changePercent: kpi(
           currentEnrollments.totalEnrollments,
           previousEnrollments.totalEnrollments,
         ).changePercent,
-        from: window.from.toISOString(),
-        to: window.to.toISOString(),
-        bucketHours: ENROLLMENT_ACTIVITY_BUCKET_HOURS,
-        timeZone: "UTC",
         buckets,
       },
     };
   }
 
+  /**
+   * Every team member has a Home. Its academy-wide numbers need analytics
+   * for every course (the Overview or Revenue key), its money the revenue
+   * key; "Your Courses" follows the caller's own course visibility. What
+   * the caller may not see is null and never computed.
+   */
   async function buildDashboard(
     actor: AnalyticsActor,
-    dashboardScope: AnalyticsDashboardScope,
     range: DashboardRange = "30d",
+  ): Promise<DashboardSummaryResponse> {
+    const held = await academyAnalytics(actor);
+    if (!held.overview && !held.revenue) {
+      return {
+        revenue: null,
+        students: null,
+        activeLearners: null,
+        watchHours: null,
+        revenueOverview: null,
+        learningActivity: null,
+        yourCourses: await buildYourCourses(
+          await resolveDashboardCourses(actor),
+        ),
+      };
+    }
+    const full = await buildAcademyDashboard(actor, range);
+    return held.revenue
+      ? full
+      : { ...full, revenue: null, revenueOverview: null };
+  }
+
+  async function buildAcademyDashboard(
+    actor: AnalyticsActor,
+    range: DashboardRange,
   ): Promise<DashboardSummaryResponse> {
     const dashboardNow = new Date();
     const enrollmentActivityWindow =
       resolveEnrollmentActivityWindow(dashboardNow);
     const dashboardCourses = await resolveDashboardCourses(actor);
-    const { courseIds, isPlatformWide } =
-      dashboardScope === "platform"
-        ? { courseIds: [], isPlatformWide: true }
-        : {
-            courseIds: await resolveDashboardAnalyticsCourseIds(actor),
-            isPlatformWide: false,
-          };
-    if (!isPlatformWide && courseIds.length === 0) {
-      return {
-        revenue: {
-          value: 0,
-          previousValue: 0,
-          changePercent: 0,
-          currency: "INR",
-        },
-        students: { total: 0, newThisMonth: 0 },
-        activeLearners: kpi(0, 0),
-        watchHours: kpi(0, 0),
-        revenueOverview: {
-          range,
-          currency: "INR",
-          trend: [],
-          grossSales: kpi(0, 0),
-          netRevenue: kpi(0, 0),
-          orders: kpi(0, 0),
-          refunds: kpi(0, 0),
-        },
-        learningActivity: emptyLearningActivity(enrollmentActivityWindow),
-        yourCourses: await buildYourCourses(dashboardCourses),
-      };
-    }
-
-    const courseIdFilter: string | string[] | undefined = isPlatformWide
-      ? undefined
-      : courseIds.length === 1
-        ? courseIds[0]
-        : courseIds;
     const scope = await orderService.getAcademyScope();
     const {
       now,
@@ -742,12 +1009,11 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const [currentRevenue, revenueOverview, learningActivity, yourCourses] =
       await Promise.all([
         orderService.getRawStatsForCourses(scope, {
-          courseId: courseIdFilter,
           from: currentMonthFrom,
           to: now,
         }),
-        buildRevenueOverview(scope, courseIdFilter, range),
-        buildLearningActivity(courseIdFilter, enrollmentActivityWindow),
+        buildRevenueOverview(scope, range),
+        buildLearningActivity(enrollmentActivityWindow),
         buildYourCourses(dashboardCourses),
       ]);
 
@@ -762,33 +1028,27 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       // Pin the previous period to the current period's currency so a
       // multi-currency academy never compares different currencies.
       orderService.getRawStatsForCourses(scope, {
-        courseId: courseIdFilter,
         from: previousMonthFrom,
         to: previousMonthTo,
         currency: currentRevenue.currency,
       }),
       studentsService.getStudentPopulationCounts({
-        courseId: courseIdFilter,
         createdFrom: currentMonthFrom,
         createdTo: now,
       }),
       studentsService.getActiveLearnerCount({
-        courseId: courseIdFilter,
         from: activeCurrentFrom,
         to: now,
       }),
       studentsService.getActiveLearnerCount({
-        courseId: courseIdFilter,
         from: activePreviousFrom,
         to: activePreviousTo,
       }),
       learningProgressService.getEstimatedWatchHours({
-        courseId: courseIdFilter,
         from: currentMonthFrom,
         to: now,
       }),
       learningProgressService.getEstimatedWatchHours({
-        courseId: courseIdFilter,
         from: previousMonthFrom,
         to: previousMonthTo,
       }),
@@ -811,84 +1071,101 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     };
   }
 
-  function buildEmptyResponse(
-    query: AnalyticsFilterQuery,
-  ): AnalyticsOverviewResponse {
+  function buildEmptyOverview(): AnalyticsOverviewResponse {
     const emptyKpi = kpi(0, 0);
     return {
-      scope: {
-        type: "course",
-        courseId: query.courseId ?? null,
-        courseIds: [],
-      },
       currency: "INR",
       overview: {
         netRevenue: emptyKpi,
         orders: emptyKpi,
         newEnrollments: emptyKpi,
-        activeLearners: emptyKpi,
-        estimatedWatchHours: emptyKpi,
+        totalStudents: emptyKpi,
+        refundRate: emptyKpi,
         completionRate: emptyKpi,
-        revenueTrend: [],
-        orderFunnel: { created: 0, paid: 0, refunded: 0 },
-        learningFunnel: { enrolled: 0, started: 0, completed: 0 },
+        dailyOrders: [],
+        dailyEnrollments: [],
         coursePerformance: [],
       },
     };
   }
 
-  /**
-   * Short-TTL response cache (same pattern as order.service's stats cache,
-   * including in-flight promise dedupe so concurrent identical requests
-   * share one computation). Analytics responses are aggregate snapshots;
-   * serving one up to 30s old is an accepted tradeoff — without it, every
-   * dashboard poll re-runs ~15 full-table aggregates, and a single admin
-   * tab was measured degrading all other traffic ~10x. Keys include the
-   * actor's id and sorted roles, so a permission change can widen/narrow
-   * the scope at most one TTL late.
-   */
-  const RESPONSE_CACHE_TTL_MS = 30_000;
-  const RESPONSE_CACHE_MAX_ENTRIES = 100;
-  const responseCache = new Map<
-    string,
-    { expiresAt: number; promise: Promise<unknown> }
-  >();
+  function buildEmptyRevenue(): AnalyticsRevenueResponse {
+    const emptyKpi = kpi(0, 0);
+    return {
+      currency: "INR",
+      revenue: {
+        grossSales: emptyKpi,
+        netRevenue: emptyKpi,
+        orders: emptyKpi,
+        uniqueBuyers: emptyKpi,
+        averageOrderValue: emptyKpi,
+        refundRate: emptyKpi,
+        refundedAmount: emptyKpi,
+        refundCount: emptyKpi,
+        funnel: { inCarts: 0, checkoutStarted: 0, paid: 0, refunded: 0 },
+        daily: [],
+        byProduct: [],
+        sources: [],
+        paymentMethods: [],
+        coupons: [],
+        topCourses: [],
+      },
+    };
+  }
 
-  function cachedResponse<T>(key: string, build: () => Promise<T>): Promise<T> {
-    const now = Date.now();
-    const hit = responseCache.get(key);
-    if (hit && hit.expiresAt > now) {
-      return hit.promise as Promise<T>;
-    }
-    if (
-      responseCache.size >= RESPONSE_CACHE_MAX_ENTRIES &&
-      !responseCache.has(key)
-    ) {
-      const oldest = responseCache.keys().next().value;
-      if (oldest !== undefined) responseCache.delete(oldest);
-    }
-    const promise = build().catch((error: unknown) => {
-      // Never cache a failure.
-      responseCache.delete(key);
-      throw error;
-    });
-    responseCache.set(key, {
-      expiresAt: now + RESPONSE_CACHE_TTL_MS,
-      promise,
-    });
-    return promise;
+  function buildEmptyCourses(): AnalyticsCoursesResponse {
+    const emptyKpi = kpi(0, 0);
+    return {
+      courses: {
+        activeCourses: emptyKpi,
+        enrollments: emptyKpi,
+        averageCompletion: emptyKpi,
+        lessonsPublished: emptyKpi,
+        totalDurationHours: emptyKpi,
+        quizAttempts: emptyKpi,
+        dailyEnrollments: [],
+        topCourses: [],
+        content: {
+          courses: 0,
+          publishedCourses: 0,
+          sections: 0,
+          lessons: 0,
+          videoLessons: 0,
+          documentLessons: 0,
+          quizLessons: 0,
+          resources: 0,
+          durationHours: 0,
+        },
+        quizzes: { attempts: 0, submitted: 0, passRate: 0, averageScore: 0 },
+      },
+    };
+  }
+
+  /**
+   * Answers are aggregate snapshots (see `analyticsResponses`), each for one
+   * actor: a change to the actor's roles clears theirs (`user:<id>`).
+   */
+  async function cachedResponse<T>(
+    actor: AnalyticsActor,
+    key: string,
+    build: () => Promise<T>,
+  ): Promise<T> {
+    return (await analyticsResponses.fetch(key, build, {
+      tags: [cacheTags.user(actor.id), cacheTags.rbac],
+    })) as T;
   }
 
   function actorKey(actor: AnalyticsActor): string {
     return `${actor.id}:${[...actor.roles].sort().join(",")}`;
   }
 
-  function overviewKey(
+  function tabKey(
+    tab: "overview" | "revenue" | "courses",
     actor: AnalyticsActor,
     query: AnalyticsFilterQuery,
   ): string {
     return [
-      "overview",
+      tab,
       actorKey(actor),
       query.courseId ?? "",
       query.from?.toISOString() ?? "",
@@ -897,22 +1174,27 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
   }
 
   return {
-    adminOverview: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
-      cachedResponse(overviewKey(actor, query), () =>
-        buildOverview(actor, query),
+    overview: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
+      cachedResponse(actor, tabKey("overview", actor, query), async () => {
+        const [response, revenue] = await Promise.all([
+          buildOverview(actor, query),
+          seesRevenue(actor),
+        ]);
+        return revenue ? response : withoutRevenue(response);
+      }),
+    revenue: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
+      cachedResponse(actor, tabKey("revenue", actor, query), () =>
+        buildRevenue(actor, query),
       ),
-    instructorOverview: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
-      cachedResponse(overviewKey(actor, query), () =>
-        buildOverview(actor, query),
+    courses: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
+      cachedResponse(actor, tabKey("courses", actor, query), () =>
+        buildCourses(actor, query),
       ),
-    dashboard: (
-      actor: AnalyticsActor,
-      dashboardScope: AnalyticsDashboardScope,
-      range: DashboardRange = "30d",
-    ) =>
+    dashboard: (actor: AnalyticsActor, range: DashboardRange = "30d") =>
       cachedResponse(
-        ["dashboard", actorKey(actor), dashboardScope, range].join("|"),
-        () => buildDashboard(actor, dashboardScope, range),
+        actor,
+        ["dashboard", actorKey(actor), range].join("|"),
+        () => buildDashboard(actor, range),
       ),
   };
 }

@@ -1,3 +1,9 @@
+import {
+  followsDefaultColorTheme,
+  readPlatformAppearance,
+  recordColorThemeShown,
+} from "./store/appearanceDefaults";
+
 export interface AcademyTheme {
   id: string;
   name: string;
@@ -7,16 +13,10 @@ export interface AcademyTheme {
 }
 
 // The order here is the order everywhere themes are listed: the appearance
-// settings, the sidebar's colour menu and the theme rotation pool. The first
-// entry is the default theme.
+// settings, the sidebar's colour menu and the theme rotation pool. They run
+// by colour: white, blues, purples, pinks and reds, oranges, yellow, greens.
+// The default theme is DEFAULT_ACADEMY_THEME, wherever it sits here.
 export const academyThemes: readonly AcademyTheme[] = [
-  {
-    id: "ocean",
-    name: "Ocean Blue",
-    note: "Default - clear & confident",
-    preview: "#7193ff",
-    darkInk: true,
-  },
   {
     id: "codex",
     name: "Veo Onyx",
@@ -32,10 +32,59 @@ export const academyThemes: readonly AcademyTheme[] = [
     darkInk: false,
   },
   {
+    id: "ocean",
+    name: "Ocean Blue",
+    note: "Default - clear & confident",
+    preview: "#7193ff",
+    darkInk: true,
+  },
+  {
+    id: "brainwave",
+    name: "Brainwave Slate",
+    note: "Cool graphite & electric blue",
+    preview: "#0085ff",
+    darkInk: true,
+  },
+  {
     id: "graphite",
     name: "Graphite Studio",
     note: "Graphite & violet",
     preview: "#8b68ff",
+    darkInk: false,
+  },
+  {
+    id: "lilac",
+    name: "Velvet Lilac",
+    note: "Plum depth & soft lavender",
+    preview: "#c18cff",
+    darkInk: true,
+  },
+  {
+    id: "barbie",
+    name: "Barbie Pink",
+    note: "Bright & iconic",
+    preview: "#ec4d9b",
+    darkInk: true,
+  },
+  {
+    id: "rose",
+    name: "Studio Rose",
+    note: "Expressive & warm",
+    preview: "#fb6f92",
+    darkInk: true,
+  },
+  {
+    id: "signal",
+    name: "Signal Red",
+    note: "Crisp & high-impact",
+    preview: "#d92d4e",
+    darkInk: false,
+  },
+  {
+    id: "live",
+    name: "Live Red",
+    note: "Near-black & vivid red",
+    preview: "#ff0033",
     darkInk: false,
   },
   {
@@ -60,6 +109,13 @@ export const academyThemes: readonly AcademyTheme[] = [
     darkInk: true,
   },
   {
+    id: "lime",
+    name: "Electric Lime",
+    note: "Graphite & vivid chartreuse",
+    preview: "#a3e635",
+    darkInk: true,
+  },
+  {
     id: "grove",
     name: "Grove Green",
     note: "Calm & grounded",
@@ -67,59 +123,10 @@ export const academyThemes: readonly AcademyTheme[] = [
     darkInk: true,
   },
   {
-    id: "rose",
-    name: "Studio Rose",
-    note: "Expressive & warm",
-    preview: "#fb6f92",
-    darkInk: true,
-  },
-  {
-    id: "signal",
-    name: "Signal Red",
-    note: "Crisp & high-impact",
-    preview: "#d92d4e",
-    darkInk: false,
-  },
-  {
-    id: "barbie",
-    name: "Barbie Pink",
-    note: "Bright & iconic",
-    preview: "#ec4d9b",
-    darkInk: true,
-  },
-  {
     id: "aurora",
     name: "Aurora Teal",
     note: "Cool & luminous",
     preview: "#28d8c6",
-    darkInk: true,
-  },
-  {
-    id: "brainwave",
-    name: "Brainwave Slate",
-    note: "Cool graphite & electric blue",
-    preview: "#0085ff",
-    darkInk: true,
-  },
-  {
-    id: "lilac",
-    name: "Velvet Lilac",
-    note: "Plum depth & soft lavender",
-    preview: "#c18cff",
-    darkInk: true,
-  },
-  {
-    id: "champagne",
-    name: "Champagne Noir",
-    note: "Soft black & champagne gold",
-    preview: "#e6c98a",
-    darkInk: true,
-  },
-  {
-    id: "lime",
-    name: "Electric Lime",
-    note: "Graphite & vivid chartreuse",
-    preview: "#a3e635",
     darkInk: true,
   },
 ];
@@ -230,17 +237,31 @@ export function pickRandomAcademyTheme(
   return selectionPool[index] || DEFAULT_ACADEMY_THEME;
 }
 
+/**
+ * The theme a visitor who has not picked their own sees: the academy's
+ * default (Platform > Appearance), when this version has that theme.
+ */
+export function getDefaultAcademyTheme(): string {
+  const themeId = readPlatformAppearance().defaultColorTheme;
+  return paletteIds.has(themeId) ? themeId : DEFAULT_ACADEMY_THEME;
+}
+
 export function getInitialAcademyTheme(): string {
   if (typeof window === "undefined") return DEFAULT_ACADEMY_THEME;
 
   const savedVersion = window.localStorage.getItem(THEME_VERSION_KEY);
   const savedTheme = window.localStorage.getItem(THEME_KEY);
-  const currentTheme =
+  const savedThemeIsCurrent =
     savedVersion === ACADEMY_THEME_VERSION &&
     savedTheme !== null &&
-    paletteIds.has(savedTheme)
+    paletteIds.has(savedTheme);
+  const followsDefault = followsDefaultColorTheme(
+    () => savedThemeIsCurrent && savedTheme !== DEFAULT_ACADEMY_THEME,
+  );
+  const currentTheme =
+    !followsDefault && savedThemeIsCurrent
       ? savedTheme
-      : DEFAULT_ACADEMY_THEME;
+      : getDefaultAcademyTheme();
   const rotation = getThemeRotationPreferences();
 
   if (!rotation.enabled) {
@@ -260,6 +281,7 @@ export function persistAcademyTheme(theme: string): void {
   if (typeof window === "undefined" || !paletteIds.has(theme)) return;
   window.localStorage.setItem(THEME_KEY, theme);
   window.localStorage.setItem(THEME_VERSION_KEY, ACADEMY_THEME_VERSION);
+  recordColorThemeShown(theme);
 
   if (getThemeRotationPreferences().enabled) {
     window.sessionStorage.setItem(SESSION_THEME_KEY, theme);

@@ -4,23 +4,27 @@ import type {
   OrderScope,
   OrderStatsQuery,
   OrderDirectRefundRequest,
+  NeedsRefundListQuery,
 } from "@veolms/contracts";
-import { ADMIN_ROLE } from "../../auth/index.ts";
 import { httpError } from "../../../lib/errors.ts";
 import type { OrderService } from "./order.service.ts";
+import type { NeedsRefundService } from "./needs-refund.service.ts";
 import type { InvoiceService } from "../invoices/invoice.service.ts";
 import type { RefundService } from "../refunds/refund.service.ts";
+import { toRefundResult } from "../refunds/refund.mapper.ts";
 import type { AuthorizationService } from "../../authorization/authorization.service.ts";
 
 type BillingPermission = "billing.read" | "billing.manage";
 
 export function createOrderController({
   service,
+  needsRefundService,
   invoiceService,
   refundService,
   authorizationService,
 }: {
   service: OrderService;
+  needsRefundService: NeedsRefundService;
   invoiceService: InvoiceService;
   refundService: RefundService;
   authorizationService: AuthorizationService;
@@ -34,15 +38,9 @@ export function createOrderController({
   }
 
   /**
-   * Allows the request when RBAC grants `permission`, or when the user holds
-   * the legacy ADMIN_ROLE.
-   *
-   * ADMIN_ROLE is a superuser bypass: it passes even if an RBAC policy
-   * explicitly denies the permission (`AuthorizationDecision` doesn't tell an
-   * explicit deny from a missing grant). That matches the `requireAdmin`
-   * routes, which check the role alone. Honouring a deny only here would be
-   * sidestepped through those routes, so tightening it has to be done
-   * platform-wide rather than in this controller.
+   * Allows the request when a role reaching every course grants
+   * `permission`: the academy's orders are not any one course's. Admin holds
+   * every billing permission, so it needs no bypass.
    */
   async function requireBillingPermission(
     request: FastifyRequest,
@@ -54,10 +52,10 @@ export function createOrderController({
     const decision = await authorizationService.check({
       userId: user.id,
       permission,
+      platformWide: true,
     });
-    const hasAdminRole = user.roles?.includes(ADMIN_ROLE) ?? false;
 
-    if (!decision.allowed && !hasAdminRole) {
+    if (!decision.allowed) {
       throw httpError(
         403,
         "PERMISSION_DENIED",
@@ -99,6 +97,17 @@ export function createOrderController({
     return await service.getOrderStats(scope, request.query);
   }
 
+  async function listNeedsRefund(
+    request: FastifyRequest<{ Querystring: NeedsRefundListQuery }>,
+  ) {
+    await requireBillingPermission(
+      request,
+      "billing.read",
+      "view payments that need a refund",
+    );
+    return await needsRefundService.listNeedsRefund(request.query);
+  }
+
   async function getOrder(
     request: FastifyRequest<{
       Params: { orderId: string };
@@ -130,17 +139,24 @@ export function createOrderController({
     reply: FastifyReply,
   ) {
     const scope = await resolveScope(request, request.query?.view);
-    const html = await invoiceService.generateInvoiceHtml(
+    const download = await invoiceService.getInvoiceDownload(
       scope,
       request.params.orderId,
     );
-    reply
-      .header("Content-Type", "text/html; charset=utf-8")
+    reply.header("Cache-Control", "private, no-store");
+    if (download.kind === "redirect") {
+      // The stored PDF, straight from the bucket, by a link that soon
+      // stops working.
+      await reply.redirect(download.url, 302);
+      return;
+    }
+    await reply
+      .header("Content-Type", "application/pdf")
       .header(
         "Content-Disposition",
-        `attachment; filename="invoice-${request.params.orderId}.html"`,
+        `attachment; filename="${download.fileName}"`,
       )
-      .send(html);
+      .send(download.pdf);
   }
 
   async function refundOrder(
@@ -168,18 +184,21 @@ export function createOrderController({
       );
     }
 
-    return await refundService.processRefund(user.id, {
+    const refund = await refundService.processRefund(user.id, {
       orderId: request.params.orderId,
       amount: request.body.amount,
       reason: request.body.reason,
       preserveAccess: request.body.preserveAccess ?? false,
       idempotencyKey: headerKey ?? bodyKey,
+      outsideRefund: request.body.outsideRefund,
     });
+    return toRefundResult(refund);
   }
 
   return {
     listOrders,
     getOrderStats,
+    listNeedsRefund,
     getOrder,
     getInvoice,
     downloadInvoice,

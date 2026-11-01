@@ -72,5 +72,9 @@ export {
   type EnrollmentAudienceService,
 } from "./enrollments/enrollment-audience.service.ts";
 
+// What a course costs and whether it is a paid course at all, as checkout
+// reads it. For other modules that must agree with checkout on it.
+export { resolveCoursePricing } from "./pricing/purchasable.ts";
+
 export * from "./shared/commerce.types.ts";
 export { CommerceErrors } from "./shared/commerce.errors.ts";

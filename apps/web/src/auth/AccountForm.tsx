@@ -104,7 +104,11 @@ export function AccountForm({
           <span className="auth-account-form__verified-mask">
             {maskIdentifier(identifier)}
           </span>
-          <span className="auth-account-form__verified-state">verified</span>
+          {/* The code is checked when the account is created, not before, so
+              this must not claim the address is already verified. */}
+          <span className="auth-account-form__verified-state">
+            code entered
+          </span>
         </p>
 
         {secondaryIdentifier && (
@@ -113,7 +117,9 @@ export function AccountForm({
             <span className="auth-account-form__verified-mask">
               {maskIdentifier(secondaryIdentifier)}
             </span>
-            <span className="auth-account-form__verified-state">verified</span>
+            <span className="auth-account-form__verified-state">
+              code entered
+            </span>
           </p>
         )}
       </div>

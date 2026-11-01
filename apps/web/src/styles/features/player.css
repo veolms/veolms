@@ -22,7 +22,8 @@ html:has(.learning-session-dialog[open]) {
 
 .learning-session-dialog::backdrop {
   background: color-mix(in srgb, var(--canvas) 76%, transparent);
-  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
 .learning-session-dialog__close {
@@ -185,6 +186,53 @@ html:has(.learning-session-dialog[open]) {
   border-radius: 0;
 }
 
+/* Full screen takes the screen's size at once: an animated height kept the
+   portrait height while a phone turned sideways (the animation cannot run
+   while the page lays out the turn), and the video sat half off the screen
+   for a second. */
+.video-shell:fullscreen .youtube-player {
+  transition: none;
+}
+
+/* The lesson behind a video full screen on a phone (see
+   phoneVideoFullscreenHold.ts) is not laid out until the phone is upright
+   again: laid out sideways, its discussion feed was measured anew and
+   every comment re-rendered while the screen turned. */
+html[data-phone-layout-held] .learning-workspace {
+  content-visibility: hidden;
+}
+
+/* A video leaving full screen on a phone that is still sideways (see
+   phoneVideoFullscreenHold.ts): until the screen is upright again only the
+   video shows, still filling it, so the page never appears in its wide
+   layout. The standby video stays transparent. */
+html[data-phone-video-leaving],
+html[data-phone-video-leaving] body {
+  background: #000;
+}
+html[data-phone-video-leaving] body * {
+  visibility: hidden;
+}
+html[data-phone-video-leaving] [data-phone-video-leaving-surface] {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  width: 100vw;
+  height: 100vh;
+}
+html[data-phone-video-leaving]
+  [data-phone-video-leaving-surface]
+  .youtube-player {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  transition: none;
+}
+html[data-phone-video-leaving] [data-phone-video-leaving-surface] video {
+  visibility: visible;
+}
+
 .ambient-canvas {
   position: absolute;
   inset: 1%;
@@ -193,13 +241,25 @@ html:has(.learning-session-dialog[open]) {
   height: 98%;
   pointer-events: none;
   opacity: 0;
+  /* Not painted at all while it is transparent, which is whenever ambient
+     mode is off. A transparent canvas is still a compositor layer, and one
+     that lies under the page forces the whole surface above it (the lesson
+     frame and its shadow) into a separate layer the size of the screen. It
+     is hidden only once the fade-out has finished. */
+  visibility: hidden;
   filter: blur(38px) saturate(1.55);
   transform: scale(1.065);
-  transition: opacity 320ms ease;
+  transition:
+    opacity 320ms ease,
+    visibility 0s linear 320ms;
 }
 
 .ambient-canvas--visible {
   opacity: 0.62;
+  visibility: visible;
+  transition:
+    opacity 320ms ease,
+    visibility 0s;
 }
 
 .ambient-canvas--shell {

@@ -2,6 +2,7 @@ import { OAuth2Client } from "google-auth-library";
 import { z } from "zod";
 
 import { AppError } from "../../../lib/errors.ts";
+import type { AuthLogger } from "../shared/auth.types.ts";
 
 /**
  * Upper bound for any single provider HTTP call. These run synchronously in
@@ -36,6 +37,27 @@ export interface FetchOauthProfileInput {
   credentials: OauthProviderCredentials;
   /** Enables the `mock_` short-circuit used by local development. */
   allowMockCodes: boolean;
+  /** Records provider error text that is not returned to the client. */
+  logger?: AuthLogger | undefined;
+}
+
+/**
+ * A provider's profile with its email address in the one form accounts are
+ * stored and looked up in: no spaces around it, lower case. This is the rule
+ * `emailInput` in the contracts applies to an address someone types.
+ *
+ * Providers return the address in whatever case its owner once entered, and
+ * the email column compares exactly. Left as it came, "Ada@Example.com" from
+ * a provider matched no "ada@example.com" account, so the sign-in created a
+ * second account instead of linking to the first; an account created from
+ * the provider's spelling could then never be reached by a typed address.
+ *
+ * Only the email changes. The provider's own id and the suggested username
+ * are kept as they were returned.
+ */
+export function normalizeOauthProfile(profile: OauthProfile): OauthProfile {
+  const email = profile.email.trim().toLowerCase();
+  return email === profile.email ? profile : { ...profile, email };
 }
 
 function oauthFailure(message: string): AppError {
@@ -203,9 +225,17 @@ async function fetchGithubProfile(
   );
 
   if (tokenData.error) {
-    throw oauthFailure(
-      `GitHub OAuth error: ${tokenData.error_description || tokenData.error}`,
+    // The provider's own wording stays in the log; the client gets a fixed
+    // message.
+    input.logger?.warn(
+      {
+        provider: "github",
+        providerError: tokenData.error,
+        providerErrorDescription: tokenData.error_description,
+      },
+      "GitHub OAuth token exchange was rejected",
     );
+    throw oauthFailure("GitHub token exchange failed");
   }
 
   const accessToken = tokenData.access_token;
@@ -321,13 +351,13 @@ export function googleIdTokenToProfile(
       ? claims.picture
       : undefined;
 
-  return {
+  return normalizeOauthProfile({
     email: claims.email,
     name: claims.name || localPart || "Google User",
     username: localPart,
     providerUserId: claims.sub,
     pictureUrl,
-  };
+  });
 }
 
 // Reused across requests so Google's signing certs stay cached in the client.
@@ -374,12 +404,14 @@ export async function fetchOauthProfile(
   input: FetchOauthProfileInput,
 ): Promise<OauthProfile> {
   if (input.allowMockCodes && input.code.startsWith("mock_")) {
-    return mockProfile(input.provider, input.code);
+    return normalizeOauthProfile(mockProfile(input.provider, input.code));
   }
 
-  return input.provider === "google"
-    ? fetchGoogleProfile(input)
-    : fetchGithubProfile(input);
+  return normalizeOauthProfile(
+    input.provider === "google"
+      ? await fetchGoogleProfile(input)
+      : await fetchGithubProfile(input),
+  );
 }
 
 const oauthStateCookieSchema = z.object({

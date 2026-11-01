@@ -8,11 +8,11 @@ import sunlitDark from "../styles/themes/dark/sunlit.css?url&no-inline";
 import groveDark from "../styles/themes/dark/grove.css?url&no-inline";
 import roseDark from "../styles/themes/dark/rose.css?url&no-inline";
 import signalDark from "../styles/themes/dark/signal.css?url&no-inline";
+import liveDark from "../styles/themes/dark/live.css?url&no-inline";
 import barbieDark from "../styles/themes/dark/barbie.css?url&no-inline";
 import auroraDark from "../styles/themes/dark/aurora.css?url&no-inline";
 import brainwaveDark from "../styles/themes/dark/brainwave.css?url&no-inline";
 import lilacDark from "../styles/themes/dark/lilac.css?url&no-inline";
-import champagneDark from "../styles/themes/dark/champagne.css?url&no-inline";
 import limeDark from "../styles/themes/dark/lime.css?url&no-inline";
 import codexLight from "../styles/themes/light/codex.css?url&no-inline";
 import oceanLight from "../styles/themes/light/ocean.css?url&no-inline";
@@ -24,11 +24,11 @@ import sunlitLight from "../styles/themes/light/sunlit.css?url&no-inline";
 import groveLight from "../styles/themes/light/grove.css?url&no-inline";
 import roseLight from "../styles/themes/light/rose.css?url&no-inline";
 import signalLight from "../styles/themes/light/signal.css?url&no-inline";
+import liveLight from "../styles/themes/light/live.css?url&no-inline";
 import barbieLight from "../styles/themes/light/barbie.css?url&no-inline";
 import auroraLight from "../styles/themes/light/aurora.css?url&no-inline";
 import brainwaveLight from "../styles/themes/light/brainwave.css?url&no-inline";
 import lilacLight from "../styles/themes/light/lilac.css?url&no-inline";
-import champagneLight from "../styles/themes/light/champagne.css?url&no-inline";
 import limeLight from "../styles/themes/light/lime.css?url&no-inline";
 import paletteCatalogStylesheet from "../styles/themes/academy-theme-palettes.css?url&no-inline";
 import { DEFAULT_ACADEMY_THEME } from "../themes";
@@ -51,16 +51,33 @@ export const academyPaletteStylesById: Readonly<
   grove: { dark: groveDark, light: groveLight },
   rose: { dark: roseDark, light: roseLight },
   signal: { dark: signalDark, light: signalLight },
+  live: { dark: liveDark, light: liveLight },
   barbie: { dark: barbieDark, light: barbieLight },
   aurora: { dark: auroraDark, light: auroraLight },
   brainwave: { dark: brainwaveDark, light: brainwaveLight },
   lilac: { dark: lilacDark, light: lilacLight },
-  champagne: { dark: champagneDark, light: champagneLight },
   lime: { dark: limeDark, light: limeLight },
 };
 
+/**
+ * The default palette's stylesheets. The document links these directly (see
+ * root.tsx), so they are ordinary parser-discovered, render-blocking
+ * stylesheets for everyone who has not picked another palette.
+ */
+export const defaultAcademyPaletteStyles: AcademyPaletteStyles =
+  academyPaletteStylesById[DEFAULT_ACADEMY_THEME]!;
+
+/**
+ * Loads the stored palette when it is not the default one. Those links are
+ * created by script, which is not render-blocking by itself, so they carry
+ * `blocking="render"` to keep the page from flashing the default colors.
+ *
+ * The default palette deliberately does not go through this path: under
+ * Lighthouse a script-inserted `blocking="render"` stylesheet held the first
+ * frame back by one to two seconds after everything had loaded.
+ */
 export function getAcademyPaletteStylesheetBootstrapScript(): string {
-  return `(()=>{try{const p=document.documentElement.dataset.palette||${JSON.stringify(DEFAULT_ACADEMY_THEME)},all=${JSON.stringify(academyPaletteStylesById)},css=all[p]||all[${JSON.stringify(DEFAULT_ACADEMY_THEME)}];for(const mode of ["dark","light"]){const link=document.createElement("link");link.rel="stylesheet";link.href=css[mode];link.dataset.academyPaletteStyle=p;link.dataset.academyPaletteMode=mode;link.setAttribute("blocking","render");document.head.append(link)}}catch{}})();`;
+  return `(()=>{try{const d=${JSON.stringify(DEFAULT_ACADEMY_THEME)},p=document.documentElement.dataset.palette||d,all=${JSON.stringify(academyPaletteStylesById)},css=all[p];if(p===d||!css)return;for(const mode of ["dark","light"]){const link=document.createElement("link");link.rel="stylesheet";link.href=css[mode];link.dataset.academyPaletteStyle=p;link.dataset.academyPaletteMode=mode;link.setAttribute("blocking","render");document.head.append(link)}}catch{}})();`;
 }
 
 let paletteCatalogLoad: Promise<void> | null = null;

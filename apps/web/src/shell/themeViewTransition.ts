@@ -115,28 +115,63 @@ export function applyRootPalette(palette: string): void {
   document.documentElement.dataset.palette = palette;
 }
 
+// Called when a reveal starts drawing the new page (its `ready`, or its end
+// when it is skipped before that).
+const revealStartListeners = new Set<(kind: ThemeViewTransitionKind) => void>();
+
+/**
+ * Calls `listener` each time a reveal starts drawing. The page is not drawn
+ * at all between a change and this moment (the browser holds it while it
+ * captures the old and the new page), so motion meant to be seen with the
+ * change starts here: started at the press, its first part played unseen
+ * and it jumped (on a phone, most of the light/dark switch's slide).
+ */
+export function onThemeRevealStart(
+  listener: (kind: ThemeViewTransitionKind) => void,
+): () => void {
+  revealStartListeners.add(listener);
+  return () => {
+    revealStartListeners.delete(listener);
+  };
+}
+
+/** Whether a change of theme is revealed (and so waits for its start). */
+export function themeRevealAvailable(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    typeof document.startViewTransition === "function" &&
+    !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 export function applyWithThemeViewTransition(
   commit: () => void,
   kind: ThemeViewTransitionKind = "mode",
   origin?: ThemeRevealOrigin,
-): void {
-  if (
-    typeof document.startViewTransition !== "function" ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  ) {
+): ViewTransition | null {
+  if (!themeRevealAvailable()) {
     commit();
-    return;
+    return null;
   }
-  // Tag the root so the mask can pick its reveal corner; keep the tag until
-  // the transition settles so the pseudo-element styles stay stable.
   const transitionId = nextTransitionId++;
-  document.documentElement.dataset.themeTransition = kind;
-  taggedTransitionId = transitionId;
-  // Claim the staged origin in both cases: leaving a prior pointer
-  // transition's coordinates staged would reveal this transition from that
-  // pointer instead of the mask's corner fallback.
-  stageRevealOrigin(transitionId, origin ?? null);
-  const transition = document.startViewTransition(commit);
+  // The tag and the origin are set in the update, after the old page has
+  // been captured, together with the change itself. Both are on the root
+  // (the tag also stops every other transition on the page), so set before
+  // the capture they made the browser restyle the whole page once more
+  // first: about 50ms of a frozen screen on a lesson page between the click
+  // and the reveal. Neither changes how the old page looks.
+  const transition = document.startViewTransition(() => {
+    // Tag the root so the mask can pick its reveal corner; keep the tag
+    // until the transition settles so the pseudo-element styles stay
+    // stable.
+    document.documentElement.dataset.themeTransition = kind;
+    taggedTransitionId = transitionId;
+    // Claim the staged origin in both cases: leaving a prior pointer
+    // transition's coordinates staged would reveal this transition from
+    // that pointer instead of the mask's corner fallback.
+    stageRevealOrigin(transitionId, origin ?? null);
+    commit();
+  });
   activeThemeViewTransitions.add(transition);
   const clear = () => {
     // A newer transition may have retagged the root or restaged the origin;
@@ -150,4 +185,9 @@ export function applyWithThemeViewTransition(
     activeThemeViewTransitions.delete(transition);
   };
   transition.finished.then(clear, clear);
+  const started = () => {
+    for (const listener of [...revealStartListeners]) listener(kind);
+  };
+  transition.ready.then(started, started);
+  return transition;
 }

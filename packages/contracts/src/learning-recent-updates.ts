@@ -11,7 +11,6 @@ export const recentUpdateLessonSchema = z.strictObject({
   lessonId: z.uuid(),
   lessonTitle: z.string().min(1),
   lessonNumber: z.number().int().positive(),
-  updatedAt: z.iso.datetime(),
 });
 export type RecentUpdateLesson = z.infer<typeof recentUpdateLessonSchema>;
 
@@ -21,7 +20,6 @@ export const recentUpdateCourseSchema = z.strictObject({
   courseTitle: z.string().min(1),
   courseThumbnailUrl: z.string().nullable(),
   courseThumbnailMediaId: z.uuid().nullable(),
-  recentLessonCount: z.number().int().nonnegative(),
   latestUpdatedAt: z.iso.datetime(),
   lessons: z.array(recentUpdateLessonSchema),
 });

@@ -101,7 +101,7 @@ export const discussionAnswerAcceptedEventSchema = z.strictObject({
 
 export const moderationContentModeratedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
-  contentType: z.enum(["thread", "reply"]),
+  contentType: z.enum(["thread", "reply", "note"]),
   action: z.string().min(1).max(50),
   reason: z.string().max(1000).optional().nullable(),
 });

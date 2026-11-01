@@ -1,17 +1,24 @@
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
 
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { loadWebConfig } from "@veolms/config";
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import {
+  defineConfig,
+  loadEnv,
+  type Plugin,
+  type Rolldown,
+  type UserConfig,
+} from "vite";
+
+import { parseSiteOrigin } from "./src/routing/siteOrigin.ts";
+import { colorMixFallbackPlugin } from "./scripts/colorMixFallbackPlugin.ts";
+import { containerUnitFallbackPlugin } from "./scripts/containerUnitFallbackPlugin.ts";
 
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
 const webSourceRoot = fileURLToPath(new URL("./src", import.meta.url));
-const axiosBrowserEntry = fileURLToPath(
-  new URL("./node_modules/axios/dist/esm/axios.js", import.meta.url),
-);
 
 const shellPhosphorIcons = new Set([
   "Bell",
@@ -19,6 +26,7 @@ const shellPhosphorIcons = new Set([
   "CaretDown",
   "CaretRight",
   "ChartBar",
+  "ChartLineUp",
   "ChatCircleDots",
   "ChatTeardropDots",
   "Check",
@@ -48,7 +56,6 @@ const shellPhosphorIcons = new Set([
 ]);
 const homePhosphorIcons = new Set([
   "ArrowRight",
-  "ChartLineUp",
   "CheckCircle",
   "Clock",
   "Fire",
@@ -170,7 +177,7 @@ const ROUTE_CHUNK_PRELOADS = [
     placeholder: "__VEO_CATALOGUE_CHUNK_URL__",
     cssPlaceholder: "__VEO_CATALOGUE_CSS_URLS__",
     jsPlaceholder: "__VEO_CATALOGUE_JS_URLS__",
-    facadeSuffix: "/src/courses/CourseCatalogue.tsx",
+    moduleSuffix: "/src/courses/CourseCatalogue.tsx",
     manifestSrcSuffix: "courses/CourseCatalogue.tsx",
     devUrl: "/src/courses/CourseCatalogue.tsx",
   },
@@ -178,15 +185,51 @@ const ROUTE_CHUNK_PRELOADS = [
     placeholder: "__VEO_GUEST_HOME_CHUNK_URL__",
     cssPlaceholder: "__VEO_GUEST_HOME_CSS_URLS__",
     jsPlaceholder: "__VEO_GUEST_HOME_JS_URLS__",
-    facadeSuffix: "/src/GuestHome.tsx",
+    moduleSuffix: "/src/GuestHome.tsx",
     manifestSrcSuffix: "src/GuestHome.tsx",
     devUrl: "/src/GuestHome.tsx",
   },
+  {
+    placeholder: "__VEO_COURSE_OVERVIEW_CHUNK_URL__",
+    cssPlaceholder: "__VEO_COURSE_OVERVIEW_CSS_URLS__",
+    jsPlaceholder: "__VEO_COURSE_OVERVIEW_JS_URLS__",
+    moduleSuffix: "/src/courses/CourseOverviewPage.tsx",
+    manifestSrcSuffix: "courses/CourseOverviewPage.tsx",
+    devUrl: "/src/courses/CourseOverviewPage.tsx",
+  },
 ];
+
+// The chunk a lazy route body's dynamic import loads. Usually the module is
+// that chunk's facade. A module that another chunk also imports statically
+// (the course page, through the course editor's preview) is placed by
+// Rolldown in a shared chunk with no facade, and the dynamic import loads
+// that chunk instead, so look for the chunk that contains the module.
+function findRouteBodyChunk(
+  bundle: Rolldown.OutputBundle,
+  moduleSuffix: string,
+) {
+  const chunks = Object.values(bundle).filter(
+    (item): item is Rolldown.OutputChunk => item.type === "chunk",
+  );
+  return (
+    chunks.find((chunk) =>
+      chunk.facadeModuleId?.replaceAll("\\", "/").endsWith(moduleSuffix),
+    ) ??
+    chunks.find((chunk) =>
+      Object.keys(chunk.modules).some((id) =>
+        id.replaceAll("\\", "/").endsWith(moduleSuffix),
+      ),
+    )
+  );
+}
 
 function routeChunkPreloadPlugin(): Plugin {
   let publicBase = "/";
   let command: "build" | "serve" = "build";
+  // What the client pass resolved. React Router builds the client first and
+  // shares plugin instances across its environments, so the server pass,
+  // which renders the prerendered documents, reuses these.
+  let clientUrls = new Map<string, string>();
 
   return {
     name: "veo-route-chunk-preload",
@@ -219,69 +262,68 @@ function routeChunkPreloadPlugin(): Plugin {
     },
     generateBundle(_outputOptions, bundle) {
       const isSsrPass = Boolean(this.environment?.config.build.ssr);
-      const urls = new Map<string, string>();
-      // Facade matching is only valid in the client pass: the SSR bundle
+      const urls = new Map<string, string>(isSsrPass ? clientUrls : []);
+      // Chunk matching is only valid in the client pass: the SSR bundle
       // emits its own chunk for these modules under a different hash, and
       // baking that name into the prerendered HTML points the preload at a
       // file that does not exist under client/assets.
       if (!isSsrPass) {
-        for (const item of Object.values(bundle)) {
-          if (item.type !== "chunk" || !item.facadeModuleId) continue;
-          const facade = item.facadeModuleId.replaceAll("\\", "/");
-          for (const entry of ROUTE_CHUNK_PRELOADS) {
-            if (facade.endsWith(entry.facadeSuffix)) {
-              urls.set(
-                entry.placeholder,
-                joinPublicPath(publicBase, item.fileName),
-              );
-              // The feature CSS usually belongs to chunks this one imports
-              // statically, so collect it across that whole graph.
-              const cssFiles = new Set<string>();
-              const jsFiles = new Set<string>();
-              const seen = new Set<string>();
-              const pending = [item.fileName];
-              while (pending.length) {
-                const fileName = pending.pop() as string;
-                if (seen.has(fileName)) continue;
-                seen.add(fileName);
-                const chunk = bundle[fileName];
-                if (!chunk || chunk.type !== "chunk") continue;
-                // A chunk made only of stylesheets is deleted after this
-                // hook; it never becomes a file that could be preloaded.
-                const moduleIds = Object.keys(chunk.modules);
-                const isStyleOnlyChunk =
-                  moduleIds.length > 0 &&
-                  moduleIds.every((id) => /\.css(?:$|\?)/u.test(id));
-                if (fileName !== item.fileName && !isStyleOnlyChunk) {
-                  jsFiles.add(fileName);
-                }
-                for (const file of chunk.viteMetadata?.importedCss ?? []) {
-                  cssFiles.add(file);
-                }
-                pending.push(...chunk.imports);
-              }
-              urls.set(
-                entry.cssPlaceholder,
-                [...cssFiles]
-                  .map((file) => joinPublicPath(publicBase, file))
-                  .join(","),
-              );
-              // The chunks it imports statically: the document preloads
-              // them too, so the lazy body is ready when hydration starts.
-              urls.set(
-                entry.jsPlaceholder,
-                [...jsFiles]
-                  .map((file) => joinPublicPath(publicBase, file))
-                  .join(","),
-              );
+        for (const entry of ROUTE_CHUNK_PRELOADS) {
+          const item = findRouteBodyChunk(bundle, entry.moduleSuffix);
+          if (!item) continue;
+          urls.set(
+            entry.placeholder,
+            joinPublicPath(publicBase, item.fileName),
+          );
+          // The feature CSS usually belongs to chunks this one imports
+          // statically, so collect it across that whole graph.
+          const cssFiles = new Set<string>();
+          const jsFiles = new Set<string>();
+          const seen = new Set<string>();
+          const pending = [item.fileName];
+          while (pending.length) {
+            const fileName = pending.pop() as string;
+            if (seen.has(fileName)) continue;
+            seen.add(fileName);
+            const chunk = bundle[fileName];
+            if (!chunk || chunk.type !== "chunk") continue;
+            // A chunk made only of stylesheets is deleted after this hook;
+            // it never becomes a file that could be preloaded.
+            const moduleIds = Object.keys(chunk.modules);
+            const isStyleOnlyChunk =
+              moduleIds.length > 0 &&
+              moduleIds.every((id) => /\.css(?:$|\?)/u.test(id));
+            if (fileName !== item.fileName && !isStyleOnlyChunk) {
+              jsFiles.add(fileName);
             }
+            for (const file of chunk.viteMetadata?.importedCss ?? []) {
+              cssFiles.add(file);
+            }
+            pending.push(...chunk.imports);
           }
+          urls.set(
+            entry.cssPlaceholder,
+            [...cssFiles]
+              .map((file) => joinPublicPath(publicBase, file))
+              .join(","),
+          );
+          // The chunks it imports statically: the document preloads them
+          // too, so the lazy body is ready when hydration starts.
+          urls.set(
+            entry.jsPlaceholder,
+            [...jsFiles]
+              .map((file) => joinPublicPath(publicBase, file))
+              .join(","),
+          );
         }
+        clientUrls = new Map(urls);
       }
 
-      if (urls.size < ROUTE_CHUNK_PRELOADS.length * 3) {
-        // The SSR pass does not emit the client chunks; read their URLs from
-        // the client manifest the way earlyHlsPreloadPlugin does.
+      if (isSsrPass && urls.size < ROUTE_CHUNK_PRELOADS.length * 3) {
+        // Only when the client pass ran with other plugin instances: read
+        // the client chunks' URLs from its manifest the way
+        // earlyHlsPreloadPlugin does. The manifest names a chunk only by the
+        // module that is its facade.
         const manifestPath = path.resolve(
           this.environment?.config.build.outDir ?? "",
           "../client/.vite/manifest.json",
@@ -335,12 +377,11 @@ function routeChunkPreloadPlugin(): Plugin {
             }
           }
         } catch {
-          // Leave unresolved placeholders untouched; the links then point at
-          // a non-module URL and the preload is simply wasted, never fatal.
+          // No client manifest; what is left unresolved fails below.
         }
       }
 
-      if (!urls.size) return;
+      const unresolved = new Set<string>();
       for (const item of Object.values(bundle)) {
         if (item.type === "chunk") {
           for (const [placeholder, url] of urls) {
@@ -355,7 +396,170 @@ function routeChunkPreloadPlugin(): Plugin {
             }
           }
         }
+        const text = item.type === "chunk" ? item.code : item.source;
+        if (typeof text !== "string") continue;
+        for (const entry of ROUTE_CHUNK_PRELOADS) {
+          for (const placeholder of [
+            entry.placeholder,
+            entry.cssPlaceholder,
+            entry.jsPlaceholder,
+          ]) {
+            if (text.includes(placeholder)) unresolved.add(placeholder);
+          }
+        }
       }
+      // A placeholder left in place ships as a relative link: the browser
+      // requests it under the page's own address, gets the page back and
+      // logs a MIME-type error, and the body it stands for is not preloaded.
+      if (unresolved.size) {
+        this.error(
+          `Route chunk preload placeholders were not resolved: ${[
+            ...unresolved,
+          ].join(", ")}. See routeChunkPreloadPlugin in vite.config.ts.`,
+        );
+      }
+    },
+  };
+}
+
+// Dev server only. Vite's page script reloads the whole page whenever its
+// live-update socket closes and the server answers again. Tunnels such as
+// BrowserStack Local close a socket that carries nothing for a while, so a
+// page opened through one reloaded by itself every few minutes (mid-video
+// too). A small message every 20 s keeps the socket in use; pages ignore it.
+const DEV_SOCKET_KEEPALIVE_MS = 20_000;
+
+function devSocketKeepalivePlugin(): Plugin {
+  return {
+    name: "veo-dev-socket-keepalive",
+    apply: "serve",
+    configureServer(server) {
+      const timer = setInterval(() => {
+        server.ws.send({ type: "custom", event: "veo:keepalive" });
+      }, DEV_SOCKET_KEEPALIVE_MS);
+      timer.unref();
+      server.httpServer?.once("close", () => clearInterval(timer));
+    },
+  };
+}
+
+// Dev server only. Each `import picture from "./a.webp"` is a module of its
+// own in dev (`export default "/src/assets/a.webp"`), fetched and checked
+// for changes on every page load: about 120 requests before the app can
+// render, each a full round trip for a phone on the network. This writes
+// the URL Vite would have returned straight into the importing module, so
+// the browser fetches the picture itself only when it is shown. The value
+// is taken from Vite's own answer for that module, so it is the same URL
+// (or inlined data) as before. Stylesheets imported by URL (`?url`, the
+// palette and route stylesheets) are handled the same way; a stylesheet
+// imported for its styles is left alone. Production builds are not affected.
+const ASSET_IMPORT_INLINE_RE =
+  /\bimport\s+(?:([A-Za-z_$][\w$]*)|\{\s*default\s+as\s+([A-Za-z_$][\w$]*)\s*\})\s+from\s+(["'])([^"'\n]+\.(?:webp|png|jpe?g|avif|gif|svg|woff2?)(?:\?(?:url|no-inline|url&no-inline))?|[^"'\n]+\.css\?url(?:&no-inline)?)\3;?/g;
+const ASSET_DEFAULT_EXPORT_RE = /^export default ("(?:[^"\\\n]|\\.)*")/;
+
+function devAssetImportInlinePlugin(): Plugin {
+  let root = "";
+  return {
+    name: "veo-dev-asset-import-inline",
+    apply: "serve",
+    enforce: "post",
+    configResolved(config) {
+      root = config.root;
+    },
+    async transform(code, id, options) {
+      if (options?.ssr || this.environment?.name !== "client") return undefined;
+      if (id.includes("/node_modules/") || !/\.[cm]?[jt]sx?(?:$|\?)/.test(id)) {
+        return undefined;
+      }
+      if (!ASSET_IMPORT_INLINE_RE.test(code)) return undefined;
+      ASSET_IMPORT_INLINE_RE.lastIndex = 0;
+      const environment = this.environment as unknown as {
+        transformRequest?: (url: string) => Promise<{ code: string } | null>;
+      };
+      if (typeof environment.transformRequest !== "function") return undefined;
+
+      const replacements: Array<{ start: number; end: number; text: string }> =
+        [];
+      for (const match of code.matchAll(ASSET_IMPORT_INLINE_RE)) {
+        const binding = match[1] ?? match[2];
+        const specifier = match[4];
+        if (!binding || !specifier) continue;
+        const resolved = await this.resolve(specifier, id);
+        if (!resolved || resolved.external) continue;
+        const [file = "", query] = resolved.id.split("?");
+        const relative = path.relative(root, file).replaceAll("\\", "/");
+        if (
+          !relative ||
+          relative.startsWith("..") ||
+          path.isAbsolute(relative)
+        ) {
+          continue;
+        }
+        let value: string | undefined;
+        try {
+          const result = await environment.transformRequest(
+            `/${relative}${query ? `?${query}` : ""}`,
+          );
+          value = result?.code.match(ASSET_DEFAULT_EXPORT_RE)?.[1];
+        } catch {
+          value = undefined;
+        }
+        if (!value) continue;
+        // A change to the picture still refreshes the module that uses it.
+        this.addWatchFile(file);
+        replacements.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          // Keep the line count, so line mappings still hold.
+          text: `const ${binding} = ${value};${"\n".repeat(
+            match[0].split("\n").length - 1,
+          )}`,
+        });
+      }
+      if (!replacements.length) return undefined;
+
+      let next = "";
+      let cursor = 0;
+      for (const { start, end, text } of replacements) {
+        next += code.slice(cursor, start) + text;
+        cursor = end;
+      }
+      next += code.slice(cursor);
+      return { code: next, map: null };
+    },
+  };
+}
+
+// Extension packages that live outside this app (a deployment's own
+// plugins, whose routes come in through VEO_ROUTES_FILE) use Tailwind classes
+// too. VEO_STYLE_SOURCES lists their source folders, separated like PATH;
+// each becomes an `@source` of the app's one utilities build in styles.css,
+// so their classes are generated in the same order as everything else.
+// No effect when it is not set.
+function extraStyleSourcesPlugin(): Plugin {
+  const sources = (process.env.VEO_STYLE_SOURCES ?? "")
+    .split(path.delimiter)
+    .map((source) => source.trim())
+    .filter(Boolean);
+  const stylesEntry = path.join(webSourceRoot, "styles.css");
+  return {
+    name: "veo-extra-style-sources",
+    enforce: "pre",
+    transform(code, id) {
+      if (sources.length === 0) return null;
+      const [file = "", query = ""] = id.split("?");
+      if (path.normalize(file) !== stylesEntry) return null;
+      // Only the stylesheet itself: `?url` and the like are JS modules. A
+      // build compiles a stylesheet imported with `?url` (appStylesheet.ts)
+      // as `?transform-only`; without it here the plugins' classes were
+      // never generated in production (the download button had no tile).
+      if (query && !/^(?:direct|inline|transform-only)(?:&|$)/u.test(query)) {
+        return null;
+      }
+      const lines = sources.map(
+        (source) => `@source ${JSON.stringify(source.replaceAll("\\", "/"))};`,
+      );
+      return { code: `${code}\n${lines.join("\n")}\n`, map: null };
     },
   };
 }
@@ -363,6 +567,42 @@ function routeChunkPreloadPlugin(): Plugin {
 // Writes a module-to-chunk report for the client build when
 // VEO_BUNDLE_REPORT is set, so bundle composition can be audited offline.
 // No effect on normal builds.
+/**
+ * Loads the server bundle as soon as it is written, during a prerendering
+ * build. React Router's preview server otherwise imports it on the first
+ * prerender request (`/`), and that request has a fixed 10 second limit:
+ * the 11 MB bundle takes about 4 s to import even when the disk is warm,
+ * and right after it was written (cold cache, antivirus scanning the new
+ * file) the import alone could push `/` past the limit, failing the first
+ * build after a change while the next one passed. The preview server
+ * imports the same file URL, so Node's module cache answers it at once.
+ */
+function warmServerBuildPlugin(): Plugin {
+  return {
+    name: "veo-warm-server-build",
+    apply: "build",
+    async writeBundle(outputOptions, bundle) {
+      if (process.env.VEO_REACT_ROUTER_BUILD !== "true") return;
+      if (!this.environment?.config.build.ssr) return;
+      if (!outputOptions.dir || !("index.js" in bundle)) return;
+      const entry = path.resolve(outputOptions.dir, "index.js");
+      const started = Date.now();
+      try {
+        await import(pathToFileURL(entry).href);
+        this.environment.logger.info(
+          `Server bundle loaded for prerendering in ${Date.now() - started} ms`,
+        );
+      } catch (error) {
+        // Only a head start: the preview server imports it again and
+        // reports a real problem itself.
+        this.environment.logger.warn(
+          `Server bundle could not be preloaded: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    },
+  };
+}
+
 function bundleReportPlugin(): Plugin {
   return {
     name: "veo-bundle-report",
@@ -400,12 +640,51 @@ function bundleReportPlugin(): Plugin {
   };
 }
 
-export default defineConfig(({ command, mode }) => {
+/**
+ * The academy's default look (Platform > Appearance) as the build API has
+ * it, written into every page's head so that a first visit opens in it.
+ * Later changes reach visitors through the API; when the API cannot answer
+ * in time the build keeps the built-in default rather than failing.
+ */
+async function fetchPlatformAppearance(apiUrl: string): Promise<unknown> {
+  const base = apiUrl.replace(/\/+$/u, "").replace(/\/api\/v1$/u, "/v1");
+  const url = `${base.endsWith("/v1") ? base : `${base}/v1`}/platform/public-settings`;
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(4_000),
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    const payload =
+      body && typeof body === "object" && "data" in body ? body.data : body;
+    return payload && typeof payload === "object" && "appearance" in payload
+      ? payload.appearance
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
   const environment = {
     ...process.env,
     ...loadEnv(mode, workspaceRoot, ""),
   };
   const config = loadWebConfig(environment);
+  // Optional: the site's public address, for the share tags of pages built
+  // ahead of time. Unset leaves those tags out, as before.
+  const siteOrigin = parseSiteOrigin(environment.VITE_SITE_URL);
+  if (environment.VITE_SITE_URL?.trim() && !siteOrigin) {
+    throw new Error(
+      "VITE_SITE_URL must be the site's public origin, such as https://academy.example.com (http or https, no path or query).",
+    );
+  }
+
+  const platformAppearance =
+    command === "build"
+      ? await fetchPlatformAppearance(config.STATIC_BUILD_API_URL)
+      : null;
 
   return {
     envDir: workspaceRoot,
@@ -426,9 +705,12 @@ export default defineConfig(({ command, mode }) => {
         "@tanstack/query-async-storage-persister",
         "@tanstack/react-query-persist-client",
         "@veolms/contracts > zod",
-        "axios",
         "clsx",
         "tailwind-merge",
+        // The login card's icon registry imports from the package's index,
+        // which re-exports every icon. Served as source that is about 1,900
+        // requests before the card can show; prebundled it is one.
+        "lucide-react",
         // The markdown pipeline (unified/micromark) reaches CommonJS packages
         // such as `debug` and `extend`. With discovery disabled they would be
         // served as raw ESM and fail with a missing `default` export.
@@ -447,6 +729,7 @@ export default defineConfig(({ command, mode }) => {
         // The analytics charts. Recharts imports CommonJS lodash modules
         // (`lodash/get` and others) by their default export.
         "recharts",
+        "@veolms/analytics-ui > recharts",
         "@veolms/video-player > shaka-player",
       ],
       holdUntilCrawlEnd: false,
@@ -459,12 +742,28 @@ export default defineConfig(({ command, mode }) => {
         config.STATIC_BUILD_API_URL,
       ),
       "import.meta.env.VITE_CDN_URL": JSON.stringify(config.VITE_CDN_URL),
+      "import.meta.env.VITE_SITE_URL": JSON.stringify(siteOrigin ?? ""),
+      // Checked where it is read (store/appearanceDefaults.ts).
+      "import.meta.env.VEO_PLATFORM_APPEARANCE":
+        JSON.stringify(platformAppearance),
+      // The API's own setting, handed to the login form so its countdown
+      // ends when the API starts accepting another send.
+      "import.meta.env.OTP_RESEND_COOLDOWN_SECONDS": JSON.stringify(
+        config.OTP_RESEND_COOLDOWN_SECONDS,
+      ),
     },
     plugins: [
       earlyHlsPreloadPlugin(),
       routeChunkPreloadPlugin(),
+      devAssetImportInlinePlugin(),
+      devSocketKeepalivePlugin(),
       bundleReportPlugin(),
+      warmServerBuildPlugin(),
+      extraStyleSourcesPlugin(),
       tailwindcss(),
+      // Older Safari (iOS 15): see each plugin.
+      colorMixFallbackPlugin(),
+      containerUnitFallbackPlugin(),
       reactRouter(),
     ],
     // React Router's prerender pass fetches route data from Vite's temporary
@@ -474,6 +773,11 @@ export default defineConfig(({ command, mode }) => {
       host: "127.0.0.1",
     },
     resolve: {
+      // Extension packages outside this app (VEO_ROUTES_FILE) import these
+      // too. Each must be the app's own single copy: a second React Router
+      // or TanStack Query has its own context, so a plugin component would
+      // not see the app's router or QueryClient.
+      dedupe: ["react", "react-dom", "react-router", "@tanstack/react-query"],
       alias: [
         { find: "@", replacement: webSourceRoot },
         // React 19 provides the hook directly; Base UI's CommonJS shim cannot
@@ -487,9 +791,6 @@ export default defineConfig(({ command, mode }) => {
             ),
           ),
         },
-        // Axios' package ESM entry currently resolves its Node platform in
-        // Vite, which exposes the Node-only `process` global to the browser.
-        { find: "axios", replacement: axiosBrowserEntry },
         {
           find: "@veolms/video-player/shaka-preload",
           replacement: fileURLToPath(
@@ -512,6 +813,13 @@ export default defineConfig(({ command, mode }) => {
       ],
     },
     build: {
+      // The default targets, with Safari and iPhones from 15 instead of
+      // 16.4. With the default the minifier writes every breakpoint in
+      // range syntax (`@media (width>=40rem)`), which Safari reads only
+      // from 16.4: on iOS 15 no breakpoint applied at all (a phone got the
+      // desktop rail and its sheets). These targets keep `min-width` and
+      // `max-width`. See also the two fallback plugins above.
+      cssTarget: ["chrome111", "edge111", "firefox114", "safari15", "ios15"],
       rollupOptions: {
         output: {
           manualChunks(id) {

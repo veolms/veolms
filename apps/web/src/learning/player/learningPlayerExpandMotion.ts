@@ -22,6 +22,56 @@ export interface LearningPlayerExpandTarget extends LearningPagePartRect {
 }
 
 /**
+ * A lesson page layout measured with the frame's left edge in one place, as
+ * it will be with that edge in another.
+ *
+ * The layout is taken when the player is minimized, and the frame can change
+ * before it is expanded again: the sidebar is collapsed, opened or dragged
+ * to another width while the small player is up. An expand aimed at the old
+ * layout sent the window, and the page's stand-ins with it, to where the
+ * lesson page used to be, and only then across to where it is.
+ *
+ * The page's rule is simple enough to follow without the page: the course
+ * content column keeps its width and its place against the right of the
+ * window; the lesson (the video and everything under it) takes what is
+ * left, from the frame's left edge. So the lesson moves with that edge and
+ * takes up the whole change in width, and what is under the video starts
+ * lower or higher by as much as the video's height changes with its width.
+ *
+ * Only the left edge is compared. The frame's right edge is not the same
+ * thing on the two pages (on the lesson page the frame stops at the course
+ * content column, elsewhere it runs to the window's edge), and a window
+ * that changed size is not expanded into at all.
+ *
+ * Null when the lesson would be left too narrow to be worth aiming at; the
+ * caller then restores without the expand.
+ */
+export function fitLearningPlayerExpandTarget(
+  target: LearningPlayerExpandTarget,
+  measuredFrameLeft: number,
+  frameLeft: number,
+): LearningPlayerExpandTarget | null {
+  const shift = frameLeft - measuredFrameLeft;
+  if (Math.abs(shift) < 0.5) return target;
+  const width = target.width - shift;
+  if (target.width <= 0 || width < MIN_PLACEHOLDER_PART_WIDTH_PX) return null;
+  const heightScale = width / target.width;
+  return {
+    left: target.left + shift,
+    top: target.top,
+    width,
+    column: target.column,
+    content: target.content
+      ? {
+          left: target.content.left + shift,
+          top: target.top + (target.content.top - target.top) * heightScale,
+          width: Math.max(0, target.content.width - shift),
+        }
+      : null,
+  };
+}
+
+/**
  * Ends a motion early. With `hold`, everything that was moving is left
  * exactly where it is on screen, so another motion can pick it up from
  * there instead of from its resting place.
@@ -607,6 +657,12 @@ export function startLearningPlayerExpand(
   const startRect = miniHost.getBoundingClientRect();
   if (startRect.width <= 0 || target.width <= 0) return null;
 
+  // From its first frame the growing window carries the same mark the full
+  // player carries while it lands. Whatever is drawn on the video (its
+  // controls, a message, a retry button) is hidden for as long as the mark
+  // is there, so only the picture travels and nothing is scaled with it.
+  miniHost.dataset.learningPlayerRestorePhase = "expanding";
+
   const durationMs = LEARNING_PLAYER_MOTION_DURATION_MS;
   const easing = LEARNING_PLAYER_MOTION_EASING;
   const startedAt = performance.now();
@@ -773,6 +829,7 @@ export function startLearningPlayerExpand(
   const release = () => {
     if (released) return;
     released = true;
+    delete miniHost.dataset.learningPlayerRestorePhase;
     windowRun.animation?.cancel();
     for (const track of tracks) track.animation?.cancel();
     cancelAnimations(chromeFades);

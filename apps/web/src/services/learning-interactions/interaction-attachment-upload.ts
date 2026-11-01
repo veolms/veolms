@@ -1,4 +1,4 @@
-import type { LearningUploadResponse } from "@veolms/contracts";
+import type { UploadedAttachment } from "@veolms/contracts";
 import {
   type InteractionAttachmentPatch,
   type LocalComposerAttachment,
@@ -15,7 +15,7 @@ export async function uploadInteractionAttachments(
     patch: InteractionAttachmentPatch,
   ) => void,
   context?: DiscussionAttachmentUploadContext,
-): Promise<LearningUploadResponse[]> {
+): Promise<UploadedAttachment[]> {
   if (attachments.length > 0 && !context) {
     throw new Error("Course and lesson context are required for attachments.");
   }
@@ -41,10 +41,10 @@ export async function uploadInteractionAttachments(
       );
       onAttachmentChange(attachment.id, {
         serverId: uploaded.id,
-        fileUrl: uploaded.url,
+        fileUrl: uploaded.fileUrl,
         fileName: uploaded.fileName,
         mimeType: uploaded.mimeType,
-        fileSize: uploaded.size,
+        fileSize: uploaded.fileSize,
         kind: uploaded.kind,
         width: uploaded.width ?? null,
         height: uploaded.height ?? null,

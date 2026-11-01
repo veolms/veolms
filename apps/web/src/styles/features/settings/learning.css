@@ -5,7 +5,7 @@
   border-radius: 16px;
   padding: clamp(16px, 2vw, 22px);
   color: var(--text);
-  background: var(--surface);
+  background: var(--card-surface);
   box-shadow: var(--card-shadow);
 }
 

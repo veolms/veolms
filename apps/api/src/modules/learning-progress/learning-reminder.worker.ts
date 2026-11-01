@@ -16,8 +16,13 @@ interface DueReminderRow {
   user_id: string;
   daily_goal_minutes: number;
   time_zone: string;
+  accrual_floor_date: Date | null;
   local_date: string;
 }
+
+const PAGE_SIZE = 500;
+/** Upper bound per cycle (10,000 learners); the next cycle continues. */
+const MAX_PAGES_PER_CYCLE = 20;
 
 /**
  * Produces the `learning.reminder` outbox events the notification
@@ -119,14 +124,44 @@ export class LearningReminderWorker {
   }
 
   private async publishDueReminders(): Promise<void> {
+    // Everyone due is handled in this cycle, a page at a time: a published
+    // reminder drops out of the next page through its dedupe key. A single
+    // page of 500 per 15-minute cycle left later learners unreminded.
+    let published = 0;
+    for (let page = 0; page < MAX_PAGES_PER_CYCLE; page += 1) {
+      const count = await this.publishDueReminderPage();
+      published += count;
+      if (count < PAGE_SIZE) break;
+    }
+    if (published > 0) {
+      this.logger?.info(
+        { job: "learning-reminder-worker", published },
+        "Learning reminders published",
+      );
+    }
+  }
+
+  private async publishDueReminderPage(): Promise<number> {
     const due = await sql<DueReminderRow>`
+      -- Materialized so rows with a zone Postgres cannot use are dropped
+      -- before any "at time zone" is evaluated: one such row used to abort
+      -- the scan, and with it every learner's reminder.
+      with s as materialized (
+        select settings.*
+        from user_learning_settings settings
+        where settings.reminders_enabled
+          and settings.daily_goal_minutes is not null
+          and settings.time_zone in (select name from pg_timezone_names)
+      )
       select
         s.user_id,
         s.daily_goal_minutes,
         s.time_zone,
+        s.accrual_floor_date,
         to_char((now() at time zone s.time_zone)::date, 'YYYY-MM-DD')
           as local_date
-      from user_learning_settings s
+      from s
+      inner join users u on u.id = s.user_id and u.is_deleted = false
       where s.reminders_enabled
         and s.daily_goal_minutes is not null
         and lower(to_char(now() at time zone s.time_zone, 'dy'))
@@ -143,10 +178,8 @@ export class LearningReminderWorker {
           where o.dedupe_key = 'learning.reminder:' || s.user_id || ':'
             || to_char((now() at time zone s.time_zone)::date, 'YYYY-MM-DD')
         )
-      limit 500
+      limit ${PAGE_SIZE}
     `.execute(this.database);
-
-    if (due.rows.length === 0) return;
 
     for (const row of due.rows) {
       // Streak context for the copy: the streak that ends yesterday is
@@ -154,7 +187,11 @@ export class LearningReminderWorker {
       const aggregates =
         await learningProgressRepository.getLearningSummaryAggregates(
           this.database,
-          { userId: row.user_id, timeZone: row.time_zone },
+          {
+            userId: row.user_id,
+            timeZone: row.time_zone,
+            floorDate: row.accrual_floor_date,
+          },
         );
 
       await this.database.transaction().execute(async (transaction) => {
@@ -173,9 +210,6 @@ export class LearningReminderWorker {
       });
     }
 
-    this.logger?.info(
-      { job: "learning-reminder-worker", published: due.rows.length },
-      "Learning reminders published",
-    );
+    return due.rows.length;
   }
 }

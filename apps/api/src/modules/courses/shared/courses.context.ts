@@ -1,20 +1,19 @@
 import type { Permission } from "@veolms/contracts";
+import type { FastifyRequest } from "fastify";
 import type { RoutePluginOptions } from "../../../lib/route-plugin.ts";
 import {
   createAuthMiddleware,
   type AuthMiddleware,
 } from "../../../middlewares/auth.middleware.ts";
-import {
-  ADMIN_ROLE,
-  INSTRUCTOR_ROLE,
-  createSessionService,
-} from "../../auth/index.ts";
+import { createSessionService } from "../../auth/index.ts";
 import {
   createAuthorizationGuard,
   createAuthorizationService,
   type AuthorizationGuard,
   type ResourceType,
 } from "../../authorization/index.ts";
+
+type PreHandler = AuthMiddleware["authenticate"];
 
 export interface CoursesContext {
   middleware: AuthMiddleware;
@@ -24,13 +23,18 @@ export interface CoursesContext {
     permission: Permission,
     resourceType?: ResourceType,
     featureKey?: string,
-  ) => AuthMiddleware["authenticate"][];
-  /** Course authoring is restricted to administrators and instructors. */
-  requireCourseAuthor: AuthMiddleware["authenticate"][];
-  /** Administrator-only access. */
-  requireAdmin: AuthMiddleware["authenticate"][];
-  /** General authenticated access for any logged-in role. */
-  requireAuthenticated: AuthMiddleware["authenticate"][];
+  ) => PreHandler[];
+  /** As `authorize`, allowed by any one of the permissions. */
+  authorizeAny: (
+    permissions: readonly Permission[],
+    resourceType?: ResourceType,
+    featureKey?: string,
+  ) => PreHandler[];
+  /** As `authorize`, needing every permission `pick` reads off the request. */
+  authorizeEach: (
+    pick: (request: FastifyRequest) => readonly Permission[],
+    resourceType?: ResourceType,
+  ) => PreHandler[];
 }
 
 export function createCoursesContext({
@@ -40,44 +44,37 @@ export function createCoursesContext({
   const middleware = createAuthMiddleware(sessionService);
   const authorizationService = createAuthorizationService(database);
   const authGuard = createAuthorizationGuard(authorizationService);
-
-  const requireAuthenticated = [
+  const signedIn = [
     middleware.authenticate,
     middleware.requireAuthenticated,
     middleware.requireMfaVerified,
   ];
 
-  const requireCourseAuthor = [
-    middleware.authenticate,
-    middleware.requireAuthenticated,
-    middleware.requireMfaVerified,
-    middleware.requireRoles([ADMIN_ROLE, INSTRUCTOR_ROLE]),
-  ];
-
-  const requireAdmin = [
-    middleware.authenticate,
-    middleware.requireAuthenticated,
-    middleware.requireMfaVerified,
-    middleware.requireRoles([ADMIN_ROLE]),
+  const authorizeAny = (
+    permissions: readonly Permission[],
+    resourceType: ResourceType = "course",
+    featureKey?: string,
+  ) => [
+    ...signedIn,
+    authGuard.authorizeAny(permissions, resourceType, featureKey),
   ];
 
   const authorize = (
     permission: Permission,
     resourceType: ResourceType = "course",
     featureKey?: string,
-  ) => [
-    middleware.authenticate,
-    middleware.requireAuthenticated,
-    middleware.requireMfaVerified,
-    authGuard.authorize(permission, resourceType, featureKey),
-  ];
+  ) => authorizeAny([permission], resourceType, featureKey);
+
+  const authorizeEach = (
+    pick: (request: FastifyRequest) => readonly Permission[],
+    resourceType: ResourceType = "course",
+  ) => [...signedIn, authGuard.authorizeEach(pick, resourceType)];
 
   return {
     middleware,
     authGuard,
     authorize,
-    requireCourseAuthor,
-    requireAdmin,
-    requireAuthenticated,
+    authorizeAny,
+    authorizeEach,
   };
 }

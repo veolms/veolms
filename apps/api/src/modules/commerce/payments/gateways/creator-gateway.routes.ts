@@ -23,13 +23,13 @@ const creatorGatewayRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/payments/gateway-config",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("payment.gateway.manage"),
       schema: {
         operationId: "savePaymentGatewayConfig",
         tags: ["Commerce - Payment Gateways"],
-        summary: "Connect payment gateway",
+        summary: "Connect payment gateway (not available)",
         description:
-          "Stores and encrypts payment gateway API keys so course sales route funds into the merchant account.",
+          "Not available: answers 409 and stores nothing. Payments are taken through the platform's configured gateway; keys stored through this endpoint were never used to take or route a payment.",
         body: saveCreatorPaymentConfigRequestSchema,
         response: {
           200: jsonResponse(
@@ -39,6 +39,7 @@ const creatorGatewayRoutes: RoutePlugin = async (app, options) => {
           400: errorResponse("Invalid gateway keys"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
+          409: errorResponse("Connecting a gateway is not available"),
         },
       },
     },
@@ -49,12 +50,13 @@ const creatorGatewayRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/payments/gateway-config",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("payment.gateway.manage"),
       schema: {
         operationId: "getPaymentGatewayConfig",
         tags: ["Commerce - Payment Gateways"],
         summary: "Get payment gateway configuration",
-        description: "Returns active payment provider and masked key ID.",
+        description:
+          "Returns the provider and masked key ID stored earlier, if any. A stored key is not used for payments.",
         response: {
           200: jsonResponse(
             "Payment config",

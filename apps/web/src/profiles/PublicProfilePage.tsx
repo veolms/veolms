@@ -1,55 +1,66 @@
-import {
-  EnvelopeSimpleIcon as EnvelopeSimple,
-  GithubLogoIcon as GithubLogo,
-  GlobeIcon as Globe,
-  LinkedinLogoIcon as LinkedinLogo,
-  PhoneIcon as Phone,
-  SealCheckIcon as SealCheck,
-  UserIcon as User,
-} from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
+import { GithubLogoIcon as GithubLogo } from "@phosphor-icons/react/GithubLogo";
+import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
+import { LinkedinLogoIcon as LinkedinLogo } from "@phosphor-icons/react/LinkedinLogo";
+import { PhoneIcon as Phone } from "@phosphor-icons/react/Phone";
+import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
+import { UserIcon as User } from "@phosphor-icons/react/User";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { PublicProfileResponse } from "@veolms/contracts";
 import { PageHeading } from "../components/PageHeading";
+import { safeExternalUrl } from "../lib/external-url";
 import { PublicProfileCard } from "../components/PublicProfileCard";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
+import {
+  NOT_FOUND_SECTION,
+  notFoundDocumentTitle,
+  productName,
+  routeDescriptors,
+} from "../routing/routeDescriptors";
+import { useDocumentTitle } from "../routing/useDocumentTitle";
 import { usePublicProfile } from "../services/auth";
+import { resolvePublicProfileView } from "./publicProfileView";
 import "../styles/features/profile.css";
+
+// The app's own not-found screen, the one an address no page answers to
+// shows. Loaded only when a lookup finds no profile.
+const NotFoundPage = lazy(() =>
+  import("../courses/PlaceholderPage").then((module) => ({
+    default: module.PlaceholderPage,
+  })),
+);
 
 interface PublicProfilePageProps {
   username?: string;
   onNavigateBack?: () => void;
 }
 
-function safeExternalUrl(value: string | null) {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:"
-      ? url.href
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function PublicProfileAvatar({ profile }: { profile: PublicProfileResponse }) {
+export function PublicProfileAvatar({
+  profile,
+}: {
+  profile: PublicProfileResponse;
+}) {
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     setImageFailed(false);
   }, [profile.avatarDataUrl]);
 
+  // On someone's own profile page the portrait is content, not decoration,
+  // so it is named. The placeholder icon shown without one stays hidden.
+  const hasPortrait = Boolean(profile.avatarDataUrl) && !imageFailed;
+
   return (
     <span
       className="settings-profile__avatar settings-profile__avatar--large"
-      aria-hidden="true"
+      aria-hidden={hasPortrait ? undefined : true}
     >
       {profile.avatarDataUrl && !imageFailed ? (
         <ResponsiveAvatar
           src={profile.avatarDataUrl}
           srcSet={profile.avatarSrcSet}
           sizes="150px"
-          alt=""
+          alt={`${profile.displayName || profile.username}'s profile picture`}
           width={160}
           height={160}
           loading="eager"
@@ -67,7 +78,11 @@ function PublicProfileAvatar({ profile }: { profile: PublicProfileResponse }) {
   );
 }
 
-function PublicProfileLinks({ profile }: { profile: PublicProfileResponse }) {
+export function PublicProfileLinks({
+  profile,
+}: {
+  profile: PublicProfileResponse;
+}) {
   const linkedinUrl = safeExternalUrl(profile.linkedinUrl);
   const githubUrl = safeExternalUrl(profile.githubUrl);
   const websiteUrl = safeExternalUrl(profile.websiteUrl);
@@ -109,10 +124,34 @@ export function PublicProfilePage({
 }: PublicProfilePageProps) {
   const {
     data: profile,
+    error,
     isError,
     isLoading,
     refetch,
   } = usePublicProfile(username);
+  const view = resolvePublicProfileView({
+    isLoading,
+    isError,
+    errorStatus: error?.status,
+    hasProfile: Boolean(profile),
+  });
+  // Any one-word address can be a username, so the route is titled as a
+  // profile until the profile turns out not to exist. Both titles are set
+  // here, so going on to a member who does exist titles the tab again.
+  useDocumentTitle(
+    view === "not-found"
+      ? notFoundDocumentTitle
+      : `${routeDescriptors["public-profile"].title} · ${productName}`,
+  );
+
+  if (view === "not-found") {
+    return (
+      <Suspense fallback={null}>
+        {/* The not-found screen is the same for every role. */}
+        <NotFoundPage section={NOT_FOUND_SECTION} role="student" />
+      </Suspense>
+    );
+  }
 
   return (
     <main
@@ -126,7 +165,7 @@ export function PublicProfilePage({
         onNavigateBack={onNavigateBack}
       />
 
-      {isLoading ? (
+      {view === "loading" ? (
         <section
           className="settings-profile__public-card"
           aria-label="Loading public profile"
@@ -141,7 +180,7 @@ export function PublicProfilePage({
             <span className="sr-only">Loading public profile</span>
           </div>
         </section>
-      ) : isError || !profile ? (
+      ) : view === "unavailable" || !profile ? (
         <section
           className="settings-profile__public-card"
           aria-label="Public profile details"

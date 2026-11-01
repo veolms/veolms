@@ -2,7 +2,13 @@ import { useCallback, useRef, useState } from "react";
 import { BellSimpleIcon as BellSimple } from "@phosphor-icons/react/BellSimple";
 import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
+import { MarkdownLogoIcon as MarkdownLogo } from "@phosphor-icons/react/MarkdownLogo";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
+import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
+import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import {
   Drawer,
   DrawerContent,
@@ -84,6 +90,8 @@ interface DiscussionWorkspaceMobileActionSheetProps {
   destination: string | null;
   onClose: () => void;
   setNotice?: (message: string) => void;
+  onEdit?: (card: DiscussionWorkspaceCard) => void;
+  onReport?: (card: DiscussionWorkspaceCard) => void;
 }
 
 export function DiscussionWorkspaceMobileActionSheet({
@@ -91,6 +99,8 @@ export function DiscussionWorkspaceMobileActionSheet({
   destination,
   onClose,
   setNotice,
+  onEdit,
+  onReport,
 }: DiscussionWorkspaceMobileActionSheetProps) {
   const firstActionRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(true);
@@ -187,6 +197,69 @@ export function DiscussionWorkspaceMobileActionSheet({
               >
                 <CopySimple size={19} weight="regular" aria-hidden="true" />
                 <span>Copy text</span>
+              </button>
+            )}
+            {actions.canCopyText && (
+              <button
+                type="button"
+                className="flex min-h-12 w-full items-center gap-3 border-t border-(--border) px-4 text-left text-sm font-medium text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+                onClick={() => {
+                  closeSheet();
+                  void actions.copyMarkdown();
+                }}
+              >
+                <MarkdownLogo size={19} weight="regular" aria-hidden="true" />
+                <span>Copy Markdown</span>
+              </button>
+            )}
+            {actions.canEdit && onEdit && (
+              <button
+                type="button"
+                className="flex min-h-12 w-full items-center gap-3 border-t border-(--border) px-4 text-left text-sm font-medium text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+                onClick={() => runAndClose(() => onEdit(card))}
+              >
+                <PencilSimple size={19} weight="regular" aria-hidden="true" />
+                <span>{actions.editLabel}</span>
+              </button>
+            )}
+            {actions.canReport && onReport && (
+              <button
+                type="button"
+                className="flex min-h-12 w-full items-center gap-3 border-t border-(--border) px-4 text-left text-sm font-medium text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+                onClick={() => runAndClose(() => onReport(card))}
+              >
+                <Flag size={19} weight="regular" aria-hidden="true" />
+                <span>{actions.reportLabel}</span>
+              </button>
+            )}
+            {actions.canHide && (
+              <button
+                type="button"
+                className="flex min-h-12 w-full items-center gap-3 border-t border-(--border) px-4 text-left text-sm font-medium text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+                onClick={() =>
+                  runAndClose(actions.isHidden ? actions.unhide : actions.hide)
+                }
+              >
+                {actions.isHidden ? (
+                  <Eye size={19} weight="regular" aria-hidden="true" />
+                ) : (
+                  <EyeSlash size={19} weight="regular" aria-hidden="true" />
+                )}
+                <span>{actions.hideLabel}</span>
+              </button>
+            )}
+            {actions.canDelete && (
+              <button
+                type="button"
+                className="flex min-h-12 w-full items-center gap-3 border-t border-(--border) px-4 text-left text-sm font-medium text-rose-400 transition-colors hover:bg-rose-500/10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+                onClick={() => {
+                  // The first press only asks for confirmation.
+                  if (!actions.confirmingDelete) actions.deleteItem();
+                  else runAndClose(actions.deleteItem);
+                }}
+              >
+                <Trash size={19} weight="regular" aria-hidden="true" />
+                <span>{actions.deleteLabel}</span>
               </button>
             )}
           </div>

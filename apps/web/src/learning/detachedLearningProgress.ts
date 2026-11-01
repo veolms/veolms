@@ -1,0 +1,196 @@
+import { useMemo, useSyncExternalStore } from "react";
+import { getDeviceTimeZone } from "../lib/device-time-zone";
+import { learningProgressService } from "../services/learning-progress";
+import {
+  getLearningProgressMap,
+  getPendingLearningProgress,
+  markLearningProgressSynced,
+  readLearningProgress,
+  recordLearningProgress,
+  writeLearningProgress,
+} from "./learningProgressStorage";
+import {
+  peekWatchedSeconds,
+  restoreWatchedSeconds,
+  takeWatchedSeconds,
+} from "./learningWatchTime";
+import {
+  hasLessonPositions,
+  refuseLessonPositions,
+  restoreLessonPositions,
+  takeLessonPositions,
+  withLessonPositions,
+} from "./lessonPositionOutbox";
+import { getApiError } from "../lib/api-client";
+import { queryClient } from "../lib/query-client";
+import { markCourseResumeStale } from "./courseResumeCache";
+
+/**
+ * Progress recording for a lesson that is playing with no lesson page mounted
+ * — the mini player.
+ *
+ * `useLearningProgress` belongs to the lesson page. Once that page unmounts,
+ * the callback it gave the player updates nothing, so whatever was watched in
+ * the mini player went unrecorded. This writes to the same per-user,
+ * per-course store the hook reads, and sends the same idempotent batch, so
+ * the lesson page picks the progress up when it next opens.
+ */
+export interface DetachedProgressTarget {
+  userId: string;
+  courseKey: string;
+  lessonIdsByNumber?: ReadonlyMap<number, string>;
+}
+
+const SYNC_INTERVAL_MS = 15_000;
+const MAX_BATCH_ITEMS = 100;
+
+const lastSyncAtByCourse = new Map<string, number>();
+
+// Bumped on every recorded change, so a mini player's lesson list can show
+// progress as it is made instead of the figures it was handed when the
+// lesson page closed.
+let progressRevision = 0;
+const progressListeners = new Set<() => void>();
+
+function subscribeToDetachedProgress(listener: () => void) {
+  progressListeners.add(listener);
+  return () => {
+    progressListeners.delete(listener);
+  };
+}
+
+const getProgressRevision = () => progressRevision;
+const getServerProgressRevision = () => 0;
+const syncingCourses = new Set<string>();
+
+async function syncDetachedLearningProgress(
+  { userId, courseKey, lessonIdsByNumber }: DetachedProgressTarget,
+  force: boolean,
+): Promise<void> {
+  const identity = `${userId}\u0000${courseKey}`;
+  if (syncingCourses.has(identity)) return;
+  const lastSyncAt = lastSyncAtByCourse.get(identity) ?? 0;
+  if (!force && Date.now() - lastSyncAt < SYNC_INTERVAL_MS) return;
+
+  const pending = getPendingLearningProgress(
+    readLearningProgress(userId, courseKey),
+  );
+  if (
+    pending.length === 0 &&
+    peekWatchedSeconds(courseKey) < 1 &&
+    !hasLessonPositions(courseKey)
+  ) {
+    return;
+  }
+
+  syncingCourses.add(identity);
+  lastSyncAtByCourse.set(identity, Date.now());
+  // The seconds of video played since the last report (what the learner's
+  // daily goal is credited from), and where the learner is in each video
+  // played since (where the course resumes on any device). Handed back if
+  // the request fails.
+  const watchedSeconds = takeWatchedSeconds(courseKey);
+  const positions = takeLessonPositions(courseKey);
+  const pendingItems = pending.slice(0, MAX_BATCH_ITEMS - positions.length);
+  const items = withLessonPositions(
+    pendingItems.map(({ lessonId, progressPercent }) => ({
+      lessonId,
+      progressPercent,
+    })),
+    positions,
+    lessonIdsByNumber,
+  );
+  try {
+    const response = await learningProgressService.sync(courseKey, {
+      items,
+      watchedSeconds,
+      timeZone: getDeviceTimeZone(),
+    });
+    if (response.synced) {
+      writeLearningProgress(
+        userId,
+        courseKey,
+        markLearningProgressSynced(
+          readLearningProgress(userId, courseKey),
+          pendingItems,
+        ),
+      );
+      if (items.some((item) => item.positionSeconds !== undefined)) {
+        markCourseResumeStale(queryClient, courseKey);
+      }
+    }
+  } catch (error) {
+    // The items stay pending in storage; the next update or the lesson page
+    // sends the same batch again.
+    restoreWatchedSeconds(courseKey, watchedSeconds);
+    // An API from before positions were kept turns the whole batch down.
+    if (
+      getApiError(error).status === 400 &&
+      items.some((item) => item.positionSeconds !== undefined)
+    ) {
+      refuseLessonPositions();
+    } else {
+      restoreLessonPositions(courseKey, positions);
+    }
+  } finally {
+    syncingCourses.delete(identity);
+  }
+}
+
+/**
+ * Sends the watch time tallied for a course when no progress has moved to
+ * carry it (the usual interval between requests still applies).
+ */
+export function syncDetachedWatchTime(target: DetachedProgressTarget): void {
+  if (
+    peekWatchedSeconds(target.courseKey) < 1 &&
+    !hasLessonPositions(target.courseKey)
+  ) {
+    return;
+  }
+  void syncDetachedLearningProgress(target, false);
+}
+
+export function recordDetachedLearningProgress(
+  target: DetachedProgressTarget,
+  lessonNumber: number,
+  progressPercent: number,
+): void {
+  const { userId, courseKey, lessonIdsByNumber } = target;
+  const current = readLearningProgress(userId, courseKey);
+  const next = recordLearningProgress(current, {
+    lessonId: lessonIdsByNumber?.get(lessonNumber),
+    lessonNumber,
+    progressPercent,
+    clientUpdatedAt: new Date().toISOString(),
+  });
+  if (next === current) return;
+
+  writeLearningProgress(userId, courseKey, next);
+  progressRevision += 1;
+  for (const listener of progressListeners) listener();
+  // A finished lesson is sent at once; anything else on the usual interval.
+  void syncDetachedLearningProgress(target, Math.round(progressPercent) >= 100);
+}
+
+/**
+ * Per-lesson progress (by lesson number) as stored for this learner and
+ * course, re-read whenever the mini player records more.
+ */
+export function useDetachedLessonProgress(
+  target: DetachedProgressTarget | undefined,
+): Readonly<Record<number, number>> {
+  const revision = useSyncExternalStore(
+    subscribeToDetachedProgress,
+    getProgressRevision,
+    getServerProgressRevision,
+  );
+  const userId = target?.userId;
+  const courseKey = target?.courseKey;
+  return useMemo(
+    () => getLearningProgressMap(readLearningProgress(userId, courseKey)),
+    // `revision` is the signal that the stored progress has changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [courseKey, revision, userId],
+  );
+}

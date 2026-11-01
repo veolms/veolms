@@ -47,13 +47,13 @@ export function createRefundRequestController({
       orderId,
       request.body,
     );
-    reply.status(201).send(result);
+    await reply.status(201).send(result);
   }
 
   async function listMyRequests(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user!.id;
     const requests = await service.listStudentRefundRequests(userId);
-    reply.status(200).send(requests);
+    await reply.status(200).send(requests);
   }
 
   async function listAllRequests(
@@ -62,7 +62,7 @@ export function createRefundRequestController({
   ) {
     const { status } = request.query;
     const requests = await service.listAllRefundRequests(status);
-    reply.status(200).send(requests);
+    await reply.status(200).send(requests);
   }
 
   async function reviewRequest(
@@ -79,7 +79,7 @@ export function createRefundRequestController({
       requestId,
       request.body,
     );
-    reply.status(200).send(result.refundRequest);
+    await reply.status(200).send(result.refundRequest);
   }
 
   return {

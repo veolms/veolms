@@ -1,5 +1,4 @@
 import { memo, useState, useEffect } from "react";
-import { useStudent } from "../services/students";
 import { getStudentInitials } from "./orderHelpers";
 
 export interface StudentAvatarProps {
@@ -13,19 +12,15 @@ export interface StudentAvatarProps {
 export const StudentAvatar = memo(function StudentAvatar({
   name,
   username,
-  avatarUrl: initialAvatarUrl,
+  avatarUrl,
   size = "md",
   className = "",
 }: StudentAvatarProps) {
   const [imgFailed, setImgFailed] = useState(false);
 
-  // If initialAvatarUrl is not passed, fetch student details to retrieve Google/custom avatar
-  const { data: studentData } = useStudent(username, {
-    enabled: Boolean(username && !initialAvatarUrl),
-  });
-
-  const effectiveAvatarUrl =
-    initialAvatarUrl || studentData?.student?.avatarUrl || null;
+  // The order response carries the buyer's avatar, so a row never has to
+  // fetch the student to show it.
+  const effectiveAvatarUrl = avatarUrl || null;
 
   useEffect(() => {
     setImgFailed(false);

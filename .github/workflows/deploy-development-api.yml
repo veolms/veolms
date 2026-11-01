@@ -6,6 +6,10 @@ on:
       - dev
     paths:
       - "apps/api/**"
+      - "packages/api-core/**"
+      - "packages/services/**"
+      - "packages/plugin-sdk/**"
+      - "packages/video-player/**"
       - "packages/contracts/**"
       - "packages/database/**"
       - "packages/config/**"
@@ -135,6 +139,8 @@ jobs:
             echo "::warning::.env file not found in ${app_dir}. Verify your server environment configuration."
           fi
 
+          previous_sha="$(git rev-parse HEAD)"
+
           echo "==> Fetching latest commit (${deploy_sha})..."
           git fetch --prune origin dev
           if ! git cat-file -e "${deploy_sha}^{commit}"; then
@@ -154,16 +160,111 @@ jobs:
           echo "==> Building API..."
           pnpm --filter @veolms/api build
 
-          echo "==> Restarting service: ${service_name}..."
+          # One value from .env, without surrounding quotes.
+          env_value() {
+            local value
+            value="$(grep -E "^$1=" .env 2>/dev/null | tail -n 1 | cut -d= -f2- || true)"
+            value="${value%\"}"; value="${value#\"}"
+            value="${value%\'}"; value="${value#\'}"
+            printf '%s' "${value}"
+          }
+          api_port="$(env_value API_PORT)"
+          api_port="${api_port:-4000}"
+
+          # `pm2 reload` (below) stops each old process once its replacement
+          # is ready or listen_timeout runs out, whichever comes first, so a
+          # build that cannot start would take the API down. It is started
+          # first on a spare port, on 127.0.0.1 only, and must answer
+          # /v1/ready there. Its background jobs are safe beside the live
+          # ones (database locks). If it fails, the previous code is put back
+          # on disk and nothing is restarted.
+          boot_check() {
+            local port=$(( api_port + 100 ))
+            local url="http://127.0.0.1:${port}/v1/ready"
+            local boot_log="${HOME}/deploy-boot-check.log"
+            if curl --silent --max-time 2 "${url}" >/dev/null 2>&1; then
+              echo "::error::Port ${port} is in use; it is needed to check the new build."
+              return 1
+            fi
+            echo "==> Checking that the new build starts (port ${port})..."
+            (cd apps/api && API_HOST=127.0.0.1 API_PORT="${port}" \
+              exec node --env-file-if-exists=../../.env src/index.ts) >"${boot_log}" 2>&1 &
+            local pid=$!
+            local ok=0
+            curl --fail --silent --show-error --retry 30 --retry-delay 2 \
+              --retry-connrefused --retry-all-errors "${url}" >/dev/null || ok=$?
+            # Its graceful shutdown, or SIGKILL after 15 s.
+            kill -INT "${pid}" 2>/dev/null || true
+            for _ in $(seq 1 60); do
+              kill -0 "${pid}" 2>/dev/null || break
+              sleep 0.25
+            done
+            kill -KILL "${pid}" 2>/dev/null || true
+            wait "${pid}" 2>/dev/null || true
+            if [ "${ok}" -ne 0 ]; then
+              echo "::error::The new build did not become ready on port ${port}. Its output:"
+              tail -n 60 "${boot_log}" || true
+              return 1
+            fi
+            echo "==> The new build starts and is ready."
+          }
+
+          if ! boot_check; then
+            echo "==> Putting ${previous_sha} back on disk; the running API was not touched."
+            git checkout --force -B dev "${previous_sha}"
+            CI=true pnpm install --frozen-lockfile
+            exit 1
+          fi
+
+          # Zero-downtime deploys under pm2: the API runs in cluster mode
+          # (ecosystem.config.cjs), and `pm2 reload` replaces its processes
+          # one at a time, each new one reporting ready before the old one
+          # stops. A fork-mode process is moved to cluster mode once (a short
+          # restart). systemd services are restarted as before.
+          pm2_exec_mode() {
+            ${pm2_cmd} jlist | node -e '
+              const name = process.argv[1];
+              let input = "";
+              process.stdin.on("data", (chunk) => (input += chunk));
+              process.stdin.on("end", () => {
+                const app = JSON.parse(input).find((p) => p.name === name);
+                process.stdout.write(app?.pm2_env?.exec_mode ?? "");
+              });
+            ' "${service_name}"
+          }
+          pm2_deploy() {
+            local mode
+            mode="$(pm2_exec_mode)"
+            if [ "${mode}" = "cluster_mode" ] && [ -f ecosystem.config.cjs ]; then
+              echo "--> Reloading ${service_name} one process at a time..."
+              ${pm2_cmd} reload ecosystem.config.cjs --only "${service_name}" --update-env
+            elif [ "${mode}" = "cluster_mode" ]; then
+              echo "--> Reloading ${service_name} one process at a time..."
+              ${pm2_cmd} reload "${service_name}" --update-env
+            elif [ -f ecosystem.config.cjs ]; then
+              echo "--> Moving ${service_name} to pm2 cluster mode (one-time restart)..."
+              ${pm2_cmd} delete "${service_name}"
+              ${pm2_cmd} start ecosystem.config.cjs --only "${service_name}"
+            else
+              echo "--> Restarting ${service_name}..."
+              ${pm2_cmd} restart "${service_name}" --update-env
+            fi
+            # What pm2 starts again after a reboot.
+            ${pm2_cmd} save
+          }
+
+          echo "==> Deploying service: ${service_name}..."
           if command -v systemctl >/dev/null 2>&1 && sudo systemctl list-unit-files "${service_name}*" 2>/dev/null | grep -q "${service_name}"; then
             echo "--> Restarting via systemctl..."
             sudo systemctl restart "${service_name}"
           elif sudo pm2 describe "${service_name}" >/dev/null 2>&1; then
-            echo "--> Restarting via sudo PM2..."
-            sudo pm2 restart "${service_name}" --update-env
+            echo "--> Via sudo PM2..."
+            pm2_cmd="sudo pm2"
+            pm2_deploy
           elif pm2 describe "${service_name}" >/dev/null 2>&1; then
-            echo "--> Restarting via user PM2..."
-            pm2 restart "${service_name}" --update-env
+            echo "--> Via user PM2..."
+            pm2_cmd="pm2"
+            pm2_deploy
           else
             echo "--> Fallback: Restarting via sudo systemctl..."
             sudo systemctl restart "${service_name}"

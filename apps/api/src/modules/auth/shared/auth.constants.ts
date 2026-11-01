@@ -10,25 +10,47 @@ const DAY_MS = 24 * HOUR_MS;
 
 // --- One-time passcodes -----------------------------------------------------
 
-/** Quoted in the OTP email and SMS templates. */
-export const OTP_TTL_MINUTES = 5;
-export const OTP_TTL_MS = OTP_TTL_MINUTES * MINUTE_MS;
-
 /** Wrong guesses before the outstanding code is burned. */
 export const OTP_MAX_ATTEMPTS = 3;
 
-/** Minimum gap between sends for one identifier and purpose. */
-export const OTP_RESEND_WINDOW_MS = 60 * 1000;
+// How long a code stays valid and the minimum gap between sends for one
+// identifier and purpose are not constants: they are OTP_TTL_MINUTES and
+// OTP_RESEND_COOLDOWN_SECONDS in the environment.
 
-/** Ceiling per identifier and purpose, so the resend gap cannot be looped. */
+/**
+ * Daily sends one requester may trigger for one identifier and purpose, so
+ * the resend gap cannot be looped. Counted per requesting address: a single
+ * outsider can no longer use up someone else's allowance.
+ */
 export const OTP_DAILY_LIMIT = 10;
 export const OTP_DAILY_WINDOW_MS = DAY_MS;
+
+/** The window OTP_IP_WINDOW_LIMIT counts a network address's requests over. */
+export const OTP_IP_WINDOW_MS = 10 * MINUTE_MS;
+
+/**
+ * Hard daily ceiling for one identifier and purpose across ALL requesters.
+ * Bounds delivery cost (and inbox flooding) when requests for the same
+ * destination arrive from many addresses.
+ */
+export const OTP_IDENTIFIER_DAILY_CEILING = 30;
+
+/**
+ * Daily verification sends one signed-in user may trigger across every
+ * destination. Without it a single session could request codes for an
+ * unlimited number of different phone numbers.
+ */
+export const OTP_USER_DAILY_LIMIT = 10;
 
 // --- Sessions ---------------------------------------------------------------
 
 export const SESSION_TTL_DAYS = 30;
 export const SESSION_TTL_MS = SESSION_TTL_DAYS * DAY_MS;
 export const SESSION_TTL_SECONDS = SESSION_TTL_DAYS * 24 * 60 * 60;
+
+/** What `sessionResponseSchema` allows for a session's device details. */
+export const SESSION_USER_AGENT_MAX_LENGTH = 255;
+export const SESSION_IP_ADDRESS_MAX_LENGTH = 45;
 
 /**
  * `last_used_at` is only refreshed once a session is older than this, to keep
@@ -45,6 +67,7 @@ export const BACKUP_CODE_COUNT = 10;
 /** Backup codes are 8 digits, distinguishing them from 6-digit TOTP codes. */
 export const BACKUP_CODE_MIN = 10_000_000;
 export const BACKUP_CODE_MAX = 99_999_999;
+export const BACKUP_CODE_LENGTH = 8;
 
 export const WEBAUTHN_CHALLENGE_TTL_MS = 5 * MINUTE_MS;
 
@@ -58,8 +81,11 @@ export const SETUP_SESSION_TTL_SECONDS = 30 * 60;
 export const SESSION_COOKIE = "veolms-session";
 export const OAUTH_STATE_COOKIE = "veolms-oauth-state";
 export const SETUP_COOKIE = "veolms-setup-token";
+/** A sign-in waiting for its student to sign another device out. */
+export const DEVICE_SIGN_IN_COOKIE = "veolms-device-sign-in";
 
 export const OAUTH_STATE_TTL_SECONDS = 10 * 60;
+export const DEVICE_SIGN_IN_TTL_SECONDS = 10 * 60;
 
 // --- Roles ------------------------------------------------------------------
 
@@ -69,3 +95,6 @@ export const STUDENT_ROLE = "student";
 
 /** Bounded so a pathological username prefix cannot spin indefinitely. */
 export const USERNAME_SUFFIX_ATTEMPTS = 10;
+
+/** The longest display name a response may carry (`authUserSchema`). */
+export const DISPLAY_NAME_MAX_LENGTH = 100;

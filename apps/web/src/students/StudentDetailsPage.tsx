@@ -1,7 +1,7 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
-import { ArrowSquareOutIcon as ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CalendarBlankIcon as CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
+import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
@@ -9,13 +9,26 @@ import { GithubLogoIcon as GithubLogo } from "@phosphor-icons/react/GithubLogo";
 import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { LinkedinLogoIcon as LinkedinLogo } from "@phosphor-icons/react/LinkedinLogo";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PhoneIcon as Phone } from "@phosphor-icons/react/Phone";
 import { TrendUpIcon as TrendUp } from "@phosphor-icons/react/TrendUp";
+import { UserPlusIcon as UserPlus } from "@phosphor-icons/react/UserPlus";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import type { StudentCourseDetail } from "@veolms/contracts";
+import { lazy, Suspense, useState } from "react";
+import type { AdminOrder, StudentCourseDetail } from "@veolms/contracts";
+import { safeExternalUrl } from "../lib/external-url";
+import { OrderRefundModal } from "../orders/OrderRefundModal";
 import type { NavigateTo } from "../routing/navigation";
+import { useFetchOrder } from "../services/orders";
 import { useStudent } from "../services/students";
+import { useCapabilities } from "../services/authorization";
+import {
+  StudentCourseAccessModal,
+  type StudentCourseAccessChange,
+} from "./StudentCourseAccessModal";
+import { StudentCourseCard } from "./StudentCourseCard";
 import { StudentDetailsSkeleton } from "./StudentDetailsSkeleton";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface StudentDetailsPageProps {
   username?: string;
@@ -23,14 +36,71 @@ export interface StudentDetailsPageProps {
   setNotice?: (message: string) => void;
 }
 
+// Only staff who may edit contact details open it, and it carries the
+// contact form's validation.
+const StudentContactModal = lazy(() =>
+  import("./StudentContactModal").then((module) => ({
+    default: module.StudentContactModal,
+  })),
+);
+
+// The Team page's add-member panel, opened with this student chosen.
+const AddMemberPanel = lazy(() =>
+  import("../team/members/AddMemberPanel").then((module) => ({
+    default: module.AddMemberPanel,
+  })),
+);
+
 export function StudentDetailsPage({
   username,
   onNavigatePage,
   setNotice,
 }: StudentDetailsPageProps) {
   const { data, isLoading, isError, refetch } = useStudent(username);
+  // A learner's day-by-day progress is theirs to share; staff who see every
+  // student (student.read for every course, as an admin has) can open it
+  // either way. Anyone else here would only be told it is private.
+  const { can, canOnCourse } = useCapabilities();
+  const canOpenProgress = canOnCourse("student.read", null);
+  const canEditContact = can("student.contact.update");
+  const canManageAccess = can("student.access.manage");
+  const canIssueRefunds = can("billing.manage");
+  const canAssignRoles = can("role.assign");
+  const [makingTeamMember, setMakingTeamMember] = useState(false);
+
+  // The refund dialog is the one the Orders screen uses, so it needs the
+  // whole order; it is read when "Issue refund" is picked on a course.
+  const fetchOrder = useFetchOrder();
+  const [refundOrder, setRefundOrder] = useState<AdminOrder | null>(null);
+  const [accessChange, setAccessChange] =
+    useState<StudentCourseAccessChange | null>(null);
+  const [editingContact, setEditingContact] = useState(false);
+
+  const openCourse = (course: StudentCourseDetail) =>
+    onNavigatePage?.(`/courses/${course.courseSlug}`);
+
+  const startRefund = (course: StudentCourseDetail) => {
+    if (!course.orderId) return;
+    fetchOrder(course.orderId, "admin").then(
+      (order) => {
+        if (!("admin" in order)) return;
+        if (order.status === "refunded") {
+          setNotice?.(`Order ${order.orderNumber} is already refunded.`);
+          return;
+        }
+        setRefundOrder(order);
+      },
+      () =>
+        setNotice?.(
+          "The order for this course could not be opened. Please try again.",
+        ),
+    );
+  };
 
   const student = data?.student;
+  const githubUrl = safeExternalUrl(student?.socials?.githubUrl);
+  const linkedinUrl = safeExternalUrl(student?.socials?.linkedinUrl);
+  const websiteUrl = safeExternalUrl(student?.socials?.websiteUrl);
   const metrics = data?.metrics;
   const courses = data?.courses ?? [];
 
@@ -79,9 +149,9 @@ export function StudentDetailsPage({
         <StudentDetailsSkeleton />
       ) : isError || !student ? (
         // Error or Not Found state
-        <div
-          className="flex flex-col items-center justify-center rounded-[18px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) p-10 sm:p-12 text-center"
-          style={{ boxShadow: "var(--card-shadow)" }}
+        <ElevatedCard
+          as="div"
+          className="flex flex-col items-center justify-center p-10 sm:p-12 text-center"
         >
           <WarningCircle size={40} className="text-rose-400 mb-3" />
           <h2 className="text-lg font-bold text-(--text)">
@@ -107,7 +177,7 @@ export function StudentDetailsPage({
               Back to Students List
             </button>
           </div>
-        </div>
+        </ElevatedCard>
       ) : (
         // Loaded student details
         <div className="space-y-6">
@@ -224,22 +294,64 @@ export function StudentDetailsPage({
                     )}
 
                     {student.phoneNo && (
-                      <div className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted)">
+                      <a
+                        href={`tel:${student.phoneNo.replace(/[^\d+]/g, "")}`}
+                        title="Call this number"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted) transition-colors hover:border-(--accent) hover:text-(--accent)"
+                      >
                         <Phone size={14} className="shrink-0" />
                         <span className="font-mono text-[11.5px]">
                           {student.phoneNo}
                         </span>
-                      </div>
+                      </a>
                     )}
+
+                    {canEditContact ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditingContact(true)}
+                        aria-haspopup="dialog"
+                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted) transition-colors hover:border-(--accent) hover:text-(--accent)"
+                      >
+                        <PencilSimple size={14} className="shrink-0" />
+                        <span>Edit contact</span>
+                      </button>
+                    ) : null}
+
+                    {canAssignRoles && student.email ? (
+                      <button
+                        type="button"
+                        onClick={() => setMakingTeamMember(true)}
+                        aria-haspopup="dialog"
+                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted) transition-colors hover:border-(--accent) hover:text-(--accent)"
+                      >
+                        <UserPlus size={14} className="shrink-0" />
+                        <span>Make team member</span>
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
 
-              {/* Right: Social links */}
+              {/* Right: Progress, and social links */}
               <div className="flex items-center gap-2 sm:self-start shrink-0 pt-2 sm:pt-0">
-                {student.socials?.githubUrl && (
+                {canOpenProgress ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onNavigatePage?.(
+                        `/progress/${encodeURIComponent(student.username)}`,
+                      )
+                    }
+                    className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] px-3 text-xs font-semibold text-(--text) transition-colors hover:border-(--accent) hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                  >
+                    <ChartLineUp size={16} weight="bold" aria-hidden="true" />
+                    View progress
+                  </button>
+                ) : null}
+                {githubUrl && (
                   <a
-                    href={student.socials.githubUrl}
+                    href={githubUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] text-(--muted) hover:text-(--accent) hover:border-(--accent) transition-colors"
@@ -248,9 +360,9 @@ export function StudentDetailsPage({
                     <GithubLogo size={18} weight="duotone" />
                   </a>
                 )}
-                {student.socials?.linkedinUrl && (
+                {linkedinUrl && (
                   <a
-                    href={student.socials.linkedinUrl}
+                    href={linkedinUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] text-(--muted) hover:text-(--accent) hover:border-(--accent) transition-colors"
@@ -259,9 +371,9 @@ export function StudentDetailsPage({
                     <LinkedinLogo size={18} weight="duotone" />
                   </a>
                 )}
-                {student.socials?.websiteUrl && (
+                {websiteUrl && (
                   <a
-                    href={student.socials.websiteUrl}
+                    href={websiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] text-(--muted) hover:text-(--accent) hover:border-(--accent) transition-colors"
@@ -280,9 +392,9 @@ export function StudentDetailsPage({
             className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5"
           >
             {/* Card 1: Enrolled */}
-            <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-              style={{ boxShadow: "var(--card-shadow)" }}
+            <ElevatedCard
+              as="div"
+              className="p-3 sm:p-4.5 transition-all duration-200"
             >
               <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -296,12 +408,12 @@ export function StudentDetailsPage({
                 {metrics?.enrolledCoursesCount ?? 0}
               </p>
               <p className="mt-0.5 text-[11px] text-(--muted)">Total courses</p>
-            </div>
+            </ElevatedCard>
 
             {/* Card 2: Completed */}
-            <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-              style={{ boxShadow: "var(--card-shadow)" }}
+            <ElevatedCard
+              as="div"
+              className="p-3 sm:p-4.5 transition-all duration-200"
             >
               <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -317,12 +429,12 @@ export function StudentDetailsPage({
               <p className="mt-0.5 text-[11px] text-(--muted)">
                 Finished courses
               </p>
-            </div>
+            </ElevatedCard>
 
             {/* Card 3: In Progress */}
-            <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-              style={{ boxShadow: "var(--card-shadow)" }}
+            <ElevatedCard
+              as="div"
+              className="p-3 sm:p-4.5 transition-all duration-200"
             >
               <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -338,12 +450,12 @@ export function StudentDetailsPage({
               <p className="mt-0.5 text-[11px] text-(--muted)">
                 Active progress
               </p>
-            </div>
+            </ElevatedCard>
 
             {/* Card 4: Lessons Done */}
-            <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-              style={{ boxShadow: "var(--card-shadow)" }}
+            <ElevatedCard
+              as="div"
+              className="p-3 sm:p-4.5 transition-all duration-200"
             >
               <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -359,12 +471,12 @@ export function StudentDetailsPage({
               <p className="mt-0.5 text-[11px] text-(--muted)">
                 Total completed
               </p>
-            </div>
+            </ElevatedCard>
 
             {/* Card 5: Avg Progress */}
-            <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 col-span-2 sm:col-span-1 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-              style={{ boxShadow: "var(--card-shadow)" }}
+            <ElevatedCard
+              as="div"
+              className="p-3 sm:p-4.5 col-span-2 sm:col-span-1 transition-all duration-200"
             >
               <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -380,7 +492,7 @@ export function StudentDetailsPage({
               <p className="mt-0.5 text-[11px] text-(--muted)">
                 Overall learning rate
               </p>
-            </div>
+            </ElevatedCard>
           </section>
 
           {/* Enrolled courses list */}
@@ -397,18 +509,28 @@ export function StudentDetailsPage({
             {courses.length > 0 ? (
               <div className="space-y-3 sm:space-y-4">
                 {courses.map((course) => (
-                  <CourseProgressCard
+                  <StudentCourseCard
                     key={course.courseId}
                     course={course}
-                    onNavigatePage={onNavigatePage}
+                    canManageAccess={canManageAccess}
+                    canIssueRefunds={canIssueRefunds}
+                    onOpenCourse={openCourse}
+                    onRefund={startRefund}
+                    onRevokeAccess={(target) =>
+                      setAccessChange({ action: "revoke", course: target })
+                    }
+                    onRestoreAccess={(target) =>
+                      setAccessChange({ action: "restore", course: target })
+                    }
+                    setNotice={setNotice}
                   />
                 ))}
               </div>
             ) : (
               /* Clean Empty State Card */
-              <div
-                className="flex flex-col items-center justify-center rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-8 sm:p-10 text-center"
-                style={{ boxShadow: "var(--card-shadow)" }}
+              <ElevatedCard
+                as="div"
+                className="flex flex-col items-center justify-center p-8 sm:p-10 text-center"
               >
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-(--accent)/12 text-(--accent) mb-3">
                   <GraduationCap size={26} weight="duotone" />
@@ -421,149 +543,63 @@ export function StudentDetailsPage({
                   This student has registered an account but has not yet
                   enrolled in any academy courses.
                 </p>
-              </div>
+              </ElevatedCard>
             )}
           </section>
         </div>
       )}
+
+      {/* Keyed per opening so one order's amount, reason and "preserve
+          access" tick never carry over to the next. */}
+      <OrderRefundModal
+        key={refundOrder?.id ?? "closed"}
+        order={refundOrder}
+        onClose={() => setRefundOrder(null)}
+        setNotice={setNotice}
+      />
+
+      {accessChange && student ? (
+        <StudentCourseAccessModal
+          change={accessChange}
+          studentId={student.id}
+          studentName={student.displayName || `@${student.username}`}
+          onClose={() => setAccessChange(null)}
+          setNotice={setNotice}
+        />
+      ) : null}
+
+      {editingContact && student ? (
+        <Suspense fallback={null}>
+          <StudentContactModal
+            username={student.username}
+            studentName={student.displayName || `@${student.username}`}
+            email={student.email ?? null}
+            phoneNo={student.phoneNo ?? null}
+            onClose={() => setEditingContact(false)}
+            setNotice={setNotice}
+          />
+        </Suspense>
+      ) : null}
+
+      {makingTeamMember && student?.email ? (
+        <Suspense fallback={null}>
+          <AddMemberPanel
+            initialUser={{
+              userId: student.id,
+              name: student.displayName,
+              username: student.username,
+              email: student.email,
+              avatarUrl: student.avatarUrl ?? null,
+              isMember: false,
+              roles: [],
+            }}
+            onClose={() => setMakingTeamMember(false)}
+            setNotice={(notice) =>
+              setNotice?.(typeof notice === "string" ? notice : notice.message)
+            }
+          />
+        </Suspense>
+      ) : null}
     </div>
-  );
-}
-
-interface CourseProgressCardProps {
-  course: StudentCourseDetail;
-  onNavigatePage?: NavigateTo;
-}
-
-function CourseProgressCard({
-  course,
-  onNavigatePage,
-}: CourseProgressCardProps) {
-  const isCompleted = course.progressPercent >= 100;
-
-  const handleOpenCourse = () => {
-    onNavigatePage?.(`/courses/${course.courseSlug}`);
-  };
-
-  return (
-    <article
-      className="group rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-4 sm:p-5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Left: Thumbnail + Title + Meta */}
-        <div className="flex items-start gap-3.5 sm:gap-4 min-w-0 flex-1">
-          {course.courseThumbnailUrl ? (
-            <img
-              src={course.courseThumbnailUrl}
-              alt={course.courseTitle}
-              width={96}
-              height={64}
-              loading="lazy"
-              decoding="async"
-              className="h-16 w-24 shrink-0 rounded-xl object-cover border border-(--border) shadow-xs"
-            />
-          ) : (
-            <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-xl font-bold text-xs text-(--accent) bg-(--accent)/10 border border-(--border) shadow-xs">
-              <BookOpen size={24} weight="duotone" />
-            </div>
-          )}
-
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3
-                className="text-base font-bold text-(--text) hover:text-(--accent) transition-colors cursor-pointer"
-                onClick={handleOpenCourse}
-              >
-                {course.courseTitle}
-              </h3>
-              {course.difficulty && (
-                <span className="rounded-md bg-(--surface-strong) px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-(--muted) border border-(--border)">
-                  {course.difficulty}
-                </span>
-              )}
-            </div>
-
-            {course.courseDescription && (
-              <p className="mt-1 line-clamp-1 text-xs text-(--muted)">
-                {course.courseDescription}
-              </p>
-            )}
-
-            <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs text-(--muted)">
-              <span>
-                Enrolled on{" "}
-                {new Date(course.enrolledAt).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </span>
-              <span>•</span>
-              <span>
-                Source:{" "}
-                <span className="capitalize">
-                  {course.enrollmentSource.replace("_", " ")}
-                </span>
-              </span>
-              {course.lastAccessedAt && (
-                <>
-                  <span>•</span>
-                  <span>
-                    Last active{" "}
-                    {new Date(course.lastAccessedAt).toLocaleDateString(
-                      undefined,
-                      {
-                        month: "short",
-                        day: "numeric",
-                      },
-                    )}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Progress Meter & Action Button */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-(--border)/60">
-          <div className="w-full sm:w-44">
-            <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-[11px] text-(--muted)">
-                {course.completedLessonsCount} of {course.totalLessonsCount}{" "}
-                lessons
-              </span>
-              <span
-                className={`font-bold font-mono text-xs ${
-                  isCompleted ? "text-emerald-500" : "text-(--accent)"
-                }`}
-              >
-                {course.progressPercent}%
-              </span>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-(--surface-strong) border border-(--border)/40">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${Math.max(0, Math.min(100, course.progressPercent))}%`,
-                  background: isCompleted
-                    ? "var(--emerald-500, #10b981)"
-                    : "var(--accent)",
-                }}
-              />
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleOpenCourse}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface) px-3.5 py-2 text-xs font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--accent) hover:border-(--accent) transition-all cursor-pointer whitespace-nowrap shadow-xs"
-          >
-            <span>View Course</span>
-            <ArrowSquareOut size={14} weight="bold" />
-          </button>
-        </div>
-      </div>
-    </article>
   );
 }

@@ -11,6 +11,7 @@ import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import type { ComponentType } from "react";
+import { OctopusIllustration } from "../components/OctopusIllustration";
 import type { CourseRole } from "./catalogue";
 import { getRoleDisplayName } from "../shell/workspaceRole";
 
@@ -50,7 +51,7 @@ const placeholderContent: Record<string, PlaceholderContent> = {
   },
   Discussions: {
     title: "Discussions",
-    description: "Bring course conversations, questions, and replies together.",
+    description: "All your discussions in one place.",
     message: "Discussions are not implemented yet.",
     icon: ChatCircleDots,
   },
@@ -106,11 +107,58 @@ export interface PlaceholderPageProps {
   userRoles?: readonly string[] | null;
 }
 
+const NOT_FOUND_SECTION = "Not Found";
+
+/**
+ * What an address that leads nowhere shows: the octopus failing to find the
+ * page, and the two ways back.
+ */
+function NotFoundPage() {
+  return (
+    <div
+      className="grid min-h-[min(34rem,calc(100dvh-8rem))] place-items-center px-6 py-12 text-center"
+      aria-labelledby="placeholder-page-title"
+    >
+      <div className="max-w-md">
+        <OctopusIllustration
+          kind="not-found"
+          className="mx-auto h-36 w-auto sm:h-40"
+        />
+        <h1
+          id="placeholder-page-title"
+          className="mt-6 text-2xl font-bold tracking-tight text-(--text)"
+        >
+          Page not found
+        </h1>
+        <p className="mt-2 text-[0.9375rem] leading-6 text-(--muted)">
+          The address may be mistyped, or the page may have moved.
+        </p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="/"
+            className="inline-flex h-11 items-center justify-center rounded-lg bg-(--accent) px-5 text-[0.9375rem] font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          >
+            Go to Home
+          </a>
+          <a
+            href="/courses"
+            className="inline-flex h-11 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] px-5 text-[0.9375rem] font-semibold text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          >
+            Browse courses
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PlaceholderPage({
   section = "This page",
   role,
   userRoles,
 }: PlaceholderPageProps) {
+  if (section === NOT_FOUND_SECTION) return <NotFoundPage />;
+
   const content = placeholderContent[section] || {
     title: section,
     description: "This workspace is ready for the next VeoLMS feature.",

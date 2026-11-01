@@ -1,7 +1,8 @@
-import type {
-  BulkQuizAnswersRequest,
-  LearnerQuizAttempt,
-  QuizResponseValue,
+import {
+  hasUnsafeQuizAnswerContent,
+  type BulkQuizAnswersRequest,
+  type LearnerQuizAttempt,
+  type QuizResponseValue,
 } from "@veolms/contracts";
 
 export interface QuizAttemptDraft {
@@ -9,20 +10,45 @@ export interface QuizAttemptDraft {
   currentQuestionId: string | null;
 }
 
+export function isQuestionAnswered(
+  question: LearnerQuizAttempt["questions"][number],
+  draft: QuizAttemptDraft,
+) {
+  const answer = draft.answers[question.id];
+  if (!answer) return false;
+  if (question.questionType === "short_answer") {
+    // An answer the server would refuse is not an answer yet: it leaves the
+    // question open, so the quiz cannot be handed in around it.
+    return Boolean(
+      answer.textResponse &&
+      answer.textResponse.trim().length > 0 &&
+      !hasUnsafeQuizAnswerContent(answer.textResponse),
+    );
+  }
+  return (answer.selectedOptionIds?.length ?? 0) > 0;
+}
+
+/** True while any written answer holds something the server would refuse. */
+export function hasRefusedAnswer(
+  attempt: LearnerQuizAttempt,
+  draft: QuizAttemptDraft,
+) {
+  return attempt.questions.some(
+    (question) =>
+      question.questionType === "short_answer" &&
+      hasUnsafeQuizAnswerContent(
+        draft.answers[question.id]?.textResponse ?? "",
+      ),
+  );
+}
+
 export function answeredQuestionCount(
   attempt: LearnerQuizAttempt,
   draft: QuizAttemptDraft,
 ) {
-  return attempt.questions.filter((question) => {
-    const answer = draft.answers[question.id];
-    if (!answer) return false;
-    if (question.questionType === "short_answer") {
-      return Boolean(
-        answer.textResponse && answer.textResponse.trim().length > 0,
-      );
-    }
-    return (answer.selectedOptionIds?.length ?? 0) > 0;
-  }).length;
+  return attempt.questions.filter((question) =>
+    isQuestionAnswered(question, draft),
+  ).length;
 }
 
 export function hasAnsweredEveryQuestion(
@@ -44,6 +70,21 @@ export function toBulkQuizAnswers(
       }),
     ),
   };
+}
+
+/**
+ * How far the server's clock is ahead of this device's, from the server
+ * time sent with the attempt and the moment that response arrived. Zero
+ * when either is missing.
+ */
+export function serverClockOffsetMs(
+  serverNow: string | undefined,
+  receivedAtMs: number,
+) {
+  const serverNowMs = serverNow ? Date.parse(serverNow) : Number.NaN;
+  return Number.isFinite(serverNowMs) && receivedAtMs > 0
+    ? serverNowMs - receivedAtMs
+    : 0;
 }
 
 export function formatQuizRemainingTime(seconds: number) {

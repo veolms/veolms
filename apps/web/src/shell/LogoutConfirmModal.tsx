@@ -1,11 +1,17 @@
+import type { ReactNode } from "react";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { ConfirmActionModal } from "./ConfirmActionModal";
+
+const LOGOUT_DESCRIPTION =
+  "You'll need to sign in again to get back to your courses.";
 
 export interface LogoutConfirmModalProps {
   isOpen: boolean;
   isPending?: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  /** Shown under the description, e.g. why signing out is on hold. */
+  notice?: ReactNode;
 }
 
 export function LogoutConfirmModal({
@@ -13,6 +19,7 @@ export function LogoutConfirmModal({
   isPending = false,
   onClose,
   onConfirm,
+  notice,
 }: LogoutConfirmModalProps) {
   return (
     <ConfirmActionModal
@@ -23,10 +30,20 @@ export function LogoutConfirmModal({
       onConfirm={onConfirm}
       icon={SignOut}
       iconWeight="regular"
-      emphasis="cancel"
+      appearance="loginCard"
+      closeOnConfirm
       title="Sign out?"
-      description="This ends your session on this device. You can sign back in anytime to return to your courses and workspace."
-      cancelLabel="Stay signed in"
+      description={
+        notice ? (
+          <>
+            <span>{LOGOUT_DESCRIPTION}</span>
+            {notice}
+          </>
+        ) : (
+          LOGOUT_DESCRIPTION
+        )
+      }
+      cancelLabel="Cancel"
       confirmLabel="Sign out"
       pendingLabel="Signing out…"
     />

@@ -4,9 +4,9 @@ import { FilePdfIcon as FilePdf } from "@phosphor-icons/react/FilePdf";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { VideoCameraIcon as VideoCamera } from "@phosphor-icons/react/VideoCamera";
-import { XIcon as X } from "@phosphor-icons/react/X";
 import { useEffect, useRef, useState } from "react";
 import { ThumbnailPlaceholderBackground } from "../../components/ui/ThumbnailPlaceholderBackground";
+import { AttachmentViewerDialog } from "./AttachmentViewerDialog";
 import {
   type DiscussionAttachmentItem,
   formatFileSize,
@@ -35,38 +35,10 @@ export function DiscussionAttachmentsList({
   const [failedVideoIds, setFailedVideoIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const viewerDialogRef = useRef<HTMLDialogElement>(null);
   const viewerTriggerRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    const dialog = viewerDialogRef.current;
-    if (!dialog) return;
-    if (
-      viewerAttachment &&
-      !dialog.open &&
-      typeof dialog.showModal === "function"
-    ) {
-      dialog.showModal();
-    }
-    if (
-      !viewerAttachment &&
-      dialog.open &&
-      typeof dialog.close === "function"
-    ) {
-      dialog.close();
-    }
-  }, [viewerAttachment]);
 
   if (!attachments || attachments.length === 0) return null;
 
-  const closeViewer = () => {
-    const dialog = viewerDialogRef.current;
-    if (dialog?.open && typeof dialog.close === "function") {
-      dialog.close();
-    } else {
-      handleViewerClose();
-    }
-  };
   const handleViewerClose = () => {
     setViewerAttachment(null);
     viewerTriggerRef.current?.focus();
@@ -239,43 +211,10 @@ export function DiscussionAttachmentsList({
         </div>
       </div>
 
-      <dialog
-        ref={viewerDialogRef}
-        aria-label={
-          viewerAttachment
-            ? `Image preview: ${viewerAttachment.fileName}`
-            : "Image preview"
-        }
-        data-testid="discussion-image-viewer"
-        className="fixed inset-0 z-150 m-auto max-h-[92dvh] max-w-[94vw] overflow-visible border-0 bg-transparent p-0 text-(--text) backdrop:bg-black/75 backdrop:backdrop-blur-xs"
-        onCancel={(event) => {
-          event.preventDefault();
-          closeViewer();
-        }}
+      <AttachmentViewerDialog
+        attachment={viewerAttachment}
         onClose={handleViewerClose}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) closeViewer();
-        }}
-      >
-        {viewerAttachment && getAttachmentVisualUrl(viewerAttachment) && (
-          <div className="relative flex max-h-[92dvh] max-w-[94vw] items-center justify-center">
-            <img
-              src={getAttachmentVisualUrl(viewerAttachment)}
-              alt={viewerAttachment.fileName}
-              decoding="async"
-              className="max-h-[88dvh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
-            />
-            <button
-              type="button"
-              aria-label="Close image preview"
-              onClick={closeViewer}
-              className="fixed top-4 right-4 z-10 grid size-10 place-items-center rounded-full border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-(--surface) text-(--text) shadow-xl transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-            >
-              <X size={18} weight="bold" />
-            </button>
-          </div>
-        )}
-      </dialog>
+      />
     </>
   );
 }

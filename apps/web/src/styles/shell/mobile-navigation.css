@@ -165,11 +165,28 @@
         max(14px, var(--app-safe-area-bottom))
     );
     --mobile-menu-sheet-inline-inset: 0.75rem;
+    /* Base UI registers its drawer variables with `inherits: false`, so the
+       resting snap offset is copied here for the body to read. */
+    --mobile-menu-sheet-rest-offset: var(
+      --drawer-snap-point-offset,
+      var(--translate-y, 0px)
+    );
 
     display: flex;
     min-height: 0;
     flex: 1 1 auto;
     flex-direction: column;
+  }
+
+  /* The drawer registers `--translate-y` as non-inherited so a drag does not
+     restyle the whole sheet every frame (components/ui/drawer.tsx). The body's
+     height and the floating menus below read it, so they inherit it on purpose. */
+  #mobile-navigation-sheet [data-slot="drawer-content"],
+  .mobile-menu-sheet__body,
+  #mobile-navigation-sheet > .mobile-palette-menu,
+  #mobile-navigation-sheet > .settings-quick-menu--mobile,
+  #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
+    --translate-y: inherit;
   }
 
   #mobile-navigation-sheet [data-slot="drawer-content"] {
@@ -180,10 +197,21 @@
   .mobile-menu-sheet__body {
     display: flex;
     min-height: 0;
+    /* A downward drag must not shrink the body: the shorter scroll lane
+       would start to overflow mid-drag and Base UI would hand the gesture to
+       it, freezing the sheet under the thumb. So the height never drops below
+       the resting snap point's, while an upward drag still grows it. */
     height: clamp(
       0px,
       calc(
-        100dvh - max(0px, var(--translate-y, 0px)) -
+        100dvh -
+          max(
+            0px,
+            min(
+              var(--translate-y, 0px),
+              var(--mobile-menu-sheet-rest-offset, var(--translate-y, 0px))
+            )
+          ) -
           var(--mobile-menu-sheet-vertical-chrome)
       ),
       100dvh
@@ -456,7 +484,7 @@
   #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
     top: auto;
     bottom: calc(
-      68px + var(--app-viewport-safe-area-bottom, 0px) + var(--translate-y, 0px)
+      71px + var(--app-viewport-safe-area-bottom, 0px) + var(--translate-y, 0px)
     );
     max-height: calc(100dvh - 92px - env(safe-area-inset-top, 0px));
   }

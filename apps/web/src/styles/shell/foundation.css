@@ -1,6 +1,34 @@
 :root {
-  --sidebar-width: 300px;
+  --sidebar-width: 220px;
   --sidebar-expanded-width: var(--sidebar-width);
+}
+
+/* The shell's live geometry while the sidebar is dragged: the first is
+   written on `.courses-app` for every movement of the pointer, and the second
+   follows from it. An unregistered custom property is inherited, so each of
+   those writes made the browser work out the style of every element on the
+   page again (about 17ms of each frame on a tablet). Registered as not
+   inherited, a write restyles the shell alone. The few boxes further in that
+   read one ask for it with `inherit`. The initial value is the collapsed
+   rail, as in the `var()` fallbacks. */
+@property --sidebar-resize-preview-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 76px;
+}
+
+/* The logo's opacity at the width a drag has reached (written with the
+   width, see writeSidebarResizeWidth). Not inherited, for the same reason. */
+@property --sidebar-resize-logo-opacity {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --main-surface-inline-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
 .courses-app {
@@ -8,13 +36,16 @@
   grid-template-columns: var(--sidebar-expanded-width) minmax(0, 1fr);
   gap: 0;
   padding: 12px 12px 10px 0;
-  background:
+  /* Named so that the drag surface can paint the same backdrop from a box of
+     its own while the sidebar is dragged (shell-drag-surface.css). */
+  --shell-backdrop:
     radial-gradient(
       circle at 16% 2%,
       color-mix(in srgb, var(--accent) 4%, transparent),
       transparent 26%
     ),
     var(--app-shell);
+  background: var(--shell-backdrop);
 }
 
 .courses-app--collapsed,
@@ -147,8 +178,9 @@
   }
 
   /* Keep the shell's inset edge above sticky page content. Box shadows on the
-     scrollport itself paint behind descendants, so the shell overlay restores
-     the continuous rounded highlight without taking up layout space. */
+     scrollport itself paint behind descendants, so the shell restores the
+     continuous rounded highlight above the page without taking up layout
+     space, in the box these rules describe. */
   :root[data-content-layout="framed"] .courses-app {
     --main-surface-inline-start: var(--sidebar-expanded-width);
     position: relative;
@@ -167,7 +199,10 @@
     --main-surface-inline-start: 14px;
   }
 
+  /* The same box as a shell-level overlay. A split frame gives it a shadow
+     to cast (components/split-frame-pane.css). */
   :root[data-content-layout="framed"] .courses-app::after {
+    --main-surface-inline-start: inherit;
     content: "";
     position: absolute;
     z-index: 46;
@@ -177,11 +212,17 @@
     left: var(--main-surface-inline-start);
     border-radius: 18px;
     pointer-events: none;
-    box-shadow: var(
-      --application-frame-edge-shadow,
-      var(--surface-depth-edge-shadow, none)
-    );
   }
+
+  /* With a mouse or trackpad the frame draws the edge highlight over its own
+     page, from an overlay of its own (below). It used to be this shell-level
+     overlay, but that box only follows the frame through its `left`, and
+     Safari did not repaint the place it had just left: collapsing the
+     sidebar left a faint copy of the frame's rounded edge standing over the
+     page. On touch devices neither paints and FrameEdge draws the edge
+     instead: a box this size above the page costs the compositor a
+     frame-sized layer however little it draws, and a high-density tablet
+     does not have the tile memory for it while the sidebar is dragged. */
 }
 
 @media (min-width: 641px) {
@@ -195,6 +236,33 @@
     border-radius: 18px;
     background: var(--main-surface);
     box-shadow: var(--application-frame-shadow, var(--card-shadow));
+  }
+
+  /* The edge highlight, laid over the page in the frame's single grid cell
+     (a grid item stacks by its z-index without being positioned, so the
+     frame does not become a containing block for the page's own boxes).
+     A split frame positions its overlay itself (split-frame-pane.css). */
+  @media not (pointer: coarse) {
+    :root[data-content-layout="framed"] .courses-main-frame {
+      display: grid;
+      grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    }
+
+    :root[data-content-layout="framed"] .courses-main-frame > .courses-main,
+    :root[data-content-layout="framed"] .courses-main-frame::after {
+      grid-area: 1 / 1;
+    }
+
+    :root[data-content-layout="framed"] .courses-main-frame::after {
+      content: "";
+      z-index: 46;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: var(
+        --application-frame-edge-shadow,
+        var(--surface-depth-edge-shadow, none)
+      );
+    }
   }
 
   /* Chromium can leak a one-pixel compositor edge when the same rounded box
@@ -346,13 +414,14 @@
     color-mix(in srgb, var(--accent-shadow) 48%, transparent);
 }
 
+/* 14px to grab, 2px of it drawn (the line below sits in its middle). */
 .sidebar-resize-handle {
   position: absolute;
   top: 0;
-  right: -5px;
+  right: -7px;
   bottom: 0;
   z-index: 80;
-  width: 10px;
+  width: 14px;
   border: 0;
   padding: 0;
   cursor: e-resize;
@@ -360,33 +429,131 @@
   background: transparent;
 }
 
+/* How strongly the line shows, from 0 to 1. Registered as a number so that
+   it can ease between its steps. */
+@property --sidebar-resize-line-strength {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0.34;
+}
+
+/* The line lies half over the sidebar and half over the page beside it, and
+   the page is not one colour down its edge (a dark hero, then the page's
+   ground). A see-through line took on whatever was behind it and showed in
+   two tones. So it is painted solid: the accent mixed into the shell's own
+   colour, by more or less as it shows more or less strongly.
+
+   Light themes are the exception (below): there the sidebar beside the line
+   is darker than the shell colour, so a line made of the shell colour ended
+   in a pale strip at the top and bottom, and the accent mixed into that pale
+   colour already read as the hover state at rest. */
 .sidebar-resize-handle::after {
+  --sidebar-resize-line-strength: var(--sidebar-resize-line-rest, 0.34);
   content: "";
   position: absolute;
   top: 14px;
-  right: 4px;
+  right: 6px;
   bottom: 14px;
-  left: 4px;
+  left: 6px;
   border-radius: 999px;
-  opacity: 0.34;
   background: linear-gradient(
     180deg,
+    var(--sidebar-resize-line-base, var(--app-shell)) 0%,
+    color-mix(
+        in srgb,
+        var(--accent) calc(34% * var(--sidebar-resize-line-strength)),
+        var(--sidebar-resize-line-base, var(--app-shell))
+      )
+      13%,
+    color-mix(
+        in srgb,
+        var(--accent) calc(58% * var(--sidebar-resize-line-strength)),
+        var(--sidebar-resize-line-base, var(--app-shell))
+      )
+      50%,
+    color-mix(
+        in srgb,
+        var(--accent) calc(34% * var(--sidebar-resize-line-strength)),
+        var(--sidebar-resize-line-base, var(--app-shell))
+      )
+      87%,
+    var(--sidebar-resize-line-base, var(--app-shell)) 100%
+  );
+  /* The ends fade out to nothing, whatever lies beside them. Fading only
+     into the shell colour left a hard top end beside the page's rounded top
+     corner: a pale stub in a light theme, and the same stub, merely dark, in
+     a dark one. */
+  -webkit-mask-image: linear-gradient(
+    180deg,
     transparent 0%,
-    color-mix(in srgb, var(--accent) 34%, transparent) 13%,
-    color-mix(in srgb, var(--accent) 58%, transparent) 50%,
-    color-mix(in srgb, var(--accent) 34%, transparent) 87%,
+    #000 16%,
+    #000 84%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 16%,
+    #000 84%,
     transparent 100%
   );
   transition:
+    --sidebar-resize-line-strength 150ms ease,
     opacity 150ms ease,
     box-shadow 150ms ease;
 }
 
+/* In a light theme the line is the accent alone, see-through, so its ends
+   fade into whatever lies beside them and it only ever tints the edge; and it
+   rests fainter, so the pointer clearly brings it up. */
+:root[data-theme="light"] .sidebar-resize-handle {
+  --sidebar-resize-line-base: transparent;
+  --sidebar-resize-line-rest: 0.22;
+}
+
+/* Three steps: faint at rest, clearer under the pointer, and brightest
+   (with its glow) only while the sidebar is actually being dragged. */
 .sidebar-resize-handle:hover::after,
-.sidebar-resize-handle:focus-visible::after,
+.sidebar-resize-handle:focus-visible::after {
+  --sidebar-resize-line-strength: 0.62;
+}
+
 .courses-app--resizing .sidebar-resize-handle::after {
-  opacity: 1;
+  --sidebar-resize-line-strength: 1;
   box-shadow: 0 0 16px color-mix(in srgb, var(--accent-shadow) 65%, transparent);
+}
+
+/* The floating sidebar (opened over the page) keeps its edge clean, like the
+   floating course content: no line at rest, the line under the pointer, and
+   the same line a little brighter while it is dragged. */
+.courses-app--hidden.courses-app--edge-open .sidebar-resize-handle::after {
+  --sidebar-resize-line-strength: 1;
+  opacity: 0;
+}
+
+.courses-app--hidden.courses-app--edge-open .sidebar-resize-handle:hover::after,
+.courses-app--hidden.courses-app--edge-open
+  .sidebar-resize-handle:focus-visible::after {
+  opacity: 0.7;
+}
+
+.courses-app--hidden.courses-app--edge-open.courses-app--resizing
+  .sidebar-resize-handle::after {
+  opacity: 1;
+  box-shadow: none;
+}
+
+/* The floating sidebar takes its width from the saved sidebar width, which
+   only changes when a drag ends. While its edge is being dragged it follows
+   the drag's own width instead, with no transition, so it resizes under the
+   pointer. (Only that drag sets `--resizing` on a floating sidebar; the
+   swipes that open and close it do not.) */
+:root
+  .courses-app--hidden.courses-app--edge-open.courses-app--resizing
+  > .courses-sidebar {
+  --sidebar-resize-preview-width: inherit;
+  width: min(var(--sidebar-resize-preview-width), calc(100vw - 28px));
+  transition: none;
 }
 
 .sidebar-resize-handle:focus-visible {
@@ -413,17 +580,6 @@
   }
 }
 
-/* The prerendered home is the guest home. A browser that was signed in last
-   time (data-session-hint, set by the head bootstrap script) shows the
-   loading state from the first paint instead of flashing guest content. */
-.guest-home-preview {
-  display: contents;
-}
-
-.session-pending-home {
-  display: none;
-}
-
 @media (max-width: 480px) {
   [role="dialog"][aria-labelledby="logout-modal-title"] > div > .mt-6 {
     gap: 8px;
@@ -433,12 +589,4 @@
     height: 44px;
     min-height: 44px;
   }
-}
-
-html[data-session-hint="signed-in"] .guest-home-preview {
-  display: none;
-}
-
-html[data-session-hint="signed-in"] .session-pending-home {
-  display: block;
 }

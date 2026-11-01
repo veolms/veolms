@@ -1,0 +1,35 @@
+/* live palette - dark mode: near-black neutrals and a vivid red. */
+:root[data-palette="live"] {
+  --canvas: #0f0f0f;
+  --header: #121212;
+  --surface: #1f1f1f;
+  --hover: #383838;
+  --selected: #353535;
+  --track: #1a1a1a;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #f1f1f1;
+  --text-secondary: #d9d9d9;
+  --muted: #aaaaaa;
+  --accent: #ff0033;
+  --accent-hover: #e0002d;
+  --accent-soft: rgba(255, 0, 51, 0.16);
+  --accent-border: rgba(255, 0, 51, 0.42);
+  --accent-shadow: rgba(204, 0, 41, 0.26);
+  --on-accent: #ffffff;
+  --app-shell: #0c0c0c;
+  --main-surface: #141414;
+  --surface-strong: #2c2c2c;
+  --progress-track: #4a4a4a;
+  --on-accent-glyph: #ffffff;
+  --card-surface: #1f1f1f;
+  --card-surface-raised: #2c2c2c;
+  --card-surface-soft: #171717;
+  --card-surface-hover: #272727;
+}
+
+:root[data-high-contrast="true"][data-palette="live"] {
+  --text: #ffffff;
+  --text-secondary: #e5e5e5;
+  --muted: #bdbdbd;
+}

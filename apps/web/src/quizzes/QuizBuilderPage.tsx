@@ -9,6 +9,8 @@ import { useMyCourses } from "../services/courses";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { QuizAuthoringLoadingSkeleton } from "./QuizAuthoringLoadingSkeleton";
+import { ElevatedCard } from "../components/ElevatedCard";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 
 const QuizAuthoringPanel = lazy(() =>
   import("./QuizAuthoringPanel").then((module) => ({
@@ -26,13 +28,15 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
-  const rawCourses = coursesQuery.data?.courses ?? [];
+  const rawCourses = useMemo(
+    () => coursesQuery.data?.courses ?? [],
+    [coursesQuery.data?.courses],
+  );
 
   const filteredCourses = useMemo(() => {
     if (!searchQuery.trim()) return rawCourses;
-    const lower = searchQuery.toLowerCase().trim();
     return rawCourses.filter((course) =>
-      course.title.toLowerCase().includes(lower),
+      fuzzyMatches(searchQuery, course.title),
     );
   }, [rawCourses, searchQuery]);
 
@@ -83,7 +87,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
       </div>
 
       {/* Course Selection Card */}
-      <div className="rounded-[18px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-5 sm:p-7 shadow-(--card-shadow)">
+      <ElevatedCard as="div" className="p-5 sm:p-7">
         <div className="flex items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] pb-4 mb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] text-(--accent)">
@@ -230,7 +234,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
             </Button>
           </div>
         )}
-      </div>
+      </ElevatedCard>
     </main>
   );
 }

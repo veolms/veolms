@@ -56,29 +56,20 @@
   }
 }
 
-/* Progress / Time Bar Animation */
-@keyframes toastProgressBar {
-  from {
-    transform: scaleX(1);
-  }
-  to {
-    transform: scaleX(0);
-  }
-}
-
 .toast-notification {
   position: fixed;
   right: 24px;
   bottom: 24px;
   z-index: 9999;
   display: flex;
-  min-height: 48px;
-  max-width: min(440px, calc(100vw - 32px));
+  min-height: 58px;
+  min-width: min(300px, calc(100vw - 32px));
+  max-width: min(460px, calc(100vw - 32px));
   align-items: center;
-  gap: 12px;
+  gap: 13px;
   border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
   border-radius: var(--control-radius-structured, 12px);
-  padding: 10px 14px 12px 12px;
+  padding: 12px 14px 12px 13px;
   color: var(--text);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -114,8 +105,8 @@
 
 .toast-notification__icon-wrap {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -183,7 +174,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text);
-  font-size: 0.84rem;
+  font-size: 0.9rem;
   font-weight: 600;
 }
 
@@ -198,8 +189,8 @@
 
 .toast-notification__close {
   display: inline-flex;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -220,44 +211,6 @@
   background: color-mix(in srgb, var(--text) 10%, transparent);
 }
 
-/* Time Progress Bar Track & Fill */
-.toast-notification__progress-track {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2.5px;
-  overflow: hidden;
-  border-radius: 0 0 inherit inherit;
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-}
-
-.toast-notification__progress-fill {
-  width: 100%;
-  height: 100%;
-  transform-origin: left center;
-  background: var(--accent);
-  animation: toastProgressBar var(--toast-duration, 3200ms) linear forwards;
-  will-change: transform;
-}
-
-.toast-notification:hover .toast-notification__progress-fill,
-.toast-notification.is-paused .toast-notification__progress-fill {
-  animation-play-state: paused;
-}
-
-.toast-notification--success .toast-notification__progress-fill {
-  background: #10b981;
-}
-
-.toast-notification--error .toast-notification__progress-fill {
-  background: #ef4444;
-}
-
-.toast-notification--warning .toast-notification__progress-fill {
-  background: #f59e0b;
-}
-
 /* Smaller Screens: Top-Center Position with Safe Inset */
 @media (max-width: 768px) {
   .toast-notification {
@@ -266,9 +219,17 @@
     left: 50%;
     right: auto;
     transform: translate(-50%, 0);
-    max-width: min(480px, calc(100vw - 32px));
-    width: max-content;
+    max-width: min(480px, calc(100vw - 24px));
+    width: calc(100vw - 24px);
+    min-height: 60px;
+    padding: 13px 14px;
     animation: toastSlideInTop 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    /* A swipe left, right or up dismisses it (ToastNotification). */
+    touch-action: none;
+  }
+
+  .toast-notification__message {
+    font-size: 0.92rem;
   }
 
   .toast-notification.is-detailed {
@@ -305,10 +266,5 @@
     to {
       opacity: 0;
     }
-  }
-
-  .toast-notification__progress-fill {
-    animation: none;
-    display: none;
   }
 }

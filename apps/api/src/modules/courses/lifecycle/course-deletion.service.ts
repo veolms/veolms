@@ -1,16 +1,16 @@
 import crypto from "node:crypto";
 import { z } from "zod";
-import type { Kysely, Selectable } from "kysely";
+import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 import type { S3StorageService } from "@veolms/storage";
-import type { Course, DeletedCoursesQuery } from "@veolms/contracts";
+import type { DeletedCoursesQuery } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import * as courseRepo from "../course/course.repository.ts";
 import {
   createMediaRetentionService,
   type MediaRetentionService,
 } from "../../media/index.ts";
-import { ADMIN_ROLE, INSTRUCTOR_ROLE } from "../../auth/index.ts";
+import { mayManageCourse } from "../shared/courses.utils.ts";
 import * as deletionRepo from "./course-deletion.repository.ts";
 
 export const COURSE_DELETION_RETENTION_DAYS = 30;
@@ -24,27 +24,6 @@ const cursorSchema = z.object({
   scheduledFor: z.iso.datetime(),
   courseId: z.uuid(),
 });
-
-function toCourseResponse(course: Selectable<Database["courses"]>): Course {
-  return {
-    id: course.id,
-    slug: course.slug,
-    title: course.title,
-    shortDescription: course.short_description,
-    description: course.description,
-    difficulty: course.difficulty,
-    status: course.status,
-    creatorId: course.creator_id,
-    categoryId: course.category_id,
-    thumbnailMediaId: course.thumbnail_media_id,
-    trailerMediaId: course.trailer_media_id,
-    instructorAlias: course.instructor_alias,
-    version: course.version,
-    createdAt: course.created_at.toISOString(),
-    updatedAt: course.updated_at.toISOString(),
-    publishedAt: course.published_at?.toISOString() ?? null,
-  };
-}
 
 function encodeCursor(scheduledFor: Date, courseId: string): string {
   return Buffer.from(
@@ -96,7 +75,7 @@ export function createCourseDeletionService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const result = await database.transaction().execute(async (trx) => {
+    return await database.transaction().execute(async (trx) => {
       const course = await deletionRepo.findCourseIncludingDeleted(
         trx,
         courseId,
@@ -106,9 +85,15 @@ export function createCourseDeletionService({
       if (!course) {
         throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
       }
-      const isAdmin = userRoles?.includes(ADMIN_ROLE);
-      const isInstructor = userRoles?.includes(INSTRUCTOR_ROLE);
-      if (!isAdmin && !isInstructor && course.creator_id !== creatorId) {
+      if (
+        !(await mayManageCourse(
+          trx,
+          course,
+          creatorId,
+          userRoles,
+          "course.delete",
+        ))
+      ) {
         throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
       }
       if (course.deleted_at) {
@@ -136,10 +121,10 @@ export function createCourseDeletionService({
         updated_at: now,
       });
 
-      return { purgeAt, slug: course.slug };
+      // The slug lets the public page refresh remove this course's page;
+      // it cannot be looked up by id once the course is in the bin.
+      return { slug: course.slug };
     });
-
-    return { purgeAt: result.purgeAt.toISOString(), slug: result.slug };
   }
 
   async function listDeletedCourses({ limit, cursor }: DeletedCoursesQuery) {
@@ -160,10 +145,6 @@ export function createCourseDeletionService({
         status: row.status,
         creatorId: row.creator_id,
         deletedAt: row.deleted_at!.toISOString(),
-        purgeAt: row.purge_at.toISOString(),
-        purgeState: row.purge_state,
-        purgeAttempts: row.purge_attempts,
-        lastPurgeError: row.last_purge_error,
       })),
       nextCursor: hasMore && last ? encodeCursor(last.purge_at, last.id) : null,
     };
@@ -191,7 +172,8 @@ export function createCourseDeletionService({
       );
     }
 
-    return { course: toCourseResponse(result.course) };
+    // `course.slug` lets the public page refresh rebuild the restored page.
+    return { course: { id: result.course.id, slug: result.course.slug } };
   }
 
   async function prepareCoursePurge(

@@ -5,7 +5,10 @@
 
 .courses-nav {
   gap: 4px;
-  margin: 5px -14px -5px;
+  /* 10px above the menu (5px more than it had, in every desktop state: see
+     the collapsed rail in courses.css and the drag in cards-responsive.css),
+     so its first item stands clear of the logo. */
+  margin: 10px -14px -5px;
   padding: 5px 14px;
   overflow-x: visible;
   scrollbar-width: none;
@@ -22,6 +25,21 @@
   display: none;
   width: 0;
   height: 0;
+}
+
+/* When the menu is taller than its list, two items' worth of blank room
+   (two 57px items and the 8px between them) follows the last one, so it can
+   be scrolled well clear of the profile button. A list that fits has none,
+   or the room alone would make it scroll. */
+.courses-nav__end-space {
+  display: none;
+  flex: none;
+  height: 122px;
+  pointer-events: none;
+}
+
+.courses-nav.has-overflow > .courses-nav__end-space {
+  display: block;
 }
 
 .courses-nav.has-scroll-top {
@@ -78,8 +96,64 @@
 }
 
 .courses-nav button:hover {
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  background: var(
+    --sidebar-menu-hover-background,
+    color-mix(in srgb, var(--surface) 72%, transparent)
+  );
   box-shadow: none;
+}
+
+/* The lesson video projects its ambient glow under the whole sidebar. The
+   selected item is solid and sits on top of it, but idle and hovered items
+   are see-through, so the glow tinted them as if it lay over them. While the
+   glow shows, their fills are mixed into the shell colour instead of into
+   nothing: the same shade as before, now covering the glow. The floating
+   sidebar is left alone (its items lie on glass, not on the shell), and so
+   are narrow screens, where the projection is not drawn (see player.css). */
+@media (min-width: 821px) {
+  .courses-app:not(.courses-app--hidden):has(
+      > .ambient-canvas--shell.ambient-canvas--visible
+    )
+    .courses-nav {
+    --sidebar-menu-idle-background: color-mix(
+      in srgb,
+      var(--surface) 35%,
+      var(--app-shell, var(--canvas))
+    );
+    --sidebar-menu-hover-background: color-mix(
+      in srgb,
+      var(--surface) 72%,
+      var(--app-shell, var(--canvas))
+    );
+  }
+}
+
+/* In a light theme an idle item is a faint veil over the sidebar, not a pale
+   tile: close to the sidebar's own colour, still seen as an item, and well
+   apart from the selected one. The surface mixed into the shell colour (the
+   rule above) came out nearly white beside the darker sidebar of a lesson
+   page; seen through, the lesson's glow tints the item a little, as it does
+   the sidebar around it. */
+:root[data-theme="light"] .courses-app .courses-nav {
+  --sidebar-menu-idle-background: color-mix(
+    in srgb,
+    var(--surface) 22%,
+    transparent
+  );
+}
+
+@media (min-width: 821px) {
+  :root[data-theme="light"]
+    .courses-app:not(.courses-app--hidden):has(
+      > .ambient-canvas--shell.ambient-canvas--visible
+    )
+    .courses-nav {
+    --sidebar-menu-idle-background: color-mix(
+      in srgb,
+      var(--surface) 22%,
+      transparent
+    );
+  }
 }
 
 .courses-nav button.is-active {
@@ -466,10 +540,12 @@
 
 .sidebar-appearance
   > .sidebar-palette-menu--dock-attached:not(.sidebar-palette-menu--collapsed) {
-  right: auto;
-  bottom: calc(100% + 2px);
-  left: 5px;
-  width: 216px;
+  /* Spans the profile button's edges (the dock shares them) and covers it:
+     the dock's 8px top margin puts both bottoms on the same line. */
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: auto;
 }
 
 .sidebar-palette-trigger {
@@ -528,7 +604,10 @@
   aspect-ratio: 1;
   place-items: center;
   border: 2px solid transparent;
-  border-radius: 15px;
+  /* The swatches grow and shrink with the sidebar's width. A fixed radius
+     turned the small ones into circles, so the corner keeps the proportion
+     it has at the default width (15px on 47px), never more than 15px. */
+  border-radius: min(15px, 32%);
   padding: 3px;
   color: white;
   background:
@@ -603,7 +682,7 @@
   width: 100%;
   height: 100%;
   border: 1px solid color-mix(in srgb, var(--theme-swatch) 76%, white 24%);
-  border-radius: 12px;
+  border-radius: min(12px, 32%);
   background: var(--theme-swatch);
   filter: saturate(1.05);
   box-shadow:
@@ -624,7 +703,11 @@
   filter: saturate(1.14) brightness(1.05);
 }
 
-:root[data-theme="light"] .sidebar-palette-menu {
+/* The sidebar's reading and settings menus share this light surface; the
+   settings menu also needs to outweigh the profile menu's light rule below. */
+:root[data-theme="light"] .sidebar-palette-menu,
+:root[data-theme="light"] .sidebar-appearance > .reading-mode-quick-menu,
+:root[data-theme="light"] .courses-profile > .profile-menu.settings-quick-menu {
   background-color: color-mix(
     in srgb,
     var(--surface-strong) 94%,
@@ -638,7 +721,9 @@
     var(--surface-depth-shadow);
 }
 
-:root[data-theme="light"] .profile-menu {
+/* The phone sheet lays the menu flat on its own surface: a shadow there
+   shows only as a line under the last item. */
+:root[data-theme="light"] .profile-menu:not(.mobile-menu-sheet__profile-menu) {
   --profile-menu-cast-shadow: 0 1px 5px
     color-mix(in srgb, var(--text) 12%, transparent);
   box-shadow:
@@ -747,6 +832,18 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent);
 }
 
+/* The selected item, and the profile and theme buttons raised like it, are
+   the brightest thing on a light sidebar: white, the accent only tinting
+   the far edge. Mixed with the stronger surface and more accent they read
+   as grey beside the faint idle items. */
+:root[data-theme="light"] .courses-sidebar {
+  --sidebar-menu-active-background: linear-gradient(
+    108deg,
+    var(--surface) 0%,
+    color-mix(in srgb, var(--surface) 94%, var(--accent) 6%) 100%
+  );
+}
+
 :root[data-theme="light"] .courses-nav button.is-active {
   color: var(--text);
   background: var(--sidebar-menu-active-background);
@@ -778,11 +875,13 @@
   filter: none;
 }
 
+/* Raised exactly like the sidebar's selected menu item and its theme button:
+   the same tinted fill, the same shadow, and no outline of its own (the
+   shadow marks its edge). */
 :root[data-theme="light"] .courses-profile__button {
-  background: var(--sidebar-control-surface);
-  box-shadow:
-    var(--surface-depth-edge-shadow),
-    0 3px 7px color-mix(in srgb, var(--text) 10%, transparent);
+  border-color: transparent;
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
 }
 
 :root[data-elevated-surfaces="false"] .courses-profile__button {
@@ -1044,14 +1143,12 @@
   left: calc(100% + 2px);
 }
 
+/* Beside the collapsed rail the menu sits on the sidebar's bottom edge, as
+   the reading and settings menus do. */
 .courses-app--collapsed
   .sidebar-palette-menu--dock-attached.sidebar-palette-menu--collapsed {
   top: auto;
-  bottom: calc(
-    -5px +
-      (var(--sidebar-dock-count, 1) - var(--palette-menu-dock-index, 0) - 1) *
-      42px
-  );
+  bottom: 0;
 }
 
 /* Static documents receive the persisted sidebar state from the head
@@ -1377,6 +1474,11 @@
   --sidebar-glow-opacity: 0;
 }
 
+/* Drawn only beside the pinned or floating sidebar (see below). */
+.courses-sidebar__bokeh {
+  display: none;
+}
+
 @media (min-width: 641px) {
   .courses-app {
     isolation: isolate;
@@ -1410,31 +1512,73 @@
     transition: opacity 180ms ease;
   }
 
+  /* The framed shell fills the viewport and never scrolls, so laying the glow
+     out against the shell gives the same box as fixing it to the viewport.
+     It matters to the compositor, though: a fixed box cannot share the page's
+     own layer, and the main frame stacked above it then needs a layer of its
+     own too. Those two viewport-sized layers took a sidebar drag past
+     Chrome's tile memory limit on high-density Android tablets, which drew
+     frames with whole parts of the page missing.
+
+     Touch devices only. On a low-density desktop monitor those extra layers
+     are also what makes Chrome draw the page's text with greyscale rather
+     than subpixel antialiasing, so removing them there would change how
+     every line of text in the frame looks. */
+  @media (pointer: coarse) {
+    :root[data-content-layout="framed"] .courses-app::before {
+      position: absolute;
+    }
+  }
+
   .courses-sidebar {
     isolation: isolate;
   }
 
-  .courses-sidebar::before {
+  /* The shapes are two boxes, one inside the other. The inner one draws the
+     shapes and cuts them out with a mask; the outer one blurs and fades the
+     result. On a single box the blur ran first and the mask then cut it
+     back to a crisp outline, so the blur setting never softened an edge. */
+  .courses-sidebar > .courses-sidebar__bokeh {
     position: absolute;
     inset: 0;
     z-index: -1;
+    display: block;
+    /* The setting is linear up to its default (25%) and steeper above it:
+       a plain multiple left the shapes barely visible at 100%, all the more
+       once they are blurred. The colours below are three times as strong as
+       they used to be and this factor a third (0.24 for 0.72), so the
+       default looks as it did while the top of the range has room to grow. */
+    opacity: min(
+      1,
+      calc(
+        var(--sidebar-glow-opacity) * var(--sidebar-glow-intensity) * 0.24 *
+          (1 + 10.8 * max(0, var(--sidebar-glow-intensity) - 0.25))
+      )
+    );
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  .courses-sidebar__bokeh > span {
+    position: absolute;
+    inset: 0;
     background:
       radial-gradient(
         circle var(--sidebar-bokeh-top-size) at 42px 17%,
-        color-mix(in srgb, var(--sidebar-glow-primary) 12%, transparent) 0 32%,
-        color-mix(in srgb, var(--sidebar-glow-primary) 5%, transparent) 58%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 36%, transparent) 0 32%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 15%, transparent) 58%,
         transparent 76%
       ),
       radial-gradient(
         circle var(--sidebar-bokeh-center-size) at 178px 50%,
-        color-mix(in srgb, var(--sidebar-glow-primary) 10%, transparent) 0 31%,
-        color-mix(in srgb, var(--sidebar-glow-secondary) 6%, transparent) 57%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 30%, transparent) 0 31%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 18%, transparent) 57%,
         transparent 76%
       ),
       radial-gradient(
         circle var(--sidebar-bokeh-bottom-size) at 58px 83%,
-        color-mix(in srgb, var(--sidebar-glow-secondary) 12%, transparent) 0 32%,
-        color-mix(in srgb, var(--sidebar-glow-secondary) 5%, transparent) 58%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 36%, transparent) 0 32%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 15%, transparent) 58%,
         transparent 76%
       );
     -webkit-mask-image:
@@ -1467,12 +1611,6 @@
       var(--sidebar-bokeh-top-size) var(--sidebar-bokeh-top-size),
       var(--sidebar-bokeh-center-size) var(--sidebar-bokeh-center-size),
       var(--sidebar-bokeh-bottom-size) var(--sidebar-bokeh-bottom-size);
-    content: "";
-    opacity: calc(
-      var(--sidebar-glow-opacity) * var(--sidebar-glow-intensity) * 0.72
-    );
-    pointer-events: none;
-    transition: opacity 180ms ease;
   }
 
   /* Keep the adjustable glass layer above the bokeh and below the real
@@ -1491,7 +1629,9 @@
   /* A full-height backdrop-filter surface exposes its rectangular compositor
      boundary beside the main frame in Chromium at fractional display scales.
      Blur the generated bokeh itself so the pinned sidebar has no raster edge. */
-  .courses-app:not(.courses-app--hidden) .courses-sidebar::before {
+  .courses-app:not(.courses-app--hidden)
+    .courses-sidebar
+    > .courses-sidebar__bokeh {
     filter: blur(var(--sidebar-backdrop-blur));
   }
 
@@ -1509,7 +1649,7 @@
   /* Floating navigation uses two distinct glass layers. The sidebar itself
      is the permanent 6px underlay; bokeh paints above it, and ::after applies
      only the additional user-controlled blur. */
-  .courses-app--hidden .courses-sidebar::before {
+  .courses-app--hidden .courses-sidebar > .courses-sidebar__bokeh {
     z-index: 0;
   }
 
@@ -1520,7 +1660,8 @@
 
   :root[data-sidebar-backdrop-blur="off"]
     .courses-app:not(.courses-app--hidden)
-    .courses-sidebar::before {
+    .courses-sidebar
+    > .courses-sidebar__bokeh {
     filter: none;
   }
 

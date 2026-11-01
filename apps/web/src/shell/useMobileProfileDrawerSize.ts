@@ -47,7 +47,11 @@ export function useMobileProfileDrawerSize({
     );
     if (!body || !profile || !scroll || !appearance) return;
 
-    const menu = scroll.firstElementChild as HTMLElement | null;
+    // The account menu is a lazy chunk behind Suspense: on the first open
+    // after signing in it is usually not there yet, and it arrives as a new
+    // child a moment later. It is picked up again whenever the children
+    // change, or the sheet stays sized for an empty menu (the 0.42 floor).
+    let menu = scroll.firstElementChild as HTMLElement | null;
     let frame: number | null = null;
     const measure = () => {
       const viewportHeight =
@@ -90,11 +94,21 @@ export function useMobileProfileDrawerSize({
     for (const element of [profile, menu, appearance]) {
       if (element) observer.observe(element);
     }
+    const menuSwap = new MutationObserver(() => {
+      const next = scroll.firstElementChild as HTMLElement | null;
+      if (next === menu) return;
+      if (menu) observer.unobserve(menu);
+      menu = next;
+      if (menu) observer.observe(menu);
+      scheduleMeasure();
+    });
+    menuSwap.observe(scroll, { childList: true });
     window.addEventListener("resize", scheduleMeasure);
     window.visualViewport?.addEventListener("resize", scheduleMeasure);
     return () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
       observer.disconnect();
+      menuSwap.disconnect();
       window.removeEventListener("resize", scheduleMeasure);
       window.visualViewport?.removeEventListener("resize", scheduleMeasure);
     };

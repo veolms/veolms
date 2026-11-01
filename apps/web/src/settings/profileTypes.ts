@@ -46,5 +46,3 @@ export const getDefaultProfileIdentity = (
   websiteUrl: "",
   roleLabel: role === "creator" ? "Instructor" : "Student",
 });
-
-export const getProfileIdentity = getDefaultProfileIdentity;

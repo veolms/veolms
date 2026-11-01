@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
@@ -11,6 +11,7 @@ import { OrderHistoryTable } from "./OrderHistoryTable";
 import { useOrderHistoryFilter } from "./useOrderHistoryFilter";
 import { ordersService } from "../services/orders";
 import type { OrderHistoryItem } from "./orderHistoryData";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface OrderHistoryPageProps {
   onNavigatePage?: NavigateTo;
@@ -52,29 +53,10 @@ export function OrderHistoryPage({
     refetch,
   } = useOrderHistoryFilter(setNotice);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
-      const isInput =
-        activeTag === "input" ||
-        activeTag === "textarea" ||
-        (document.activeElement as HTMLElement)?.isContentEditable;
-      if (
-        !isInput &&
-        (event.key === "/" ||
-          ((event.metaKey || event.ctrlKey) && event.key === "k"))
-      ) {
-        event.preventDefault();
-        document.getElementById("order-history-search-input")?.focus();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  usePageSearchShortcut("order-history-search-input");
 
   const handleDownloadReceipt = (order: OrderHistoryItem) => {
-    setNotice?.(`Opening invoice for order ${order.orderNumber}...`);
+    setNotice?.(`Downloading invoice for order ${order.orderNumber}...`);
     window.open(
       ordersService.getInvoiceDownloadUrl(order.id, "student"),
       "_blank",
@@ -128,20 +110,17 @@ export function OrderHistoryPage({
       {/* Purchase History Content Section */}
       <section aria-label="Purchase history" className="min-w-0">
         {isLoading ? (
-          <div
-            className="grid min-h-72 place-items-center rounded-2xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) shadow-(--card-shadow)"
-            style={{ boxShadow: "var(--card-shadow)" }}
-          >
+          <ElevatedCard as="div" className="grid min-h-72 place-items-center">
             <CircleNotch
               size={32}
               className="animate-spin text-(--accent)"
               aria-label="Loading"
             />
-          </div>
+          </ElevatedCard>
         ) : isError ? (
-          <div
-            className="flex min-h-72 flex-col items-center justify-center rounded-2xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) p-6 text-center shadow-(--card-shadow)"
-            style={{ boxShadow: "var(--card-shadow)" }}
+          <ElevatedCard
+            as="div"
+            className="flex min-h-72 flex-col items-center justify-center p-6 text-center"
           >
             <WarningCircle size={30} className="mb-3 text-rose-400" />
             <h2 className="font-semibold text-(--text)">
@@ -154,7 +133,7 @@ export function OrderHistoryPage({
             >
               Try again
             </button>
-          </div>
+          </ElevatedCard>
         ) : paginatedOrders.length > 0 ? (
           <>
             <OrderHistoryTable
@@ -225,14 +204,36 @@ export function OrderHistoryPage({
             </div>
             <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
               {hasFilters
-                ? "No purchases match these filters"
+                ? hasNextPage
+                  ? "No match in the purchases loaded so far"
+                  : "No purchases match these filters"
                 : "No purchases yet"}
             </h2>
             <p className="mt-1.5 max-w-sm text-xs sm:text-sm text-(--muted) leading-relaxed">
               {hasFilters
-                ? "Try changing your search query or reset your active filters to view all orders."
+                ? hasNextPage
+                  ? `The payment method filter looks through the ${totalLoadedCount} purchases loaded so far. Older ones have not been loaded yet.`
+                  : "Try changing your search query or reset your active filters to view all orders."
                 : "Your completed purchases, invoices, and payment history will appear here."}
             </p>
+            {/* Status and search are answered by the server over every
+                purchase, so this is reached only through the payment method
+                filter, which still sees just what has been loaded. Saying
+                "nothing matches" with older purchases still unloaded, and no
+                way to load them, hid orders that were there. */}
+            {hasFilters && hasNextPage && (
+              <button
+                type="button"
+                onClick={() => void fetchNextPage()}
+                aria-busy={isFetchingNextPage}
+                disabled={isFetchingNextPage}
+                className="mt-4 rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-semibold text-(--text) hover:bg-(--hover) transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-60"
+              >
+                {isFetchingNextPage
+                  ? "Loading older purchases…"
+                  : "Load older purchases"}
+              </button>
+            )}
             {hasFilters && (
               <button
                 type="button"

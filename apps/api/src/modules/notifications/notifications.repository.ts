@@ -10,6 +10,9 @@ import type {
   NotificationDeliveryTable,
 } from "@veolms/database";
 import { sql, type Kysely, type Selectable } from "kysely";
+import { exactCursorTimestamp } from "../../lib/keyset.ts";
+import { escapeLikePattern } from "../../lib/like-pattern.ts";
+import { fuzzyMatchesAny } from "../../lib/fuzzy-search.ts";
 
 export interface NotificationCursor {
   createdAt: Date;
@@ -63,20 +66,28 @@ export async function findNotifications(
     query = query.where("notifications.read_at", "is not", null);
   }
   if (input.search) {
-    const pattern = `%${input.search}%`;
+    // "%", "_" and "\" in the search are matched as typed.
+    const pattern = `%${escapeLikePattern(input.search)}%`;
     query = query.where((expression) =>
       expression.or([
         expression("notifications.title", "ilike", pattern),
         expression("notifications.body", "ilike", pattern),
+        fuzzyMatchesAny(input.search!, [sql.ref("notifications.title")]),
       ]),
     );
   }
   if (input.cursor) {
+    const createdAt = exactCursorTimestamp(
+      ["notifications"],
+      "created_at",
+      input.cursor.id,
+      input.cursor.createdAt,
+    );
     query = query.where(
       sql<boolean>`(
-        notifications.created_at < ${input.cursor.createdAt}
+        notifications.created_at < ${createdAt}
         or (
-          notifications.created_at = ${input.cursor.createdAt}
+          notifications.created_at = ${createdAt}
           and notifications.id < ${input.cursor.id}::uuid
         )
       )`,
@@ -134,7 +145,7 @@ export async function markRead(
     .where("id", "=", notificationId)
     .where("recipient_user_id", "=", userId)
     .where("archived_at", "is", null)
-    .returningAll()
+    .returning(["id", "read_at"])
     .executeTakeFirst();
 }
 
@@ -149,7 +160,7 @@ export async function markUnread(
     .where("id", "=", notificationId)
     .where("recipient_user_id", "=", userId)
     .where("archived_at", "is", null)
-    .returningAll()
+    .returning(["id", "read_at"])
     .executeTakeFirst();
 }
 
@@ -211,27 +222,35 @@ export async function getPreference(
   return row?.enabled;
 }
 
-export async function updatePreference(
+/**
+ * Saves a set of preferences in one statement. Each (type, channel) pair may
+ * appear only once: Postgres rejects an upsert that touches a row twice.
+ */
+export async function upsertPreferences(
   database: DatabaseExecutor,
-  input: {
-    userId: string;
+  userId: string,
+  preferences: ReadonlyArray<{
     notificationType: string;
     channel: NotificationChannel;
     enabled: boolean;
-  },
+  }>,
 ): Promise<void> {
+  if (preferences.length === 0) return;
+
   await database
     .insertInto("notification_preferences")
-    .values({
-      user_id: input.userId,
-      notification_type: input.notificationType,
-      channel: input.channel,
-      enabled: input.enabled,
-    })
+    .values(
+      preferences.map((preference) => ({
+        user_id: userId,
+        notification_type: preference.notificationType,
+        channel: preference.channel,
+        enabled: preference.enabled,
+      })),
+    )
     .onConflict((conflict) =>
       conflict
         .columns(["user_id", "notification_type", "channel"])
-        .doUpdateSet({ enabled: input.enabled }),
+        .doUpdateSet((eb) => ({ enabled: eb.ref("excluded.enabled") })),
     )
     .execute();
 }

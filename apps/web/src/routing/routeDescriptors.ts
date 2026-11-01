@@ -3,10 +3,14 @@
 // page. username-rules is dependency-free and stays in lockstep with
 // publicProfileUsernameParamsSchema.
 import { isValidPublicProfileUsername } from "@veolms/contracts/username-rules";
-import { getCourseTitle } from "../learning/courseMetadata";
+import { getDemoCourseTitle } from "../learning/courseMetadata";
+import type { AcademyStaticPageData } from "../routes/academyStaticPageData";
 import {
+  PLATFORM_DEFAULT_TAB,
+  PLATFORM_TABS,
   SETTINGS_DEFAULT_TAB,
   readDiscussionTab,
+  readPlatformTab,
   readSettingsTab,
   resolveSessionTabPath,
 } from "./tabSessionState";
@@ -15,6 +19,7 @@ import {
   isCourseEditEditorPath,
 } from "../courses/courseEditorRouting";
 import { getCatalogueRouteIdFromPath } from "../courses/catalogueRoutes";
+import { getShellPageContribution } from "../lib/web-contributions";
 
 export const productName = "ProCodrr";
 
@@ -23,6 +28,10 @@ export type ShellPage =
   | "courses"
   | "coupons"
   | "coupon-builder"
+  | "home-page-settings"
+  | "platform"
+  | "team"
+  | "invite"
   | "reviews"
   | "quizzes"
   | "quiz-builder"
@@ -38,13 +47,19 @@ export type ShellPage =
   | "workspace"
   | "students"
   | "student-details"
-  | "public-profile";
+  | "progress"
+  | "public-profile"
+  /** A plugin page (see `shellRoutes`); the route renders its content. */
+  | "extension";
 
 export interface ShellRouteDescriptor {
   kind: "shell";
   page: ShellPage;
   section?: string;
   settingsTab?: string;
+  platformTab?: string;
+  /** The analytics section's id from the path (`/analytics/<tab>`). */
+  analyticsTab?: string;
   discussionTab?: string;
   title: string;
   description: string;
@@ -55,6 +70,8 @@ export interface LearningRouteDescriptor {
   page: "learning";
   section: "Courses";
   settingsTab?: undefined;
+  platformTab?: undefined;
+  analyticsTab?: undefined;
   discussionTab?: undefined;
 }
 
@@ -63,6 +80,8 @@ export interface CourseOverviewRouteDescriptor {
   page: "course-overview";
   section: "Courses";
   settingsTab?: undefined;
+  platformTab?: undefined;
+  analyticsTab?: undefined;
   discussionTab?: undefined;
 }
 
@@ -76,8 +95,21 @@ const discussionsRouteBase = {
   page: "workspace",
   section: "Discussions",
   title: "Discussions",
-  description: "Bring course conversations, questions, and replies together.",
+  description: "All your discussions in one place.",
 } as const;
+
+export const NOT_FOUND_SECTION = "Not Found";
+
+const notFoundRouteDescriptor = {
+  kind: "shell",
+  page: "placeholder",
+  section: NOT_FOUND_SECTION,
+  title: "Page not found",
+  description: "This page does not exist or is no longer available.",
+} as const;
+
+/** The tab title of the not-found screen, for a page that finds out late. */
+export const notFoundDocumentTitle = `${notFoundRouteDescriptor.title} · ${productName}`;
 
 export const routeDescriptors = {
   "root-courses": {
@@ -119,6 +151,12 @@ export const routeDescriptors = {
     description: "Browse available courses and continue learning in ProCodrr.",
   },
   "courses-not-enrolled": {
+    kind: "shell",
+    page: "courses",
+    title: "Courses",
+    description: "Browse available courses and continue learning in ProCodrr.",
+  },
+  "courses-free": {
     kind: "shell",
     page: "courses",
     title: "Courses",
@@ -175,19 +213,30 @@ export const routeDescriptors = {
     title: "Student profile",
     description: "Review learner details, enrolled courses, and progress.",
   },
+  progress: {
+    kind: "shell",
+    page: "progress",
+    section: "Progress",
+    title: "Progress",
+    description: "Your learning day by day, and the goals you have met.",
+  },
+  "progress-learner": {
+    kind: "shell",
+    page: "progress",
+    section: "Progress",
+    title: "Progress",
+    description: "A learner's days of learning and the goals they have met.",
+  },
   "public-profile": {
     kind: "shell",
     page: "public-profile",
     title: "Public profile",
     description: "View this member's public profile.",
   },
-  reviews: {
-    kind: "shell",
-    page: "reviews",
-    section: "Reviews",
-    title: "Reviews",
-    description: "Keep an eye on learner feedback and course sentiment.",
-  },
+  // Course reviews have no backend yet. The page behind this address was a
+  // design mock with sample reviews and a submit that saved nothing, so the
+  // address answers "not found" until reviews are real.
+  reviews: notFoundRouteDescriptor,
   quizzes: {
     kind: "shell",
     page: "quizzes",
@@ -218,7 +267,11 @@ export const routeDescriptors = {
   },
   discussions: {
     ...discussionsRouteBase,
-    discussionTab: "q-and-a",
+    discussionTab: "all",
+  },
+  "discussions-all": {
+    ...discussionsRouteBase,
+    discussionTab: "all",
   },
   "discussions-q-and-a": {
     ...discussionsRouteBase,
@@ -259,13 +312,8 @@ export const routeDescriptors = {
     title: "Orders",
     description: "Review purchases, refunds, and commerce activity.",
   },
-  messages: {
-    kind: "shell",
-    page: "placeholder",
-    section: "Messages",
-    title: "Messages",
-    description: "Manage direct communication with your learners.",
-  },
+  // Messaging is not built; the address answers "not found".
+  messages: notFoundRouteDescriptor,
   "purchase-history": {
     kind: "shell",
     page: "purchase-history",
@@ -359,6 +407,37 @@ export const routeDescriptors = {
     description:
       "Create and manage discount coupons, promotional offers and special campaigns for your learners.",
   },
+  // The old address of the Platform page's Home page tab; it leads there.
+  "home-page-settings": {
+    kind: "shell",
+    page: "home-page-settings",
+    section: "Platform",
+    title: "Platform",
+    description:
+      "Choose what signed-out visitors see on the academy home page.",
+  },
+  platform: {
+    kind: "shell",
+    page: "platform",
+    section: "Platform",
+    platformTab: PLATFORM_DEFAULT_TAB,
+    title: "Platform",
+    description:
+      "Manage academy-wide settings: the home page, the default look and the student rules.",
+  },
+  team: {
+    kind: "shell",
+    page: "team",
+    section: "Team",
+    title: "Team",
+    description: "Who works on the academy and what each person may do.",
+  },
+  invite: {
+    kind: "shell",
+    page: "invite",
+    title: "Team invitation",
+    description: "Accept an invitation to join the academy's team.",
+  },
   "coupon-create": {
     kind: "shell",
     page: "coupon-builder",
@@ -373,13 +452,9 @@ export const routeDescriptors = {
     title: "Edit Coupon",
     description: "Maintain coupon parameters, limits, and validity.",
   },
-  "home-fallback": {
-    kind: "shell",
-    page: "home",
-    title: "Home",
-    description:
-      "Continue learning and review recent student activity in ProCodrr.",
-  },
+  // An address no page answers to. It used to render Home under the wrong
+  // address; it now says the page was not found.
+  "home-fallback": notFoundRouteDescriptor,
 } as const satisfies Record<string, ShellRouteDescriptor>;
 
 const learningDescriptor = {
@@ -399,12 +474,17 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   dashboard: "/",
   courses: "/courses",
   coupons: "/coupons",
+  "home-page-settings": "/platform/home",
+  platform: "/platform",
+  team: "/team",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "create-course": "/courses/create",
   "edit-course": "/courses/:courseId/edit/basics",
   students: "/students",
   "student-details": "/students/:username",
+  progress: "/progress",
+  "progress-learner": "/progress/:username",
   "public-profile": "/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
@@ -424,8 +504,12 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   Coupons: "/coupons",
   "/Coupons": "/coupons",
   "/coupons": "/coupons",
+  "Home Page": "/platform/home",
+  Platform: "/platform",
+  Team: "/team",
   "/my-learning": "/courses",
   Students: "/students",
+  Progress: "/progress",
   Reviews: "/reviews",
   Discussions: "/discussions",
   Analytics: "/analytics",
@@ -445,6 +529,12 @@ const canonicalPathsByRouteId = {
   dashboard: "/dashboard",
   courses: "/courses",
   coupons: "/coupons",
+  "home-page-settings": "/home-page",
+  platform: "/platform",
+  "platform-home": "/platform/home",
+  "platform-appearance": "/platform/appearance",
+  "platform-security": "/platform/security",
+  "platform-general": "/platform/general",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "course-create": "/courses/create",
@@ -452,16 +542,20 @@ const canonicalPathsByRouteId = {
   "course-edit": "/courses/:courseId/edit/:editTab",
   "courses-enrolled": "/courses/enrolled",
   "courses-not-enrolled": "/courses/not-enrolled",
+  "courses-free": "/courses/free",
   "courses-wishlist": "/courses/wishlist",
   wishlist: "/wishlist",
   students: "/students",
   "student-details": "/students/:username",
+  progress: "/progress",
+  "progress-learner": "/progress/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
   "quiz-edit": "/quizzes/:quizId",
   "quiz-attempt": "/quizzes/attempt/:assignmentId",
   discussions: "/discussions",
+  "discussions-all": "/discussions/all",
   "discussions-q-and-a": "/discussions/q-and-a",
   "discussions-comments": "/discussions/comments",
   "discussions-notes": "/discussions/notes",
@@ -492,6 +586,25 @@ const hasOwn = <ObjectType extends object>(
   key: PropertyKey,
 ): key is keyof ObjectType => Object.prototype.hasOwnProperty.call(value, key);
 
+const isPlatformTab = (value: string) =>
+  (PLATFORM_TABS as readonly string[]).includes(value);
+
+/**
+ * `/analytics/<tab>`: the analytics page with that section open. The
+ * sections are not a fixed list (a plugin adds its own), so any id-shaped
+ * segment is accepted here and the page falls back to its overview for one
+ * it does not have.
+ */
+const ANALYTICS_TAB_PATH = /^\/analytics\/([a-z0-9][a-z0-9-]*)$/;
+
+const analyticsDescriptorForPath = (
+  normalizedPath: string,
+): RouteDescriptor | undefined => {
+  if (normalizedPath === "/analytics") return routeDescriptors.analytics;
+  const tab = ANALYTICS_TAB_PATH.exec(normalizedPath)?.[1];
+  return tab ? { ...routeDescriptors.analytics, analyticsTab: tab } : undefined;
+};
+
 export const normalizeNavigationPath = (path: string) =>
   String(path).replace(/\/+$/, "") || "/";
 
@@ -510,6 +623,30 @@ export const getEffectiveRouteId = (
         normalizedPath,
       );
     return match?.[1] ? `settings-${match[1]}` : "home-fallback";
+  }
+
+  if (routeId === "platform") {
+    if (normalizedPath === "/platform") return routeId;
+    const tab = /^\/platform\/([^/]+)$/.exec(normalizedPath)?.[1];
+    return tab && isPlatformTab(tab) ? `platform-${tab}` : "home-fallback";
+  }
+
+  if (routeId === "analytics") {
+    return analyticsDescriptorForPath(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "team") {
+    return /^\/team(?:\/(?:members|roles|invitations))?$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "invite") {
+    return /^\/invite\/[A-Za-z0-9_-]{32,128}$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
   }
 
   if (routeId === "learning" || routeId === "legacy-learning") {
@@ -564,6 +701,12 @@ export const getEffectiveRouteId = (
       : "home-fallback";
   }
 
+  if (routeId === "progress-learner") {
+    return /^\/progress\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
   if (routeId === "public-profile") {
     const match = /^\/([^/]+)$/.exec(normalizedPath);
     if (!match?.[1]) return "home-fallback";
@@ -606,14 +749,32 @@ export const getRouteDescriptor = (
   if (routeId === "settings") {
     return { ...routeDescriptors.settings, settingsTab: readSettingsTab() };
   }
+  if (routeId === "platform") {
+    return { ...routeDescriptors.platform, platformTab: readPlatformTab() };
+  }
+  if (routeId.startsWith("platform-")) {
+    const tab = routeId.slice("platform-".length);
+    return isPlatformTab(tab)
+      ? { ...routeDescriptors.platform, platformTab: tab }
+      : undefined;
+  }
   if (routeId === "discussions") {
     return {
       ...routeDescriptors.discussions,
       discussionTab: readDiscussionTab(),
     };
   }
-  return hasOwn(routeDescriptors, routeId)
-    ? routeDescriptors[routeId as StaticRouteId]
+  if (hasOwn(routeDescriptors, routeId)) {
+    return routeDescriptors[routeId as StaticRouteId];
+  }
+  const extensionPage = getShellPageContribution(routeId);
+  return extensionPage
+    ? {
+        kind: "shell",
+        page: "extension",
+        title: extensionPage.title,
+        description: extensionPage.description,
+      }
     : undefined;
 };
 
@@ -636,6 +797,8 @@ export const getStaticRouteDescriptor = (
   }
 
   const normalizedPath = normalizeNavigationPath(pathname);
+  const analyticsDescriptor = analyticsDescriptorForPath(normalizedPath);
+  if (analyticsDescriptor) return analyticsDescriptor;
   const canonicalRoute = Object.entries(canonicalPathsByRouteId).find(
     ([, canonicalPath]) => canonicalPath === normalizedPath,
   );
@@ -685,10 +848,175 @@ export const getAuthRouteMeta = (
   description,
 });
 
+interface RouteMetaMatch {
+  id: string;
+  loaderData?: unknown;
+}
+
+/** What a course page's head tags say about its course. */
+export interface CourseHeadDetails {
+  slug: string;
+  title: string;
+  shortDescription?: string | null;
+  thumbnailUrl?: string | null;
+}
+
+/** A head tag, in the shape a route's `meta` export returns. */
+export type HeadTagDescriptor =
+  | { name: string; content: string }
+  | { property: string; content: string }
+  | { tagName: "link"; rel: "canonical"; href: string };
+
+/**
+ * The course the data this document was built with already holds — the
+ * prerendered overview of this course, or the first catalogue page. Nothing
+ * is fetched for a head tag.
+ */
+const getRouteCourse = (
+  courseSlug: string | undefined,
+  matches: readonly (RouteMetaMatch | undefined)[] | undefined,
+): CourseHeadDetails | undefined => {
+  if (!courseSlug) return undefined;
+  const pageData = matches?.find((match) => match?.id === "root")
+    ?.loaderData as AcademyStaticPageData | null | undefined;
+  return [
+    pageData?.courseCurriculum?.curriculum.course,
+    pageData?.lessonPage?.curriculum.course,
+    ...(pageData?.publishedCoursePage?.courses ?? []),
+  ].find((course) => course?.slug === courseSlug || course?.id === courseSlug);
+};
+
+/**
+ * The lesson a lesson page's document was built with, when it is the one
+ * the address names: its title and, when it is for everyone, its
+ * description.
+ */
+const getRouteLesson = (
+  params: RouteParams,
+  matches: readonly (RouteMetaMatch | undefined)[] | undefined,
+) => {
+  const pageData = matches?.find((match) => match?.id === "root")
+    ?.loaderData as AcademyStaticPageData | null | undefined;
+  const seed = pageData?.lessonPage;
+  if (
+    !seed ||
+    !params.courseSlug ||
+    (seed.curriculum.course.slug !== params.courseSlug &&
+      seed.curriculum.course.id !== params.courseSlug) ||
+    params.lectureSlug !== `lecture-${seed.lessonNumber}`
+  ) {
+    return undefined;
+  }
+  return seed.curriculum.sections
+    .flatMap((section) => section.lessons ?? [])
+    .find((lesson) => lesson.id === seed.lessonId);
+};
+
+/** A description's first words, as search results show them; none for no text. */
+const toMetaDescription = (text: string | null | undefined) => {
+  const plain = text
+    ?.replace(/<[^>]*>/gu, " ")
+    .replace(/[#*_`>[\]()]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!plain) return undefined;
+  return plain.length > 160 ? `${plain.slice(0, 157).trimEnd()}…` : plain;
+};
+
+/**
+ * The name to put in a course page's title: the real one when the document
+ * was built with it. Any other course gets no name: every unknown course
+ * used to be titled "UI/UX Design Mastery", a demo course.
+ */
+const getRouteCourseTitle = (
+  courseSlug: string | undefined,
+  matches: readonly (RouteMetaMatch | undefined)[] | undefined,
+): string | undefined =>
+  getRouteCourse(courseSlug, matches)?.title.trim() ||
+  (courseSlug ? getDemoCourseTitle(courseSlug) : undefined);
+
+const getCourseOverviewDescription = (
+  title: string | undefined,
+  shortDescription?: string | null,
+): string =>
+  shortDescription?.trim() ||
+  (title
+    ? `Course overview for ${title} on ${productName}.`
+    : `Course overview on ${productName}.`);
+
+const toAbsoluteUrl = (value: string, origin?: string): string | undefined => {
+  try {
+    return new URL(value, origin).href;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * The description and share tags of a course's overview page. The page's
+ * address (`og:url` and the canonical link) is included only when `origin`
+ * is given: a page built ahead of time knows the site it will be served
+ * from only when the build was told (`configuredSiteOrigin`). A picture is
+ * included only when its address is complete.
+ */
+export const getCourseHeadTags = (
+  course: CourseHeadDetails,
+  origin?: string,
+): HeadTagDescriptor[] => {
+  const title = course.title.trim();
+  const description = getCourseOverviewDescription(
+    title,
+    course.shortDescription,
+  );
+  const tags: HeadTagDescriptor[] = [
+    { name: "description", content: description },
+    { property: "og:title", content: title },
+    { property: "og:description", content: description },
+  ];
+  const thumbnailUrl = course.thumbnailUrl?.trim();
+  const imageUrl = thumbnailUrl
+    ? toAbsoluteUrl(thumbnailUrl, origin)
+    : undefined;
+  if (imageUrl) tags.push({ property: "og:image", content: imageUrl });
+  if (origin) {
+    const url = `${origin}/courses/${encodeURIComponent(course.slug)}/overview`;
+    tags.push(
+      { property: "og:url", content: url },
+      { tagName: "link", rel: "canonical", href: url },
+    );
+  }
+  return tags;
+};
+
+/**
+ * The share tags a route's `meta` adds to what `getRouteMeta` gives: those
+ * of the course, on the overview of a course this document was built with.
+ * `origin` is the site's public address when the build knows it.
+ */
+export const getRouteShareTags = (
+  routeId: string | undefined,
+  params: RouteParams = {},
+  pathname: string,
+  matches?: readonly (RouteMetaMatch | undefined)[],
+  origin?: string,
+): HeadTagDescriptor[] => {
+  if (
+    routeId === undefined ||
+    getEffectiveRouteId(routeId, pathname) !== "course-overview"
+  ) {
+    return [];
+  }
+  const course = getRouteCourse(params.courseSlug, matches);
+  return course
+    ? getCourseHeadTags(course, origin).filter((tag) => !("name" in tag))
+    : [];
+};
+
 export const getRouteMeta = (
   routeId: string | undefined,
   params: RouteParams = {},
   pathname?: string,
+  matches?: readonly (RouteMetaMatch | undefined)[],
 ): RouteMetadata => {
   const effectiveRouteId =
     pathname === undefined || routeId === undefined
@@ -696,18 +1024,32 @@ export const getRouteMeta = (
       : getEffectiveRouteId(routeId, pathname);
 
   if (effectiveRouteId === "learning") {
-    const title = getCourseTitle(params.courseSlug);
+    const title = getRouteCourseTitle(params.courseSlug, matches);
+    const lesson = getRouteLesson(params, matches);
+    if (title && lesson) {
+      return {
+        title: [lesson.title, title, productName].join(" · "),
+        description:
+          toMetaDescription(lesson.description) ??
+          `${lesson.title}, a lesson of ${title} on ${productName}.`,
+      };
+    }
     return {
-      title: `${title} \u00B7 ${productName}`,
-      description: `Continue ${title} in the focused ${productName} learning workspace.`,
+      title: `${title ?? "Course"} \u00B7 ${productName}`,
+      description: title
+        ? `Continue ${title} in the focused ${productName} learning workspace.`
+        : `Continue learning in the focused ${productName} learning workspace.`,
     };
   }
 
   if (effectiveRouteId === "course-overview") {
-    const title = getCourseTitle(params.courseSlug);
+    const title = getRouteCourseTitle(params.courseSlug, matches);
     return {
-      title: `${title} · ${productName}`,
-      description: `Course overview for ${title} on ${productName}.`,
+      title: `${title ?? "Course"} · ${productName}`,
+      description: getCourseOverviewDescription(
+        title,
+        getRouteCourse(params.courseSlug, matches)?.shortDescription,
+      ),
     };
   }
 
@@ -722,4 +1064,37 @@ export const getRouteMeta = (
     title: `${descriptor.title} \u00B7 ${productName}`,
     description: descriptor.description,
   };
+};
+
+/** What the client has fetched about the course a course page shows. */
+export interface LoadedCourseTitles {
+  courseTitle?: string | null;
+  /** The lesson being studied; used on the learning page only. */
+  lessonTitle?: string | null;
+}
+
+/**
+ * The tab title of a course page (its overview or a lesson) from what the
+ * client holds now. `getRouteMeta` can only name a course the document was
+ * built with, so most course pages were titled "Course"; once the course
+ * has been fetched its own name is used, and a lesson page leads with the
+ * lesson's name. Until then, and for an address that is not a course page
+ * after all, the title is exactly the one `getRouteMeta` gives.
+ */
+export const getCourseDocumentTitle = (
+  routeId: "learning" | "course-overview",
+  params: RouteParams,
+  pathname: string,
+  matches: readonly (RouteMetaMatch | undefined)[] | undefined,
+  loaded: LoadedCourseTitles,
+): string => {
+  const courseTitle = loaded.courseTitle?.trim();
+  if (!courseTitle || getEffectiveRouteId(routeId, pathname) !== routeId) {
+    return getRouteMeta(routeId, params, pathname, matches).title;
+  }
+  const lessonTitle =
+    routeId === "learning" ? loaded.lessonTitle?.trim() : undefined;
+  return [lessonTitle, courseTitle, productName]
+    .filter(Boolean)
+    .join(" \u00B7 ");
 };

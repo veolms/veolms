@@ -217,12 +217,10 @@
     var(--surface-strong)
   );
 
+  /* The shared card has no outline; the transparent line keeps the size. */
   border: 1px solid transparent;
   background: var(--creator-discussion-card-surface);
-  border-color: color-mix(in srgb, var(--text) 18%, var(--border));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent),
-    var(--card-compact-shadow);
+  box-shadow: var(--card-shadow);
   transition:
     background-color 160ms ease,
     border-color 160ms ease;
@@ -230,15 +228,15 @@
 
 .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
-  border-color: color-mix(in srgb, var(--text) 18%, var(--border));
-  background: color-mix(
-    in srgb,
-    var(--creator-discussion-card-surface, var(--surface-strong)) 92%,
-    var(--text) 8%
+  background: var(
+    --card-surface-hover,
+    color-mix(
+      in srgb,
+      var(--creator-discussion-card-surface, var(--surface-strong)) 92%,
+      var(--text) 8%
+    )
   );
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
-    var(--card-compact-shadow);
+  box-shadow: var(--card-shadow);
 }
 
 .creator-discussion-list[data-dashboard-discussion-preview]

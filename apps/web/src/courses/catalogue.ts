@@ -1,3 +1,4 @@
+import { fuzzyMatches } from "../lib/fuzzySearch";
 export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
@@ -5,6 +6,7 @@ export type CourseEnrollmentFilter =
   | "all"
   | "enrolled"
   | "not-enrolled"
+  | "free"
   | "wishlist"
   | "published"
   | "draft"
@@ -22,12 +24,23 @@ export type CourseLifecycleStatus = "published" | "draft" | "archived";
 
 export interface CourseOpenOptions {
   preview?: boolean;
+  /** The lesson to open, rather than the one the course's address picks. */
+  lessonNumber?: number;
+  /** Pressed to watch: the lesson opens playing (see lessonOpenIntent). */
+  autoplay?: boolean;
 }
 
 export interface CoursePricing {
   price: string;
   originalPrice: string;
   discount: string;
+  /**
+   * Show `discount` as a badge on the card: the creator's choice for a paid
+   * course, always on for a free course that names its original price.
+   */
+  showDiscountBadge?: boolean;
+  /** The course costs nothing to enroll in. */
+  free?: boolean;
 }
 
 export interface Course {
@@ -38,12 +51,27 @@ export interface Course {
   category: CourseCategory;
   sections: number;
   lectures: number;
+  /** Percent watched, with up to two decimals (0.42). */
   progress: number | null;
+  /**
+   * The learner has watched some of it, which a long course can show as
+   * 0.00% for a while (see `hasStartedCourse`).
+   */
+  started?: boolean;
   enrolled: boolean;
+  /**
+   * Whether this viewer holds the course is not known yet (the prerendered
+   * page, or a signed-in browser before its enrolments arrive). The card
+   * then shows neither a price nor progress: either could be wrong.
+   */
+  viewerStatePending?: boolean;
   duration: string;
   students: number;
   thumbnail: string;
-  thumbnailSrcSet?: readonly { url: string; width: number; height: number }[];
+  thumbnailSrcSet?: readonly { url: string; width: number }[];
+  /** The wide picture behind the overview hero on desktop, when one is set. */
+  banner?: string;
+  bannerSrcSet?: readonly { url: string; width: number }[];
   lifecycleStatus: CourseLifecycleStatus;
   pricing?: CoursePricing;
   certificateAvailable?: boolean;
@@ -51,9 +79,14 @@ export interface Course {
   createdAt?: string;
   updatedAt?: string;
   deletedAt?: string;
-  purgeAt?: string;
   isApi?: boolean;
   creatorId?: string | null;
+  /**
+   * The course list's `canSelfEnroll`: false for a course nobody may enrol
+   * in themselves (access-restricted, with no price). Absent for a course
+   * that did not come from that list.
+   */
+  canSelfEnroll?: boolean;
 }
 
 /**
@@ -106,16 +139,32 @@ export function courseMatchesWishlist(
   return Boolean(slug && wishlisted.has(slug));
 }
 
+/**
+ * Whether the course belongs on the wish list as the learner sees it: one
+ * they marked and have not enrolled in. A wish list is for courses still to
+ * be taken, so a course leaves it the moment the learner enrols; the mark
+ * itself is kept, and nothing has to be cleaned up when that happens.
+ */
+export function courseIsOnWishlist(
+  course: Pick<Course, "id" | "slug" | "enrolled">,
+  wishlisted: ReadonlySet<string>,
+): boolean {
+  return !course.enrolled && courseMatchesWishlist(course, wishlisted);
+}
+
 function matchesCourseSearch(
   course: Course,
   normalizedSearch: string,
 ): boolean {
   return (
     !normalizedSearch ||
-    `${course.title} ${course.description}`
-      .toLowerCase()
-      .includes(normalizedSearch)
+    fuzzyMatches(normalizedSearch, course.title, course.description)
   );
+}
+
+/** Whether an enrolled learner has begun the course at all. */
+export function hasBegunCourse(course: Pick<Course, "progress" | "started">) {
+  return Boolean(course.started) || (course.progress ?? 0) > 0;
 }
 
 function matchesCourseStatusFilter(
@@ -127,10 +176,13 @@ function matchesCourseStatusFilter(
   const progress = course.progress ?? 0;
   if (
     statusFilter === "in-progress" &&
-    (!course.enrolled || progress <= 0 || progress >= 100)
+    (!course.enrolled || !hasBegunCourse(course) || progress >= 100)
   )
     return false;
-  if (statusFilter === "not-started" && (!course.enrolled || progress !== 0))
+  if (
+    statusFilter === "not-started" &&
+    (!course.enrolled || hasBegunCourse(course))
+  )
     return false;
   if (statusFilter === "completed" && (!course.enrolled || progress < 100))
     return false;
@@ -141,6 +193,7 @@ export interface CourseQuickFilterCounts {
   all: number;
   enrolled: number;
   "not-enrolled": number;
+  free: number;
   published: number;
   draft: number;
   bin: number;
@@ -166,7 +219,7 @@ export function getCourseQuickFilterCounts(
   });
 
   const wishlistPool = pool.filter((course) =>
-    courseMatchesWishlist(course, wishlisted),
+    courseIsOnWishlist(course, wishlisted),
   );
 
   if (role === "student") {
@@ -175,6 +228,7 @@ export function getCourseQuickFilterCounts(
       all: pool.length,
       enrolled,
       "not-enrolled": pool.length - enrolled,
+      free: pool.filter((course) => course.pricing?.free).length,
       published: 0,
       draft: 0,
       bin: 0,
@@ -193,6 +247,7 @@ export function getCourseQuickFilterCounts(
     all: pool.length,
     enrolled: 0,
     "not-enrolled": 0,
+    free: 0,
     published,
     draft,
     bin: 0,
@@ -217,7 +272,7 @@ export function getVisibleCourses(
     if (
       role === "student" &&
       enrollmentFilter === "wishlist" &&
-      !courseMatchesWishlist(course, wishlisted)
+      !courseIsOnWishlist(course, wishlisted)
     )
       return false;
     if (
@@ -233,6 +288,12 @@ export function getVisibleCourses(
     )
       return false;
     if (
+      role === "student" &&
+      enrollmentFilter === "free" &&
+      !course.pricing?.free
+    )
+      return false;
+    if (
       role === "creator" &&
       enrollmentFilter !== "all" &&
       enrollmentFilter !== "bin" &&
@@ -243,12 +304,12 @@ export function getVisibleCourses(
       const progress = course.progress ?? 0;
       if (
         statusFilter === "in-progress" &&
-        (!course.enrolled || progress <= 0 || progress >= 100)
+        (!course.enrolled || !hasBegunCourse(course) || progress >= 100)
       )
         return false;
       if (
         statusFilter === "not-started" &&
-        (!course.enrolled || progress !== 0)
+        (!course.enrolled || hasBegunCourse(course))
       )
         return false;
       if (statusFilter === "completed" && (!course.enrolled || progress < 100))
@@ -256,9 +317,7 @@ export function getVisibleCourses(
     }
     return (
       !normalizedSearch ||
-      `${course.title} ${course.description}`
-        .toLowerCase()
-        .includes(normalizedSearch)
+      fuzzyMatches(normalizedSearch, course.title, course.description)
     );
   });
   if (

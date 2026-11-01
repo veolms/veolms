@@ -182,12 +182,8 @@ function insertIntoSavedWorkspace(
       {
         ...firstPage,
         items: [bookmarkedItem, ...firstPage.items],
-        totalCount: firstPage.totalCount + 1,
       },
-      ...data.pages.slice(1).map((page) => ({
-        ...page,
-        totalCount: page.totalCount + 1,
-      })),
+      ...data.pages.slice(1),
     ],
   };
 }
@@ -224,7 +220,6 @@ function insertIntoFollowingWorkspace(
               ...page.items.slice(insertionItemIndex),
             ]
           : page.items,
-      totalCount: page.totalCount + 1,
     })),
   };
 }
@@ -246,14 +241,7 @@ function removeFromWorkspaceMembership(
     });
     return items.length === page.items.length ? page : { ...page, items };
   });
-  if (!removed) return data;
-  return {
-    ...data,
-    pages: pages.map((page) => ({
-      ...page,
-      totalCount: Math.max(0, page.totalCount - 1),
-    })),
-  };
+  return removed ? { ...data, pages } : data;
 }
 
 /**
@@ -341,6 +329,80 @@ export function optimisticallyUpdateDiscussionsWorkspaceMembership(
   return { entries: snapshots };
 }
 
+/**
+ * Changes one item, found by its type and id, in every cached Discussions
+ * feed. Returns the data as it was, for putting it back if the change fails.
+ */
+export function updateDiscussionsWorkspaceItem(
+  queryClient: QueryClient,
+  target: { itemType: WorkspaceDiscussionItem["itemType"]; id: string },
+  update: (item: WorkspaceDiscussionItem) => WorkspaceDiscussionItem,
+): DiscussionsWorkspaceCacheSnapshot {
+  const snapshots: Array<DiscussionsWorkspaceCacheSnapshot["entries"][number]> =
+    [];
+
+  for (const query of queryClient.getQueryCache().findAll({
+    predicate: (candidate) => isDiscussionsWorkspaceQuery(candidate.queryKey),
+  })) {
+    const data = query.state.data as DiscussionsWorkspaceCache | undefined;
+    if (!data) continue;
+    let changed = false;
+    const pages = data.pages.map((page) => {
+      let pageChanged = false;
+      const items = page.items.map((item) => {
+        if (item.itemType !== target.itemType || item.id !== target.id) {
+          return item;
+        }
+        pageChanged = true;
+        return update(item);
+      });
+      changed ||= pageChanged;
+      return pageChanged ? { ...page, items } : page;
+    });
+    if (!changed) continue;
+    snapshots.push({ queryKey: query.queryKey, data });
+    queryClient.setQueryData(query.queryKey, { ...data, pages });
+  }
+
+  return { entries: snapshots };
+}
+
+/**
+ * Takes a deleted item out of every cached Discussions feed: a thread with
+ * its replies, a single reply, or a note. Returns the data as it was, for
+ * putting it back if the delete fails.
+ */
+export function removeFromDiscussionsWorkspaceCache(
+  queryClient: QueryClient,
+  target: { itemType: WorkspaceDiscussionItem["itemType"]; id: string },
+): DiscussionsWorkspaceCacheSnapshot {
+  const isTarget = (item: WorkspaceDiscussionItem) =>
+    target.itemType === "thread"
+      ? matchesDiscussionWorkspaceSource(item, "thread", target.id)
+      : item.itemType === target.itemType && item.id === target.id;
+  const snapshots: Array<DiscussionsWorkspaceCacheSnapshot["entries"][number]> =
+    [];
+
+  for (const query of queryClient.getQueryCache().findAll({
+    predicate: (candidate) => isDiscussionsWorkspaceQuery(candidate.queryKey),
+  })) {
+    const data = query.state.data as DiscussionsWorkspaceCache | undefined;
+    if (!data) continue;
+    let removed = false;
+    const pages = data.pages.map((page) => {
+      const items = page.items.filter((item) => !isTarget(item));
+      if (items.length === page.items.length) return page;
+      removed = true;
+      return { ...page, items };
+    });
+    if (!removed) continue;
+    snapshots.push({ queryKey: query.queryKey, data });
+    queryClient.setQueryData(query.queryKey, { ...data, pages });
+  }
+
+  return { entries: snapshots };
+}
+
 export function restoreDiscussionsWorkspaceCacheSnapshot(
   queryClient: QueryClient,
   snapshot: DiscussionsWorkspaceCacheSnapshot,
@@ -348,6 +410,13 @@ export function restoreDiscussionsWorkspaceCacheSnapshot(
   for (const entry of snapshot.entries) {
     queryClient.setQueryData(entry.queryKey, entry.data);
   }
+}
+
+/** Fetches the Discussions page's lists again (a post shown again). */
+export function refetchDiscussionsWorkspace(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({
+    predicate: (query) => isDiscussionsWorkspaceQuery(query.queryKey),
+  });
 }
 
 function updateDiscussionsWorkspaceSource(

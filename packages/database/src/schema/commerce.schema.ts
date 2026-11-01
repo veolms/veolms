@@ -21,7 +21,11 @@ export type PaymentAttemptStatus =
 export type RefundStatus = "pending" | "processed" | "failed";
 export type EnrollmentStatus = "active" | "suspended" | "revoked" | "expired";
 export type EnrollmentSource =
-  "direct_purchase" | "bundle_purchase" | "free_grant" | "admin_grant";
+  | "direct_purchase"
+  | "bundle_purchase"
+  | "free_grant"
+  | "admin_grant"
+  | "linked_course";
 
 export interface CourseBundleTable {
   id: string;
@@ -75,6 +79,8 @@ export interface CouponTable {
   is_active: Generated<boolean>;
   restricted_course_ids: string[] | null;
   restricted_bundle_ids: string[] | null;
+  /** Null for coupons that predate ownership; those are admin-managed. */
+  created_by: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -104,12 +110,28 @@ export interface OrderTable {
   idempotency_key: string | null;
   expires_at: Date;
   paid_at: Date | null;
+  /**
+   * "<prefix>/<year>/<running number>", issued once when the order is paid
+   * (see `assignInvoiceNumber`). Null for an order never paid.
+   */
+  invoice_number: string | null;
+  /**
+   * Where the invoice PDF is kept in object storage, once it has been made
+   * (shortly after payment, or on the first download). Null until then.
+   */
+  invoice_pdf_key: string | null;
   gstin: string | null;
   cgst_amount: Generated<number>;
   sgst_amount: Generated<number>;
   igst_amount: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+}
+
+/** The last invoice number issued in each calendar year (India time). */
+export interface InvoiceNumberCounterTable {
+  year: number;
+  last_number: number;
 }
 
 export interface OrderItemTable {
@@ -130,6 +152,21 @@ export interface OrderItemTable {
   sgst_amount: Generated<number>;
   igst_amount: Generated<number>;
   created_at: Generated<Date>;
+}
+
+/**
+ * Which courses an order item granted when its order was fulfilled: one row
+ * for a course item, one per course for a bundle item (its contents at that
+ * moment). Append-only. See the migration that creates it for what is and is
+ * not filled in for orders paid before it existed.
+ */
+export interface OrderItemCourseTable {
+  id: Generated<string>;
+  order_item_id: string;
+  order_id: string;
+  user_id: string;
+  course_id: string;
+  granted_at: Generated<Date>;
 }
 
 export interface PaymentTable {
@@ -189,7 +226,12 @@ export interface AccessGrantTable {
   course_id: string;
   order_id: string | null;
   status: "active" | "suspended" | "revoked" | "expired";
-  source: "purchase" | "bundle_purchase" | "free_grant" | "admin_grant";
+  source:
+    | "purchase"
+    | "bundle_purchase"
+    | "free_grant"
+    | "admin_grant"
+    | "linked_course";
   valid_from: Generated<Date>;
   valid_until: Date | null;
   created_at: Generated<Date>;
@@ -236,7 +278,8 @@ export interface RefundRequestTable {
   updated_at: Generated<Date>;
 }
 
-export type ManualPaymentStatus = "pending" | "verified" | "rejected";
+export type ManualPaymentStatus =
+  "pending" | "verified" | "rejected" | "withdrawn";
 
 export interface ManualPaymentRequestTable {
   id: string;

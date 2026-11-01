@@ -2,8 +2,8 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
   LockThreadRequest,
-  SearchMentionsQuery,
   ToggleLikeRequest,
+  UserAutocompleteQuery,
 } from "@veolms/contracts";
 import type { EngagementsService } from "./engagements.service.ts";
 import { discussionActor } from "../shared/discussion.access.ts";
@@ -38,7 +38,7 @@ export interface EngagementsController {
   ): Promise<void>;
 
   searchMentions(
-    request: FastifyRequest<{ Querystring: SearchMentionsQuery }>,
+    request: FastifyRequest<{ Querystring: UserAutocompleteQuery }>,
     reply: FastifyReply,
   ): Promise<void>;
 }
@@ -61,7 +61,7 @@ export function createEngagementsController({
         targetType,
         targetId,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async toggleBookmark(request, reply) {
@@ -73,7 +73,7 @@ export function createEngagementsController({
         discussionActor(user),
         threadId,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async toggleNoteBookmark(request, reply) {
@@ -85,7 +85,7 @@ export function createEngagementsController({
         discussionActor(user),
         noteId,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async toggleFollow(request, reply) {
@@ -97,7 +97,7 @@ export function createEngagementsController({
         discussionActor(user),
         threadId,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async lockThread(request, reply) {
@@ -111,7 +111,7 @@ export function createEngagementsController({
         isLocked,
         discussionActor(user),
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async searchMentions(request, reply) {
@@ -121,7 +121,7 @@ export function createEngagementsController({
         discussionActor(user),
         request.query,
       );
-      reply.status(200).send({ users });
+      await reply.status(200).send({ users });
     },
   };
 }

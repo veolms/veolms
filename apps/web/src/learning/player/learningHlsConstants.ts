@@ -1,4 +1,5 @@
 import type { VideoNetworkRequest } from "@veolms/video-player";
+import { installSegmentCache } from "./segmentCache";
 
 export const LEARNING_HLS_MIME_TYPE = "application/x-mpegurl";
 
@@ -87,6 +88,10 @@ function appendHlsCacheQuery(uri: string, origin: string | null): string {
   return `${path}?${params.toString()}${hash}`;
 }
 
+// An inlined playlist is served from a data: URI; a query appended to one
+// would become part of its content.
+const IN_MEMORY_URI = /^(?:data|blob):/i;
+
 export function appendLearningHlsCacheVersion(
   request: VideoNetworkRequest,
 ): void {
@@ -99,11 +104,28 @@ export function appendLearningHlsCacheVersion(
   const origin = getLearningMediaOrigin();
 
   request.uris = request.uris.map((uri) =>
-    appendHlsCacheQuery(repairShakaSetSchemeUri(uri, origin), origin),
+    IN_MEMORY_URI.test(uri)
+      ? uri
+      : appendHlsCacheQuery(repairShakaSetSchemeUri(uri, origin), origin),
   );
 }
 
-export function createLearningHlsRequestFilter(options?: {
+/**
+ * Requests that carry the CDN playback token: playlists (.m3u8/.mpd),
+ * segments (.ts today, .m4s and init.mp4 with CMAF), captions, AES-128
+ * keys (key.bin), and the seek-preview storyboard (index and sheets).
+ */
+function carriesPlaybackToken(type: VideoNetworkRequest["type"]): boolean {
+  return (
+    type === "manifest" ||
+    type === "segment" ||
+    type === "text" ||
+    type === "key" ||
+    type === "thumbnail"
+  );
+}
+
+type LearningHlsRequestOptions = {
   protectedPlayback?: boolean;
   segmentToken?: string;
   segmentTokenExpiresAt?: number;
@@ -111,7 +133,22 @@ export function createLearningHlsRequestFilter(options?: {
     token: string;
     expiresAt?: number;
   } | null>;
-}) {
+};
+
+/**
+ * The lesson player's request filter: the cache version and the playback
+ * token on every request that needs them. Segments the browser already
+ * keeps are answered from there (see segmentCache.ts, set up here: this is
+ * made before the player's runtime is loaded).
+ */
+export function createLearningHlsRequestFilter(
+  options?: LearningHlsRequestOptions,
+) {
+  installSegmentCache();
+  return createTokenRequestFilter(options);
+}
+
+function createTokenRequestFilter(options?: LearningHlsRequestOptions) {
   if (!options?.segmentToken && !options?.refreshSegmentToken) {
     return appendLearningHlsCacheVersion;
   }
@@ -122,7 +159,8 @@ export function createLearningHlsRequestFilter(options?: {
 
   return async (request: VideoNetworkRequest): Promise<void> => {
     appendLearningHlsCacheVersion(request);
-    if (request.type !== "segment" && request.type !== "text") return;
+    if (!carriesPlaybackToken(request.type)) return;
+    if (request.uris.every((uri) => IN_MEMORY_URI.test(uri))) return;
 
     const refreshBefore = Math.floor(Date.now() / 1000) + 30;
     if (
@@ -146,7 +184,9 @@ export function createLearningHlsRequestFilter(options?: {
     if (!currentToken) return;
     const queryParam = currentToken.length === 40 ? "t" : "veo_token";
     request.uris = request.uris.map((uri) =>
-      appendLearningHlsQueryParameter(uri, queryParam, currentToken!),
+      IN_MEMORY_URI.test(uri)
+        ? uri
+        : appendLearningHlsQueryParameter(uri, queryParam, currentToken!),
     );
   };
 }
@@ -171,12 +211,66 @@ function appendLearningHlsQueryParameter(
   }
 }
 
-export const LEARNING_HLS_STREAMING = {
-  abrEnabled: true,
-  // A VOD player does not need Shaka's default ~10s startup buffer. Keep the
-  // first playable frame responsive while retaining a small rebuffer safety
-  // margin for normal network jitter.
-  bufferingGoal: 2,
-  rebufferingGoal: 1,
-  bufferBehind: 60,
-} as const;
+/**
+ * Played video kept in memory: 3 minutes, so going back that far needs no
+ * download at all. With the 60s ahead that is ~80MB of 1080p, inside every
+ * browser's per-video buffer cap (Chrome 150MB, Firefox 100MB) with room
+ * for bitrate peaks. Further back is still on this device, in the segment
+ * cache (segmentCache.ts), so it costs no network either.
+ */
+const LEARNING_BUFFER_BEHIND_SECONDS = 180;
+/** A phone with 2GB of memory or less keeps what it kept before. */
+const LEARNING_LEAN_BUFFER_BEHIND_SECONDS = 30;
+const LEARNING_LEAN_DEVICE_MEMORY_GB = 2;
+
+/** How much played video this device keeps in memory. */
+export function learningBufferBehindSeconds(): number {
+  const deviceMemory =
+    typeof navigator === "undefined"
+      ? undefined
+      : (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return typeof deviceMemory === "number" &&
+    deviceMemory <= LEARNING_LEAN_DEVICE_MEMORY_GB
+    ? LEARNING_LEAN_BUFFER_BEHIND_SECONDS
+    : LEARNING_BUFFER_BEHIND_SECONDS;
+}
+
+/**
+ * The picture height the learner picked in the player's quality menu, kept
+ * with the learning settings as `videoQuality` ("1080", or "auto"), or
+ * undefined for auto. Read from storage directly, as the preload's resume
+ * setting is (learningHlsPreloadSource.ts): this module is in the early
+ * preload chunk, which the settings module would weigh down.
+ */
+export function readPreferredVideoHeight(): number | undefined {
+  try {
+    const stored = JSON.parse(
+      globalThis.localStorage?.getItem("veolms-learning-preferences") || "{}",
+    ) as { videoQuality?: unknown };
+    const height = Number(stored.videoQuality);
+    return Number.isInteger(height) && height > 0 ? height : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Start as soon as one 2s segment is in (1.5s), then build a 60s cushion so
+ * a phone losing signal for half a minute keeps playing; more ahead is
+ * downloaded for nothing when a learner skips or leaves. Played video is
+ * kept as above. The buffer sits in MSE SourceBuffers, which the page
+ * cannot read back. A video starts at the quality the learner picked, if
+ * any (else ABR starts low and climbs). Read per source, and the live and
+ * preload sources share it, so a preload is made at the quality playback
+ * starts at and is not cleared by a config mismatch.
+ */
+export function learningHlsStreaming() {
+  const preferredVideoHeight = readPreferredVideoHeight();
+  return {
+    abrEnabled: true,
+    ...(preferredVideoHeight ? { preferredVideoHeight } : {}),
+    rebufferingGoal: 1.5,
+    bufferingGoal: 60,
+    bufferBehind: learningBufferBehindSeconds(),
+  } as const;
+}

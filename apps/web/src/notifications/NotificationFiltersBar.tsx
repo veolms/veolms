@@ -6,6 +6,11 @@ import {
   SearchShortcutHint,
 } from "../searchShortcut";
 
+import {
+  FilterBar,
+  filterControlClasses,
+  filterSelectTriggerClasses,
+} from "../components/FilterBar";
 export interface NotificationFiltersBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -48,13 +53,12 @@ export function NotificationFiltersBar({
   onSortByChange,
 }: NotificationFiltersBarProps) {
   return (
-    <div
-      className="flex flex-col gap-3 rounded-[15px] border border-(--border) bg-(--card-surface) p-3 transition-all md:p-3.5"
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
+    <FilterBar className="gap-3">
       <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         {/* Search Input */}
-        <label className="flex min-h-9.75 min-w-52.5 flex-1 cursor-text items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]">
+        <label
+          className={`${filterControlClasses} min-w-52.5 flex-1 cursor-text gap-2.5`}
+        >
           <MagnifyingGlass
             size={17}
             className="text-(--muted) shrink-0"
@@ -85,41 +89,41 @@ export function NotificationFiltersBar({
         </label>
 
         {/* Category Select */}
-        <div className="flex min-h-9.75 min-w-36.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]">
+        <div className={`${filterControlClasses} min-w-36.25`}>
           <ThemedSelect
             id="notifications-category-filter"
             value={categoryFilter}
             onValueChange={onCategoryFilterChange}
             options={categoryOptions}
             ariaLabel="Filter by category"
-            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full whitespace-nowrap"
+            triggerClassName={`${filterSelectTriggerClasses} w-full whitespace-nowrap`}
           />
         </div>
 
         {/* Status Select */}
-        <div className="flex min-h-9.75 min-w-31.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]">
+        <div className={`${filterControlClasses} min-w-31.25`}>
           <ThemedSelect
             id="notifications-status-filter"
             value={statusFilter}
             onValueChange={onStatusFilterChange}
             options={statusOptions}
             ariaLabel="Filter by read status"
-            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full whitespace-nowrap"
+            triggerClassName={`${filterSelectTriggerClasses} w-full whitespace-nowrap`}
           />
         </div>
 
         {/* Sort Select */}
-        <div className="flex min-h-9.75 min-w-36.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]">
+        <div className={`${filterControlClasses} min-w-36.25`}>
           <ThemedSelect
             id="notifications-sort-filter"
             value={sortBy}
             onValueChange={onSortByChange}
             options={sortOptions}
             ariaLabel="Sort notifications"
-            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full whitespace-nowrap"
+            triggerClassName={`${filterSelectTriggerClasses} w-full whitespace-nowrap`}
           />
         </div>
       </div>
-    </div>
+    </FilterBar>
   );
 }

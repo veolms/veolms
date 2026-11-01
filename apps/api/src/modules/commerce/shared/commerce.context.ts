@@ -1,54 +1,23 @@
 import type { RoutePluginOptions } from "../../../lib/route-plugin.ts";
-import {
-  createAuthMiddleware,
-  type AuthMiddleware,
-} from "../../../middlewares/auth.middleware.ts";
-import { ADMIN_ROLE, createSessionService } from "../../auth/index.ts";
+import type { AuthMiddleware } from "../../../middlewares/auth.middleware.ts";
+import { createPermissionPreHandlers } from "../../authorization/index.ts";
 
 export interface CommerceContext {
   middleware: AuthMiddleware;
   requireAuthenticated: AuthMiddleware["authenticate"][];
-  requireAdmin: AuthMiddleware["authenticate"][];
-  requireStaff: AuthMiddleware["authenticate"][];
+  /** Signed in, two-factor done, and holding the permission (see createPermissionPreHandlers). */
+  requires: ReturnType<typeof createPermissionPreHandlers>["requires"];
 }
 
 export function createCommerceContext({
   database,
 }: RoutePluginOptions): CommerceContext {
-  const sessionService = createSessionService({ database });
-  const middleware = createAuthMiddleware(sessionService);
-
-  const requireAuthenticated = [
-    middleware.authenticate,
-    middleware.requireAuthenticated,
-    middleware.requireMfaVerified,
-  ];
-
-  const requireAdmin = [
-    middleware.authenticate,
-    middleware.requireAuthenticated,
-    middleware.requireMfaVerified,
-    middleware.requireRoles([ADMIN_ROLE]),
-  ];
-
-  const requireStaff = [
-    middleware.authenticate,
-    middleware.requireAuthenticated,
-    middleware.requireMfaVerified,
-    middleware.requireRoles([
-      "admin",
-      "administrator",
-      "platform_admin",
-      "platform administrator",
-      "instructor",
-      "creator",
-    ]),
-  ];
+  const { middleware, signedIn, requires } =
+    createPermissionPreHandlers(database);
 
   return {
     middleware,
-    requireAuthenticated,
-    requireAdmin,
-    requireStaff,
+    requireAuthenticated: signedIn,
+    requires,
   };
 }

@@ -99,6 +99,10 @@
 
 .auth-card {
   display: grid;
+  /* One column no wider than the card: with an auto column, one-line
+     content (the remembered Google account's name and address) widened
+     it past the card on narrow phones. */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: start;
   width: 100%;
   min-width: 0;

@@ -5,6 +5,7 @@ import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullet
 import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
+import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
 import type { NavigateTo } from "../routing/navigation";
 import { CourseReviewHeader } from "./CourseReviewHeader";
 import { NeedHelpWidget } from "./NeedHelpWidget";
@@ -17,6 +18,7 @@ import { TopReviewersWidget } from "./TopReviewersWidget";
 import { useReviewsFilter } from "./useReviewsFilter";
 import { WriteReviewModal } from "./WriteReviewModal";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface ReviewsPageProps {
   onNavigatePage?: NavigateTo;
@@ -73,7 +75,9 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
     onDismiss: () => setIsSupportModalOpen(false),
   });
 
-  // Keyboard shortcut listener (/ or Cmd+K to search, W to write review)
+  usePageSearchShortcut("reviews-search-input");
+
+  // Keyboard shortcut listener (W to write review)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeTag = (document.activeElement?.tagName || "").toLowerCase();
@@ -82,14 +86,9 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
         activeTag === "textarea" ||
         (document.activeElement as HTMLElement)?.isContentEditable;
 
-      if (!isInput) {
-        if (e.key === "/" || ((e.metaKey || e.ctrlKey) && e.key === "k")) {
-          e.preventDefault();
-          document.getElementById("reviews-search-input")?.focus();
-        } else if (e.key.toLowerCase() === "w" && !e.metaKey && !e.ctrlKey) {
-          e.preventDefault();
-          setIsWriteModalOpen(true);
-        }
+      if (!isInput && e.key.toLowerCase() === "w" && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setIsWriteModalOpen(true);
       }
     };
 
@@ -133,10 +132,9 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
       </header>
 
       {/* Course Header Banner */}
-      <section
+      <ElevatedCard
         aria-label="Course details and actions"
-        className="mb-5 rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
-        style={{ boxShadow: "var(--card-shadow)" }}
+        className="mb-5 p-5 md:p-6 transition-all"
       >
         <CourseReviewHeader
           courseMeta={courseMeta}
@@ -145,7 +143,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
           onOpenWriteModal={() => setIsWriteModalOpen(true)}
           setNotice={setNotice}
         />
-      </section>
+      </ElevatedCard>
 
       {/* Tab Navigation Bar with delicate thin bottom line and transparent background */}
       <nav
@@ -230,9 +228,9 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               />
             ))
           ) : (
-            <div
-              className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
-              style={{ boxShadow: "var(--card-shadow)" }}
+            <ElevatedCard
+              as="div"
+              className="flex flex-col items-center justify-center p-12 text-center"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted) mb-3">
                 <Star size={24} />
@@ -252,7 +250,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               >
                 Reset filters
               </button>
-            </div>
+            </ElevatedCard>
           )}
 
           {/* Pagination note */}
@@ -307,7 +305,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
       {/* Contact Support Dialog Modal */}
       {isSupportModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-in fade-in duration-150"
           role="dialog"
           aria-modal="true"
         >

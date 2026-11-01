@@ -6,6 +6,7 @@ import type {
   MouseEvent,
   ReactNode,
 } from "react";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { ThemedSelect } from "../ThemedSelect";
@@ -22,6 +23,15 @@ export function RecommendedBadge() {
     <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--success)_16%,transparent)] px-1.5 py-px text-[0.62rem] font-semibold text-(--success)">
       <Star aria-hidden size={10} weight="fill" />
       Recommended
+    </span>
+  );
+}
+
+/** A short state in place of a control, such as "Not supported". */
+export function StatusNote({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 text-[0.72rem] font-semibold whitespace-nowrap text-(--muted)">
+      {children}
     </span>
   );
 }
@@ -146,6 +156,33 @@ export function SettingsToggle({
       onClick={() => onChange(!checked)}
     >
       <span aria-hidden="true" />
+    </button>
+  );
+}
+
+export interface SettingsResetButtonProps {
+  onReset: () => void;
+  // Names what is reset, for assistive technology; the button reads "Reset".
+  label: string;
+  disabled?: boolean;
+}
+
+/** Returns one settings section to its defaults, from the section heading. */
+export function SettingsResetButton({
+  onReset,
+  label,
+  disabled = false,
+}: SettingsResetButtonProps) {
+  return (
+    <button
+      type="button"
+      className="settings-section__reset"
+      disabled={disabled}
+      onClick={onReset}
+      aria-label={label}
+    >
+      <ArrowCounterClockwise size={16} weight="bold" />
+      Reset
     </button>
   );
 }

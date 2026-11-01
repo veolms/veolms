@@ -20,19 +20,17 @@ export async function findAccessRuleByCourseId(
     .executeTakeFirst();
 }
 
-export async function insertAccessRule(
-  database: Kysely<Database>,
-  values: {
-    id: string;
-    course_id: string;
-    access_type: AccessType;
-    duration_type: AccessDurationType;
-    duration_days: number | null;
-    created_at: Date;
-    updated_at: Date;
-  },
+/** The access type of each course that has an access rule. */
+export async function findAccessTypesByCourseIds(
+  database: DatabaseExecutor,
+  courseIds: string[],
 ) {
-  await database.insertInto("course_access_rules").values(values).execute();
+  if (courseIds.length === 0) return [];
+  return await database
+    .selectFrom("course_access_rules")
+    .select(["course_id", "access_type"])
+    .where("course_id", "in", courseIds)
+    .execute();
 }
 
 export async function upsertAccessRule(
@@ -61,23 +59,6 @@ export async function upsertAccessRule(
     .returning("id")
     .executeTakeFirstOrThrow();
   return result.id;
-}
-
-export async function updateAccessRule(
-  database: Kysely<Database>,
-  accessRuleId: string,
-  values: {
-    access_type: AccessType;
-    duration_type: AccessDurationType;
-    duration_days: number | null;
-    updated_at: Date;
-  },
-) {
-  await database
-    .updateTable("course_access_rules")
-    .set(values)
-    .where("id", "=", accessRuleId)
-    .execute();
 }
 
 // --- Pricing ---
@@ -113,22 +94,6 @@ export async function findPricingByCourseIds(
     .execute();
 }
 
-export async function insertPricing(
-  database: Kysely<Database>,
-  values: {
-    id: string;
-    course_id: string;
-    pricing_type: PricingType;
-    price: number;
-    currency: string;
-    sale_price: number | null;
-    created_at: Date;
-    updated_at: Date;
-  },
-) {
-  await database.insertInto("course_pricing").values(values).execute();
-}
-
 export async function upsertPricing(
   database: Kysely<Database>,
   values: {
@@ -137,7 +102,9 @@ export async function upsertPricing(
     pricing_type: PricingType;
     price: number;
     currency: string;
-    sale_price: number | null;
+    sale_price: number;
+    /** Left out while the column does not exist yet (migration pending). */
+    show_discount_badge?: boolean;
     created_at: Date;
     updated_at: Date;
   },
@@ -151,30 +118,15 @@ export async function upsertPricing(
         price: values.price,
         currency: values.currency,
         sale_price: values.sale_price,
+        ...(values.show_discount_badge === undefined
+          ? {}
+          : { show_discount_badge: values.show_discount_badge }),
         updated_at: values.updated_at,
       }),
     )
     .returning("id")
     .executeTakeFirstOrThrow();
   return result.id;
-}
-
-export async function updatePricing(
-  database: Kysely<Database>,
-  pricingId: string,
-  values: {
-    pricing_type: PricingType;
-    price: number;
-    currency: string;
-    sale_price: number | null;
-    updated_at: Date;
-  },
-) {
-  await database
-    .updateTable("course_pricing")
-    .set(values)
-    .where("id", "=", pricingId)
-    .execute();
 }
 
 // --- Settings ---
@@ -188,26 +140,6 @@ export async function findSettingsByCourseId(
     .selectAll()
     .where("course_id", "=", courseId)
     .executeTakeFirst();
-}
-
-export async function insertSettings(
-  database: Kysely<Database>,
-  values: {
-    id: string;
-    course_id: string;
-    allow_qa: boolean;
-    allow_comments: boolean;
-    allow_downloads: boolean;
-    allow_notes: boolean;
-    certificate_enabled: boolean;
-    show_instructor_name: boolean;
-    language: string;
-    estimated_duration: number | null;
-    created_at: Date;
-    updated_at: Date;
-  },
-) {
-  await database.insertInto("course_settings").values(values).execute();
 }
 
 export async function upsertSettings(
@@ -246,26 +178,4 @@ export async function upsertSettings(
     .returning("id")
     .executeTakeFirstOrThrow();
   return result.id;
-}
-
-export async function updateSettings(
-  database: Kysely<Database>,
-  settingsId: string,
-  values: {
-    allow_qa?: boolean;
-    allow_comments?: boolean;
-    allow_downloads?: boolean;
-    allow_notes?: boolean;
-    certificate_enabled?: boolean;
-    show_instructor_name?: boolean;
-    language?: string;
-    estimated_duration?: number | null;
-    updated_at: Date;
-  },
-) {
-  await database
-    .updateTable("course_settings")
-    .set(values)
-    .where("id", "=", settingsId)
-    .execute();
 }

@@ -1,12 +1,10 @@
 import { z } from "zod";
+import { emailInput } from "./email-input.ts";
 import { authUserSchema } from "./user.ts";
 
 export const loginRequestSchema = z
   .object({
-    email: z
-      .email("Invalid email address")
-      .max(255)
-      .toLowerCase()
+    email: emailInput("Invalid email address")
       .meta({ example: "ada@example.com" })
       .optional(),
     phoneNo: z
@@ -31,15 +29,13 @@ export const oauthUrlRequestSchema = z.object({
   provider: oauthProviderSchema,
   redirectUri: z
     .url()
+    .max(2048)
     .meta({ example: "https://app.example.com/oauth/callback" }),
 });
 
 export const oauthUrlResponseSchema = z.object({
   url: z.string().meta({
     description: "Provider consent screen the client should redirect to.",
-  }),
-  state: z.string().meta({
-    description: "Opaque CSRF value the provider echoes back on callback.",
   }),
 });
 
@@ -50,6 +46,7 @@ export const oauthCallbackRequestSchema = z.object({
   state: z.string().meta({ example: "8f14e45fceea167a" }).optional(),
   redirectUri: z
     .string()
+    .max(2048)
     .meta({ example: "https://app.example.com/oauth/callback" })
     .optional(),
 });
@@ -84,11 +81,27 @@ export const oauthRegisterRequestSchema = oauthCallbackRequestSchema.extend({
 
 export const authConfigResponseSchema = z.object({
   googleClientId: z.string().optional(),
-  githubClientId: z.string().optional(),
+  /**
+   * A verified mobile number is needed before buying or enrolling: the
+   * course page asks for it first (REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT).
+   */
+  requireVerifiedPhoneForEnrollment: z.boolean().optional(),
 });
 
 export const authMessageResponseSchema = z.object({
   message: z.string().max(255),
+});
+
+export const otpSendResponseSchema = authMessageResponseSchema.extend({
+  codeExpiresInSeconds: z
+    .number()
+    .int()
+    .positive()
+    .meta({
+      description:
+        "How long the code just sent can be used, counted from this answer " +
+        "(OTP_TTL_MINUTES on the server).",
+    }),
 });
 
 export const loginResponseSchema = z.object({
@@ -108,10 +121,24 @@ export const sessionResponseSchema = z.object({
   id: z.uuid(),
   ipAddress: z.string().max(45).nullable(),
   userAgent: z.string().max(255).nullable(),
+  location: z.string().max(255).nullable().meta({
+    description: "Roughly where the device signed in from, e.g. a city.",
+  }),
   isCurrent: z.boolean(),
-  createdAt: z.string().max(40),
   lastUsedAt: z.string().max(40),
-  expiresAt: z.string().max(40),
+});
+
+/**
+ * A student at the academy's device limit, signing in on one more: the
+ * devices they are signed in on, one of which they sign out to continue.
+ */
+export const deviceLimitResponseSchema = z.object({
+  limit: z.number().int().positive().nullable(),
+  sessions: sessionResponseSchema.array(),
+});
+
+export const resolveDeviceLimitRequestSchema = z.object({
+  sessionId: z.uuid().describe("The session to sign out to make room."),
 });
 
 export const sessionParamsSchema = z.object({
@@ -119,15 +146,43 @@ export const sessionParamsSchema = z.object({
 });
 
 // Passkeys & MFA
+
+/**
+ * The least a WebAuthn credential must carry for the server to look it up:
+ * a credential id and the authenticator's response object. Everything else
+ * is left to the WebAuthn library, which authenticators and password
+ * managers extend with fields of their own.
+ */
+function isWebAuthnCredentialPayload(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const { id, response } = value as { id?: unknown; response?: unknown };
+  return (
+    typeof id === "string" &&
+    id.length > 0 &&
+    id.length <= 2048 &&
+    typeof response === "object" &&
+    response !== null &&
+    !Array.isArray(response)
+  );
+}
+
+const WEBAUTHN_PAYLOAD_MESSAGE =
+  "A WebAuthn credential with an id and a response is required";
+
 export const passkeyRegisterVerifyRequestSchema = z.object({
   response: z
     .any()
+    .refine(isWebAuthnCredentialPayload, WEBAUTHN_PAYLOAD_MESSAGE)
     .meta({ description: "WebAuthn PublicKeyCredential registration payload" }),
 });
 
 export const passkeyLoginVerifyRequestSchema = z.object({
   response: z
     .any()
+    .refine(isWebAuthnCredentialPayload, WEBAUTHN_PAYLOAD_MESSAGE)
     .meta({ description: "WebAuthn PublicKeyCredential assertion payload" }),
 });
 
@@ -147,9 +202,12 @@ export const totpEnableRequestSchema = z.object({
     .length(6, "TOTP code must be 6 digits")
     .regex(/^\d+$/, "TOTP code must contain only digits")
     .meta({ example: "123456" }),
+  // The secret comes back unchanged from the setup step, which issues
+  // base32. Anything else decodes to a short or empty key.
   secret: z
     .string()
     .min(1, "TOTP secret is required")
+    .regex(/^[A-Z2-7]{16,64}$/, "TOTP secret is not valid")
     .meta({ example: "JBSWY3DPEHPK3PXP" }),
 });
 
@@ -161,6 +219,20 @@ export const totpSetupResponseSchema = z.object({
 export const totpEnableResponseSchema = z.object({
   backupCodes: z.array(z.string().max(8)),
 });
+
+/** A fresh set of single-use backup codes; shown to the user exactly once. */
+export const backupCodesResponseSchema = z.object({
+  backupCodes: z.array(z.string().max(8)),
+});
+
+/**
+ * `backupCodes` is present only when this passkey left the account without
+ * any unused backup code — in practice, when it is the first factor.
+ */
+export const passkeyRegisterVerifyResponseSchema =
+  authMessageResponseSchema.extend({
+    backupCodes: z.array(z.string().max(8)).optional(),
+  });
 
 export type PasskeyAuthenticatorTransport =
   "ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb";
@@ -269,13 +341,22 @@ export type OauthCallbackRequest = z.input<typeof oauthCallbackRequestSchema>;
 export type AuthConfigResponse = z.output<typeof authConfigResponseSchema>;
 export type LoginResponse = z.output<typeof loginResponseSchema>;
 export type AuthMessageResponse = z.output<typeof authMessageResponseSchema>;
+export type OtpSendResponse = z.output<typeof otpSendResponseSchema>;
 export type SessionParams = z.input<typeof sessionParamsSchema>;
 export type SessionResponse = z.output<typeof sessionResponseSchema>;
+export type DeviceLimitResponse = z.output<typeof deviceLimitResponseSchema>;
+export type ResolveDeviceLimitRequest = z.input<
+  typeof resolveDeviceLimitRequestSchema
+>;
 export type PasskeyRegisterVerifyRequest = z.input<
   typeof passkeyRegisterVerifyRequestSchema
 >;
 export type PasskeyLoginVerifyRequest = z.input<
   typeof passkeyLoginVerifyRequestSchema
 >;
+export type PasskeyRegisterVerifyResponse = z.output<
+  typeof passkeyRegisterVerifyResponseSchema
+>;
+export type BackupCodesResponse = z.output<typeof backupCodesResponseSchema>;
 export type TotpVerifyRequest = z.input<typeof totpVerifyRequestSchema>;
 export type TotpEnableRequest = z.input<typeof totpEnableRequestSchema>;

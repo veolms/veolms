@@ -1,5 +1,18 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import type { PresignMediaRequest } from "@veolms/contracts";
+import type {
+  MediaDeliveryResponse,
+  MediaUploadCompleteResponse,
+  MultipartUploadAbortResponse,
+  MultipartUploadPartUrlsRequest,
+  MultipartUploadPartUrlsResponse,
+  MultipartUploadStartResponse,
+  MultipartUploadStatusResponse,
+  PresignMediaRequest,
+  VideoTranscodeCancelResponse,
+  VideoTranscodeRetryResponse,
+} from "@veolms/contracts";
+import { AppError } from "../../lib/errors.ts";
+import { isLearnerViewRequest } from "../../lib/learner-view.ts";
 import type { MediaService } from "./media.service.ts";
 import type { MediaConvertWebhookPayload } from "./webhooks/mediaconvert-webhook.schema.ts";
 
@@ -14,9 +27,66 @@ export function createMediaController({ service }: { service: MediaService }) {
     return result;
   }
 
+  async function startMultipartUpload(
+    request: FastifyRequest<{ Body: PresignMediaRequest }>,
+  ): Promise<MultipartUploadStartResponse> {
+    const ownerId = request.user!.id;
+    return await service.startMultipartUpload(
+      ownerId,
+      request.body,
+      request.log,
+    );
+  }
+
+  async function getMultipartUploadStatus(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+  ): Promise<MultipartUploadStatusResponse> {
+    return await service.getMultipartUploadStatus(
+      request.params.mediaId,
+      request.user!.id,
+      request.user?.roles,
+    );
+  }
+
+  async function presignMultipartUploadParts(
+    request: FastifyRequest<{
+      Params: { mediaId: string };
+      Body: MultipartUploadPartUrlsRequest;
+    }>,
+  ): Promise<MultipartUploadPartUrlsResponse> {
+    return await service.presignMultipartUploadParts(
+      request.params.mediaId,
+      request.body,
+      request.user!.id,
+      request.user?.roles,
+    );
+  }
+
+  async function completeMultipartUpload(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+  ): Promise<MediaUploadCompleteResponse> {
+    return await service.completeMultipartUpload(
+      request.params.mediaId,
+      request.user!.id,
+      request.log,
+      request.user?.roles,
+    );
+  }
+
+  async function abortMultipartUpload(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+  ): Promise<MultipartUploadAbortResponse> {
+    return await service.abortMultipartUpload(
+      request.params.mediaId,
+      request.user!.id,
+      request.user?.roles,
+      request.log,
+    );
+  }
+
   async function confirmMediaUpload(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
-  ) {
+  ): Promise<MediaUploadCompleteResponse> {
     const { mediaId } = request.params;
     const ownerId = request.user!.id;
     const result = await service.confirmUpload(
@@ -25,14 +95,7 @@ export function createMediaController({ service }: { service: MediaService }) {
       request.log,
       request.user?.roles,
     );
-    return {
-      status: result.status,
-      ...(result.deliveryUrl ? { deliveryUrl: result.deliveryUrl } : {}),
-      ...(result.deliveryUrlExpiresAt
-        ? { deliveryUrlExpiresAt: result.deliveryUrlExpiresAt }
-        : {}),
-      ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
-    };
+    return { status: result.status };
   }
 
   async function getVideoJobProgress(
@@ -50,15 +113,32 @@ export function createMediaController({ service }: { service: MediaService }) {
   async function getPlaybackBootstrap(
     request: FastifyRequest<{
       Params: { idOrSlug: string; lessonNumber: number };
+      Querystring: {
+        inlineManifest?: "0" | "1";
+        storyboard?: "0" | "1";
+        resume?: "0" | "1";
+        subtitles?: "0" | "1";
+      };
     }>,
   ) {
     const user = request.user
-      ? { id: request.user.id, roles: request.user.roles }
+      ? {
+          id: request.user.id,
+          roles: request.user.roles,
+          learnerView: isLearnerViewRequest(request),
+        }
       : undefined;
     return await service.getPlaybackBootstrap(
       request.params.idOrSlug,
       request.params.lessonNumber,
       user,
+      {
+        inlineManifest: request.query?.inlineManifest === "1",
+        storyboard: request.query?.storyboard === "1",
+        resume: request.query?.resume === "1",
+        subtitles: request.query?.subtitles === "1",
+        logger: request.log,
+      },
     );
   }
 
@@ -69,7 +149,11 @@ export function createMediaController({ service }: { service: MediaService }) {
     reply: FastifyReply,
   ) {
     const user = request.user
-      ? { id: request.user.id, roles: request.user.roles }
+      ? {
+          id: request.user.id,
+          roles: request.user.roles,
+          learnerView: isLearnerViewRequest(request),
+        }
       : undefined;
     // The link is signed for this request and expires within minutes.
     reply.header("Cache-Control", "private, no-store");
@@ -88,7 +172,11 @@ export function createMediaController({ service }: { service: MediaService }) {
     reply: FastifyReply,
   ) {
     const user = request.user
-      ? { id: request.user.id, roles: request.user.roles }
+      ? {
+          id: request.user.id,
+          roles: request.user.roles,
+          learnerView: isLearnerViewRequest(request),
+        }
       : undefined;
     reply.header("Cache-Control", "private, no-store");
     return await service.getPlaybackToken(
@@ -100,34 +188,42 @@ export function createMediaController({ service }: { service: MediaService }) {
 
   async function getMediaDelivery(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
-  ) {
-    return service.getMediaDelivery(
+  ): Promise<MediaDeliveryResponse> {
+    const delivery = await service.getMediaDelivery(
       request.params.mediaId,
       request.user?.id,
       request.user?.roles,
     );
+    return {
+      url: delivery.url,
+      ...(delivery.expiresAt ? { expiresAt: delivery.expiresAt } : {}),
+    };
   }
 
+  // The service's results carry the internal job id and a dispatch hint for
+  // its other callers; neither is a client concern.
   async function retryVideoJob(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
-  ) {
-    return service.retryTranscodeJob(
+  ): Promise<VideoTranscodeRetryResponse> {
+    const result = await service.retryTranscodeJob(
       request.params.mediaId,
       request.user!.id,
       request.log,
       request.user?.roles,
     );
+    return { queued: result.should202 };
   }
 
   async function cancelVideoJob(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
-  ) {
-    return service.cancelTranscodeJob(
+  ): Promise<VideoTranscodeCancelResponse> {
+    await service.cancelTranscodeJob(
       request.params.mediaId,
       request.user!.id,
       request.log,
       request.user?.roles,
     );
+    return { cancelled: true };
   }
 
   async function streamVideoJobProgress(
@@ -197,8 +293,17 @@ export function createMediaController({ service }: { service: MediaService }) {
         if (["completed", "failed", "cancelled"].includes(progress.status))
           break;
       } catch (error) {
+        // Only an AppError's message is written for clients. Anything else
+        // (a database or driver failure) is logged and answered generically.
+        const isAppError = error instanceof AppError;
+        if (!isAppError) {
+          request.log.error(
+            { err: error, mediaId: request.params.mediaId },
+            "Failed to read video job progress for the progress stream",
+          );
+        }
         response.write(
-          `event: error\ndata: ${JSON.stringify({ message: error instanceof Error ? error.message : "Unable to read progress" })}\n\n`,
+          `event: error\ndata: ${JSON.stringify({ message: isAppError ? error.message : "Unable to read progress" })}\n\n`,
         );
         break;
       }
@@ -236,27 +341,6 @@ export function createMediaController({ service }: { service: MediaService }) {
     return reply.send(result.stream);
   }
 
-  async function getMediaAssetStream(
-    request: FastifyRequest<{ Params: { mediaId: string } }>,
-    reply: FastifyReply,
-  ) {
-    const { mediaId } = request.params;
-    const requestingUserId = request.user?.id;
-    const result = await service.getMediaStream(
-      mediaId,
-      requestingUserId,
-      request.user?.roles,
-    );
-    reply.header("Content-Type", result.contentType);
-    if (result.contentLength !== undefined) {
-      reply.header("Content-Length", result.contentLength);
-    }
-    // Assets whose public access can be revoked (e.g. unpublished/deleted courses
-    // or replaced thumbnails) must not be retained in shared caches.
-    reply.header("Cache-Control", "no-store");
-    return reply.send(result.stream);
-  }
-
   async function getImageVariantManifest(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
     reply: FastifyReply,
@@ -282,7 +366,16 @@ export function createMediaController({ service }: { service: MediaService }) {
     );
     reply
       .header("Content-Type", result.contentType)
-      .header("Cache-Control", "public, max-age=31536000, immutable");
+      // A variant of a published course's thumbnail is immutable and public.
+      // One served only because the requester owns it (a draft image) must
+      // not be kept by a shared cache, which would hand it to anyone.
+      .header(
+        "Cache-Control",
+        result.isPublic
+          ? "public, max-age=31536000, immutable"
+          : "private, no-store",
+      )
+      .header("X-Content-Type-Options", "nosniff");
     if (result.contentLength !== undefined)
       reply.header("Content-Length", result.contentLength);
     return reply.send(result.stream);
@@ -303,6 +396,11 @@ export function createMediaController({ service }: { service: MediaService }) {
 
   return {
     presignMediaUpload,
+    startMultipartUpload,
+    getMultipartUploadStatus,
+    presignMultipartUploadParts,
+    completeMultipartUpload,
+    abortMultipartUpload,
     confirmMediaUpload,
     getVideoJobProgress,
     getPlaybackBootstrap,
@@ -312,7 +410,6 @@ export function createMediaController({ service }: { service: MediaService }) {
     retryVideoJob,
     cancelVideoJob,
     streamVideoJobProgress,
-    getMediaAssetStream,
     getImageVariantManifest,
     getImageVariantStream,
     streamHlsResource,

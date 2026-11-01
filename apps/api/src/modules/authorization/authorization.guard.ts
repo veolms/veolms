@@ -12,7 +12,15 @@ declare module "fastify" {
   }
 }
 
-export type ResourceType = "platform" | "course" | "lesson" | "section";
+/**
+ * What the permission is checked against. "platform" counts every role the
+ * user holds, an instructor's own-course roles included (they still need the
+ * course service's ownership check). "academy" is for academy-wide surfaces
+ * (platform moderation, every student, settings): only roles that reach all
+ * courses count.
+ */
+export type ResourceType =
+  "platform" | "academy" | "course" | "lesson" | "section";
 
 export interface AuthorizationGuard {
   authorize: (
@@ -25,8 +33,14 @@ export interface AuthorizationGuard {
     resourceType?: ResourceType,
     featureKey?: string,
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  requireFeature: (
-    featureKey: string,
+  /**
+   * Allowed only with every permission the request needs, as `pick` reads
+   * them from it: one route that changes several things (a lesson's title,
+   * its content, whether it is published) checks each thing it changes.
+   */
+  authorizeEach: (
+    pick: (request: FastifyRequest) => readonly Permission[],
+    resourceType?: ResourceType,
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
 
@@ -86,8 +100,10 @@ export function createAuthorizationGuard(
           .send(httpError(401, "UNAUTHORIZED", "Authentication required"));
       }
 
-      const resourceId = extractResourceId(request, resourceType);
-      const scope = await service.resolveScope(resourceType, resourceId);
+      const platformWide = resourceType === "academy";
+      const scopeType = platformWide ? "platform" : resourceType;
+      const resourceId = extractResourceId(request, scopeType);
+      const scope = await service.resolveScope(scopeType, resourceId);
 
       const decisions = await Promise.all(
         permissions.map((permission) =>
@@ -96,6 +112,7 @@ export function createAuthorizationGuard(
             permission,
             courseId: scope.courseId,
             featureKey,
+            platformWide,
           }),
         ),
       );
@@ -113,6 +130,19 @@ export function createAuthorizationGuard(
             });
 
       if (!decision.allowed) {
+        // Why the policy said no (which role assignment, deny rule or
+        // feature flag) stays in the log; the client gets a fixed message.
+        request.log?.info(
+          {
+            userId: request.user.id,
+            permissions,
+            courseId: scope.courseId,
+            code: decision.code,
+            reason: decision.reason,
+          },
+          "Authorization denied",
+        );
+
         if (decision.code === "FEATURE_DISABLED") {
           return reply
             .code(403)
@@ -120,8 +150,7 @@ export function createAuthorizationGuard(
               httpError(
                 403,
                 "FEATURE_DISABLED",
-                decision.reason ??
-                  "This feature is not enabled on the platform",
+                "This feature is not enabled on the platform",
               ),
             );
         }
@@ -132,8 +161,7 @@ export function createAuthorizationGuard(
             httpError(
               403,
               "PERMISSION_DENIED",
-              decision.reason ??
-                "You do not have permission to perform this action",
+              "You do not have permission to perform this action",
             ),
           );
       }
@@ -150,27 +178,18 @@ export function createAuthorizationGuard(
     return authorizeAny([permission], resourceType, featureKey);
   }
 
-  function requireFeature(featureKey: string) {
-    return async function requireFeatureHandler(
+  function authorizeEach(
+    pick: (request: FastifyRequest) => readonly Permission[],
+    resourceType: ResourceType = "platform",
+  ) {
+    return async function authorizeEachHandler(
       request: FastifyRequest,
       reply: FastifyReply,
     ): Promise<void> {
-      const decision = await service.check({
-        userId: request.user?.id ?? "00000000-0000-0000-0000-000000000000",
-        permission: "course.read",
-        featureKey,
-      });
-
-      if (decision.code === "FEATURE_DISABLED") {
-        return reply
-          .code(403)
-          .send(
-            httpError(
-              403,
-              "FEATURE_DISABLED",
-              `Feature '${featureKey}' is disabled on the platform`,
-            ),
-          );
+      for (const permission of pick(request)) {
+        await authorizeAny([permission], resourceType)(request, reply);
+        // The first permission missing has answered 401 or 403.
+        if (reply.sent) return;
       }
     };
   }
@@ -178,6 +197,6 @@ export function createAuthorizationGuard(
   return {
     authorize,
     authorizeAny,
-    requireFeature,
+    authorizeEach,
   };
 }

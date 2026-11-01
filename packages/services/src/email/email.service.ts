@@ -19,6 +19,17 @@ export interface EmailServiceOptions {
   logger: FastifyBaseLogger;
 }
 
+/** A file sent with a message, such as an order's invoice PDF. */
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
+export interface EmailSendOptions {
+  attachments?: readonly EmailAttachment[];
+}
+
 export type EmailDeliveryResult =
   | { status: "sent"; messageId: string }
   | { status: "logged" }
@@ -31,7 +42,11 @@ export interface EmailService {
    * the process down rather than fail the one email. Failures are logged and
    * surfaced through the returned result for callers that care.
    */
-  send(to: string, content: EmailContent): Promise<EmailDeliveryResult>;
+  send(
+    to: string,
+    content: EmailContent,
+    options?: EmailSendOptions,
+  ): Promise<EmailDeliveryResult>;
   /** Opens a connection and authenticates, to validate credentials at boot. */
   verify(): Promise<boolean>;
   /** Releases pooled connections during shutdown. */
@@ -71,10 +86,17 @@ export function createEmailService({
   async function send(
     to: string,
     content: EmailContent,
+    options: EmailSendOptions = {},
   ): Promise<EmailDeliveryResult> {
+    const attachments = options.attachments ?? [];
     if (config.transport === "console") {
       log.info(
-        { to, subject: content.subject, body: content.text },
+        {
+          to,
+          subject: content.subject,
+          body: content.text,
+          attachments: attachments.map((file) => file.filename),
+        },
         "Email not dispatched (console transport)",
       );
       return { status: "logged" };
@@ -87,6 +109,15 @@ export function createEmailService({
         subject: content.subject,
         text: content.text,
         html: content.html,
+        ...(attachments.length > 0
+          ? {
+              attachments: attachments.map((file) => ({
+                filename: file.filename,
+                content: file.content,
+                contentType: file.contentType,
+              })),
+            }
+          : {}),
       });
 
       log.info({ to, messageId: info.messageId }, "Email sent");

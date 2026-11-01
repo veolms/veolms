@@ -87,12 +87,34 @@ export interface SessionTable {
   token_hash: string;
   ip_address: string | null;
   user_agent: string | null;
+  /** Roughly where it was signed in from (Cloudflare's location headers). */
+  location_city: string | null;
+  location_region: string | null;
+  location_country: string | null;
   mfa_verified: Generated<boolean>;
   revoked_at: Date | null;
   expires_at: Date;
   last_used_at: Generated<Date>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+}
+
+/**
+ * A student's sign-in held back while they choose a device to sign out, as
+ * the academy's device limit asks (see the device-limit migration).
+ */
+export interface PendingDeviceSignInTable {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  location_city: string | null;
+  location_region: string | null;
+  location_country: string | null;
+  expires_at: Date;
+  used_at: Date | null;
+  created_at: Generated<Date>;
 }
 
 export interface OauthAccountTable {
@@ -113,6 +135,10 @@ export interface OtpCodeTable {
   attempts: Generated<number>;
   expires_at: Date;
   consumed_at: Date | null;
+  /** Address the send was requested from; null on rows that predate it. */
+  requester_ip: string | null;
+  /** Signed-in user who requested the send (profile verification only). */
+  requester_user_id: string | null;
   created_at: Generated<Date>;
 }
 

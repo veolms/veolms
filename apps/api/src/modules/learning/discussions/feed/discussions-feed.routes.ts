@@ -16,7 +16,7 @@ import {
 } from "./discussions-feed.service.ts";
 
 export interface DiscussionsFeedRouteDependencies {
-  permissions?: Pick<DiscussionPermissionsContext, "authenticate">;
+  permissions?: Pick<DiscussionPermissionsContext, "optionalAuthenticated">;
   service?: LearningDiscussionsFeedService;
 }
 
@@ -35,7 +35,7 @@ export function createDiscussionsFeedRoutes(
     app.get(
       "/courses/:courseId/lessons/:lessonId/discussions",
       {
-        preHandler: permissions.authenticate,
+        preHandler: permissions.optionalAuthenticated,
         schema: {
           operationId: "listLessonDiscussions",
           tags: ["Learning Discussions"],

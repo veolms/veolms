@@ -52,9 +52,26 @@ export function getDocumentFullscreenElement(
   );
 }
 
+/**
+ * Whether the app is running installed, opened from its own icon with no
+ * browser bars. It already fills the screen there, and the status bar stays
+ * in view. Page fullscreen would only take the status bar away and make the
+ * back button leave fullscreen instead of navigating, so it is not offered.
+ */
+export function isInstalledAppDisplay(): boolean {
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia !== "function") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches ||
+    window.matchMedia("(display-mode: minimal-ui)").matches
+  );
+}
+
 export function canToggleDocumentFullscreen(
   documentTarget: Document = document,
 ): boolean {
+  if (isInstalledAppDisplay()) return false;
   const root = documentTarget.documentElement as WebkitFullscreenElement;
   const target = documentTarget as WebkitFullscreenDocument;
   return Boolean(
@@ -78,6 +95,8 @@ export async function toggleDocumentFullscreen(
     return false;
   }
 
+  // Not entered when the app runs installed (see isInstalledAppDisplay).
+  if (isInstalledAppDisplay()) return false;
   const root = documentTarget.documentElement as WebkitFullscreenElement;
   const request =
     root.requestFullscreen?.bind(root) ??

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Database, DatabaseExecutor } from "@veolms/database";
+import type { DatabaseExecutor, Json } from "@veolms/database";
 import type {
   CreateQuizQuestionRequest,
   CreateQuizRequest,
@@ -7,16 +7,34 @@ import type {
   UpdateQuizQuestionRequest,
   UpdateQuizRequest,
 } from "@veolms/contracts";
+import { cacheTags, invalidateCache } from "@veolms/api-core";
 import { AppError } from "../../../lib/errors.ts";
 import * as repo from "../shared/quiz.repository.ts";
-import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
-import type { QuizActor, QuizServiceOptions } from "../shared/quiz.types.ts";
-import { isAdmin } from "../shared/quiz.types.ts";
+import { presentAssignment } from "../shared/quiz.presenters.ts";
+import {
+  assertNoLearnerAttempts,
+  reachesEveryQuiz,
+  requireAcademyId,
+  type QuizActor,
+  type QuizServiceOptions,
+} from "../shared/quiz.types.ts";
+import type { Permission } from "@veolms/contracts";
 
-type OptionInput = CreateQuizQuestionRequest["options"];
+type QuizRow = NonNullable<Awaited<ReturnType<typeof repo.findQuiz>>>;
 
 function iso(value: Date | null | undefined) {
   return value ? value.toISOString() : null;
+}
+
+/**
+ * The options a question is stored with. A short answer is a free response:
+ * the accepted answers an older editor still sends for it are dropped, not
+ * refused, so that editor keeps working until it is updated.
+ */
+function questionOptions(
+  payload: Pick<CreateQuizQuestionRequest, "questionType" | "options">,
+) {
+  return payload.questionType === "short_answer" ? [] : payload.options;
 }
 
 function validateQuestionPayload(payload: CreateQuizQuestionRequest) {
@@ -26,20 +44,9 @@ function validateQuestionPayload(payload: CreateQuizQuestionRequest) {
       "INVALID_TRUE_FALSE_OPTIONS",
       "True/False questions require exactly two options.",
     );
-  if (payload.questionType === "short_answer") {
-    if (payload.options.length === 0)
-      throw new AppError(
-        400,
-        "SHORT_ANSWER_NEEDS_OPTION",
-        "Short answer questions require at least one accepted answer.",
-      );
-    if (payload.options.some((option) => !option.isCorrect))
-      throw new AppError(
-        400,
-        "SHORT_ANSWER_OPTIONS_MUST_BE_CORRECT",
-        "All accepted answers for short answer questions must be marked correct.",
-      );
-  } else {
+  // A short answer is a free response and has no key, so it has no options
+  // to check. Any that are sent are not stored (see questionOptions).
+  if (payload.questionType !== "short_answer") {
     const correct = payload.options.filter((option) => option.isCorrect);
     if (correct.length === 0)
       throw new AppError(
@@ -65,27 +72,27 @@ function validateQuestionPayload(payload: CreateQuizQuestionRequest) {
     );
 }
 
+function isJsonObject(value: unknown): value is Record<string, Json> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function createAuthoringService(options: QuizServiceOptions) {
   const { database } = options;
 
-  async function academyId() {
-    const id = await options.getAcademyId();
-    if (!id)
-      throw new AppError(
-        503,
-        "ACADEMY_NOT_CONFIGURED",
-        "The academy is not configured.",
-      );
-    return id;
-  }
-
-  async function requireQuiz(quizId: string, actor: QuizActor) {
+  async function requireQuiz(
+    quizId: string,
+    actor: QuizActor,
+    permission: Permission,
+  ) {
     const quiz = await repo.findQuiz(database, quizId);
     if (!quiz) throw new AppError(404, "QUIZ_NOT_FOUND", "Quiz not found.");
-    const currentAcademyId = await academyId();
+    const currentAcademyId = await requireAcademyId(options);
     if (quiz.academy_id !== currentAcademyId)
       throw new AppError(404, "QUIZ_NOT_FOUND", "Quiz not found.");
-    if (quiz.creator_id !== actor.id && !isAdmin(actor))
+    if (
+      quiz.creator_id !== actor.id &&
+      !(await reachesEveryQuiz(database, actor, permission))
+    )
       throw new AppError(403, "FORBIDDEN", "You do not own this Quiz.");
     return quiz;
   }
@@ -97,7 +104,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     await database.transaction().execute(async (trx) => {
       await repo.insertQuiz(trx, {
         id: quizId,
-        academy_id: await academyId(),
+        academy_id: await requireAcademyId(options),
         creator_id: actor.id,
         title: payload.title,
         description: payload.description ?? null,
@@ -115,7 +122,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
         published_at: null,
       });
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function createQuizWithQuestions(
@@ -143,7 +150,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
       deleted_at: null,
     }));
     const optionRows = payload.questions.flatMap((question, questionIndex) =>
-      question.options.map((option, position) => ({
+      questionOptions(question).map((option, position) => ({
         id: option.id ?? crypto.randomUUID(),
         question_id: questionRows[questionIndex]!.id,
         option_text: option.text,
@@ -158,7 +165,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     await database.transaction().execute(async (trx) => {
       await repo.insertQuiz(trx, {
         id: quizId,
-        academy_id: await academyId(),
+        academy_id: await requireAcademyId(options),
         creator_id: actor.id,
         title: payload.title,
         description: payload.description ?? null,
@@ -179,103 +186,93 @@ export function createAuthoringService(options: QuizServiceOptions) {
       await repo.insertOptions(trx, optionRows);
     });
 
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
+  /**
+   * The quiz library. A summary per quiz, counted in one query: the list
+   * shows a title, a status and two counts, never a question.
+   */
   async function listMine(actor: QuizActor) {
-    const rows = isAdmin(actor)
-      ? await repo.listQuizzesByAcademy(database, await academyId())
-      : await repo.listQuizzesByCreator(database, actor.id);
-    return Promise.all(rows.map((quiz) => getQuiz(actor, quiz.id)));
+    const rows = await repo.listQuizSummaries(
+      database,
+      (await reachesEveryQuiz(database, actor, "quiz.read"))
+        ? { academyId: await requireAcademyId(options) }
+        : { creatorId: actor.id },
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      updatedAt: row.updated_at.toISOString(),
+      questionCount: Number(row.question_count ?? 0),
+      publishedVersionCount: Number(row.published_version_count ?? 0),
+    }));
   }
 
-  async function presentQuiz(quizId: string) {
-    const quiz = await repo.findQuiz(database, quizId);
-    if (!quiz) throw new AppError(404, "QUIZ_NOT_FOUND", "Quiz not found.");
-    const versions = await repo.listVersions(database, quizId);
-    const result = [];
-    for (const version of versions) {
-      const questions = await repo.listQuestions(database, version.id);
-      const options = await repo.listOptions(
-        database,
-        questions.map((question) => question.id),
-      );
-      result.push({
-        id: version.id,
-        versionNumber: version.version_number,
-        instructions: version.instructions,
-        publishedAt: iso(version.published_at),
-        questions: questions.map((question) => ({
-          id: question.id,
-          questionType: question.question_type,
-          prompt: question.prompt,
-          points: Number(question.points),
-          position: question.position,
-          explanation: question.explanation,
-          options: options
-            .filter((option) => option.question_id === question.id)
-            .map((option) => ({
-              id: option.id,
-              text: option.option_text,
-              isCorrect: option.is_correct,
-              weight: Number(option.weight),
-              position: option.position,
-            })),
-        })),
-      });
-    }
-    const assignmentRows = await repo.listAssignmentsForQuizzes(database, [
-      quizId,
+  /**
+   * The quiz as its author edits it. Questions are loaded for one version
+   * only — the draft, or the newest version when nothing is in draft — which
+   * is the one the editor works on. Earlier versions are listed by number so
+   * one can be picked for an assignment.
+   */
+  async function presentQuiz(quiz: QuizRow) {
+    const [versions, assignmentRows] = await Promise.all([
+      repo.listVersions(database, quiz.id),
+      repo.listAssignmentsForQuizzes(database, [quiz.id]),
     ]);
-    const pricingByCourseId = new Map(
-      (
-        await pricingRepo.listPricingForCourses(database, [
-          ...new Set(assignmentRows.map((row) => row.course_id)),
-        ])
-      ).map((pricing) => [pricing.course_id, pricing] as const),
+    const editable =
+      versions.find((version) => !version.published_at) ?? versions.at(-1);
+    const questions = editable
+      ? await repo.listQuestions(database, editable.id)
+      : [];
+    const options = await repo.listOptions(
+      database,
+      questions.map((question) => question.id),
     );
-    const assignments = assignmentRows.map((row) => {
-      const pricing = pricingByCourseId.get(row.course_id);
-      return {
-        id: row.id,
-        quizId: row.quiz_id,
-        quizVersionId: row.quiz_version_id,
-        courseId: row.course_id,
-        lessonId: row.lesson_id,
-        required: row.required,
-        passPercentage: Number(row.pass_percentage),
-        maxAttempts: row.max_attempts,
-        timeLimitSeconds: row.time_limit_seconds,
-        shuffleQuestions: row.shuffle_questions,
-        shuffleOptions: row.shuffle_options,
-        feedbackMode: row.feedback_mode,
-        availableFrom: row.available_from?.toISOString() ?? null,
-        availableUntil: row.available_until?.toISOString() ?? null,
-        quizPricingId: pricing?.id ?? null,
-        pricingType: pricing?.pricing_type ?? ("free" as const),
-        price: Number(pricing?.price ?? 0),
-        currency: pricing?.currency ?? "INR",
-        salePrice:
-          pricing?.sale_price !== null && pricing?.sale_price !== undefined
-            ? Number(pricing.sale_price)
-            : null,
-      };
-    });
     return {
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
-      status: quiz.status,
-      createdAt: quiz.created_at.toISOString(),
-      updatedAt: quiz.updated_at.toISOString(),
-      versions: result,
-      assignments,
+      versions: versions.map((version) => ({
+        id: version.id,
+        versionNumber: version.version_number,
+        publishedAt: iso(version.published_at),
+      })),
+      editableVersion: editable
+        ? {
+            id: editable.id,
+            instructions: editable.instructions,
+            publishedAt: iso(editable.published_at),
+            questions: questions.map((question) => ({
+              id: question.id,
+              questionType: question.question_type,
+              prompt: question.prompt,
+              points: Number(question.points),
+              explanation: question.explanation,
+              options: options
+                .filter((option) => option.question_id === question.id)
+                .map((option) => ({
+                  id: option.id,
+                  text: option.option_text,
+                  isCorrect: option.is_correct,
+                })),
+            })),
+          }
+        : null,
+      assignments: assignmentRows.map(presentAssignment),
     };
   }
 
+  /** For a caller that has already been authorized for this quiz. */
+  async function presentQuizById(quizId: string) {
+    const quiz = await repo.findQuiz(database, quizId);
+    if (!quiz) throw new AppError(404, "QUIZ_NOT_FOUND", "Quiz not found.");
+    return presentQuiz(quiz);
+  }
+
   async function getQuiz(actor: QuizActor, quizId: string) {
-    await requireQuiz(quizId, actor);
-    return presentQuiz(quizId);
+    return presentQuiz(await requireQuiz(quizId, actor, "quiz.read"));
   }
 
   async function getEditableVersion(trx: DatabaseExecutor, quizId: string) {
@@ -285,13 +282,14 @@ export function createAuthoringService(options: QuizServiceOptions) {
     const source = latest.at(-1);
     if (!source)
       throw new AppError(409, "QUIZ_VERSION_MISSING", "Quiz has no version.");
+    const now = new Date();
     const version = await repo.insertVersion(trx, {
       id: crypto.randomUUID(),
       quiz_id: quizId,
       version_number:
         Math.max(...latest.map((item) => item.version_number)) + 1,
       instructions: source.instructions,
-      created_at: new Date(),
+      created_at: now,
       published_at: null,
     });
     const questions = await repo.listQuestions(trx, source.id);
@@ -299,45 +297,62 @@ export function createAuthoringService(options: QuizServiceOptions) {
       trx,
       questions.map((question) => question.id),
     );
-    for (const question of questions) {
-      const questionId = crypto.randomUUID();
-      await repo.insertQuestion(trx, {
-        id: questionId,
+    // The copy is written in two statements, not two per question.
+    const copies = questions.map((question) => ({
+      source: question,
+      id: crypto.randomUUID(),
+    }));
+    await repo.insertQuestions(
+      trx,
+      copies.map(({ source: question, id }) => ({
+        id,
         quiz_version_id: version.id,
         question_type: question.question_type,
         prompt: question.prompt,
         points: question.points,
         position: question.position,
-        configuration: question.configuration,
+        // Remember which published question this copy came from, so an
+        // edit addressed to the published id reaches the right draft row.
+        configuration: {
+          ...(isJsonObject(question.configuration)
+            ? question.configuration
+            : {}),
+          sourceQuestionId: question.id,
+        },
         explanation: question.explanation,
-        created_at: new Date(),
-        updated_at: new Date(),
+        created_at: now,
+        updated_at: now,
         deleted_at: null,
-      });
-      await repo.insertOptions(
-        trx,
+      })),
+    );
+    await repo.insertOptions(
+      trx,
+      copies.flatMap(({ source: question, id }) =>
         options
           .filter((option) => option.question_id === question.id)
           .map((option) => ({
             id: crypto.randomUUID(),
-            question_id: questionId,
+            question_id: id,
             option_text: option.option_text,
             is_correct: option.is_correct,
             weight: option.weight,
             position: option.position,
-            created_at: new Date(),
-            updated_at: new Date(),
+            created_at: now,
+            updated_at: now,
           })),
-      );
-    }
+      ),
+    );
     return version;
   }
 
   /**
    * Resolve a question against the editable snapshot. If the caller loaded a
    * published version before the first edit, its question IDs belong to that
-   * immutable snapshot. Match that source question to the cloned draft by its
-   * stable authoring position so edits never mutate an attempt's pinned data.
+   * immutable snapshot. Match that source question to its copy in the draft
+   * so edits never mutate an attempt's pinned data. The copy records the id
+   * it was made from; position and prompt are only a fallback for drafts
+   * cloned before that was recorded — two questions can share a position
+   * after a delete and an add, and matching on it edited the wrong one.
    */
   async function getEditableQuestion(
     trx: DatabaseExecutor,
@@ -367,6 +382,11 @@ export function createAuthoringService(options: QuizServiceOptions) {
     const draftQuestions = await repo.listQuestions(trx, version.id);
     const question =
       draftQuestions.find(
+        (candidate) =>
+          isJsonObject(candidate.configuration) &&
+          candidate.configuration.sourceQuestionId === sourceQuestion.id,
+      ) ??
+      draftQuestions.find(
         (candidate) => candidate.position === sourceQuestion.position,
       ) ??
       draftQuestions.find(
@@ -387,7 +407,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     quizId: string,
     payload: UpdateQuizRequest,
   ) {
-    await requireQuiz(quizId, actor);
+    await requireQuiz(quizId, actor, "quiz.settings.update");
     await database.transaction().execute(async (trx) => {
       if (payload.title !== undefined || payload.description !== undefined)
         await repo.updateQuiz(trx, quizId, {
@@ -401,7 +421,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
         });
       }
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function addQuestion(
@@ -409,19 +429,19 @@ export function createAuthoringService(options: QuizServiceOptions) {
     quizId: string,
     payload: CreateQuizQuestionRequest,
   ) {
-    await requireQuiz(quizId, actor);
+    await requireQuiz(quizId, actor, "quiz.questions.manage");
     validateQuestionPayload(payload);
     const questionId = crypto.randomUUID();
     await database.transaction().execute(async (trx) => {
       const version = await getEditableVersion(trx, quizId);
-      const existing = await repo.listQuestions(trx, version.id);
       await repo.insertQuestion(trx, {
         id: questionId,
         quiz_version_id: version.id,
         question_type: payload.questionType,
         prompt: payload.prompt,
         points: payload.points,
-        position: payload.position ?? existing.length,
+        position:
+          payload.position ?? (await repo.countQuestions(trx, version.id)),
         configuration: {},
         explanation: payload.explanation ?? null,
         created_at: new Date(),
@@ -430,7 +450,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
       });
       await repo.insertOptions(
         trx,
-        payload.options.map((option, position) => ({
+        questionOptions(payload).map((option, position) => ({
           id: option.id ?? crypto.randomUUID(),
           question_id: questionId,
           option_text: option.text,
@@ -442,7 +462,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
         })),
       );
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function updateQuestion(
@@ -451,7 +471,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     questionId: string,
     payload: UpdateQuizQuestionRequest,
   ) {
-    await requireQuiz(quizId, actor);
+    await requireQuiz(quizId, actor, "quiz.questions.manage");
     await database.transaction().execute(async (trx) => {
       const editable = await getEditableQuestion(trx, quizId, questionId);
       const currentOptions = await repo.listOptions(trx, [
@@ -483,14 +503,16 @@ export function createAuthoringService(options: QuizServiceOptions) {
         position: next.position,
         explanation: next.explanation,
       });
-      if (payload.options) {
+      // Options are rewritten when new ones are sent, and removed when the
+      // question is, or has just become, a short answer.
+      if (payload.options || next.questionType === "short_answer") {
         const currentOptionIds = new Set(
           currentOptions.map((option) => option.id),
         );
         await repo.deleteOptions(trx, editable.question.id);
         await repo.insertOptions(
           trx,
-          next.options.map((option, position) => ({
+          questionOptions(next).map((option, position) => ({
             id:
               option.id && currentOptionIds.has(option.id)
                 ? option.id
@@ -506,7 +528,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
         );
       }
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function deleteQuestion(
@@ -514,7 +536,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     quizId: string,
     questionId: string,
   ) {
-    await requireQuiz(quizId, actor);
+    await requireQuiz(quizId, actor, "quiz.questions.manage");
     await database.transaction().execute(async (trx) => {
       const editable = await getEditableQuestion(trx, quizId, questionId);
       await repo.softDeleteQuestion(trx, editable.question.id);
@@ -523,7 +545,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
   }
 
   async function publish(actor: QuizActor, quizId: string) {
-    await requireQuiz(quizId, actor);
+    await requireQuiz(quizId, actor, "quiz.publish");
     const version = await repo.findLatestVersion(database, quizId, false);
     if (!version)
       throw new AppError(
@@ -565,27 +587,43 @@ export function createAuthoringService(options: QuizServiceOptions) {
       await repo.updateVersion(trx, version.id, { published_at: new Date() });
       await repo.updateQuiz(trx, quizId, { status: "published" });
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function deleteQuiz(actor: QuizActor, quizId: string) {
-    await requireQuiz(quizId, actor);
+    await requireQuiz(quizId, actor, "quiz.delete");
+    // Courses whose lesson turns back into a video lesson: their cached
+    // content is cleared once this has committed.
+    const changedCourseIds = new Set<string>();
     await database.transaction().execute(async (trx) => {
-      const assignments = await repo.listAssignmentsForQuizzes(trx, [quizId]);
+      const assignments = await repo.listAssignmentRefsForQuizzes(trx, [
+        quizId,
+      ]);
+      assertNoLearnerAttempts(
+        await repo.countLearnerAttempts(trx, {
+          assignmentIds: assignments.map((assignment) => assignment.id),
+          actorId: actor.id,
+        }),
+      );
       const lessonIds = assignments
         .map((a) => a.lesson_id)
         .filter((id): id is string => Boolean(id));
       if (lessonIds.length > 0) {
-        await trx
-          .updateTable("course_lessons")
-          .set({ content_type: "video", updated_at: new Date() })
-          .where("id", "in", lessonIds)
-          .where("content_type", "=", "quiz")
-          .execute();
+        // The lesson stays published; it just no longer has the quiz. There
+        // is no lesson type for "no video and no quiz", so it becomes a
+        // video lesson with no media. The learner's lesson page reads that
+        // from the course overview (`contentMediaId: null`): it says the
+        // lesson has no video, asks for no playback, and counts the lesson
+        // finished when it is opened, so the course can still reach 100%.
+        await repo.revertQuizLessonsToVideo(trx, lessonIds);
+        for (const assignment of assignments) {
+          if (assignment.lesson_id) changedCourseIds.add(assignment.course_id);
+        }
       }
       await repo.deleteAssignmentsByQuizId(trx, quizId);
       await repo.softDeleteQuiz(trx, quizId);
     });
+    invalidateCache([...changedCourseIds].map((id) => cacheTags.course(id)));
     return { success: true as const };
   }
 
@@ -600,7 +638,6 @@ export function createAuthoringService(options: QuizServiceOptions) {
     updateQuestion,
     deleteQuestion,
     publish,
-    presentQuiz,
   };
 }
 export type AuthoringService = ReturnType<typeof createAuthoringService>;

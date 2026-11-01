@@ -2,13 +2,18 @@ import crypto from "node:crypto";
 import type {
   Refund,
   CreateRefundRequest,
+  GatewayRefundOutput,
   PaymentGateway,
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { AppError } from "../../../lib/errors.ts";
-import { CommerceErrors } from "../shared/commerce.errors.ts";
-import { toMinorUnits } from "../shared/currency.ts";
+import {
+  CommerceErrors,
+  toClientGatewayError,
+} from "../shared/commerce.errors.ts";
+import { isUniqueViolation } from "../shared/db-errors.ts";
+import { outsideRefundId, refundChannelRefusal } from "./outside-refund.ts";
 import * as refundRepo from "./refund.repository.ts";
 import { toRefundContract } from "./refund.mapper.ts";
 import * as orderRepo from "../orders/order.repository.ts";
@@ -30,7 +35,7 @@ export interface RefundService {
  * network failure, timeout, 5xx, an in-progress 409, an unreadable response —
  * leaves the outcome unknown: the gateway may well have processed it.
  */
-function isDefinitiveGatewayRejection(err: unknown): boolean {
+export function isDefinitiveGatewayRejection(err: unknown): boolean {
   return (
     err instanceof AppError &&
     err.code === "PAYMENT_GATEWAY_ERROR" &&
@@ -38,6 +43,14 @@ function isDefinitiveGatewayRejection(err: unknown): boolean {
     err.statusCode < 500 &&
     err.statusCode !== 408 &&
     err.statusCode !== 409
+  );
+}
+
+function outsideRefundAlreadyRecorded(): AppError {
+  return new AppError(
+    409,
+    "REFUND_REFERENCE_ALREADY_USED",
+    "A refund with this transfer reference has already been recorded. Check the reference; one transfer back can be recorded once.",
   );
 }
 
@@ -66,6 +79,12 @@ export function createRefundService({
    * calling the gateway) and a separate "finalize" step that updates that
    * same row once the gateway responds. The gateway call deliberately stays
    * outside both transactions: never hold a row lock across a network call.
+   *
+   * Outside refunds: an order paid by manual transfer has no gateway payment,
+   * so staff return the money themselves and record it with
+   * `request.outsideRefund`. Everything is the same except that the gateway
+   * is not called: the reservation is finalized as `processed` under an id
+   * made from the staff reference (see ./outside-refund.ts).
    */
   async function processRefund(
     adminUserId: string,
@@ -73,6 +92,14 @@ export function createRefundService({
   ): Promise<Refund> {
     const { orderId, orderItemId, amount, reason, idempotencyKey } = request;
     const newRefundId = crypto.randomUUID();
+    const outsideId = request.outsideRefund
+      ? outsideRefundId(request.outsideRefund.reference)
+      : null;
+    if (request.outsideRefund && !outsideId) {
+      throw CommerceErrors.REFUND_NOT_ALLOWED(
+        "Enter the reference of the transfer the money was returned by.",
+      );
+    }
 
     // 1. Reserve — see the concurrency note above.
     const reservation = await database.transaction().execute(async (trx) => {
@@ -93,9 +120,13 @@ export function createRefundService({
           idempotencyKey,
         );
         if (existing) {
+          // A key that recorded one transfer back cannot stand for another.
           const sameRequest =
             existing.order_item_id === (orderItemId ?? null) &&
-            (amount === undefined || existing.amount === amount);
+            (amount === undefined || existing.amount === amount) &&
+            (!outsideId ||
+              !existing.gateway_refund_id ||
+              existing.gateway_refund_id === outsideId);
           if (!sameRequest) {
             throw CommerceErrors.REFUND_IDEMPOTENCY_KEY_REUSED();
           }
@@ -113,6 +144,13 @@ export function createRefundService({
               throw CommerceErrors.REFUND_NOT_ALLOWED(
                 "No captured payment exists for this order.",
               );
+            }
+            const resumeRefusal = refundChannelRefusal(
+              payment.gateway_provider,
+              outsideId !== null,
+            );
+            if (resumeRefusal) {
+              throw CommerceErrors.REFUND_NOT_ALLOWED(resumeRefusal);
             }
             const resumedItem = existing.order_item_id
               ? ((await orderRepo.findOrderItemById(
@@ -166,6 +204,41 @@ export function createRefundService({
         );
       }
 
+      // A no-cost order has a payment row of zero and nothing to return.
+      // It used to be refused as "already fully refunded".
+      if (payment.gateway_provider === "free" || payment.amount === 0) {
+        throw CommerceErrors.REFUND_NOT_ALLOWED(
+          "This order had no charge, so there is nothing to refund.",
+        );
+      }
+
+      // A manual payment arrived by bank or UPI transfer, outside any
+      // gateway, so there is no gateway payment to refund. Asked anyway, the
+      // gateway refused the made-up payment id and every such refund failed
+      // as a gateway error. It is refused here instead, before anything is
+      // reserved or sent, and nothing about the order changes: this service
+      // cannot move that money. The money is returned outside the platform,
+      // and staff then record that with `outsideRefund`; only that explicit
+      // marker records a refund this service did not make, and it is refused
+      // in turn for a payment that did come through a gateway.
+      const channelRefusal = refundChannelRefusal(
+        payment.gateway_provider,
+        outsideId !== null,
+      );
+      if (channelRefusal) {
+        throw CommerceErrors.REFUND_NOT_ALLOWED(channelRefusal);
+      }
+
+      // One reference stands for one transfer back. The unique column
+      // enforces it; asking first answers plainly before anything is
+      // reserved. Two requests racing past this meet at finalization.
+      if (
+        outsideId &&
+        (await refundRepo.findRefundByGatewayRefundId(trx, outsideId))
+      ) {
+        throw outsideRefundAlreadyRecorded();
+      }
+
       // Calculate total already refunded — safe from the race now that
       // this read happens under the order row's lock. No exclusion
       // needed: this refund doesn't exist as a row yet.
@@ -182,17 +255,12 @@ export function createRefundService({
       }
 
       // If orderItemId was provided without an explicit amount, default to
-      // the target item's final amount. `order_items.final_amount` is in
-      // major units while `payment.amount` / refund amounts are gateway
-      // minor units (see shared/currency.ts) — convert before comparing,
-      // otherwise this default refunds 1/100 of the item's price.
+      // the target item's final amount (minor units, like the payment and
+      // refund amounts it is compared with).
       const requestedAmount =
         amount ??
         (targetItem
-          ? Math.min(
-              toMinorUnits(targetItem.final_amount, payment.currency),
-              maxRefundable,
-            )
+          ? Math.min(targetItem.final_amount, maxRefundable)
           : maxRefundable);
       if (requestedAmount > maxRefundable) {
         throw CommerceErrors.REFUND_NOT_ALLOWED(
@@ -257,20 +325,30 @@ export function createRefundService({
           .update(`refund:${order.id}:${idempotencyKey}`)
           .digest("hex")
       : refundId;
-    let gatewayResult;
+    //
+    //    An outside refund was already made by staff: there is nothing to
+    //    send, and it is settled as soon as it is recorded.
+    let gatewayResult: GatewayRefundOutput;
     try {
-      gatewayResult = await paymentGateway.refundPayment({
-        gatewayPaymentId: payment.gateway_payment_id!,
-        amount: requestedAmount,
-        currency: payment.currency,
-        reason: reason ?? "Admin initiated refund",
-        idempotencyKey: gatewayIdempotencyKey,
-        notes: {
-          orderId: order.id,
-          adminUserId,
-          ...(targetItem ? { orderItemId: targetItem.id } : {}),
-        },
-      });
+      gatewayResult = outsideId
+        ? {
+            gatewayRefundId: outsideId,
+            amount: requestedAmount,
+            currency: payment.currency,
+            status: "processed",
+          }
+        : await paymentGateway.refundPayment({
+            gatewayPaymentId: payment.gateway_payment_id!,
+            amount: requestedAmount,
+            currency: payment.currency,
+            reason: reason ?? "Admin initiated refund",
+            idempotencyKey: gatewayIdempotencyKey,
+            notes: {
+              orderId: order.id,
+              adminUserId,
+              ...(targetItem ? { orderItemId: targetItem.id } : {}),
+            },
+          });
     } catch (err) {
       // Outcome unknown (timeout, 5xx, ...) and the caller can retry under
       // a key: keep the reservation `pending` with its key. It keeps
@@ -278,8 +356,10 @@ export function createRefundService({
       // gateway did create the refund, and a retry with the same key resumes
       // it (see the replay branch above) under the same gateway key, so it
       // resolves to the original refund rather than a second one.
+      // Both branches decide on the gateway's own status first; only what is
+      // thrown to the caller is stripped of the provider's status and text.
       if (idempotencyKey && !isDefinitiveGatewayRejection(err)) {
-        throw err;
+        throw toClientGatewayError(err);
       }
 
       // Otherwise release the reservation so it doesn't permanently eat into
@@ -291,7 +371,7 @@ export function createRefundService({
         idempotency_key: null,
         updated_at: new Date(),
       });
-      throw err;
+      throw toClientGatewayError(err);
     }
 
     const now = new Date();
@@ -302,7 +382,11 @@ export function createRefundService({
     const newTotalRefunded = totalRefundedAlready + requestedAmount;
     const isFullRefund = isProcessed && newTotalRefunded >= payment.amount;
 
-    const createdRefund = await database.transaction().execute(async (trx) => {
+    // Set when another refund already holds this outside reference: the
+    // reservation is released inside the transaction and the caller is told
+    // once that has committed.
+    let outsideReferenceTaken = false;
+    const finalize = database.transaction().execute(async (trx) => {
       // The gateway returns the same refund for a repeated key, so the
       // webhook may have recorded it already: it upserts by gateway refund id
       // and can't see this reservation. It applied its own side effects, so
@@ -319,6 +403,12 @@ export function createRefundService({
           idempotency_key: null,
           updated_at: now,
         });
+        // An outside reference on another row is another refund, not this
+        // one seen twice: there is nothing to fold into.
+        if (outsideId) {
+          outsideReferenceTaken = true;
+          return recorded;
+        }
         const adopted = await refundRepo.updateRefundStatus(trx, recorded.id, {
           status: recorded.status,
           ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
@@ -378,9 +468,11 @@ export function createRefundService({
           } else if (targetItem) {
             // Partial item-specific refund: revoke access specifically for this item
             await courseAccessService.revokeAccessForOrderItem(trx, order, {
+              id: targetItem.id,
               item_type: targetItem.item_type,
               course_id: targetItem.course_id,
               bundle_id: targetItem.bundle_id,
+              quiz_pricing_id: targetItem.quiz_pricing_id,
             });
           }
         }
@@ -403,6 +495,30 @@ export function createRefundService({
 
       return record;
     });
+
+    let createdRefund;
+    try {
+      createdRefund = await finalize;
+    } catch (err) {
+      // Two outside refunds with one reference finalizing at the same moment:
+      // the second meets the unique column. Only that column, and only for
+      // an outside refund; the reservation is released like any refused one.
+      if (
+        outsideId &&
+        isUniqueViolation(err, "refunds_gateway_refund_id_key")
+      ) {
+        await refundRepo.updateRefundStatus(database, refundId, {
+          status: "failed",
+          idempotency_key: null,
+          updated_at: new Date(),
+        });
+        throw outsideRefundAlreadyRecorded();
+      }
+      throw err;
+    }
+    if (outsideReferenceTaken) {
+      throw outsideRefundAlreadyRecorded();
+    }
 
     return toRefundContract(createdRefund);
   }

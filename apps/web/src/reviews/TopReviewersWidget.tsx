@@ -1,5 +1,6 @@
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import type { TopReviewer } from "./reviewsData";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface TopReviewersWidgetProps {
   reviewers: readonly TopReviewer[];
@@ -13,10 +14,9 @@ export function TopReviewersWidget({
   onViewAll,
 }: TopReviewersWidgetProps) {
   return (
-    <section
+    <ElevatedCard
       aria-labelledby="top-reviewers-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="p-5 md:p-6 transition-all"
     >
       <div className="flex items-center justify-between">
         <h3
@@ -67,6 +67,6 @@ export function TopReviewersWidget({
           </div>
         ))}
       </div>
-    </section>
+    </ElevatedCard>
   );
 }

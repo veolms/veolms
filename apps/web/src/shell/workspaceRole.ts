@@ -7,18 +7,16 @@ export const ADMIN_ROLES = new Set([
   "platform administrator",
 ]);
 
-export const STAFF_ROLES = new Set([
-  "admin",
-  "administrator",
-  "creator",
-  "instructor",
-  "platform_admin",
-  "platform administrator",
-  "superadmin",
-  "super_admin",
-]);
-
-export const CREATOR_ROLES = new Set(["creator", "instructor", ...ADMIN_ROLES]);
+/**
+ * Any role beyond student puts the account on the team: built-in staff
+ * roles and every custom team role. Which pages it may open is decided by
+ * its permissions (see navigation.ts), not by the role's name.
+ */
+export function hasTeamRole(
+  roles: readonly string[] | null | undefined,
+): boolean {
+  return normalizeRoles(roles).some((role) => role !== "student");
+}
 
 export function normalizeRoles(
   roles: readonly string[] | null | undefined,
@@ -29,6 +27,29 @@ export function normalizeRoles(
 
 export function getWorkspaceRoleStorageKey(userId?: string | null): string {
   return userId ? `veolms-role-${userId}` : "veolms-role";
+}
+
+/**
+ * The view an account opens in: the one it last chose on this device, or,
+ * with none saved, the creator view for an admin and the student view for
+ * everyone else (other team roles included). The shell opens in it, and the
+ * route guard judges the home page by it: the home is the dashboard only in
+ * the creator view.
+ */
+export function readSavedWorkspaceView(
+  userId: string | null | undefined,
+  roles: readonly string[] | null | undefined,
+): CourseRole {
+  let stored: string | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      stored = window.localStorage.getItem(getWorkspaceRoleStorageKey(userId));
+    } catch {
+      stored = null;
+    }
+  }
+  if (stored === "student") return "student";
+  return stored === "creator" || hasAdminRole(roles) ? "creator" : "student";
 }
 
 export function getAllowedWorkspaceRoles(
@@ -47,7 +68,7 @@ export function getAllowedWorkspaceRoles(
   if (normalized.has("student")) {
     allowed.push("student");
   }
-  if ([...normalized].some((role) => CREATOR_ROLES.has(role))) {
+  if ([...normalized].some((role) => role !== "student")) {
     allowed.push("creator");
   }
   return allowed;
@@ -97,7 +118,7 @@ export function isStaffRole(
   if (!roles?.length) {
     return false;
   }
-  return normalizeRoles(roles).some((role) => STAFF_ROLES.has(role));
+  return hasTeamRole(roles);
 }
 
 export function getRoleDisplayName(
@@ -110,7 +131,11 @@ export function getRoleDisplayName(
   if (hasAdminRole(userRoles)) {
     return "Admin";
   }
-  return "Instructor";
+  const normalized = normalizeRoles(userRoles);
+  if (normalized.includes("instructor") || normalized.includes("creator")) {
+    return "Instructor";
+  }
+  return "Team";
 }
 
 export function getShellProfileSubtitle(

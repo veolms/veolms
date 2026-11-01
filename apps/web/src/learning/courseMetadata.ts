@@ -71,6 +71,19 @@ export const getCourseTitle = (courseSlug: string | undefined) =>
   (courseSlug ? courseTitlesBySlug[courseSlug] : undefined) ||
   "UI/UX Design Mastery";
 
+/**
+ * The title of a built-in demo course, and nothing for any other course.
+ * `getCourseTitle` answers "UI/UX Design Mastery" for a slug it does not
+ * know; used for page titles, that put a demo course's name in the browser
+ * tab of every real course.
+ */
+export const getDemoCourseTitle = (
+  courseSlug: string | undefined,
+): string | undefined => {
+  const title = courseSlug ? courseTitlesBySlug[courseSlug] : undefined;
+  return typeof title === "string" ? title : undefined;
+};
+
 const courseThumbnailsBySlug: Record<string, string | undefined> = {
   "ui-ux-design-mastery": "/static/instructor-poster-960.webp",
   "typescript-course": typescriptCourseThumbnail,

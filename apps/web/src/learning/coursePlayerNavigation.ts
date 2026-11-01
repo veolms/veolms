@@ -94,6 +94,7 @@ const parseCoursePlayerSessionCandidate = (
         (key) =>
           !LEGACY_LAUNCH_CONTEXT_PARAMS.some((legacy) => legacy === key) &&
           key !== "thread" &&
+          key !== "focus" &&
           key !== "noteId" &&
           key !== "view",
       )
@@ -110,6 +111,7 @@ const parseCoursePlayerSessionCandidate = (
       lessonId,
       path: getCoursePlayerPath(candidate.courseId, lessonId, {
         threadId,
+        threadFocus: getCoursePlayerThreadFocus(pathUrl.search),
         noteId,
         view,
       }),
@@ -245,6 +247,21 @@ export function getCoursePlayerThread(search: string): string | null {
   return normalized && !normalized.startsWith("client-") ? normalized : null;
 }
 
+/**
+ * How a linked thread is shown. A plain thread link opens the thread beside
+ * the lesson. With `focus=comment` the lesson's discussion instead brings the
+ * comment to the top of its list, scrolls to it and highlights it.
+ */
+export type CoursePlayerThreadFocus = "comment";
+
+export function getCoursePlayerThreadFocus(
+  search: string,
+): CoursePlayerThreadFocus | undefined {
+  return new URLSearchParams(search).get("focus") === "comment"
+    ? "comment"
+    : undefined;
+}
+
 export function getCoursePlayerNote(search: string): string | null {
   const note = new URLSearchParams(search).get("noteId");
   const normalized = note?.trim();
@@ -261,6 +278,8 @@ export function getCoursePlayerView(
 
 export interface CoursePlayerPathOptions {
   threadId?: string | null;
+  /** Only read together with `threadId`. */
+  threadFocus?: CoursePlayerThreadFocus;
   noteId?: string | null;
   view?: "video" | "quiz";
 }
@@ -283,6 +302,7 @@ export function getCoursePlayerPath(
     search.set("noteId", noteId);
   } else if (threadId && !threadId.startsWith("client-")) {
     search.set("thread", threadId);
+    if (options?.threadFocus === "comment") search.set("focus", "comment");
   }
   if (options?.view === "quiz") search.set("view", "quiz");
   const query = search.toString();
@@ -356,6 +376,7 @@ export function migrateCoursePlayerSessionKey(
     courseId: nextCourseId,
     path: getCoursePlayerPath(nextCourseId, previousSession.lessonId, {
       threadId: getCoursePlayerThread(previousSearch),
+      threadFocus: getCoursePlayerThreadFocus(previousSearch),
       noteId: getCoursePlayerNote(previousSearch),
       view: getCoursePlayerView(previousSearch),
     }),
@@ -386,6 +407,7 @@ export function upsertCoursePlayerSessionFromRoute(
   const view = getCoursePlayerView(search);
   const path = getCoursePlayerPath(courseId, lessonId, {
     threadId,
+    threadFocus: getCoursePlayerThreadFocus(search),
     noteId,
     view,
   });

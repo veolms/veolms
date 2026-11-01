@@ -2,12 +2,12 @@ import { z } from "zod";
 import {
   lockThreadRequestSchema,
   lockThreadResponseSchema,
-  searchMentionsQuerySchema,
-  searchMentionsResponseSchema,
   toggleBookmarkResponseSchema,
   toggleFollowResponseSchema,
   toggleLikeRequestSchema,
   toggleLikeResponseSchema,
+  userAutocompleteQuerySchema,
+  userAutocompleteResponseSchema,
 } from "@veolms/contracts";
 import { errorResponse } from "../../../../lib/errors.ts";
 import { jsonResponse } from "../../../../lib/responses.ts";
@@ -154,11 +154,11 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
         operationId: "autocompleteUsersForMention",
         tags: ["Learning Engagements"],
         summary: "Search course participants for @mentions",
-        querystring: searchMentionsQuerySchema,
+        querystring: userAutocompleteQuerySchema,
         response: {
           200: jsonResponse(
             "List of matching users",
-            searchMentionsResponseSchema,
+            userAutocompleteResponseSchema,
           ),
           400: errorResponse("Query and courseId are required"),
           401: errorResponse("Unauthorized"),

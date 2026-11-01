@@ -149,6 +149,13 @@ export interface WebExtension {
   name: string;
   /** Additional React Router routes to merge into the route tree. */
   routes?: RouteConfigEntry[];
+  /**
+   * Pages shown inside the academy shell (sidebar, header, page frame), as
+   * core's own pages are. Each route's module renders the page content;
+   * register its title with `registerShellPage` (web-core) under the same
+   * route id.
+   */
+  shellRoutes?: RouteConfigEntry[];
 }
 
 /**

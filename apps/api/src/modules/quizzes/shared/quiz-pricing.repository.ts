@@ -2,6 +2,9 @@ import type { Database, DatabaseExecutor } from "@veolms/database";
 import type { Insertable } from "kysely";
 import type { QuizPricingRow } from "../../commerce/pricing/quiz-pricing.amount.ts";
 
+/** What a quiz pass costs; all a price needs to be resolved or shown. */
+const PRICE_COLUMNS = ["pricing_type", "price", "sale_price"] as const;
+
 /**
  * Quiz pricing is stored once per course and applies to every quiz attached to
  * it. No row means the course's quizzes are free.
@@ -12,7 +15,7 @@ export async function findPricing(
 ) {
   return await database
     .selectFrom("course_quiz_pricing")
-    .selectAll()
+    .select(PRICE_COLUMNS)
     .where("course_id", "=", courseId)
     .executeTakeFirst();
 }
@@ -30,24 +33,13 @@ export async function findCourseCurrency(
   return (row?.currency ?? "INR").toUpperCase();
 }
 
+/** Which course a purchased quiz pass belongs to. */
 export async function findPricingById(database: DatabaseExecutor, id: string) {
   return await database
     .selectFrom("course_quiz_pricing")
-    .selectAll()
+    .select(["id", "course_id"])
     .where("id", "=", id)
     .executeTakeFirst();
-}
-
-export async function listPricingForCourses(
-  database: DatabaseExecutor,
-  courseIds: readonly string[],
-) {
-  if (courseIds.length === 0) return [];
-  return await database
-    .selectFrom("course_quiz_pricing")
-    .selectAll()
-    .where("course_id", "in", courseIds)
-    .execute();
 }
 
 export async function upsertPricing(
@@ -66,7 +58,7 @@ export async function upsertPricing(
         updated_at: new Date(),
       }),
     )
-    .returningAll()
+    .returning(PRICE_COLUMNS)
     .executeTakeFirstOrThrow();
 }
 
@@ -84,6 +76,7 @@ export async function findOfferingByAssignmentId(
     .select([
       "qa.id as assignment_id",
       "l.is_preview as lesson_is_preview",
+      "l.is_published as lesson_is_published",
       "qa.quiz_id",
       "qa.course_id",
       "qa.lesson_id",
@@ -148,7 +141,7 @@ export async function findActiveGrant(
 ) {
   return await database
     .selectFrom("course_quiz_access_grants")
-    .selectAll()
+    .select("id")
     .where("user_id", "=", input.userId)
     .where("course_id", "=", input.courseId)
     .where("status", "=", "active")
@@ -174,7 +167,7 @@ export async function upsertGrant(
         updated_at: new Date(),
       }),
     )
-    .returningAll()
+    .returning("id")
     .executeTakeFirstOrThrow();
 }
 

@@ -1,12 +1,23 @@
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import type { Permission, CapabilitiesResponse } from "@veolms/contracts";
-import * as repo from "./authorization.repository.ts";
+import {
+  checkPermission,
+  isFeatureOn,
+  listEffectivePermissions,
+} from "./permission-cache.ts";
+import { resolveResourceCourseId } from "./scope-cache.ts";
 
 export interface AuthorizationCheckRequest {
   userId: string;
   permission: Permission;
   courseId?: string | null;
   featureKey?: string;
+  /**
+   * Count only roles that reach every course: for academy-wide surfaces
+   * (platform moderation, all students), where an instructor's course
+   * permissions must not apply.
+   */
+  platformWide?: boolean;
 }
 
 export interface AuthorizationDecision {
@@ -38,14 +49,12 @@ export function createAuthorizationService(
     async check(
       request: AuthorizationCheckRequest,
     ): Promise<AuthorizationDecision> {
-      const { userId, permission, courseId, featureKey } = request;
+      const { userId, permission, courseId, featureKey, platformWide } =
+        request;
 
       // 1. Check Feature Entitlement if a feature is bound to this action
       if (featureKey) {
-        const featureEnabled = await repo.isFeatureEnabled(
-          database,
-          featureKey,
-        );
+        const featureEnabled = await isFeatureOn(database, featureKey);
         if (!featureEnabled) {
           return {
             allowed: false,
@@ -57,10 +66,11 @@ export function createAuthorizationService(
       }
 
       // 2. Check Scoped Role Permissions
-      const result = await repo.checkUserPermission(database, {
+      const result = await checkPermission(database, {
         userId,
         permissionKey: permission,
         courseId,
+        excludeOwnCoursesOnlyRoles: platformWide,
       });
 
       if (!result.allowed) {
@@ -87,19 +97,14 @@ export function createAuthorizationService(
     }): Promise<CapabilitiesResponse> {
       const { userId, courseId } = params;
 
-      const [permissionsList, featuresMap] = await Promise.all([
-        repo.getUserEffectivePermissions(database, {
+      const [permissions, academyPermissions] = await Promise.all([
+        listEffectivePermissions(database, { userId, courseId }),
+        listEffectivePermissions(database, {
           userId,
-          courseId,
+          excludeOwnCoursesOnlyRoles: true,
         }),
-        repo.getFeatureMap(database),
       ]);
-
-      return {
-        courseId: courseId ?? null,
-        permissions: permissionsList,
-        features: featuresMap,
-      };
+      return { permissions, academyPermissions };
     },
 
     async resolveScope(
@@ -110,28 +115,15 @@ export function createAuthorizationService(
         return { courseId: null };
       }
 
-      if (resourceType === "course") {
-        const resolved = await repo.resolveCourseScope(database, resourceId);
-        return {
-          courseId: resolved?.courseId ?? resourceId,
-        };
-      }
-
-      if (resourceType === "lesson") {
-        const resolved = await repo.resolveLessonScope(database, resourceId);
-        return {
-          courseId: resolved?.courseId ?? null,
-        };
-      }
-
-      if (resourceType === "section") {
-        const resolved = await repo.resolveSectionScope(database, resourceId);
-        return {
-          courseId: resolved?.courseId ?? null,
-        };
-      }
-
-      return { courseId: null };
+      const courseId = await resolveResourceCourseId(
+        database,
+        resourceType,
+        resourceId,
+      );
+      // An unknown course keeps the id it was asked by, as before.
+      return {
+        courseId: courseId ?? (resourceType === "course" ? resourceId : null),
+      };
     },
   };
 }

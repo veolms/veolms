@@ -2,9 +2,9 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
   CompleteAttachmentUploadRequest,
-  CreateLinkPreviewRequest,
   InitiateAttachmentUploadRequest,
 } from "@veolms/contracts";
+import { httpError } from "../../../../lib/errors.ts";
 import { discussionActor } from "../shared/discussion.access.ts";
 import { readDiscussionAttachmentUploadContext } from "./attachment-upload-context.ts";
 import type { AttachmentsService } from "./attachments.service.ts";
@@ -26,11 +26,6 @@ export interface AttachmentsController {
   ): Promise<void>;
 
   uploadAttachment(request: FastifyRequest, reply: FastifyReply): Promise<void>;
-
-  getLinkPreview(
-    request: FastifyRequest<{ Body: CreateLinkPreviewRequest }>,
-    reply: FastifyReply,
-  ): Promise<void>;
 }
 
 export function createAttachmentsController({
@@ -48,7 +43,7 @@ export function createAttachmentsController({
         discussionActor(user),
         request.body,
       );
-      reply.status(201).send(result);
+      await reply.status(201).send(result);
     },
 
     async uploadFile(request, reply) {
@@ -56,8 +51,7 @@ export function createAttachmentsController({
       const { attachmentId } = request.params;
       const multipartFile = await request.file();
       if (!multipartFile) {
-        reply.status(400).send({ message: "No file provided" });
-        return;
+        throw httpError(400, "FILE_REQUIRED", "No file provided");
       }
 
       try {
@@ -74,8 +68,9 @@ export function createAttachmentsController({
             isTruncated: () => multipartFile.file.truncated,
             ...readMultipartDimensions(multipartFile.fields),
           },
+          request.log,
         );
-        reply.status(200).send(attachment);
+        await reply.status(200).send(attachment);
       } catch (error) {
         // If the service rejected before consuming the stream (auth/mime/
         // 404 paths), drain it so busboy can finish parsing the request.
@@ -91,16 +86,16 @@ export function createAttachmentsController({
         database,
         attachmentId,
         user.id,
+        request.log,
       );
-      reply.status(200).send(attachment);
+      await reply.status(200).send(attachment);
     },
 
     async uploadAttachment(request, reply) {
       const user = request.user!;
       const multipartFile = await request.file();
       if (!multipartFile) {
-        reply.status(400).send({ message: "No file provided" });
-        return;
+        throw httpError(400, "FILE_REQUIRED", "No file provided");
       }
 
       const context = readDiscussionAttachmentUploadContext(
@@ -119,17 +114,11 @@ export function createAttachmentsController({
             ...readMultipartDimensions(multipartFile.fields),
           },
         );
-        reply.status(201).send(result);
+        await reply.status(201).send(result);
       } catch (error) {
         multipartFile.file.resume();
         throw error;
       }
-    },
-
-    async getLinkPreview(request, reply) {
-      const { url } = request.body;
-      const preview = await service.fetchLinkPreview(url);
-      reply.status(200).send(preview);
     },
   };
 }

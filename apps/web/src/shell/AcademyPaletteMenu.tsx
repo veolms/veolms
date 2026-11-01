@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { AcademyTheme } from "../themes";
+import { AppearanceModeSwitch } from "./AppearanceModeSwitch";
+import type { AppearanceMode } from "./AppearanceModeSwitch";
 import {
   themeRevealOriginFromClick,
   themeRevealOriginFromElement,
@@ -19,6 +21,12 @@ interface AcademyPaletteMenuProps {
   onPreview: (themeId: string, origin?: ThemeRevealOrigin) => void;
   onConfirm: (themeId: string) => void;
   onCancel: (origin?: ThemeRevealOrigin) => void;
+  // The light/dark switch under the swatches.
+  appearanceMode: AppearanceMode;
+  onAppearanceModeChange: (
+    mode: AppearanceMode,
+    origin?: ThemeRevealOrigin,
+  ) => void;
 }
 
 const PALETTE_GRID_COLUMNS = 4;
@@ -33,6 +41,8 @@ export function AcademyPaletteMenu({
   onPreview,
   onConfirm,
   onCancel,
+  appearanceMode,
+  onAppearanceModeChange,
 }: AcademyPaletteMenuProps) {
   const [activeTheme, setActiveTheme] = useState(selectedTheme);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -173,6 +183,10 @@ export function AcademyPaletteMenu({
           <i aria-hidden="true" />
         </button>
       ))}
+      <AppearanceModeSwitch
+        mode={appearanceMode}
+        onChange={onAppearanceModeChange}
+      />
     </div>
   );
 }

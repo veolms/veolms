@@ -1,5 +1,4 @@
 import {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -9,6 +8,7 @@ import {
 } from "react";
 import {
   useLocation,
+  useMatches,
   useNavigate,
   useOutletContext,
   useParams,
@@ -22,10 +22,18 @@ import {
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
 import { LearningWorkspaceFallback } from "../learning/LearningWorkspaceFallback";
+// Imported with the route, not lazily: a lesson page is built with the
+// workspace drawn, and the route's code is loaded before the page hydrates,
+// so the built page is hydrated as it is and its stylesheets are linked in
+// the document's head. Loaded lazily, the workspace was not there when the
+// page hydrated: the page painted it unstyled, dropped it for the loading
+// placeholder, then drew it again.
+import { LearningWorkspace } from "../learning/LearningWorkspace";
 import {
   getCoursePlayerNote,
   getCoursePlayerPath,
   getCoursePlayerThread,
+  getCoursePlayerThreadFocus,
   getStoredCourseLessonId,
   migrateCoursePlayerSessionKey,
   upsertCoursePlayerSessionFromRoute,
@@ -35,25 +43,30 @@ import {
   getLearningReturnLocationServerSnapshot,
   subscribeToLearningReturnLocation,
 } from "../learning/learningReturnLocation";
-import { getRouteMeta } from "../routing/routeDescriptors";
-import { buildLoginPath } from "../routing/routeAccess";
+import {
+  getCourseDocumentTitle,
+  getRouteMeta,
+} from "../routing/routeDescriptors";
+import { useDocumentTitle } from "../routing/useDocumentTitle";
+import {
+  buildLoginPath,
+  keepLoginDialogOpen,
+  stripLoginDialogParams,
+} from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
-import { useCourseOverview } from "../services/courses";
+import { useLearningCourse } from "../learning/useLearningCourse";
+import { staticCurriculumUrl } from "../courses/staticCurriculum";
+import type { AcademyStaticPageData } from "./academyStaticPageData";
+import { withKeepScroll } from "../shell/applicationScroll";
 import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
 import { getVideoPlaybackApiOrigin } from "../learning/videoPlaybackBootstrap";
 import { useMyQuizAssignments } from "../services/quizzes";
 
-const LearningWorkspace = lazy(() =>
-  import("../learning/LearningWorkspace").then((module) => ({
-    default: module.LearningWorkspace,
-  })),
-);
-
-export function meta({ location, params }: Route.MetaArgs) {
+export function meta({ location, matches, params }: Route.MetaArgs) {
   const descriptors = Object.entries(
-    getRouteMeta("learning", params, location.pathname),
+    getRouteMeta("learning", params, location.pathname, matches),
   ).map(([name, content]) =>
     name === "title" ? { title: content } : { name, content },
   );
@@ -70,7 +83,33 @@ export function meta({ location, params }: Route.MetaArgs) {
         },
       ]
     : [];
-  return [...descriptors, ...safeMetadata];
+  return [...descriptors, ...safeMetadata, ...curriculumPreload(matches)];
+}
+
+/**
+ * A page built for a lesson asks for its course's curriculum file as soon as
+ * the document is read, beside the app's code rather than after it: the
+ * lessons of the other sections are in it. The request is the one the page
+ * makes (`getStaticCurriculum`), so it is downloaded once.
+ */
+function curriculumPreload(matches: Route.MetaArgs["matches"]) {
+  const seed = (
+    matches.find((match) => match?.id === "root")?.loaderData as
+      AcademyStaticPageData | null | undefined
+  )?.lessonPage;
+  if (!seed) return [];
+  return [
+    {
+      tagName: "link",
+      rel: "preload",
+      as: "fetch",
+      crossOrigin: "anonymous",
+      href: staticCurriculumUrl(
+        seed.curriculum.course.slug,
+        seed.curriculum.version,
+      ),
+    },
+  ];
 }
 
 export function links() {
@@ -92,6 +131,7 @@ const isDiscussionsReturnPath = (returnPath: string): boolean => {
 export default function LearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();
+  const matches = useMatches();
   const navigate = useNavigate();
   const outletContext = useOutletContext<AcademyOutletContext>() ?? {};
   const {
@@ -102,6 +142,7 @@ export default function LearningRoute() {
     onLearningPlayerMinimizeGestureChange,
     onMiniPlayerRestoreReady,
     openLearningMiniPlayer = () => {},
+    openCourseToUnlock,
     persistentPlayerMounted = false,
     registerPersistentPlayer,
   } = outletContext;
@@ -114,10 +155,13 @@ export default function LearningRoute() {
     getLearningReturnLocation,
     getLearningReturnLocationServerSnapshot,
   ).path;
-  const { data: courseOverview, isLoading: isCourseOverviewLoading } =
-    useCourseOverview(courseSlug, {
-      enabled: Boolean(courseSlug),
-    });
+  const {
+    data: courseOverview,
+    isComplete: isCourseOverviewComplete,
+    isLoading: isCourseOverviewLoading,
+  } = useLearningCourse(courseSlug, {
+    enabled: Boolean(courseSlug),
+  });
   const { data: myQuizAssignments, isLoading: myQuizAssignmentsLoading } =
     useMyQuizAssignments({
       enabled: Boolean(activeUser),
@@ -169,8 +213,16 @@ export default function LearningRoute() {
   }, [targetLessonUuid, allApiLessons]);
 
   const lessonId = resolvedFromUuid ?? routeLessonId;
+  // Any link that names its lesson by id — a discussion deep link or a quiz
+  // link from the Quizzes page or a notification — has to wait for the course
+  // to load. Canonicalising earlier rewrote the address to the last-watched
+  // lesson and dropped the id.
+  // A page built for one lesson lists the others only once the course's
+  // curriculum is in, so a lesson it does not list yet is still to come.
   const isLessonUuidResolutionPending = Boolean(
-    deepLinkLessonUuid && isCourseOverviewLoading && !courseOverview,
+    targetLessonUuid &&
+    ((isCourseOverviewLoading && !courseOverview) ||
+      (courseOverview && !isCourseOverviewComplete && !resolvedFromUuid)),
   );
   const isDeepLinkRouteSettled =
     !hasDiscussionDeepLink ||
@@ -185,6 +237,20 @@ export default function LearningRoute() {
       !isLessonUuidResolutionPending,
     );
   const apiLesson = allApiLessons[lessonId - 1];
+  // `meta` above can only name a course the document was built with. Once
+  // the course is here the tab is titled with the lesson and the course.
+  useDocumentTitle(
+    getCourseDocumentTitle(
+      "learning",
+      { courseSlug, lectureSlug },
+      location.pathname,
+      matches,
+      {
+        courseTitle: courseOverview?.course.title,
+        lessonTitle: apiLesson?.title,
+      },
+    ),
+  );
   const quizAssignment = myQuizAssignments?.assignments.find(
     (assignment) =>
       assignment.courseId === courseOverview?.course.id &&
@@ -216,7 +282,9 @@ export default function LearningRoute() {
     )
       return;
 
-    const currentPath = `${location.pathname}${location.search}`;
+    // The login pop-up's parameters are not part of the lesson's address:
+    // they are left out of the comparison and carried over a rewrite.
+    const currentPath = `${location.pathname}${stripLoginDialogParams(location.search)}`;
     const nextPath = courseSlug
       ? upsertCoursePlayerSessionFromRoute(
           courseSlug,
@@ -225,7 +293,10 @@ export default function LearningRoute() {
         )
       : playerReturnPath;
     if (currentPath !== nextPath) {
-      void navigate(nextPath, { replace: true });
+      void navigate(keepLoginDialogOpen(location.search, nextPath), {
+        replace: true,
+        state: withKeepScroll(location.state),
+      });
     }
   }, [
     courseSlug,
@@ -255,10 +326,14 @@ export default function LearningRoute() {
     const threadId = noteDeepLinkId ? null : threadDeepLinkId;
     const nextPath = getCoursePlayerPath(canonicalCourseSlug, lessonId, {
       threadId,
+      threadFocus: getCoursePlayerThreadFocus(location.search),
       noteId: noteDeepLinkId,
       view: isQuizViewRequested ? "quiz" : undefined,
     });
-    void navigate(nextPath, { replace: true });
+    void navigate(keepLoginDialogOpen(location.search, nextPath), {
+      replace: true,
+      state: withKeepScroll(location.state),
+    });
   }, [
     canonicalCourseSlug,
     courseSlug,
@@ -281,6 +356,7 @@ export default function LearningRoute() {
         isSameLesson && !noteId ? getCoursePlayerThread(location.search) : null;
       const path = getCoursePlayerPath(courseSlug, nextLessonId, {
         threadId,
+        threadFocus: getCoursePlayerThreadFocus(location.search),
         noteId,
         view,
       });
@@ -296,10 +372,26 @@ export default function LearningRoute() {
     }
     navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
   }, [courseSlug, hasDiscussionReturnPath, navigateTo, playerReturnPath]);
+  // A locked lesson's "Unlock the course": the course page with the player
+  // closed rather than minimized (see `openCourseToUnlock`).
+  const unlockCourse = useCallback(() => {
+    if (!courseSlug) return;
+    if (openCourseToUnlock) {
+      openCourseToUnlock(courseSlug);
+      return;
+    }
+    navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
+  }, [courseSlug, navigateTo, openCourseToUnlock]);
   const openLogin = useCallback(() => {
-    navigateTo(buildLoginPath(`${location.pathname}${location.search}`), {
-      exact: true,
-    });
+    navigateTo(
+      buildLoginPath(
+        `${location.pathname}${stripLoginDialogParams(location.search)}`,
+        "discussion",
+      ),
+      {
+        exact: true,
+      },
+    );
   }, [location.pathname, location.search, navigateTo]);
   const minimizePlayer = useCallback(
     (request: LearningMiniPlayerRequest) => {
@@ -329,6 +421,8 @@ export default function LearningRoute() {
         mobileBottomNavigationHidden={mobileBottomNavigationHidden}
         onSelectLesson={selectLesson}
         onOpenCourseOverview={openCourseOverview}
+        onOpenEditor={navigateTo}
+        onUnlockCourse={unlockCourse}
         onOpenLogin={openLogin}
         onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
         onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}

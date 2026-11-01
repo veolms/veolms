@@ -1,5 +1,6 @@
 import type { RecentMentionItem } from "./notificationsData";
 import { AtIcon as At } from "@phosphor-icons/react/At";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface RecentMentionsWidgetProps {
   mentions: readonly RecentMentionItem[];
@@ -13,10 +14,9 @@ export function RecentMentionsWidget({
   onSelectMention,
 }: RecentMentionsWidgetProps) {
   return (
-    <section
+    <ElevatedCard
       aria-labelledby="recent-mentions-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 transition-all md:p-6"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="p-5 transition-all md:p-6"
     >
       <div className="flex items-center justify-between">
         <h3
@@ -63,6 +63,6 @@ export function RecentMentionsWidget({
           </button>
         ))}
       </div>
-    </section>
+    </ElevatedCard>
   );
 }

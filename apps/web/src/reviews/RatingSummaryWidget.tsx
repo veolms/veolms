@@ -2,6 +2,7 @@ import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import type { RatingSummaryData } from "./reviewsData";
 import type { RatingFilterOption } from "./useReviewsFilter";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface RatingSummaryWidgetProps {
   summary: RatingSummaryData;
@@ -21,10 +22,9 @@ export function RatingSummaryWidget({
   onToggleExpand,
 }: RatingSummaryWidgetProps) {
   return (
-    <section
+    <ElevatedCard
       aria-labelledby="rating-summary-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="p-5 md:p-6 transition-all"
     >
       <div
         className={`flex items-center justify-between ${
@@ -127,6 +127,6 @@ export function RatingSummaryWidget({
           </div>
         </div>
       )}
-    </section>
+    </ElevatedCard>
   );
 }

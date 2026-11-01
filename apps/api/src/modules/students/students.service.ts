@@ -1,4 +1,6 @@
 import type {
+  StudentContactUpdateRequest,
+  StudentContactUpdateResponse,
   StudentCourseDetail,
   StudentDetailResponse,
   StudentListItem,
@@ -9,10 +11,44 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { AppError } from "../../lib/errors.ts";
+import { createAuthService, type AuthService } from "../auth/index.ts";
+import { hasAcademyPermission } from "../authorization/index.ts";
 import * as studentsRepo from "./students.repository.ts";
 
 export interface StudentsServiceOptions {
   database: Kysely<Database>;
+  authService?: AuthService;
+}
+
+/** The staff member asking for student data. */
+export interface StudentsActor {
+  id: string;
+  roles: readonly string[];
+}
+
+/**
+ * A learner's progress through one course: completed lessons over published
+ * lessons, or — for a course with no published lessons left — the average of
+ * whatever progress rows remain.
+ */
+function resolveCourseProgressPercent(
+  publishedLessonsCount: number,
+  summary:
+    | { completed_lessons: number; progress_rows: number; avg_progress: number }
+    | undefined,
+): number {
+  if (publishedLessonsCount > 0) {
+    return Math.min(
+      100,
+      Math.round(
+        ((summary?.completed_lessons ?? 0) / publishedLessonsCount) * 100,
+      ),
+    );
+  }
+  if (summary && summary.progress_rows > 0) {
+    return Math.min(100, Math.round(summary.avg_progress));
+  }
+  return 0;
 }
 
 export function resolveStudentAvatar(
@@ -79,7 +115,25 @@ export function resolveStudentAvatar(
   return null;
 }
 
-export function createStudentsService({ database }: StudentsServiceOptions) {
+export function createStudentsService({
+  database,
+  authService,
+}: StudentsServiceOptions) {
+  /**
+   * Whoever reads students through a role that reaches every course (admin,
+   * or a team role with student.read) sees every student. Anyone else, an
+   * instructor, is limited to learners enrolled in courses they created and
+   * to those courses' enrollments and progress: the returned id is that
+   * restriction; undefined means unrestricted.
+   */
+  async function resolveCreatorScope(
+    actor: StudentsActor,
+  ): Promise<string | undefined> {
+    return (await hasAcademyPermission(database, actor.id, "student.read"))
+      ? undefined
+      : actor.id;
+  }
+
   async function resolveStudentAvatars(
     users: readonly {
       id: string;
@@ -114,9 +168,16 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
   async function listStudents(
     query: StudentListQuery,
+    actor: StudentsActor,
   ): Promise<StudentListResponse> {
     const limit = query.limit || 50;
+    const creatorId = await resolveCreatorScope(actor);
+    // Phone numbers are admin-only, and so is finding a learner by one: an
+    // instructor could otherwise test whether a number is a learner's.
+    const searchPhone = !creatorId;
 
+    // The total describes the whole filtered population, so only the first
+    // page carries it; later pages would recount the same rows.
     const [rows, totalCount] = await Promise.all([
       studentsRepo.listStudentsPaginated(database, {
         cursor: query.cursor,
@@ -125,12 +186,18 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         courseId: query.courseId,
         status: query.status,
         sortBy: query.sortBy,
+        creatorId,
+        searchPhone,
       }),
-      studentsRepo.countTotalStudents(database, {
-        search: query.search,
-        courseId: query.courseId,
-        status: query.status,
-      }),
+      query.cursor
+        ? undefined
+        : studentsRepo.countTotalStudents(database, {
+            search: query.search,
+            courseId: query.courseId,
+            status: query.status,
+            creatorId,
+            searchPhone,
+          }),
     ]);
 
     const hasNextPage = rows.length > limit;
@@ -147,12 +214,16 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     const userIds = pageRows.map((u) => u.id);
 
     const [allEnrollments, allProgress, allAvatars] = await Promise.all([
-      studentsRepo.listEnrollmentsForUserIds(database, userIds),
+      studentsRepo.listEnrollmentsForUserIds(database, userIds, creatorId),
       // Aggregated per (user, course) in SQL: the raw-row variant shipped
       // thousands of progress rows per page and page throughput was bound
       // by Node parsing them (measured ~21 req/s at 25 connections while
       // every individual query finished in tens of milliseconds).
-      studentsRepo.listProgressSummariesForUserIds(database, userIds),
+      studentsRepo.listProgressSummariesForUserIds(
+        database,
+        userIds,
+        creatorId,
+      ),
       studentsRepo.listAvatarsForUserIds(database, userIds),
     ]);
 
@@ -193,8 +264,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       const userAvatars = avatarsByUserId.get(user.id) ?? [];
       const avatarUrl = resolveStudentAvatar(user.avatar_data_url, userAvatars);
 
-      // Progress summaries are pre-aggregated per (user, course) in SQL;
-      // the math below mirrors the previous per-row JS computation exactly.
+      // Progress summaries are pre-aggregated per (user, course) in SQL.
       const progressByCourse = new Map(
         userProgress.map((p) => [p.course_id, p]),
       );
@@ -203,22 +273,10 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       let completedCoursesCount = 0;
 
       for (const enrollment of userEnrollments) {
-        const courseLessonsCount = lessonCounts.get(enrollment.course_id) ?? 0;
-        const summary = progressByCourse.get(enrollment.course_id);
-
-        let courseProgressPercent = 0;
-        if (courseLessonsCount > 0) {
-          const completedLessons = summary?.completed_lessons ?? 0;
-          courseProgressPercent = Math.min(
-            100,
-            Math.round((completedLessons / courseLessonsCount) * 100),
-          );
-        } else if (summary && summary.progress_rows > 0) {
-          courseProgressPercent = Math.min(
-            100,
-            Math.round(summary.avg_progress),
-          );
-        }
+        const courseProgressPercent = resolveCourseProgressPercent(
+          lessonCounts.get(enrollment.course_id) ?? 0,
+          progressByCourse.get(enrollment.course_id),
+        );
 
         if (courseProgressPercent >= 100) {
           completedCoursesCount += 1;
@@ -233,29 +291,17 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
           ? Math.round(totalProgressSum / enrolledCoursesCount)
           : 0;
 
-      // Determine last active timestamp
-      let latestActive: Date | null = null;
-      for (const p of userProgress) {
-        const date = new Date(p.last_activity_at);
-        if (!latestActive || date > latestActive) {
-          latestActive = date;
-        }
-      }
-      if (!latestActive && userEnrollments.length > 0) {
-        latestActive = new Date(userEnrollments[0]!.enrolled_at);
-      }
-
       return {
         id: user.id,
         username: user.username,
         displayName: user.display_name,
         email: user.email,
+        phoneNo: searchPhone ? user.phone_no : null,
         avatarUrl,
         joinedAt: user.created_at.toISOString(),
         enrolledCoursesCount,
         completedCoursesCount,
         averageProgressPercent,
-        lastActiveAt: latestActive?.toISOString() ?? null,
       };
     });
 
@@ -344,8 +390,16 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
   async function getStudentByUsername(
     username: string,
+    actor: StudentsActor,
   ): Promise<StudentDetailResponse> {
-    const user = await studentsRepo.findStudentByUsername(database, username);
+    const creatorId = await resolveCreatorScope(actor);
+    // Out-of-scope accounts answer exactly like unknown usernames, so the
+    // endpoint cannot be used to probe who exists or studies elsewhere.
+    const user = await studentsRepo.findStudentByUsername(
+      database,
+      username,
+      creatorId,
+    );
     if (!user) {
       throw new AppError(
         404,
@@ -354,11 +408,17 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       );
     }
 
-    const [enrolledCourses, userProgress, userAvatars] = await Promise.all([
-      studentsRepo.getStudentEnrolledCourses(database, user.id),
-      studentsRepo.listProgressForUserIds(database, [user.id]),
-      studentsRepo.listAvatarsForUserIds(database, [user.id]),
-    ]);
+    const [enrolledCourses, progressSummaries, userAvatars] = await Promise.all(
+      [
+        studentsRepo.getStudentEnrolledCourses(database, user.id, creatorId),
+        studentsRepo.listProgressSummariesForUserIds(
+          database,
+          [user.id],
+          creatorId,
+        ),
+        studentsRepo.listAvatarsForUserIds(database, [user.id]),
+      ],
+    );
 
     const courseIds = enrolledCourses.map((c) => c.course_id);
     const lessonCounts = await studentsRepo.listCourseLessonCounts(
@@ -366,50 +426,26 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       courseIds,
     );
 
-    // Group user progress by courseId
-    const progressByCourse = new Map<string, typeof userProgress>();
-    for (const p of userProgress) {
-      const list = progressByCourse.get(p.course_id) ?? [];
-      list.push(p);
-      progressByCourse.set(p.course_id, list);
-    }
+    const progressByCourse = new Map(
+      progressSummaries.map((summary) => [summary.course_id, summary]),
+    );
+    const totalLessonsCompleted = progressSummaries.reduce(
+      (sum, summary) => sum + summary.completed_lessons,
+      0,
+    );
 
     let completedCoursesCount = 0;
     let inProgressCoursesCount = 0;
     let totalProgressSum = 0;
-    let totalLessonsCompleted = 0;
-    let latestActive: Date | null = null;
 
-    for (const p of userProgress) {
-      if (p.progress_percent >= 90) {
-        totalLessonsCompleted += 1;
-      }
-      const date = new Date(p.updated_at);
-      if (!latestActive || date > latestActive) {
-        latestActive = date;
-      }
-    }
-
+    const now = new Date();
     const courses: StudentCourseDetail[] = enrolledCourses.map((c) => {
       const totalLessonsCount = lessonCounts.get(c.course_id) ?? 0;
-      const courseProgressList = progressByCourse.get(c.course_id) ?? [];
-
-      const completedLessonsCount = courseProgressList.filter(
-        (p) => p.progress_percent >= 90,
-      ).length;
-
-      let progressPercent = 0;
-      if (totalLessonsCount > 0) {
-        progressPercent = Math.min(
-          100,
-          Math.round((completedLessonsCount / totalLessonsCount) * 100),
-        );
-      } else if (courseProgressList.length > 0) {
-        const avg =
-          courseProgressList.reduce((acc, p) => acc + p.progress_percent, 0) /
-          courseProgressList.length;
-        progressPercent = Math.min(100, Math.round(avg));
-      }
+      const summary = progressByCourse.get(c.course_id);
+      const progressPercent = resolveCourseProgressPercent(
+        totalLessonsCount,
+        summary,
+      );
 
       if (progressPercent >= 100) {
         completedCoursesCount += 1;
@@ -419,14 +455,6 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
       totalProgressSum += progressPercent;
 
-      let lastAccessedAt: string | null = null;
-      for (const p of courseProgressList) {
-        const pDate = new Date(p.updated_at);
-        if (!lastAccessedAt || pDate > new Date(lastAccessedAt)) {
-          lastAccessedAt = pDate.toISOString();
-        }
-      }
-
       return {
         courseId: c.course_id,
         courseTitle: c.course_title,
@@ -435,13 +463,27 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         courseThumbnailUrl: c.course_thumbnail_url,
         difficulty: c.difficulty,
         enrolledAt: c.enrolled_at.toISOString(),
-        enrollmentStatus: c.enrollment_status,
         enrollmentSource: c.enrollment_source,
-        accessExpiresAt: c.access_expires_at?.toISOString() ?? null,
+        accessStatus:
+          c.enrollment_status === "active" &&
+          c.access_expires_at &&
+          c.access_expires_at <= now
+            ? "expired"
+            : c.enrollment_status,
+        // Refunds are an admin's job; an instructor is not told which order
+        // paid for a place in their course.
+        orderId: creatorId ? null : c.order_id,
+        refundable:
+          !creatorId &&
+          (c.order_status === "paid" ||
+            c.order_status === "partially_refunded") &&
+          (c.order_total_amount ?? 0) > 0,
         progressPercent,
-        completedLessonsCount,
+        completedLessonsCount: summary?.completed_lessons ?? 0,
         totalLessonsCount,
-        lastAccessedAt,
+        lastAccessedAt: summary
+          ? new Date(summary.last_activity_at).toISOString()
+          : null,
       };
     });
 
@@ -451,20 +493,27 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         ? Math.round(totalProgressSum / enrolledCoursesCount)
         : 0;
 
+    // An instructor sees a learner's links only where the learner chose to
+    // publish them, exactly as on the public profile. Admins see them all.
+    const visibleLink = (url: string | null, isPublic: boolean) =>
+      !creatorId || isPublic ? url : null;
+
     return {
       student: {
         id: user.id,
         username: user.username,
         displayName: user.display_name,
         email: user.email,
-        phoneNo: user.phone_no,
+        // Phone numbers are admin-only: an instructor reaches their learners
+        // through the platform, not through a personal number.
+        phoneNo: creatorId ? null : user.phone_no,
         avatarUrl: resolveStudentAvatar(user.avatar_data_url, userAvatars),
         bio: user.bio,
         joinedAt: user.created_at.toISOString(),
         socials: {
-          githubUrl: user.github_url,
-          linkedinUrl: user.linkedin_url,
-          websiteUrl: user.website_url,
+          githubUrl: visibleLink(user.github_url, user.github_public),
+          linkedinUrl: visibleLink(user.linkedin_url, user.linkedin_public),
+          websiteUrl: visibleLink(user.website_url, user.website_public),
         },
       },
       metrics: {
@@ -473,15 +522,56 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         inProgressCoursesCount,
         averageProgressPercent,
         totalLessonsCompleted,
-        lastActiveAt: latestActive?.toISOString() ?? null,
       },
       courses,
     };
   }
 
+  /**
+   * An admin changes a learner's email or phone number, or removes the
+   * number. Instructors may not: contact details are admin-only, as the
+   * phone number already is on the details page.
+   */
+  async function updateStudentContact(
+    username: string,
+    input: StudentContactUpdateRequest,
+    actor: StudentsActor,
+  ): Promise<StudentContactUpdateResponse> {
+    if (
+      !(await hasAcademyPermission(
+        database,
+        actor.id,
+        "student.contact.update",
+      ))
+    ) {
+      throw new AppError(
+        403,
+        "FORBIDDEN",
+        "Only admins can change a learner's contact details.",
+      );
+    }
+    const user = await studentsRepo.findStudentByUsername(
+      database,
+      username,
+      undefined,
+    );
+    if (!user) {
+      throw new AppError(
+        404,
+        "STUDENT_NOT_FOUND",
+        `Student with username '${username}' was not found.`,
+      );
+    }
+    // Built on first use: the other modules that make a students service
+    // never change contact details.
+    authService ??= createAuthService({ database });
+    return authService.updateContactAsAdmin(user.id, input);
+  }
+
   return {
     listStudents,
     getStudentByUsername,
+    updateStudentContact,
     resolveStudentAvatars,
     getActiveLearnerCount,
     getStudentPopulationCounts,

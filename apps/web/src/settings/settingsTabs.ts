@@ -6,6 +6,7 @@ import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldChec
 import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import type { ComponentType, CSSProperties } from "react";
+import { isSignedInSettingsTab } from "../routing/tabSessionState";
 import type { SettingsTab } from "../routing/tabSessionState";
 
 type SettingsTabIcon = ComponentType<{
@@ -14,15 +15,18 @@ type SettingsTabIcon = ComponentType<{
   style?: CSSProperties;
 }>;
 
-export interface SettingsTabDefinition {
-  id: SettingsTab;
+/** A tab of a settings-style page (Settings, Platform). */
+export interface PageTabDefinition<Id extends string = string> {
+  id: Id;
   label: string;
   Icon: SettingsTabIcon;
   tone: "blue" | "cyan" | "gold" | "green" | "orange" | "rose" | "violet";
 }
 
+export type SettingsTabDefinition = PageTabDefinition<SettingsTab>;
+
+// What everyone can change comes first; the account's own sections follow.
 export const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
-  { id: "profile", label: "Profile", Icon: UserCircle, tone: "blue" },
   {
     id: "appearance",
     label: "Appearance",
@@ -48,5 +52,13 @@ export const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
     Icon: ShieldCheck,
     tone: "cyan",
   },
+  { id: "profile", label: "Profile", Icon: UserCircle, tone: "blue" },
   { id: "account", label: "Account", Icon: GearSix, tone: "rose" },
 ];
+
+const GUEST_SETTINGS_TABS = SETTINGS_TABS.filter(
+  ({ id }) => !isSignedInSettingsTab(id),
+);
+
+export const getSettingsTabs = (showSignedInTabs: boolean) =>
+  showSignedInTabs ? SETTINGS_TABS : GUEST_SETTINGS_TABS;

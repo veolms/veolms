@@ -8,19 +8,23 @@ export interface EnrollmentAnalyticsFilters {
   to?: Date;
 }
 
+/**
+ * Recent enrollments. `creatorId` limits the list to that creator's courses
+ * — non-admin staff only ever see enrollments in courses they own.
+ *
+ * The learner's average progress is a correlated subquery rather than a
+ * joined aggregate, so it is computed for the returned rows only instead of
+ * grouping every enrollment before the limit applies.
+ */
 export async function listAcademyEnrollments(
   database: Executor,
   limit: number,
+  creatorId?: string,
 ) {
-  return await database
+  let query = database
     .selectFrom("enrollments as e")
     .innerJoin("users as u", "u.id", "e.user_id")
     .innerJoin("courses as c", "c.id", "e.course_id")
-    .leftJoin("learning_progress as lp", (join) =>
-      join
-        .onRef("lp.user_id", "=", "e.user_id")
-        .onRef("lp.course_id", "=", "e.course_id"),
-    )
     .select([
       "e.id as enrollment_id",
       "e.created_at as enrolled_at",
@@ -28,27 +32,146 @@ export async function listAcademyEnrollments(
       "u.username as student_username",
       "u.display_name as student_display_name",
       "u.avatar_data_url as student_avatar_data_url",
-      "c.id as course_id",
       "c.title as course_title",
-      sql<number | null>`avg(lp.progress_percent)`.as(
-        "average_progress_percent",
-      ),
     ])
+    .select((eb) =>
+      eb
+        .selectFrom("learning_progress as lp")
+        .select(
+          sql<number | null>`avg(lp.progress_percent)`.as(
+            "average_progress_percent",
+          ),
+        )
+        .whereRef("lp.user_id", "=", "e.user_id")
+        .whereRef("lp.course_id", "=", "e.course_id")
+        .as("average_progress_percent"),
+    )
     .where("u.is_deleted", "=", false)
-    .where("c.deleted_at", "is", null)
-    .groupBy([
-      "e.id",
-      "e.created_at",
-      "u.id",
-      "u.username",
-      "u.display_name",
-      "u.avatar_data_url",
-      "c.id",
-      "c.title",
-    ])
+    .where("c.deleted_at", "is", null);
+
+  if (creatorId) {
+    query = query.where("c.creator_id", "=", creatorId);
+  }
+
+  return await query
     .orderBy("e.created_at", "desc")
     .orderBy("e.id", "desc")
     .limit(limit)
+    .execute();
+}
+
+/**
+ * A learner's active, unexpired enrollments in published courses, with the
+ * course details and durable progress the learner's home needs.
+ */
+export async function listEnrolledCoursesForUser(
+  database: Executor,
+  userId: string,
+) {
+  return await database
+    .selectFrom("enrollments as e")
+    .innerJoin("courses as c", "c.id", "e.course_id")
+    .select([
+      "c.id as course_id",
+      "c.creator_id as course_creator_id",
+      "c.slug as course_slug",
+      "c.title as course_title",
+      "c.thumbnail_media_id as course_thumbnail_media_id",
+      "e.created_at as enrolled_at",
+      "e.access_expires_at as access_expires_at",
+    ])
+    // Aggregate durable learner progress for the published lessons in this
+    // course. The old learning_space_sessions table was removed when
+    // progress moved to learning_progress.
+    .select((eb) =>
+      eb
+        .selectFrom("course_lessons as progress_lesson")
+        .leftJoin("learning_progress as lp", (join) =>
+          join
+            .onRef("lp.lesson_id", "=", "progress_lesson.id")
+            .onRef("lp.course_id", "=", "progress_lesson.course_id")
+            .on("lp.user_id", "=", userId),
+        )
+        .select(
+          sql<number>`coalesce(avg(coalesce(lp.progress_percent, 0)), 0)`.as(
+            "progress_percent",
+          ),
+        )
+        .whereRef("progress_lesson.course_id", "=", "c.id")
+        .where("progress_lesson.is_published", "=", true)
+        .where("progress_lesson.deleted_at", "is", null)
+        .as("progress_percent"),
+    )
+    .select((eb) =>
+      eb
+        .selectFrom("learning_progress as lp")
+        .innerJoin(
+          "course_lessons as progress_lesson",
+          "progress_lesson.id",
+          "lp.lesson_id",
+        )
+        .select((sub) => sub.fn.max("lp.updated_at").as("last_accessed_at"))
+        .whereRef("lp.course_id", "=", "c.id")
+        .where("lp.user_id", "=", userId)
+        .where("progress_lesson.is_published", "=", true)
+        .where("progress_lesson.deleted_at", "is", null)
+        .as("last_accessed_at"),
+    )
+    // Subquery counts for sections
+    .select((eb) =>
+      eb
+        .selectFrom("course_sections as cs")
+        .select((sub) => sub.fn.count("cs.id").as("cnt"))
+        .whereRef("cs.course_id", "=", "c.id")
+        .where("cs.deleted_at", "is", null)
+        .as("total_sections"),
+    )
+    // Subquery counts for lessons
+    .select((eb) =>
+      eb
+        .selectFrom("course_lessons as cl")
+        .select((sub) => sub.fn.count("cl.id").as("cnt"))
+        .whereRef("cl.course_id", "=", "c.id")
+        .where("cl.is_published", "=", true)
+        .where("cl.deleted_at", "is", null)
+        .as("total_lessons"),
+    )
+    // Subquery sum for total duration
+    .select((eb) =>
+      eb
+        .selectFrom("course_lessons as cl2")
+        .leftJoin(
+          "media_assets as lesson_media",
+          "lesson_media.id",
+          "cl2.content_media_id",
+        )
+        .select((sub) =>
+          sub.fn
+            .coalesce(
+              sub.fn.sum("lesson_media.duration_seconds"),
+              sql<number>`0`,
+            )
+            .as("dur"),
+        )
+        .whereRef("cl2.course_id", "=", "c.id")
+        .where("cl2.is_published", "=", true)
+        .where("cl2.deleted_at", "is", null)
+        .as("total_duration_seconds"),
+    )
+    .where("e.user_id", "=", userId)
+    // Excludes revoked, suspended and expired enrollments.
+    .where("e.status", "=", "active")
+    .where((eb) =>
+      eb.or([
+        eb("e.access_expires_at", "is", null),
+        eb("e.access_expires_at", ">", new Date()),
+      ]),
+    )
+    // A learner keeps a course that was archived after they got it; a draft
+    // stays out of the student view.
+    .where("c.status", "in", ["published", "archived"])
+    .where("c.deleted_at", "is", null)
+    .orderBy("e.created_at", "desc")
     .execute();
 }
 
@@ -57,6 +180,7 @@ function toCourseIdList(courseId: string | string[] | undefined): string[] {
   return Array.isArray(courseId) ? courseId : [courseId];
 }
 
+/** One learner's enrollment in one course, whatever its status. */
 export async function findEnrollment(
   database: Executor,
   userId: string,
@@ -68,23 +192,6 @@ export async function findEnrollment(
     .where("user_id", "=", userId)
     .where("course_id", "=", courseId)
     .executeTakeFirst();
-}
-
-export async function listUserEnrollments(
-  database: Executor,
-  userId: string,
-  status?: EnrollmentStatus,
-) {
-  let query = database
-    .selectFrom("enrollments")
-    .selectAll()
-    .where("user_id", "=", userId);
-
-  if (status) {
-    query = query.where("status", "=", status);
-  }
-
-  return await query.orderBy("created_at", "desc").execute();
 }
 
 export async function listUserEnrolledCourseIds(
@@ -129,15 +236,12 @@ export async function listActiveUserIdsByCourseId(
 export async function getEnrollmentStats(
   database: Executor,
   filters: EnrollmentAnalyticsFilters,
-): Promise<{ totalEnrollments: number; activeEnrollments: number }> {
+): Promise<{ totalEnrollments: number }> {
   const courseIds = toCourseIdList(filters.courseId);
 
   let query = database
     .selectFrom("enrollments")
-    .select([
-      sql<number>`count(*)::int`.as("total"),
-      sql<number>`count(*) filter (where status = 'active')::int`.as("active"),
-    ]);
+    .select(sql<number>`count(*)::int`.as("total"));
 
   if (courseIds.length > 0) {
     query = query.where("course_id", "in", courseIds);
@@ -150,10 +254,7 @@ export async function getEnrollmentStats(
   }
 
   const row = await query.executeTakeFirst();
-  return {
-    totalEnrollments: Number(row?.total ?? 0),
-    activeEnrollments: Number(row?.active ?? 0),
-  };
+  return { totalEnrollments: Number(row?.total ?? 0) };
 }
 
 /**
@@ -279,12 +380,24 @@ export async function insertEnrollment(
       // so this reactivated row correctly points at the *new* purchase
       // (the order that will actually revoke it on refund), not whichever
       // order originally created the row.
+      //
+      // As in insertAccessGrant: a live enrollment never has its access
+      // period shortened by a later purchase.
       oc.columns(["user_id", "course_id"]).doUpdateSet({
         order_id: values.order_id ?? null,
         status: values.status,
         source: values.source,
         access_starts_at: values.access_starts_at ?? new Date(),
-        access_expires_at: values.access_expires_at ?? null,
+        access_expires_at: sql<Date | null>`case
+          when enrollments.status <> 'active'
+            or (enrollments.access_expires_at is not null
+                and enrollments.access_expires_at <= now())
+            then excluded.access_expires_at
+          when enrollments.access_expires_at is null
+            or excluded.access_expires_at is null
+            then null
+          else greatest(enrollments.access_expires_at, excluded.access_expires_at)
+        end`,
         updated_at: new Date(),
       }),
     )
@@ -292,29 +405,11 @@ export async function insertEnrollment(
     .executeTakeFirst();
 }
 
-export async function updateEnrollmentStatus(
-  database: Executor,
-  userId: string,
-  courseId: string,
-  status: EnrollmentStatus,
-) {
-  return await database
-    .updateTable("enrollments")
-    .set({
-      status,
-      updated_at: new Date(),
-    })
-    .where("user_id", "=", userId)
-    .where("course_id", "=", courseId)
-    .returningAll()
-    .executeTakeFirst();
-}
-
 /**
  * Revokes every enrollment row belonging to an order — mirrors
  * access.repository.ts's revokeAccessGrantsByOrderId. Scoping by `order_id`
- * (not `(user_id, course_id)` alone, which `updateEnrollmentStatus` above
- * does) matters because a user can own the same course through two
+ * (not `(user_id, course_id)` alone) matters because a user can own the
+ * same course through two
  * different orders — e.g. bought directly under order A, then separately
  * bought a bundle containing it under order C (bundle purchase is only
  * blocked when *every* member course is already owned). Refunding order C
@@ -333,6 +428,43 @@ export async function revokeEnrollmentsByOrderId(
       updated_at: new Date(),
     })
     .where("order_id", "=", orderId)
+    .returningAll()
+    .execute();
+}
+
+/** Courses whose live enrollment currently belongs to an order. */
+export async function listActiveEnrollmentCourseIdsByOrderId(
+  database: Executor,
+  orderId: string,
+): Promise<string[]> {
+  const rows = await database
+    .selectFrom("enrollments")
+    .select("course_id")
+    .where("order_id", "=", orderId)
+    .where("status", "=", "active")
+    .execute();
+  return rows.map((row) => row.course_id);
+}
+
+/** Mirrors access.repository.ts's reassignAccessGrantOrder. */
+export async function reassignEnrollmentOrder(
+  database: Executor,
+  input: {
+    fromOrderId: string;
+    courseId: string;
+    toOrderId: string;
+    source: EnrollmentSource;
+  },
+) {
+  return await database
+    .updateTable("enrollments")
+    .set({
+      order_id: input.toOrderId,
+      source: input.source,
+      updated_at: new Date(),
+    })
+    .where("order_id", "=", input.fromOrderId)
+    .where("course_id", "=", input.courseId)
     .returningAll()
     .execute();
 }

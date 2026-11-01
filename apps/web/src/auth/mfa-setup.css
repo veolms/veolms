@@ -276,6 +276,7 @@
   min-height: 100dvh;
   padding: 24px 16px;
   background: color-mix(in srgb, var(--canvas) 75%, transparent);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 

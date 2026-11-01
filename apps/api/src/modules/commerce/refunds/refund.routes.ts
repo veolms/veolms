@@ -1,8 +1,10 @@
 import { z } from "zod";
 import {
   refundSchema,
+  refundResultSchema,
   createRefundRequestSchema,
   refundRequestSchema,
+  learnerRefundRequestSchema,
   createStudentRefundRequestSchema,
   reviewRefundRequestSchema,
 } from "@veolms/contracts";
@@ -35,20 +37,26 @@ const refundRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/refunds",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("billing.manage"),
       schema: {
         operationId: "createRefund",
         tags: ["Commerce - Refunds"],
         summary: "Initiate full or partial refund",
         description:
-          "Initiates a refund via the payment gateway and records refund state.",
+          "Initiates a refund via the payment gateway and records refund state. For an order paid by manual transfer, send outsideRefund with the reference of the transfer staff made: the refund is recorded and no money is moved.",
         body: createRefundRequestSchema,
         response: {
-          200: jsonResponse("Refund initiated successfully", refundSchema),
+          200: jsonResponse(
+            "Refund initiated successfully",
+            refundResultSchema,
+          ),
           400: errorResponse("Refund not allowed"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
           404: errorResponse("Order or payment not found"),
+          409: errorResponse(
+            "Idempotency key already used for a different refund request, or an outside refund with this reference is already recorded",
+          ),
         },
       },
     },
@@ -59,7 +67,7 @@ const refundRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/refunds/:refundId",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("billing.read"),
       schema: {
         operationId: "getRefund",
         tags: ["Commerce - Refunds"],
@@ -79,7 +87,7 @@ const refundRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/refunds/order/:orderId",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("billing.read"),
       schema: {
         operationId: "listOrderRefunds",
         tags: ["Commerce - Refunds"],
@@ -109,7 +117,10 @@ const refundRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ orderId: z.uuid() }),
         body: createStudentRefundRequestSchema,
         response: {
-          201: jsonResponse("Refund request submitted", refundRequestSchema),
+          201: jsonResponse(
+            "Refund request submitted",
+            learnerRefundRequestSchema,
+          ),
           400: errorResponse("Order not refundable"),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Order not found"),
@@ -132,7 +143,7 @@ const refundRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "List of student refund requests",
-            z.array(refundRequestSchema),
+            z.array(learnerRefundRequestSchema),
           ),
           401: errorResponse("Unauthorized"),
         },
@@ -145,7 +156,7 @@ const refundRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/refund-requests",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("refund.review"),
       schema: {
         operationId: "listRefundRequests",
         tags: ["Commerce - Refund Requests"],
@@ -172,11 +183,13 @@ const refundRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/refund-requests/:requestId/review",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("refund.review"),
       schema: {
         operationId: "reviewRefundRequest",
         tags: ["Commerce - Refund Requests"],
         summary: "Approve or reject student refund request",
+        description:
+          "Approving issues the refund. For an order paid by manual transfer, send outsideRefund with the reference of the transfer staff made: the refund is recorded and no money is moved. A refused approval leaves the request pending.",
         params: z.object({ requestId: z.uuid() }),
         body: reviewRefundRequestSchema,
         response: {
@@ -185,6 +198,9 @@ const refundRoutes: RoutePlugin = async (app, options) => {
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
           404: errorResponse("Refund request not found"),
+          409: errorResponse(
+            "An outside refund with this reference is already recorded",
+          ),
         },
       },
     },

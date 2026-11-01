@@ -7,6 +7,18 @@ import {
 } from "../../components/ui/context-menu";
 import { CurriculumSectionActionsMenuContent } from "../CurriculumSectionActionsMenu";
 
+// The mini window's video carries the window's 12px corners itself. Safari
+// on iPhone draws a video apart from the page, and the window's rounded
+// `overflow` did not cut it (nor the black plane around it): the corners
+// came out square. So the video's shell is clipped to the rounded shape
+// (`MINI_PLAYER_VIDEO_SHELL_CLASS`, on the shell; the window's shadow stays
+// outside it), and the shell, the player and the video are rounded as well
+// (`MINI_PLAYER_VIDEO_CORNERS_CLASS`). The bottom corners meet the bar below
+// where it is shown (641px and up); on a phone the video is the whole window.
+export const MINI_PLAYER_VIDEO_CORNERS_CLASS =
+  "!rounded-t-[12px] !rounded-b-none max-[641px]:!rounded-b-[12px]";
+export const MINI_PLAYER_VIDEO_SHELL_CLASS = `${MINI_PLAYER_VIDEO_CORNERS_CLASS} [clip-path:inset(0_round_12px_12px_0_0)] max-[641px]:[clip-path:inset(0_round_12px)]`;
+
 export interface MiniPlayerInfoBarProps {
   lessonTitle: string;
   courseTitle?: string;
@@ -19,7 +31,6 @@ export interface MiniPlayerInfoBarProps {
   expandedSectionIds?: readonly number[];
   onExpandAllSections?: () => void;
   onCollapseAllSections?: () => void;
-  onOpenCourseOverview?: () => void;
   contextMenuPortalHostRef?: RefObject<HTMLElement | null>;
 }
 
@@ -35,7 +46,6 @@ export function MiniPlayerInfoBar({
   expandedSectionIds = [],
   onExpandAllSections,
   onCollapseAllSections,
-  onOpenCourseOverview,
   contextMenuPortalHostRef,
 }: MiniPlayerInfoBarProps) {
   const subtitleParts = [
@@ -78,14 +88,14 @@ export function MiniPlayerInfoBar({
     >
       <div className="flex-1 min-w-0 pr-2 text-left">
         <p
-          className="truncate text-[13px] font-semibold text-white leading-tight"
+          className="truncate text-sm font-semibold text-white leading-tight"
           title={lessonTitle}
         >
           {lessonTitle}
         </p>
         {subtitle ? (
           <p
-            className="truncate text-xs leading-tight mt-0.5"
+            className="truncate text-[13px] leading-tight mt-0.5"
             title={subtitle}
             data-learning-mini-player-info-subtitle=""
           >
@@ -123,7 +133,6 @@ export function MiniPlayerInfoBar({
         expandedSectionIds={expandedSectionIds}
         onExpandAllSections={onExpandAllSections}
         onCollapseAllSections={onCollapseAllSections}
-        onOpenCourseOverview={onOpenCourseOverview}
         portalContainer={contextMenuPortalHostRef}
         ariaLabel="Mini player curriculum actions"
       />

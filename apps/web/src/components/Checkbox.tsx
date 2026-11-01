@@ -11,6 +11,28 @@ export interface CheckboxProps {
   className?: string;
 }
 
+/**
+ * The checkbox's box on its own, for a row that lays out its own label (a
+ * title and a line of help): the real input sits beside it, visually
+ * hidden. Looks the same as the box `Checkbox` draws.
+ */
+export function CheckboxIndicator({
+  checked,
+  className = "",
+}: {
+  checked: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex size-4.5 shrink-0 items-center justify-center rounded-[4px] border transition-[background-color,border-color,color] ${checked ? "border-(--accent) bg-(--accent) text-(--on-accent)" : "[border-color:color-mix(in_srgb,var(--text)_30%,transparent)] bg-(--canvas) text-transparent"} ${className}`}
+    >
+      <Check size={11} weight="bold" />
+    </span>
+  );
+}
+
 export function Checkbox({
   id,
   checked,

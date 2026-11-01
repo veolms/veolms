@@ -1,8 +1,16 @@
 import { useCallback, useState } from "react";
+import { getApiError } from "../lib/api-error";
 import { startFileDownload } from "../lib/save-file";
 import { coursesService } from "../services/courses";
 
-export type LessonResourceDownloadStatus = "downloading" | "done" | "failed";
+/**
+ * "signInRequired" and "accessRequired" are the API's refusals: the files of
+ * a lesson are for learners who have the course, even where the lesson
+ * itself plays as a preview. Trying again does not help, so they are told
+ * apart from "failed".
+ */
+export type LessonResourceDownloadStatus =
+  "downloading" | "done" | "failed" | "signInRequired" | "accessRequired";
 
 export interface DownloadableLessonResource {
   id: string;
@@ -44,8 +52,17 @@ export function useLessonResourceDownloads({
         startFileDownload(link.url);
         setStatus("done");
         return true;
-      } catch {
-        setStatus("failed");
+      } catch (error: unknown) {
+        // Only the two refusals that mean "this is not yours yet"; any
+        // other 403 (a two-factor step, say) is not an enrolment matter.
+        const { status, code } = getApiError(error);
+        setStatus(
+          status === 401
+            ? "signInRequired"
+            : code === "COURSE_ACCESS_DENIED"
+              ? "accessRequired"
+              : "failed",
+        );
         return false;
       }
     },

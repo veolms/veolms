@@ -164,7 +164,7 @@ export function DiscussionReportDialog({
       aria-labelledby="report-dialog-title"
       aria-describedby="report-dialog-description"
       data-testid="discussion-report-dialog"
-      className="fixed inset-0 z-150 m-auto w-[min(92vw,32rem)] rounded-3xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_96%,var(--canvas))] p-5 text-(--text) shadow-[0_24px_80px_color-mix(in_srgb,black_42%,transparent),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] backdrop:bg-black/65 backdrop:backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-150 m-auto w-[min(92vw,32rem)] rounded-3xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_96%,var(--canvas))] p-5 text-(--text) shadow-[0_24px_80px_color-mix(in_srgb,black_42%,transparent),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] backdrop:bg-black/65 backdrop:backdrop-blur-xs sm:p-6"
       onCancel={(event) => {
         event.preventDefault();
         if (!isSubmitting) onClose();

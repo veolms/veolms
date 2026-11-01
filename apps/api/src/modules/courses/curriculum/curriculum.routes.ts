@@ -8,7 +8,10 @@ import {
   reorderLessonsRequestSchema,
   createLessonResourceRequestSchema,
   lessonResourceSchema,
+  type Permission,
+  type UpdateCourseLessonRequest,
 } from "@veolms/contracts";
+import type { FastifyRequest } from "fastify";
 
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
@@ -17,6 +20,27 @@ import type { RoutePlugin } from "../../../lib/route-plugin.ts";
 import { createCoursesContext } from "../shared/courses.context.ts";
 import { createCurriculumController } from "./curriculum.controller.ts";
 import { createCurriculumService } from "./curriculum.service.ts";
+
+/**
+ * A lesson's PATCH changes up to three things, each its own permission:
+ * its details, its content, and whether learners see it.
+ */
+function lessonUpdatePermissions(request: FastifyRequest): Permission[] {
+  const body = (request.body ?? {}) as UpdateCourseLessonRequest;
+  const keys: Permission[] = [];
+  if (
+    body.title !== undefined ||
+    body.description !== undefined ||
+    body.isPreview !== undefined
+  ) {
+    keys.push("lesson.details.update");
+  }
+  if (body.contentType !== undefined || body.contentMediaId !== undefined) {
+    keys.push("lesson.content.update");
+  }
+  if (body.isPublished !== undefined) keys.push("lesson.publish");
+  return keys.length > 0 ? keys : ["lesson.details.update"];
+}
 
 const curriculumRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCoursesContext(options);
@@ -38,12 +62,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         response: {
           201: jsonResponse(
             "Section created",
-            z.object({
-              id: z.uuid(),
-              courseId: z.uuid(),
-              title: z.string(),
-              position: z.number(),
-            }),
+            z.object({ id: z.uuid(), title: z.string() }),
           ),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
@@ -133,10 +152,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         body: createCourseLessonRequestSchema,
         response: {
-          201: jsonResponse(
-            "Lesson created",
-            z.object({ id: z.uuid(), position: z.number() }),
-          ),
+          201: jsonResponse("Lesson created", z.object({ id: z.uuid() })),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Section not found"),
         },
@@ -162,22 +178,14 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
           ),
           202: jsonResponse(
             "Video processing accepted",
-            z.object({
-              videoJobId: z.uuid(),
-              processingStatus: z.enum([
-                "queued",
-                "processing",
-                "completed",
-                "failed",
-              ]),
-            }),
+            z.object({ success: z.boolean() }),
           ),
           400: errorResponse("Invalid media asset or type mismatch"),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Lesson not found"),
         },
       },
-      preHandler: ctx.authorize("lesson.details.update", "lesson"),
+      preHandler: ctx.authorizeEach(lessonUpdatePermissions, "lesson"),
     },
     controller.updateCourseLesson,
   );

@@ -1,5 +1,7 @@
 import { api } from "../../lib/api-client";
 import type {
+  StudentContactUpdateRequest,
+  StudentContactUpdateResponse,
   StudentDetailResponse,
   StudentListQuery,
   StudentListResponse,
@@ -16,6 +18,16 @@ export const studentsService = {
   getStudentByUsername: (username: string): Promise<StudentDetailResponse> => {
     return api.get<StudentDetailResponse>(
       `/students/${encodeURIComponent(username)}`,
+    );
+  },
+
+  updateStudentContact: (
+    username: string,
+    input: StudentContactUpdateRequest,
+  ): Promise<StudentContactUpdateResponse> => {
+    return api.patch<StudentContactUpdateResponse>(
+      `/students/${encodeURIComponent(username)}/contact`,
+      input,
     );
   },
 };

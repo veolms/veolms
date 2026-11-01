@@ -36,7 +36,7 @@ const binRoutes: RoutePlugin = async (app, options) => {
           403: errorResponse("Administrator access required"),
         },
       },
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.authorize("course.restore", "academy"),
     },
     controller.listDeletedCourses,
   );
@@ -59,7 +59,7 @@ const binRoutes: RoutePlugin = async (app, options) => {
           409: errorResponse("Course purge is already in progress"),
         },
       },
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.authorize("course.restore", "academy"),
     },
     controller.restoreCourse,
   );

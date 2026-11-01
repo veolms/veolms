@@ -4,6 +4,7 @@ import type {
   AvatarUploadPresignRequest,
   AvatarUploadPresignResponse,
   AuthMessageResponse,
+  BackupCodesResponse,
   CurrentUserResponse,
   EmailVerificationSendRequest,
   EmailVerificationVerifyRequest,
@@ -15,14 +16,17 @@ import type {
   OauthUrlRequest,
   OauthUrlResponse,
   OtpSendRequest,
+  OtpSendResponse,
   PhoneVerificationSendRequest,
   PhoneVerificationVerifyRequest,
   PasskeyAuthenticationOptionsResponse,
+  PasskeyRegisterVerifyResponse,
   PasskeyRegistrationOptionsResponse,
   ProfileUpdateRequest,
   PublicProfileResponse,
   RegisterRequest,
   SessionResponse,
+  DeviceLimitResponse,
   UserAvatarListResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
@@ -128,14 +132,14 @@ async function generatedAvatarFile(previewUrl: string): Promise<File> {
 }
 
 export const authService = {
-  sendOtp: (payload: OtpSendRequest): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>("/auth/otp/send", payload);
+  sendOtp: (payload: OtpSendRequest): Promise<OtpSendResponse> => {
+    return api.post<OtpSendResponse>("/auth/otp/send", payload);
   },
 
   sendPhoneVerificationOtp: (
     payload: PhoneVerificationSendRequest,
-  ): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>("/auth/me/phone/otp/send", payload);
+  ): Promise<OtpSendResponse> => {
+    return api.post<OtpSendResponse>("/auth/me/phone/otp/send", payload);
   },
 
   sendEmailVerificationOtp: (
@@ -220,11 +224,15 @@ export const authService = {
 
   verifyPasskeyRegister: (payload: {
     response: unknown;
-  }): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>(
+  }): Promise<PasskeyRegisterVerifyResponse> => {
+    return api.post<PasskeyRegisterVerifyResponse>(
       "/auth/passkey/register/verify",
       payload,
     );
+  },
+
+  regenerateBackupCodes: (): Promise<BackupCodesResponse> => {
+    return api.post<BackupCodesResponse>("/auth/backup-codes");
   },
 
   getPasskeyLoginOptions:
@@ -257,6 +265,20 @@ export const authService = {
 
   revokeAllOtherSessions: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/sessions/revoke-all");
+  },
+
+  /** The devices a sign-in held back by the device limit can make room on. */
+  getDeviceLimit: async (): Promise<DeviceLimitResponse> => {
+    const [response, { deviceLimitResponseSchema }] = await Promise.all([
+      api.get<unknown>("/auth/device-limit"),
+      import("@veolms/contracts/auth/session"),
+    ]);
+    return deviceLimitResponseSchema.parse(response);
+  },
+
+  /** Signs that device out and finishes the sign-in that was held back. */
+  resolveDeviceLimit: (sessionId: string): Promise<LoginResponse> => {
+    return api.post<LoginResponse>("/auth/device-limit/resolve", { sessionId });
   },
 
   getMe: async (): Promise<CurrentUserResponse> => {
@@ -324,10 +346,6 @@ export const authService = {
     return api.post<UserProfileResponse>("/auth/me/avatar/select", {
       avatarId,
     });
-  },
-
-  deleteUploadedAvatars: (): Promise<UserProfileResponse> => {
-    return api.delete<UserProfileResponse>("/auth/me/avatars");
   },
 
   logout: (): Promise<AuthMessageResponse> => {

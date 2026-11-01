@@ -7,9 +7,10 @@ import type {
   PaymentProvider,
 } from "@veolms/contracts";
 import type { ServerConfig } from "@veolms/config";
+import { RazorpayPaymentGateway } from "@veolms/services";
+import { AppError } from "../../../../lib/errors.ts";
 import * as creatorGatewayRepo from "./creator-gateway.repository.ts";
 import { encryptSecret, decryptSecret } from "./crypto.helper.ts";
-import { RazorpayPaymentGateway } from "./razorpay/razorpay.gateway.ts";
 
 export interface CreatorGatewayService {
   saveCreatorConfig(
@@ -21,6 +22,27 @@ export interface CreatorGatewayService {
     provider?: PaymentProvider,
   ): Promise<CreatorPaymentConfig | null>;
   resolveGatewayForCreator(creatorId?: string | null): Promise<PaymentGateway>;
+}
+
+/**
+ * Whether new gateway keys are accepted. Off: nothing reads a stored key.
+ * Checkout, refunds, webhooks and the recovery worker all use the one
+ * gateway the platform is configured with (`resolveGatewayForCreator` has no
+ * caller), so "connecting" a gateway stored live secrets to no effect while
+ * telling the person their sales would be paid into that account.
+ *
+ * Turning this on is not enough to make it true. Every one of those paths
+ * would have to resolve the gateway per order first.
+ */
+const ACCEPTS_NEW_GATEWAY_KEYS = false;
+
+/**
+ * A key id as it is shown back to the person who saved it: enough to tell
+ * which key is connected (`rzp_live****1a2B`), not the key itself.
+ */
+function maskKeyId(keyId: string): string {
+  if (keyId.length <= 12) return "****";
+  return `${keyId.slice(0, 8)}****${keyId.slice(-4)}`;
 }
 
 export function createCreatorGatewayService({
@@ -36,6 +58,14 @@ export function createCreatorGatewayService({
     creatorId: string,
     request: SaveCreatorPaymentConfigRequest,
   ): Promise<CreatorPaymentConfig> {
+    if (!ACCEPTS_NEW_GATEWAY_KEYS) {
+      throw new AppError(
+        409,
+        "PAYMENT_GATEWAY_CONFIG_UNAVAILABLE",
+        "Connecting your own payment gateway is not available. Payments are taken through the platform's gateway, and the keys you sent were not stored.",
+      );
+    }
+
     const encryptedKeyId = encryptSecret(request.keyId);
     const encryptedKeySecret = encryptSecret(request.keySecret);
     const encryptedWebhookSecret = request.webhookSecret
@@ -54,9 +84,8 @@ export function createCreatorGatewayService({
 
     return {
       id: row.id,
-      creatorId: row.creator_id,
       provider: row.provider as PaymentProvider,
-      keyId: request.keyId,
+      keyId: maskKeyId(request.keyId),
       hasWebhookSecret: !!row.encrypted_webhook_secret,
       isActive: row.is_active,
       createdAt: row.created_at,
@@ -75,18 +104,17 @@ export function createCreatorGatewayService({
     );
     if (!row) return null;
 
-    let decryptedKeyId = "******";
+    let maskedKeyId = "****";
     try {
-      decryptedKeyId = decryptSecret(row.encrypted_key_id);
+      maskedKeyId = maskKeyId(decryptSecret(row.encrypted_key_id));
     } catch {
       // safe fallback if key derivation changes
     }
 
     return {
       id: row.id,
-      creatorId: row.creator_id,
       provider: row.provider as PaymentProvider,
-      keyId: decryptedKeyId,
+      keyId: maskedKeyId,
       hasWebhookSecret: !!row.encrypted_webhook_secret,
       isActive: row.is_active,
       createdAt: row.created_at,

@@ -1,6 +1,9 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -8,30 +11,19 @@ import {
 } from "react";
 import type { MouseEvent } from "react";
 import { useParams } from "react-router";
-import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
-import { ArrowsInLineVertical } from "@phosphor-icons/react/ArrowsInLineVertical";
-import { ArrowsOutLineVertical } from "@phosphor-icons/react/ArrowsOutLineVertical";
 import { BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
-import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { Circle } from "@phosphor-icons/react/Circle";
+import { PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { Clock } from "@phosphor-icons/react/Clock";
-import { FileText } from "@phosphor-icons/react/FileText";
 import { Heart } from "@phosphor-icons/react/Heart";
 import { Play } from "@phosphor-icons/react/Play";
-import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
-import { Question } from "@phosphor-icons/react/Question";
 import { ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
-import { Stack } from "@phosphor-icons/react/Stack";
-import { Tag } from "@phosphor-icons/react/Tag";
-import { Ticket } from "@phosphor-icons/react/Ticket";
-import { User } from "@phosphor-icons/react/User";
-import { X } from "@phosphor-icons/react/X";
 import {
+  CHECKOUT_WINDOW_SECONDS,
   MAX_VOLUNTARY_AMOUNT,
   type Category,
   type CheckoutPreviewResponse,
+  type CourseAccessResume,
   type CourseEditorDataResponse,
   type CourseOverviewResponse,
 } from "@veolms/contracts";
@@ -43,42 +35,116 @@ import {
   type CourseLifecycleStatus,
   type CourseRole,
 } from "./catalogue";
-import { toggleWishlistCourse, useCourseWishlisted } from "./wishlistStorage";
-import { CourseWishlistHeartButton } from "./CourseWishlistHeartButton";
-import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
-import type { CourseSection } from "../learning/courseContent";
-import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
-import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
-import type { NavigateTo } from "../routing/navigation";
-import { useAuthStore } from "../store/auth.store";
-import { useCourseOverview } from "../services/courses";
-import { useEnrolledCourses } from "../services/enrollments";
-import { getApiError } from "../lib/api-error";
 import {
+  checkoutCourseItem,
+  describeCouponSaving,
+  isCouponTotalStale,
+  payableBeforeCoupon,
+  type AppliedCoupon,
+} from "./couponTotal";
+import {
+  INVITATION_ONLY_MESSAGE,
+  resolveCourseEnrollmentOffer,
+} from "./courseEnrollmentOffer";
+import { readCustomAmount } from "./customAmountEntry";
+import { readPastedCouponCode } from "./pastedCouponCode";
+import { formatPlainDescription } from "./overview/formatPlainDescription";
+import { useCourseWishlisted, useToggleWishlistCourse } from "../wishlist";
+import type { CourseSection } from "../learning/courseContent";
+import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
+import { useLearningProgressResumeContext } from "../services/learning-progress";
+import {
+  useLessonListOpenIntent,
+  useLessonOpenIntent,
+} from "../learning/lessonOpenIntent";
+import type { LessonIntentFor } from "./overview/CourseOverviewCurriculum";
+import type { NavigateTo } from "../routing/navigation";
+import { productName } from "../routing/routeDescriptors";
+import { useAuthStore } from "../store/auth.store";
+import { useCoursePageData } from "./overview/useCoursePageData";
+import { CurriculumIntentContext } from "./overview/curriculumIntent";
+import type { CourseCurriculumPreview } from "./staticCurriculum";
+import { getApiError } from "../lib/api-error";
+import { trackAnalyticsEvent } from "../lib/analytics-track";
+import {
+  readCheckoutStartError,
+  CHECKOUT_WINDOW_BLOCKED_MESSAGE,
+  openCheckoutWindow,
   useCheckoutPreview,
+  useAwaitPaidOrder,
   useCreateCheckoutOrder,
+  useReleaseCheckoutOrder,
   useVerifyPayment,
 } from "../services/payments";
+import { useCurrentUser } from "../services/auth";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
+import { CourseLearnerProgressBar } from "./overview/CourseLearnerProgressBar";
+import { CourseLearnerProgressBarEarly } from "./overview/CourseLearnerProgressBarEarly";
+import { CourseOverviewCurriculum } from "./overview/CourseOverviewCurriculum";
+import { courseValidityLabel } from "./overview/courseValidity";
 import {
-  getApplicationScrollElement,
-  scrollApplicationTo,
-} from "../shell/applicationScroll";
+  CourseOverviewHero,
+  overviewColumnClasses,
+} from "./overview/CourseOverviewHero";
+import { CourseOverviewSkeleton } from "./overview/CourseOverviewSkeleton";
+import { CourseLoadError } from "./overview/CourseLoadError";
+import { CourseManagerBar } from "./overview/CourseManagerBar";
+import { CourseViewerBandPlaceholder } from "./overview/CourseViewerBandPlaceholder";
+import {
+  coursePurchaseCheckoutNote,
+  coursePurchaseGuarantee,
+  getCoursePurchasePerks,
+} from "./overview/coursePurchasePerks";
+import {
+  presumedGuestOnlyClasses,
+  sessionExpectedOnlyClasses,
+  type CourseViewerState,
+} from "./overview/courseViewerState";
+import { HoverFillIcon } from "./overview/HoverFillIcon";
+import { PayCardIcon } from "./overview/PayCardIcon";
+import "../services/payments/razorpay-checkout.css";
+import {
+  CoursePriceBar,
+  type CoursePriceDisplayPrice,
+} from "./overview/CoursePriceBar";
+import {
+  bandHeaderClasses,
+  bandLinkClasses,
+  bandTitleClasses,
+  overviewCardClasses,
+  overviewCardPaddingClasses,
+  overviewBandColumnClasses,
+  overviewColumnUnderHeroClasses,
+  overviewPageContainerClasses,
+  overviewTwoColumnClasses,
+} from "./overview/overviewStyles";
+import {
+  CourseSupportAmountPicker,
+  type ContributionPresetId,
+} from "./overview/CourseSupportAmountPicker";
+import { formatPriceWithCurrency } from "./overview/coursePriceFormat";
+import { getCourseEditorPath } from "./courseEditorRouting";
+
+// Asked for only when an enrolment needs a verified number first, so its
+// code is fetched then and not with the page.
+const PhoneVerificationDialog = lazy(
+  () => import("../auth/PhoneVerificationDialog"),
+);
+
+export { CourseOverviewSkeleton };
+
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
 export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
 
-const NO_PINNED_LESSONS: ReadonlySet<string> = new Set();
-const SECTION_COLLAPSE_TRANSITION_MS = 250;
-const SECTION_SCROLL_SETTLE_DELAY_MS = SECTION_COLLAPSE_TRANSITION_MS + 50;
-const getOverviewLessonKey = (lesson: CourseSection["lessons"][number]) =>
-  String(lesson[0]);
-
 declare global {
   interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void;
+      close?: () => void;
+    };
   }
 }
 
@@ -110,35 +176,6 @@ export const priceTextClasses: Record<PriceSizeVariant, string> = {
   large: "text-[1.75rem] max-[640px]:text-[1.55rem] tracking-[-0.02em]",
   xlarge: "text-[1.55rem] max-[640px]:text-[1.4rem] tracking-[-0.015em]",
 };
-
-export function getCurrencySymbol(currency: string = "INR"): string {
-  switch (currency.toUpperCase()) {
-    case "INR":
-      return "₹";
-    case "USD":
-      return "$";
-    case "EUR":
-      return "€";
-    case "GBP":
-      return "£";
-    case "CAD":
-      return "CA$";
-    case "AUD":
-      return "A$";
-    case "JPY":
-      return "¥";
-    default:
-      return `${currency.toUpperCase()} `;
-  }
-}
-
-export function formatPriceWithCurrency(
-  amount: number,
-  currency: string = "INR",
-): string {
-  const sym = getCurrencySymbol(currency);
-  return `${sym}${amount.toLocaleString("en-US")}`;
-}
 
 export function isCourseSaleActive(
   salePrice: number | null | undefined,
@@ -200,6 +237,8 @@ export interface CourseOverviewPricingProps {
   discount?: string;
   /** Catalog charge in major currency units. */
   amount?: number;
+  /** The marked price in major units, when `originalPrice` is shown. */
+  originalAmount?: number;
   currency?: string;
 }
 
@@ -224,6 +263,17 @@ function toOverviewPricingProps(
 ): CourseOverviewPricingProps {
   const currency = pr?.currency || "INR";
   if (!pr || pr.pricingType === "free") {
+    // A free course that names what it would otherwise cost shows that
+    // price struck through beside a price of zero.
+    if (pr && pr.price > 0) {
+      return {
+        price: formatPriceWithCurrency(0, currency),
+        originalPrice: formatPriceWithCurrency(pr.price, currency),
+        discount: "Free",
+        amount: 0,
+        currency,
+      };
+    }
     return { price: "Free", amount: 0, currency };
   }
 
@@ -237,6 +287,7 @@ function toOverviewPricingProps(
       originalPrice: formatPriceWithCurrency(pr.price, currency),
       discount: `${discountPct}% OFF`,
       amount: pr.salePrice,
+      originalAmount: pr.price,
       currency,
     };
   }
@@ -248,23 +299,11 @@ function toOverviewPricingProps(
   };
 }
 
-type ContributionPresetId = "0" | "100" | "250" | "500" | "custom";
-
-function checkoutCourseItem(
-  courseId: string,
-  options: { isFree: boolean; amount: number; catalogPrice: number },
-) {
-  const includeCustom =
-    options.amount > 0 &&
-    (options.isFree || options.amount >= options.catalogPrice);
-  return {
-    itemType: "course" as const,
-    courseId,
-    ...(includeCustom ? { customAmount: options.amount } : {}),
-  };
-}
-
-function appliedCouponFromPreview(code: string, res: CheckoutPreviewResponse) {
+function appliedCouponFromPreview(
+  code: string,
+  res: CheckoutPreviewResponse,
+  pricedForAmount: number,
+): AppliedCoupon {
   const discountAmount = res.pricing.discountAmount;
   const currency = res.pricing.currency || "INR";
   const totalAmount = res.pricing.totalAmount;
@@ -283,283 +322,115 @@ function appliedCouponFromPreview(code: string, res: CheckoutPreviewResponse) {
     totalAmount,
     currency,
     discountLabel,
+    pricedForAmount,
   };
 }
 
-// ─── sub-components ──────────────────────────────────────────────────────────
+// ─── Price, Coupon & Enrolment ──────────────────────────────────────────────
 
-interface CurriculumSectionProps {
-  section: CourseSection;
-  index: number;
-  isOpen: boolean;
-  onToggle: () => void;
-  onSelectLesson?: (lessonNumber: number) => void;
-  shouldVirtualizeLessons?: boolean;
-  isReadOnlyPreview?: boolean;
-  isPaidCourse?: boolean;
-}
+/**
+ * Whether a buyer is offered amounts above the price ("Support Teacher").
+ * Switched off for now: the page shows the course's one price. The checkout
+ * below still handles a chosen amount, so turning this on brings the picker
+ * back as it was.
+ */
+const SUPPORT_AMOUNTS_OFFERED: boolean = false;
 
-function parseDurationLabel(label: string): number {
-  const hours = Number(label.match(/(\d+)h/)?.[1] ?? 0);
-  const minutes = Number(label.match(/(\d+)m/)?.[1] ?? 0);
-  return hours * 3600 + minutes * 60;
-}
-
-function CurriculumSectionItem({
-  section,
-  index,
-  isOpen,
-  onToggle,
-  onSelectLesson,
-  shouldVirtualizeLessons = false,
-  isReadOnlyPreview = false,
-  isPaidCourse = false,
-}: CurriculumSectionProps) {
-  const panelId = `cov-section-panel-${section.id}`;
-  const buttonId = `cov-section-toggle-${section.id}`;
-  const lessonCount = section.lessons.length;
-  const durationSeconds = section.lessons.reduce(
-    (total, lesson) => total + parseDurationLabel(lesson[2]),
-    0,
-  );
-  const durationLabel =
-    durationSeconds > 0 ? formatDuration(durationSeconds) : "";
-
-  return (
-    <div
-      className={`rounded-xl border bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow] duration-150 ${
-        isOpen
-          ? "border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
-          : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-      }`}
-      role="listitem"
-    >
-      <button
-        id={buttonId}
-        type="button"
-        className="flex w-full min-h-13 items-center gap-3.5 border-0 px-4.5 py-3 text-(--text) bg-transparent text-[0.92rem] font-semibold text-left cursor-pointer transition-colors duration-140 hover:bg-(--hover) max-[640px]:p-[10px_14px] max-[640px]:text-[0.88rem]"
-        aria-expanded={isOpen}
-        aria-controls={panelId}
-        onClick={onToggle}
-      >
-        <span
-          className="inline-flex w-6.5 h-6.5 shrink-0 items-center justify-center rounded-md bg-(--accent) text-(--on-accent,#ffffff) text-[0.82rem] font-bold"
-          aria-hidden="true"
-        >
-          {index + 1}
-        </span>
-        <span className="flex-1 min-w-0 text-(--text)">{section.title}</span>
-        <span className="shrink-0 text-(--muted) text-[0.82rem] font-normal mr-1">
-          {lessonCount} Lesson{lessonCount === 1 ? "" : "s"}
-          {durationLabel ? ` • ${durationLabel}` : ""}
-        </span>
-        <span
-          className={`shrink-0 text-(--muted) inline-flex items-center justify-center transition-transform duration-200 ease-out motion-reduce:transition-none ${
-            isOpen ? "rotate-180" : ""
-          }`}
-          aria-hidden="true"
-        >
-          <CaretDown size={16} weight="bold" />
-        </span>
-      </button>
-
-      <div
-        id={panelId}
-        role="region"
-        aria-labelledby={buttonId}
-        aria-hidden={!isOpen}
-        className={`grid motion-reduce:transition-none ${
-          isOpen
-            ? "grid-rows-[1fr] opacity-100 visible transition-[grid-template-rows,opacity,visibility] duration-300 ease-in-out"
-            : "grid-rows-[0fr] opacity-0 invisible transition-[grid-template-rows,opacity,visibility] duration-250 ease-[cubic-bezier(0,1,0,1)]"
-        }`}
-      >
-        <div className="overflow-hidden min-h-0">
-          <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,var(--text))]">
-            {section.lessons.length > 0 ? (
-              isOpen ? (
-                <VirtualizedLessonList
-                  items={section.lessons}
-                  forceVirtualized={shouldVirtualizeLessons}
-                  estimatedItemSize={46}
-                  itemGap={0}
-                  overscan={14}
-                  getItemKey={getOverviewLessonKey}
-                  pinnedItemIds={NO_PINNED_LESSONS}
-                  renderItem={([
-                    number,
-                    title,
-                    duration,
-                    status,
-                    isPreview,
-                    contentType,
-                  ]) => {
-                    const isDoc = contentType === "document";
-                    const isQuiz = contentType === "quiz";
-                    return (
-                      <button
-                        type="button"
-                        className={`group/lesson flex items-center gap-3 w-full min-h-11.5 border-0 bg-transparent px-4.5 py-1.5 text-(--text-secondary) text-[0.85rem] text-left transition-colors duration-140 ${
-                          isReadOnlyPreview
-                            ? "cursor-default opacity-85 hover:bg-transparent hover:text-(--text-secondary)"
-                            : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-inset"
-                        }`}
-                        key={number}
-                        disabled={isReadOnlyPreview}
-                        onClick={() => {
-                          if (isReadOnlyPreview) return;
-                          onSelectLesson?.(number);
-                        }}
-                        aria-label={`Lesson ${number}: ${title}${duration ? `, ${duration}` : ""}`}
-                      >
-                        {/* Content type icon */}
-                        <span
-                          className={`inline-flex w-5 shrink-0 items-center justify-center text-(--muted) transition-colors duration-140 ${
-                            isReadOnlyPreview
-                              ? ""
-                              : "group-hover/lesson:text-(--accent)"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          {isDoc ? (
-                            <FileText size={16} weight="regular" />
-                          ) : isQuiz ? (
-                            <Question size={16} weight="regular" />
-                          ) : (
-                            <PlayCircle size={16} weight="regular" />
-                          )}
-                        </span>
-
-                        {/* Lesson title */}
-                        <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.85rem] text-(--text-secondary)">
-                          {title}
-                        </span>
-
-                        {/* Duration */}
-                        {duration ? (
-                          <span className="text-(--muted) text-[0.78rem] shrink-0 w-11.25 text-right">
-                            {duration}
-                          </span>
-                        ) : null}
-
-                        {/* Free preview badge: only displayed when course is paid and lesson is marked as free preview */}
-                        {isPaidCourse && isPreview ? (
-                          <span
-                            className="shrink-0 inline-flex items-center rounded-[5px] px-[6px] py-[2px] text-[0.7rem] font-[700] leading-none bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]"
-                            aria-label="Free preview"
-                          >
-                            Free
-                          </span>
-                        ) : null}
-
-                        {/* Progress status */}
-                        {status === "done" ? (
-                          <span
-                            className="inline-flex items-center justify-center shrink-0"
-                            aria-hidden="true"
-                          >
-                            <CheckCircle
-                              size={16}
-                              weight="fill"
-                              className="text-[#10b981]"
-                            />
-                          </span>
-                        ) : status === "todo" ? (
-                          <span
-                            className="inline-flex items-center justify-center shrink-0"
-                            aria-hidden="true"
-                          >
-                            <Circle size={16} className="text-(--muted)" />
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  }}
-                />
-              ) : null
-            ) : (
-              <div className="px-3.5 py-3 text-(--muted) text-[0.82rem] italic">
-                No lessons added yet
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Header & Hero Section ──────────────────────────────────────────────────
-
-interface CourseHeroSectionProps {
+interface CoursePurchaseSectionProps {
   course: Course;
-  title: string;
-  thumbnail: string;
-  wishlisted: boolean;
-  instructorName?: string;
-  shortDescription?: string;
-  categoryName?: string;
-  language?: string;
   pricing?: CourseOverviewPricingProps;
   inclusions?: string[];
-  trailerMediaId?: string | null;
-  onNavigateCourses?: () => void;
-  onToggleWishlist?: (event: MouseEvent<HTMLButtonElement>) => void;
   onNavigatePage?: NavigateTo;
   isReadOnlyPreview?: boolean;
   isCreator?: boolean;
+  /** The overview's `canSelfEnroll`; only `false` closes enrolment. */
+  canSelfEnroll?: boolean;
 }
 
-function CourseHeroSection({
+function CoursePurchaseSection({
   course,
-  title,
-  thumbnail,
-  trailerMediaId,
-  wishlisted,
-  instructorName,
-  shortDescription,
-  categoryName,
-  language,
   pricing,
   inclusions,
-  onNavigateCourses,
-  onToggleWishlist,
   onNavigatePage,
   isReadOnlyPreview = false,
   isCreator = false,
-}: CourseHeroSectionProps) {
+  canSelfEnroll,
+}: CoursePurchaseSectionProps) {
   const user = useAuthStore((state) => state.user);
   const preview = useCheckoutPreview();
   const createOrder = useCreateCheckoutOrder();
+  // The course page being opened, for the conversion funnel.
+  useEffect(() => {
+    trackAnalyticsEvent("course_view", { courseId: course.id });
+  }, [course.id]);
+  const checkoutIntentRef = useRef<{ intent: string; key: string } | null>(
+    null,
+  );
+  const releaseOrder = useReleaseCheckoutOrder();
   const verify = useVerifyPayment();
+  const awaitPaidOrder = useAwaitPaidOrder();
+  const paymentConfirmationRef = useRef<AbortController | null>(null);
+  useEffect(() => () => paymentConfirmationRef.current?.abort(), []);
+  // The watch kept on the gateway's window while it is open (see
+  // `watchForUnansweredClose`).
+  const checkoutWatchRef = useRef<number | null>(null);
+  const stopCheckoutWatch = () => {
+    if (checkoutWatchRef.current !== null) {
+      window.clearInterval(checkoutWatchRef.current);
+      checkoutWatchRef.current = null;
+    }
+  };
+  useEffect(() => stopCheckoutWatch, []);
+  // Whether the gateway's window came up (see openCheckoutWindow).
+  const stopWindowLoadWatchRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopWindowLoadWatchRef.current?.(), []);
   const isEnrolled = Boolean(user && course.enrolled);
 
   const [isPaymentBusy, setIsPaymentBusy] = useState(false);
+  // A verified mobile number before the first enrolment, where the academy
+  // asks for one (REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT) of a new account:
+  // the server says so when the order is asked for (only new accounts are
+  // asked), and the enrolment waits behind the number's pop-up and carries
+  // on once it is verified.
+  const currentUser = useCurrentUser();
+  const [phoneGate, setPhoneGate] = useState<{
+    amount: number | undefined;
+  } | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
 
   const [selectedPreset, setSelectedPreset] =
     useState<ContributionPresetId>("0");
   const [voluntaryAmount, setVoluntaryAmount] = useState<number>(0);
   const [customAmountInput, setCustomAmountInput] = useState<string>("");
+  const [customAmountError, setCustomAmountError] = useState<string | null>(
+    null,
+  );
 
   const [couponInputOpen, setCouponInputOpen] = useState(false);
   const [couponCodeInput, setCouponCodeInput] = useState("");
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
-  const [appliedCoupon, setAppliedCoupon] = useState<{
-    code: string;
-    discountAmount: number;
-    totalAmount: number;
-    currency: string;
-    discountLabel?: string;
-  } | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(
+    null,
+  );
 
   const courseCurrency = pricing?.currency ?? "INR";
-  const currencySymbol = getCurrencySymbol(courseCurrency);
   const baseNumericPrice = pricing?.amount ?? 0;
   const isPreview = Boolean(isReadOnlyPreview);
   const isCreatorNormal = Boolean(isCreator && !isPreview);
   const isFree = isFreeCoursePricing(pricing);
+  // A restricted course with no price is entered by a grant from staff and
+  // checkout refuses it, so the card offers no enrolment, amount or coupon
+  // for it: one line says how the course is entered.
+  const isInvitationOnly =
+    resolveCourseEnrollmentOffer({
+      managesCourse: isCreatorNormal,
+      isPreview,
+      isEnrolled,
+      isFree,
+      canSelfEnroll,
+    }) === "invitation-only";
 
   const checkoutItem = useMemo(
     () =>
@@ -571,21 +442,28 @@ function CourseHeroSection({
     [course.id, isFree, voluntaryAmount, baseNumericPrice],
   );
 
-  const lastPreviewedAmount = useRef(voluntaryAmount);
+  // What a payment would charge before the coupon, and whether the coupon
+  // total on the card was worked out for it. Both are read during render, so
+  // the pay button is already held on the render that follows a change of
+  // amount; it does not wait for the effect below.
+  const payableAmount = payableBeforeCoupon(voluntaryAmount, baseNumericPrice);
+  const couponTotalIsStale =
+    !isFree && isCouponTotalStale(appliedCoupon, payableAmount);
+  const appliedCouponCode = appliedCoupon?.code;
+  // `preview` is a new object on every render, and starting the request
+  // causes a render. As a dependency it cancelled the effect's own request,
+  // so the answer was dropped and the old total stayed. The function is the
+  // same one for the life of the component.
+  const previewCheckout = preview.mutateAsync;
   useEffect(() => {
-    if (!appliedCoupon?.code || isFree) {
-      lastPreviewedAmount.current = voluntaryAmount;
-      return;
-    }
-    if (lastPreviewedAmount.current === voluntaryAmount) return;
-    lastPreviewedAmount.current = voluntaryAmount;
+    if (!appliedCouponCode || !couponTotalIsStale) return;
 
     let cancelled = false;
     const handle = window.setTimeout(async () => {
       try {
-        const res = await preview.mutateAsync({
+        const res = await previewCheckout({
           items: [checkoutItem],
-          couponCode: appliedCoupon.code,
+          couponCode: appliedCouponCode,
         });
         if (cancelled) return;
         if (res.couponValidation && !res.couponValidation.valid) {
@@ -596,11 +474,17 @@ function CourseHeroSection({
           );
           return;
         }
-        setAppliedCoupon(appliedCouponFromPreview(appliedCoupon.code, res));
+        setAppliedCoupon(
+          appliedCouponFromPreview(appliedCouponCode, res, payableAmount),
+        );
       } catch (err) {
         if (cancelled) return;
+        // The total for this amount is unknown. The coupon comes off so the
+        // button names a price that is known, and the reason is shown.
         setAppliedCoupon(null);
-        setCouponError(getApiError(err).message);
+        setCouponError(
+          `The coupon was removed because its total for this amount could not be worked out. ${getApiError(err).message}`,
+        );
       }
     }, 250);
 
@@ -608,7 +492,13 @@ function CourseHeroSection({
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [appliedCoupon?.code, checkoutItem, isFree, preview, voluntaryAmount]);
+  }, [
+    appliedCouponCode,
+    checkoutItem,
+    couponTotalIsStale,
+    payableAmount,
+    previewCheckout,
+  ]);
 
   const basePrice = pricing?.price ?? "Free";
   const displayPrice = appliedCoupon
@@ -621,24 +511,121 @@ function CourseHeroSection({
     : voluntaryAmount > 0 && voluntaryAmount > baseNumericPrice
       ? formatPriceWithCurrency(voluntaryAmount, courseCurrency)
       : basePrice;
-  const originalPrice = pricing?.originalPrice;
-  const discount = pricing?.discount;
-  const displayDiscount = appliedCoupon
+  // The headline is then the buyer's own, higher amount. The catalogue's
+  // "was" price and "% OFF" badge describe the regular price, and next to a
+  // chosen amount they claimed a discount that is not being given.
+  const isPayingAbovePrice =
+    !isFree &&
+    !appliedCoupon &&
+    voluntaryAmount > 0 &&
+    voluntaryAmount > baseNumericPrice;
+  const originalPrice = isPayingAbovePrice ? undefined : pricing?.originalPrice;
+  const discount = isPayingAbovePrice ? undefined : pricing?.discount;
+  // With a coupon, what the total is compared with. On the buyer's own,
+  // higher amount the catalogue price and the coupon's "% OFF" are both the
+  // wrong comparison (see `describeCouponSaving`).
+  const couponSaving =
+    !isFree && appliedCoupon
+      ? describeCouponSaving(appliedCoupon, baseNumericPrice)
+      : null;
+  // A coupon used on a course that is already on sale: both savings are
+  // shown, the sale's own and then the coupon's ("30% OFF + 20% OFF"), and
+  // the price struck through stays the marked one. The two are not added
+  // up: the coupon's share is of the sale price, and one figure for both
+  // would be a third number that is written nowhere else.
+  const couponOnTopOfSale =
+    couponSaving?.against === "catalogue" && Boolean(originalPrice && discount);
+  const couponSavingLabel = appliedCoupon
     ? appliedCoupon.discountLabel ||
       `${formatPriceWithCurrency(appliedCoupon.discountAmount, appliedCoupon.currency)} OFF`
-    : discount;
-  const perksList = inclusions ?? [
-    "Full lifetime access",
-    "Access on mobile & desktop",
-    "Certificate of completion",
-  ];
+    : undefined;
+  const struckThroughPrice =
+    !couponSaving || !appliedCoupon
+      ? originalPrice
+      : couponSaving.against === "catalogue"
+        ? couponOnTopOfSale
+          ? originalPrice
+          : basePrice
+        : couponSaving.against === "ownAmount"
+          ? formatPriceWithCurrency(
+              couponSaving.wasAmount,
+              appliedCoupon.currency,
+            )
+          : undefined;
+  const displayDiscount = !appliedCoupon
+    ? discount
+    : couponSaving?.against === "ownAmount"
+      ? `${formatPriceWithCurrency(couponSaving.savedAmount, appliedCoupon.currency)} OFF`
+      : couponSaving?.against === "nothing"
+        ? undefined
+        : couponOnTopOfSale
+          ? discount
+          : couponSavingLabel;
+  // A paid course's price said in full: the marked price and the sale's
+  // amount off, the coupon's amount off once one is in use, and the total.
+  // Left out where the price line says something else: a free course, the
+  // buyer's own higher amount, a coupon that takes nothing off.
+  const priceBreakdown = (() => {
+    if (isFree || isPayingAbovePrice || isCreatorNormal) return undefined;
+    if (appliedCoupon && couponSaving?.against === "nothing") return undefined;
+    const currency = appliedCoupon?.currency ?? courseCurrency;
+    const before = appliedCoupon
+      ? appliedCoupon.totalAmount + appliedCoupon.discountAmount
+      : baseNumericPrice;
+    const markedAmount =
+      originalPrice &&
+      discount &&
+      pricing?.originalAmount &&
+      (!appliedCoupon || couponOnTopOfSale)
+        ? pricing.originalAmount
+        : undefined;
+    return {
+      sale:
+        markedAmount && originalPrice && discount
+          ? {
+              marked: originalPrice,
+              discount: formatPriceWithCurrency(
+                markedAmount - before,
+                currency,
+              ),
+              label: discount.replace(/\s*off$/i, "").trim() + " off",
+            }
+          : undefined,
+      beforeCoupon: formatPriceWithCurrency(before, currency),
+      coupon: appliedCoupon
+        ? {
+            code: appliedCoupon.code,
+            discount: formatPriceWithCurrency(
+              appliedCoupon.discountAmount,
+              currency,
+            ),
+          }
+        : undefined,
+      total: displayPrice,
+    };
+  })();
+  const perksList = getCoursePurchasePerks({
+    duration: course.duration,
+    lessons: course.lectures,
+    sections: course.sections,
+    courseIncludes: inclusions,
+  });
+  // The payment line and the money-back promise only where something is
+  // paid for.
+  const isPaidPurchase = !isFree && !isInvitationOnly && !isCreatorNormal;
   const priceSizeVariant = getPriceSizeVariant(displayPrice);
 
-  const handleApplyCoupon = async () => {
-    const code = couponCodeInput.trim().toUpperCase();
+  const applyCouponCode = async (rawCode: string) => {
+    const code = rawCode.trim().toUpperCase();
     if (!code) return;
     setCouponBusy(true);
     setCouponError(null);
+    // A code tried while another is applied (it was pasted on the page)
+    // does not take the applied one off unless it is good; a refusal says
+    // that the applied one is still there.
+    const stillApplied = appliedCoupon
+      ? ` ${appliedCoupon.code} is still applied.`
+      : "";
 
     try {
       const res = await preview.mutateAsync({
@@ -647,20 +634,39 @@ function CourseHeroSection({
       });
 
       if (res.couponValidation && !res.couponValidation.valid) {
-        setCouponError(res.couponValidation.message || "Invalid coupon code.");
+        // Never the code itself: a private code is the creator's to share.
+        trackAnalyticsEvent("coupon_rejected", { courseId: course.id });
+        setCouponError(
+          (res.couponValidation.message || "Invalid coupon code.") +
+            stillApplied,
+        );
         return;
       }
 
-      lastPreviewedAmount.current = voluntaryAmount;
-      setAppliedCoupon(appliedCouponFromPreview(code, res));
+      // `payableAmount` is the amount this request was made for. If the
+      // buyer changed theirs while it was in flight, the total is stale on
+      // arrival and the effect above asks again.
+      setAppliedCoupon(appliedCouponFromPreview(code, res, payableAmount));
+      trackAnalyticsEvent("coupon_applied", { courseId: course.id });
       setCouponInputOpen(false);
       setCouponCodeInput("");
     } catch (err) {
-      setCouponError(getApiError(err).message);
+      setCouponError(getApiError(err).message + stillApplied);
     } finally {
       setCouponBusy(false);
     }
   };
+
+  const handleApplyCoupon = () => void applyCouponCode(couponCodeInput);
+
+  // With a coupon applied there is no field for a refusal to hang from, so
+  // it is a line under the bar; it has nothing to be corrected in, and
+  // goes away by itself.
+  useEffect(() => {
+    if (!appliedCouponCode || !couponError) return undefined;
+    const handle = window.setTimeout(() => setCouponError(null), 6000);
+    return () => window.clearTimeout(handle);
+  }, [appliedCouponCode, couponError]);
 
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
@@ -668,13 +674,126 @@ function CourseHeroSection({
     setCouponCodeInput("");
   };
 
-  const handlePayNow = async (voluntaryContributionAmount?: number) => {
-    if (isReadOnlyPreview) return;
-    if (!user) {
-      setPaymentError("Please log in before enrolling.");
+  // The server has the money: unlike `payment_result: paid`, which the
+  // gateway's window reports before the server has checked anything.
+  const trackPaidEnrollment = (orderId: string) => {
+    trackAnalyticsEvent("payment_confirmed", {
+      courseId: course.id,
+      orderId,
+      props: { item: "course" },
+    });
+    trackAnalyticsEvent("enrollment_completed", {
+      courseId: course.id,
+      props: { kind: "paid", item: "course" },
+    });
+  };
+
+  const confirmPaidOrder = async (orderId: string) => {
+    paymentConfirmationRef.current?.abort();
+    const confirmation = new AbortController();
+    paymentConfirmationRef.current = confirmation;
+
+    setPaymentError(null);
+    setPaymentNotice(
+      "Payment received. We are confirming your access — this can take a few minutes. Please do not pay again.",
+    );
+    setIsPaymentBusy(true);
+
+    const paid = await awaitPaidOrder(orderId, confirmation.signal);
+    if (confirmation.signal.aborted) return;
+    paymentConfirmationRef.current = null;
+
+    setPaymentNotice(null);
+    setIsPaymentBusy(false);
+    if (paid) {
+      trackPaidEnrollment(orderId);
+      onNavigatePage?.(
+        `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+      );
       return;
     }
+    setPaymentError(
+      "Your payment was received, but confirming it is taking longer than usual. Your course will unlock automatically — check Purchase History in a few minutes. Please do not pay again.",
+    );
+  };
 
+  /**
+   * The gateway's window can go away without telling the page anything: it
+   * calls neither the success handler nor `ondismiss` when the learner
+   * closes it from one of its own error screens ("Uh! oh! Something went
+   * wrong"). The button then stayed on "Processing…" for good. Worse, the
+   * card may already have been charged by then, as it was when this was
+   * found: the gateway had captured the payment and failed afterwards.
+   *
+   * So while the window is open the page watches it, and if it closes
+   * unanswered the button is given back with a message that tells the truth
+   * about what is not known, and the order goes on being watched: the
+   * server's recovery cycle marks a captured payment paid within a few
+   * minutes, and the course then opens without the learner paying twice.
+   */
+  const watchForUnansweredClose = (
+    orderId: string,
+    answered: () => boolean,
+  ) => {
+    stopCheckoutWatch();
+    let seenOpen = false;
+    checkoutWatchRef.current = window.setInterval(() => {
+      if (answered()) return stopCheckoutWatch();
+      const container = document.querySelector(".razorpay-container");
+      const isOpen =
+        container !== null &&
+        window.getComputedStyle(container).display !== "none";
+      if (isOpen) {
+        seenOpen = true;
+        return;
+      }
+      if (!seenOpen) return;
+      stopCheckoutWatch();
+      void followUpUnansweredClose(orderId);
+    }, 500);
+  };
+
+  const followUpUnansweredClose = async (orderId: string) => {
+    paymentConfirmationRef.current?.abort();
+    const confirmation = new AbortController();
+    paymentConfirmationRef.current = confirmation;
+
+    setIsPaymentBusy(false);
+    setPaymentNotice(null);
+    setPaymentError(
+      "The payment window closed before we heard back from it. If your payment went through, this course will unlock by itself within a few minutes, so please check Purchase History before paying again.",
+    );
+
+    const paid = await awaitPaidOrder(orderId, confirmation.signal);
+    if (confirmation.signal.aborted) return;
+    paymentConfirmationRef.current = null;
+    if (paid) {
+      trackPaidEnrollment(orderId);
+      setPaymentError(null);
+      onNavigatePage?.(
+        `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+      );
+    }
+  };
+
+  const handlePayNow = async (
+    voluntaryContributionAmount?: number,
+    { phoneChecked = false }: { phoneChecked?: boolean } = {},
+  ) => {
+    if (isReadOnlyPreview) return;
+    if (!phoneChecked) {
+      trackAnalyticsEvent("enroll_click", {
+        courseId: course.id,
+        outcome: user ? "signed_in" : "guest",
+      });
+    }
+    if (!user) {
+      // Opens the login pop-up over this course page, so the visitor is back
+      // on the price card as soon as they are signed in.
+      if (onNavigatePage) onNavigatePage("/login");
+      else setPaymentError("Please log in before enrolling.");
+      return;
+    }
     setIsPaymentBusy(true);
     setPaymentError(null);
 
@@ -685,17 +804,47 @@ function CourseHeroSection({
         catalogPrice: baseNumericPrice,
       });
       const coupon = appliedCoupon?.code?.trim();
+      const couponCode = !isFree && coupon ? coupon.toUpperCase() : undefined;
+      // The key identifies this purchase, not this click: a second click on
+      // the same course, amount and coupon must reach the same order. A new
+      // key per click made the server see every retry as a new purchase.
+      const intent = JSON.stringify([item, couponCode ?? null]);
+      if (checkoutIntentRef.current?.intent !== intent) {
+        checkoutIntentRef.current = { intent, key: crypto.randomUUID() };
+      }
       const order = await createOrder.mutateAsync({
         items: [item],
-        ...(!isFree && coupon ? { couponCode: coupon.toUpperCase() } : {}),
-        idempotencyKey: crypto.randomUUID(),
+        ...(couponCode ? { couponCode } : {}),
+        idempotencyKey: checkoutIntentRef.current.key,
+      });
+      trackAnalyticsEvent("checkout_start", {
+        courseId: course.id,
+        orderId: order.order.id,
+        outcome: order.gateway ? "payment" : "free",
       });
 
       if (!order.gateway) {
+        trackAnalyticsEvent("payment_result", {
+          courseId: course.id,
+          orderId: order.order.id,
+          outcome: "free",
+        });
+        trackAnalyticsEvent("enrollment_completed", {
+          courseId: course.id,
+          props: { kind: "free", item: "course" },
+        });
         setIsPaymentBusy(false);
         onNavigatePage?.(
           `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
         );
+        return;
+      }
+
+      // The same purchase was already paid — an earlier attempt whose
+      // confirmation did not reach this page. Opening the gateway again would
+      // invite a second payment for an order that is complete.
+      if (order.order.status === "paid") {
+        await confirmPaidOrder(order.order.id);
         return;
       }
 
@@ -704,17 +853,30 @@ function CourseHeroSection({
         throw new Error("Payment checkout is unavailable.");
       }
 
+      trackAnalyticsEvent("checkout_step", {
+        courseId: course.id,
+        orderId: order.order.id,
+        step: "gateway_opened",
+      });
+      // Whether the gateway's window has told the page how it ended.
+      let checkoutAnswered = false;
+      // The gateway refused to load its window here (see
+      // openCheckoutWindow); its own close then says nothing more.
+      let windowBlocked = false;
       const rzp = new window.Razorpay({
         key: order.gateway.keyId,
         amount: order.gateway.amount,
         currency: order.gateway.currency,
-        name: "VeoLMS",
+        name: productName,
         description:
           (voluntaryContributionAmount ?? 0) > baseNumericPrice ||
           (isFree && (voluntaryContributionAmount ?? 0) > 0)
             ? `Support Creator - ${course.title}`
             : course.title,
         order_id: order.gateway.gatewayOrderId,
+        // The window closes itself, so a payment cannot be completed in it
+        // long after the server has let the buyer start another one.
+        timeout: CHECKOUT_WINDOW_SECONDS,
         prefill: {
           name: user.displayName || user.username,
           email: user.email,
@@ -724,6 +886,12 @@ function CourseHeroSection({
           razorpay_payment_id: string;
           razorpay_signature: string;
         }) => {
+          checkoutAnswered = true;
+          trackAnalyticsEvent("payment_result", {
+            courseId: course.id,
+            orderId: order.order.id,
+            outcome: "paid",
+          });
           try {
             await verify.mutateAsync({
               orderId: order.order.id,
@@ -731,37 +899,112 @@ function CourseHeroSection({
               gatewayPaymentId: response.razorpay_payment_id,
               gatewaySignature: response.razorpay_signature,
             });
+            trackPaidEnrollment(order.order.id);
             setIsPaymentBusy(false);
             onNavigatePage?.(
               `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
             );
-          } catch (error) {
-            setPaymentError(
-              error instanceof Error
-                ? error.message
-                : "Payment verification failed. Please retry.",
-            );
-            setIsPaymentBusy(false);
+          } catch {
+            // The gateway has taken the payment; only our confirmation call
+            // failed. The server still fulfils the order from the gateway
+            // webhook or its recovery cycle, so wait for that rather than
+            // telling the learner to pay again.
+            await confirmPaidOrder(order.order.id);
           }
         },
         modal: {
           ondismiss: () => {
-            setPaymentError("Payment cancelled. You can retry.");
-            setIsPaymentBusy(false);
+            checkoutAnswered = true;
+            if (windowBlocked) return;
+            // A payment that went through is being confirmed; the gateway
+            // closing its own window afterwards is not a cancellation.
+            const confirmation = paymentConfirmationRef.current;
+            if (confirmation && !confirmation.signal.aborted) return;
+            trackAnalyticsEvent("payment_result", {
+              courseId: course.id,
+              orderId: order.order.id,
+              outcome: "dismissed",
+            });
+            setPaymentError(
+              "The payment window was closed before the payment was completed. You can try again whenever you are ready.",
+            );
+            // The order is cancelled on the server, so paying again (with
+            // another coupon, at another amount) is not refused as a second
+            // payment while the closed window's time runs out. The button
+            // waits for that answer, so a quick second click does not race
+            // it. A payment the gateway may still take keeps its order.
+            void releaseOrder
+              .mutateAsync(order.order.id)
+              .then((result) => {
+                if (result.released) checkoutIntentRef.current = null;
+              })
+              .catch(() => undefined)
+              .finally(() => setIsPaymentBusy(false));
           },
         },
       });
 
-      rzp.open();
+      // Opens the window. If it never comes up, nothing can have been paid
+      // in it, so the order is let go and the button given back with the
+      // reason.
+      stopWindowLoadWatchRef.current?.();
+      stopWindowLoadWatchRef.current = openCheckoutWindow(rzp, () => {
+        windowBlocked = true;
+        checkoutAnswered = true;
+        stopCheckoutWatch();
+        trackAnalyticsEvent("payment_result", {
+          courseId: course.id,
+          orderId: order.order.id,
+          outcome: "blocked",
+        });
+        setPaymentError(CHECKOUT_WINDOW_BLOCKED_MESSAGE);
+        void releaseOrder
+          .mutateAsync(order.order.id)
+          .then((result) => {
+            if (result.released) checkoutIntentRef.current = null;
+          })
+          .catch(() => undefined)
+          .finally(() => setIsPaymentBusy(false));
+      });
+      watchForUnansweredClose(order.order.id, () => checkoutAnswered);
     } catch (error) {
-      const msg =
-        error && typeof error === "object" && "message" in error
-          ? String((error as { message: unknown }).message)
-          : "Checkout could not be started. Please retry.";
-      setPaymentError(msg);
+      // The server asks for the number of a new account that has none.
+      if (
+        (error as { code?: string } | null)?.code ===
+        "PHONE_VERIFICATION_REQUIRED"
+      ) {
+        setIsPaymentBusy(false);
+        setPhoneGate({ amount: voluntaryContributionAmount });
+        trackAnalyticsEvent("checkout_step", {
+          courseId: course.id,
+          step: "phone_verification",
+        });
+        return;
+      }
+      trackAnalyticsEvent("checkout_step", {
+        courseId: course.id,
+        step: "order_failed",
+        outcome: (error as { code?: string } | null)?.code ?? "error",
+      });
+      setPaymentError(
+        readCheckoutStartError(
+          error,
+          "Checkout could not be started. Please retry.",
+        ),
+      );
       setIsPaymentBusy(false);
     }
   };
+
+  // "Pay Now", with a card for its icon: the amount stands on the bar
+  // beside the button. A buyer's own, higher amount is still named, and a
+  // coupon that leaves nothing to pay says so instead.
+  const paidCtaLabel = (payable: number, currency: string) =>
+    payable === 0
+      ? "Enroll for Free"
+      : voluntaryAmount > baseNumericPrice
+        ? `Pay ${formatPriceWithCurrency(payable, currency)} & Enroll`
+        : "Pay Now";
 
   let ctaLabel = "Continue Learning";
   let ctaIcon: React.ReactNode = (
@@ -774,12 +1017,79 @@ function CourseHeroSection({
     }
   };
 
-  const showApplyCoupon = !isCreatorNormal && !isFree;
+  // An enrolled student has nothing left to buy; offering a coupon next to
+  // "Continue Learning" suggested there was still something to pay for.
+  const showApplyCoupon =
+    !isCreatorNormal && !isFree && !isEnrolled && !isInvitationOnly;
+
+  // A code copied somewhere else is used by pasting it anywhere on the page
+  // (Ctrl+V), without opening the field first: the field opens with the
+  // code in it and the code is tried at once. A good one is applied; a bad
+  // one stays in the field with what is wrong with it. Pasting into the
+  // coupon field does the same. Text pasted into any other field is that
+  // field's, and what cannot be a code (a sentence, a link) is ignored.
+  // With a coupon already applied, a different pasted code takes its place
+  // only if it is good; otherwise the applied one stays and the bar says
+  // why the new one was refused.
+  const tryPastedCoupon = useEffectEvent((event: ClipboardEvent) => {
+    if (event.defaultPrevented || couponBusy || isPaymentBusy) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const inCouponField = Boolean(target?.closest("[data-coupon-code-input]"));
+    if (
+      !inCouponField &&
+      target &&
+      (target.isContentEditable || target.closest("input, textarea, select"))
+    ) {
+      return;
+    }
+    const code = readPastedCouponCode(
+      event.clipboardData?.getData("text/plain"),
+    );
+    if (!code || code === appliedCoupon?.code) return;
+    // In the coupon field the code is put there from here, not typed in a
+    // second time by the browser.
+    event.preventDefault();
+    if (!appliedCoupon) {
+      setCouponInputOpen(true);
+      setCouponCodeInput(code);
+    }
+    void applyCouponCode(code);
+  });
+  // Not in the course editor's preview: nothing is bought from there.
+  const listensForPastedCoupon = showApplyCoupon && !isPreview;
+  useEffect(() => {
+    if (!listensForPastedCoupon) return undefined;
+    const onPaste = (event: ClipboardEvent) => tryPastedCoupon(event);
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [listensForPastedCoupon]);
   const isCustomUnderPrice =
     !isFree &&
     selectedPreset === "custom" &&
     voluntaryAmount > 0 &&
     voluntaryAmount < baseNumericPrice;
+  // The custom box holds something that is not a whole number ("199.50",
+  // "1e5", "abc"). It stays in the box as typed and nothing can be paid or
+  // enrolled until it is corrected: the amount is 0 meanwhile, and paying
+  // the catalogue price next to a box that says otherwise would be a
+  // different mistake.
+  const isCustomAmountUnreadable =
+    selectedPreset === "custom" &&
+    readCustomAmount(customAmountInput, MAX_VOLUNTARY_AMOUNT).kind ===
+      "unreadable";
+  // Why the amount in the custom box cannot be used. The pay button is
+  // disabled for an unreadable amount and for one under the price; without
+  // this nothing said why. Derived from the box, so it stays for as long as
+  // the box is wrong.
+  const customAmountMessage =
+    selectedPreset !== "custom"
+      ? null
+      : isCustomAmountUnreadable
+        ? "Enter a whole number, with no decimals or symbols."
+        : (customAmountError ??
+          (isCustomUnderPrice
+            ? `The least you can pay for this course is ${formatPriceWithCurrency(baseNumericPrice, courseCurrency)}.`
+            : null));
 
   if (isCreatorNormal || isEnrolled) {
     // 1. Creator viewing their course normally or already enrolled student:
@@ -817,27 +1127,13 @@ function CourseHeroSection({
         );
       } else {
         ctaLabel = "Enroll for Free";
-        ctaIcon = (
-          <BookOpen
-            size="1.15em"
-            weight="bold"
-            className="shrink-0"
-            aria-hidden="true"
-          />
-        );
+        ctaIcon = <HoverFillIcon icon={BookOpen} />;
       }
     } else {
       const payable =
         voluntaryAmount > baseNumericPrice ? voluntaryAmount : baseNumericPrice;
-      ctaLabel = `Pay ${formatPriceWithCurrency(payable, courseCurrency)} & Enroll`;
-      ctaIcon = (
-        <ShoppingBag
-          size="1.15em"
-          weight="bold"
-          className="shrink-0"
-          aria-hidden="true"
-        />
-      );
+      ctaLabel = paidCtaLabel(payable, courseCurrency);
+      ctaIcon = <PayCardIcon />;
     }
     ctaDisabled = false;
     ctaOnClick = undefined; // Preview actions stay non-functional.
@@ -873,12 +1169,7 @@ function CourseHeroSection({
             aria-hidden="true"
           />
         ) : (
-          <BookOpen
-            size="1.15em"
-            weight="bold"
-            className="shrink-0"
-            aria-hidden="true"
-          />
+          <HoverFillIcon icon={BookOpen} />
         );
         ctaDisabled = isPaymentBusy;
         ctaOnClick = () => handlePayNow(0);
@@ -889,7 +1180,7 @@ function CourseHeroSection({
       const finalPayable = appliedCoupon ? appliedCoupon.totalAmount : payable;
       ctaLabel = isPaymentBusy
         ? "Processing…"
-        : `Pay ${formatPriceWithCurrency(finalPayable, appliedCoupon?.currency ?? courseCurrency)} & Enroll`;
+        : paidCtaLabel(finalPayable, appliedCoupon?.currency ?? courseCurrency);
       ctaIcon = isPaymentBusy ? (
         <CircleNotch
           size="1.15em"
@@ -897,12 +1188,7 @@ function CourseHeroSection({
           aria-hidden="true"
         />
       ) : (
-        <ShoppingBag
-          size="1.15em"
-          weight="bold"
-          className="shrink-0"
-          aria-hidden="true"
-        />
+        <PayCardIcon />
       );
       ctaDisabled = isPaymentBusy || isCustomUnderPrice;
       ctaOnClick = () => {
@@ -917,552 +1203,181 @@ function CourseHeroSection({
         );
       };
     }
+
+    // Free or paid: no payment and no enrolment while the custom box holds
+    // text that is not an amount. The message under the box says why.
+    if (isCustomAmountUnreadable) {
+      ctaDisabled = true;
+      ctaOnClick = undefined;
+    }
+
+    // The coupon total on the card belongs to an earlier amount, and the one
+    // for the amount now chosen has been asked for. Until it arrives the
+    // button names no price and takes no payment: a click here used to send
+    // the new amount under the old total. It ends when the new total
+    // arrives, or when the coupon comes off because it could not be had.
+    if (couponTotalIsStale) {
+      ctaDisabled = true;
+      ctaOnClick = undefined;
+      if (!isPaymentBusy) {
+        ctaLabel = "Updating total…";
+        ctaIcon = (
+          <CircleNotch
+            size="1.15em"
+            className="animate-spin shrink-0"
+            aria-hidden="true"
+          />
+        );
+      }
+    }
   }
 
-  const handlePreviewClick = (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    if (isReadOnlyPreview) return;
-    if (onNavigatePage) {
-      onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
-    }
-  };
+  const priceLabel = isFree
+    ? originalPrice
+      ? basePrice
+      : "Free"
+    : displayPrice;
+  const priceBadge =
+    (isFree ? originalPrice : true) && displayDiscount
+      ? displayDiscount
+      : undefined;
 
   return (
-    <div className="grid grid-cols-1 min-[1200px]:grid-cols-2 gap-8 items-start relative max-[1200px]:flex max-[1200px]:flex-col max-[1200px]:gap-5.5 max-[640px]:gap-4.5">
-      {/* Left Column: Title, Metadata, Pricing Section */}
-      <div className="flex flex-col min-w-0 w-full gap-4 max-[1200px]:contents">
-        {/* Upper Navigation Back Button */}
-        {onNavigateCourses && (
-          <div className="flex items-center gap-2.5 flex-wrap max-[1200px]:order-0 max-[1200px]:w-full">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center w-9.5 h-9.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,#000)] text-(--text) cursor-pointer p-0 shadow-[0_2px_8px_rgba(0,0,0,0.14)] transition-[border-color,background-color,color] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)] hover:bg-(--hover) hover:text-(--text)"
-              aria-label="Back to courses"
-              onClick={onNavigateCourses}
-              title="Back to courses"
-            >
-              <ArrowLeft size={18} weight="bold" />
-            </button>
-          </div>
-        )}
-
-        {/* Lower Content Group: Title, Meta row, Pricing Card */}
-        <div className="flex flex-col min-w-0 w-full gap-3.5 max-[1200px]:contents">
-          {/* Title & Metadata Group */}
-          <div className="flex flex-col min-w-0 shrink-0 max-[1200px]:order-1 max-[1200px]:w-full gap-2.5">
-            {/* 1. Title */}
-            <h1 className="m-0 text-(--text) text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em]">
-              {title}
-            </h1>
-
-            {/* 2. Metadata row immediately below title */}
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-(--text-secondary) text-[0.88rem] max-[900px]:gap-x-3 max-[900px]:gap-y-1.5 max-[640px]:text-[0.86rem] max-[640px]:gap-x-2.5 max-[640px]:gap-y-1.25">
-              {instructorName && (
-                <>
-                  <span className="inline-flex items-center gap-1.5 text-(--text) font-[650]">
-                    <User size={17} weight="bold" aria-hidden="true" />
-                    <span>{instructorName}</span>
-                  </span>
-                  <span
-                    className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                    aria-hidden="true"
-                  >
-                    •
-                  </span>
-                </>
-              )}
-              <span className="inline-flex items-center gap-1.5">
-                <Stack size={17} aria-hidden="true" />
-                <span>
-                  {course.sections} Section{course.sections === 1 ? "" : "s"}
-                </span>
-              </span>
-              <span
-                className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                aria-hidden="true"
-              >
-                •
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <BookOpen size={17} aria-hidden="true" />
-                <span>
-                  {course.lectures} Lesson{course.lectures === 1 ? "" : "s"}
-                </span>
-              </span>
-              {/* Language metadata is temporarily hidden per requirements (retained for future use) */}
-              {categoryName ? (
-                <>
-                  <span
-                    className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                    aria-hidden="true"
-                  >
-                    •
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Tag size={17} aria-hidden="true" />
-                    <span>{categoryName}</span>
-                  </span>
-                </>
-              ) : null}
-              <span
-                className="text-[color-mix(in_srgb,var(--text)_30%,transparent)] text-[0.8rem]"
-                aria-hidden="true"
-              >
-                •
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Clock size={17} aria-hidden="true" />
-                <span>{course.duration || "0h 0m"}</span>
-              </span>
-            </div>
-          </div>
-
-          {/* Full-width Rich Pricing Section in Left Column */}
-          <div
-            className={`flex flex-col min-h-0 rounded-[14px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,transparent)] shadow-(--card-shadow) w-full box-border max-[1200px]:order-3 max-[1200px]:w-full max-[1200px]:mt-0 max-[640px]:p-[16px_14px] max-[640px]:gap-3 p-[18px_20px] gap-3.5`}
-            aria-label="Course pricing and enrollment"
-          >
-            {/* Top Row: Prominent Price + Original Price + Discount (Left) and Favourite Button (Top Right) */}
-            {!isCreatorNormal && (
-              <div className="flex items-start justify-between gap-3 w-full">
-                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5 min-w-0 flex-1">
-                  <span
-                    className={`text-(--text) font-[850] leading-none whitespace-nowrap ${priceTextClasses[priceSizeVariant]}`}
-                  >
-                    {isFree ? "Free" : displayPrice}
-                  </span>
-                  {!isFree && (originalPrice || appliedCoupon) && (
-                    <span className="text-(--muted) text-[1.05rem] font-medium line-through whitespace-nowrap">
-                      {appliedCoupon ? basePrice : originalPrice}
-                    </span>
-                  )}
-                  {!isFree && displayDiscount && (
-                    <span className="inline-flex items-center rounded-md px-2 py-0.75 bg-(--accent-soft,color-mix(in_srgb,var(--accent)_18%,transparent)) text-(--accent-ink,var(--accent)) text-[0.75rem] font-[750] leading-none whitespace-nowrap">
-                      {displayDiscount}
-                    </span>
-                  )}
-                </div>
-
-                <CourseWishlistHeartButton
-                  variant="overview-surface"
-                  wishlisted={wishlisted}
-                  disabled={isPreview}
-                  aria-label={
-                    wishlisted ? "Remove from wishlist" : "Add to wishlist"
-                  }
-                  title={
-                    wishlisted ? "Remove from wishlist" : "Add to wishlist"
-                  }
-                  onClick={(event) => onToggleWishlist?.(event)}
-                />
-              </div>
-            )}
-
-            {/* Applied Coupon Badge */}
-            {appliedCoupon && (
-              <div className="flex items-center justify-between gap-2 w-full px-3 py-2 rounded-[9px] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] text-(--text)">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Ticket
-                    size={16}
-                    weight="fill"
-                    className="text-(--accent) shrink-0"
-                    aria-hidden="true"
-                  />
-                  <span className="text-xs font-bold uppercase tracking-wider text-(--accent-ink,var(--accent)) truncate">
-                    {appliedCoupon.code}
-                  </span>
-                  <span className="text-xs text-(--muted) whitespace-nowrap">
-                    applied{" "}
-                    {appliedCoupon.discountLabel
-                      ? `(${appliedCoupon.discountLabel})`
-                      : ""}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRemoveCoupon}
-                  className="inline-flex items-center justify-center w-5 h-5 rounded-full text-(--muted) hover:text-rose-500 hover:bg-rose-500/10 cursor-pointer transition-colors"
-                  aria-label="Remove coupon"
-                  title="Remove coupon"
-                >
-                  <X size={13} weight="bold" />
-                </button>
-              </div>
-            )}
-
-            {/* Inline Coupon Input Box (shown when user clicks 'Apply coupon') */}
-            {showApplyCoupon && couponInputOpen && !appliedCoupon && (
-              <div className="flex flex-col gap-1.5 w-full">
-                <div className="flex items-center gap-2 w-full min-h-10.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_75%,var(--canvas))] border border-[color-mix(in_srgb,var(--text)_18%,transparent)] focus-within:border-(--accent) focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--accent)_18%,transparent)] p-1.5 pl-3 transition-all">
-                  <Ticket
-                    size={18}
-                    weight="bold"
-                    className="text-(--muted) shrink-0"
-                    aria-hidden="true"
-                  />
-                  <input
-                    type="text"
-                    value={couponCodeInput}
-                    onChange={(e) => {
-                      setCouponCodeInput(e.target.value.toUpperCase());
-                      setCouponError(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleApplyCoupon();
-                      } else if (e.key === "Escape") {
-                        setCouponInputOpen(false);
-                        setCouponError(null);
-                      }
-                    }}
-                    placeholder="Enter coupon code"
-                    disabled={couponBusy}
-                    aria-label="Coupon code"
-                    className="w-full bg-transparent border-0 text-(--text) placeholder-(--muted) text-[0.86rem] font-semibold tracking-wider outline-none uppercase"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    disabled={couponBusy || !couponCodeInput.trim()}
-                    className="inline-flex items-center justify-center px-3.5 py-1.5 rounded-[7px] bg-(--accent) text-(--on-accent,#ffffff) text-[0.82rem] font-[750] cursor-pointer whitespace-nowrap transition-all hover:bg-(--accent-hover,color-mix(in_srgb,var(--accent)_85%,var(--text))) disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                  >
-                    {couponBusy ? (
-                      <CircleNotch size={14} className="animate-spin" />
-                    ) : (
-                      "Apply"
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCouponInputOpen(false);
-                      setCouponError(null);
-                    }}
-                    aria-label="Cancel"
-                    title="Cancel"
-                    className="inline-flex items-center justify-center w-7 h-7 rounded-md text-(--muted) hover:text-(--text) hover:bg-(--hover) cursor-pointer transition-colors shrink-0"
-                  >
-                    <X size={15} weight="bold" />
-                  </button>
-                </div>
-                {couponError && (
-                  <p className="m-0 text-xs text-rose-500 font-semibold px-1">
-                    {couponError}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Pay What You Want / Voluntary Contribution for Free and Paid Courses */}
-            {!isCreatorNormal && !isEnrolled && (
-              <div className="flex flex-col gap-2 pt-2 pb-0.5 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
-                <div className="flex items-center justify-between gap-2 min-h-5">
-                  <span className="text-[0.8rem] font-bold text-(--text) uppercase tracking-wider flex items-center gap-1.5">
-                    <Heart
-                      size={14}
-                      weight="fill"
-                      className="text-rose-500"
-                      aria-hidden="true"
-                    />
-                    <span>Support Teacher (Optional)</span>
-                  </span>
-                  <span
-                    className={`text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full transition-opacity duration-150 ${
-                      voluntaryAmount > (isFree ? 0 : baseNumericPrice)
-                        ? "opacity-100"
-                        : "opacity-0 pointer-events-none"
-                    }`}
-                  >
-                    {formatPriceWithCurrency(voluntaryAmount, courseCurrency)}{" "}
-                    Total
-                  </span>
-                </div>
-                <p className="m-0 text-[0.8rem] text-(--muted) leading-snug">
-                  {isFree
-                    ? "This course is free. If you'd like to support the instructor, you can optionally contribute any amount."
-                    : `You can optionally pay more than the regular price (${formatPriceWithCurrency(baseNumericPrice, courseCurrency)}) to support the instructor.`}
-                </p>
-
-                {/* Preset Contribution Chips with Inline Custom Pill */}
-                <div className="flex flex-wrap items-center gap-1.5 min-h-8">
-                  {(isFree
-                    ? [
-                        {
-                          id: "0" as const,
-                          label: `Free (${formatPriceWithCurrency(0, courseCurrency)})`,
-                          value: 0,
-                        },
-                        {
-                          id: "100" as const,
-                          label: formatPriceWithCurrency(100, courseCurrency),
-                          value: 100,
-                        },
-                        {
-                          id: "250" as const,
-                          label: formatPriceWithCurrency(250, courseCurrency),
-                          value: 250,
-                        },
-                        {
-                          id: "500" as const,
-                          label: formatPriceWithCurrency(500, courseCurrency),
-                          value: 500,
-                        },
-                        { id: "custom" as const, label: "Custom", value: -1 },
-                      ]
-                    : [
-                        {
-                          id: "0" as const,
-                          label: `Regular (${formatPriceWithCurrency(baseNumericPrice, courseCurrency)})`,
-                          value: 0,
-                        },
-                        {
-                          id: "100" as const,
-                          label: `+${formatPriceWithCurrency(100, courseCurrency)} (${formatPriceWithCurrency(baseNumericPrice + 100, courseCurrency)})`,
-                          value: baseNumericPrice + 100,
-                        },
-                        {
-                          id: "250" as const,
-                          label: `+${formatPriceWithCurrency(250, courseCurrency)} (${formatPriceWithCurrency(baseNumericPrice + 250, courseCurrency)})`,
-                          value: baseNumericPrice + 250,
-                        },
-                        {
-                          id: "500" as const,
-                          label: `+${formatPriceWithCurrency(500, courseCurrency)} (${formatPriceWithCurrency(baseNumericPrice + 500, courseCurrency)})`,
-                          value: baseNumericPrice + 500,
-                        },
-                        { id: "custom" as const, label: "Custom", value: -1 },
-                      ]
-                  ).map((preset) => {
-                    if (preset.id === "custom") {
-                      if (selectedPreset === "custom") {
-                        return (
-                          <div
-                            key="custom-input-pill"
-                            className="inline-flex items-center gap-1 h-8 rounded-[8px] bg-[color-mix(in_srgb,var(--surface-strong)_85%,var(--canvas))] border border-(--accent) focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--accent)_25%,transparent)] px-2.5 transition-all"
-                          >
-                            <span className="text-xs font-bold text-(--accent)">
-                              {currencySymbol}
-                            </span>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              value={customAmountInput}
-                              onChange={(e) => {
-                                const raw = e.target.value.replace(/\D/g, "");
-                                if (!raw) {
-                                  setCustomAmountInput("");
-                                  setVoluntaryAmount(0);
-                                  return;
-                                }
-                                const parsed = parseInt(raw, 10);
-                                if (Number.isNaN(parsed) || parsed <= 0) {
-                                  setCustomAmountInput(raw);
-                                  setVoluntaryAmount(0);
-                                  return;
-                                }
-                                const clamped = Math.min(
-                                  parsed,
-                                  MAX_VOLUNTARY_AMOUNT,
-                                );
-                                setCustomAmountInput(String(clamped));
-                                setVoluntaryAmount(clamped);
-                              }}
-                              placeholder={
-                                isFree ? "Amount" : `>= ${baseNumericPrice}`
-                              }
-                              className="w-24 bg-transparent border-0 text-(--text) placeholder-(--muted) text-[0.82rem] font-bold outline-none"
-                              autoFocus
-                            />
-                            {customAmountInput && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setCustomAmountInput("");
-                                  setVoluntaryAmount(0);
-                                }}
-                                className="inline-flex items-center justify-center w-4 h-4 rounded-full text-(--muted) hover:text-(--text) cursor-pointer"
-                              >
-                                <X size={11} weight="bold" />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      }
-                      return (
-                        <button
-                          key="custom-btn"
-                          type="button"
-                          onClick={() => {
-                            setSelectedPreset("custom");
-                            const parsed = parseInt(customAmountInput, 10);
-                            setVoluntaryAmount(
-                              !Number.isNaN(parsed) && parsed > 0
-                                ? Math.min(parsed, MAX_VOLUNTARY_AMOUNT)
-                                : 0,
-                            );
-                          }}
-                          className="px-3 py-1.5 rounded-[8px] text-[0.82rem] font-bold border transition-all cursor-pointer bg-[color-mix(in_srgb,var(--surface-strong)_70%,var(--canvas))] text-(--text) border-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)] hover:bg-(--hover)"
-                        >
-                          Custom
-                        </button>
-                      );
-                    }
-
-                    const isSelected = selectedPreset === preset.id;
-                    return (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedPreset(preset.id);
-                          setVoluntaryAmount(preset.value);
-                          setCustomAmountInput("");
-                        }}
-                        className={`px-3 py-1.5 rounded-[8px] text-[0.82rem] font-bold border transition-all cursor-pointer ${
-                          isSelected
-                            ? "bg-(--accent) text-(--on-accent,#ffffff) border-(--accent) shadow-xs"
-                            : "bg-[color-mix(in_srgb,var(--surface-strong)_70%,var(--canvas))] text-(--text) border-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_30%,transparent)] hover:bg-(--hover)"
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Middle Row: Actions (Apply Coupon + Pay Now / Continue Learning / Enroll for Free) */}
-            <div className="flex flex-wrap items-center gap-2.5 w-full min-w-0 max-[640px]:gap-2">
-              {showApplyCoupon && !couponInputOpen && !appliedCoupon && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCouponInputOpen(true);
-                    setCouponError(null);
-                  }}
-                  className="inline-flex items-center justify-center gap-1.5 min-h-10.5 border border-dashed border-[color-mix(in_srgb,var(--text)_25%,transparent)] rounded-[9px] px-3.5 sm:px-4 py-2 text-(--text) bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] text-[0.86rem] font-[750] cursor-pointer whitespace-nowrap min-w-0 transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-(--accent) hover:text-(--accent) hover:bg-(--accent-soft,color-mix(in_srgb,var(--accent)_12%,transparent)) hover:-translate-y-px shrink-0 max-[480px]:flex-1 max-[480px]:min-w-30 max-[640px]:px-3 max-[640px]:text-[0.84rem]"
-                >
-                  <Ticket
-                    size="1.15em"
-                    weight="bold"
-                    className="shrink-0"
-                    aria-hidden="true"
-                  />
-                  <span className="font-[750] truncate">Apply coupon</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-2 flex-1 min-h-10.5 min-w-35 px-4 sm:px-5 py-2.5 border-0 rounded-[9px] text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_4px_14px_var(--accent-shadow,color-mix(in_srgb,var(--accent)_28%,transparent))] text-[0.94rem] font-[800] tracking-[-0.01em] cursor-pointer whitespace-nowrap min-w-0 max-[640px]:text-[0.88rem] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:shadow-none"
-                disabled={ctaDisabled}
-                onClick={ctaOnClick}
-              >
-                {ctaIcon}
-                <span className="font-[800] truncate">{ctaLabel}</span>
-              </button>
-            </div>
-
-            {/* Payment Error Banner */}
-            {paymentError && (
-              <div className="flex items-center justify-between gap-2 w-full rounded-lg bg-rose-500/12 border border-rose-500/30 p-2.5 text-xs text-rose-500 font-medium">
-                <span>{paymentError}</span>
-                <button
-                  type="button"
-                  onClick={() => setPaymentError(null)}
-                  className="text-rose-400 hover:text-rose-600 cursor-pointer p-0.5"
-                  aria-label="Dismiss error"
-                >
-                  <X size={13} weight="bold" />
-                </button>
-              </div>
-            )}
-
-            {/* Bottom Row: Additional Inclusions / Value Perks */}
-            {perksList.length > 0 && (
-              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 pt-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) text-[0.82rem] max-[640px]:text-[0.78rem] max-[640px]:gap-x-3 max-[640px]:gap-y-2">
-                {perksList.map((perk, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-1.5 font-medium whitespace-nowrap"
-                  >
-                    <CheckCircle
-                      size={15}
-                      weight="fill"
-                      className="text-emerald-500 dark:text-emerald-400 shrink-0"
-                      aria-hidden="true"
-                    />
-                    <span>{perk}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Right Column: 16:9 Course Trailer */}
-      <div className="flex items-end justify-center w-full min-w-0 min-[1200px]:h-full max-[1200px]:order-2 max-[1200px]:w-full max-[640px]:-mx-3.5 max-[640px]:w-[calc(100%+28px)] max-[640px]:max-w-none">
-        <div
-          className="group w-full aspect-video overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center rounded-[14px] max-[640px]:rounded-none max-[640px]:border-x-0"
-          aria-label="Course preview player"
-        >
-          {thumbnail ? (
-            <img
-              src={thumbnail}
-              srcSet={course.thumbnailSrcSet
-                ?.map(({ url, width }) => `${url} ${width}w`)
-                .join(", ")}
-              sizes="(max-width: 640px) 100vw, (max-width: 1200px) 50vw, 560px"
-              alt={`Preview thumbnail for ${title}`}
-              className="w-full h-full object-cover opacity-90 transition-[transform,opacity] duration-300 motion-reduce:transition-none group-hover:scale-[1.015] group-hover:opacity-[0.98]"
-              width={960}
-              height={540}
-              loading="eager"
-              fetchPriority="high"
-              decoding="async"
-            />
-          ) : (
-            <CourseThumbnailPlaceholder />
-          )}
-
-          {/* Conditional Trailer Overlay & Watch Trailer Action */}
-          {Boolean(trailerMediaId) && (
-            <>
-              <div className="absolute inset-0 bg-linear-to-b from-black/8 to-black/45 pointer-events-none" />
-
-              {/* Bottom Left Pill Button */}
-              <button
-                type="button"
-                className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/65 backdrop-blur-[10px] border border-white/18 text-white text-[0.78rem] font-semibold px-3.25 py-1.5 rounded-full cursor-pointer z-2 transition-[background-color,border-color,transform] duration-160 ease-out hover:bg-black/85 hover:border-white/40 hover:-translate-y-px"
-                onClick={handlePreviewClick}
-                disabled={isReadOnlyPreview}
-                aria-label="Watch trailer"
-              >
-                <PlayCircle size={15} weight="bold" />
-                <span>Watch trailer</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+    <CoursePriceBar
+      price={
+        isCreatorNormal
+          ? undefined
+          : {
+              label: priceLabel,
+              sizeClassName: priceTextClasses[priceSizeVariant],
+              struckThrough: struckThroughPrice,
+              badge: priceBadge,
+              // The only saving shown, and it is the coupon's.
+              badgeIsCoupon: Boolean(
+                priceBadge && appliedCoupon && !couponOnTopOfSale,
+              ),
+              couponBadge:
+                priceBadge && couponOnTopOfSale ? couponSavingLabel : undefined,
+            }
+      }
+      priceBreakdown={
+        priceBreakdown
+          ? {
+              ...priceBreakdown,
+              totalSizeClassName: priceTextClasses[priceSizeVariant],
+            }
+          : undefined
+      }
+      coupon={
+        appliedCoupon || showApplyCoupon
+          ? {
+              applied: appliedCoupon ? { code: appliedCoupon.code } : null,
+              isOpen: couponInputOpen,
+              code: couponCodeInput,
+              busy: couponBusy,
+              onOpen: () => {
+                setCouponInputOpen(true);
+                setCouponError(null);
+              },
+              onClose: () => {
+                setCouponInputOpen(false);
+                setCouponError(null);
+              },
+              onCodeChange: (code) => {
+                setCouponCodeInput(code);
+                setCouponError(null);
+              },
+              onApply: handleApplyCoupon,
+              onRemove: handleRemoveCoupon,
+            }
+          : undefined
+      }
+      // Said beside the open field, and under the bar when there is no
+      // open field: a coupon that came off by itself would otherwise give
+      // no reason at all, and neither would a pasted code that was refused
+      // while another coupon is applied.
+      couponError={couponError}
+      action={{
+        label: ctaLabel,
+        icon: ctaIcon,
+        disabled: ctaDisabled,
+        onClick: ctaOnClick,
+      }}
+      closedMessage={isInvitationOnly ? INVITATION_ONLY_MESSAGE : undefined}
+      notice={paymentNotice}
+      error={paymentError}
+      onDismissError={() => setPaymentError(null)}
+      perks={perksList}
+      checkoutNote={isPaidPurchase ? coursePurchaseCheckoutNote : undefined}
+      guarantee={isPaidPurchase ? coursePurchaseGuarantee : undefined}
+    >
+      {SUPPORT_AMOUNTS_OFFERED &&
+      !isCreatorNormal &&
+      !isEnrolled &&
+      !isInvitationOnly ? (
+        <CourseSupportAmountPicker
+          isFree={isFree}
+          basePrice={baseNumericPrice}
+          currency={courseCurrency}
+          selectedPreset={selectedPreset}
+          voluntaryAmount={voluntaryAmount}
+          customAmountInput={customAmountInput}
+          customAmountMessage={customAmountMessage}
+          onSelectPreset={setSelectedPreset}
+          onVoluntaryAmountChange={setVoluntaryAmount}
+          onCustomAmountInputChange={setCustomAmountInput}
+          onCustomAmountErrorChange={setCustomAmountError}
+        />
+      ) : null}
+      {phoneGate ? (
+        <Suspense fallback={null}>
+          <PhoneVerificationDialog
+            purpose={isFree && !phoneGate.amount ? "enroll" : "pay"}
+            savedPhoneNo={
+              currentUser.data && !currentUser.data.mobileVerified
+                ? currentUser.data.phoneNo
+                : null
+            }
+            onClose={() => setPhoneGate(null)}
+            onVerified={() => {
+              const { amount } = phoneGate;
+              setPhoneGate(null);
+              void handlePayNow(amount, { phoneChecked: true });
+            }}
+          />
+        </Suspense>
+      ) : null}
+    </CoursePriceBar>
   );
 }
+
 interface CourseAboutCardProps {
   description?: string;
+  /** For someone who manages the course: opens the editor's Basics tab. */
+  onEdit?: () => void;
   isReadOnlyPreview?: boolean;
 }
 
-/** Line height × clamp lines = collapsed max-height in px. */
-const CLAMP_LINES = 5;
-const LINE_HEIGHT_PX = 0.88 * 16 * 1.65; // font-size × line-height ≈ 23.2 px
+/**
+ * Line height × clamp lines = collapsed max-height in px. Seven: about
+ * three lines whole (the paragraphs' spacing takes some of it) and two
+ * fading out under them (it was five, which left room for half a line to
+ * fade, until 2026-10-15).
+ */
+const CLAMP_LINES = 7;
+const LINE_HEIGHT_PX = 0.92 * 16 * 1.65; // font-size × line-height ≈ 24.3 px
 
-function CourseAboutCard({ description }: CourseAboutCardProps) {
+/**
+ * The cut description's fade: whole until 4.5rem above the cut, then easing
+ * out across the two lines over "See more", dimmer and then fainter, and
+ * gone 0.875rem above the cut, in the space before the next paragraph, so
+ * nothing shows beside "See more" (which rises over the text: its
+ * `-mt-7`).
+ */
+const aboutFadeClasses =
+  "[mask-image:linear-gradient(to_bottom,#000_calc(100%_-_4.5rem),rgb(0_0_0/0.75)_calc(100%_-_3.625rem),rgb(0_0_0/0.5)_calc(100%_-_2.75rem),rgb(0_0_0/0.32)_calc(100%_-_1.875rem),rgb(0_0_0/0.15)_calc(100%_-_1.25rem),transparent_calc(100%_-_0.875rem))]";
+
+function CourseAboutCard({ description, onEdit }: CourseAboutCardProps) {
   const hasDescription = Boolean(description && description.trim());
   const [expanded, setExpanded] = useState(false);
   const [needsClamp, setNeedsClamp] = useState(() => {
@@ -1479,188 +1394,87 @@ function CourseAboutCard({ description }: CourseAboutCardProps) {
 
   const collapsedMaxHeight = `${Math.round(LINE_HEIGHT_PX * CLAMP_LINES)}px`;
 
+  // A box, the page's last: heading, the description, and "See more" once
+  // it is cut. Cut, the text itself fades out over its last four lines or
+  // so, slowly at first and then faster, so no line stops short at full
+  // strength (it was a 3rem overlay in the box's colour until 2026-10-15,
+  // which faded only the last line).
   return (
     <section
-      className="p-[18px_22px] rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shadow-(--card-shadow) max-[640px]:p-[18px_16px]"
+      className={`${overviewCardClasses} ${overviewCardPaddingClasses}`}
       aria-labelledby="cov-about-heading"
+      data-fixed-radius
     >
-      <h2
-        id="cov-about-heading"
-        className="m-0 mb-3 text-(--text) text-[1.24rem] font-bold tracking-[-0.015em]"
-      >
-        About this course
-      </h2>
+      <div className={bandHeaderClasses}>
+        <h2 id="cov-about-heading" className={bandTitleClasses}>
+          About this course
+        </h2>
+        {onEdit ? (
+          <button type="button" className={bandLinkClasses} onClick={onEdit}>
+            <PencilSimple size={15} weight="bold" aria-hidden="true" />
+            <span>Edit about</span>
+          </button>
+        ) : null}
+      </div>
 
       {hasDescription ? (
-        <div className="flex flex-col gap-2">
-          {/* Clamp wrapper */}
+        <div className="mt-3.5 flex flex-col gap-2.5">
           <div className="relative">
             <div
               ref={contentRef}
-              className="cov-prose text-[0.88rem] leading-[1.65] overflow-hidden transition-[max-height] duration-300 ease-in-out"
+              className={`cov-prose overflow-hidden text-[0.92rem] leading-[1.65] text-(--text-secondary) transition-[max-height] duration-300 ease-in-out ${
+                needsClamp && !expanded ? aboutFadeClasses : ""
+              }`}
               style={{
                 maxHeight:
                   needsClamp && !expanded ? collapsedMaxHeight : "9999px",
               }}
             >
               <DiscussionMarkdown
-                content={createDiscussionDraft(description!.trim())}
+                content={createDiscussionDraft(
+                  formatPlainDescription(description!),
+                )}
                 label="About this course"
-                className="[&>:first-child]:mt-0 max-w-none"
+                // The description is written with single line breaks; they
+                // are kept as lines instead of being run into one paragraph.
+                // One written as plain lines is spaced out first (see
+                // `formatPlainDescription`).
+                preserveSoftBreaks
+                className="max-w-none [&_p]:my-2.5 [&>:first-child]:mt-0"
               />
             </div>
-
-            {/* Gradient fade — only shown when collapsed and clamp is active */}
-            {needsClamp && !expanded && (
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-(--surface) to-transparent"
-              />
-            )}
           </div>
 
-          {/* Toggle button */}
           {needsClamp && (
             <button
               type="button"
               data-testid="description-toggle"
               onClick={() => setExpanded((prev) => !prev)}
-              className="self-start flex items-center gap-1.5 text-[0.82rem] font-semibold text-(--accent) hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-0 p-0"
+              // While the text is cut, it rises over the faint end of the
+              // fade, so it sits just under the line that is fading out.
+              className={`${bandLinkClasses} relative self-start ${
+                expanded ? "" : "-mt-7"
+              }`}
             >
-              {expanded ? (
-                <>
-                  Show less
-                  <CaretDown
-                    size={13}
-                    weight="bold"
-                    className="rotate-180 transition-transform duration-200"
-                  />
-                </>
-              ) : (
-                <>
-                  Show more
-                  <CaretDown
-                    size={13}
-                    weight="bold"
-                    className="transition-transform duration-200"
-                  />
-                </>
-              )}
+              {expanded ? "See less" : "See more"}
+              <CaretDown
+                size={13}
+                weight="bold"
+                className={`transition-transform duration-200 ${
+                  expanded ? "rotate-180" : ""
+                }`}
+                aria-hidden="true"
+              />
             </button>
           )}
         </div>
       ) : (
-        <div
-          className="p-8 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) text-(--muted) text-center text-[0.88rem] italic"
+        <p
+          className="m-0 mt-3.5 text-[0.9rem] text-(--muted)"
           data-testid="course-description-empty"
         >
           No description available yet
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ─── course curriculum card ──────────────────────────────────────────────────
-
-interface CourseCurriculumCardProps {
-  course: Course;
-  courseSections: CourseSection[];
-  openSections: Set<number>;
-  onToggleSection: (index: number) => void;
-  onExpandAll: () => void;
-  onCollapseAll: () => void;
-  onSelectLesson?: (lessonNumber: number) => void;
-  isReadOnlyPreview?: boolean;
-  isPaidCourse?: boolean;
-}
-
-function CourseCurriculumCard({
-  course,
-  courseSections,
-  openSections,
-  onToggleSection,
-  onExpandAll,
-  onCollapseAll,
-  onSelectLesson,
-  isReadOnlyPreview = false,
-  isPaidCourse = false,
-}: CourseCurriculumCardProps) {
-  const allSectionsExpanded =
-    courseSections.length > 0 && openSections.size === courseSections.length;
-
-  return (
-    <section
-      className="p-[18px_22px] rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shadow-(--card-shadow) max-[640px]:p-[18px_16px]"
-      aria-labelledby="cov-curriculum-heading"
-    >
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <div>
-          <h2
-            id="cov-curriculum-heading"
-            className="m-0 mb-2.5 text-(--text) text-[1.1rem] font-bold tracking-[-0.015em]"
-          >
-            Course curriculum
-          </h2>
-          <p className="m-0 mt-0.5 text-(--muted) text-[0.82rem]">
-            {course.sections} Section{course.sections === 1 ? "" : "s"} &bull;{" "}
-            {course.lectures} Lesson{course.lectures === 1 ? "" : "s"} &bull;{" "}
-            {course.duration}
-          </p>
-        </div>
-        <div className="flex items-center shrink-0 pt-1">
-          <button
-            type="button"
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,var(--text))] text-(--muted) cursor-pointer"
-            onClick={allSectionsExpanded ? onCollapseAll : onExpandAll}
-            aria-label={
-              allSectionsExpanded
-                ? "Collapse all sections"
-                : "Expand all sections"
-            }
-            title={
-              allSectionsExpanded
-                ? "Collapse all sections"
-                : "Expand all sections"
-            }
-          >
-            {allSectionsExpanded ? (
-              <ArrowsInLineVertical
-                size={17}
-                weight="bold"
-                aria-hidden="true"
-              />
-            ) : (
-              <ArrowsOutLineVertical
-                size={17}
-                weight="bold"
-                aria-hidden="true"
-              />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {courseSections.length === 0 ? (
-        <div className="p-8 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) text-(--muted) text-center text-[0.88rem] italic">
-          No sections added yet
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1.5" role="list">
-          {courseSections.map((section, index) => (
-            <CurriculumSectionItem
-              key={section.id}
-              section={section}
-              index={index}
-              isOpen={openSections.has(index)}
-              onToggle={() => onToggleSection(index)}
-              onSelectLesson={onSelectLesson}
-              shouldVirtualizeLessons={course.lectures >= 80}
-              isReadOnlyPreview={isReadOnlyPreview}
-              isPaidCourse={isPaidCourse}
-            />
-          ))}
-        </div>
+        </p>
       )}
     </section>
   );
@@ -1670,8 +1484,11 @@ function CourseCurriculumCard({
 
 export interface CourseOverviewPageProps {
   courseSlug?: string | undefined;
-  initialOverview?: CourseOverviewResponse;
+  /** The course as the page was built with it (see `useCoursePageData`). */
+  initialCurriculum?: CourseCurriculumPreview;
   onNavigateCourses?: () => void;
+  /** The menu page the back link returns to, as the menu names it. */
+  backSection?: string;
   onNavigatePage?: NavigateTo;
   onSelectLesson?: (lessonNumber: number) => void;
   role?: CourseRole;
@@ -1693,6 +1510,18 @@ export interface CourseOverviewPageProps {
   customPricing?: CourseOverviewPricingProps;
   customTrailerMediaId?: string | null;
   isReadOnlyPreview?: boolean;
+  /**
+   * Whether the session has answered and, for someone signed in, which view
+   * they are in (learner or manager). Passed by the course page's own
+   * route; left out where there is nobody to wait for (the editor's
+   * preview), which is the same as true. See `courseViewerState`.
+   */
+  viewerSettled?: boolean;
+  /**
+   * Nothing has answered yet and nothing remembers a session on this
+   * browser: the visitor is taken for a guest meanwhile.
+   */
+  presumeGuest?: boolean;
 }
 
 export interface AdaptedOverviewData {
@@ -1706,6 +1535,13 @@ export interface AdaptedOverviewData {
   pricing: CourseOverviewPricingProps;
   instructorName: string | undefined;
   trailerMediaId: string | null;
+  /**
+   * The overview's `canSelfEnroll`. Absent for the editor's preview, which
+   * is built from the course's saved settings rather than from an overview.
+   */
+  canSelfEnroll?: boolean;
+  /** The overview's `accessValidity`: how long the course stays with a learner. */
+  accessValidity?: CourseOverviewResponse["accessValidity"];
 }
 
 export function adaptCourseOverviewResponse(
@@ -1756,8 +1592,10 @@ export function adaptCourseOverviewResponse(
     students: 0,
     thumbnail: resolvedThumbnail,
     thumbnailSrcSet: c.thumbnailSrcSet,
-    lifecycleStatus: (c.status === "published"
-      ? "published"
+    banner: c.bannerUrl || undefined,
+    bannerSrcSet: c.bannerSrcSet,
+    lifecycleStatus: (c.status === "published" || c.status === "archived"
+      ? c.status
       : "draft") as CourseLifecycleStatus,
     creatorId: c.creatorId ?? overview.creator?.id ?? null,
   };
@@ -1812,6 +1650,8 @@ export function adaptCourseOverviewResponse(
     pricing: pricingProps,
     instructorName: resolvedInstructorName,
     trailerMediaId: c.trailerMediaId ?? null,
+    canSelfEnroll: overview.canSelfEnroll,
+    accessValidity: overview.accessValidity,
   };
 }
 
@@ -1862,8 +1702,10 @@ export function adaptPreviewDataToOverview(
     students: 0,
     thumbnail: c.thumbnailUrl || "",
     thumbnailSrcSet: c.thumbnailSrcSet,
-    lifecycleStatus: (c.status === "published"
-      ? "published"
+    banner: c.bannerUrl || undefined,
+    bannerSrcSet: c.bannerSrcSet,
+    lifecycleStatus: (c.status === "published" || c.status === "archived"
+      ? c.status
       : "draft") as CourseLifecycleStatus,
     creatorId: c.creatorId ?? null,
   };
@@ -1921,81 +1763,6 @@ export function adaptPreviewDataToOverview(
   };
 }
 
-export function CourseOverviewSkeleton({
-  onNavigateCourses,
-}: {
-  onNavigateCourses?: () => void;
-}) {
-  return (
-    <div
-      className="w-full max-w-275 mx-auto flex flex-col gap-6 max-[900px]:gap-4.5 max-[640px]:gap-4 box-border text-(--text) animate-pulse"
-      data-testid="course-overview-skeleton"
-    >
-      <div className="grid grid-cols-1 min-[1200px]:grid-cols-2 gap-8 items-start relative max-[1200px]:flex max-[1200px]:flex-col max-[1200px]:gap-5.5 max-[640px]:gap-4.5 w-full">
-        {/* Left Column Skeleton */}
-        <div className="flex flex-col min-w-0 w-full gap-4 max-[1200px]:contents">
-          {/* Top Back button skeleton */}
-          {onNavigateCourses && (
-            <div className="flex items-center gap-2.5 flex-wrap max-[1200px]:order-0 max-[1200px]:w-full">
-              <div className="w-9.5 h-9.5 rounded-xl bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
-            </div>
-          )}
-
-          <div className="flex flex-col min-w-0 w-full gap-3.5 max-[1200px]:contents">
-            {/* Title & Metadata row skeleton */}
-            <div className="flex flex-col min-w-0 shrink-0 max-[1200px]:order-1 max-[1200px]:w-full gap-2.5">
-              <div className="flex flex-col gap-2">
-                <div className="h-9 w-11/12 rounded-lg bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
-                <div className="h-9 w-3/5 rounded-lg bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
-              </div>
-
-              <div className="flex items-center gap-3 py-1">
-                <div className="h-5 w-28 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-                <div className="h-5 w-24 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-                <div className="h-5 w-20 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-              </div>
-            </div>
-
-            {/* Pricing Box skeleton */}
-            <div className="flex flex-col min-h-0 rounded-[14px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_95%,transparent)] shadow-(--card-shadow) w-full box-border max-[1200px]:order-3 max-[1200px]:w-full max-[1200px]:mt-0 max-[640px]:p-[16px_14px] max-[640px]:gap-3 p-[18px_20px] gap-3.5">
-              <div className="flex items-baseline gap-3 mb-2">
-                <div className="h-9 w-32 rounded-lg bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
-                <div className="h-6 w-20 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-              </div>
-              <div className="h-11 w-full rounded-xl bg-[color-mix(in_srgb,var(--accent)_30%,transparent)] mb-2" />
-              <div className="flex flex-col gap-2.5 pt-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                <div className="h-4 w-48 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-                <div className="h-4 w-40 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-                <div className="h-4 w-52 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: 16:9 Course Trailer Video Placeholder */}
-        <div className="flex items-end justify-center w-full min-w-0 min-[1200px]:h-full max-[1200px]:order-2 max-[1200px]:w-full max-[640px]:-mx-3.5 max-[640px]:w-[calc(100%+28px)] max-[640px]:max-w-none">
-          <div className="w-full aspect-video overflow-hidden border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_60%,#000)] shadow-(--card-shadow) relative flex items-center justify-center rounded-[14px] max-[640px]:rounded-none max-[640px]:border-x-0" />
-        </div>
-      </div>
-
-      {/* Lower section: Description & Curriculum skeletons */}
-      <div className="mt-6 max-[640px]:mt-2 flex flex-col gap-6 max-[640px]:gap-4 w-full">
-        <div className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) p-6 max-[640px]:p-4 shadow-(--card-shadow) flex flex-col gap-3">
-          <div className="h-7 w-48 rounded-lg bg-[color-mix(in_srgb,var(--text)_12%,transparent)] mb-1" />
-          <div className="h-4 w-full rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-          <div className="h-4 w-5/6 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-          <div className="h-4 w-4/6 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-        </div>
-
-        <div className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) p-6 max-[640px]:p-4 shadow-(--card-shadow) flex flex-col gap-4">
-          <div className="h-7 w-56 rounded-lg bg-[color-mix(in_srgb,var(--text)_12%,transparent)] mb-1" />
-          <div className="h-14 w-full rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const { courseSlug: routeCourseSlug } = useParams();
   const courseSlug = props.courseSlug ?? routeCourseSlug;
@@ -2004,17 +1771,30 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const defaultInstructorName =
     authUser?.displayName || authUser?.username || "Instructor";
 
-  const { data: apiOverview, isLoading: isOverviewLoading } = useCourseOverview(
+  const awaitsAccess = Boolean(authUser) && props.role !== "creator";
+  const {
+    overview: apiOverview,
+    isLoading: isOverviewLoading,
+    error: overviewError,
+    refetch: refetchOverview,
+    access,
+    accessPending,
+    totalSections,
+    sectionsComplete,
+    requestAllSections,
+    prefetchAllSections,
+  } = useCoursePageData({
     courseSlug,
-    {
-      enabled:
-        !props.initialOverview &&
-        !props.previewData &&
-        !props.customCourse &&
-        Boolean(courseSlug),
-      initialData: props.initialOverview,
-    },
-  );
+    preview: props.initialCurriculum,
+    enabled: !props.previewData && !props.customCourse && Boolean(courseSlug),
+    awaitsAccess,
+    viewerKind:
+      props.role === "creator" || props.viewerSettled === false
+        ? null
+        : authUser
+          ? "learner"
+          : "guest",
+  });
 
   // If previewData is provided, adapt it cleanly from persisted server state
   const adaptedFromPreview = props.previewData
@@ -2033,27 +1813,35 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
 
   const course = activeAdapted?.course ?? props.customCourse;
 
-  const { data: enrolledData } = useEnrolledCourses({
-    enabled: Boolean(authUser) && props.role !== "creator",
-  });
+  // What the parts of the page that depend on the viewer may show yet. The
+  // viewer's access answer is the last one in: whether this course is
+  // theirs decides between the price and their progress.
+  const viewer: CourseViewerState =
+    props.viewerSettled === undefined ||
+    props.previewData ||
+    props.customCourse ||
+    props.isReadOnlyPreview
+      ? "known"
+      : !props.viewerSettled
+        ? props.presumeGuest
+          ? "presumed-guest"
+          : "pending"
+        : accessPending
+          ? "pending"
+          : "known";
 
-  const isEnrolled = useMemo(() => {
-    if (!enrolledData?.courses) return false;
-    return enrolledData.courses.some(
-      (ec) =>
-        ec.courseId === course?.id ||
-        ec.courseSlug === courseSlug ||
-        (course?.slug && ec.courseSlug === course.slug),
-    );
-  }, [enrolledData, course, courseSlug]);
-
+  // The viewer's enrolment, from the same answer that decides which lessons
+  // open to them.
+  const enrolment = access?.enrolled ? access.progress : null;
   const courseWithEnrollment = useMemo(() => {
     if (!course) return undefined;
     return {
       ...course,
-      enrolled: isEnrolled || course.enrolled,
+      enrolled: Boolean(enrolment) || course.enrolled,
+      progress: enrolment?.percent ?? course.progress,
+      started: enrolment?.started ?? false,
     };
-  }, [course, isEnrolled]);
+  }, [course, enrolment]);
 
   if (
     isOverviewLoading &&
@@ -2062,7 +1850,22 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     !props.customCourse
   ) {
     return (
-      <CourseOverviewSkeleton onNavigateCourses={props.onNavigateCourses} />
+      <CourseOverviewSkeleton
+        onNavigateCourses={props.onNavigateCourses}
+        heroPlacement={props.isReadOnlyPreview ? "card" : "edge"}
+      />
+    );
+  }
+
+  // A failed request is not a missing course. Saying "not found" for a
+  // dropped connection or a server error told people a course they own
+  // had been removed.
+  if (!courseWithEnrollment && overviewError && overviewError.status !== 404) {
+    return (
+      <CourseLoadError
+        onRetry={() => void refetchOverview()}
+        onBack={props.onNavigateCourses}
+      />
     );
   }
 
@@ -2110,40 +1913,61 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         : isCourseOwner);
 
   return (
-    <CourseOverviewContent
-      {...props}
-      key={courseWithEnrollment.id}
-      course={courseWithEnrollment}
-      courseSlug={courseSlug}
-      defaultInstructorName={defaultInstructorName}
-      adaptedFromPreview={activeAdapted}
-      isCreator={isCreator}
-    />
+    // A built page holds its first sections only; the controls that show or
+    // use the rest fetch it as the reader reaches for them.
+    <CurriculumIntentContext.Provider
+      value={sectionsComplete ? null : prefetchAllSections}
+    >
+      <CourseOverviewContent
+        {...props}
+        key={courseWithEnrollment.id}
+        course={courseWithEnrollment}
+        courseSlug={courseSlug}
+        adaptedFromPreview={activeAdapted}
+        isCreator={isCreator}
+        viewer={viewer}
+        totalSections={totalSections}
+        sectionsComplete={sectionsComplete}
+        onRequestAllSections={requestAllSections}
+        resume={access?.resume}
+        enrolmentAccess={
+          access?.enrolled
+            ? { accessExpiresAt: access.accessExpiresAt ?? null }
+            : null
+        }
+      />
+    </CurriculumIntentContext.Provider>
   );
 }
 
 type CourseOverviewContentProps = CourseOverviewPageProps & {
   course: Course;
   courseSlug: string | undefined;
-  defaultInstructorName: string;
   adaptedFromPreview: AdaptedOverviewData | null;
   isCreator?: boolean;
+  viewer?: CourseViewerState;
+  /** How many sections the whole curriculum has. */
+  totalSections?: number;
+  /** Whether the curriculum holds every section yet. */
+  sectionsComplete?: boolean;
+  onRequestAllSections?: () => void;
+  /** Where an enrolled learner carries on, from the access answer. */
+  resume?: CourseAccessResume | null;
+  /** An enrolled learner's end of access, from the access answer. */
+  enrolmentAccess?: { accessExpiresAt: string | null } | null;
 };
 
 function CourseOverviewContent({
   course,
   courseSlug,
-  defaultInstructorName,
   adaptedFromPreview,
   onNavigateCourses,
+  backSection,
   onNavigatePage,
   onSelectLesson,
   customCourse,
-  customInstructor,
   customDescription,
   customShortDescription,
-  customCategoryName,
-  customLanguage,
   customSections,
   customIncludes,
   customInclusions,
@@ -2152,13 +1976,25 @@ function CourseOverviewContent({
   isReadOnlyPreview = false,
   isCreator = false,
   isPaidCourse: propIsPaidCourse,
+  viewer = "known",
+  totalSections,
+  sectionsComplete = true,
+  onRequestAllSections,
+  resume,
+  enrolmentAccess,
 }: CourseOverviewContentProps) {
+  const user = useAuthStore((state) => state.user);
+  // A lesson in the curriculum is readied while the pointer rests on it,
+  // and opens playing.
+  const lessonRowsIntent = useLessonListOpenIntent(
+    isReadOnlyPreview ? null : getCourseRouteKey(course),
+  );
   const handleSelectLesson = (lessonNumber: number) => {
     if (isReadOnlyPreview) return;
     onSelectLesson?.(lessonNumber);
     if (!onNavigatePage) return;
-    onNavigatePage(
-      getCoursePlayerPath(getCourseRouteKey(course), lessonNumber),
+    lessonRowsIntent.open(lessonNumber, (opened) =>
+      onNavigatePage(getCoursePlayerPath(getCourseRouteKey(course), opened)),
     );
   };
   const locationHash =
@@ -2194,18 +2030,6 @@ function CourseOverviewContent({
     course.thumbnail;
   const shortDescription =
     adaptedFromPreview?.shortDescription ?? customShortDescription ?? undefined;
-  const categoryName =
-    adaptedFromPreview !== null
-      ? adaptedFromPreview?.categoryName
-      : (customCategoryName ??
-        (!isReadOnlyPreview && course.category ? course.category : undefined));
-  const instructorName =
-    adaptedFromPreview !== null
-      ? adaptedFromPreview?.instructorName
-      : customInstructor !== undefined
-        ? customInstructor
-        : defaultInstructorName;
-  const language = adaptedFromPreview?.language ?? customLanguage ?? undefined;
   const courseSections = adaptedFromPreview?.sections ?? customSections ?? [];
   const activeDescription =
     adaptedFromPreview?.description ?? customDescription ?? course.description;
@@ -2239,16 +2063,8 @@ function CourseOverviewContent({
         : undefined;
 
   const [openSections, setOpenSections] = useState<Set<number>>(
-    () => new Set([0]),
-  );
-  const sectionScrollTimerRef = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (sectionScrollTimerRef.current !== null) {
-        window.clearTimeout(sectionScrollTimerRef.current);
-      }
-    },
-    [],
+    // Every section starts closed: the list reads as a table of contents.
+    () => new Set(),
   );
   const wishlistTarget = useMemo(
     (): Pick<Course, "id" | "slug"> => ({
@@ -2258,71 +2074,29 @@ function CourseOverviewContent({
     [course?.id, course?.slug, courseSlug],
   );
   const wishlisted = useCourseWishlisted(wishlistTarget);
+  const toggleWishlistCourse = useToggleWishlistCourse();
 
-  const cancelPendingSectionScroll = () => {
-    if (sectionScrollTimerRef.current !== null) {
-      window.clearTimeout(sectionScrollTimerRef.current);
-      sectionScrollTimerRef.current = null;
-    }
-  };
-
-  const scrollToSection = (index: number, delay: number) => {
-    const section = courseSections[index];
-    if (!section) return;
-
-    sectionScrollTimerRef.current = window.setTimeout(() => {
-      sectionScrollTimerRef.current = null;
-      const sectionHeader = document.getElementById(
-        `cov-section-toggle-${section.id}`,
-      );
-      if (!sectionHeader) return;
-
-      const scrollElement = getApplicationScrollElement();
-      const headerTop = sectionHeader.getBoundingClientRect().top;
-      const scrollTop = scrollElement
-        ? scrollElement.scrollTop +
-          headerTop -
-          scrollElement.getBoundingClientRect().top
-        : window.scrollY + headerTop;
-      const prefersReducedMotion = window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
-
-      scrollApplicationTo({
-        top: Math.max(0, scrollTop - 16),
-        behavior: prefersReducedMotion ? "auto" : "smooth",
-      });
-    }, delay);
-  };
-
+  // As in the course content beside a lesson: any number of sections may be
+  // open, and opening or closing one moves nothing. The section opens where
+  // it is, downwards. (It used to close the others and then scroll to the
+  // one opened, which took the page up as they shut and back down again.)
   const toggleSection = (index: number) => {
-    const wasOpen = openSections.has(index);
-    cancelPendingSectionScroll();
+    setOpenSections((open) => {
+      const next = new Set(open);
+      if (!next.delete(index)) next.add(index);
+      return next;
+    });
+  };
 
-    if (wasOpen) {
-      setOpenSections(new Set());
-      return;
-    }
-
-    setOpenSections(new Set([index]));
-    const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    scrollToSection(
-      index,
-      openSections.size > 0 && !prefersReducedMotion
-        ? SECTION_SCROLL_SETTLE_DELAY_MS
-        : 0,
+  // Opens the first `count` sections: the curriculum may show only its
+  // first few, and "Expand all" opens what is on the page.
+  const expandAllSections = (count: number) => {
+    setOpenSections(
+      new Set(courseSections.slice(0, count).map((_, index) => index)),
     );
   };
 
-  const expandAllSections = () => {
-    cancelPendingSectionScroll();
-    setOpenSections(new Set(courseSections.map((_, index) => index)));
-  };
-
   const collapseAllSections = () => {
-    cancelPendingSectionScroll();
     setOpenSections(new Set());
   };
 
@@ -2332,7 +2106,7 @@ function CourseOverviewContent({
       if (isReadOnlyPreview || !wishlistTarget.id) return;
       toggleWishlistCourse(wishlistTarget);
     },
-    [isReadOnlyPreview, wishlistTarget],
+    [isReadOnlyPreview, toggleWishlistCourse, wishlistTarget],
   );
 
   const trailerMediaId =
@@ -2341,50 +2115,351 @@ function CourseOverviewContent({
     (course as { trailerMediaId?: string | null }).trailerMediaId ??
     null;
 
+  // Someone who manages the course has nothing to save for later or to try
+  // before buying, and neither has a learner who is already enrolled.
+  const managesCourse = isCreator && !isReadOnlyPreview;
+  // The editor's tabs, for the manager's "Edit" links.
+  const openEditor = (step: "basics" | "curriculum") => () =>
+    onNavigatePage?.(
+      getCourseEditorPath({ mode: "edit", courseId: course.id, step }),
+    );
+  // The price as a learner sees it before any coupon, by the purchase
+  // bar's own rules: a free course that names a marked price shows that
+  // price struck through beside a price of zero and the "Free" tag.
+  const managerPriceIsFree = isFreeCoursePricing(activePricing);
+  const managerPriceLabel = managerPriceIsFree
+    ? activePricing?.originalPrice
+      ? (activePricing?.price ?? "Free")
+      : "Free"
+    : (activePricing?.price ?? "Free");
+  const managerPrice: CoursePriceDisplayPrice = {
+    label: managerPriceLabel,
+    sizeClassName: priceTextClasses[getPriceSizeVariant(managerPriceLabel)],
+    struckThrough: activePricing?.originalPrice,
+    badge:
+      (managerPriceIsFree ? activePricing?.originalPrice : true) &&
+      activePricing?.discount
+        ? activePricing.discount
+        : undefined,
+  };
+  const isEnrolled = Boolean(user && course.enrolled);
+  // An enrolled learner's play button on the picture opens the lesson they
+  // go on with, as the band's button under the hero does (it shares its
+  // request for that lesson when the page was not given it).
+  const learnerPlays =
+    isEnrolled && !managesCourse && viewer === "known" && !isReadOnlyPreview;
+  const learnerResumeQuery = useLearningProgressResumeContext(
+    getCourseRouteKey(course),
+    { enabled: learnerPlays && !resume },
+  );
+  const learnerPercent = course.progress ?? 0;
+  // The lesson the learner carries on with, readied ahead of the press on
+  // the picture's play button or the band's "Continue Learning", and once
+  // the page is idle, as the home readies its hero's: it is the press this
+  // page is most likely to get, and a phone has no hover to ready it on.
+  const learnerIntent = useLessonOpenIntent(
+    learnerPlays
+      ? {
+          courseKey: getCourseRouteKey(course),
+          lesson: "resume",
+          known:
+            (resume ?? learnerResumeQuery.data)?.resumeLesson?.lessonNumber ??
+            null,
+          review: learnerPercent >= 100,
+        }
+      : null,
+  );
+  const readyLearnerLesson = learnerIntent.ready;
+  useEffect(() => {
+    if (!learnerPlays) return undefined;
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(readyLearnerLesson, {
+        timeout: 1500,
+      });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(readyLearnerLesson, 300);
+    return () => window.clearTimeout(timer);
+  }, [learnerPlays, readyLearnerLesson]);
+  const learnerPlayLabel =
+    learnerPercent >= 100
+      ? "Review course"
+      : course.started || learnerPercent > 0
+        ? "Continue learning"
+        : "Start learning";
+  const openLearning = () => {
+    if (isReadOnlyPreview || !onNavigatePage) return;
+    const courseKey = getCourseRouteKey(course);
+    learnerIntent.open((lessonNumber) =>
+      onNavigatePage(getCoursePlayerPath(courseKey, lessonNumber)),
+    );
+  };
+  // What a visitor can watch before buying: the lessons a paid course marks
+  // as free previews (the ones the curriculum labels "Free").
+  const firstFreeLessonNumber = isPaidCourse
+    ? courseSections
+        .flatMap((section) => section.lessons)
+        .find((lesson) => lesson[4])?.[0]
+    : undefined;
+  // With a trailer the preview is there for everyone. Without one it stands
+  // for the free lessons, which only someone who neither manages the course
+  // nor holds it is offered: that waits until the viewer is known.
+  const previewDependsOnViewer =
+    !trailerMediaId && firstFreeLessonNumber !== undefined;
+  // While the viewer is not known the guest's preview is in the page, and
+  // the document's head shows or hides it (see `courseViewerState`).
+  // Which lessons in the curriculum the viewer can play, so only those are
+  // readied while the pointer rests on them.
+  const lessonIntentFor: LessonIntentFor | undefined = isReadOnlyPreview
+    ? undefined
+    : (lessonNumber, isPreview) =>
+        managesCourse || isEnrolled || isPreview || !isPaidCourse
+          ? lessonRowsIntent.handlersFor(lessonNumber)
+          : undefined;
+  const canPreview =
+    Boolean(trailerMediaId) ||
+    (!managesCourse && !isEnrolled && firstFreeLessonNumber !== undefined);
+  // A visitor's preview is the course's first free lesson, readied ahead of
+  // the press and opened playing (a trailer opens as it always has).
+  const previewLesson =
+    !isReadOnlyPreview &&
+    !trailerMediaId &&
+    !managesCourse &&
+    !isEnrolled &&
+    firstFreeLessonNumber !== undefined
+      ? firstFreeLessonNumber
+      : null;
+  const previewIntent = useLessonOpenIntent(
+    previewLesson !== null
+      ? { courseKey: getCourseRouteKey(course), lesson: previewLesson }
+      : null,
+  );
+  const openPreview = () => {
+    if (isReadOnlyPreview || !onNavigatePage) return;
+    const courseKey = getCourseRouteKey(course);
+    if (previewLesson !== null) {
+      previewIntent.open((lessonNumber) =>
+        onNavigatePage(getCoursePlayerPath(courseKey, lessonNumber)),
+      );
+      return;
+    }
+    onNavigatePage(
+      trailerMediaId || firstFreeLessonNumber === undefined
+        ? `/learn/${encodeURIComponent(courseKey)}`
+        : getCoursePlayerPath(courseKey, firstFreeLessonNumber),
+    );
+  };
+
+  const openCourse = () => {
+    if (isReadOnlyPreview || !onNavigatePage) return;
+    onNavigatePage(`/learn/${encodeURIComponent(getCourseRouteKey(course))}`);
+  };
+
+  // On the course page the hero touches the frame; in the course editor's
+  // preview window it is a card in the column with the rest.
+  const hero = (
+    <CourseOverviewHero
+      placement={isReadOnlyPreview ? "card" : "edge"}
+      title={title}
+      shortDescription={shortDescription}
+      sections={course.sections}
+      lessons={course.lectures}
+      duration={course.duration}
+      thumbnail={thumbnail}
+      thumbnailSrcSet={course.thumbnailSrcSet}
+      banner={course.banner}
+      bannerSrcSet={course.bannerSrcSet}
+      onBack={onNavigateCourses}
+      // The link names the page it returns to. The course list is "All
+      // courses" from here, where one course is open; any other page keeps
+      // the name the menu gives it. In the editor's preview it closes the
+      // preview.
+      backLabel={
+        isReadOnlyPreview
+          ? "Back to editor"
+          : !backSection || backSection === "Courses"
+            ? "All courses"
+            : backSection
+      }
+      // No heart for someone who manages the course, nor for a learner who
+      // is enrolled in it: a wish list is for courses not yet taken.
+      wishlist={
+        managesCourse || isEnrolled
+          ? undefined
+          : {
+              wishlisted,
+              disabled: isReadOnlyPreview,
+              onToggle: toggleWishlist,
+            }
+      }
+      // Someone who manages the course gets the same pill, into the course
+      // itself, in place of the preview (the bar under the hero no longer
+      // carries an "Open course" button).
+      preview={
+        managesCourse && viewer === "known"
+          ? { onOpen: openCourse, disabled: isReadOnlyPreview, kind: "open" }
+          : learnerPlays
+            ? {
+                onOpen: openLearning,
+                disabled: false,
+                kind: "open",
+                label: learnerPlayLabel,
+                intent: learnerIntent.handlers,
+              }
+            : canPreview
+              ? {
+                  onOpen: openPreview,
+                  disabled: isReadOnlyPreview,
+                  intent:
+                    previewLesson !== null ? previewIntent.handlers : undefined,
+                }
+              : undefined
+      }
+      viewerPlaceholders={
+        viewer === "known"
+          ? undefined
+          : {
+              // Pending is a browser that remembers a session, as an
+              // expected session is: the same parts, picked by the head.
+              for: "expected-session",
+              preview: previewDependsOnViewer,
+              wishlist: true,
+              heldPlay: !isReadOnlyPreview,
+            }
+      }
+    />
+  );
+
   return (
     <div
       data-course-overview
-      className={`w-full max-w-275 mx-auto flex flex-col gap-6 box-border text-(--text) ${
+      // What the document's head keys this course's early state on (see
+      // `courseCardEarlyState`), as the course cards do.
+      data-course-card-id={course.id}
+      // On the course page the first box touches the hero; in the editor's
+      // preview the hero is a card in the column like the rest.
+      className={`flex w-full flex-col text-(--text) ${
         isReadOnlyPreview
-          ? "p-[36px_24px_48px] max-[900px]:p-[24px_16px_48px] max-[900px]:gap-4.5 max-[640px]:p-[16px_14px_40px] max-[640px]:gap-4"
-          : "max-[900px]:gap-4.5 max-[640px]:gap-4"
+          ? "gap-4 p-[36px_24px_48px] max-[900px]:p-[24px_16px_48px] max-[640px]:p-[16px_14px_40px]"
+          : overviewPageContainerClasses
       }`}
     >
-      {/* 1. Two-Column Hero Section with Info & Pricing on Left, Trailer on Right */}
-      <CourseHeroSection
-        course={course}
-        title={title}
-        thumbnail={thumbnail}
-        trailerMediaId={trailerMediaId}
-        wishlisted={wishlisted}
-        instructorName={instructorName}
-        shortDescription={shortDescription}
-        categoryName={categoryName}
-        language={language}
-        pricing={activePricing}
-        inclusions={inclusions}
-        onNavigateCourses={onNavigateCourses}
-        onToggleWishlist={toggleWishlist}
-        onNavigatePage={onNavigatePage}
-        isReadOnlyPreview={isReadOnlyPreview}
-        isCreator={isCreator}
-      />
+      {/* The lesson pages readied ahead of a press (see lessonOpenIntent). */}
+      {learnerIntent.pageLinks}
+      {previewIntent.pageLinks}
+      {lessonRowsIntent.pageLinks}
+      {/* 1. Title and course facts over the thumbnail */}
+      {isReadOnlyPreview ? null : hero}
 
-      {/* 2. About This Course */}
-      <CourseAboutCard description={activeDescription} />
+      <div
+        className={`${overviewColumnClasses} ${
+          isReadOnlyPreview
+            ? ""
+            : `${overviewColumnUnderHeroClasses} ${overviewTwoColumnClasses}`
+        }`}
+        data-fixed-radius
+      >
+        {isReadOnlyPreview ? hero : null}
 
-      {/* 3. Course Curriculum */}
-      <CourseCurriculumCard
-        course={course}
-        courseSections={courseSections}
-        openSections={openSections}
-        onToggleSection={toggleSection}
-        onExpandAll={expandAllSections}
-        onCollapseAll={collapseAllSections}
-        onSelectLesson={handleSelectLesson}
-        isReadOnlyPreview={isReadOnlyPreview}
-        isPaidCourse={isPaidCourse}
-      />
+        {/* 2. For someone who manages the course, its state and the ways
+            into the editor; for an enrolled learner, where they are in the
+            course; otherwise the price, the coupon and the button that
+            buys it. Which of the three is not known until the viewer is
+            (see `courseViewerState`), and a placeholder holds the band's
+            place until then: the price and "Pay Now" used to stand there
+            for a learner until their enrolments arrived.
+
+            The band is always in the one box, and in the same place in it
+            whether the visitor is known or only presumed a guest, so that
+            learning which it is does not start the band over (an open
+            coupon field would lose what was typed in it).
+
+            On a wide page it is the right column, beside the curriculum,
+            and stays in view while the page scrolls. */}
+        <div
+          className={isReadOnlyPreview ? undefined : overviewBandColumnClasses}
+        >
+          {/* While the viewer is not known (presumed a guest, or pending)
+              the box holds every form the band can take and the document's
+              head picks one before the first paint (see
+              `courseViewerState`): the guest's band, the learner's progress
+              band when this tab's copies say the course is theirs, or the
+              placeholder when it has none. The band itself stays the first
+              element throughout. */}
+          <div
+            className={
+              viewer === "known" ? undefined : presumedGuestOnlyClasses
+            }
+            data-course-card-early={viewer === "known" ? undefined : "offer"}
+          >
+            {managesCourse ? (
+              <CourseManagerBar
+                course={course}
+                price={managerPrice}
+                onNavigatePage={onNavigatePage}
+              />
+            ) : isEnrolled ? (
+              <CourseLearnerProgressBar
+                courseKey={getCourseRouteKey(course)}
+                courseTitle={title}
+                progress={course.progress ?? 0}
+                started={Boolean(course.started)}
+                totalLessons={course.lectures}
+                resume={resume}
+                onNavigatePage={onNavigatePage}
+                openIntent={learnerPlays ? learnerIntent : undefined}
+              />
+            ) : (
+              <CoursePurchaseSection
+                course={course}
+                pricing={activePricing}
+                inclusions={inclusions}
+                onNavigatePage={onNavigatePage}
+                isReadOnlyPreview={isReadOnlyPreview}
+                isCreator={isCreator}
+                canSelfEnroll={adaptedFromPreview?.canSelfEnroll}
+              />
+            )}
+          </div>
+          {viewer === "known" ? null : (
+            <>
+              <div className="hidden" data-course-card-early="held">
+                <CourseLearnerProgressBarEarly />
+              </div>
+              <div className={sessionExpectedOnlyClasses}>
+                <CourseViewerBandPlaceholder />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 3. Course curriculum */}
+        <CourseOverviewCurriculum
+          onEdit={managesCourse ? openEditor("curriculum") : undefined}
+          courseSections={courseSections}
+          openSections={openSections}
+          onToggleSection={toggleSection}
+          onExpandAll={expandAllSections}
+          onCollapseAll={collapseAllSections}
+          onSelectLesson={handleSelectLesson}
+          lessonIntentFor={lessonIntentFor}
+          isReadOnlyPreview={isReadOnlyPreview}
+          isPaidCourse={isPaidCourse}
+          validityLabel={courseValidityLabel(
+            adaptedFromPreview?.accessValidity,
+            enrolmentAccess,
+          )}
+          totalSections={totalSections}
+          sectionsComplete={sectionsComplete}
+          onRequestAllSections={onRequestAllSections}
+        />
+
+        {/* 4. About this course, under the curriculum */}
+        <CourseAboutCard
+          description={activeDescription}
+          onEdit={managesCourse ? openEditor("basics") : undefined}
+        />
+      </div>
     </div>
   );
 }

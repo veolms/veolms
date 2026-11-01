@@ -4,9 +4,11 @@ import type {
   UpdateCourseBasicsRequest,
   CourseListQuery,
   CourseSlugParams,
+  LessonDescriptionParams,
   CourseStaticPageRefreshStatus,
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
+import { isLearnerViewRequest } from "../../../lib/learner-view.ts";
 import type { CourseService } from "./course.service.ts";
 import type { CourseStaticPageRefreshService } from "@veolms/services/course-static-pages";
 
@@ -102,16 +104,37 @@ export function createCourseController({
       request.user?.roles,
     );
 
+    // 202 tells the editor the new trailer still has to be processed.
     if (result.accepted) {
       reply.code(202);
-      return {
-        videoJobId: result.videoJobId,
-        processingStatus: result.processingStatus,
-        version: result.version,
-      };
+      return { version: result.version };
     }
 
     return result.course;
+  }
+
+  async function getCourseTrailerPlayback(
+    request: FastifyRequest<{ Params: { idOrSlug: string } }>,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    return await service.getCourseTrailerPlayback(
+      request.params.idOrSlug,
+      user,
+    );
+  }
+
+  async function getCourseTrailerPlaybackToken(
+    request: FastifyRequest<{ Params: { idOrSlug: string } }>,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    return await service.getCourseTrailerPlaybackToken(
+      request.params.idOrSlug,
+      user,
+    );
   }
 
   async function getCourseOverview(
@@ -121,9 +144,33 @@ export function createCourseController({
   ) {
     const { idOrSlug } = request.params;
     const user = request.user
-      ? { id: request.user.id, roles: request.user.roles }
+      ? {
+          id: request.user.id,
+          roles: request.user.roles,
+          learnerView: isLearnerViewRequest(request),
+        }
       : undefined;
     return await service.getCourseOverviewData(idOrSlug, user);
+  }
+
+  async function getPublicCurriculum(
+    request: FastifyRequest<{ Params: { idOrSlug: string } }>,
+  ) {
+    return await service.getPublicCurriculum(request.params.idOrSlug);
+  }
+
+  async function getLessonDescription(
+    request: FastifyRequest<{ Params: LessonDescriptionParams }>,
+  ) {
+    const { courseId, lessonId } = request.params;
+    const user = request.user
+      ? {
+          id: request.user.id,
+          roles: request.user.roles,
+          learnerView: isLearnerViewRequest(request),
+        }
+      : undefined;
+    return await service.getLessonDescription(courseId, lessonId, user);
   }
 
   async function deleteCourse(
@@ -137,6 +184,12 @@ export function createCourseController({
   async function getStaticPageRefreshStatus(
     request: FastifyRequest<{ Params: { id: string } }>,
   ): Promise<CourseStaticPageRefreshStatus> {
+    await service.getCourseAndVerifyOwner(
+      request.params.id,
+      request.user!.id,
+      request.user?.roles,
+      "course.details.update",
+    );
     return (
       staticPages?.getStatus(request.params.id) ?? {
         courseId: request.params.id,
@@ -152,6 +205,12 @@ export function createCourseController({
   async function retryStaticPageRefresh(
     request: FastifyRequest<{ Params: { id: string } }>,
   ): Promise<CourseStaticPageRefreshStatus> {
+    await service.getCourseAndVerifyOwner(
+      request.params.id,
+      request.user!.id,
+      request.user?.roles,
+      "course.details.update",
+    );
     return (
       staticPages?.retry(request.params.id) ??
       getStaticPageRefreshStatus(request)
@@ -161,11 +220,20 @@ export function createCourseController({
   async function updateCourseThumbnail(
     request: FastifyRequest<{
       Params: { id: string };
-      Body: { thumbnailUrl: string; thumbnailMediaId?: string | null };
+      Body: {
+        thumbnailUrl: string;
+        thumbnailMediaId?: string | null;
+        version?: number;
+      };
     }>,
   ) {
     const { id } = request.params;
-    return await service.updateCourseThumbnail(id, request.body);
+    return await service.updateCourseThumbnail(
+      id,
+      request.user!.id,
+      request.user?.roles,
+      request.body,
+    );
   }
 
   async function updateCourseDetails(
@@ -178,18 +246,28 @@ export function createCourseController({
         language?: string;
         level?: "beginner" | "intermediate" | "advanced" | "all_levels";
         categoryId?: string | null;
+        version?: number;
       };
     }>,
   ) {
     const { id } = request.params;
-    return await service.updateCourseDetails(id, request.body);
+    return await service.updateCourseDetails(
+      id,
+      request.user!.id,
+      request.user?.roles,
+      request.body,
+    );
   }
 
   async function archiveCourse(
     request: FastifyRequest<{ Params: { id: string } }>,
   ) {
     const { id } = request.params;
-    return await service.archiveCourse(id);
+    return await service.archiveCourse(
+      id,
+      request.user!.id,
+      request.user?.roles,
+    );
   }
 
   return {
@@ -205,6 +283,10 @@ export function createCourseController({
     updateCourseDetails,
     archiveCourse,
     getCourseOverview,
+    getCourseTrailerPlayback,
+    getCourseTrailerPlaybackToken,
+    getPublicCurriculum,
+    getLessonDescription,
     deleteCourse,
     getStaticPageRefreshStatus,
     retryStaticPageRefresh,

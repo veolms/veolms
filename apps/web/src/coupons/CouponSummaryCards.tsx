@@ -4,6 +4,7 @@ import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyIn
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { formatPaiseAsRupees } from "./couponHelpers";
 import type { CouponTabFilter } from "./couponHelpers";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface CouponSummaryMetrics {
   totalCoupons: number;
@@ -39,10 +40,10 @@ function StatCard({
   onClick?: () => void;
 }) {
   const clickable = Boolean(onClick);
-  const cardClassName = `group rounded-[12px] sm:rounded-[16px] border bg-(--card-surface-raised,var(--surface)) p-2.5 sm:p-5 text-left transition-all duration-200 hover:shadow-(--card-hover-shadow) ${
-    active
-      ? "border-(--accent) ring-2 ring-(--accent)/20"
-      : "border-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
+  // The shared card has no outline; the tile that is the current filter is
+  // marked by an accent ring instead.
+  const cardClassName = `group p-2.5 sm:p-5 text-left transition-all duration-200 ${
+    active ? "ring-2 ring-(--accent)/60" : ""
   } ${clickable ? "cursor-pointer" : "cursor-default"}`;
 
   const content = (
@@ -76,22 +77,22 @@ function StatCard({
 
   if (clickable) {
     return (
-      <button
+      <ElevatedCard
+        as="button"
         type="button"
         onClick={onClick}
         aria-pressed={active}
         className={cardClassName}
-        style={{ boxShadow: "var(--card-shadow)" }}
       >
         {content}
-      </button>
+      </ElevatedCard>
     );
   }
 
   return (
-    <div className={cardClassName} style={{ boxShadow: "var(--card-shadow)" }}>
+    <ElevatedCard as="div" className={cardClassName}>
       {content}
-    </div>
+    </ElevatedCard>
   );
 }
 

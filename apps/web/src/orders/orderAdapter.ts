@@ -1,7 +1,7 @@
-import type { Order } from "@veolms/contracts";
+import type { LearnerOrder } from "@veolms/contracts";
+import { formatMoney, toMajorUnits } from "@veolms/contracts/commerce/money";
 import type {
   OrderItem,
-  OrderStatus,
   OrderSummaryMetrics,
   RecentPaymentItem,
 } from "./ordersData";
@@ -11,145 +11,15 @@ import type {
 } from "../order-history/orderHistoryData";
 
 /**
- * Adapts an API Order to the frontend OrderItem model consumed by OrdersPage.
+ * Adapts an API order to the frontend OrderHistoryItem model consumed by OrderHistoryPage.
  */
-export function adaptOrderToOrderItem(order: Order): OrderItem {
-  const firstItem = order.items?.[0];
+export function adaptOrderToOrderHistoryItem(
+  order: LearnerOrder,
+): OrderHistoryItem {
+  const firstItem = order.items[0];
   const courseTitle =
     firstItem?.titleSnapshot ||
-    (order.items && order.items.length > 1
-      ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
-      : "Course Order");
-  const courseId = firstItem?.courseId || firstItem?.bundleId || order.id;
-
-  let badgeText = "TS";
-  let badgeColor = "#2563eb";
-  let badgeTextColor = "#ffffff";
-  const titleLower = courseTitle.toLowerCase();
-  if (titleLower.includes("typescript")) {
-    badgeText = "TS";
-    badgeColor = "#2563eb";
-  } else if (titleLower.includes("javascript")) {
-    badgeText = "JS";
-    badgeColor = "#eab308";
-    badgeTextColor = "#000000";
-  } else if (titleLower.includes("node") || titleLower.includes("backend")) {
-    badgeText = "node";
-    badgeColor = "#1e293b";
-    badgeTextColor = "#4ade80";
-  } else if (
-    titleLower.includes("ui") ||
-    titleLower.includes("ux") ||
-    titleLower.includes("design")
-  ) {
-    badgeText = "UI";
-    badgeColor = "#8b5cf6";
-  } else if (
-    titleLower.includes("postgres") ||
-    titleLower.includes("sql") ||
-    titleLower.includes("database")
-  ) {
-    badgeText = "PG";
-    badgeColor = "#0284c7";
-  } else if (titleLower.includes("react")) {
-    badgeText = "react";
-    badgeColor = "#06b6d4";
-  } else if (titleLower.includes("graphql")) {
-    badgeText = "GQL";
-    badgeColor = "#ec4899";
-  } else if (titleLower.includes("aws") || titleLower.includes("cloud")) {
-    badgeText = "AWS";
-    badgeColor = "#f59e0b";
-  } else {
-    badgeText = courseTitle.slice(0, 2).toUpperCase();
-    badgeColor = "#3b82f6";
-  }
-
-  let status: OrderStatus = "pending";
-  let statusLabel = "Pending";
-  if (order.status === "paid") {
-    status = "completed";
-    statusLabel = "Completed";
-  } else if (
-    order.status === "pending" ||
-    order.status === "payment_processing"
-  ) {
-    status = "pending";
-    statusLabel =
-      order.status === "payment_processing" ? "Processing" : "Pending";
-  } else if (
-    order.status === "payment_failed" ||
-    order.status === "expired" ||
-    order.status === "cancelled"
-  ) {
-    status = "failed";
-    statusLabel = "Failed";
-  } else if (
-    order.status === "refunded" ||
-    order.status === "partially_refunded"
-  ) {
-    status = "refunded";
-    statusLabel = "Refunded";
-  }
-
-  const dateObj = order.createdAt ? new Date(order.createdAt) : new Date();
-  const date = dateObj.toLocaleDateString("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-  });
-
-  const price = Math.round(order.totalAmount / 100);
-  const subtotal = Math.round(order.subtotalAmount / 100);
-  const tax = Math.round(order.taxAmount / 100);
-  const currency = order.currency || "INR";
-  const formattedPrice = new Intl.NumberFormat(
-    currency === "INR" ? "en-IN" : "en-US",
-    {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    },
-  ).format(price);
-
-  const cleanOrderNumber = order.orderNumber.startsWith("#")
-    ? order.orderNumber
-    : `#${order.orderNumber}`;
-  const invoiceNumber = `INV-${
-    order.orderNumber.replace(/^[#A-Za-z_-]+/, "") || order.id.slice(0, 8)
-  }`;
-  const transactionId =
-    order.idempotencyKey || `TXN_${order.id.replace(/-/g, "").slice(0, 10)}`;
-
-  return {
-    id: order.id,
-    orderNumber: cleanOrderNumber,
-    courseId,
-    courseTitle,
-    badgeText,
-    badgeColor,
-    badgeTextColor,
-    date,
-    paymentMethod: "Credit Card / UPI",
-    price,
-    formattedPrice,
-    status,
-    statusLabel,
-    invoiceNumber,
-    transactionId,
-    tax,
-    subtotal,
-  };
-}
-
-/**
- * Adapts an API Order to the frontend OrderHistoryItem model consumed by OrderHistoryPage.
- */
-export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
-  const firstItem = order.items?.[0];
-  const courseTitle =
-    firstItem?.titleSnapshot ||
-    (order.items && order.items.length > 1
+    (order.items.length > 1
       ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
       : "Course Order");
   const courseId = firstItem?.courseId || "";
@@ -181,37 +51,36 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
   }
 
   const dateObj = order.createdAt ? new Date(order.createdAt) : new Date();
-  const date = dateObj.toLocaleDateString("en-US", {
+  // In the reader's own date and time conventions, not American ones.
+  const date = dateObj.toLocaleDateString(undefined, {
     month: "short",
     day: "2-digit",
     year: "numeric",
   });
-  const time = dateObj.toLocaleTimeString("en-US", {
+  const time = dateObj.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
   });
 
-  const amount = order.totalAmount / 100;
-  const subtotal = order.subtotalAmount / 100;
-  const tax = order.taxAmount / 100;
   const currency = order.currency || "INR";
-  const formattedAmount = new Intl.NumberFormat(
-    currency === "INR" ? "en-IN" : "en-US",
-    {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    },
-  ).format(amount);
+  const amount = toMajorUnits(order.totalAmount, currency);
+  const subtotal = toMajorUnits(order.subtotalAmount, currency);
+  const tax = toMajorUnits(order.taxAmount, currency);
+  const formattedAmount = formatMoney(order.totalAmount, { currency });
 
   const cleanOrderNumber = order.orderNumber.startsWith("#")
     ? order.orderNumber
     : `#${order.orderNumber}`;
-  const invoiceNumber = `INV-${
-    order.orderNumber.replace(/^[#A-Za-z_-]+/, "") || order.id.slice(0, 8)
-  }`;
-  const transactionId =
-    order.idempotencyKey || `TXN_${order.id.replace(/-/g, "").slice(0, 10)}`;
+  // The server issues the invoice number when the order is paid, and sends
+  // it with the order; an order never paid has none. A number made up here
+  // used to be shown, and offered for copying, on every order: it matched no
+  // invoice. The same went for a "transaction id" cut from the order's own
+  // id, which no payment provider would recognise; the API gives a learner
+  // no payment reference, so none is shown.
+  const invoiceNumber =
+    status === "completed" || status === "refunded"
+      ? order.invoiceNumber
+      : null;
 
   let iconColor = "#3b82f6";
   const titleLower = courseTitle.toLowerCase();
@@ -227,9 +96,36 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
   else if (titleLower.includes("javascript")) iconColor = "#f97316";
 
   const itemCount =
-    order.items && order.items.length > 1
-      ? `${order.items.length} Courses`
-      : "1 Course";
+    order.items.length > 1 ? `${order.items.length} Courses` : "1 Course";
+
+  // Said in words a buyer would use. The provider and method used to be
+  // printed as they come ("free (free)"), and an order nobody had paid yet
+  // read "Payment (Payment method unavailable)".
+  const paymentSummary = order.paymentSummary;
+  const paymentDetail = [paymentSummary?.method, paymentSummary?.detail]
+    .filter(Boolean)
+    .join(" · ");
+  const isNoCostOrder =
+    order.totalAmount === 0 ||
+    paymentSummary?.provider.toLowerCase() === "free";
+  // No summary means the provider named no method, not that nothing was
+  // paid: a completed order, or one since refunded, was paid for, and used
+  // to read "No payment taken". Only an order that failed took nothing.
+  const paymentBrand = isNoCostOrder
+    ? "No payment needed"
+    : paymentSummary
+      ? paymentSummary.provider
+      : status === "processing"
+        ? "Awaiting payment"
+        : status === "completed" || status === "refunded"
+          ? "Payment received"
+          : "No payment taken";
+  const paymentLabel =
+    isNoCostOrder ||
+    !paymentSummary ||
+    paymentDetail.toLowerCase() === paymentSummary.provider.toLowerCase()
+      ? ""
+      : paymentDetail;
 
   const paymentMethod = order.paymentSummary?.method.toLowerCase() ?? "";
   const paymentType = paymentMethod.includes("upi")
@@ -254,11 +150,8 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
     time,
     payment: {
       type: paymentType,
-      brand: order.paymentSummary?.provider || "Payment",
-      label:
-        [order.paymentSummary?.method, order.paymentSummary?.detail]
-          .filter(Boolean)
-          .join(" · ") || "Payment method unavailable",
+      brand: paymentBrand,
+      label: paymentLabel,
     },
     amount,
     formattedAmount,
@@ -266,7 +159,7 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
     statusLabel,
     subtotal,
     tax,
-    transactionId,
+    transactionId: null,
   };
 }
 
@@ -295,11 +188,8 @@ export function computeOrderSummary(
     }
   }
 
-  const formattedTotal = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(totalSpentAmount);
+  // `price` on the view model is already in major units.
+  const formattedTotal = formatMoney(totalSpentAmount, { unit: "major" });
 
   return {
     totalOrders: orders.length,

@@ -1,7 +1,7 @@
 import type {
-  Notification,
   NotificationListResponse,
   NotificationPreferencesResponse,
+  NotificationReadState,
   NotificationSummary,
   UpdateNotificationPreferences,
 } from "@veolms/contracts";
@@ -20,11 +20,11 @@ export const notificationsService = {
   summary: (): Promise<NotificationSummary> =>
     api.get<NotificationSummary>("/notifications/summary"),
 
-  markRead: (id: string): Promise<Notification> =>
-    api.patch<Notification>(`/notifications/${id}/read`),
+  markRead: (id: string): Promise<NotificationReadState> =>
+    api.patch<NotificationReadState>(`/notifications/${id}/read`),
 
-  markUnread: (id: string): Promise<Notification> =>
-    api.patch<Notification>(`/notifications/${id}/unread`),
+  markUnread: (id: string): Promise<NotificationReadState> =>
+    api.patch<NotificationReadState>(`/notifications/${id}/unread`),
 
   markAllRead: (): Promise<{ updatedCount: number }> =>
     api.post<{ updatedCount: number }>("/notifications/read-all"),

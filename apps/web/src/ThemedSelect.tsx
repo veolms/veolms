@@ -17,8 +17,14 @@ import {
 import { createPortal } from "react-dom";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
 import { useBackDismiss } from "./navigation/useBackDismiss";
+import { fuzzyMatches } from "./lib/fuzzySearch";
 
 const THEMED_SELECT_MENU_MAX_WIDTH = 300;
+/**
+ * A pop-up the select is in: an open modal dialog, or one opened as a
+ * popover with this mark (the login card, see auth/authCardDialogOpening).
+ */
+const OPEN_DIALOG_SELECTOR = "dialog[open], dialog[data-dialog-open]";
 
 export interface ThemedSelectOptionExtra {
   readonly flag?: ReactNode;
@@ -67,6 +73,22 @@ const joinClasses = (
   ...classes: Array<string | false | null | undefined>
 ): string => classes.filter(Boolean).join(" ");
 
+/**
+ * What the menu lines up with. A trigger drawn bare inside a frame that
+ * carries the control's surface (a filter bar's selects) is not the
+ * control's edge; the frame is. A parent counts as that frame when the
+ * trigger is the only thing in it and it paints a fill or a shadow.
+ */
+function findControlFrame(trigger: HTMLElement): HTMLElement {
+  const parent = trigger.parentElement;
+  if (!parent || parent.childElementCount !== 1) return trigger;
+  const style = window.getComputedStyle(parent);
+  const paintsFill =
+    style.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+    style.backgroundColor !== "transparent";
+  return paintsFill || style.boxShadow !== "none" ? parent : trigger;
+}
+
 interface MenuPosition {
   left: number;
   top?: number;
@@ -111,6 +133,14 @@ export function ThemedSelect<Value extends string>({
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [position, setPosition] = useState<MenuPosition | null>(null);
+  // A select inside an open modal dialog (the phone pop-up, say) puts its
+  // list in that dialog: everything outside a modal dialog is inert and is
+  // drawn under it, so a list portalled into <body> showed behind the
+  // pop-up and could not be clicked. There the list is also a manual
+  // popover, so it is drawn in the top layer above the dialog's own
+  // contents and not clipped by its scrolling; the top layer places it by
+  // the viewport, as the fixed position below expects.
+  const [dialogHost, setDialogHost] = useState<HTMLDialogElement | null>(null);
   const debouncedSearchQuery = useDebounce(searchQuery, searchDebounceMs);
   // Emptying or reopening the menu must reveal the complete option set
   // immediately; only active typing should wait for the debounce window.
@@ -151,22 +181,19 @@ export function ThemedSelect<Value extends string>({
       return options;
     }
     const query = effectiveSearchQuery.trim().toLowerCase();
-    return options.filter(([val, label, extra]) => {
-      const matchLabel = label.toLowerCase().includes(query);
-      const matchVal = val.toLowerCase().includes(query);
-      const matchExtraLabel = extra?.label?.toLowerCase().includes(query);
-      const matchSubtitle = extra?.subtitle?.toLowerCase().includes(query);
-      const matchKeywords = extra?.searchKeywords
-        ?.toLowerCase()
-        .includes(query);
-      return Boolean(
-        matchLabel ||
-        matchVal ||
-        matchExtraLabel ||
-        matchSubtitle ||
-        matchKeywords,
-      );
-    });
+    return options.filter(
+      ([val, label, extra]) =>
+        // A value (an id, a code) is matched as typed; the words shown,
+        // loosely.
+        val.toLowerCase().includes(query) ||
+        fuzzyMatches(
+          query,
+          label,
+          extra?.label,
+          extra?.subtitle,
+          extra?.searchKeywords,
+        ),
+    );
   }, [options, searchable, effectiveSearchQuery, defaultLimit, value]);
 
   const measureNaturalMenuWidth = useCallback(
@@ -200,7 +227,9 @@ export function ThemedSelect<Value extends string>({
   const calculatePosition = useCallback((): MenuPosition | null => {
     const trigger = triggerRef.current;
     if (!trigger) return null;
-    const anchor = matchMenuToContainer ? trigger.parentElement : trigger;
+    const anchor = matchMenuToContainer
+      ? trigger.parentElement
+      : findControlFrame(trigger);
     const rect = (anchor ?? trigger).getBoundingClientRect();
     const viewportPadding = 12;
     const gap = 6;
@@ -232,10 +261,18 @@ export function ThemedSelect<Value extends string>({
       menuMaxWidth,
       window.innerWidth - viewportPadding * 2,
     );
-    let left = rect.left;
-    if (left + width > window.innerWidth - viewportPadding) {
-      left = Math.max(viewportPadding, rect.right - width);
-    }
+    // The menu ends where the control ends: a list wider than its control
+    // grows towards the start, and one near the start edge of the window
+    // is kept on screen.
+    // In a pop-up the list starts where the control starts instead, so it
+    // stays over the pop-up rather than hanging off its side.
+    const inDialog = Boolean(trigger.closest(OPEN_DIALOG_SELECTOR));
+    const left = inDialog
+      ? Math.max(
+          viewportPadding,
+          Math.min(rect.left, window.innerWidth - viewportPadding - width),
+        )
+      : Math.max(viewportPadding, rect.right - width);
     return {
       left,
       top: useAbove ? undefined : rect.bottom + gap,
@@ -260,6 +297,10 @@ export function ThemedSelect<Value extends string>({
     setSearchQuery("");
     const pos = calculatePosition();
     setPosition(pos);
+    setDialogHost(
+      triggerRef.current?.closest<HTMLDialogElement>(OPEN_DIALOG_SELECTOR) ??
+        null,
+    );
     setOpen(true);
     requestAnimationFrame(() => {
       if (searchable && searchInputRef.current) {
@@ -294,6 +335,12 @@ export function ThemedSelect<Value extends string>({
       if (pos) setPosition(pos);
     }
   }, [open, calculatePosition]);
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!open || !dialogHost || !content?.isConnected) return;
+    if (!content.matches(":popover-open")) content.showPopover();
+  }, [dialogHost, open, position]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -535,6 +582,7 @@ export function ThemedSelect<Value extends string>({
             role="listbox"
             aria-label={ariaLabel}
             data-side={position.side}
+            popover={dialogHost ? "manual" : undefined}
             className={joinClasses("themed-select__content", contentClassName)}
             onKeyDown={handleMenuKeyDown}
             style={
@@ -547,6 +595,17 @@ export function ThemedSelect<Value extends string>({
                 boxSizing: "border-box",
                 maxHeight: position.maxHeight,
                 overflowY: "auto",
+                // A popover's own defaults (centred, a margin, padding and
+                // all four edges at 0) would undo the placement.
+                ...(dialogHost
+                  ? {
+                      margin: 0,
+                      padding: 0,
+                      right: "auto",
+                      bottom: position.bottom ?? "auto",
+                      top: position.top ?? "auto",
+                    }
+                  : null),
               } as CSSProperties
             }
           >
@@ -650,7 +709,7 @@ export function ThemedSelect<Value extends string>({
               </div>
             )}
           </div>,
-          document.body,
+          dialogHost ?? document.body,
         )}
     </>
   );

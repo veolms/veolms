@@ -11,13 +11,7 @@ export const learningNoteSchema = z.object({
   authorUsername: z.string().nullable().optional(),
   authorAvatarUrl: z.string().nullable().optional(),
   courseId: z.uuid(),
-  courseTitle: z.string().optional(),
-  sectionId: z.uuid().optional(),
-  sectionTitle: z.string().optional(),
-  sectionPosition: z.number().int().optional(),
   lessonId: z.uuid(),
-  lessonTitle: z.string().optional(),
-  lessonPosition: z.number().int().optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   title: z.string().max(255).nullable().optional(),
   content: z.string().min(1).max(50000),
@@ -37,14 +31,6 @@ export const learningNoteSchema = z.object({
   updatedAt: z.string(),
 });
 export type LearningNote = z.infer<typeof learningNoteSchema>;
-
-export const toggleNoteBookmarkResponseSchema = z.object({
-  noteId: z.uuid(),
-  bookmarked: z.boolean(),
-});
-export type ToggleNoteBookmarkResponse = z.infer<
-  typeof toggleNoteBookmarkResponseSchema
->;
 
 export const createLearningNoteRequestSchema = z.object({
   courseId: z.uuid(),

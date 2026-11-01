@@ -3,7 +3,6 @@ import React, {
   Suspense,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -15,32 +14,63 @@ import type {
 } from "@veolms/contracts";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
-  defaultRangeExtractor,
-  useVirtualizer,
-  useWindowVirtualizer,
-} from "@tanstack/react-virtual";
-import { useInRouterContext, useSearchParams } from "react-router";
-import { createPortal } from "react-dom";
-import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
+  useInRouterContext,
+  useRouteLoaderData,
+  useSearchParams,
+} from "react-router";
+import { useDebounce } from "../hooks";
+import type { AcademyStaticPageData } from "../routes/academyStaticPageData";
+import type { LessonPageSeed } from "./staticLessonPage";
+import { ThreadSurface } from "./discussion/ThreadSurface";
 import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "../components/ui/drawer";
-import { ThemedSelect } from "../ThemedSelect";
+  CURRENT_USER,
+  getCachedInteractionItems,
+  threadEntriesShareIdentity,
+  mergeDirectThreadCommentIdentity,
+  initialEntries,
+  getAllowedVisibility,
+  isValidNoteDeepLinkId,
+  isStoredEntries,
+} from "./discussion/discussionEntries";
+import { keepEntryCentered } from "./discussion/keepEntryCentered";
+import type {
+  DiscussionProps,
+  EditingEntry,
+  OpenDiscussionThread,
+} from "./discussion/discussionTypes";
+import {
+  DEFAULT_CAPABILITIES,
+  DISCUSSION_COMMENT_CHARACTER_LIMIT,
+  COMMENT_LENGTH_NOTICE,
+  initialDraft,
+  countCharacters,
+} from "./discussion/discussionConstants";
+export {
+  threadEntriesShareIdentity,
+  mergeDirectThreadCommentIdentity,
+} from "./discussion/discussionEntries";
+export { PrerenderedMobileCommentComposer } from "./discussion/CompactComposer";
+export {
+  getDiscussionComposerCollapsedSnapPoint,
+  getDiscussionComposerViewportGeometry,
+} from "./discussion/composerGeometry";
+export type {
+  DiscussionProps,
+  LessonContentAccessState,
+  LessonParticipationState,
+} from "./discussion/discussionTypes";
+export { DISCUSSION_COMMENT_CHARACTER_LIMIT } from "./discussion/discussionConstants";
+export { shouldShowDiscussionEnd } from "./discussion/ThreadSurface";
 import { ToastNotification, type ToastMessage } from "../ToastNotification";
-import { CommentCard } from "./CommentCard";
 import type { Comment, CommentReply } from "./CommentCard";
-import { CommentComposer } from "./CommentComposer";
-import { DiscussionAvatar } from "./DiscussionAvatar";
-import { getApplicationScrollElement } from "../shell/applicationScroll";
+import { withKeepScroll } from "../shell/applicationScroll";
 import {
   applyDiscussionFeed,
-  DISCUSSION_FEED_SORT_OPTIONS,
+  getDiscussionFeedSort,
   getDiscussionCountForFilter,
   type DiscussionEntryFilter,
   type DiscussionFeedSort,
+  type DiscussionFeedView,
   type InteractionCapabilities,
 } from "./discussionFeed";
 import {
@@ -56,31 +86,29 @@ import {
 } from "./unified-discussions.reconciliation";
 
 export type { InteractionCapabilities };
+const loadDiscussionThreadPanel = () => import("./DiscussionThreadPanel");
 const DiscussionThreadPanel = lazy(() =>
-  import("./DiscussionThreadPanel").then((module) => ({
+  loadDiscussionThreadPanel().then((module) => ({
     default: module.DiscussionThreadPanel,
   })),
 );
-import {
-  DESCRIPTION_SURFACE_BASE,
-  LessonDescription,
-} from "./LessonDescription";
 import {
   createDiscussionDraft,
   createEmptyDiscussionDraft,
   getDiscussionAttachmentCount,
   hasDiscussionDraftContent,
-  isDiscussionContent,
   isStoredDiscussionDraft,
   type DiscussionDraft,
   type DiscussionEntryKind,
   type DiscussionVisibility,
 } from "./discussion-editor/types";
+import { preloadDiscussionEditor } from "./discussion-editor/DiscussionEditor";
 import {
   NO_LEGACY_KEYS,
   useSessionStorageState,
 } from "./useSessionStorageState";
 import { useCurrentUser } from "../services/auth";
+import { useCapabilities } from "../services/authorization";
 import {
   useCreateLessonThread,
   useCreateNote,
@@ -140,314 +168,23 @@ import {
   isCommentOrQaThread,
 } from "./learning-threads.adapter";
 
-const CURRENT_USER = {
-  name: "Ashi Singh",
-  avatar: "",
-};
-
-const EMPTY_MOBILE_COMPOSER_DRAFT = createEmptyDiscussionDraft();
-
-function getCachedInteractionItems<T>(
-  data: unknown,
-  key: "notes" | "threads",
-): T[] {
-  if (!data || typeof data !== "object") return [];
-  const cache = data as Record<string, unknown>;
-  const pages = Array.isArray(cache.pages) ? cache.pages : [cache];
-  return pages.flatMap((page) => {
-    if (!page || typeof page !== "object") return [];
-    const items = (page as Record<string, unknown>)[key];
-    return Array.isArray(items) ? (items as T[]) : [];
-  });
-}
-
-function getThreadIdentityValues(entry: Comment): string[] {
-  return Array.from(
-    new Set(
-      [
-        entry.clientId,
-        entry.serverId,
-        String(entry.id),
-        getServerEntityId(entry),
-      ].filter((value): value is string => Boolean(value)),
-    ),
-  );
-}
-
-export function threadEntriesShareIdentity(
-  first: Comment,
-  second: Comment,
-): boolean {
-  const secondIdentityValues = new Set(getThreadIdentityValues(second));
-  return getThreadIdentityValues(first).some((value) =>
-    secondIdentityValues.has(value),
-  );
-}
-
-export function mergeDirectThreadCommentIdentity(
-  existing: Comment,
-  incoming: Comment,
-): Comment {
-  const clientId = getClientEntityId(existing);
-  return {
-    ...incoming,
-    id: clientId,
-    clientId,
-    serverId: getServerEntityId(incoming) ?? getServerEntityId(existing),
-  };
-}
-
-const initialEntries: Comment[] = [
-  {
-    id: 4,
-    name: "Rohit Sharma",
-    time: "2 hours ago",
-    avatar: "/static/ethan-avatar-160.webp",
-    text: "Great explanation! The way you broke down the design process makes it so much easier to understand. Especially the part about user empathy — super insightful!",
-    entryKind: "comment",
-    likes: 24,
-    replies: 2,
-    repliesExpanded: true,
-    thread: [
-      {
-        id: 401,
-        name: "Ashi Singh",
-        time: "1 hour ago",
-        avatar: "/static/sofia-avatar-160.webp",
-        text: "Thank you so much, Rohit! Really glad it helped.",
-        likes: 12,
-      },
-      {
-        id: 402,
-        name: "Karan Mehta",
-        time: "45 minutes ago",
-        avatar: "/static/ethan-avatar-160.webp",
-        text: "Totally agree! The empathy part clicked for me too.",
-        likes: 5,
-      },
-    ],
-  },
-  {
-    id: 3,
-    name: "Neha Patel",
-    time: "3 hours ago",
-    avatar: "/static/sofia-avatar-160.webp",
-    text: "Can you share some real-world examples of this process?",
-    entryKind: "question",
-    likes: 18,
-    replies: 1,
-    isQuestion: true,
-    thread: [
-      {
-        id: 301,
-        name: "Ashi Singh",
-        time: "2 hours ago",
-        avatar: "/static/sofia-avatar-160.webp",
-        text: "Absolutely — I’ll add a few examples from product discovery and usability testing.",
-        likes: 7,
-      },
-    ],
-  },
-  {
-    id: 1,
-    name: "Vivek Nair",
-    time: "1 day ago",
-    avatar: "/static/ethan-avatar-160.webp",
-    text: "How do you know when you have enough user interviews to start mapping patterns?",
-    entryKind: "question",
-    likes: 11,
-    replies: 1,
-    isQuestion: true,
-    thread: [
-      {
-        id: 101,
-        name: "Karan Mehta",
-        time: "21 hours ago",
-        avatar: "/static/ethan-avatar-160.webp",
-        text: "When the same themes repeat and new interviews stop changing the shape of the problem.",
-        likes: 7,
-      },
-    ],
-  },
-];
-
-type ComposerMode = "collapsed" | "desktop" | "mobile";
-
-const DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT = 0.62;
-const DISCUSSION_VIRTUAL_OVERSCAN = 5;
-const DISCUSSION_VIRTUAL_ESTIMATE_SIZE = 240;
-
-export const getDiscussionComposerCollapsedSnapPoint = (
-  viewportHeight: number,
-  playerBottom: number | undefined,
-) => {
-  if (
-    !Number.isFinite(viewportHeight) ||
-    viewportHeight <= 0 ||
-    playerBottom === undefined ||
-    !Number.isFinite(playerBottom)
-  ) {
-    return DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT;
-  }
-
-  return Math.max(2, Math.round(viewportHeight - playerBottom));
-};
-
-export const getDiscussionComposerViewportGeometry = (
-  layoutViewportHeight: number,
-  visualViewportHeight: number,
-  visualViewportOffsetTop: number,
-  playerBottom: number | undefined,
-) => {
-  const resolvedLayoutViewportHeight =
-    Number.isFinite(layoutViewportHeight) && layoutViewportHeight > 0
-      ? layoutViewportHeight
-      : visualViewportHeight;
-  const rawVisualViewportHeight =
-    Number.isFinite(visualViewportHeight) && visualViewportHeight > 0
-      ? visualViewportHeight
-      : resolvedLayoutViewportHeight;
-  const resolvedVisualViewportHeight = Math.min(
-    resolvedLayoutViewportHeight,
-    rawVisualViewportHeight,
-  );
-  const resolvedVisualViewportOffsetTop = Math.min(
-    Math.max(
-      0,
-      Number.isFinite(visualViewportOffsetTop) ? visualViewportOffsetTop : 0,
-    ),
-    Math.max(0, resolvedLayoutViewportHeight - resolvedVisualViewportHeight),
-  );
-  const visualViewportBottom =
-    resolvedVisualViewportOffsetTop + resolvedVisualViewportHeight;
-
-  return {
-    collapsedSnapPoint: getDiscussionComposerCollapsedSnapPoint(
-      visualViewportBottom,
-      playerBottom,
-    ),
-    keyboardInset: Math.max(
-      0,
-      Math.round(resolvedLayoutViewportHeight - visualViewportBottom),
-    ),
-    visualViewportHeight: Math.max(2, Math.round(resolvedVisualViewportHeight)),
-  };
-};
-
-export interface DiscussionProps {
-  persistenceKey: string;
-  courseSlug?: string;
-  courseId?: string;
-  lessonId?: string;
-  mobileLessonHeader?: React.ReactNode;
-  mobileBottomNavigation?: boolean;
-  mobileBottomNavigationHidden?: boolean;
-  lessonDescription?: string | null;
-  isLessonDescriptionLoading?: boolean;
-  interactionCapabilities?: InteractionCapabilities;
-  isInteractionCapabilitiesLoading?: boolean;
-  lessonContentAccess: LessonContentAccessState;
-  lessonContentAccessReason?: "login" | "access" | null;
-  /** Resolved by LearningWorkspace; Discussion must not recalculate access. */
-  canParticipate?: boolean;
-  participationState?: LessonParticipationState;
-  participationActionLabel?: string;
-  onParticipationAction?: () => void;
-  isThreadDeepLinkReady?: boolean;
-  noteDeepLinkId?: string | null;
-  onSeekToTimestamp?: (seconds: number) => void;
-}
-
-export type LessonContentAccessState = "pending" | "granted" | "denied";
-export type LessonParticipationState = "pending" | "granted" | "denied";
-
-const DEFAULT_CAPABILITIES: InteractionCapabilities = {
-  allowComments: true,
-  allowNotes: true,
-  allowQa: true,
-};
-
-export const DISCUSSION_COMMENT_CHARACTER_LIMIT = 10_000;
-const COMMENT_LENGTH_NOTICE = `Comments, Q&As, and notes can be up to ${DISCUSSION_COMMENT_CHARACTER_LIMIT.toLocaleString("en-US")} characters.`;
-const initialDraft = createEmptyDiscussionDraft();
-const countCharacters = (value: string) => Array.from(value).length;
-
-interface EditingEntry {
-  id: string | number;
-  draft: DiscussionDraft;
-  entryKind: DiscussionEntryKind;
-  visibility: DiscussionVisibility;
-}
-
-interface OpenDiscussionThread {
-  id: string | number;
-  focusComposer: boolean;
-}
-
-const isDiscussionEntryKind = (value: unknown): value is DiscussionEntryKind =>
-  value === "comment" || value === "question" || value === "note";
-
-const isDiscussionVisibility = (
-  value: unknown,
-): value is DiscussionVisibility =>
-  value === "public" || value === "private" || value === "unlisted";
-
-const getAllowedVisibility = (
-  entryKind: DiscussionEntryKind,
-  visibility: DiscussionVisibility,
-): DiscussionVisibility =>
-  entryKind !== "note" && visibility === "private" ? "public" : visibility;
-
-const NOTE_DEEP_LINK_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isValidNoteDeepLinkId(value: string | null): value is string {
-  return Boolean(value && NOTE_DEEP_LINK_ID_PATTERN.test(value));
-}
-
-const isStoredEntries = (value: unknown): value is Comment[] =>
-  Array.isArray(value) &&
-  value.every(
-    (entry) =>
-      Boolean(entry) &&
-      typeof entry === "object" &&
-      (typeof (entry as Comment).id === "number" ||
-        typeof (entry as Comment).id === "string") &&
-      typeof (entry as Comment).name === "string" &&
-      typeof (entry as Comment).time === "string" &&
-      typeof (entry as Comment).avatar === "string" &&
-      typeof (entry as Comment).text === "string" &&
-      typeof (entry as Comment).likes === "number" &&
-      (typeof (entry as Comment).entryKind === "undefined" ||
-        isDiscussionEntryKind((entry as Comment).entryKind)) &&
-      (typeof (entry as Comment).content === "undefined" ||
-        isDiscussionContent((entry as Comment).content)) &&
-      (typeof (entry as Comment).visibility === "undefined" ||
-        isDiscussionVisibility((entry as Comment).visibility)) &&
-      (typeof (entry as Comment).liked === "undefined" ||
-        typeof (entry as Comment).liked === "boolean") &&
-      (typeof (entry as Comment).isBookmarked === "undefined" ||
-        typeof (entry as Comment).isBookmarked === "boolean") &&
-      (typeof (entry as Comment).isFollowing === "undefined" ||
-        typeof (entry as Comment).isFollowing === "boolean") &&
-      (typeof (entry as Comment).isOwn === "undefined" ||
-        typeof (entry as Comment).isOwn === "boolean"),
-  );
-
 type SetURLSearchParams = (
   nextInit?: URLSearchParams | ((prev: URLSearchParams) => URLSearchParams),
-  navigateOpts?: { replace?: boolean },
+  navigateOpts?: { replace?: boolean; state?: unknown },
 ) => void;
 
 interface DiscussionInnerProps extends DiscussionProps {
   searchParams: URLSearchParams;
   setSearchParams: SetURLSearchParams;
+  /** What the document was built with, when it is a lesson page. */
+  builtLessonPage?: LessonPageSeed;
 }
 
 function DiscussionInner({
   persistenceKey,
   courseSlug,
   courseId,
+  courseCreatorId,
   lessonId,
   mobileLessonHeader,
   mobileBottomNavigation = false,
@@ -462,11 +199,13 @@ function DiscussionInner({
   participationState = "granted",
   participationActionLabel,
   onParticipationAction,
+  loginToParticipate = false,
   isThreadDeepLinkReady = true,
   noteDeepLinkId = null,
   onSeekToTimestamp,
   searchParams,
   setSearchParams,
+  builtLessonPage,
 }: DiscussionInnerProps) {
   const capabilities = interactionCapabilities ?? DEFAULT_CAPABILITIES;
   const hasNoteDeepLink = Boolean(noteDeepLinkId);
@@ -547,7 +286,17 @@ function DiscussionInner({
   const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>(
     enabledKinds.length === 1 ? enabledKinds[0]! : "all",
   );
-  const [feedSort, setFeedSort] = useState<DiscussionFeedSort>("newest");
+  const [chosenFeedView, setFeedView] = useState<DiscussionFeedView>("top");
+  // "Mine" is only there for a learner who is signed in; one who signs out
+  // while it is chosen is back on the top ones.
+  const feedView: DiscussionFeedView =
+    chosenFeedView === "mine" && !currentUser ? "top" : chosenFeedView;
+  const feedSort: DiscussionFeedSort = getDiscussionFeedSort(feedView);
+  const feedMine = feedView === "mine";
+  // The search is asked of the server once typing pauses, within the kind
+  // and the order chosen; the server takes up to 200 characters.
+  const [discussionSearch, setDiscussionSearch] = useState("");
+  const feedSearch = useDebounce(discussionSearch.trim().slice(0, 200));
 
   const { data: interactionCounts } = useLessonInteractionCounts(
     courseId,
@@ -627,15 +376,37 @@ function DiscussionInner({
         entryFilter === "note"
           ? entryFilter
           : ("all" as const),
-      sort: feedSort === "top" ? ("top" as const) : ("newest" as const),
+      sort: feedSort,
+      ...(feedMine ? { mine: true } : {}),
+      ...(feedSearch ? { search: feedSearch } : {}),
     }),
-    [entryFilter, feedSort],
+    [entryFilter, feedMine, feedSearch, feedSort],
   );
+  // A lesson page is built with the first of its discussions in the order
+  // they open with, so they are there at once; they are asked for again
+  // straight away, as they are as old as the build.
+  const builtDiscussions =
+    builtLessonPage?.discussions &&
+    builtLessonPage.curriculum.course.id === courseId &&
+    builtLessonPage.lessonId === lessonId &&
+    builtLessonPage.discussions.kind === unifiedDiscussionQuery.kind &&
+    unifiedDiscussionQuery.sort === "top" &&
+    !feedMine &&
+    !feedSearch
+      ? {
+          page: builtLessonPage.discussions.page,
+          updatedAt: builtLessonPage.builtAt,
+        }
+      : undefined;
   const unifiedDiscussions = useLessonDiscussions(
     courseId ?? "",
     lessonId ?? "",
     unifiedDiscussionQuery,
     {
+      initialPage: builtDiscussions,
+      // A search refined as it is typed keeps the list it narrows on screen
+      // until its own results come, instead of a loading state each pause.
+      keepPreviousData: Boolean(feedSearch),
       enabled: Boolean(
         courseId &&
         lessonId &&
@@ -661,22 +432,40 @@ function DiscussionInner({
           entity,
         );
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deletionRevision is not read here: it changes when the deletion coordinator read above does
     [deletionRevision, unifiedDiscussionItems],
   );
   useEffect(() => {
     unifiedRemoteBaseRef.current.clear();
   }, [courseId, currentUser?.id, lessonId]);
+  // A list that failed and is being asked for again still counts as failed
+  // until the new attempt is over. Asked for again with nothing loaded, the
+  // query goes back to pending and forgets its error, and the page swapped
+  // the error for the loading placeholders: a shorter block, which pulled
+  // the list's scroll up and brought the phone's bottom menu back.
+  const [retryingAfterError, setRetryingAfterError] = useState(false);
+  const wasFetchingRef = useRef(false);
+  useEffect(() => {
+    if (wasFetchingRef.current && !unifiedDiscussions.isFetching) {
+      setRetryingAfterError(false);
+    }
+    wasFetchingRef.current = unifiedDiscussions.isFetching;
+  }, [unifiedDiscussions.isFetching]);
+  const listFailed = unifiedDiscussions.isError || retryingAfterError;
   const isNotesLoading =
     unifiedDiscussions.isLoading &&
     (entryFilter === "all" || entryFilter === "note");
   const isThreadsLoading =
     unifiedDiscussions.isLoading && entryFilter !== "note";
   const isNotesError =
-    unifiedDiscussions.isError &&
-    (entryFilter === "all" || entryFilter === "note");
-  const isThreadsError = unifiedDiscussions.isError && entryFilter !== "note";
-  const refetchNotes = unifiedDiscussions.refetch;
-  const refetchThreads = unifiedDiscussions.refetch;
+    listFailed && (entryFilter === "all" || entryFilter === "note");
+  const isThreadsError = listFailed && entryFilter !== "note";
+  const retryDiscussions = () => {
+    setRetryingAfterError(true);
+    return unifiedDiscussions.refetch();
+  };
+  const refetchNotes = retryDiscussions;
+  const refetchThreads = retryDiscussions;
 
   const createNoteMutation = useCreateNote();
   const updateNoteMutation = useUpdateNote();
@@ -690,19 +479,12 @@ function DiscussionInner({
   const deleteThreadMutation = useDeleteThread(courseId, lessonId);
   const createReportMutation = useCreateReport();
 
-  const currentUserRole = useMemo(() => {
-    if (!currentUser?.roles) return "Student";
-    const lowerRoles = currentUser.roles.map((r) => r.toLowerCase());
-    if (lowerRoles.includes("admin")) return "Admin";
-    if (
-      lowerRoles.includes("instructor") ||
-      lowerRoles.includes("creator") ||
-      lowerRoles.includes("teacher")
-    ) {
-      return "Instructor";
-    }
-    return "Student";
-  }, [currentUser?.roles]);
+  // Who may lock any thread here and accept any answer, as the API decides
+  // it: the course's creator, or a role that moderates every course.
+  const { canOnCourse } = useCapabilities({ enabled: Boolean(currentUser) });
+  const canModerate =
+    Boolean(currentUser?.id && courseCreatorId === currentUser.id) ||
+    canOnCourse("discussion.moderate", null);
 
   const legacyNotes = useMemo<LearningNoteCacheItem[]>(() => {
     const legacyNotesData = notesData as unknown as
@@ -1017,8 +799,24 @@ function DiscussionInner({
   );
 
   const rawThreadId = noteDeepLinkId ? null : searchParams.get("thread");
-  const threadIdFromUrl =
+  const linkedThreadId =
     rawThreadId && rawThreadId.trim().length > 0 ? rawThreadId.trim() : null;
+  // A thread link with `focus=comment` does not open the thread. The comment
+  // is brought to the top of the list, scrolled to and highlighted instead.
+  // The id is kept in state because the link's parameters are dropped once
+  // that has happened, and the comment should stay where the visitor found it.
+  const spotlightIdFromUrl =
+    linkedThreadId && searchParams.get("focus") === "comment"
+      ? linkedThreadId
+      : null;
+  const [spotlightThreadId, setSpotlightThreadId] = useState<string | null>(
+    spotlightIdFromUrl,
+  );
+  if (spotlightIdFromUrl && spotlightIdFromUrl !== spotlightThreadId) {
+    setSpotlightThreadId(spotlightIdFromUrl);
+  }
+  const threadIdFromUrl = spotlightIdFromUrl ? null : linkedThreadId;
+  const directThreadId = threadIdFromUrl ?? spotlightThreadId;
   const initialThreadDeepLinkId = useState<string | null>(
     () => threadIdFromUrl,
   )[0];
@@ -1027,14 +825,17 @@ function DiscussionInner({
     data: directThreadData,
     isLoading: isDirectThreadLoading,
     isError: isDirectThreadError,
-  } = useThreadDetails(threadIdFromUrl ?? "", {
+  } = useThreadDetails(directThreadId ?? "", {
     enabled: Boolean(
-      threadIdFromUrl &&
+      directThreadId &&
       isBackendMode &&
-      isThreadDeepLinkReady &&
-      lessonContentAccess === "granted" &&
-      courseId &&
-      lessonId,
+      // A comment a link points at is asked for straight away, without
+      // waiting for the lesson around it: the visitor came for the comment.
+      (spotlightThreadId ||
+        (isThreadDeepLinkReady &&
+          lessonContentAccess === "granted" &&
+          courseId &&
+          lessonId)),
     ),
   });
 
@@ -1042,11 +843,11 @@ function DiscussionInner({
     if (!directThreadData || !isCommentOrQaThread(directThreadData))
       return null;
     return withSourceAwareIdentity(
-      adaptLearningThreadToComment(directThreadData, currentUser?.id),
+      adaptLearningThreadToComment(directThreadData),
       "thread",
       directThreadData.id,
     );
-  }, [currentUser?.id, directThreadData]);
+  }, [directThreadData]);
 
   const backendThreads = useMemo<Comment[]>(() => {
     if (
@@ -1073,7 +874,7 @@ function DiscussionInner({
         );
       })
       .map((thread) => {
-        const adapted = adaptLearningThreadToComment(thread, currentUser?.id);
+        const adapted = adaptLearningThreadToComment(thread);
         const serverId = getServerEntityId(thread);
         return serverId
           ? withSourceAwareIdentity(adapted, "thread", serverId)
@@ -1139,6 +940,56 @@ function DiscussionInner({
     },
     [],
   );
+
+  const draftRef = useRef(draft);
+  const isMountedRef = useRef(false);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // The editor reads its text only when it mounts, so a draft put back after
+  // a failed post is shown by giving the new-entry editor a fresh identity.
+  const [draftRestoreToken, setDraftRestoreToken] = useState(0);
+
+  // A failed post used to leave only a toast: the composer had already been
+  // emptied, so the text was gone. Put the submitted snapshot back, but only
+  // into a composer that is still empty, so it never replaces newer input.
+  const restoreSubmittedDraft = (
+    submittedDraft: DiscussionDraft,
+    submittedAttachments: readonly LocalComposerAttachment[],
+  ) => {
+    if (
+      !isMountedRef.current ||
+      hasDiscussionDraftContent(draftRef.current) ||
+      composerAttachmentsRef.current.length > 0
+    ) {
+      return;
+    }
+
+    // The failed creation already released these previews, so a restored
+    // image or video needs a new one.
+    const restoredAttachments = submittedAttachments.map((attachment) =>
+      attachment.localPreviewUrl
+        ? {
+            ...attachment,
+            localPreviewUrl: URL.createObjectURL(attachment.file),
+          }
+        : attachment,
+    );
+    draftRef.current = submittedDraft;
+    composerAttachmentsRef.current = restoredAttachments;
+    setDraft(submittedDraft);
+    setComposerAttachments(restoredAttachments);
+    setDraftRestoreToken((current) => current + 1);
+  };
 
   const sanitizeStoredEntries = (items: Comment[]): Comment[] =>
     items.filter((entry) => entry.entryKind !== "note");
@@ -1254,24 +1105,27 @@ function DiscussionInner({
     [combinedEntries],
   );
 
-  const filteredEntries = useMemo(
-    () =>
-      applyDiscussionFeed({
-        entries: isBackendMode ? dedupedBackendEntries : combinedEntries,
-        filter: entryFilter,
-        sort: feedSort,
-        capabilities: feedCapabilities,
-        preserveOrder: isBackendMode,
-      }),
-    [
-      combinedEntries,
-      dedupedBackendEntries,
-      entryFilter,
-      feedCapabilities,
-      feedSort,
-      isBackendMode,
-    ],
-  );
+  const filteredEntries = useMemo(() => {
+    const entries = applyDiscussionFeed({
+      entries: isBackendMode ? dedupedBackendEntries : combinedEntries,
+      filter: entryFilter,
+      sort: feedSort,
+      capabilities: feedCapabilities,
+      preserveOrder: isBackendMode,
+    });
+    // The server sends only the learner's own for "Mine". What this page
+    // already holds from the other views is merged in beside that, so the
+    // same rule is kept here.
+    return feedMine ? entries.filter((entry) => entry.isOwn) : entries;
+  }, [
+    combinedEntries,
+    dedupedBackendEntries,
+    entryFilter,
+    feedCapabilities,
+    feedMine,
+    feedSort,
+    isBackendMode,
+  ]);
 
   const allFeedPageSnapshotRef = useRef<Comment[] | null>(null);
   const allFeedPagePendingRef = useRef(false);
@@ -1284,6 +1138,7 @@ function DiscussionInner({
   const isAllInitialLoading = Boolean(
     isBackendMode &&
     entryFilter === "all" &&
+    !retryingAfterError &&
     ((isAllNotesSourceEnabled && isNotesLoading) ||
       (isAllThreadsSourceEnabled && isThreadsLoading)),
   );
@@ -1314,11 +1169,144 @@ function DiscussionInner({
     setNoteDeepLinkHandled(false);
   }, [noteDeepLinkId]);
   const isNoteDeepLinkPending = Boolean(noteDeepLinkId && !noteDeepLinkHandled);
+  const spotlightEntry = useMemo(() => {
+    if (!spotlightThreadId) return null;
+    const entry =
+      visibleEntries.find(
+        (candidate) => getServerEntityId(candidate) === spotlightThreadId,
+      ) ??
+      // The comment fetched on its own stands in while the list has not
+      // reached it. Not under "My Discussions": there it is shown only when
+      // the filtered list itself has it, so someone else's linked comment
+      // stays out.
+      (!feedMine &&
+      directThreadComment &&
+      getServerEntityId(directThreadComment) === spotlightThreadId
+        ? directThreadComment
+        : null);
+    if (!entry) return null;
+    return entryFilter === "all" || entryFilter === entry.entryKind
+      ? entry
+      : null;
+  }, [
+    directThreadComment,
+    entryFilter,
+    feedMine,
+    spotlightThreadId,
+    visibleEntries,
+  ]);
   const displayEntries = isNoteDeepLinkPending
     ? visibleEntries.filter(
         (entry) => getServerEntityId(entry) === noteDeepLinkId,
       )
-    : visibleEntries;
+    : spotlightEntry
+      ? [
+          spotlightEntry,
+          ...visibleEntries.filter(
+            (entry) => getServerEntityId(entry) !== spotlightThreadId,
+          ),
+        ]
+      : visibleEntries;
+  const spotlightEntryClientId = spotlightEntry
+    ? getClientEntityId(spotlightEntry)
+    : null;
+  const spotlitThreadRef = useRef<string | null>(null);
+  const spotlightScrollRef = useRef<ReturnType<
+    typeof keepEntryCentered
+  > | null>(null);
+  useEffect(
+    () => () => {
+      spotlightScrollRef.current?.stop();
+      // Forget that the jump was made, so a re-run of the effects (which
+      // React does in development, and on a remount) starts it again
+      // instead of finding it "done" with its hold already stopped.
+      spotlitThreadRef.current = null;
+    },
+    [],
+  );
+  const [highlightedThreadId, setHighlightedThreadId] = useState<string | null>(
+    null,
+  );
+  const clearHighlightedThread = useCallback(
+    () => setHighlightedThreadId(null),
+    [],
+  );
+  // The comment shows as soon as it has loaded, ahead of the lesson and the
+  // rest of the list, and the page jumps to it straight away. Everything
+  // else then arrives around it: what loads above it keeps the height its
+  // placeholder had, and the hold below only steps in if the comment still
+  // ends up away from the middle of the screen.
+  useEffect(() => {
+    if (
+      !spotlightThreadId ||
+      !spotlightEntryClientId ||
+      spotlitThreadRef.current === spotlightThreadId
+    ) {
+      return;
+    }
+    const target = document.getElementById(
+      `discussion-entry-${spotlightEntryClientId}`,
+    );
+    if (!target) return;
+
+    spotlitThreadRef.current = spotlightThreadId;
+    spotlightScrollRef.current?.stop();
+    spotlightScrollRef.current = keepEntryCentered(target.id, 100);
+    // The card shows the highlight itself once it is on screen: the list is
+    // virtualized, so the element found here may be replaced on the way.
+    setHighlightedThreadId(spotlightThreadId);
+  }, [
+    displayEntries.length,
+    isAllInitialLoading,
+    isThreadsLoading,
+    spotlightEntryClientId,
+    spotlightThreadId,
+  ]);
+  // Once the lesson and the whole list are in, the hold is wound down. It
+  // was already stopped if the visitor moved the page themselves.
+  const isSpotlightPageReady =
+    isThreadDeepLinkReady &&
+    !isInteractionCapabilitiesLoading &&
+    !isLessonDescriptionLoading &&
+    !isAllInitialLoading &&
+    !isThreadsLoading;
+  const settledSpotlightRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !spotlightThreadId ||
+      !spotlightEntryClientId ||
+      !isSpotlightPageReady ||
+      spotlitThreadRef.current !== spotlightThreadId ||
+      settledSpotlightRef.current === spotlightThreadId
+    ) {
+      return;
+    }
+    settledSpotlightRef.current = spotlightThreadId;
+    if (spotlightScrollRef.current?.isRunning()) {
+      spotlightScrollRef.current.stop();
+      spotlightScrollRef.current = keepEntryCentered(
+        `discussion-entry-${spotlightEntryClientId}`,
+        8,
+      );
+    }
+  }, [isSpotlightPageReady, spotlightEntryClientId, spotlightThreadId]);
+  // The link has done its work once the lesson route has found the lesson
+  // (it reads these parameters to do so): a reload or a resumed session
+  // should open the lesson normally, not highlight the comment again. The
+  // address change asks the app to leave the scroll position alone.
+  useEffect(() => {
+    if (!spotlightIdFromUrl || !isThreadDeepLinkReady) return;
+    setSearchParams(
+      (prev) => {
+        if (prev.get("thread") !== spotlightIdFromUrl) return prev;
+        const next = new URLSearchParams(prev);
+        next.delete("thread");
+        next.delete("focus");
+        return next;
+      },
+      { replace: true, state: withKeepScroll(window.history.state?.usr) },
+    );
+  }, [isThreadDeepLinkReady, setSearchParams, spotlightIdFromUrl]);
   const noteDeepLinkReadyForFocus = Boolean(
     noteDeepLinkId &&
     !noteDeepLinkHandled &&
@@ -1484,6 +1472,56 @@ function DiscussionInner({
   );
   const lastHandledErrorThreadRef = useRef<string | null>(null);
   const suppressThreadUrlSyncRef = useRef(false);
+  // Set while the address is on its way to a thread that was chosen here: a
+  // swipe to the next one, or another picked from the list. The address
+  // follows such a choice a moment later. Until it has, the effect below
+  // would take the old address for an instruction and put the old thread
+  // back, which made every swipe between threads spring back. `from` is the
+  // address the choice started from.
+  const pendingThreadAddressRef = useRef<{
+    from: string | null;
+    to: string;
+  } | null>(null);
+  const expectThreadAddress = (serverId: string | undefined) => {
+    pendingThreadAddressRef.current =
+      serverId && serverId !== threadIdFromUrl && !spotlightIdFromUrl
+        ? { from: threadIdFromUrl ?? null, to: serverId }
+        : null;
+  };
+  const threadPanelOpen =
+    openThread !== null &&
+    threadEntries.some(
+      (entry) => getClientEntityId(entry) === String(openThread.id),
+    );
+  // The thread panel is put on the page with the first thread that is opened
+  // and stays until it has finished sliding shut, so it animates both ways.
+  const [threadPanelMounted, setThreadPanelMounted] = useState(false);
+  if (threadPanelOpen && !threadPanelMounted) setThreadPanelMounted(true);
+  const hasThreadEntries = threadEntries.length > 0;
+
+  useEffect(() => {
+    if (!hasThreadEntries && !canParticipate) return undefined;
+    // A visitor who has asked their browser to save data only pays for
+    // these when they are about to use them.
+    const saveData =
+      (navigator as Navigator & { connection?: { saveData?: boolean } })
+        .connection?.saveData === true;
+    if (saveData) return undefined;
+    // Fetched once the lesson is idle: the thread panel, so the first thread
+    // that is opened does not wait for its code, and the editor, so neither
+    // a reply nor a new comment waits for theirs. Arriving while the panel
+    // is opening, the editor and its styles more than doubled that wait.
+    const warm = () => {
+      if (hasThreadEntries) void loadDiscussionThreadPanel().catch(() => {});
+      if (canParticipate) preloadDiscussionEditor();
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(warm, { timeout: 4000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = window.setTimeout(warm, 2000);
+    return () => window.clearTimeout(handle);
+  }, [canParticipate, hasThreadEntries]);
 
   useEffect(() => {
     if (
@@ -1497,6 +1535,13 @@ function DiscussionInner({
         suppressThreadUrlSyncRef.current = false;
       }
       return;
+    }
+
+    const pendingThreadAddress = pendingThreadAddressRef.current;
+    if (pendingThreadAddress) {
+      // Still where the choice started from: the address has not caught up.
+      if ((threadIdFromUrl ?? null) === pendingThreadAddress.from) return;
+      pendingThreadAddressRef.current = null;
     }
 
     if (!threadIdFromUrl) {
@@ -1518,7 +1563,7 @@ function DiscussionInner({
               next.set("thread", selectedServerId);
               return next;
             },
-            { replace: true },
+            { replace: true, state: withKeepScroll(window.history.state?.usr) },
           );
           return;
         }
@@ -1566,7 +1611,7 @@ function DiscussionInner({
             next.delete("thread");
             return next;
           },
-          { replace: true },
+          { replace: true, state: withKeepScroll(window.history.state?.usr) },
         );
       }
     }
@@ -1617,7 +1662,7 @@ function DiscussionInner({
             next.delete("thread");
             return next;
           },
-          { replace: true },
+          { replace: true, state: withKeepScroll(window.history.state?.usr) },
         );
       }
     }
@@ -1716,6 +1761,8 @@ function DiscussionInner({
           : {}),
       } as const;
 
+      const submittedDraft = activeDraft;
+
       try {
         const request = createNoteMutation.mutateAsync(notePayload);
         setDraft(createEmptyDiscussionDraft());
@@ -1725,6 +1772,7 @@ function DiscussionInner({
         await request;
         return true;
       } catch (error) {
+        restoreSubmittedDraft(submittedDraft, localAttachments);
         setCreationToast({
           message: "Couldn't save your note. Please try again.",
           type: "error",
@@ -1816,6 +1864,7 @@ function DiscussionInner({
       // Capture and clear the submitted snapshot before dispatch. The
       // coordinator retains the immutable payload for reconciliation and
       // future recovery; a failure must never restore over newer input.
+      const submittedDraft = activeDraft;
       setDraft(createEmptyDiscussionDraft());
       setComposerAttachments([]);
 
@@ -1826,6 +1875,7 @@ function DiscussionInner({
         setNotice("");
         return true;
       } catch (error) {
+        restoreSubmittedDraft(submittedDraft, localAttachments);
         setCreationToast({
           message:
             activeEntryKind === "question"
@@ -2080,6 +2130,7 @@ function DiscussionInner({
       setNotice("");
       if (!isBackendNote && openThread?.id === clientId) {
         suppressThreadUrlSyncRef.current = true;
+        pendingThreadAddressRef.current = null;
         setOpenThread(null);
         setSearchParams(
           (prev) => {
@@ -2088,7 +2139,7 @@ function DiscussionInner({
             next.delete("thread");
             return next;
           },
-          { replace: true },
+          { replace: true, state: withKeepScroll(window.history.state?.usr) },
         );
       }
       return;
@@ -2266,14 +2317,6 @@ function DiscussionInner({
         }
         try {
           await learningInteractionsService.toggleNoteBookmark(threadIdStr);
-          if (queryClient) {
-            void queryClient.invalidateQueries({
-              queryKey: ["learning-notes"],
-            });
-            void queryClient.invalidateQueries({
-              queryKey: ["learning-course-notes-overview"],
-            });
-          }
           return bookmarked;
         } catch (err: any) {
           if (queryClient) {
@@ -2433,19 +2476,29 @@ function DiscussionInner({
         onDismiss={() => setCreationToast(null)}
       />
       <ThreadSurface
+        scrollMemoryKey={persistenceKey}
         lessonDescription={lessonDescription}
         isLessonDescriptionLoading={isLessonDescriptionLoading}
         mobileLessonHeader={mobileLessonHeader}
         draft={activeDraft}
+        draftRestoreToken={draftRestoreToken}
         entryKind={activeEntryKind}
         visibility={activeVisibility}
         editingEntryId={editingEntry?.id ?? null}
         notice={notice}
         entryFilter={entryFilter}
-        feedSort={feedSort}
+        feedView={feedView}
+        canFilterMine={Boolean(currentUser)}
+        search={discussionSearch}
+        isSearchActive={Boolean(feedSearch)}
+        isSearchPending={unifiedDiscussions.isPlaceholderData}
+        onSearchChange={setDiscussionSearch}
         entries={displayEntries}
         noteDeepLinkTargetId={noteDeepLinkReadyForFocus ? noteDeepLinkId : null}
         onNoteDeepLinkHandled={consumeNoteDeepLink}
+        linkedThreadId={spotlightEntry ? spotlightThreadId : null}
+        highlightedThreadId={highlightedThreadId}
+        onThreadHighlightShown={clearHighlightedThread}
         discussionCount={discussionCount}
         draftIsTooLong={draftIsTooLong}
         draftAttachmentCount={draftAttachmentCount}
@@ -2486,12 +2539,14 @@ function DiscussionInner({
         enabledKinds={enabledKinds}
         promptText={promptText}
         authorAvatar={authorAvatar}
+        viewerKnown={Boolean(currentUser)}
         lessonContentAccess={lessonContentAccess}
         lessonContentAccessReason={lessonContentAccessReason}
         canParticipate={canParticipate}
         participationState={participationState}
         participationActionLabel={participationActionLabel}
         onParticipationAction={onParticipationAction}
+        loginToParticipate={loginToParticipate}
         onDraftChange={(value) => {
           if (editingEntry) {
             setEditingEntry((current) =>
@@ -2528,7 +2583,7 @@ function DiscussionInner({
         onSubmit={submitEntry}
         onCancelEdit={() => setEditingEntry(null)}
         onEntryFilterChange={setEntryFilter}
-        onFeedSortChange={setFeedSort}
+        onFeedViewChange={setFeedView}
         onLike={onLike}
         onEdit={beginEditingEntry}
         onDelete={deleteEntry}
@@ -2541,6 +2596,7 @@ function DiscussionInner({
           if (!entry) return;
           const clientId = getClientEntityId(entry);
           const serverId = getServerEntityId(entry);
+          expectThreadAddress(serverId);
           setOpenThread({
             id: clientId,
             focusComposer: canParticipate && focusComposer,
@@ -2552,12 +2608,12 @@ function DiscussionInner({
               else next.delete("thread");
               return next;
             },
-            { replace: true },
+            { replace: true, state: withKeepScroll(window.history.state?.usr) },
           );
         }}
         isBackendMode={isBackendMode}
         currentUserId={currentUser?.id}
-        userRole={currentUserRole}
+        canModerate={canModerate}
         onToggleAcceptReply={handleToggleAcceptReply}
         onToggleLockThread={handleToggleLockThread}
         onToggleBookmark={handleToggleBookmark}
@@ -2570,18 +2626,16 @@ function DiscussionInner({
         onDeleteFailure={setNotice}
         courseId={courseId}
       />
-      {openThread !== null &&
-      threadEntries.some(
-        (entry) => getClientEntityId(entry) === String(openThread.id),
-      ) ? (
+      {threadPanelMounted ? (
         <Suspense fallback={null}>
           <DiscussionThreadPanel
-            open={true}
+            open={threadPanelOpen}
+            onCloseComplete={() => setThreadPanelMounted(false)}
             activeEntryId={openThread?.id ?? null}
             entries={threadEntries}
             isBackendMode={isBackendMode}
             currentUserId={currentUser?.id}
-            userRole={currentUserRole}
+            canModerate={canModerate}
             currentUser={{ name: authorName, avatar: authorAvatar }}
             canParticipate={canParticipate}
             participationState={participationState}
@@ -2593,6 +2647,7 @@ function DiscussionInner({
             onOpenChange={(open) => {
               if (!open) {
                 suppressThreadUrlSyncRef.current = true;
+                pendingThreadAddressRef.current = null;
                 setOpenThread(null);
                 setSearchParams(
                   (prev) => {
@@ -2601,26 +2656,33 @@ function DiscussionInner({
                     next.delete("thread");
                     return next;
                   },
-                  { replace: true },
+                  {
+                    replace: true,
+                    state: withKeepScroll(window.history.state?.usr),
+                  },
                 );
               }
             }}
             onActiveEntryChange={(id) => {
+              const entry = threadEntries.find(
+                (candidate) => getClientEntityId(candidate) === String(id),
+              );
+              const serverId = entry ? getServerEntityId(entry) : undefined;
+              expectThreadAddress(serverId);
               setOpenThread((current) =>
                 current ? { id, focusComposer: false } : current,
               );
               setSearchParams(
                 (prev) => {
                   const next = new URLSearchParams(prev);
-                  const entry = threadEntries.find(
-                    (candidate) => getClientEntityId(candidate) === String(id),
-                  );
-                  const serverId = entry ? getServerEntityId(entry) : undefined;
                   if (serverId) next.set("thread", serverId);
                   else next.delete("thread");
                   return next;
                 },
-                { replace: true },
+                {
+                  replace: true,
+                  state: withKeepScroll(window.history.state?.usr),
+                },
               );
             }}
             onLike={onLike}
@@ -2665,11 +2727,14 @@ function DiscussionInner({
 
 function DiscussionRouterBridge(props: DiscussionProps) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const pageData = useRouteLoaderData("root") as
+    AcademyStaticPageData | null | undefined;
   return (
     <DiscussionInner
       {...props}
       searchParams={searchParams}
       setSearchParams={setSearchParams}
+      builtLessonPage={pageData?.lessonPage}
     />
   );
 }
@@ -2700,1677 +2765,3 @@ export function Discussion(props: DiscussionProps) {
   }
   return <DiscussionFallbackBridge {...props} />;
 }
-
-interface ThreadSurfaceProps {
-  lessonDescription?: string | null;
-  isLessonDescriptionLoading?: boolean;
-  mobileLessonHeader?: React.ReactNode;
-  draft: DiscussionDraft;
-  entryKind: DiscussionEntryKind;
-  visibility: DiscussionVisibility;
-  editingEntryId: string | number | null;
-  notice: string;
-  entryFilter: DiscussionEntryFilter;
-  feedSort: DiscussionFeedSort;
-  entries: Comment[];
-  noteDeepLinkTargetId?: string | null;
-  onNoteDeepLinkHandled?: (noteId: string) => void;
-  discussionCount?: number;
-  draftIsTooLong: boolean;
-  draftAttachmentCount: number;
-  canSubmitDraft: boolean;
-  isSubmitting?: boolean;
-  isNotesLoading?: boolean;
-  isNotesError?: boolean;
-  onRetryNotes?: () => void;
-  onLoadMore?: () => Promise<void>;
-  onRetryNextPage?: () => Promise<void>;
-  hasNextPage?: boolean;
-  isFetchingNextPage?: boolean;
-  isNextPageError?: boolean;
-  isThreadsLoading?: boolean;
-  isThreadDeepLinkPending?: boolean;
-  isAllInitialLoading?: boolean;
-  isThreadsError?: boolean;
-  onRetryThreads?: () => void;
-  mobileBottomNavigation: boolean;
-  mobileBottomNavigationHidden: boolean;
-  capabilities: InteractionCapabilities;
-  isInteractionCapabilitiesLoading?: boolean;
-  lessonContentAccess: LessonContentAccessState;
-  lessonContentAccessReason?: "login" | "access" | null;
-  canParticipate: boolean;
-  participationState: LessonParticipationState;
-  participationActionLabel?: string;
-  onParticipationAction?: () => void;
-  isAllDisabled: boolean;
-  availableFilters: readonly (readonly [DiscussionEntryFilter, string])[];
-  enabledKinds: DiscussionEntryKind[];
-  promptText: string;
-  authorAvatar?: string | null;
-  attachments?: LocalComposerAttachment[];
-  onAttachmentsChange?: (attachments: LocalComposerAttachment[]) => void;
-  onDraftChange: (value: DiscussionDraft) => void;
-  onEntryKindChange: (value: DiscussionEntryKind) => void;
-  onVisibilityChange: (value: DiscussionVisibility) => void;
-  onSubmit: (onLocallyAccepted?: () => void) => Promise<boolean> | void;
-  onCancelEdit: () => void;
-  onEntryFilterChange: (filter: DiscussionEntryFilter) => void;
-  onFeedSortChange: (sort: DiscussionFeedSort) => void;
-  onLike: (id: string | number, liked: boolean) => void;
-  onEdit: (comment: Comment) => void;
-  onDelete: (id: string | number) => void;
-  onReport: (
-    target:
-      | {
-          targetType: "thread" | "reply";
-          targetId: string | number;
-          authorName?: string;
-          serverId?: string;
-        }
-      | (string | number),
-  ) => void;
-  onOpenThread: (id: string | number, focusComposer?: boolean) => void;
-  isBackendMode?: boolean;
-  currentUserId?: string;
-  userRole?: string;
-  onToggleAcceptReply?: (
-    threadId: string | number,
-    replyId: string | number,
-    accepted: boolean,
-  ) => void;
-  onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
-  onToggleBookmark?: (
-    threadId: string | number,
-    bookmarked: boolean,
-  ) => Promise<boolean> | void;
-  onToggleFollow?: (
-    threadId: string | number,
-    following: boolean,
-  ) => Promise<boolean> | void;
-  onSeekToTimestamp?: (seconds: number) => void;
-  onCopyTextNotice?: (message: string) => void;
-  onReplyEditFailure?: () => void;
-  onDeleteFailure?: (message: string) => void;
-  courseId?: string;
-}
-
-export function shouldShowDiscussionEnd({
-  isBackendMode,
-  entryFilter,
-  entryCount,
-  hasNextPage,
-  isNextPageError,
-  isNotesLoading,
-  isThreadsLoading,
-}: {
-  isBackendMode: boolean;
-  entryFilter: DiscussionEntryFilter;
-  entryCount: number;
-  hasNextPage: boolean;
-  isNextPageError?: boolean;
-  isNotesLoading: boolean;
-  isThreadsLoading: boolean;
-}): boolean {
-  if (!isBackendMode || entryCount === 0 || hasNextPage || isNextPageError) {
-    return false;
-  }
-  if (entryFilter === "all") {
-    return !isNotesLoading && !isThreadsLoading;
-  }
-  return entryFilter === "note" ? !isNotesLoading : !isThreadsLoading;
-}
-
-type DiscussionVirtualItem = {
-  index: number;
-  start: number;
-  size: number;
-  end: number;
-};
-
-type DiscussionVirtualizer = {
-  getTotalSize: () => number;
-  getVirtualItems: () => DiscussionVirtualItem[];
-  scrollOffset: number | null;
-  measureElement: (element: HTMLDivElement | null) => void;
-};
-
-type DiscussionVirtualFeedProps = {
-  entries: Comment[];
-  protectedEntryIndices: ReadonlySet<number>;
-  renderEntry: (entry: Comment) => React.ReactNode;
-  layoutKey?: string;
-};
-
-function useDiscussionRangeExtractor(
-  entries: Comment[],
-  protectedEntryIndices: ReadonlySet<number>,
-) {
-  return useCallback(
-    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
-      const indices = new Set(defaultRangeExtractor(range));
-      protectedEntryIndices.forEach((index) => {
-        if (index >= 0 && index < entries.length) indices.add(index);
-      });
-      return Array.from(indices).sort((left, right) => left - right);
-    },
-    [entries.length, protectedEntryIndices],
-  );
-}
-
-function DiscussionVirtualFeedRows({
-  feedRef,
-  entries,
-  renderEntry,
-  virtualizer,
-  scrollMargin = 0,
-}: DiscussionVirtualFeedProps & {
-  feedRef?: React.Ref<HTMLDivElement>;
-  virtualizer: DiscussionVirtualizer;
-  scrollMargin?: number;
-}) {
-  const virtualItems = virtualizer.getVirtualItems();
-
-  return (
-    <div
-      data-discussion-virtual-feed
-      data-entry-count={entries.length}
-      ref={feedRef}
-      style={{ height: `${virtualizer.getTotalSize()}px` }}
-      className="relative w-full shrink-0"
-    >
-      {virtualItems.map((virtualItem) => {
-        const entry = entries[virtualItem.index];
-        if (!entry) return null;
-        return (
-          <div
-            key={getClientEntityId(entry)}
-            data-index={virtualItem.index}
-            data-client-id={getClientEntityId(entry)}
-            ref={virtualizer.measureElement}
-            className={virtualItem.index < entries.length - 1 ? "pb-1" : ""}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-            }}
-          >
-            {renderEntry(entry)}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function DiscussionViewportVirtualFeed({
-  viewportRef,
-  ...props
-}: DiscussionVirtualFeedProps & {
-  viewportRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  const rangeExtractor = useDiscussionRangeExtractor(
-    props.entries,
-    props.protectedEntryIndices,
-  );
-  const feedRef = useRef<HTMLDivElement>(null);
-  const phoneScrollMargin = useDiscussionPhoneVirtualFeedScrollMargin(
-    feedRef,
-    viewportRef,
-  );
-
-  const virtualizer = useVirtualizer({
-    count: props.entries.length,
-    getScrollElement: () => viewportRef.current,
-    estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
-    getItemKey: (index) => getClientEntityId(props.entries[index]!),
-    initialRect: { width: 1024, height: 768 },
-    overscan: DISCUSSION_VIRTUAL_OVERSCAN,
-    rangeExtractor,
-    scrollMargin: phoneScrollMargin,
-  });
-
-  return (
-    <>
-      <DiscussionVirtualFeedRows
-        {...props}
-        feedRef={feedRef}
-        virtualizer={{
-          ...virtualizer,
-          measureElement: (element) => virtualizer.measureElement(element),
-        }}
-        scrollMargin={phoneScrollMargin}
-      />
-    </>
-  );
-}
-
-function getDiscussionVirtualFeedScrollMargin(
-  feed: HTMLDivElement | null,
-  scrollport: HTMLElement | null,
-): number {
-  if (!feed || typeof window === "undefined") return 0;
-
-  const feedRect = feed.getBoundingClientRect();
-  if (scrollport) {
-    return (
-      feedRect.top -
-      scrollport.getBoundingClientRect().top +
-      scrollport.scrollTop
-    );
-  }
-
-  return feedRect.top + window.scrollY;
-}
-
-function useDiscussionPhoneVirtualFeedScrollMargin(
-  feedRef: React.RefObject<HTMLDivElement | null>,
-  viewportRef: React.RefObject<HTMLDivElement | null>,
-) {
-  const [phoneScrollMargin, setPhoneScrollMargin] = useState(0);
-
-  useLayoutEffect(() => {
-    const scrollport = viewportRef.current;
-    const header = scrollport?.querySelector<HTMLElement>(
-      "[data-discussion-scroll-header]",
-    );
-    if (!scrollport || !header) return undefined;
-
-    const syncScrollMargin = () => {
-      const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(
-        feedRef.current,
-        scrollport,
-      );
-      setPhoneScrollMargin((current) =>
-        Math.abs(current - nextScrollMargin) > 1 ? nextScrollMargin : current,
-      );
-    };
-
-    syncScrollMargin();
-
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", syncScrollMargin);
-      return () => window.removeEventListener("resize", syncScrollMargin);
-    }
-
-    const resizeObserver = new ResizeObserver(syncScrollMargin);
-    resizeObserver.observe(header);
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [feedRef, viewportRef]);
-
-  return phoneScrollMargin;
-}
-
-function useDiscussionScrollMode() {
-  const [useWindowScroll, setUseWindowScroll] = useState(true);
-
-  useLayoutEffect(() => {
-    const syncScrollMode = () => {
-      setUseWindowScroll(getApplicationScrollElement() === null);
-    };
-
-    syncScrollMode();
-    window.addEventListener("resize", syncScrollMode);
-    return () => window.removeEventListener("resize", syncScrollMode);
-  }, []);
-
-  return useWindowScroll;
-}
-
-function useDiscussionVirtualFeedScrollMargin(
-  feedRef: React.RefObject<HTMLDivElement | null>,
-  useWindowScroll: boolean,
-  layoutKey: string | undefined,
-  itemCount: number,
-) {
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  useLayoutEffect(() => {
-    const syncScrollMargin = () => {
-      const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(
-        feedRef.current,
-        useWindowScroll ? null : getApplicationScrollElement(),
-      );
-      setScrollMargin((current) =>
-        Math.abs(current - nextScrollMargin) > 1 ? nextScrollMargin : current,
-      );
-    };
-
-    syncScrollMargin();
-    window.addEventListener("resize", syncScrollMargin);
-    return () => window.removeEventListener("resize", syncScrollMargin);
-  }, [feedRef, itemCount, layoutKey, useWindowScroll]);
-
-  return scrollMargin;
-}
-
-function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
-  const feedRef = useRef<HTMLDivElement>(null);
-  const scrollMargin = useDiscussionVirtualFeedScrollMargin(
-    feedRef,
-    true,
-    props.layoutKey,
-    props.entries.length,
-  );
-  const virtualizer = useWindowVirtualizer({
-    count: props.entries.length,
-    estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
-    getItemKey: (index) => getClientEntityId(props.entries[index]!),
-    initialRect: { width: 1024, height: 768 },
-    overscan: DISCUSSION_VIRTUAL_OVERSCAN,
-    rangeExtractor: useDiscussionRangeExtractor(
-      props.entries,
-      props.protectedEntryIndices,
-    ),
-    scrollMargin,
-  });
-
-  useEffect(() => {
-    virtualizer.measure();
-  }, [props.layoutKey, virtualizer]);
-
-  return (
-    <DiscussionVirtualFeedRows
-      {...props}
-      feedRef={feedRef}
-      scrollMargin={scrollMargin}
-      virtualizer={{
-        ...virtualizer,
-        measureElement: (element) => virtualizer.measureElement(element),
-      }}
-    />
-  );
-}
-
-function DiscussionScrollportVirtualFeed(props: DiscussionVirtualFeedProps) {
-  const feedRef = useRef<HTMLDivElement>(null);
-  const scrollMargin = useDiscussionVirtualFeedScrollMargin(
-    feedRef,
-    false,
-    props.layoutKey,
-    props.entries.length,
-  );
-  const virtualizer = useVirtualizer({
-    count: props.entries.length,
-    getScrollElement: getApplicationScrollElement,
-    estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
-    getItemKey: (index) => getClientEntityId(props.entries[index]!),
-    initialRect: { width: 1024, height: 768 },
-    overscan: DISCUSSION_VIRTUAL_OVERSCAN,
-    rangeExtractor: useDiscussionRangeExtractor(
-      props.entries,
-      props.protectedEntryIndices,
-    ),
-    scrollMargin,
-  });
-
-  useEffect(() => {
-    virtualizer.measure();
-  }, [props.layoutKey, virtualizer]);
-
-  return (
-    <DiscussionVirtualFeedRows
-      {...props}
-      feedRef={feedRef}
-      scrollMargin={scrollMargin}
-      virtualizer={{
-        ...virtualizer,
-        measureElement: (element) => virtualizer.measureElement(element),
-      }}
-    />
-  );
-}
-
-function DiscussionDesktopVirtualFeed(props: DiscussionVirtualFeedProps) {
-  const useWindowScroll = useDiscussionScrollMode();
-
-  if (useWindowScroll) return <DiscussionWindowVirtualFeed {...props} />;
-  return <DiscussionScrollportVirtualFeed {...props} />;
-}
-
-function DiscussionVirtualFeed({
-  viewportRef,
-  isPhone,
-  ...props
-}: DiscussionVirtualFeedProps & {
-  viewportRef: React.RefObject<HTMLDivElement | null>;
-  isPhone: boolean;
-}) {
-  if (isPhone) {
-    return (
-      <DiscussionViewportVirtualFeed viewportRef={viewportRef} {...props} />
-    );
-  }
-
-  return <DiscussionDesktopVirtualFeed {...props} />;
-}
-
-type DiscussionLoadingRowVariant = "short" | "long";
-
-function DiscussionLoadingRow({
-  variant,
-}: {
-  variant: DiscussionLoadingRowVariant;
-}) {
-  const hasSecondTextLine = variant === "long";
-
-  return (
-    <div className="relative py-4" aria-hidden="true">
-      <div className="relative flex gap-3">
-        <div className="size-10 shrink-0 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <div className="h-3.5 w-24 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
-            <div className="h-3 w-16 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_9%,transparent)]" />
-          </div>
-
-          <div className="mt-1.5 space-y-2">
-            <div
-              className={`h-3.5 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)] ${hasSecondTextLine ? "w-full" : "w-4/5"}`}
-            />
-            {hasSecondTextLine && (
-              <div className="h-3.5 w-3/5 animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface ParticipationPromptContentProps {
-  participationState: LessonParticipationState;
-  participationActionLabel?: string;
-  onParticipationAction?: () => void;
-}
-
-function ParticipationPromptContent({
-  participationState,
-  participationActionLabel,
-  onParticipationAction,
-}: ParticipationPromptContentProps) {
-  return (
-    <>
-      <p className="text-sm font-medium text-(--muted)">
-        {participationState === "pending"
-          ? "Checking participation access…"
-          : participationActionLabel === "Get access"
-            ? "Get access to participate in this lesson's discussions."
-            : "Log in to participate in this lesson's discussions."}
-      </p>
-      {participationState !== "pending" && onParticipationAction ? (
-        <button
-          type="button"
-          onClick={onParticipationAction}
-          className="inline-flex min-h-9 items-center rounded-lg bg-(--accent) px-3 py-1.5 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-        >
-          {participationActionLabel ?? "Log in"}
-        </button>
-      ) : null}
-    </>
-  );
-}
-
-function ThreadSurface({
-  lessonDescription,
-  isLessonDescriptionLoading = false,
-  mobileLessonHeader,
-  draft,
-  entryKind,
-  visibility,
-  editingEntryId,
-  notice,
-  entryFilter,
-  feedSort,
-  entries,
-  noteDeepLinkTargetId = null,
-  onNoteDeepLinkHandled,
-  discussionCount,
-  draftIsTooLong,
-  draftAttachmentCount,
-  canSubmitDraft,
-  isSubmitting = false,
-  isNotesLoading = false,
-  isNotesError = false,
-  onRetryNotes,
-  onLoadMore,
-  onRetryNextPage,
-  hasNextPage = false,
-  isFetchingNextPage = false,
-  isNextPageError = false,
-  isThreadsLoading = false,
-  isThreadDeepLinkPending = false,
-  isAllInitialLoading = false,
-  isThreadsError = false,
-  onRetryThreads,
-  mobileBottomNavigation,
-  mobileBottomNavigationHidden,
-  capabilities,
-  isInteractionCapabilitiesLoading = false,
-  lessonContentAccess,
-  lessonContentAccessReason = null,
-  canParticipate,
-  participationState,
-  participationActionLabel,
-  onParticipationAction,
-  isAllDisabled,
-  availableFilters,
-  enabledKinds,
-  promptText,
-  authorAvatar,
-  attachments,
-  onAttachmentsChange,
-  onDraftChange,
-  onEntryKindChange,
-  onVisibilityChange,
-  onSubmit,
-  onCancelEdit,
-  onEntryFilterChange,
-  onFeedSortChange,
-  onLike,
-  onEdit,
-  onDelete,
-  onReport,
-  onOpenThread,
-  isBackendMode = false,
-  currentUserId,
-  userRole,
-  onToggleAcceptReply,
-  onToggleLockThread,
-  onToggleBookmark,
-  onToggleFollow,
-  onSeekToTimestamp,
-  onCopyTextNotice,
-  onReplyEditFailure,
-  onDeleteFailure,
-  courseId,
-}: ThreadSurfaceProps) {
-  const isPhone = usePhoneComposerLayout();
-  const deletionRevision = useOptimisticDeletionRevision();
-  const composerHostRef = useRef<HTMLDivElement>(null);
-  const feedSentinelRef = useRef<HTMLDivElement>(null);
-  const discussionViewportRef = useRef<HTMLDivElement>(null);
-  // Description expansion moves the feed origin; refresh virtual scroll margin.
-  const [descriptionLayoutRevision, setDescriptionLayoutRevision] = useState(0);
-  const compactComposerScrollHidden =
-    mobileBottomNavigation && mobileBottomNavigationHidden;
-  const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
-  const [
-    mobileComposerCollapsedSnapPoint,
-    setMobileComposerCollapsedSnapPoint,
-  ] = useState<number>(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
-  const [mobileComposerSnapPoint, setMobileComposerSnapPoint] = useState<
-    number | null
-  >(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
-  const [mobileComposerKeyboardInset, setMobileComposerKeyboardInset] =
-    useState(0);
-  const [mobileComposerViewportHeight, setMobileComposerViewportHeight] =
-    useState<number | null>(null);
-  const mobileComposerSnapPoints = useMemo(
-    () => [mobileComposerCollapsedSnapPoint, 1],
-    [mobileComposerCollapsedSnapPoint],
-  );
-
-  useLayoutEffect(() => {
-    if (!isPhone) return undefined;
-    const root = document.documentElement;
-    root.dataset.learningMobileComposerReady = "true";
-    return () => {
-      delete root.dataset.learningMobileComposerReady;
-    };
-  }, [isPhone]);
-
-  const getMobileComposerViewportGeometry = useCallback(() => {
-    const playerBottom = document
-      .querySelector<HTMLElement>(".learning-workspace__player-wrap")
-      ?.getBoundingClientRect().bottom;
-    const visualViewport = window.visualViewport;
-    return getDiscussionComposerViewportGeometry(
-      document.documentElement.clientHeight || window.innerHeight,
-      visualViewport?.height ?? window.innerHeight,
-      visualViewport?.offsetTop ?? 0,
-      playerBottom,
-    );
-  }, []);
-
-  const closeComposer = useCallback(() => {
-    setComposerMode("collapsed");
-    if (editingEntryId !== null) onCancelEdit();
-  }, [editingEntryId, onCancelEdit]);
-
-  const openMobileComposer = useCallback(() => {
-    const geometry = getMobileComposerViewportGeometry();
-    setMobileComposerCollapsedSnapPoint(geometry.collapsedSnapPoint);
-    setMobileComposerSnapPoint(geometry.collapsedSnapPoint);
-    setMobileComposerKeyboardInset(geometry.keyboardInset);
-    setMobileComposerViewportHeight(geometry.visualViewportHeight);
-    setComposerMode("mobile");
-  }, [getMobileComposerViewportGeometry]);
-
-  useEffect(() => {
-    setComposerMode((current: ComposerMode) => {
-      if (isPhone && current === "desktop") return "collapsed";
-      if (!isPhone && current === "mobile") return "collapsed";
-      return current;
-    });
-  }, [isPhone]);
-
-  useEffect(() => {
-    if (editingEntryId === null) return undefined;
-    if (isPhone) {
-      openMobileComposer();
-      return undefined;
-    }
-
-    setComposerMode("desktop");
-    const frame = window.requestAnimationFrame(() => {
-      const reduceMotion = window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
-      composerHostRef.current?.scrollIntoView?.({
-        behavior: reduceMotion ? "auto" : "smooth",
-        block: "start",
-      });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [editingEntryId, isPhone, openMobileComposer]);
-
-  useEffect(() => {
-    if (!isPhone || composerMode !== "mobile") {
-      setMobileComposerKeyboardInset(0);
-      setMobileComposerViewportHeight(null);
-      return undefined;
-    }
-
-    const syncGeometry = () => {
-      const geometry = getMobileComposerViewportGeometry();
-      setMobileComposerCollapsedSnapPoint(geometry.collapsedSnapPoint);
-      setMobileComposerSnapPoint((current: number | null) =>
-        current === 1 ? 1 : geometry.collapsedSnapPoint,
-      );
-      setMobileComposerKeyboardInset(geometry.keyboardInset);
-      setMobileComposerViewportHeight(geometry.visualViewportHeight);
-    };
-
-    syncGeometry();
-    let frameId = 0;
-    const scheduleSnapPointSync = () => {
-      window.cancelAnimationFrame(frameId);
-      frameId = window.requestAnimationFrame(syncGeometry);
-    };
-
-    window.addEventListener("resize", scheduleSnapPointSync);
-    window.visualViewport?.addEventListener("resize", scheduleSnapPointSync);
-    window.visualViewport?.addEventListener("scroll", scheduleSnapPointSync);
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      window.removeEventListener("resize", scheduleSnapPointSync);
-      window.visualViewport?.removeEventListener(
-        "resize",
-        scheduleSnapPointSync,
-      );
-      window.visualViewport?.removeEventListener(
-        "scroll",
-        scheduleSnapPointSync,
-      );
-    };
-  }, [composerMode, getMobileComposerViewportGeometry, isPhone]);
-
-  useEffect(() => {
-    if (composerMode === "collapsed") return undefined;
-
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest("[data-comment-composer-container]")
-      ) {
-        return;
-      }
-      if (document.querySelector('[role="listbox"]')) return;
-      closeComposer();
-    };
-
-    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
-    return () =>
-      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
-  }, [closeComposer, composerMode]);
-
-  const submitAndCollapse = async (onLocallyAccepted?: () => void) => {
-    if (!canSubmitDraft) return false;
-    let acceptedLocally = false;
-    const result = await onSubmit(() => {
-      acceptedLocally = true;
-      setComposerMode("collapsed");
-      onLocallyAccepted?.();
-    });
-    const succeeded = result !== false;
-    if (succeeded && !acceptedLocally) {
-      setComposerMode("collapsed");
-    }
-    return succeeded;
-  };
-
-  useEffect(() => {
-    const sentinel = feedSentinelRef.current;
-    if (!sentinel || !onLoadMore || !hasNextPage || isFetchingNextPage) {
-      return undefined;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          void onLoadMore();
-        }
-      },
-      {
-        root: isPhone
-          ? discussionViewportRef.current
-          : getApplicationScrollElement(),
-        rootMargin: "600px 0px",
-      },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, isPhone, onLoadMore]);
-
-  const protectedEntryIndices = useMemo(() => {
-    const indices = new Set<number>();
-
-    entries.forEach((entry, index) => {
-      const clientId = getClientEntityId(entry);
-      const serverId = getServerEntityId(entry);
-      const deletionKind = entry.entryKind === "note" ? "note" : "thread";
-      const deletion = optimisticDeletionCoordinator.get(
-        deletionKind,
-        clientId,
-        serverId,
-      );
-      const isRootEditing =
-        editingEntryId !== null && String(editingEntryId) === clientId;
-      const hasUndoableChild =
-        deletionKind === "thread" &&
-        optimisticDeletionCoordinator.hasUndoableReplyForParent(
-          clientId,
-          serverId,
-        );
-
-      if (
-        deletion?.phase === "undoable" ||
-        isRootEditing ||
-        hasUndoableChild ||
-        (noteDeepLinkTargetId && serverId === noteDeepLinkTargetId)
-      ) {
-        indices.add(index);
-      }
-    });
-
-    return indices;
-  }, [deletionRevision, editingEntryId, entries, noteDeepLinkTargetId]);
-
-  const focusedNoteDeepLinkRef = useRef<string | null>(null);
-
-  useLayoutEffect(() => {
-    if (
-      !noteDeepLinkTargetId ||
-      entryFilter !== "note" ||
-      focusedNoteDeepLinkRef.current === noteDeepLinkTargetId
-    ) {
-      return;
-    }
-
-    const target = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-note-id]"),
-    ).find((element) => element.dataset.noteId === noteDeepLinkTargetId);
-    if (!target) return;
-
-    focusedNoteDeepLinkRef.current = noteDeepLinkTargetId;
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    target.scrollIntoView({
-      behavior: reduceMotion ? "auto" : "smooth",
-      block: "center",
-    });
-    target.focus({ preventScroll: true });
-    onNoteDeepLinkHandled?.(noteDeepLinkTargetId);
-  }, [entryFilter, noteDeepLinkTargetId, onNoteDeepLinkHandled]);
-
-  const renderEntry = useCallback(
-    (entry: Comment) => (
-      <CommentCard
-        comment={entry}
-        onLike={onLike}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onEditFailure={onReplyEditFailure}
-        onDeleteFailure={onDeleteFailure}
-        onReport={onReport}
-        onOpenThread={onOpenThread}
-        isBackendMode={isBackendMode}
-        currentUserId={currentUserId}
-        userRole={userRole}
-        onToggleAcceptReply={onToggleAcceptReply}
-        onToggleLockThread={onToggleLockThread}
-        onToggleBookmark={onToggleBookmark}
-        onToggleFollow={onToggleFollow}
-        onSeekToTimestamp={onSeekToTimestamp}
-        onCopyTextNotice={onCopyTextNotice}
-        courseId={courseId}
-        canParticipate={canParticipate}
-        constrainToContainer
-        canEdit={
-          canParticipate &&
-          (entry.entryKind !== "note" || capabilities.allowNotes)
-        }
-        canDelete={
-          canParticipate &&
-          (entry.entryKind !== "note" || capabilities.allowNotes)
-        }
-        isDeepLinkTarget={Boolean(
-          noteDeepLinkTargetId &&
-          entry.entryKind === "note" &&
-          getServerEntityId(entry) === noteDeepLinkTargetId,
-        )}
-      />
-    ),
-    [
-      courseId,
-      currentUserId,
-      isBackendMode,
-      onDelete,
-      onDeleteFailure,
-      onEdit,
-      onLike,
-      onOpenThread,
-      onReplyEditFailure,
-      onReport,
-      onToggleAcceptReply,
-      onToggleBookmark,
-      onToggleFollow,
-      onSeekToTimestamp,
-      onCopyTextNotice,
-      onToggleLockThread,
-      capabilities.allowNotes,
-      canParticipate,
-      noteDeepLinkTargetId,
-      userRole,
-    ],
-  );
-
-  const discussionDescription = (
-    <LessonDescription
-      description={lessonDescription}
-      isLoading={isLessonDescriptionLoading}
-      onSeekToTimestamp={onSeekToTimestamp}
-      onExpandedChange={() =>
-        setDescriptionLayoutRevision((revision) => revision + 1)
-      }
-    />
-  );
-  const hasDescriptionSurface =
-    isLessonDescriptionLoading || Boolean(lessonDescription?.trim());
-
-  const disabledMessage = (
-    <div
-      className="py-8 text-center"
-      data-testid="learner-interactions-disabled-message"
-    >
-      <p className="text-sm font-medium text-(--muted)">
-        Learner interactions are disabled for this course.
-      </p>
-    </div>
-  );
-
-  const participationPrompt = !canParticipate ? (
-    <div
-      className="flex flex-col items-center justify-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_52%,transparent)] px-4 py-4 text-center"
-      data-testid="learning-discussion-login-prompt"
-    >
-      <ParticipationPromptContent
-        participationState={participationState}
-        participationActionLabel={participationActionLabel}
-        onParticipationAction={onParticipationAction}
-      />
-    </div>
-  ) : null;
-
-  const showMobileParticipationPrompt =
-    isPhone && enabledKinds.length > 0 && !canParticipate;
-
-  const lessonAccessMessage =
-    lessonContentAccess === "denied"
-      ? lessonContentAccessReason === "login"
-        ? "Log in to read this lesson's discussions."
-        : lessonContentAccessReason === "access"
-          ? "Get access to this course to read this lesson's discussions."
-          : "This lesson's discussions are not available yet."
-      : "Checking lesson access before loading discussions.";
-
-  if (lessonContentAccess !== "granted") {
-    const accessStateMessage = (
-      <div
-        className="flex min-h-48 flex-col items-center justify-center py-12 text-center"
-        data-testid={
-          lessonContentAccess === "denied"
-            ? "learning-discussion-access-denied"
-            : "learning-discussion-access-pending"
-        }
-        role={lessonContentAccess === "pending" ? "status" : undefined}
-        aria-label={
-          lessonContentAccess === "pending" ? "Loading discussion" : undefined
-        }
-      >
-        {lessonContentAccess === "pending" ? (
-          <LoadingSpinnerIcon size={24} />
-        ) : null}
-        <p className="mt-3 text-sm font-medium text-(--muted)">
-          {lessonAccessMessage}
-        </p>
-      </div>
-    );
-
-    if (isPhone) {
-      return (
-        <div className="mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col">
-          <div
-            ref={discussionViewportRef}
-            data-discussion-scroll-viewport
-            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
-          >
-            <div
-              data-discussion-scroll-header
-              className="min-w-0 max-w-full shrink-0"
-            >
-              {mobileLessonHeader}
-              {discussionDescription}
-            </div>
-            {accessStateMessage}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div>
-        {discussionDescription}
-        {accessStateMessage}
-      </div>
-    );
-  }
-
-  if (isAllDisabled) {
-    if (isPhone) {
-      return (
-        <div className="mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col">
-          <div
-            ref={discussionViewportRef}
-            data-discussion-scroll-viewport
-            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
-            style={{
-              minHeight: 0,
-              maxWidth: "100%",
-              overflowX: "hidden",
-              overflowY: "auto",
-              overscrollBehaviorX: "none",
-              overscrollBehaviorY: "none",
-              touchAction: "pan-y",
-            }}
-          >
-            <div
-              data-discussion-scroll-header
-              className="min-w-0 max-w-full shrink-0"
-            >
-              {mobileLessonHeader}
-              {discussionDescription}
-            </div>
-            {disabledMessage}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div>
-        <LessonDescription
-          description={lessonDescription}
-          isLoading={isLessonDescriptionLoading}
-          onSeekToTimestamp={onSeekToTimestamp}
-        />
-        {disabledMessage}
-      </div>
-    );
-  }
-
-  const discussionFilters =
-    availableFilters.length > 0 ? (
-      <div
-        role="group"
-        aria-label="Filter discussion entries"
-        className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
-      >
-        {availableFilters.map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={entryFilter === value}
-            onClick={() => onEntryFilterChange(value)}
-            className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    ) : null;
-  const discussionToolbar = (
-    <div
-      className="mt-3.5 flex min-w-0 items-end max-[640px]:mt-2.5"
-      data-discussion-feed-toolbar
-    >
-      <p className="min-w-0 truncate text-lg leading-none font-semibold tracking-[-0.02em] text-(--text)">
-        {discussionCount === undefined
-          ? "Discussions"
-          : `${discussionCount} Discussions`}
-      </p>
-      <span
-        className="shrink-0 text-lg leading-none text-(--text-secondary)"
-        aria-hidden="true"
-        data-discussion-feed-separator
-      >
-        {"\u00A0\u00A0·\u00A0\u00A0"}
-      </span>
-      <ThemedSelect
-        value={feedSort}
-        onValueChange={onFeedSortChange}
-        ariaLabel="Sort discussions"
-        options={DISCUSSION_FEED_SORT_OPTIONS}
-        triggerClassName="h-auto! w-auto! max-w-full shrink-0! items-end! justify-start! gap-1! border-0! bg-transparent! p-0! shadow-none! text-[13px] leading-none! font-medium whitespace-nowrap text-(--text-secondary)! hover:bg-transparent! hover:text-(--text)! data-[state=open]:bg-transparent! data-[state=open]:shadow-none!"
-      />
-    </div>
-  );
-
-  const discussionLoadingContent = (
-    <div
-      className="mt-4 flex min-h-0 flex-1 flex-col gap-3"
-      data-testid="learner-interactions-loading"
-    >
-      <DiscussionLoadingRow variant="short" />
-      <DiscussionLoadingRow variant="long" />
-      <DiscussionLoadingRow variant="short" />
-    </div>
-  );
-
-  const discussionContent = isInteractionCapabilitiesLoading ? (
-    discussionLoadingContent
-  ) : isThreadDeepLinkPending ? (
-    <div
-      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
-      data-testid="learning-thread-deep-link-loading"
-      role="status"
-      aria-label="Loading discussion"
-    >
-      <LoadingSpinnerIcon size={24} />
-    </div>
-  ) : isAllInitialLoading ? (
-    discussionLoadingContent
-  ) : entryFilter === "note" && isNotesLoading && entries.length === 0 ? (
-    discussionLoadingContent
-  ) : entryFilter === "note" && isNotesError && entries.length === 0 ? (
-    <div
-      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
-      data-testid="learning-notes-error"
-    >
-      <p className="font-semibold text-(--text)">Failed to load notes</p>
-      <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-        There was a problem loading your notes for this lesson.
-      </p>
-      {onRetryNotes && (
-        <button
-          type="button"
-          onClick={onRetryNotes}
-          className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
-        >
-          Retry
-        </button>
-      )}
-    </div>
-  ) : entryFilter !== "note" && isThreadsLoading && entries.length === 0 ? (
-    discussionLoadingContent
-  ) : entryFilter !== "note" && isThreadsError && entries.length === 0 ? (
-    <div
-      className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
-      data-testid="learning-threads-error"
-    >
-      <p className="font-semibold text-(--text)">Failed to load discussions</p>
-      <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-        There was a problem loading the discussion for this lesson.
-      </p>
-      {onRetryThreads && (
-        <button
-          type="button"
-          onClick={onRetryThreads}
-          className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
-        >
-          Retry
-        </button>
-      )}
-    </div>
-  ) : (
-    <>
-      <DiscussionVirtualFeed
-        entries={entries}
-        protectedEntryIndices={protectedEntryIndices}
-        renderEntry={renderEntry}
-        layoutKey={`${composerMode}:${entryFilter}:${isLessonDescriptionLoading}:${descriptionLayoutRevision}`}
-        viewportRef={discussionViewportRef}
-        isPhone={isPhone}
-      />
-      {isBackendMode && hasNextPage && (
-        <div ref={feedSentinelRef} className="h-1" aria-hidden="true" />
-      )}
-      {isBackendMode && isFetchingNextPage && (
-        <div
-          className="grid place-items-center py-4"
-          data-testid="learning-feed-loading-more"
-          role="status"
-          aria-label="Loading more discussions"
-        >
-          <LoadingSpinnerIcon size={18} />
-        </div>
-      )}
-      {isBackendMode && isNextPageError && entries.length > 0 && (
-        <div
-          className="flex flex-col items-center gap-2 py-4 text-center"
-          data-testid="learning-feed-load-more-error"
-        >
-          <p className="text-sm text-(--muted)">
-            There was a problem loading more discussions.
-          </p>
-          {onRetryNextPage && (
-            <button
-              type="button"
-              onClick={() => void onRetryNextPage()}
-              disabled={isFetchingNextPage}
-              className="inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover) disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Retry loading more
-            </button>
-          )}
-        </div>
-      )}
-      {shouldShowDiscussionEnd({
-        isBackendMode,
-        entryFilter,
-        entryCount: entries.length,
-        hasNextPage,
-        isNextPageError,
-        isNotesLoading,
-        isThreadsLoading,
-      }) && (
-        <p
-          className="py-4 text-center text-xs text-(--muted)"
-          data-testid="learning-feed-end"
-        >
-          You’ve reached the end.
-        </p>
-      )}
-      {entries.length === 0 && (
-        <div className="py-12 text-center">
-          <p className="font-semibold text-(--text)">
-            No {entryFilter === "all" ? "entries" : getFilterName(entryFilter)}{" "}
-            yet
-          </p>
-          {availableFilters.some(([val]) => val === "all") && (
-            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
-              Choose All to return to the full lesson discussion.
-            </p>
-          )}
-        </div>
-      )}
-    </>
-  );
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {!isPhone && discussionDescription}
-      {!isPhone && enabledKinds.length > 0 && (
-        <div
-          ref={composerHostRef}
-          data-comment-composer-container
-          className={
-            hasDescriptionSurface ? "mt-3 scroll-mt-4 sm:mt-4" : "scroll-mt-4"
-          }
-        >
-          {canParticipate && composerMode === "desktop" ? (
-            <CommentComposer
-              draft={draft}
-              avatar={authorAvatar}
-              documentId={
-                editingEntryId === null
-                  ? "discussion-new"
-                  : `discussion-edit-${editingEntryId}`
-              }
-              entryKind={entryKind}
-              visibility={visibility}
-              capabilities={capabilities}
-              invalid={draftIsTooLong}
-              canSubmit={canSubmitDraft}
-              isSubmitting={isSubmitting}
-              editing={editingEntryId !== null}
-              autoFocus
-              attachments={attachments}
-              onAttachmentsChange={onAttachmentsChange}
-              onDraftChange={onDraftChange}
-              onEntryKindChange={onEntryKindChange}
-              onVisibilityChange={onVisibilityChange}
-              onSubmit={submitAndCollapse}
-              onClose={closeComposer}
-              courseId={courseId}
-            />
-          ) : canParticipate ? (
-            <CompactComposer
-              draft={draft}
-              attachmentCount={draftAttachmentCount}
-              promptText={promptText}
-              avatar={authorAvatar}
-              onOpen={() => setComposerMode("desktop")}
-            />
-          ) : (
-            participationPrompt
-          )}
-        </div>
-      )}
-
-      <p role="status" className="sr-only">
-        {notice}
-      </p>
-
-      {!isPhone && discussionFilters}
-      {!isPhone && discussionToolbar}
-
-      <div
-        className={
-          isPhone
-            ? "mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col"
-            : "mt-2.5 min-w-0 max-w-full"
-        }
-        data-discussion-feed-list
-      >
-        {isPhone ? (
-          <div
-            ref={discussionViewportRef}
-            data-discussion-scroll-viewport
-            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
-            style={{
-              minHeight: 0,
-              maxWidth: "100%",
-              overflowX: "hidden",
-              overflowY: "auto",
-              overscrollBehaviorX: "none",
-              overscrollBehaviorY: "none",
-              touchAction: "pan-y",
-            }}
-          >
-            <div
-              data-discussion-scroll-header
-              className="min-w-0 max-w-full shrink-0"
-            >
-              {mobileLessonHeader}
-              {discussionDescription}
-              {discussionFilters}
-              {discussionToolbar}
-            </div>
-            {discussionContent}
-            {showMobileParticipationPrompt && (
-              <div
-                aria-hidden="true"
-                className={`pointer-events-none invisible opacity-0 shrink-0 ${mobileBottomNavigation ? "pb-[calc(58px+var(--app-viewport-safe-area-bottom))]" : ""}`}
-              >
-                <MobileParticipationPromptSurface
-                  participationState={participationState}
-                  participationActionLabel={participationActionLabel}
-                  onParticipationAction={onParticipationAction}
-                />
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="min-w-0 max-w-full">{discussionContent}</div>
-        )}
-      </div>
-
-      {isPhone &&
-        enabledKinds.length > 0 &&
-        canParticipate &&
-        composerMode !== "mobile" && (
-          <MobileCompactComposerPortal
-            draft={draft}
-            attachmentCount={draftAttachmentCount}
-            promptText={promptText}
-            avatar={authorAvatar}
-            mobileBottomNavigation={mobileBottomNavigation}
-            scrollHidden={compactComposerScrollHidden}
-            onOpen={openMobileComposer}
-          />
-        )}
-
-      {isPhone && enabledKinds.length > 0 && canParticipate && (
-        <Drawer
-          open={composerMode === "mobile"}
-          onOpenChange={(open) => {
-            if (open) openMobileComposer();
-            else closeComposer();
-          }}
-          modal={false}
-          snapPoints={mobileComposerSnapPoints}
-          snapPoint={mobileComposerSnapPoint}
-          onSnapPointChange={(snapPoint) => {
-            if (typeof snapPoint === "number" || snapPoint === null) {
-              setMobileComposerSnapPoint(snapPoint);
-            }
-          }}
-          snapToSequentialPoints
-          showSwipeHandle
-          swipeDirection="down"
-          swipeHandleClassName="pt-2.5 after:w-18 after:bg-[color-mix(in_srgb,var(--text)_34%,transparent)]"
-        >
-          <DrawerContent
-            data-comment-composer-container
-            style={
-              {
-                "--drawer-content-height": mobileComposerViewportHeight
-                  ? `${mobileComposerViewportHeight}px`
-                  : "100dvh",
-                "--drawer-content-max-height": mobileComposerViewportHeight
-                  ? `${mobileComposerViewportHeight}px`
-                  : "100dvh",
-                bottom: `${mobileComposerKeyboardInset}px`,
-                paddingBottom:
-                  mobileComposerKeyboardInset > 0
-                    ? "0px"
-                    : "var(--app-safe-area-bottom)",
-              } as React.CSSProperties
-            }
-            aria-label={
-              editingEntryId === null
-                ? "Create a discussion entry"
-                : "Edit a discussion entry"
-            }
-            className="learning-comment-composer-drawer overflow-hidden rounded-t-[22px]! bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] px-0 pt-0 shadow-[0_-20px_56px_rgba(0,0,0,0.42)] data-expanded:rounded-none!"
-          >
-            <DrawerTitle className="sr-only">
-              {editingEntryId === null
-                ? "Create a discussion entry"
-                : "Edit a discussion entry"}
-            </DrawerTitle>
-            <DrawerDescription className="sr-only">
-              Write a comment, Q&A, or note for this lesson.
-            </DrawerDescription>
-            <CommentComposer
-              draft={draft}
-              avatar={authorAvatar}
-              documentId={
-                editingEntryId === null
-                  ? "discussion-new"
-                  : `discussion-edit-${editingEntryId}`
-              }
-              entryKind={entryKind}
-              visibility={visibility}
-              capabilities={capabilities}
-              invalid={draftIsTooLong}
-              canSubmit={canSubmitDraft}
-              isSubmitting={isSubmitting}
-              editing={editingEntryId !== null}
-              autoFocus
-              presentation="drawer"
-              attachments={attachments}
-              onAttachmentsChange={onAttachmentsChange}
-              onDraftChange={onDraftChange}
-              onEntryKindChange={onEntryKindChange}
-              onVisibilityChange={onVisibilityChange}
-              onSubmit={submitAndCollapse}
-              onClose={closeComposer}
-              courseId={courseId}
-            />
-          </DrawerContent>
-        </Drawer>
-      )}
-      {showMobileParticipationPrompt ? (
-        <MobileParticipationPromptPortal
-          mobileBottomNavigation={mobileBottomNavigation}
-          scrollHidden={mobileBottomNavigationHidden}
-          participationState={participationState}
-          participationActionLabel={participationActionLabel}
-          onParticipationAction={onParticipationAction}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-interface CompactComposerProps {
-  draft: DiscussionDraft;
-  attachmentCount: number;
-  promptText?: string;
-  avatar?: string | null;
-  disabled?: boolean;
-  onOpen: () => void;
-}
-
-const COMPACT_COMPOSER_SURFACE = `${DESCRIPTION_SURFACE_BASE} rounded-md transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_96%,var(--hover))]`;
-
-const MOBILE_COMPOSER_SURFACE_BASE =
-  "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-transparent backdrop-blur-xl px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))]";
-const MOBILE_BOTTOM_ACTION_OFFSET_CLASS =
-  "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]";
-
-interface MobileParticipationPromptSurfaceProps extends ParticipationPromptContentProps {
-  testId?: string;
-  scrollHidden?: boolean;
-}
-
-function MobileParticipationPromptSurface({
-  participationState,
-  participationActionLabel,
-  onParticipationAction,
-  testId,
-  scrollHidden = false,
-}: MobileParticipationPromptSurfaceProps) {
-  return (
-    <div
-      data-learning-mobile-participation-surface
-      data-testid={testId}
-      data-scroll-hidden={scrollHidden}
-      aria-hidden={scrollHidden}
-      className={`${MOBILE_COMPOSER_SURFACE_BASE} w-full min-w-0 max-w-full transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
-    >
-      <div className="flex min-w-0 flex-col items-center gap-1.5 px-1 py-1 text-center">
-        <ParticipationPromptContent
-          participationState={participationState}
-          participationActionLabel={participationActionLabel}
-          onParticipationAction={onParticipationAction}
-        />
-      </div>
-    </div>
-  );
-}
-
-interface MobileParticipationPromptPortalProps extends ParticipationPromptContentProps {
-  mobileBottomNavigation: boolean;
-  scrollHidden: boolean;
-}
-
-function MobileParticipationPromptPortal({
-  mobileBottomNavigation,
-  scrollHidden,
-  participationState,
-  participationActionLabel,
-  onParticipationAction,
-}: MobileParticipationPromptPortalProps) {
-  const layerTarget = document.querySelector<HTMLElement>(
-    "[data-learning-motion-stage]",
-  );
-
-  return createPortal(
-    <div
-      data-learning-mobile-participation-layer
-      className={`pointer-events-none fixed inset-x-0 z-130 box-border min-w-0 max-w-full overflow-x-clip ${mobileBottomNavigation ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS : "bottom-0"}`}
-    >
-      <div className="pointer-events-auto min-w-0 max-w-full">
-        <MobileParticipationPromptSurface
-          testId="learning-discussion-login-prompt"
-          participationState={participationState}
-          participationActionLabel={participationActionLabel}
-          onParticipationAction={onParticipationAction}
-          scrollHidden={scrollHidden}
-        />
-      </div>
-    </div>,
-    layerTarget ?? document.body,
-  );
-}
-
-interface MobileCompactComposerPortalProps {
-  draft: DiscussionDraft;
-  attachmentCount: number;
-  promptText?: string;
-  avatar?: string | null;
-  mobileBottomNavigation: boolean;
-  scrollHidden: boolean;
-  onOpen: () => void;
-}
-
-function MobileCompactComposerPortal({
-  draft,
-  attachmentCount,
-  promptText,
-  avatar,
-  mobileBottomNavigation,
-  scrollHidden,
-  onOpen,
-}: MobileCompactComposerPortalProps) {
-  const layerTarget = document.querySelector<HTMLElement>(
-    "[data-learning-motion-stage]",
-  );
-
-  return createPortal(
-    <div
-      data-learning-mobile-composer-layer
-      className={`pointer-events-none fixed inset-x-0 z-130 box-border min-w-0 max-w-full overflow-x-clip transition-[transform,opacity] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
-        mobileBottomNavigation ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS : "bottom-0"
-      }`}
-      style={{
-        opacity: "var(--learning-player-content-opacity, 1)",
-        transform:
-          "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
-        transitionDuration:
-          "var(--learning-player-content-motion-duration, 0ms)",
-      }}
-    >
-      <div
-        data-learning-mobile-composer-surface
-        data-testid="mobile-discussion-composer"
-        data-scroll-hidden={scrollHidden}
-        aria-hidden={scrollHidden}
-        className={`pointer-events-auto relative box-border min-w-0 max-w-full overflow-x-clip ${MOBILE_COMPOSER_SURFACE_BASE} transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
-      >
-        <CompactComposer
-          draft={draft}
-          attachmentCount={attachmentCount}
-          promptText={promptText}
-          avatar={avatar}
-          onOpen={onOpen}
-        />
-      </div>
-    </div>,
-    layerTarget ?? document.body,
-  );
-}
-
-export function PrerenderedMobileCommentComposer() {
-  return (
-    <div
-      data-learning-mobile-composer-prerender
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(58px+var(--app-viewport-safe-area-bottom))] z-130 box-border hidden min-w-0 max-w-full overflow-x-clip [[data-navigation-layout=compact]_&]:block [[data-learning-mobile-composer-ready=true]_&]:hidden!"
-    >
-      <div
-        className={`relative box-border min-w-0 max-w-full overflow-x-clip ${MOBILE_COMPOSER_SURFACE_BASE}`}
-      >
-        <CompactComposer
-          draft={EMPTY_MOBILE_COMPOSER_DRAFT}
-          attachmentCount={0}
-          avatar={null}
-          disabled
-          onOpen={() => undefined}
-        />
-      </div>
-    </div>
-  );
-}
-
-function CompactComposer({
-  draft,
-  attachmentCount,
-  promptText = "Write something…",
-  avatar,
-  disabled = false,
-  onOpen,
-}: CompactComposerProps) {
-  const preview =
-    draft.plainText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find(Boolean) ?? "";
-  const attachmentPreview = `${attachmentCount} ${attachmentCount === 1 ? "attachment" : "attachments"}`;
-
-  return (
-    <div
-      role="button"
-      data-compact-comment-composer
-      aria-label="Open discussion composer"
-      aria-disabled={disabled || undefined}
-      tabIndex={disabled ? -1 : 0}
-      onClick={disabled ? undefined : onOpen}
-      onKeyDown={(event) => {
-        if (disabled) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      }}
-      className={`flex w-full cursor-pointer items-center gap-2 p-1.5 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
-    >
-      <DiscussionAvatar src={avatar} className="pointer-events-none size-9" />
-      <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
-        {preview || (attachmentCount > 0 ? attachmentPreview : promptText)}
-      </span>
-    </div>
-  );
-}
-
-function usePhoneComposerLayout() {
-  const [isPhone, setIsPhone] = useState(false);
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return undefined;
-    const media = window.matchMedia("(max-width: 640px)");
-    const sync = () => setIsPhone(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
-
-  return isPhone;
-}
-
-const getFilterName = (filter: Exclude<DiscussionEntryFilter, "all">) => {
-  if (filter === "question") return "Q&As";
-  if (filter === "note") return "notes";
-  return "comments";
-};

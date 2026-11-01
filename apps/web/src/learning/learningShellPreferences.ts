@@ -1,7 +1,16 @@
+import {
+  SPLIT_FRAME_DEFAULT_WIDTH,
+  SPLIT_FRAME_MAX_WIDTH,
+  SPLIT_FRAME_MIN_WIDTH,
+  getSplitFramePrerenderedScript,
+} from "../components/splitFrame";
+
 export const CURRICULUM_COLLAPSED_WIDTH = 0;
-export const CURRICULUM_MIN_WIDTH = 300;
-export const CURRICULUM_DEFAULT_WIDTH = 400;
-export const CURRICULUM_MAX_WIDTH = 560;
+export const CURRICULUM_MIN_WIDTH = SPLIT_FRAME_MIN_WIDTH;
+export const CURRICULUM_DEFAULT_WIDTH = SPLIT_FRAME_DEFAULT_WIDTH;
+export const CURRICULUM_MAX_WIDTH = SPLIT_FRAME_MAX_WIDTH;
+/** Where the course content is a card beside the lesson (SplitFramePane). */
+export const LEARNING_SPLIT_MEDIA = "(min-width: 1081px)";
 export const CURRICULUM_WIDTH_STORAGE_KEY = "veolms-curriculum-width";
 export const CURRICULUM_COLLAPSED_STORAGE_KEY = "veolms-curriculum-collapsed";
 
@@ -80,4 +89,4 @@ export const getInitialLearningShellState = (): LearningShellState => {
 };
 
 export const getLearningShellBootstrapScript = () =>
-  `(()=>{const r=document.documentElement,d=${CURRICULUM_DEFAULT_WIDTH},n=${CURRICULUM_MIN_WIDTH},x=${CURRICULUM_MAX_WIDTH};let w=d,c=false;try{const s=localStorage.getItem(${JSON.stringify(CURRICULUM_WIDTH_STORAGE_KEY)}),v=Number(s);if(s!==null&&s.trim()&&Number.isFinite(v))w=Math.min(x,Math.max(n,v));c=localStorage.getItem(${JSON.stringify(CURRICULUM_COLLAPSED_STORAGE_KEY)})==="true"}catch{}const l={curriculumCollapsed:c,curriculumWidth:w};window.__VEO_BOOTSTRAP__={...window.__VEO_BOOTSTRAP__,learning:l};r.dataset.learningCurriculumState=c?"collapsed":"expanded";r.style.setProperty("--learning-curriculum-width",(c?0:w)+"px");r.style.setProperty("--learning-curriculum-expanded-width",w+"px")})();`;
+  `(()=>{const r=document.documentElement;${getSplitFramePrerenderedScript(LEARNING_SPLIT_MEDIA)}const d=${CURRICULUM_DEFAULT_WIDTH},n=${CURRICULUM_MIN_WIDTH},x=${CURRICULUM_MAX_WIDTH};let w=d,c=false;try{const s=localStorage.getItem(${JSON.stringify(CURRICULUM_WIDTH_STORAGE_KEY)}),v=Number(s);if(s!==null&&s.trim()&&Number.isFinite(v))w=Math.min(x,Math.max(n,v));c=localStorage.getItem(${JSON.stringify(CURRICULUM_COLLAPSED_STORAGE_KEY)})==="true"}catch{}const l={curriculumCollapsed:c,curriculumWidth:w};window.__VEO_BOOTSTRAP__={...window.__VEO_BOOTSTRAP__,learning:l};r.dataset.learningCurriculumState=c?"collapsed":"expanded";r.style.setProperty("--learning-curriculum-width",(c?0:w)+"px");r.style.setProperty("--learning-curriculum-expanded-width",w+"px")})();`;

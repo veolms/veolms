@@ -5,6 +5,7 @@ export * from "./auth.schema.ts";
 export * from "./authorization.schema.ts";
 export * from "./courses.schema.ts";
 export * from "./chapters.schema.ts";
+export * from "./subtitles.schema.ts";
 export * from "./media.schema.ts";
 export * from "./commerce.schema.ts";
 export * from "./learning-interactions.schema.ts";
@@ -13,6 +14,9 @@ export * from "./notifications.schema.ts";
 export * from "./json.schema.ts";
 export * from "./quizzes.schema.ts";
 export * from "./learning-goals.schema.ts";
+export * from "./home-page.schema.ts";
+export * from "./quotes.schema.ts";
+export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
@@ -23,6 +27,7 @@ import type {
   MenuTable,
   MenuPermissionTable,
   SessionTable,
+  PendingDeviceSignInTable,
   OauthAccountTable,
   OtpCodeTable,
   PasskeyTable,
@@ -38,6 +43,8 @@ import type {
   RolePermissionTable,
   RoleAssignmentTable,
   FeatureTable,
+  TeamInvitationTable,
+  TeamInvitationRoleTable,
 } from "./authorization.schema.ts";
 
 import type {
@@ -50,15 +57,19 @@ import type {
   CoursePricingTable,
   CourseSettingsTable,
   CourseIncludeTable,
+  CourseLinkTable,
   CourseDeletionJobTable,
   CourseDeletionStorageItemTable,
 } from "./courses.schema.ts";
 import type { LessonChapterTable } from "./chapters.schema.ts";
+import type { LessonSubtitleTable } from "./subtitles.schema.ts";
 import type {
   ImageJobTable,
   MediaAssetTable,
+  MediaSourceTable,
   VideoJobTable,
   VideoOutputTable,
+  YoutubeImportJobTable,
 } from "./media.schema.ts";
 
 import type {
@@ -69,7 +80,9 @@ import type {
   CouponTable,
   CouponRedemptionTable,
   OrderTable,
+  InvoiceNumberCounterTable,
   OrderItemTable,
+  OrderItemCourseTable,
   PaymentTable,
   PaymentAttemptTable,
   RefundTable,
@@ -119,8 +132,13 @@ import type {
 } from "./quizzes.schema.ts";
 import type {
   LearningDailyActivityTable,
+  LearningDailyCourseActivityTable,
   UserLearningSettingsTable,
 } from "./learning-goals.schema.ts";
+import type { HomePageSettingsTable } from "./home-page.schema.ts";
+import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
+import type { QuoteTable } from "./quotes.schema.ts";
+import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 
 export interface Database {
@@ -135,7 +153,10 @@ export interface Database {
   role_permissions: RolePermissionTable;
   role_assignments: RoleAssignmentTable;
   features: FeatureTable;
+  team_invitations: TeamInvitationTable;
+  team_invitation_roles: TeamInvitationRoleTable;
   sessions: SessionTable;
+  pending_device_sign_ins: PendingDeviceSignInTable;
   oauth_accounts: OauthAccountTable;
   otp_codes: OtpCodeTable;
   passkeys: PasskeyTable;
@@ -154,6 +175,7 @@ export interface Database {
   course_pricing: CoursePricingTable;
   course_settings: CourseSettingsTable;
   course_includes: CourseIncludeTable;
+  course_links: CourseLinkTable;
   course_deletion_jobs: CourseDeletionJobTable;
   course_deletion_storage_items: CourseDeletionStorageItemTable;
 
@@ -162,6 +184,8 @@ export interface Database {
   image_jobs: ImageJobTable;
   video_outputs: VideoOutputTable;
   video_jobs: VideoJobTable;
+  youtube_import_jobs: YoutubeImportJobTable;
+  media_sources: MediaSourceTable;
 
   // Commerce, Orders & Payments
   course_bundles: CourseBundleTable;
@@ -171,7 +195,9 @@ export interface Database {
   coupons: CouponTable;
   coupon_redemptions: CouponRedemptionTable;
   orders: OrderTable;
+  invoice_number_counters: InvoiceNumberCounterTable;
   order_items: OrderItemTable;
+  order_item_courses: OrderItemCourseTable;
   payments: PaymentTable;
   payment_attempts: PaymentAttemptTable;
   refunds: RefundTable;
@@ -216,11 +242,19 @@ export interface Database {
   quiz_attempts: QuizAttemptTable;
   quiz_attempt_answers: QuizAttemptAnswerTable;
   learning_daily_activity: LearningDailyActivityTable;
+  learning_daily_course_activity: LearningDailyCourseActivityTable;
   learning_progress: LearningProgressTable;
   user_learning_settings: UserLearningSettingsTable;
+  home_page_settings: HomePageSettingsTable;
+  platform_settings: PlatformSettingsTable;
+  quotes: QuoteTable;
+  wishlist_items: WishlistItemTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;
+
+  // Subtitle tracks for lesson videos
+  lesson_subtitles: LessonSubtitleTable;
 }
 
 export type PurchaseTable = OrderTable;

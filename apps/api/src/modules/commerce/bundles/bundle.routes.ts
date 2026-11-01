@@ -63,7 +63,7 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/bundles/manage",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("bundle.manage"),
       schema: {
         operationId: "listAllBundles",
         tags: ["Commerce - Bundles"],
@@ -87,7 +87,7 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/bundles/manage/:bundleId",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("bundle.manage"),
       schema: {
         operationId: "getBundleById",
         tags: ["Commerce - Bundles"],
@@ -110,7 +110,7 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/bundles",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("bundle.manage"),
       schema: {
         operationId: "createBundle",
         tags: ["Commerce - Bundles"],
@@ -137,7 +137,7 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
   app.patch(
     "/bundles/:bundleId",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("bundle.manage"),
       schema: {
         operationId: "updateBundle",
         tags: ["Commerce - Bundles"],
@@ -166,7 +166,7 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
   app.delete(
     "/bundles/:bundleId",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("bundle.manage"),
       schema: {
         operationId: "deleteBundle",
         tags: ["Commerce - Bundles"],

@@ -5,7 +5,13 @@ import { config } from "../config.ts";
 import { logger } from "../lib/logger.ts";
 import { createAuthService } from "../modules/auth/index.ts";
 import { createEnrollmentAudienceService } from "../modules/commerce/index.ts";
+import {
+  createInvoiceService,
+  invoiceStorage,
+} from "../modules/commerce/invoices/invoice.service.ts";
+import { createInvoiceAttachmentResolver } from "../modules/commerce/invoices/invoice-email-attachment.ts";
 import { createNotificationProcessor } from "../modules/notifications/index.ts";
+import { createServices } from "../services/index.ts";
 import { createEmailService } from "@veolms/services/email";
 
 const database = createDatabase(config.DATABASE_URL, {
@@ -27,11 +33,17 @@ const email = createEmailService({
 try {
   const auth = createAuthService({ database });
   const audience = createEnrollmentAudienceService({ database });
+  // The purchase email carries the order's invoice, read from (or stored
+  // to) the bucket the API keeps invoices in.
+  const { storage } = createServices({ config, logger: app.log });
   const processor = createNotificationProcessor({
     database,
     email,
     logger: app.log,
     config,
+    attachments: createInvoiceAttachmentResolver(
+      createInvoiceService({ database, storage: invoiceStorage(storage) }),
+    ),
     handlers: {
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
@@ -39,7 +51,9 @@ try {
     recipients: {
       findRecipient: async (userId) => {
         const user = await auth.findUserByIdForNotification(userId);
-        return user ? { id: user.id, email: user.email } : undefined;
+        return user
+          ? { id: user.id, email: user.email, isDeleted: user.is_deleted }
+          : undefined;
       },
       findRecipients: (userIds) =>
         auth.listNotificationRecipientsByIds(userIds),

@@ -43,7 +43,9 @@ export function LessonAmbientProjection({
   );
 
   const paintFrame = useCallback(() => {
-    const video = getShell()?.querySelector("video");
+    const video = getShell()?.querySelector<HTMLVideoElement>(
+      "video:not([data-player-standby])",
+    );
     if (!enabled || !video || video.readyState < 2) return;
 
     try {
@@ -73,7 +75,9 @@ export function LessonAmbientProjection({
 
   useEffect(() => {
     if (!enabled) return undefined;
-    const video = getShell()?.querySelector("video");
+    const video = getShell()?.querySelector<HTMLVideoElement>(
+      "video:not([data-player-standby])",
+    );
     paintFrame();
     video?.addEventListener("loadeddata", paintFrame);
     video?.addEventListener("seeked", paintFrame);

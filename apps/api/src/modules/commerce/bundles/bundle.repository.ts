@@ -37,34 +37,12 @@ export async function findBundleBySlug(database: Executor, slug: string) {
     .executeTakeFirst();
 }
 
-export async function findPublishedBundleById(
-  database: Executor,
-  bundleId: string,
-) {
-  return await database
-    .selectFrom("course_bundles")
-    .selectAll()
-    .where("id", "=", bundleId)
-    .where("status", "=", "published")
-    .where("deleted_at", "is", null)
-    .executeTakeFirst();
-}
-
 export async function listPublishedBundles(database: Executor) {
   return await database
     .selectFrom("course_bundles")
     .selectAll()
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
-    .orderBy("created_at", "asc")
-    .execute();
-}
-
-export async function listBundleItems(database: Executor, bundleId: string) {
-  return await database
-    .selectFrom("course_bundle_items")
-    .selectAll()
-    .where("bundle_id", "=", bundleId)
     .orderBy("created_at", "asc")
     .execute();
 }

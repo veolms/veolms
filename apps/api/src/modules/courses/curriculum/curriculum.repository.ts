@@ -1,5 +1,5 @@
-import { type Kysely } from "kysely";
-import type { Database } from "@veolms/database";
+import { sql, type Kysely } from "kysely";
+import type { Database, DatabaseExecutor } from "@veolms/database";
 
 // --- Sections ---
 
@@ -168,6 +168,35 @@ export async function updateLesson(
     .execute();
 }
 
+/**
+ * Points a video lesson at `mediaId`, but only while it still holds
+ * `expectedMediaId` (null: no video): a change the author made meanwhile is
+ * never overwritten. Returns whether the lesson was updated.
+ */
+export async function swapLessonMediaIfUnchanged(
+  database: Kysely<Database>,
+  lessonId: string,
+  courseId: string,
+  expectedMediaId: string | null,
+  mediaId: string,
+  now: Date,
+): Promise<boolean> {
+  const result = await database
+    .updateTable("course_lessons")
+    .set({ content_media_id: mediaId, updated_at: now })
+    .where("id", "=", lessonId)
+    .where("course_id", "=", courseId)
+    .where("content_type", "=", "video")
+    .where("deleted_at", "is", null)
+    .where((eb) =>
+      expectedMediaId === null
+        ? eb("content_media_id", "is", null)
+        : eb("content_media_id", "=", expectedMediaId),
+    )
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows) > 0;
+}
+
 export async function softDeleteLesson(
   database: Kysely<Database>,
   lessonId: string,
@@ -217,6 +246,70 @@ export async function findLessonsByCourseId(
     .where("deleted_at", "is", null)
     .orderBy("position", "asc")
     .execute();
+}
+
+/**
+ * A course's live lessons in the order learners meet them (section position,
+ * then lesson position, then id as a stable tie-break), with just what a
+ * lesson list shows. Lessons of deleted sections are left out.
+ */
+export async function listOrderedLessonsByCourseId(
+  database: DatabaseExecutor,
+  courseId: string,
+) {
+  return await database
+    .selectFrom("course_lessons")
+    .innerJoin(
+      "course_sections",
+      "course_sections.id",
+      "course_lessons.section_id",
+    )
+    .select([
+      "course_lessons.id",
+      "course_lessons.title",
+      "course_lessons.content_type",
+      "course_lessons.is_published",
+      "course_sections.title as section_title",
+    ])
+    .where("course_lessons.course_id", "=", courseId)
+    .where("course_lessons.deleted_at", "is", null)
+    .where("course_sections.deleted_at", "is", null)
+    .orderBy("course_sections.position", "asc")
+    .orderBy("course_lessons.position", "asc")
+    .orderBy("course_lessons.id", "asc")
+    .execute();
+}
+
+/**
+ * One live lesson's description, whether the lesson is published, and
+ * whether it is a preview. A lesson whose section has been deleted is not
+ * found, as it is in no list.
+ */
+export async function findLiveLessonDescription(
+  database: DatabaseExecutor,
+  lessonId: string,
+  courseId: string,
+) {
+  return await database
+    .selectFrom("course_lessons")
+    .innerJoin(
+      "course_sections",
+      "course_sections.id",
+      "course_lessons.section_id",
+    )
+    .select([
+      "course_lessons.id",
+      "course_lessons.description",
+      "course_lessons.is_published",
+      "course_lessons.is_preview",
+      "course_lessons.content_type",
+    ])
+    .where("course_lessons.id", "=", lessonId)
+    .where("course_lessons.course_id", "=", courseId)
+    .where("course_lessons.deleted_at", "is", null)
+    .where("course_sections.course_id", "=", courseId)
+    .where("course_sections.deleted_at", "is", null)
+    .executeTakeFirst();
 }
 
 export async function findLessonsBySection(
@@ -358,18 +451,66 @@ export async function findResourceByLessonId(
     .executeTakeFirst();
 }
 
-export async function listResourcesForLessons(
+/**
+ * Which of the given ids appear anywhere in course, lesson or lesson-resource
+ * text. Used before removing stored files, to be sure no description links
+ * to one. One pass over the text for the whole set of ids; `ids` must be
+ * lower-case UUIDs.
+ */
+export async function findIdsMentionedInCourseContent(
   database: Kysely<Database>,
-  lessonIds: string[],
+  ids: readonly string[],
+): Promise<string[]> {
+  if (ids.length === 0) return [];
+
+  const result = await sql<{ id: string }>`
+    select distinct lower(found[1]) as id
+    from (
+      select description as body from course_lessons
+      union all
+      select description from lesson_resources
+      union all
+      select description from courses
+      union all
+      select short_description from courses
+    ) as texts
+    cross join lateral regexp_matches(
+      texts.body,
+      '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})',
+      'g'
+    ) as found
+    where lower(found[1]) = any(${[...ids]}::text[])
+  `.execute(database);
+
+  return result.rows.map((row) => row.id);
+}
+
+/**
+ * Every live resource of a course's live lessons, in display order. Reading
+ * by course lets a caller fetch resources alongside the lessons instead of
+ * waiting for the lesson ids first.
+ */
+
+export async function listResourcesByCourseId(
+  database: Kysely<Database>,
+  courseId: string,
 ) {
-  if (lessonIds.length === 0) {
-    return [];
-  }
   return await database
     .selectFrom("lesson_resources")
-    .selectAll()
-    .where("lesson_id", "in", lessonIds)
-    .where("deleted_at", "is", null)
-    .orderBy("position", "asc")
+    .innerJoin(
+      "course_lessons",
+      "course_lessons.id",
+      "lesson_resources.lesson_id",
+    )
+    .select([
+      "lesson_resources.id",
+      "lesson_resources.lesson_id",
+      "lesson_resources.media_asset_id",
+      "lesson_resources.title",
+    ])
+    .where("course_lessons.course_id", "=", courseId)
+    .where("course_lessons.deleted_at", "is", null)
+    .where("lesson_resources.deleted_at", "is", null)
+    .orderBy("lesson_resources.position", "asc")
     .execute();
 }

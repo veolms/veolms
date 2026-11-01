@@ -1,8 +1,24 @@
 import type {
   MediaImageVariantManifest,
   MediaUploadCompleteResponse,
+  MultipartUploadAbortResponse,
+  MultipartUploadPartUrlsResponse,
+  MultipartUploadStartRequest,
+  MultipartUploadStartResponse,
+  MultipartUploadStatusResponse,
+  VideoJobProgressResponse,
   PresignMediaRequest,
   PresignMediaResponse,
+  VideoTranscodeCancelResponse,
+  VideoTranscodeRetryResponse,
+  YoutubeImportAvailabilityResponse,
+  YoutubeImportControlResponse,
+  YoutubeImportLessonQuery,
+  YoutubeImportLessonResponse,
+  YoutubeImportPreviewRequest,
+  YoutubeImportPreviewResponse,
+  YoutubeImportRequest,
+  YoutubeImportResponse,
 } from "@veolms/contracts";
 import { api, getApiBaseUrl } from "../../lib/api-client";
 
@@ -33,10 +49,6 @@ export const mediaService = {
     return `${getApiBaseUrl().replace(/\/$/, "")}/media/${mediaAssetId}/variants/${width}`;
   },
 
-  getMediaAssetUrl(mediaAssetId: string): string {
-    return `${getApiBaseUrl().replace(/\/$/, "")}/media/${mediaAssetId}`;
-  },
-
   /**
    * Public CDN URL of the frame the transcoder captures for a video asset.
    * The key mirrors the API's `thumbnailDestination`; the file exists once
@@ -56,16 +68,51 @@ export const mediaService = {
     return requestPresignedMediaUpload(payload);
   },
 
-  presignVideoUpload(
-    payload: Omit<PresignMediaRequest, "type" | "visibility"> & {
-      visibility?: PresignMediaRequest["visibility"];
+  startMultipartVideoUpload(
+    payload: Omit<MultipartUploadStartRequest, "type" | "visibility"> & {
+      visibility?: MultipartUploadStartRequest["visibility"];
     },
-  ): Promise<PresignMediaResponse> {
-    return requestPresignedMediaUpload({
+  ): Promise<MultipartUploadStartResponse> {
+    return api.post<MultipartUploadStartResponse>("/media/multipart/start", {
       ...payload,
       type: "video",
       visibility: payload.visibility ?? "protected",
     });
+  },
+
+  getMultipartUploadStatus(
+    mediaAssetId: string,
+  ): Promise<MultipartUploadStatusResponse> {
+    return api.get<MultipartUploadStatusResponse>(
+      `/media/${mediaAssetId}/multipart`,
+    );
+  },
+
+  presignMultipartUploadParts(
+    mediaAssetId: string,
+    partNumbers: number[],
+  ): Promise<MultipartUploadPartUrlsResponse> {
+    return api.post<MultipartUploadPartUrlsResponse>(
+      `/media/${mediaAssetId}/multipart/parts`,
+      { partNumbers },
+    );
+  },
+
+  completeMultipartUpload(
+    mediaAssetId: string,
+  ): Promise<MediaUploadCompleteResponse> {
+    return api.post<MediaUploadCompleteResponse>(
+      `/media/${mediaAssetId}/multipart/complete`,
+      {},
+    );
+  },
+
+  abortMultipartUpload(
+    mediaAssetId: string,
+  ): Promise<MultipartUploadAbortResponse> {
+    return api.post<MultipartUploadAbortResponse>(
+      `/media/${mediaAssetId}/multipart/abort`,
+    );
   },
 
   uploadFileToPresignedUrl(
@@ -163,6 +210,10 @@ export const mediaService = {
     );
   },
 
+  getVideoJobProgress(mediaAssetId: string): Promise<VideoJobProgressResponse> {
+    return api.get<VideoJobProgressResponse>(`/media/${mediaAssetId}/progress`);
+  },
+
   createVideoJobProgressEventSource(mediaAssetId: string): EventSource {
     if (
       typeof window === "undefined" ||
@@ -179,16 +230,66 @@ export const mediaService = {
     );
   },
 
-  retryTranscode(
-    mediaAssetId: string,
-  ): Promise<{ should202: boolean; jobId: string }> {
-    return api.post(`/media/${mediaAssetId}/transcode/retry`);
+  retryTranscode(mediaAssetId: string): Promise<VideoTranscodeRetryResponse> {
+    return api.post<VideoTranscodeRetryResponse>(
+      `/media/${mediaAssetId}/transcode/retry`,
+    );
   },
 
-  cancelTranscode(
+  cancelTranscode(mediaAssetId: string): Promise<VideoTranscodeCancelResponse> {
+    return api.post<VideoTranscodeCancelResponse>(
+      `/media/${mediaAssetId}/transcode/cancel`,
+    );
+  },
+
+  getYoutubeImportAvailability(): Promise<YoutubeImportAvailabilityResponse> {
+    return api.get<YoutubeImportAvailabilityResponse>(
+      "/media/youtube-import/availability",
+    );
+  },
+
+  previewYoutubeImport(
+    payload: YoutubeImportPreviewRequest,
+  ): Promise<YoutubeImportPreviewResponse> {
+    return api.post<YoutubeImportPreviewResponse>(
+      "/media/youtube-import/preview",
+      payload,
+    );
+  },
+
+  /** Queues the import; follow it with the usual video progress stream. */
+  startYoutubeImport(
+    payload: YoutubeImportRequest,
+  ): Promise<YoutubeImportResponse> {
+    return api.post<YoutubeImportResponse>("/media/youtube-import", payload);
+  },
+
+  /** The lesson's running or retryable import, for the editor to show again. */
+  getLessonYoutubeImport(
+    query: YoutubeImportLessonQuery,
+  ): Promise<YoutubeImportLessonResponse> {
+    return api.get<YoutubeImportLessonResponse>(
+      "/media/youtube-import/lesson",
+      {
+        params: query,
+      },
+    );
+  },
+
+  retryYoutubeImport(
     mediaAssetId: string,
-  ): Promise<{ cancelled: true; jobId: string }> {
-    return api.post(`/media/${mediaAssetId}/transcode/cancel`);
+  ): Promise<YoutubeImportControlResponse> {
+    return api.post<YoutubeImportControlResponse>(
+      `/media/${mediaAssetId}/youtube-import/retry`,
+    );
+  },
+
+  cancelYoutubeImport(
+    mediaAssetId: string,
+  ): Promise<YoutubeImportControlResponse> {
+    return api.post<YoutubeImportControlResponse>(
+      `/media/${mediaAssetId}/youtube-import/cancel`,
+    );
   },
 };
 

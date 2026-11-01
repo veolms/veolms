@@ -1,12 +1,12 @@
-import { useEffect } from "react";
-import type { Coupon } from "@veolms/contracts";
+import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
+import type { CouponListItem } from "@veolms/contracts";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
-import { getUserRoles, isStaffRole } from "../shell/workspaceRole";
+import { useCapabilities } from "../services/authorization";
 import type { NavigateTo } from "../routing/navigation";
 import { useUpdateCoupon } from "../services/coupons";
 import { getApiError } from "../lib/api-error";
@@ -27,8 +27,10 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
   const storeUser = useAuthStore((s) => s.user);
   const isAuthReady = Boolean(storeUser) || authUserFetched;
   const user = authUserFetched ? authUser : storeUser;
-  const userRoles = getUserRoles(user);
-  const isAuthorized = Boolean(user && isStaffRole(userRoles));
+  const { can } = useCapabilities({ enabled: Boolean(user) });
+  const isAuthorized = Boolean(user && can("coupon.read"));
+  // Reading coupons and changing them are separate permissions.
+  const managesCoupons = can("coupon.manage");
 
   const {
     coupons,
@@ -53,37 +55,17 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
 
   const updateMutation = useUpdateCoupon();
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
-      const isInput =
-        activeTag === "input" ||
-        activeTag === "textarea" ||
-        (document.activeElement as HTMLElement)?.isContentEditable;
-
-      if (
-        !isInput &&
-        (event.key === "/" ||
-          ((event.metaKey || event.ctrlKey) && event.key === "k"))
-      ) {
-        event.preventDefault();
-        document.getElementById("coupons-search-input")?.focus();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  usePageSearchShortcut("coupons-search-input");
 
   const handleOpenCreate = () => {
     onNavigatePage?.("/coupons/create");
   };
 
-  const handleOpenEdit = (coupon: Coupon) => {
+  const handleOpenEdit = (coupon: CouponListItem) => {
     onNavigatePage?.(`/coupons/${coupon.id}`);
   };
 
-  const handleToggleStatus = async (coupon: Coupon) => {
+  const handleToggleStatus = async (coupon: CouponListItem) => {
     try {
       await updateMutation.mutateAsync({
         id: coupon.id,
@@ -133,12 +115,14 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
             from one library.
           </p>
         </div>
-        <div className="shrink-0 pt-2 pb-0.5 sm:py-0">
-          <Button onClick={handleOpenCreate}>
-            <Plus size={16} weight="bold" />
-            Create coupon
-          </Button>
-        </div>
+        {managesCoupons ? (
+          <div className="shrink-0 pt-2 pb-0.5 sm:py-0">
+            <Button onClick={handleOpenCreate}>
+              <Plus size={16} weight="bold" />
+              Create coupon
+            </Button>
+          </div>
+        ) : null}
       </header>
 
       <CouponSummaryCards
@@ -154,13 +138,20 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
               Coupon library
             </h2>
             <p className="mt-0.5 text-xs text-(--muted)">
-              Search, filter, and open any coupon to edit it.
+              {managesCoupons
+                ? "Search, filter, and open any coupon to edit it."
+                : "Search and filter the academy's coupons."}
             </p>
           </div>
-          <Button className="hidden sm:inline-flex" onClick={handleOpenCreate}>
-            <Plus size={16} weight="bold" />
-            New coupon
-          </Button>
+          {managesCoupons ? (
+            <Button
+              className="hidden sm:inline-flex"
+              onClick={handleOpenCreate}
+            >
+              <Plus size={16} weight="bold" />
+              New coupon
+            </Button>
+          ) : null}
         </div>
 
         <CouponFiltersBar
@@ -197,9 +188,14 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
             hasNextPage={hasNextPage}
             isFetchingNextPage={isFetchingNextPage}
             fetchNextPage={fetchNextPage}
-            onEditCoupon={handleOpenEdit}
-            onToggleStatus={handleToggleStatus}
-            onCreateNew={handleOpenCreate}
+            autoLoadMore={
+              activeTab === "all" &&
+              discountTypeFilter === "all" &&
+              !searchQuery.trim()
+            }
+            onEditCoupon={managesCoupons ? handleOpenEdit : undefined}
+            onToggleStatus={managesCoupons ? handleToggleStatus : undefined}
+            onCreateNew={managesCoupons ? handleOpenCreate : undefined}
             setNotice={setNotice}
           />
         )}

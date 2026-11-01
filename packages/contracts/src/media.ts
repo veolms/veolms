@@ -151,28 +151,30 @@ export const LAMBDA_ACTIONS = ["tick", "claim", "monitor", "queue"] as const;
 export type LambdaAction = (typeof LAMBDA_ACTIONS)[number];
 export const lambdaActionSchema = z.enum(LAMBDA_ACTIONS);
 
-export const mediaAssetSchema = z.object({
-  id: z.uuid(),
-  ownerId: z.uuid(),
-  type: mediaAssetTypeSchema,
-  storageProvider: z.string(),
-  storageKey: z.string(),
-  originalFilename: z.string(),
-  mimeType: z.string(),
-  sizeBytes: z.coerce.number().int().nonnegative(),
-  width: z.number().int().positive().nullable().optional(),
-  height: z.number().int().positive().nullable().optional(),
-  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-  durationSeconds: z.number().int().positive().nullable().optional(),
-  status: mediaAssetStatusSchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
+/**
+ * Whether a file may be stored where anyone can open it by address. Public
+ * files are served to every visitor under the platform's own media domain
+ * with the content type given here, so only passive media belongs there: a
+ * picture or a video. A page, a script, or an SVG (which can carry script)
+ * would run as that domain's own content.
+ */
+function isPublishableMedia(
+  type: z.infer<typeof mediaAssetTypeSchema>,
+  contentType: string,
+): boolean {
+  const mimeType = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+
+  if (type === "image") {
+    return /^image\/[a-z0-9.+-]+$/u.test(mimeType) && !mimeType.includes("svg");
+  }
+  if (type === "video") return /^video\/[a-z0-9.+-]+$/u.test(mimeType);
+  return false;
+}
 
 export const presignMediaRequestSchema = z
   .object({
-    filename: z.string().min(1),
-    contentType: z.string().min(1),
+    filename: z.string().min(1).max(255),
+    contentType: z.string().min(1).max(255),
     fileSize: z.number().int().positive(),
     type: mediaAssetTypeSchema,
     visibility: z.enum(["public", "protected"]).default("protected"),
@@ -180,24 +182,87 @@ export const presignMediaRequestSchema = z
   .refine((data) => data.fileSize <= MEDIA_MAX_SIZES[data.type], {
     message: "File size exceeds maximum allowed for this media type",
     path: ["fileSize"],
-  });
+  })
+  .refine(
+    (data) =>
+      data.visibility !== "public" ||
+      isPublishableMedia(data.type, data.contentType),
+    {
+      message: "Only pictures and videos can be stored publicly",
+      path: ["contentType"],
+    },
+  );
 
 export const presignMediaResponseSchema = z.object({
   uploadUrl: z.url(),
   mediaAssetId: z.uuid(),
 });
 
-export const mediaUploadCompleteResponseSchema = z.object({
-  status: mediaAssetStatusSchema,
-  deliveryUrl: z.string().min(1).optional(),
-  deliveryUrlExpiresAt: z.number().int().positive().optional(),
-  thumbnailUrl: z.string().min(1).optional(),
+/**
+ * Resumable video uploads are stored with S3/R2 multipart uploads. The part
+ * size is chosen by the API so a client can slice the file identically on
+ * every attempt, including after a reload.
+ */
+export const multipartUploadStartRequestSchema =
+  presignMediaRequestSchema.refine((data) => data.type === "video", {
+    message: "Multipart uploads are only available for videos",
+    path: ["type"],
+  });
+
+export const multipartUploadStartResponseSchema = z.strictObject({
+  mediaAssetId: z.uuid(),
+  partSize: z.number().int().positive(),
+  totalParts: z.number().int().positive(),
 });
 
-export const mediaDeliveryResponseSchema = z.object({
+export const multipartUploadPartUrlsRequestSchema = z.strictObject({
+  partNumbers: z
+    .array(z.number().int().min(1).max(10_000))
+    .min(1)
+    .max(200)
+    .refine((numbers) => new Set(numbers).size === numbers.length, {
+      message: "Part numbers must be unique",
+    }),
+});
+
+export const multipartUploadPartUrlSchema = z.strictObject({
+  partNumber: z.number().int().positive(),
+  url: z.url(),
+});
+
+export const multipartUploadPartUrlsResponseSchema = z.strictObject({
+  parts: z.array(multipartUploadPartUrlSchema),
+});
+
+export const multipartUploadedPartSchema = z.strictObject({
+  partNumber: z.number().int().positive(),
+  etag: z.string().min(1),
+  size: z.number().int().nonnegative(),
+});
+
+export const multipartUploadStatusResponseSchema = z.strictObject({
+  partSize: z.number().int().positive(),
+  totalParts: z.number().int().positive(),
+  uploadedParts: z.array(multipartUploadedPartSchema),
+});
+
+export const multipartUploadCompleteRequestSchema = z.strictObject({});
+
+export const multipartUploadAbortResponseSchema = z.strictObject({
+  aborted: z.literal(true),
+});
+
+export const mediaUploadCompleteResponseSchema = z.strictObject({
+  status: mediaAssetStatusSchema,
+});
+
+/**
+ * Where a client can fetch a media asset it may see. `expiresAt` (epoch
+ * seconds) is present when the URL carries a short-lived access token.
+ */
+export const mediaDeliveryResponseSchema = z.strictObject({
   url: z.string().min(1),
   expiresAt: z.number().int().positive().optional(),
-  thumbnailUrl: z.string().min(1).optional(),
 });
 
 export const mediaImageVariantManifestSchema = z.object({
@@ -215,6 +280,19 @@ export const videoJobProgressResponseSchema = z.object({
   status: videoJobStatusSchema,
   progressPercent: z.number().int().min(0).max(100),
   error: z.string().nullable().optional(),
+  /** What is happening now, in words (YouTube imports report their stage). */
+  stage: z.string().nullable().optional(),
+  /** Set for a video being imported from YouTube rather than transcoded. */
+  source: z.enum(["upload", "youtube"]).optional(),
+});
+
+/** Whether a transcode was (re)queued. Internal job ids stay server-side. */
+export const videoTranscodeRetryResponseSchema = z.strictObject({
+  queued: z.boolean(),
+});
+
+export const videoTranscodeCancelResponseSchema = z.strictObject({
+  cancelled: z.literal(true),
 });
 
 export const videoMetadataSchema = z.looseObject({
@@ -285,20 +363,39 @@ export const lambdaResponseSchema = z.object({
 
 export type MediaAssetType = z.infer<typeof mediaAssetTypeSchema>;
 export type MediaAssetStatus = z.infer<typeof mediaAssetStatusSchema>;
-export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 export type PresignMediaRequest = z.infer<typeof presignMediaRequestSchema>;
 /**
  * Where a learner can download one lesson resource. The URL is short-lived
  * and answers with an attachment disposition, so following it saves the file
- * as `fileName` rather than opening it.
+ * under its own name rather than opening it.
  */
-export const lessonResourceDownloadResponseSchema = z.object({
+export const lessonResourceDownloadResponseSchema = z.strictObject({
   url: z.string().min(1),
-  fileName: z.string().min(1),
-  expiresAt: z.number().int().positive(),
 });
 
 export type PresignMediaResponse = z.infer<typeof presignMediaResponseSchema>;
+export type MultipartUploadStartRequest = z.infer<
+  typeof multipartUploadStartRequestSchema
+>;
+export type MultipartUploadStartResponse = z.infer<
+  typeof multipartUploadStartResponseSchema
+>;
+export type MultipartUploadPartUrlsRequest = z.infer<
+  typeof multipartUploadPartUrlsRequestSchema
+>;
+export type MultipartUploadPartUrl = z.infer<
+  typeof multipartUploadPartUrlSchema
+>;
+export type MultipartUploadPartUrlsResponse = z.infer<
+  typeof multipartUploadPartUrlsResponseSchema
+>;
+export type MultipartUploadedPart = z.infer<typeof multipartUploadedPartSchema>;
+export type MultipartUploadStatusResponse = z.infer<
+  typeof multipartUploadStatusResponseSchema
+>;
+export type MultipartUploadAbortResponse = z.infer<
+  typeof multipartUploadAbortResponseSchema
+>;
 export type MediaUploadCompleteResponse = z.infer<
   typeof mediaUploadCompleteResponseSchema
 >;
@@ -312,12 +409,17 @@ export type MediaImageVariantManifest = z.infer<
 export type VideoJobProgressResponse = z.infer<
   typeof videoJobProgressResponseSchema
 >;
+export type VideoTranscodeRetryResponse = z.infer<
+  typeof videoTranscodeRetryResponseSchema
+>;
+export type VideoTranscodeCancelResponse = z.infer<
+  typeof videoTranscodeCancelResponseSchema
+>;
 export type VideoMetadata = z.infer<typeof videoMetadataSchema>;
 export type VideoJobEvent = z.infer<typeof videoJobEventSchema>;
 export type LambdaResponse = z.infer<typeof lambdaResponseSchema>;
 
 // Register schemas for OpenAPI documentation
-z.globalRegistry.add(mediaAssetSchema, { id: "MediaAsset" });
 z.globalRegistry.add(presignMediaResponseSchema, {
   id: "PresignMediaResponse",
 });

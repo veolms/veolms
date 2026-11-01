@@ -5,6 +5,8 @@ import type {
 } from "@veolms/contracts";
 import type { FastifyRequest } from "fastify";
 
+import { isLearnerViewRequest } from "../../lib/learner-view.ts";
+
 import type { LearningProgressService } from "./learning-progress.service.ts";
 
 export function createLearningProgressController({
@@ -16,7 +18,11 @@ export function createLearningProgressController({
     request: FastifyRequest<{ Params: LearningProgressCourseParams }>,
   ) {
     return await service.getProgress(
-      { id: request.user!.id, roles: request.user!.roles },
+      {
+        id: request.user!.id,
+        roles: request.user!.roles,
+        learnerView: isLearnerViewRequest(request),
+      },
       request.params.courseKey,
     );
   }
@@ -25,7 +31,11 @@ export function createLearningProgressController({
     request: FastifyRequest<{ Params: LearningProgressCourseParams }>,
   ) {
     return await service.getResumeContext(
-      { id: request.user!.id, roles: request.user!.roles },
+      {
+        id: request.user!.id,
+        roles: request.user!.roles,
+        learnerView: isLearnerViewRequest(request),
+      },
       request.params.courseKey,
     );
   }
@@ -37,7 +47,11 @@ export function createLearningProgressController({
     }>,
   ) {
     return await service.syncProgress(
-      { id: request.user!.id, roles: request.user!.roles },
+      {
+        id: request.user!.id,
+        roles: request.user!.roles,
+        learnerView: isLearnerViewRequest(request),
+      },
       request.params.courseKey,
       request.body,
     );

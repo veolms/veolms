@@ -1,12 +1,20 @@
+import { coursePublicCurriculumSchema } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
+import { staticCurriculumUrl } from "../../courses/staticCurriculum";
+import type { HeroVideoPlayback, VideoPlaybackToken } from "@veolms/contracts";
 import type {
   Category,
-  Course,
+  CourseAccessListResponse,
+  CourseAccessResponse,
   CourseAccessRule,
+  CoursePublicCurriculum,
+  CourseBasicsResponse,
+  CourseCreatedResponse,
   CourseDeleteResponse,
   CourseEditorDataResponse,
   CourseOverviewResponse,
-  CourseStaticPageRefreshStatus,
+  CourseStaticPageRefreshStatusResponse,
+  CourseStatusResponse,
   CourseListResponse,
   CourseListQuery,
   CourseOptionsResponse,
@@ -14,6 +22,7 @@ import type {
   CourseSettings,
   CourseSummary,
   CourseValidationResponse,
+  LessonDescriptionResponse,
   CourseIncludeItem,
   CourseIncludesListResponse,
   CreateCategoryRequest,
@@ -24,6 +33,7 @@ import type {
   CreateCourseSectionRequest,
   DeletedCoursesListResponse,
   DeletedCoursesQuery,
+  LinkedCoursesListResponse,
   MyCoursesListResponse,
   PublicCourse,
   LessonResource,
@@ -41,6 +51,11 @@ import type {
   UpdateCourseSettingsRequest,
 } from "@veolms/contracts";
 
+/** The most courses the API returns in one catalogue request. */
+const COURSE_LIST_PAGE_SIZE = 60;
+/** Far more pages than any catalogue has; only guards against a cursor that never ends. */
+const MAX_COURSE_LIST_PAGES = 50;
+
 export const coursesService = {
   list: (params?: CourseListQuery): Promise<CourseListResponse> => {
     return api.get<CourseListResponse>("/courses", {
@@ -49,6 +64,29 @@ export const coursesService = {
       // indefinitely. The local API responds in well under a second.
       timeout: 5_000,
     });
+  },
+
+  /**
+   * The whole published catalogue. One request returns at most 60 courses
+   * and a cursor for the rest. Screens that filter the catalogue in the
+   * browser used to read that first page only, so in an academy with more
+   * than 60 courses the newer ones never appeared in them.
+   */
+  listAll: async (): Promise<{ courses: CourseSummary[] }> => {
+    const courses: CourseSummary[] = [];
+    const followedCursors = new Set<string>();
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_COURSE_LIST_PAGES; page += 1) {
+      const response = await coursesService.list({
+        limit: COURSE_LIST_PAGE_SIZE,
+        ...(cursor ? { cursor } : {}),
+      });
+      courses.push(...response.courses);
+      cursor = response.nextCursor;
+      if (!cursor || followedCursors.has(cursor)) break;
+      followedCursors.add(cursor);
+    }
+    return { courses };
   },
 
   listOptions: (): Promise<CourseOptionsResponse> =>
@@ -64,17 +102,62 @@ export const coursesService = {
     );
   },
 
+  /** What the viewer may do with one course: never cached anywhere. */
+  getAccess: (idOrSlug: string): Promise<CourseAccessResponse> =>
+    api.get<CourseAccessResponse>(
+      `/courses/${encodeURIComponent(idOrSlug)}/access`,
+    ),
+  /** The same for every published course, for the catalogue's cards. */
+  listAccess: (): Promise<CourseAccessListResponse> =>
+    api.get<CourseAccessListResponse>("/courses/access"),
+  /** A published course as every visitor sees it, from the API. */
+  getPublicCurriculum: (idOrSlug: string): Promise<CoursePublicCurriculum> =>
+    api.get<CoursePublicCurriculum>(
+      `/courses/${encodeURIComponent(idOrSlug)}/curriculum`,
+    ),
+  /**
+   * The same, as the site was built with it: a file served with the site's
+   * own pages, not an API call. Null when this build has no such file (a
+   * course published since, or the dev server), and for a copy of another
+   * version than the one asked for.
+   */
+  /**
+   * `version` null: whichever copy the site was built with. The request is
+   * the one a lesson page's head preloads (`as="fetch"`, crossorigin
+   * anonymous: same-origin credentials), so the two are one download.
+   */
+  getStaticCurriculum: async (
+    courseSlug: string,
+    version: string | null,
+  ): Promise<CoursePublicCurriculum | null> => {
+    const response = await fetch(staticCurriculumUrl(courseSlug, version));
+    if (!response.ok) return null;
+    const parsed = coursePublicCurriculumSchema.safeParse(
+      await response.json().catch(() => null),
+    );
+    if (!parsed.success) return null;
+    if (version !== null && parsed.data.version !== version) return null;
+    return parsed.data;
+  },
+  getLessonDescription: (
+    courseId: string,
+    lessonId: string,
+  ): Promise<LessonDescriptionResponse> =>
+    api.get<LessonDescriptionResponse>(
+      `/courses/${courseId}/lessons/${lessonId}/description`,
+    ),
+
   getStaticPageRefreshStatus: (
     courseId: string,
-  ): Promise<CourseStaticPageRefreshStatus> =>
-    api.get<CourseStaticPageRefreshStatus>(
+  ): Promise<CourseStaticPageRefreshStatusResponse> =>
+    api.get<CourseStaticPageRefreshStatusResponse>(
       `/courses/${courseId}/static-page-refresh`,
     ),
 
   retryStaticPageRefresh: (
     courseId: string,
-  ): Promise<CourseStaticPageRefreshStatus> =>
-    api.post<CourseStaticPageRefreshStatus>(
+  ): Promise<CourseStaticPageRefreshStatusResponse> =>
+    api.post<CourseStaticPageRefreshStatusResponse>(
       `/courses/${courseId}/static-page-refresh/retry`,
     ),
 
@@ -104,23 +187,40 @@ export const coursesService = {
     return api.get<CourseValidationResponse>(`/courses/${courseId}/validation`);
   },
 
-  publishCourse: (courseId: string): Promise<Course> => {
-    return api.post<Course>(`/courses/${courseId}/publish`);
+  publishCourse: (courseId: string): Promise<CourseStatusResponse> => {
+    return api.post<CourseStatusResponse>(`/courses/${courseId}/publish`);
   },
 
-  unpublishCourse: (courseId: string): Promise<Course> => {
-    return api.post<Course>(`/courses/${courseId}/unpublish`);
+  unpublishCourse: (courseId: string): Promise<CourseStatusResponse> => {
+    return api.post<CourseStatusResponse>(`/courses/${courseId}/unpublish`);
   },
 
-  createCourse: (payload: CreateCourseRequest): Promise<Course> => {
-    return api.post<Course>("/courses", payload);
+  createCourse: (
+    payload: CreateCourseRequest,
+  ): Promise<CourseCreatedResponse> => {
+    return api.post<CourseCreatedResponse>("/courses", payload);
   },
 
   updateCourseBasics: (
     id: string,
     payload: UpdateCourseBasicsRequest,
-  ): Promise<Course> => {
-    return api.patch<Course>(`/courses/${id}/basics`, payload);
+  ): Promise<CourseBasicsResponse> => {
+    return api.patch<CourseBasicsResponse>(`/courses/${id}/basics`, payload);
+  },
+
+  /** The trailer's stream, for the course editor's preview and the overview. */
+  getCourseTrailerPlayback: (idOrSlug: string): Promise<HeroVideoPlayback> => {
+    return api.get<HeroVideoPlayback>(
+      `/courses/${encodeURIComponent(idOrSlug)}/trailer/playback`,
+    );
+  },
+
+  getCourseTrailerPlaybackToken: (
+    idOrSlug: string,
+  ): Promise<VideoPlaybackToken> => {
+    return api.get<VideoPlaybackToken>(
+      `/courses/${encodeURIComponent(idOrSlug)}/trailer/playback-token`,
+    );
   },
 
   deleteCourse: (id: string): Promise<CourseDeleteResponse> => {
@@ -142,18 +242,11 @@ export const coursesService = {
   createSection: (
     courseId: string,
     payload: CreateCourseSectionRequest,
-  ): Promise<{
-    id: string;
-    courseId: string;
-    title: string;
-    position: number;
-  }> => {
-    return api.post<{
-      id: string;
-      courseId: string;
-      title: string;
-      position: number;
-    }>(`/courses/${courseId}/sections`, payload);
+  ): Promise<{ id: string; title: string }> => {
+    return api.post<{ id: string; title: string }>(
+      `/courses/${courseId}/sections`,
+      payload,
+    );
   },
 
   updateSection: (
@@ -190,8 +283,8 @@ export const coursesService = {
     courseId: string,
     sectionId: string,
     payload: CreateCourseLessonRequest,
-  ): Promise<{ id: string; position: number }> => {
-    return api.post<{ id: string; position: number }>(
+  ): Promise<{ id: string }> => {
+    return api.post<{ id: string }>(
       `/courses/${courseId}/sections/${sectionId}/lessons`,
       payload,
     );
@@ -201,16 +294,11 @@ export const coursesService = {
     courseId: string,
     lessonId: string,
     payload: UpdateCourseLessonRequest,
-  ): Promise<{
-    success: boolean;
-    videoJobId?: string;
-    processingStatus?: string;
-  }> => {
-    return api.patch<{
-      success: boolean;
-      videoJobId?: string;
-      processingStatus?: string;
-    }>(`/courses/${courseId}/lessons/${lessonId}`, payload);
+  ): Promise<{ success: boolean }> => {
+    return api.patch<{ success: boolean }>(
+      `/courses/${courseId}/lessons/${lessonId}`,
+      payload,
+    );
   },
 
   deleteLesson: (
@@ -332,6 +420,31 @@ export const coursesService = {
     return api.post<{ success: boolean }>(
       `/courses/${courseId}/includes/reorder`,
       payload,
+    );
+  },
+
+  listLinkedCourses: (courseId: string): Promise<LinkedCoursesListResponse> => {
+    return api.get<LinkedCoursesListResponse>(
+      `/courses/${courseId}/linked-courses`,
+    );
+  },
+
+  addLinkedCourse: (
+    courseId: string,
+    linkedCourseId: string,
+  ): Promise<LinkedCoursesListResponse> => {
+    return api.post<LinkedCoursesListResponse>(
+      `/courses/${courseId}/linked-courses`,
+      { linkedCourseId },
+    );
+  },
+
+  removeLinkedCourse: (
+    courseId: string,
+    linkedCourseId: string,
+  ): Promise<LinkedCoursesListResponse> => {
+    return api.delete<LinkedCoursesListResponse>(
+      `/courses/${courseId}/linked-courses/${linkedCourseId}`,
     );
   },
 };

@@ -12,7 +12,7 @@ const routes = [
   {
     name: "Home",
     path: "/",
-    ready: ".home-resume-card",
+    ready: "[data-learner-home-hero]",
     interaction: ".mobile-bottom-nav button:last-child",
   },
   {

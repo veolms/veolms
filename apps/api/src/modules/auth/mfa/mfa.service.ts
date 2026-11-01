@@ -18,12 +18,17 @@ import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
 import {
   BACKUP_CODE_COUNT,
+  BACKUP_CODE_LENGTH,
   BACKUP_CODE_MAX,
   BACKUP_CODE_MIN,
+  TOTP_LOCK_DURATION_MS,
+  TOTP_MAX_FAILED_ATTEMPTS,
   WEBAUTHN_CHALLENGE_TTL_MS,
 } from "../shared/auth.constants.ts";
+import type { Executor } from "../shared/repository.types.ts";
 import * as mfaRepository from "./mfa.repository.ts";
 import * as sessionRepository from "../session/session.repository.ts";
+import { evictCachedUserSessions } from "../shared/session-auth-cache.ts";
 import {
   decryptSecret,
   encryptSecret,
@@ -31,14 +36,79 @@ import {
   hashToken,
   verifyTotp,
 } from "../shared/auth.utils.ts";
+import type { AuthLogger } from "../shared/auth.types.ts";
 import type { SessionService } from "../session/session.service.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
-import { isMfaMandatoryAccount } from "../shared/mfa-policy.ts";
+import { isMfaMandatoryAccount, isStaffAccount } from "../shared/mfa-policy.ts";
 
 export interface MfaServiceOptions {
   database: Kysely<Database>;
   sessionService: SessionService;
+}
+
+/**
+ * Wrong backup codes per account. The authenticator lock counts wrong
+ * six-digit codes only and lives on the authenticator's own row, so backup
+ * codes could be guessed without limit, and an account whose only factor is
+ * a passkey has no such row at all. Kept in this process, like the route
+ * rate limits: it bounds guessing per account on each instance and is
+ * forgotten on restart.
+ */
+interface BackupCodeFailureState {
+  count: number;
+  lockedUntil: number;
+  updatedAt: number;
+}
+
+const backupCodeFailures = new Map<string, BackupCodeFailureState>();
+const BACKUP_CODE_FAILURE_ENTRIES_MAX = 10_000;
+
+function assertBackupCodeAttemptAllowed(userId: string): void {
+  const state = backupCodeFailures.get(userId);
+  if (state && state.lockedUntil > Date.now()) {
+    throw new AppError(
+      429,
+      "TOTP_LOCKED",
+      "Too many failed attempts. Try again later.",
+    );
+  }
+}
+
+function recordBackupCodeFailure(userId: string): void {
+  const now = Date.now();
+
+  if (backupCodeFailures.size >= BACKUP_CODE_FAILURE_ENTRIES_MAX) {
+    for (const [key, entry] of backupCodeFailures) {
+      const idleSince = Math.max(entry.updatedAt, entry.lockedUntil);
+      if (now - idleSince > TOTP_LOCK_DURATION_MS) {
+        backupCodeFailures.delete(key);
+      }
+    }
+  }
+
+  // Still full: every entry is recent. The oldest makes room.
+  if (
+    backupCodeFailures.size >= BACKUP_CODE_FAILURE_ENTRIES_MAX &&
+    !backupCodeFailures.has(userId)
+  ) {
+    const oldest = backupCodeFailures.keys().next().value;
+    if (oldest !== undefined) backupCodeFailures.delete(oldest);
+  }
+
+  const previous = backupCodeFailures.get(userId);
+  // Failures older than one lock period no longer count.
+  const count =
+    previous && now - previous.updatedAt <= TOTP_LOCK_DURATION_MS
+      ? previous.count + 1
+      : 1;
+  const isLocked = count >= TOTP_MAX_FAILED_ATTEMPTS;
+
+  backupCodeFailures.set(userId, {
+    count: isLocked ? 0 : count,
+    lockedUntil: isLocked ? now + TOTP_LOCK_DURATION_MS : 0,
+    updatedAt: now,
+  });
 }
 
 interface AuthenticatedMfaUser {
@@ -56,6 +126,20 @@ export function createMfaService({
   sessionService,
 }: MfaServiceOptions) {
   const outbox = createOutboxService();
+
+  /**
+   * Two-factor sign-in is for staff only (admins and every team role): a
+   * student cannot add a second factor, which would never be asked for.
+   */
+  function assertTwoFactorAvailable(user: AuthenticatedMfaUser) {
+    if (isStaffAccount(user.roles)) return;
+    throw new AppError(
+      403,
+      "TWO_FACTOR_OFF_FOR_STUDENTS",
+      "Two-factor sign-in is only for the academy's team.",
+    );
+  }
+
   async function assertStepUpForFactorChange(
     userId: string,
     mfaVerified: boolean,
@@ -69,9 +153,32 @@ export function createMfaService({
     }
   }
 
-  function setupTotp(user: AuthenticatedMfaUser) {
+  /** Replaces the user's backup codes and returns the new ones in the clear. */
+  async function issueBackupCodes(
+    executor: Executor,
+    userId: string,
+  ): Promise<string[]> {
+    const backupCodes = Array.from({ length: BACKUP_CODE_COUNT }, () =>
+      crypto.randomInt(BACKUP_CODE_MIN, BACKUP_CODE_MAX + 1).toString(),
+    );
+
+    await mfaRepository.replaceBackupCodes(
+      executor,
+      userId,
+      backupCodes.map((value) => ({
+        id: crypto.randomUUID(),
+        user_id: userId,
+        code_hash: hashToken(value),
+      })),
+    );
+
+    return backupCodes;
+  }
+
+  async function setupTotp(user: AuthenticatedMfaUser) {
+    await assertTwoFactorAvailable(user);
     const label = user.email || user.username || user.phoneNo || "user";
-    return generateTotpSecret(label, config.RP_NAME);
+    return generateTotpSecret(label, config.ACADEMY_NAME);
   }
 
   async function disableTotp(
@@ -83,23 +190,32 @@ export function createMfaService({
     const isMandatory = isMfaMandatoryAccount(
       Boolean(user.mfaMandatory),
       user.roles,
-      { skipAdminMfa: config.SKIP_ADMIN_MFA },
+      { skipStaffMfa: config.SKIP_ADMIN_MFA },
     );
-    if (isMandatory) {
-      const passkeyCount = await mfaRepository.countUserPasskeys(
-        database,
-        user.id,
+    const passkeyCount = await mfaRepository.countUserPasskeys(
+      database,
+      user.id,
+    );
+    if (isMandatory && passkeyCount === 0) {
+      throw new AppError(
+        400,
+        "MFA_MANDATORY",
+        "MFA is required for your account. Register a passkey before removing your authenticator app.",
       );
-      if (passkeyCount === 0) {
-        throw new AppError(
-          400,
-          "MFA_MANDATORY",
-          "MFA is required for your account. Register a passkey before removing your authenticator app.",
-        );
-      }
     }
 
-    await mfaRepository.deleteTotpCredential(database, user.id);
+    await database.transaction().execute(async (trx) => {
+      await mfaRepository.deleteTotpCredential(trx, user.id);
+      // Backup codes stand behind whichever factor is left, so they go only
+      // when this removal leaves the account with no second factor at all.
+      if (passkeyCount === 0) {
+        await mfaRepository.deleteBackupCodes(trx, user.id);
+      }
+    });
+    // The cached auth context still says the factor is enrolled. Without
+    // this, the settings page's next read of the account showed the removed
+    // authenticator as active until the cache entry expired.
+    evictCachedUserSessions(user.id);
     return { message: "Authenticator app removed successfully." };
   }
 
@@ -112,20 +228,26 @@ export function createMfaService({
     const isMandatory = isMfaMandatoryAccount(
       Boolean(user.mfaMandatory),
       user.roles,
-      { skipAdminMfa: config.SKIP_ADMIN_MFA },
+      { skipStaffMfa: config.SKIP_ADMIN_MFA },
     );
-    if (isMandatory) {
-      const totpActive = await mfaRepository.isTotpEnabled(database, user.id);
-      if (!totpActive) {
-        throw new AppError(
-          400,
-          "MFA_MANDATORY",
-          "MFA is required for your account. Set up an authenticator app before removing your passkey.",
-        );
-      }
+    const totpActive = await mfaRepository.isTotpEnabled(database, user.id);
+    if (isMandatory && !totpActive) {
+      throw new AppError(
+        400,
+        "MFA_MANDATORY",
+        "MFA is required for your account. Set up an authenticator app before removing your passkey.",
+      );
     }
 
-    await mfaRepository.deleteAllUserPasskeys(database, user.id);
+    await database.transaction().execute(async (trx) => {
+      await mfaRepository.deleteAllUserPasskeys(trx, user.id);
+      // See disableTotp: the codes outlive a factor, not the last one.
+      if (!totpActive) {
+        await mfaRepository.deleteBackupCodes(trx, user.id);
+      }
+    });
+    // See disableTotp: drop the cached "passkey enrolled" state.
+    evictCachedUserSessions(user.id);
     return { message: "Passkeys removed successfully." };
   }
 
@@ -153,12 +275,8 @@ export function createMfaService({
       throw new AppError(400, "INVALID_CODE", "Invalid verification code.");
     }
 
-    const backupCodes = Array.from({ length: BACKUP_CODE_COUNT }, () =>
-      crypto.randomInt(BACKUP_CODE_MIN, BACKUP_CODE_MAX + 1).toString(),
-    );
-
     const credentialId = crypto.randomUUID();
-    await database.transaction().execute(async (trx) => {
+    const backupCodes = await database.transaction().execute(async (trx) => {
       await mfaRepository.replaceTotpCredential(trx, {
         id: credentialId,
         userId,
@@ -166,15 +284,7 @@ export function createMfaService({
         lastUsedStep: String(result.step),
       });
 
-      await mfaRepository.replaceBackupCodes(
-        trx,
-        userId,
-        backupCodes.map((value) => ({
-          id: crypto.randomUUID(),
-          user_id: userId,
-          code_hash: hashToken(value),
-        })),
-      );
+      const issued = await issueBackupCodes(trx, userId);
       await outbox.publish(trx, {
         type: "auth.mfa_enabled",
         version: 1,
@@ -182,9 +292,39 @@ export function createMfaService({
         occurredAt: new Date(),
         payload: { recipientUserId: userId },
       });
+      return issued;
     });
 
     await sessionService.completeMfaEnrolment(userId, sessionId);
+    return { backupCodes };
+  }
+
+  /**
+   * Replaces the caller's backup codes. The old set stops working, which is
+   * also how a user retires codes they think someone else has seen.
+   */
+  async function regenerateBackupCodes(
+    userId: string,
+    mfaVerified: boolean,
+  ): Promise<{ backupCodes: string[] }> {
+    if (!(await sessionService.userHasAnyMfaFactor(userId))) {
+      throw new AppError(
+        400,
+        "MFA_NOT_ENABLED",
+        "Set up a passkey or authenticator app before creating backup codes.",
+      );
+    }
+    if (!mfaVerified) {
+      throw new AppError(
+        403,
+        "MFA_STEP_UP_REQUIRED",
+        "Verify an existing MFA factor before creating new backup codes.",
+      );
+    }
+
+    const backupCodes = await database
+      .transaction()
+      .execute((trx) => issueBackupCodes(trx, userId));
     return { backupCodes };
   }
 
@@ -197,6 +337,16 @@ export function createMfaService({
     sessionId: string;
     code: string;
   }): Promise<{ message: string }> {
+    const isBackupCodeAttempt = code.length === BACKUP_CODE_LENGTH;
+    if (isBackupCodeAttempt) {
+      assertBackupCodeAttemptAllowed(userId);
+      // Counted before the code is looked up, in the same tick as the check
+      // above: counted afterwards, a burst of guesses sent together was all
+      // let through before the first of them had been recorded. A correct
+      // code clears the count below.
+      recordBackupCodeFailure(userId);
+    }
+
     const credential = await mfaRepository.findTotpCredential(database, userId);
 
     // Backup codes are checked before the TOTP-enabled gate so passkey-only
@@ -209,12 +359,23 @@ export function createMfaService({
 
     if (backupCode) {
       if (await mfaRepository.redeemBackupCode(database, backupCode.id)) {
+        backupCodeFailures.delete(userId);
         await sessionRepository.markSessionMfaVerified(database, sessionId);
         return { message: "MFA verified using backup code" };
       }
     }
 
     if (!credential?.enabled) {
+      // A passkey-only account gets here with a backup code that matched
+      // nothing. "TOTP is not enabled" gave that user nothing to act on.
+      if (code.length === BACKUP_CODE_LENGTH) {
+        throw new AppError(
+          401,
+          "INVALID_CODE",
+          "That backup code is not valid or has already been used.",
+        );
+      }
+
       throw new AppError(
         400,
         "MFA_NOT_ENABLED",
@@ -278,12 +439,13 @@ export function createMfaService({
     mfaVerified: boolean,
     requestOrigin?: string,
   ) {
+    await assertTwoFactorAvailable(user);
     await assertStepUpForFactorChange(user.id, mfaVerified);
 
     const rpId = resolveRpIdForOrigin(requestOrigin);
     const existing = await mfaRepository.listUserPasskeys(database, user.id);
     const options = await generateRegistrationOptions({
-      rpName: config.RP_NAME,
+      rpName: config.ACADEMY_NAME,
       rpID: rpId,
       userID: Uint8Array.from(Buffer.from(user.id)),
       userName: user.email || user.username || user.phoneNo || "user",
@@ -314,11 +476,13 @@ export function createMfaService({
     userId,
     sessionId,
     response,
+    logger,
   }: {
     userId: string;
     sessionId: string;
     response: PasskeyRegisterVerifyRequest["response"];
-  }): Promise<{ message: string }> {
+    logger?: AuthLogger;
+  }): Promise<{ message: string; backupCodes?: string[] }> {
     const record = await mfaRepository.findActiveChallenge(
       database,
       userId,
@@ -351,12 +515,16 @@ export function createMfaService({
         requireUserVerification: true,
       });
     } catch (cause) {
+      // The library's reason stays in the log; the client gets a fixed
+      // message.
+      logger?.warn(
+        { err: cause, userId },
+        "WebAuthn registration verification failed",
+      );
       throw new AppError(
         400,
         "REGISTRATION_VERIFICATION_FAILED",
-        `WebAuthn verification failed: ${
-          cause instanceof Error ? cause.message : String(cause)
-        }`,
+        "Passkey verification failed.",
       );
     }
 
@@ -370,14 +538,16 @@ export function createMfaService({
 
     const { credential } = verification.registrationInfo;
     const passkeyId = crypto.randomUUID();
-    await database.transaction().execute(async (trx) => {
+    const backupCodes = await database.transaction().execute(async (trx) => {
       await mfaRepository.insertPasskey(trx, {
         id: passkeyId,
         userId,
         credentialId: credential.id,
         publicKey: Buffer.from(credential.publicKey).toString("base64"),
         counter: credential.counter,
-        transports: response.transports?.join(",") ?? null,
+        transports: Array.isArray(response.transports)
+          ? response.transports.join(",")
+          : null,
       });
       await outbox.publish(trx, {
         type: "auth.passkey_added",
@@ -386,10 +556,23 @@ export function createMfaService({
         occurredAt: new Date(),
         payload: { recipientUserId: userId, passkeyId },
       });
+
+      // A passkey lives on one device or password manager. Without a code
+      // to fall back on, an account whose only factor is a passkey was
+      // locked out the moment that passkey was out of reach. Codes are
+      // issued whenever the account has none left: a first factor, or one
+      // enrolled before passkeys came with codes.
+      if (await mfaRepository.hasUnusedBackupCode(trx, userId)) {
+        return undefined;
+      }
+      return issueBackupCodes(trx, userId);
     });
 
     await sessionService.completeMfaEnrolment(userId, sessionId);
-    return { message: "Passkey registered successfully." };
+    return {
+      message: "Passkey registered successfully.",
+      ...(backupCodes ? { backupCodes } : {}),
+    };
   }
 
   async function getPasskeyLoginOptions(
@@ -425,10 +608,12 @@ export function createMfaService({
     userId,
     sessionId,
     response,
+    logger,
   }: {
     userId: string;
     sessionId: string;
     response: PasskeyLoginVerifyRequest["response"];
+    logger?: AuthLogger;
   }): Promise<{ message: string }> {
     const record = await mfaRepository.findActiveChallenge(
       database,
@@ -444,14 +629,10 @@ export function createMfaService({
       );
     }
 
-    if (!(await mfaRepository.consumeChallenge(database, record.id))) {
-      throw new AppError(
-        400,
-        "VERIFICATION_FAILED",
-        "Challenge has already been used.",
-      );
-    }
-
+    // Looked up before the challenge is spent: a credential that is not on
+    // this account cannot pass, and refusing it here leaves the challenge
+    // for the real one. The challenge is still consumed exactly once, before
+    // any assertion is verified against it.
     const passkey = await mfaRepository.findUserPasskey(
       database,
       userId,
@@ -463,6 +644,14 @@ export function createMfaService({
         400,
         "CREDENTIAL_NOT_FOUND",
         "Passkey credential matching this session is not registered.",
+      );
+    }
+
+    if (!(await mfaRepository.consumeChallenge(database, record.id))) {
+      throw new AppError(
+        400,
+        "VERIFICATION_FAILED",
+        "Challenge has already been used.",
       );
     }
 
@@ -481,12 +670,11 @@ export function createMfaService({
         requireUserVerification: true,
       });
     } catch (cause) {
+      logger?.warn({ err: cause, userId }, "WebAuthn assertion failed");
       throw new AppError(
         401,
         "ASSERTION_FAILED",
-        `WebAuthn assertion failed: ${
-          cause instanceof Error ? cause.message : String(cause)
-        }`,
+        "Passkey verification failed.",
       );
     }
 
@@ -513,6 +701,7 @@ export function createMfaService({
   return {
     setupTotp,
     enableTotp,
+    regenerateBackupCodes,
     disableTotp,
     deletePasskeys,
     verifyTotpCode,

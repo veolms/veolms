@@ -1,27 +1,62 @@
 import { api, getApiBaseUrl } from "../../lib/api-client";
 import type {
-  Order,
-  OrdersListResponse,
+  AdminOrdersListResponse,
+  LearnerOrdersListResponse,
+  OrderResponse,
   OrdersListQueryInput,
   OrderStatsQuery,
   OrderStatsResponse,
   Invoice,
   OrderDirectRefundRequest,
-  Refund,
+  RefundResult,
   OrderView,
+  NeedsRefundListQueryInput,
+  NeedsRefundListResponse,
+  RefundRequest,
+  ReviewRefundRequest,
 } from "@veolms/contracts";
 
+/** `view` decides the response shape, so each list function fixes its own. */
+export type OrdersListParams = Omit<OrdersListQueryInput, "view">;
+
 export const ordersService = {
-  listOrders: (params?: OrdersListQueryInput): Promise<OrdersListResponse> => {
-    return api.get<OrdersListResponse>("/orders", { params });
+  /** Every order in the academy, with buyer and payment details. */
+  listAdminOrders: (
+    params?: OrdersListParams,
+  ): Promise<AdminOrdersListResponse> => {
+    return api.get<AdminOrdersListResponse>("/orders", {
+      params: { ...params, view: "admin" },
+    });
+  },
+
+  /** The signed-in user's own purchases. */
+  listMyOrders: (
+    params?: OrdersListParams,
+  ): Promise<LearnerOrdersListResponse> => {
+    return api.get<LearnerOrdersListResponse>("/orders", {
+      params: { ...params, view: "student" },
+    });
   },
 
   getOrderStats: (params?: OrderStatsQuery): Promise<OrderStatsResponse> => {
     return api.get<OrderStatsResponse>("/orders/stats", { params });
   },
 
-  getOrder: (orderId: string, view?: OrderView): Promise<Order> => {
-    return api.get<Order>(`/orders/${orderId}`, {
+  /**
+   * Money staff have to return by hand: surplus gateway payments and
+   * duplicate purchases, newest first. Needs the same permission as the
+   * admin orders list.
+   */
+  listNeedsRefund: (
+    params?: NeedsRefundListQueryInput,
+  ): Promise<NeedsRefundListResponse> => {
+    return api.get<NeedsRefundListResponse>("/orders/needs-refund", {
+      params,
+    });
+  },
+
+  getOrder: (orderId: string, view?: OrderView): Promise<OrderResponse> => {
+    return api.get<OrderResponse>(`/orders/${orderId}`, {
       params: view ? { view } : undefined,
     });
   },
@@ -41,7 +76,22 @@ export const ordersService = {
   refundOrder: (
     orderId: string,
     payload: OrderDirectRefundRequest,
-  ): Promise<Refund> => {
-    return api.post<Refund>(`/orders/${orderId}/refund`, payload);
+  ): Promise<RefundResult> => {
+    return api.post<RefundResult>(`/orders/${orderId}/refund`, payload);
+  },
+
+  /**
+   * Approves or rejects a learner's refund request (admins only). Approving
+   * issues the refund; for an order paid by manual transfer the payload
+   * carries `outsideRefund`, and the refund is recorded in the same step.
+   */
+  reviewRefundRequest: (
+    requestId: string,
+    payload: ReviewRefundRequest,
+  ): Promise<RefundRequest> => {
+    return api.post<RefundRequest>(
+      `/refund-requests/${encodeURIComponent(requestId)}/review`,
+      payload,
+    );
   },
 };

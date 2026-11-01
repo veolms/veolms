@@ -15,7 +15,6 @@ export interface DiscussionAttachmentItem {
   uploadProgress?: number;
   width?: number | null;
   height?: number | null;
-  metadata?: unknown;
 }
 
 export type AttachmentVisualItem = Pick<

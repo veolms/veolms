@@ -232,12 +232,22 @@ export function useBackDismiss({
     const finish = () => {
       if (completed) return;
       completed = true;
-      window.removeEventListener("popstate", finish);
+      window.removeEventListener("popstate", onPopState);
       window.clearTimeout(fallbackTimer);
       window.setTimeout(afterDismiss, 0);
     };
+    // Back can land on another layer's entry that is no longer open (a layer
+    // that closed while this one was above it). The history listener steps
+    // over that entry with one more Back, and that Back would cancel a route
+    // change `afterDismiss` had started meanwhile (seen in Firefox: the
+    // drawer closed and Settings never opened). So wait for that step too.
+    const onPopState = (event: PopStateEvent) => {
+      const entryId = getOverlayHistoryEntryId(event.state);
+      if (entryId !== null && !activeLayers.has(entryId)) return;
+      finish();
+    };
 
-    window.addEventListener("popstate", finish, { once: true });
+    window.addEventListener("popstate", onPopState);
     window.history.back();
     fallbackTimer = window.setTimeout(finish, 1000);
   }, []);

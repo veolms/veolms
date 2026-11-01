@@ -305,7 +305,15 @@ export function DiscussionEditorImpl({
 
   useEffect(() => {
     if (!autoFocus) return undefined;
-    const timer = window.setTimeout(() => atomicHandleRef.current?.focus(), 0);
+    const timer = window.setTimeout(() => {
+      // A reopened composer rebuilds the editor from the saved draft, and a
+      // new editor state starts with the cursor at 0; put it after the text.
+      const view = viewRef.current;
+      if (view && !view.hasFocus) {
+        view.dispatch({ selection: { anchor: view.state.doc.length } });
+      }
+      atomicHandleRef.current?.focus();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [autoFocus, documentId]);
 

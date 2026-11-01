@@ -2,10 +2,12 @@ import { useEffect } from "react";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { useMyQuizAssignments } from "../services/quizzes";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import type { NavigateTo } from "../routing/navigation";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 interface Props {
   assignmentId?: string;
-  onNavigatePage?: (destination: string) => void;
+  onNavigatePage?: NavigateTo;
 }
 
 export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
@@ -16,8 +18,11 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
 
   useEffect(() => {
     if (assignment && onNavigatePage) {
+      // This page only forwards to the lesson, so it gives up its place in
+      // the history. Left there, Back returned to it and it forwarded again.
       onNavigatePage(
         `/learn/${encodeURIComponent(assignment.courseId)}?lessonId=${encodeURIComponent(assignment.lessonId)}&view=quiz`,
+        { replace: true },
       );
     }
   }, [assignment, onNavigatePage]);
@@ -25,15 +30,12 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
   if (!assignmentId || assignments.isLoading) {
     return (
       <main data-quiz-surface="" className="mx-auto w-full max-w-[1800px]">
-        <section
-          className="rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-7 text-sm text-(--muted)"
-          style={{ boxShadow: "var(--card-shadow)" }}
-        >
+        <ElevatedCard className="p-3.5 sm:p-7 text-sm text-(--muted)">
           <CenteredLoadingSpinner
             label="Redirecting to lesson quiz"
             className="min-h-32 w-full"
           />
-        </section>
+        </ElevatedCard>
       </main>
     );
   }
@@ -41,10 +43,7 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
   if (!assignment) {
     return (
       <main data-quiz-surface="" className="mx-auto w-full max-w-[1800px]">
-        <section
-          className="rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-7 text-(--text)"
-          style={{ boxShadow: "var(--card-shadow)" }}
-        >
+        <ElevatedCard className="p-3.5 sm:p-7 text-(--text)">
           <p className="text-lg font-bold">Assessment unavailable</p>
           <p className="mt-2 text-sm text-(--muted)">
             This quiz may have been removed, restricted, or is not assigned to
@@ -58,7 +57,7 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
           >
             <ArrowLeft size={16} weight="bold" /> Back to quizzes
           </button>
-        </section>
+        </ElevatedCard>
       </main>
     );
   }
@@ -68,10 +67,7 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
       data-quiz-surface=""
       className="mx-auto grid w-full max-w-6xl gap-2.5 sm:gap-4 px-0 py-0.5 sm:p-8"
     >
-      <section
-        className="rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-7 text-sm text-(--muted)"
-        style={{ boxShadow: "var(--card-shadow)" }}
-      >
+      <ElevatedCard className="p-3.5 sm:p-7 text-sm text-(--muted)">
         <p className="text-sm font-medium">Opening lesson assessment…</p>
         <button
           type="button"
@@ -84,7 +80,7 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
         >
           Go to lesson quiz
         </button>
-      </section>
+      </ElevatedCard>
     </main>
   );
 }

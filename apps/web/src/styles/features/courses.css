@@ -379,33 +379,60 @@
     var(--profile-menu-cast-shadow);
 }
 
-/* How far the profile menu has slid shut: 0 is open, 1 is closed. The slide
-   and the clipping edge are both computed from this one animated number, so
-   they move in the same frame. As two separate transitions they could drift
-   a frame apart, which let the menu show below the profile control. */
-@property --profile-menu-slide {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
+/* The menu slides up from behind the profile control and back down behind
+   it. The slide and the clipping edge that hides what is below the control
+   are two properties of one keyframe animation, so they are always worked
+   out for the same moment; as two transitions they could drift a frame
+   apart. And an animation of plain `transform` and `clip-path` is one the
+   browser can run without waiting for the page's own work, which a number
+   driving both through `calc()` (what this used to be) never is. */
+.courses-profile > .profile-menu--animated {
+  transform: translateY(calc(100% + 8px));
+  clip-path: inset(0 -8px 100% -8px);
+  z-index: 1;
+  /* Shut, the clipping edge leaves none of it showing, and the menu is
+     `inert`, so it is not also made `visibility: hidden`: a menu that is to
+     be hidden at the end of its closing slide is one the browser will not
+     run that slide for by itself. */
+  pointer-events: none;
+  /* It gets here only by its animation. A transition as well would slide it
+     into this place whenever the sidebar is expanded, out of the place the
+     collapsed sidebar keeps it in. */
+  transition: none;
 }
 
-.courses-profile > .profile-menu--animated {
-  /* Keep the clipping edge at the fixed profile control, then reverse the
-     entrance easing so the last visible slice clears without lingering. */
-  --profile-menu-slide: 1;
-  transform: translateY(calc((100% + 8px) * var(--profile-menu-slide)));
-  clip-path: inset(
-    calc(-8px * (1 - var(--profile-menu-slide))) -8px
-      calc(
-        100% * var(--profile-menu-slide) - 8px * (1 - var(--profile-menu-slide))
-      ) -8px
-  );
-  z-index: 1;
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    --profile-menu-slide 280ms cubic-bezier(0.7, 0, 0.84, 0),
-    visibility 0s linear 280ms;
+/* Only a menu that has been open slides shut: one that has never been
+   opened is simply not there, and must not play its closing on arrival. */
+.courses-profile
+  > .profile-menu--animated[data-has-opened]:not([data-open="true"]) {
+  animation: profile-menu-slide-shut 260ms cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+@keyframes profile-menu-slide-open {
+  from {
+    transform: translateY(calc(100% + 8px));
+    clip-path: inset(0 -8px 100% -8px);
+  }
+
+  to {
+    transform: translateY(0);
+    clip-path: inset(-8px -8px -8px -8px);
+  }
+}
+
+/* Nothing but the two properties above may be in these keyframes: one
+   more that the browser cannot animate by itself (`visibility` was here)
+   and the whole animation goes back to waiting for the page. */
+@keyframes profile-menu-slide-shut {
+  from {
+    transform: translateY(0);
+    clip-path: inset(-8px -8px -8px -8px);
+  }
+
+  to {
+    transform: translateY(calc(100% + 8px));
+    clip-path: inset(0 -8px 100% -8px);
+  }
 }
 
 .courses-profile:has(> .profile-menu--animated)
@@ -416,12 +443,11 @@
 }
 
 .courses-profile > .profile-menu--animated[data-open="true"] {
-  --profile-menu-slide: 0;
-  visibility: visible;
+  transform: translateY(0);
+  clip-path: inset(-8px -8px -8px -8px);
   pointer-events: auto;
-  transition:
-    --profile-menu-slide 280ms cubic-bezier(0.16, 1, 0.3, 1),
-    visibility 0s;
+  /* It starts gently and settles slowly. */
+  animation: profile-menu-slide-open 340ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
 .courses-app--collapsed .courses-profile > .profile-menu--animated,
@@ -429,9 +455,15 @@
   .courses-app:not(.courses-app--collapsed)
   .courses-profile
   > .profile-menu--animated {
-  /* Match the clip travel so the visible edge stays at the rail boundary. */
-  transform: translateX(calc(-100% * var(--profile-menu-slide)));
-  clip-path: inset(0 0 0 calc(100% * var(--profile-menu-slide)));
+  /* Beside the collapsed sidebar the menu does not slide out from behind
+     the rail: it appears where it stands, with the short fade the settings,
+     theme and reading menus open with (`sidebar-quick-menu-in`), and goes
+     at once when closed. */
+  transform: none;
+  clip-path: none;
+  visibility: hidden;
+  transition: none;
+  animation: none;
 }
 
 .courses-app--collapsed
@@ -441,14 +473,30 @@
   .courses-app:not(.courses-app--collapsed)
   .courses-profile
   > .profile-menu--animated[data-open="true"] {
+  transform: none;
+  clip-path: none;
   visibility: visible;
   pointer-events: auto;
+  transition: none;
+  animation: sidebar-quick-menu-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Beside the collapsed sidebar a closed menu goes at once. */
+.courses-app--collapsed
+  .courses-profile
+  > .profile-menu--animated[data-has-opened]:not([data-open="true"]),
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile
+  > .profile-menu--animated[data-has-opened]:not([data-open="true"]) {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .courses-profile > .profile-menu--animated,
   .courses-profile > .profile-menu--animated[data-open="true"] {
     transition: none !important;
+    animation: none !important;
   }
 }
 
@@ -460,13 +508,39 @@
   z-index: 2;
 }
 
+/* The sidebar's settings menu wears the colour and reading menus' surface
+   (navigation.css, reading-mode.css; the light theme's is in navigation.css)
+   and, expanded, opens where they do: across the dock's width, 8px above
+   it. The dock is one 57px row with an 8px top margin, so that is 65px
+   above the bottom of the profile block. */
 .courses-profile > .settings-quick-menu {
+  right: 0;
+  bottom: 65px;
+  left: 0;
+  z-index: 140;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  border: 0;
+  border-radius: 13px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--surface-strong) 94%, var(--canvas));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
+    0 18px 42px color-mix(in srgb, var(--canvas) 62%, transparent),
+    0 4px 14px color-mix(in srgb, var(--accent-shadow) 22%, transparent);
+}
+
+/* Beside the collapsed rail it sits on the sidebar's bottom edge, as wide
+   as its longest item. */
+.courses-app--collapsed .courses-profile > .settings-quick-menu {
   right: auto;
   bottom: 0;
-  left: calc(100% + 8px);
-  z-index: 140;
-  min-width: min(200px, calc(100vw - 32px));
-  max-width: min(250px, calc(100vw - 32px));
+  left: calc(100% + 2px);
+  width: max-content;
+  min-width: 0;
+  max-width: calc(100vw - 32px);
 }
 
 .settings-quick-menu__item[aria-current="page"] {
@@ -679,7 +753,7 @@
 }
 
 .courses-app--collapsed .courses-nav {
-  margin-top: 12px;
+  margin-top: 17px;
   align-items: center;
 }
 
@@ -702,8 +776,11 @@
   flex-basis: 54px;
 }
 
+/* Beside the rail's controls, at the same distance the theme and reading
+   menus open at (`.sidebar-palette-menu` in navigation.css), so every menu
+   of the collapsed sidebar begins on one line. */
 .courses-app--collapsed .profile-menu {
-  left: calc(100% + 8px);
+  left: calc(100% + 2px);
   right: auto;
   bottom: 0;
   width: 250px;

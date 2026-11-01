@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AssignQuizRequest, QuizQuestionType } from "@veolms/contracts";
+import type {
+  AssignQuizRequest,
+  Quiz,
+  QuizQuestionType,
+} from "@veolms/contracts";
 import { Button } from "../components/Button";
 import {
   CenteredLoadingSpinner,
@@ -50,18 +54,28 @@ import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { ThemedDateTimePicker } from "../ThemedDateTimePicker";
 import { SettingsToggle } from "../settings/SettingsControls";
 import { QuizRichTextField } from "./QuizRichTextField";
+import { markdownToPlainText } from "../learning/discussion-editor/types";
 import { selectQuizAssignment } from "./quizAssignmentSelection";
 import { AutosaveStatus } from "../lib/autosync";
 import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import {
   browserDraftStorageKey,
   parseQuizBuilderBrowserDraft,
+  quizQuestionProblem,
+  sendableQuizOptions,
   toCreateQuizQuestionRequest,
   type QuizBuilderBrowserDraft,
   type QuizBuilderQuestionDraft,
   type QuizBuilderOptionDraft,
 } from "./quizBuilderDraft";
 import { QuizAuthoringLoadingSkeleton } from "./QuizAuthoringLoadingSkeleton";
+import {
+  accountScopedStorageKey,
+  readAccountScopedItem,
+} from "../store/accountScopedStorage";
+import { useAuthStore } from "../store/auth.store";
+import { useCapabilities } from "../services/authorization";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 interface Props {
   courseId?: string;
@@ -79,15 +93,34 @@ interface EditableQuestion {
   questionType: QuizQuestionType;
   prompt: string;
   points: number;
-  position: number;
   explanation: string | null;
   options: readonly OptionDraft[];
+}
+
+type SavedQuestion = NonNullable<Quiz["editableVersion"]>["questions"][number];
+
+/** The cached quiz with its editable questions replaced (optimistic edits). */
+function withEditableQuestions(
+  quiz: Quiz | undefined,
+  update: (questions: SavedQuestion[]) => SavedQuestion[],
+): Quiz | undefined {
+  if (!quiz?.editableVersion) return quiz;
+  return {
+    ...quiz,
+    editableVersion: {
+      ...quiz.editableVersion,
+      questions: update(quiz.editableVersion.questions),
+    },
+  };
 }
 
 const initialOptions = (): OptionDraft[] => [
   { text: "Option 1", isCorrect: true },
   { text: "Option 2", isCorrect: false },
 ];
+
+/** Amber that stays readable on every palette, light and dark. */
+const CAUTION_TEXT = "text-[color-mix(in_srgb,#f59e0b_52%,var(--text))]";
 
 const inputClass =
   "h-9 sm:h-10 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 text-xs sm:text-sm text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20";
@@ -122,7 +155,7 @@ const QUESTION_TYPES: readonly {
   {
     type: "short_answer",
     label: "Short Answer",
-    description: "Learners type exact answer",
+    description: "Learners write anything",
     icon: FileText,
   },
 ];
@@ -161,6 +194,29 @@ function AutoSaveIndicator({
   return <AutosaveStatus status={syncStatus} />;
 }
 
+/**
+ * Says where a validation issue is, from its path ("/questions/1/options/0/
+ * text"). The message that comes with it describes the value, not the field.
+ */
+function describeQuizIssue(path: unknown): string | null {
+  const segments = (
+    Array.isArray(path) ? path.map(String) : String(path ?? "").split("/")
+  ).filter(Boolean);
+  const field = segments.at(-1);
+  const questionAt = segments.indexOf("questions");
+  const questionNumber =
+    questionAt >= 0 && /^d+$/.test(segments[questionAt + 1] ?? "")
+      ? Number(segments[questionAt + 1]) + 1
+      : null;
+  const where = questionNumber ? `Question ${questionNumber}: ` : "";
+  if (field === "text" && segments.includes("options")) {
+    return `${where}an answer or option is empty. Fill it in or remove it.`;
+  }
+  if (field === "prompt") return `${where}the question itself is empty.`;
+  if (field === "title") return "Give the quiz a title.";
+  return null;
+}
+
 function quizErrorMessage(error: unknown) {
   if (!error) return null;
   const apiError = error as {
@@ -169,10 +225,10 @@ function quizErrorMessage(error: unknown) {
     details?: {
       error?: {
         message?: string;
-        issues?: Array<{ message?: string; path?: string[] }>;
+        issues?: Array<{ message?: string; path?: string | string[] }>;
       };
       message?: string;
-      issues?: Array<{ message?: string; path?: string[] }>;
+      issues?: Array<{ message?: string; path?: string | string[] }>;
     };
   };
   if (apiError.code === "ACADEMY_NOT_CONFIGURED") {
@@ -180,6 +236,8 @@ function quizErrorMessage(error: unknown) {
   }
   const issues = apiError.details?.error?.issues ?? apiError.details?.issues;
   if (Array.isArray(issues) && issues.length > 0) {
+    const located = describeQuizIssue(issues[0]?.path);
+    if (located) return located;
     const firstIssue = issues[0]?.message;
     if (firstIssue) return firstIssue;
   }
@@ -244,9 +302,20 @@ export function QuizAuthoringPanel({
   const [draftQuestions, setDraftQuestions] = useState<
     QuizBuilderQuestionDraft[]
   >([]);
-  const draftStorageKey = useMemo(
+  // The unsaved quiz is kept in this browser under the author's account. It
+  // used to be one entry for the whole browser, so the next account to open
+  // the builder on a shared browser was handed the previous one's quiz.
+  const draftAccountId = useAuthStore((state) => state.user?.id) ?? null;
+  const unscopedDraftStorageKey = useMemo(
     () => browserDraftStorageKey({ courseId, lessonId }),
     [courseId, lessonId],
+  );
+  const draftStorageKey = useMemo(
+    () =>
+      draftAccountId
+        ? accountScopedStorageKey(draftAccountId, unscopedDraftStorageKey)
+        : null,
+    [draftAccountId, unscopedDraftStorageKey],
   );
   const browserDraftHydratedRef = useRef(Boolean(initialQuizId));
   const [prompt, setPrompt] = useState("");
@@ -299,6 +368,18 @@ export function QuizAuthoringPanel({
   >(null);
   const questionDebounceRef = useRef<number | null>(null);
   const pendingSaveAfterCreateRef = useRef(false);
+  // "Publish changes" in two steps, so that what is published is what is on
+  // screen: first the question being edited is saved, then the quiz is
+  // published. Null when no publish is under way.
+  const [publishStep, setPublishStep] = useState<"save" | "publish" | null>(
+    null,
+  );
+  // Why a save or publish was held back before it reached the server: the
+  // number of the unfinished question and what it still needs.
+  const [unfinishedQuestion, setUnfinishedQuestion] = useState<{
+    number: number;
+    problem: string;
+  } | null>(null);
 
   const create = useCreateQuizWithQuestions();
   const addQuestion = useAddQuizQuestion();
@@ -315,6 +396,21 @@ export function QuizAuthoringPanel({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDetachConfirm, setShowDetachConfirm] = useState(false);
   const quiz = useQuiz(quizId);
+  // Each action shows only to whoever may take it. The quiz routes take
+  // these through any role (the services keep authors to their own); a
+  // draft's questions and details go out with it when it is created.
+  const { can, canOnCourse } = useCapabilities();
+  const createsQuizzes = can("quiz.create");
+  const editsSettings = can("quiz.settings.update");
+  const publishesQuizzes = can("quiz.publish");
+  const deletesQuizzes = can("quiz.delete");
+  const editsQuestions = quizId ? can("quiz.questions.manage") : createsQuizzes;
+  const editsDetails = quizId ? editsSettings : createsQuizzes;
+  // The lesson's own Free Preview switch is a lesson detail.
+  const editsLessonPreview = canOnCourse(
+    "lesson.details.update",
+    courseEditor.data?.course,
+  );
   const assignment = useMemo(() => {
     return selectQuizAssignment({
       assignments: [
@@ -337,12 +433,9 @@ export function QuizAuthoringPanel({
     courseId,
     lessonId,
   ]);
-  const version = useMemo(
-    () =>
-      quiz.data?.versions.find((item) => !item.publishedAt) ??
-      quiz.data?.versions.at(-1),
-    [quiz.data],
-  );
+  // The draft, or the newest version when nothing is in draft: the server
+  // sends questions for this version only.
+  const version = quiz.data?.editableVersion ?? undefined;
 
   useEffect(() => {
     if (initialQuizId) return;
@@ -350,9 +443,17 @@ export function QuizAuthoringPanel({
     browserDraftHydratedRef.current = true;
     let savedDraft: QuizBuilderBrowserDraft | null = null;
     try {
-      savedDraft = parseQuizBuilderBrowserDraft(
-        window.localStorage.getItem(draftStorageKey),
-      );
+      // A draft saved before drafts were per account is taken over by the
+      // first account to open this builder (see readAccountScopedItem).
+      savedDraft = draftAccountId
+        ? parseQuizBuilderBrowserDraft(
+            readAccountScopedItem(
+              window.localStorage,
+              draftAccountId,
+              unscopedDraftStorageKey,
+            ),
+          )
+        : null;
     } catch {
       // The in-memory editor remains usable when browser storage is unavailable.
     }
@@ -371,10 +472,10 @@ export function QuizAuthoringPanel({
     setAvailableFrom(savedDraft.assignment.availableFrom);
     setAvailableUntil(savedDraft.assignment.availableUntil);
     setFeedbackMode(savedDraft.assignment.feedbackMode);
-  }, [draftStorageKey, initialQuizId, lessonTitle]);
+  }, [draftAccountId, initialQuizId, lessonTitle, unscopedDraftStorageKey]);
 
   useEffect(() => {
-    if (!browserDraftHydratedRef.current || quizId) return;
+    if (!browserDraftHydratedRef.current || quizId || !draftStorageKey) return;
 
     const draft: QuizBuilderBrowserDraft = {
       title: quizTitle,
@@ -456,10 +557,7 @@ export function QuizAuthoringPanel({
       lastLoadedQuizIdRef.current = quizId;
       setQuizTitle(quiz.data.title);
       setDescription(quiz.data.description ?? "");
-      const currentVersion =
-        quiz.data.versions.find((item) => !item.publishedAt) ??
-        quiz.data.versions.at(-1);
-      const instr = currentVersion?.instructions ?? "";
+      const instr = quiz.data.editableVersion?.instructions ?? "";
       setInstructions(instr);
       lastSavedDetailsRef.current = {
         title: quiz.data.title,
@@ -503,7 +601,9 @@ export function QuizAuthoringPanel({
     resetEditor();
     setDraftQuestions([]);
     try {
-      window.localStorage.removeItem(draftStorageKey);
+      if (draftStorageKey) {
+        window.localStorage.removeItem(draftStorageKey);
+      }
     } catch {
       // Nothing to clear when browser storage is unavailable.
     }
@@ -606,6 +706,12 @@ export function QuizAuthoringPanel({
     ],
   );
 
+  // `editQuestion` is declared further down; the save path reaches it
+  // through this ref to open the question that is holding a save back.
+  const openQuestionForEditingRef = useRef<
+    ((question: EditableQuestion) => void) | null
+  >(null);
+
   const persistBrowserDraft = useCallback(
     (onSaved?: (newQuiz: NonNullable<typeof quiz.data>) => void) => {
       if (quizId || create.isPending) return;
@@ -626,6 +732,24 @@ export function QuizAuthoringPanel({
           : question,
       );
       setDraftQuestions(questions);
+
+      // An unfinished question is not sent. The server would refuse the
+      // whole quiz for it, in words that name neither question nor field.
+      const unfinishedAt = questions.findIndex((question) =>
+        quizQuestionProblem(question),
+      );
+      if (unfinishedAt >= 0) {
+        const unfinished = questions[unfinishedAt]!;
+        setUnfinishedQuestion({
+          number: unfinishedAt + 1,
+          problem: quizQuestionProblem(unfinished)!,
+        });
+        if (unfinished.id !== editingQuestionId) {
+          openQuestionForEditingRef.current?.(unfinished);
+        }
+        return;
+      }
+      setUnfinishedQuestion(null);
       setCreateSaveStatus("saving");
 
       create.mutate(
@@ -642,7 +766,9 @@ export function QuizAuthoringPanel({
             setCreateSaveStatus("saved");
             setDetailsSaveStatus("saved");
             try {
-              window.localStorage.removeItem(draftStorageKey);
+              if (draftStorageKey) {
+                window.localStorage.removeItem(draftStorageKey);
+              }
             } catch {
               // Nothing to clear when browser storage is unavailable.
             }
@@ -687,7 +813,7 @@ export function QuizAuthoringPanel({
 
   const flushDetailsPersistence = useCallback(
     (overrideTitle?: string, overrideDesc?: string, overrideInstr?: string) => {
-      if (!quizId) return;
+      if (!quizId || !editsSettings) return;
       const t = (
         overrideTitle !== undefined ? overrideTitle : quizTitle
       ).trim();
@@ -741,7 +867,7 @@ export function QuizAuthoringPanel({
         },
       );
     },
-    [quizId, quizTitle, description, instructions, updateQuiz],
+    [quizId, editsSettings, quizTitle, description, instructions, updateQuiz],
   );
 
   const scheduleAutoSaveDetails = useCallback(
@@ -772,7 +898,8 @@ export function QuizAuthoringPanel({
       const targetQuestionId = overrideQuestionId ?? editingQuestionId;
       if (!targetQuestionId) return;
       const qType = overrideType ?? questionType;
-      const qOptions = overrideOptions ?? options;
+      const editedOptions = overrideOptions ?? options;
+      const qOptions = sendableQuizOptions(qType, editedOptions);
       const qPromptValue =
         overridePrompt !== undefined ? overridePrompt : prompt;
       const qPrompt = qPromptValue.trim();
@@ -794,7 +921,8 @@ export function QuizAuthoringPanel({
                     prompt: qPromptValue,
                     points: qPoints,
                     explanation: qExplValue,
-                    options: qOptions,
+                    // The draft keeps every row as typed, empty ones too.
+                    options: editedOptions,
                   }
                 : question,
             ),
@@ -808,10 +936,11 @@ export function QuizAuthoringPanel({
 
       if (
         !quizId ||
-        !qPrompt ||
-        qOptions.length === 0 ||
-        qOptions.some((option) => !option.text.trim()) ||
-        !qOptions.some((option) => option.isCorrect) ||
+        quizQuestionProblem({
+          questionType: qType,
+          prompt: qPromptValue,
+          options: editedOptions,
+        }) ||
         updateQuestion.isPending
       )
         return;
@@ -903,14 +1032,8 @@ export function QuizAuthoringPanel({
       ];
       setOptions(nextOptions);
     } else if (nextType === "short_answer") {
-      const existingText = options[0]?.text?.trim() || "";
-      const isPlaceholder =
-        /^Option\s*\d+$/i.test(existingText) ||
-        existingText.toLowerCase() === "true" ||
-        existingText.toLowerCase() === "false";
-      nextOptions = [
-        { text: isPlaceholder ? "" : existingText, isCorrect: true },
-      ];
+      // A free response has no options.
+      nextOptions = [];
       setOptions(nextOptions);
     } else if (
       options.length < 2 ||
@@ -961,8 +1084,10 @@ export function QuizAuthoringPanel({
     },
     [updateQuestion],
   );
+  openQuestionForEditingRef.current = editQuestion;
 
   const handleToggleExpandQuestion = (question: EditableQuestion) => {
+    if (!editsQuestions) return;
     if (editingQuestionId === question.id) {
       flushQuestionSave();
       setEditingQuestionId(null);
@@ -1000,37 +1125,26 @@ export function QuizAuthoringPanel({
       id: `temp-opt-${position}-${Date.now()}`,
       text: opt.text,
       isCorrect: opt.isCorrect,
-      weight: 1,
-      position,
     }));
-    const newPosition = version?.questions.length ?? 0;
-    const optimisticQuestion = {
+    const optimisticQuestion: SavedQuestion = {
       id: tempQuestionId,
-      questionType: "single_choice" as const,
+      questionType: "single_choice",
       prompt: `Question ${nextIdx}`,
       points: 1,
-      position: newPosition,
       explanation: null,
       options: initialOpts,
     };
 
     // Optimistically update query cache immediately (0ms latency, zero fluctuation)
-    qc.setQueryData(quizKeys.detail(quizId), (prev: any) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        versions: prev.versions.map((v: any) => {
-          if (v.id !== version?.id) return v;
-          return {
-            ...v,
-            questions: [...(v.questions ?? []), optimisticQuestion],
-          };
-        }),
-      };
-    });
+    qc.setQueryData<Quiz>(quizKeys.detail(quizId), (prev) =>
+      withEditableQuestions(prev, (questions) => [
+        ...questions,
+        optimisticQuestion,
+      ]),
+    );
 
     // Immediately expand and enter edit mode for the optimistic question
-    editQuestion(optimisticQuestion as any);
+    editQuestion(optimisticQuestion);
 
     addQuestion.mutate(
       {
@@ -1050,10 +1164,7 @@ export function QuizAuthoringPanel({
       {
         onSuccess: (updatedQuiz) => {
           qc.setQueryData(quizKeys.detail(quizId), updatedQuiz);
-          const latestVersion =
-            updatedQuiz.versions.find((item) => !item.publishedAt) ??
-            updatedQuiz.versions.at(-1);
-          const realQ = latestVersion?.questions.at(-1);
+          const realQ = updatedQuiz.editableVersion?.questions.at(-1);
           if (realQ) {
             setEditingQuestionId((currentId) =>
               currentId === tempQuestionId ? realQ.id : currentId,
@@ -1072,21 +1183,11 @@ export function QuizAuthoringPanel({
           }
         },
         onError: () => {
-          qc.setQueryData(quizKeys.detail(quizId), (prev: any) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              versions: prev.versions.map((v: any) => {
-                if (v.id !== version?.id) return v;
-                return {
-                  ...v,
-                  questions: v.questions.filter(
-                    (q: any) => q.id !== tempQuestionId,
-                  ),
-                };
-              }),
-            };
-          });
+          qc.setQueryData<Quiz>(quizKeys.detail(quizId), (prev) =>
+            withEditableQuestions(prev, (questions) =>
+              questions.filter((q) => q.id !== tempQuestionId),
+            ),
+          );
           setEditingQuestionId((currentId) =>
             currentId === tempQuestionId ? null : currentId,
           );
@@ -1096,7 +1197,7 @@ export function QuizAuthoringPanel({
   };
 
   const flushAssignmentPersistence = useCallback(() => {
-    if (!assignment) return;
+    if (!assignment || !editsSettings) return;
     if (assignmentTimerRef.current !== null) {
       window.clearTimeout(assignmentTimerRef.current);
       assignmentTimerRef.current = null;
@@ -1124,7 +1225,13 @@ export function QuizAuthoringPanel({
         },
       },
     );
-  }, [assignment, assignmentPayload, assignmentVersionId, updateAssignment]);
+  }, [
+    assignment,
+    editsSettings,
+    assignmentPayload,
+    assignmentVersionId,
+    updateAssignment,
+  ]);
 
   const scheduleAutoSaveAssignment = useCallback(() => {
     if (!assignment) return;
@@ -1160,6 +1267,65 @@ export function QuizAuthoringPanel({
     );
   };
 
+  /**
+   * True when the question open in the editor is unfinished, having told the
+   * author so. An unfinished question is not saved, so publishing now would
+   * publish the quiz without the change the author is in the middle of.
+   */
+  const heldByUnfinishedQuestion = () => {
+    const editingAt = (version?.questions ?? []).findIndex(
+      (question) => question.id === editingQuestionId,
+    );
+    const problem =
+      editingAt >= 0
+        ? quizQuestionProblem({ questionType, prompt, options })
+        : null;
+    setUnfinishedQuestion(problem ? { number: editingAt + 1, problem } : null);
+    return Boolean(problem);
+  };
+
+  /** Points the lesson at a published version of this quiz. */
+  const moveLessonToVersion = (versionId: string) => {
+    if (!assignment || !editsSettings) return;
+    setAssignmentVersionId(versionId);
+    setAssignmentSaveStatus("saving");
+    updateAssignment.mutate(
+      {
+        id: assignment.id,
+        payload: { ...assignmentPayload(), quizVersionId: versionId },
+      },
+      {
+        onSuccess: () => setAssignmentSaveStatus("saved"),
+        onError: () => setAssignmentSaveStatus("failed"),
+      },
+    );
+  };
+
+  /**
+   * Makes the edits to an assigned quiz reach its learners: publishes the
+   * draft the edits were saved into, then points the lesson at it. Editing a
+   * published quiz never changes what learners are taking; until this runs
+   * they keep getting the version that was published before.
+   */
+  const publishChangesNow = () => {
+    if (!quizId) return;
+    publish.mutate(quizId, {
+      onSuccess: (publishedQuiz) => {
+        const published = publishedQuiz.versions
+          .filter((item) => item.publishedAt)
+          .at(-1);
+        if (published) moveLessonToVersion(published.id);
+      },
+    });
+  };
+
+  const publishChanges = () => {
+    if (!quizId || publish.isPending || updateAssignment.isPending) return;
+    if (heldByUnfinishedQuestion()) return;
+    // Carried on by the effect below.
+    setPublishStep("save");
+  };
+
   const publishAndAssign = () => {
     if (!quizId) {
       if (create.isPending || !draftQuestions.length) return;
@@ -1174,6 +1340,7 @@ export function QuizAuthoringPanel({
       return;
     }
     if (!version) return;
+    if (heldByUnfinishedQuestion()) return;
     if (
       version.publishedAt &&
       quiz.data &&
@@ -1190,6 +1357,26 @@ export function QuizAuthoringPanel({
       );
     }
   };
+
+  useEffect(() => {
+    // Each step waits for a question save that is still on its way.
+    if (publishStep === null || updateQuestion.isPending) return;
+    if (publishStep === "save") {
+      // Edits are saved on a short delay, and a save is skipped while an
+      // earlier one is in flight. Sent now, with nothing in flight, the
+      // question is stored exactly as it stands.
+      flushQuestionSave();
+      setPublishStep("publish");
+      return;
+    }
+    setPublishStep(null);
+    // The edit did not go through: publishing would leave it out.
+    if (updateQuestion.error) return;
+    publishChangesNow();
+    // Driven by the step and by the save settling; the functions it calls
+    // are not reasons to run again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publishStep, updateQuestion.isPending]);
 
   const courseOptions: readonly ThemedSelectOption<string>[] = useMemo(() => {
     const courses = myCourses.data?.courses ?? [];
@@ -1323,15 +1510,64 @@ export function QuizAuthoringPanel({
   const canPersistBrowserDraft = Boolean(
     quizTitle.trim() || lessonTitle?.trim(),
   );
+  // Where an assigned quiz stands against what its learners are getting.
+  const latestPublishedVersion = (quiz.data?.versions ?? [])
+    .filter((item) => item.publishedAt)
+    .at(-1);
+  const assignedToThisLesson = Boolean(
+    assignment && assignment.quizId === quizId,
+  );
+  // Edits to a published quiz are saved into a draft. Learners do not get
+  // them until that draft is published and the lesson pointed at it.
+  const hasUnpublishedChanges =
+    assignedToThisLesson && Boolean(version && !version.publishedAt);
+  // Published, but the lesson is still on an earlier version.
+  const lessonOnOlderVersion =
+    assignedToThisLesson &&
+    !hasUnpublishedChanges &&
+    Boolean(
+      latestPublishedVersion &&
+      assignment?.quizVersionId !== latestPublishedVersion.id,
+    );
+  const publishingChanges =
+    publishStep !== null || publish.isPending || updateAssignment.isPending;
+  // The buttons below, offered only with every permission their steps take:
+  // creating the quiz, publishing it, pointing the lesson at it.
+  const assignsToLesson = Boolean(effectiveCourseId && effectiveLessonId);
+  const mayPublishAndAssign =
+    (quizId ? true : createsQuizzes) &&
+    (quizId && version?.publishedAt && assignsToLesson
+      ? true
+      : publishesQuizzes) &&
+    (!assignsToLesson || editsSettings);
+  const mayUpdateLessonVersion = hasUnpublishedChanges
+    ? publishesQuizzes && editsSettings
+    : editsSettings;
+
+  // The question open in the editor, as it stands right now.
+  const editingProblem = editingQuestionId
+    ? quizQuestionProblem({ questionType, prompt, options })
+    : null;
+  // Shown after a save or publish was held back, and gone as soon as the
+  // question it points at is finished.
+  const unfinishedNotice = (() => {
+    if (!unfinishedQuestion) return null;
+    const flagged = editableQuestions[unfinishedQuestion.number - 1];
+    if (!flagged) return null;
+    const problem =
+      flagged.id === editingQuestionId
+        ? editingProblem
+        : quizQuestionProblem(flagged);
+    return problem
+      ? `Question ${unfinishedQuestion.number} is not finished: ${problem}.`
+      : null;
+  })();
 
   // Render: Unified Quiz Authoring Panel
   return (
     <div data-quiz-surface="" className="space-y-3 sm:space-y-5 text-(--text)">
       {/* Top Header Card with Quiz Selector and Back Action */}
-      <div
-        className="rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) px-2.5 py-2 sm:p-5"
-        style={{ boxShadow: "var(--card-shadow)" }}
-      >
+      <ElevatedCard as="div" className="px-2.5 py-2 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {onBack ? (
@@ -1393,7 +1629,7 @@ export function QuizAuthoringPanel({
               </div>
             ) : null}
 
-            {assignment && Boolean(courseId && lessonId) && (
+            {assignment && Boolean(courseId && lessonId) && editsSettings && (
               <button
                 type="button"
                 onClick={() => setShowDetachConfirm(true)}
@@ -1413,31 +1649,33 @@ export function QuizAuthoringPanel({
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={
-                !quizId ||
-                deleteQuizMutation.isPending ||
-                deleteAssignmentMutation.isPending
-              }
-              className="h-8.5 sm:h-9 px-3 sm:px-3.5 inline-flex items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-red-500/60 bg-red-600/20 text-xs sm:text-sm font-semibold text-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-[var(--card-compact-shadow)] transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-40"
-              title={
-                quizId
-                  ? "Permanently delete this quiz"
-                  : "No quiz loaded to delete"
-              }
-            >
-              <Trash
-                size={14}
-                weight="bold"
-                className="shrink-0 text-red-400 group-hover:text-white"
-              />
-              <span>Delete quiz</span>
-            </button>
+            {deletesQuizzes && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={
+                  !quizId ||
+                  deleteQuizMutation.isPending ||
+                  deleteAssignmentMutation.isPending
+                }
+                className="h-8.5 sm:h-9 px-3 sm:px-3.5 inline-flex items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-red-500/60 bg-red-600/20 text-xs sm:text-sm font-semibold text-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-[var(--card-compact-shadow)] transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-40"
+                title={
+                  quizId
+                    ? "Permanently delete this quiz"
+                    : "No quiz loaded to delete"
+                }
+              >
+                <Trash
+                  size={14}
+                  weight="bold"
+                  className="shrink-0 text-red-400 group-hover:text-white"
+                />
+                <span>Delete quiz</span>
+              </button>
+            )}
           </div>
         </div>
-      </div>
+      </ElevatedCard>
 
       {quiz.isLoading && !quiz.data && !lastLoadedQuizIdRef.current ? (
         <div className="my-8">
@@ -1448,10 +1686,7 @@ export function QuizAuthoringPanel({
       {!quizId || quiz.data || lastLoadedQuizIdRef.current ? (
         <div className="space-y-3 sm:space-y-5">
           {/* Card 1: Quiz Details */}
-          <div
-            className="rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:p-6"
-            style={{ boxShadow: "var(--card-shadow)" }}
-          >
+          <ElevatedCard as="div" className="p-2.5 sm:p-6">
             <div className="flex items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-(--text) tracking-tight">
@@ -1474,7 +1709,11 @@ export function QuizAuthoringPanel({
               )}
             </div>
 
-            <div className="space-y-3 sm:space-y-4">
+            {/* Shown, not editable, without quiz.settings.update. */}
+            <div
+              inert={!editsDetails}
+              className={`space-y-3 sm:space-y-4 ${editsDetails ? "" : "opacity-60"}`}
+            >
               <label className="block">
                 <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
                   Quiz title <span className="text-(--accent)">*</span>
@@ -1547,13 +1786,10 @@ export function QuizAuthoringPanel({
                 />
               </div>
             </div>
-          </div>
+          </ElevatedCard>
 
           {/* Card 2: Questions with In-Place Curriculum-Style Accordion Authoring */}
-          <div
-            className="rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:p-6"
-            style={{ boxShadow: "var(--card-shadow)" }}
-          >
+          <ElevatedCard as="div" className="p-2.5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-(--text) tracking-tight">
@@ -1570,7 +1806,11 @@ export function QuizAuthoringPanel({
                   total points
                 </span>
                 <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-2.5 py-0.5 sm:py-1 text-[0.7rem] sm:text-[0.72rem] font-semibold text-(--text-secondary)">
-                  {version?.publishedAt ? "Published version" : "Draft version"}
+                  {hasUnpublishedChanges
+                    ? "Unpublished changes"
+                    : version?.publishedAt
+                      ? "Published version"
+                      : "Draft version"}
                 </span>
               </div>
             </div>
@@ -1582,7 +1822,11 @@ export function QuizAuthoringPanel({
                 const correctCount = question.options.filter(
                   (option) => option.isCorrect,
                 ).length;
-                const promptSummary = stripHtml(question.prompt);
+                // One line of plain text: the formatting marks of the
+                // question ("**", backticks) are not part of its summary.
+                const promptSummary = markdownToPlainText(
+                  stripHtml(question.prompt),
+                );
 
                 return (
                   <div
@@ -1625,11 +1869,12 @@ export function QuizAuthoringPanel({
                         </span>
                         <span className="hidden md:inline-block text-[0.72rem] text-(--muted)">
                           {question.questionType === "short_answer"
-                            ? "Text input answer"
+                            ? "Free response"
                             : `${correctCount} correct choice${correctCount === 1 ? "" : "s"}`}
                         </span>
                         <button
                           type="button"
+                          hidden={!editsQuestions}
                           disabled={deleteQuestion.isPending}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1642,20 +1887,14 @@ export function QuizAuthoringPanel({
                                   current.filter((q) => q.id !== question.id),
                                 );
                               } else {
-                                qc.setQueryData(
+                                qc.setQueryData<Quiz>(
                                   quizKeys.detail(quizId),
-                                  (prev: any) => {
-                                    if (!prev) return prev;
-                                    return {
-                                      ...prev,
-                                      versions: prev.versions.map((v: any) => ({
-                                        ...v,
-                                        questions: v.questions.filter(
-                                          (q: any) => q.id !== question.id,
-                                        ),
-                                      })),
-                                    };
-                                  },
+                                  (prev) =>
+                                    withEditableQuestions(prev, (questions) =>
+                                      questions.filter(
+                                        (q) => q.id !== question.id,
+                                      ),
+                                    ),
                                 );
                               }
                               return;
@@ -1856,134 +2095,24 @@ export function QuizAuthoringPanel({
 
                         {/* Short Answer (Input Box Question) vs Multiple Choice Options */}
                         {questionType === "short_answer" ? (
-                          <div className="rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-[inset_0_1px_3px_color-mix(in_srgb,black_10%,transparent)] space-y-3">
+                          // A free response: the learner writes anything and
+                          // there is nothing to match it against, so there
+                          // is nothing for the author to fill in here.
+                          <div className="flex items-start gap-3 rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-[inset_0_1px_3px_color-mix(in_srgb,black_10%,transparent)]">
+                            <FileText
+                              size={18}
+                              weight="duotone"
+                              className="mt-0.5 shrink-0 text-(--accent)"
+                            />
                             <div>
                               <span className="text-xs font-bold text-(--text) tracking-tight">
-                                Correct Answer (Learner Input Box)
+                                Learners get a text box
                               </span>
-                              <p className="mt-0.5 text-[0.72rem] text-(--muted)">
-                                Learners will see a text input box to type their
-                                response. Enter the correct answer below (graded
-                                case-insensitively).
+                              <p className="mt-0.5 text-[0.72rem] leading-relaxed text-(--muted)">
+                                They can write anything. Any answer earns this
+                                question&apos;s full points; a blank answer
+                                earns none. There is no correct answer to set.
                               </p>
-                            </div>
-
-                            {/* Primary Answer Box */}
-                            <div className="space-y-2.5">
-                              <div>
-                                <input
-                                  value={options[0]?.text ?? ""}
-                                  onChange={(event) => {
-                                    const val = event.target.value;
-                                    const nextOpts = [
-                                      {
-                                        ...(options[0] ?? {}),
-                                        text: val,
-                                        isCorrect: true,
-                                      },
-                                      ...options.slice(1).map((o) => ({
-                                        ...o,
-                                        isCorrect: true,
-                                      })),
-                                    ];
-                                    setOptions(nextOpts);
-                                    scheduleAutoSaveQuestion(
-                                      undefined,
-                                      nextOpts,
-                                    );
-                                  }}
-                                  onBlur={() => flushQuestionSave()}
-                                  className={`${inputClass} w-full !h-9.5 sm:!h-10 text-sm`}
-                                  aria-label="Expected correct answer"
-                                  placeholder="Type the expected answer (e.g. Photosynthesis)..."
-                                />
-                              </div>
-
-                              {/* Alternative accepted answers (if any) */}
-                              {options.length > 1 && (
-                                <div className="pt-1.5 space-y-2">
-                                  <span className="block text-[0.72rem] font-semibold text-(--text-secondary)">
-                                    Alternative accepted answers (optional
-                                    variations):
-                                  </span>
-                                  {options.slice(1).map((option, altIndex) => {
-                                    const realIndex = altIndex + 1;
-                                    return (
-                                      <div
-                                        key={option.id ?? realIndex}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <input
-                                          value={option.text}
-                                          onChange={(event) => {
-                                            const nextOpts = options.map(
-                                              (item, idx) =>
-                                                idx === realIndex
-                                                  ? {
-                                                      ...item,
-                                                      text: event.target.value,
-                                                      isCorrect: true,
-                                                    }
-                                                  : item,
-                                            );
-                                            setOptions(nextOpts);
-                                            scheduleAutoSaveQuestion(
-                                              undefined,
-                                              nextOpts,
-                                            );
-                                          }}
-                                          onBlur={() => flushQuestionSave()}
-                                          className={`${inputClass} flex-1 min-w-0 !h-9 text-xs sm:text-sm`}
-                                          aria-label={`Alternative accepted answer ${realIndex}`}
-                                          placeholder={`Alternative answer variation ${realIndex} (e.g. abbreviation)...`}
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const nextOpts = options.filter(
-                                              (_, idx) => idx !== realIndex,
-                                            );
-                                            setOptions(nextOpts);
-                                            scheduleAutoSaveQuestion(
-                                              undefined,
-                                              nextOpts,
-                                            );
-                                          }}
-                                          title={`Remove alternative answer ${realIndex}`}
-                                          aria-label={`Remove alternative answer ${realIndex}`}
-                                          className="flex size-8 shrink-0 items-center justify-center rounded-lg text-(--muted) hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
-                                        >
-                                          <Trash size={14} />
-                                        </button>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextOptions = [
-                                      ...options,
-                                      { text: "", isCorrect: true },
-                                    ];
-                                    setOptions(nextOptions);
-                                    scheduleAutoSaveQuestion(
-                                      undefined,
-                                      nextOptions,
-                                    );
-                                  }}
-                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-(--accent) hover:underline cursor-pointer"
-                                >
-                                  <Plus size={13} weight="bold" />
-                                  <span>
-                                    + Add another acceptable variation
-                                    (optional)
-                                  </span>
-                                </button>
-                              </div>
                             </div>
                           </div>
                         ) : (
@@ -2114,7 +2243,20 @@ export function QuizAuthoringPanel({
                               <span>Done Editing</span>
                             </button>
                           </div>
-                          <AutoSaveIndicator status={questionSaveStatus} />
+                          {/* An unfinished question is not saved. Saying
+                              so here beats a save indicator that stays
+                              silent while nothing is being saved. */}
+                          {editingProblem ? (
+                            <p
+                              role="status"
+                              className={`text-xs font-semibold ${CAUTION_TEXT}`}
+                            >
+                              {quizId ? "Not saved yet" : "Not finished"}:{" "}
+                              {editingProblem}.
+                            </p>
+                          ) : (
+                            <AutoSaveIndicator status={questionSaveStatus} />
+                          )}
                         </div>
                       </div>
                     )}
@@ -2136,7 +2278,10 @@ export function QuizAuthoringPanel({
             </div>
 
             {/* Add Question Button (Course Curriculum Style) */}
-            <div className="mt-3 pt-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+            <div
+              hidden={!editsQuestions}
+              className="mt-3 pt-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+            >
               <button
                 type="button"
                 onClick={handleAddNewQuestion}
@@ -2147,13 +2292,10 @@ export function QuizAuthoringPanel({
                 <span>Add question</span>
               </button>
             </div>
-          </div>
+          </ElevatedCard>
 
           {/* Card 4: Course Assignment & Delivery Rules */}
-          <div
-            className="rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:p-6"
-            style={{ boxShadow: "var(--card-shadow)" }}
-          >
+          <ElevatedCard as="div" className="p-2.5 sm:p-6">
             <div className="flex items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-(--text) tracking-tight">
@@ -2269,20 +2411,41 @@ export function QuizAuthoringPanel({
               <div className="space-y-3 sm:space-y-4">
                 {assignment ? (
                   assignment.quizId === quizId ? (
-                    <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs font-medium text-emerald-500">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <CheckCircle
-                          size={15}
-                          weight="bold"
-                          className="shrink-0"
-                        />
-                        <span className="truncate">
-                          This quiz is currently assigned to this lesson.
-                          Delivery rules are active and auto-saving.
+                    <div
+                      className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+                        hasUnpublishedChanges || lessonOnOlderVersion
+                          ? `border-[color-mix(in_srgb,#f59e0b_30%,transparent)] bg-[color-mix(in_srgb,#f59e0b_10%,transparent)] ${CAUTION_TEXT}`
+                          : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2 min-w-0">
+                        {hasUnpublishedChanges || lessonOnOlderVersion ? (
+                          <WarningCircle
+                            size={15}
+                            weight="bold"
+                            className="mt-px shrink-0"
+                          />
+                        ) : (
+                          <CheckCircle
+                            size={15}
+                            weight="bold"
+                            className="mt-px shrink-0"
+                          />
+                        )}
+                        {/* Said plainly, because it was not: the banner
+                            used to read "active and auto-saving" while
+                            learners went on getting the old questions. */}
+                        <span>
+                          {hasUnpublishedChanges
+                            ? "Your changes are saved, but learners still get the version published before. Publish changes to give them this one."
+                            : lessonOnOlderVersion
+                              ? "A newer version of this quiz is published, but this lesson is still on an older one."
+                              : "This quiz is assigned to this lesson, and learners get its latest published version."}
                         </span>
                       </div>
                       <button
                         type="button"
+                        hidden={!editsSettings}
                         onClick={() => setShowDetachConfirm(true)}
                         disabled={deleteAssignmentMutation.isPending}
                         className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold text-rose-500 hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
@@ -2311,72 +2474,79 @@ export function QuizAuthoringPanel({
                   )
                 ) : null}
 
-                <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-3">
-                  <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Pass percentage
-                    </span>
+                {/* The delivery rules take quiz.settings.update; without it
+                    they are shown, not editable. */}
+                <div
+                  inert={!editsSettings}
+                  className={`space-y-3 sm:space-y-4 ${editsSettings ? "" : "opacity-60"}`}
+                >
+                  <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-3">
+                    <label className="block">
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Pass percentage
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={passPercentage}
+                        onChange={(event) => {
+                          setPassPercentage(Number(event.target.value));
+                          scheduleAutoSaveAssignment();
+                        }}
+                        onBlur={flushAssignmentPersistence}
+                        className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Maximum attempts
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={maxAttempts}
+                        onChange={(event) => {
+                          setMaxAttempts(Number(event.target.value));
+                          scheduleAutoSaveAssignment();
+                        }}
+                        onBlur={flushAssignmentPersistence}
+                        className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Time limit (minutes)
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="1440"
+                        value={timeLimitMinutes}
+                        onChange={(event) => {
+                          setTimeLimitMinutes(Number(event.target.value));
+                          scheduleAutoSaveAssignment();
+                        }}
+                        onBlur={flushAssignmentPersistence}
+                        className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      />
+                    </label>
+                  </div>
+
+                  <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
                     <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={passPercentage}
+                      type="checkbox"
+                      checked={required}
                       onChange={(event) => {
-                        setPassPercentage(Number(event.target.value));
+                        setRequired(event.target.checked);
                         scheduleAutoSaveAssignment();
                       }}
-                      onBlur={flushAssignmentPersistence}
-                      className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
                     />
-                  </label>
-                  <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Maximum attempts
-                    </span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={maxAttempts}
-                      onChange={(event) => {
-                        setMaxAttempts(Number(event.target.value));
-                        scheduleAutoSaveAssignment();
-                      }}
-                      onBlur={flushAssignmentPersistence}
-                      className={`${inputClass} w-full !h-9.5 sm:!h-10`}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Time limit (minutes)
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="1440"
-                      value={timeLimitMinutes}
-                      onChange={(event) => {
-                        setTimeLimitMinutes(Number(event.target.value));
-                        scheduleAutoSaveAssignment();
-                      }}
-                      onBlur={flushAssignmentPersistence}
-                      className={`${inputClass} w-full !h-9.5 sm:!h-10`}
-                    />
+                    <span>Required course assessment to complete lesson</span>
                   </label>
                 </div>
-
-                <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={required}
-                    onChange={(event) => {
-                      setRequired(event.target.checked);
-                      scheduleAutoSaveAssignment();
-                    }}
-                    className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
-                  />
-                  <span>Required course assessment to complete lesson</span>
-                </label>
 
                 {/* Free Preview Toggle & Standalone Pricing Note */}
                 <div className="rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] space-y-3">
@@ -2390,7 +2560,10 @@ export function QuizAuthoringPanel({
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                  <div
+                    hidden={!editsLessonPreview}
+                    className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                  >
                     <div className="pr-3">
                       <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
                         Free Preview
@@ -2428,107 +2601,114 @@ export function QuizAuthoringPanel({
                   </div>
                 </div>
 
-                {assignment && versionOptions.length > 0 ? (
+                <div
+                  inert={!editsSettings}
+                  className={`space-y-3 sm:space-y-4 ${editsSettings ? "" : "opacity-60"}`}
+                >
+                  {assignment && versionOptions.length > 0 ? (
+                    <div>
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Assigned published version
+                      </span>
+                      <ThemedSelect
+                        value={assignmentVersionId ?? ""}
+                        onValueChange={(val) => {
+                          setAssignmentVersionId(val);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        options={versionOptions}
+                        ariaLabel="Assigned published version"
+                        triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
+                      />
+                    </div>
+                  ) : null}
+
                   <div>
                     <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Assigned published version
+                      Result feedback mode
                     </span>
                     <ThemedSelect
-                      value={assignmentVersionId ?? ""}
+                      value={feedbackMode}
                       onValueChange={(val) => {
-                        setAssignmentVersionId(val);
+                        setFeedbackMode(val as typeof feedbackMode);
                         scheduleAutoSaveAssignment();
                       }}
-                      options={versionOptions}
-                      ariaLabel="Assigned published version"
+                      options={FEEDBACK_MODE_OPTIONS}
+                      ariaLabel="Result feedback mode"
                       triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
                     />
                   </div>
-                ) : null}
 
-                <div>
-                  <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                    Result feedback mode
-                  </span>
-                  <ThemedSelect
-                    value={feedbackMode}
-                    onValueChange={(val) => {
-                      setFeedbackMode(val as typeof feedbackMode);
-                      scheduleAutoSaveAssignment();
-                    }}
-                    options={FEEDBACK_MODE_OPTIONS}
-                    ariaLabel="Result feedback mode"
-                    triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
-                  />
-                </div>
-
-                <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-2">
-                  <div>
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Available from{" "}
-                      <span className="text-(--muted) font-normal">
-                        (optional)
+                  <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-2">
+                    <div>
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Available from{" "}
+                        <span className="text-(--muted) font-normal">
+                          (optional)
+                        </span>
                       </span>
-                    </span>
-                    <ThemedDateTimePicker
-                      value={availableFrom}
-                      onChange={(val) => {
-                        setAvailableFrom(val);
-                        scheduleAutoSaveAssignment();
-                      }}
-                      ariaLabel="Available from"
-                      placeholder="dd/mm/yyyy --:--"
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Available until{" "}
-                      <span className="text-(--muted) font-normal">
-                        (optional)
+                      <ThemedDateTimePicker
+                        value={availableFrom}
+                        onChange={(val) => {
+                          setAvailableFrom(val);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        ariaLabel="Available from"
+                        placeholder="dd/mm/yyyy --:--"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Available until{" "}
+                        <span className="text-(--muted) font-normal">
+                          (optional)
+                        </span>
                       </span>
-                    </span>
-                    <ThemedDateTimePicker
-                      value={availableUntil}
-                      onChange={(val) => {
-                        setAvailableUntil(val);
-                        scheduleAutoSaveAssignment();
-                      }}
-                      ariaLabel="Available until"
-                      placeholder="dd/mm/yyyy --:--"
-                    />
+                      <ThemedDateTimePicker
+                        value={availableUntil}
+                        onChange={(val) => {
+                          setAvailableUntil(val);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        ariaLabel="Available until"
+                        placeholder="dd/mm/yyyy --:--"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={shuffleQuestions}
-                      onChange={(event) => {
-                        setShuffleQuestions(event.target.checked);
-                        scheduleAutoSaveAssignment();
-                      }}
-                      className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
-                    />
-                    <span>Shuffle questions for each student attempt</span>
-                  </label>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shuffleQuestions}
+                        onChange={(event) => {
+                          setShuffleQuestions(event.target.checked);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
+                      />
+                      <span>Shuffle questions for each student attempt</span>
+                    </label>
 
-                  <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={shuffleOptions}
-                      onChange={(event) => {
-                        setShuffleOptions(event.target.checked);
-                        scheduleAutoSaveAssignment();
-                      }}
-                      className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
-                    />
-                    <span>Shuffle answer options for each student attempt</span>
-                  </label>
+                    <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shuffleOptions}
+                        onChange={(event) => {
+                          setShuffleOptions(event.target.checked);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
+                      />
+                      <span>
+                        Shuffle answer options for each student attempt
+                      </span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="pt-2 sm:pt-3 flex flex-wrap items-center gap-3">
-                  {!quizId ? (
+                  {!quizId && createsQuizzes ? (
                     <Button
                       onClick={() => persistBrowserDraft()}
                       disabled={!canPersistBrowserDraft || create.isPending}
@@ -2538,12 +2718,47 @@ export function QuizAuthoringPanel({
                       {create.isPending ? "Saving quiz..." : "Save draft"}
                     </Button>
                   ) : null}
-                  {assignment && assignment.quizId === quizId ? (
+                  {hasUnpublishedChanges || lessonOnOlderVersion ? (
+                    <div
+                      hidden={!mayUpdateLessonVersion}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-2"
+                    >
+                      <Button
+                        onClick={
+                          hasUnpublishedChanges
+                            ? publishChanges
+                            : () =>
+                                latestPublishedVersion &&
+                                moveLessonToVersion(latestPublishedVersion.id)
+                        }
+                        disabled={
+                          publishingChanges || !editableQuestions.length
+                        }
+                        className="h-9.5 sm:h-10 px-4 sm:px-5 font-semibold text-xs sm:text-sm"
+                      >
+                        {publishingChanges ? (
+                          <>
+                            <CircleNotch size={15} className="animate-spin" />
+                            Publishing...
+                          </>
+                        ) : hasUnpublishedChanges ? (
+                          "Publish changes"
+                        ) : (
+                          "Use latest version"
+                        )}
+                      </Button>
+                      <p className="max-w-md text-[0.72rem] leading-relaxed text-(--muted)">
+                        Learners who have not handed the quiz in restart on the
+                        new questions. Attempts already handed in keep their
+                        marks.
+                      </p>
+                    </div>
+                  ) : assignment && assignment.quizId === quizId ? (
                     <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3.5 py-2 text-xs sm:text-sm font-semibold text-emerald-500">
                       <CheckCircle size={16} weight="bold" />
                       <span>Assigned to lesson</span>
                     </span>
-                  ) : (
+                  ) : mayPublishAndAssign ? (
                     <Button
                       onClick={publishAndAssign}
                       disabled={
@@ -2570,7 +2785,7 @@ export function QuizAuthoringPanel({
                         "Publish & assign"
                       )}
                     </Button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -2582,7 +2797,7 @@ export function QuizAuthoringPanel({
                 </p>
                 {!version?.publishedAt && (
                   <div className="mt-3 flex flex-wrap justify-center gap-2">
-                    {!quizId ? (
+                    {!quizId && createsQuizzes ? (
                       <Button
                         onClick={() => persistBrowserDraft()}
                         disabled={!canPersistBrowserDraft || create.isPending}
@@ -2593,6 +2808,7 @@ export function QuizAuthoringPanel({
                       </Button>
                     ) : null}
                     <Button
+                      hidden={!mayPublishAndAssign}
                       onClick={publishAndAssign}
                       disabled={
                         !editableQuestions.length ||
@@ -2621,7 +2837,28 @@ export function QuizAuthoringPanel({
                 )}
               </div>
             )}
+          </ElevatedCard>
+        </div>
+      ) : null}
+
+      {unfinishedNotice ? (
+        <div
+          role="alert"
+          className={`flex items-center justify-between gap-3 p-3 sm:p-3.5 rounded-xl border border-[color-mix(in_srgb,#f59e0b_30%,transparent)] bg-[color-mix(in_srgb,#f59e0b_10%,transparent)] text-xs sm:text-sm font-medium ${CAUTION_TEXT}`}
+        >
+          <div className="flex items-center gap-2">
+            <WarningCircle size={16} className="shrink-0" />
+            <span>{unfinishedNotice}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setUnfinishedQuestion(null)}
+            className="flex size-6 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[color-mix(in_srgb,#f59e0b_18%,transparent)] cursor-pointer"
+            aria-label="Dismiss notice"
+            title="Dismiss notice"
+          >
+            <X size={14} weight="bold" />
+          </button>
         </div>
       ) : null}
 

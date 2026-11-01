@@ -10,6 +10,7 @@ import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
+import { MarkdownLogoIcon as MarkdownLogo } from "@phosphor-icons/react/MarkdownLogo";
 import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
@@ -29,6 +30,7 @@ import {
   createDiscussionDraft,
   createEmptyDiscussionDraft,
   hasDiscussionDraftContent,
+  markdownToPlainText,
 } from "./discussion-editor/types";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
@@ -48,7 +50,9 @@ import {
 import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
 import { useCurrentUser } from "../services/auth";
+import { useCapabilities } from "../services/authorization/authorization.queries";
 import { DiscussionAvatar } from "./DiscussionAvatar";
+import { ProfileLink } from "../profiles/ProfileLink";
 import {
   DiscussionAttachmentsList,
   type DiscussionAttachmentItem,
@@ -61,6 +65,8 @@ import {
   flattenReplyPages,
   getReplyTotalCount,
 } from "../services/learning-interactions/reply-pagination";
+import { TimeAgo } from "../components/TimeAgo";
+import { cheerLike } from "../components/likeFeedback";
 
 export interface CommentReply {
   id: string | number;
@@ -68,7 +74,11 @@ export interface CommentReply {
   serverId?: string;
   creationStatus?: "pending" | "confirmed";
   name: string;
+  /** Opens their profile from the name and picture when present. */
+  authorUsername?: string;
   time: string;
+  /** When it was written, for the exact time on hover or tap. */
+  createdAt?: string | number;
   avatar: string;
   text: string;
   content?: DiscussionContent;
@@ -86,6 +96,8 @@ export interface Comment {
   serverId?: string;
   creationStatus?: "pending" | "confirmed";
   name: string;
+  /** Opens their profile from the name and picture when present. */
+  authorUsername?: string;
   time: string;
   avatar: string;
   text: string;
@@ -154,12 +166,29 @@ interface CommentCardProps {
   onCopyTextNotice?: (message: string) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
-  userRole?: string;
+  /**
+   * May lock any thread and accept any answer: the course's creator, or a
+   * role that moderates every course (decided in Discussion, as the API does).
+   */
+  canModerate?: boolean;
   courseId?: string;
   canParticipate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   isDeepLinkTarget?: boolean;
+  /**
+   * A link pointed at this entry: once the card is on screen its highlight
+   * pulses, then `onHighlightShown` is called.
+   */
+  isHighlighted?: boolean;
+  onHighlightShown?: () => void;
+  /**
+   * Marks the entry a link led to with a tint of the accent colour behind
+   * it and an accent bar on its leading edge (no text label). In the
+   * lesson's list the tint runs out through the lesson panel's side padding
+   * to its edges, while the entry's content stays in line with the others.
+   */
+  showHighlightedLabel?: boolean;
   constrainToContainer?: boolean;
 }
 
@@ -180,14 +209,74 @@ export const CommentCard = React.memo(function CommentCard({
   onCopyTextNotice,
   isBackendMode = false,
   currentUserId,
-  userRole,
+  canModerate = false,
   courseId,
   canParticipate = true,
   canEdit = true,
   canDelete = true,
   isDeepLinkTarget = false,
+  isHighlighted = false,
+  onHighlightShown,
+  showHighlightedLabel = false,
   constrainToContainer = false,
 }: CommentCardProps) {
+  const articleRef = useRef<HTMLElement>(null);
+  // Where the press that ends in a click began. A press that travelled
+  // (selecting text by dragging) is a selection, not a click on the card.
+  const pressStartRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const article = articleRef.current;
+    if (!isHighlighted || !article) return undefined;
+    if (
+      typeof article.animate !== "function" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      onHighlightShown?.();
+      return undefined;
+    }
+
+    let animation: Animation | undefined;
+    const play = () => {
+      const accent =
+        getComputedStyle(article).getPropertyValue("--accent").trim() ||
+        "currentColor";
+      const tint = (amount: number) =>
+        `color-mix(in srgb, ${accent} ${amount}%, transparent)`;
+      const edge = (amount: number) => `inset 3px 0 0 ${tint(amount)}`;
+      // Two soft pulses that settle on the resting tint the card keeps.
+      animation = article.animate(
+        [
+          { backgroundColor: tint(10), boxShadow: edge(100) },
+          { backgroundColor: tint(26), boxShadow: edge(100), offset: 0.15 },
+          { backgroundColor: tint(10), boxShadow: edge(100), offset: 0.4 },
+          { backgroundColor: tint(24), boxShadow: edge(100), offset: 0.6 },
+          { backgroundColor: tint(10), boxShadow: edge(100) },
+        ],
+        { duration: 2800, delay: 200, easing: "ease-in-out" },
+      );
+      animation.onfinish = () => onHighlightShown?.();
+    };
+
+    // Wait until the card is in view, so the pulse is not spent while the
+    // page is still scrolling to it.
+    if (typeof IntersectionObserver !== "function") {
+      play();
+      return () => animation?.cancel();
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        play();
+      },
+      { threshold: 0.6 },
+    );
+    observer.observe(article);
+    return () => {
+      observer.disconnect();
+      animation?.cancel();
+    };
+  }, [isHighlighted, onHighlightShown]);
   const queryClient = useContext(QueryClientContext);
   const [localLiked, setLocalLiked] = useState(comment.liked ?? false);
   const isCommentLiked = isBackendMode ? Boolean(comment.liked) : localLiked;
@@ -224,22 +313,10 @@ export const CommentCard = React.memo(function CommentCard({
   const { data: authUser } = useCurrentUser();
   const effectiveUserId = currentUserId ?? authUser?.id;
   const isQuestion = entryKind === "question" || Boolean(comment.isQuestion);
-  const isModerator = Boolean(
-    userRole === "Instructor" ||
-    userRole === "Admin" ||
-    authUser?.roles?.some(
-      (r) =>
-        r.toLowerCase() === "admin" ||
-        r.toLowerCase() === "instructor" ||
-        r.toLowerCase() === "creator",
-    ) ||
-    (authUser as any)?.role === "Instructor" ||
-    (authUser as any)?.role === "Admin",
-  );
   const canLock =
-    canParticipate && !isNote && (Boolean(comment.isOwn) || isModerator);
+    canParticipate && !isNote && (Boolean(comment.isOwn) || canModerate);
   const canAcceptAnswer =
-    canParticipate && isQuestion && (Boolean(comment.isOwn) || isModerator);
+    canParticipate && isQuestion && (Boolean(comment.isOwn) || canModerate);
 
   const {
     data: repliesData,
@@ -259,9 +336,9 @@ export const CommentCard = React.memo(function CommentCard({
 
   const backendReplies = useMemo<CommentReply[]>(() => {
     return flattenReplyPages(repliesData, threadId ?? "").map((reply) =>
-      adaptLearningReplyToCommentReply(reply, effectiveUserId),
+      adaptLearningReplyToCommentReply(reply),
     );
-  }, [repliesData, effectiveUserId, threadId]);
+  }, [repliesData, threadId]);
 
   const effectiveReplies = isBackendEntity ? backendReplies : localReplies;
 
@@ -444,15 +521,36 @@ export const CommentCard = React.memo(function CommentCard({
 
   return (
     <article
+      ref={articleRef}
       id={`discussion-entry-${clientId}`}
       data-discussion-entry={entryKind}
       data-note-id={isNote ? (serverId ?? clientId) : undefined}
       aria-current={isDeepLinkTarget ? "location" : undefined}
       tabIndex={isDeepLinkTarget ? -1 : undefined}
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative ${constrainToContainer ? "py-3.5 sm:py-4" : "-mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4"} ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""}`}
+      className={`relative ${constrainToContainer ? "-mx-(--learning-lesson-content-inset) px-(--learning-lesson-content-inset) py-3.5 sm:py-4" : "-mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4"} ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""} ${showHighlightedLabel ? `max-sm:mt-4 bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] shadow-[inset_3px_0_0_var(--accent)]` : ""}`}
+      onPointerDown={(event) => {
+        pressStartRef.current = { x: event.clientX, y: event.clientY };
+      }}
       onClick={(event) => {
         if (!hasReplies) return;
+        const pressStart = pressStartRef.current;
+        pressStartRef.current = null;
+        // Selecting text, by dragging or by a double or triple click, opens
+        // and closes nothing: only a plain click on the card does.
+        const moved =
+          pressStart !== null &&
+          Math.hypot(
+            event.clientX - pressStart.x,
+            event.clientY - pressStart.y,
+          ) > 4;
+        const selection = window.getSelection();
+        const selectedHere =
+          selection !== null &&
+          !selection.isCollapsed &&
+          selection.anchorNode !== null &&
+          event.currentTarget.contains(selection.anchorNode);
+        if (moved || selectedHere || event.detail > 1) return;
         const target = event.target;
         if (
           target instanceof Element &&
@@ -472,10 +570,16 @@ export const CommentCard = React.memo(function CommentCard({
       >
         <div className="min-h-0 overflow-hidden">
           <div className="relative flex gap-3 sm:gap-3.5">
-            <DiscussionAvatar
-              src={comment.avatar}
-              className="relative z-10 size-10 sm:size-11"
-            />
+            <ProfileLink
+              username={comment.authorUsername}
+              variant="picture"
+              className="relative z-10"
+            >
+              <DiscussionAvatar
+                src={comment.avatar}
+                className="relative z-10 size-10 sm:size-11"
+              />
+            </ProfileLink>
 
             <div className="min-w-0 flex-1">
               <div
@@ -483,8 +587,13 @@ export const CommentCard = React.memo(function CommentCard({
                 className="relative flex items-start gap-2 pr-9"
               >
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-                  <h2 className="text-sm font-semibold text-(--text) sm:text-[15px]">
-                    {comment.name}
+                  <h2 className="text-[0.9375rem] font-bold text-(--text)">
+                    <ProfileLink
+                      username={comment.authorUsername}
+                      variant="name"
+                    >
+                      {comment.isOwn ? `${comment.name} (You)` : comment.name}
+                    </ProfileLink>
                   </h2>
                   {comment.role === "Instructor" && (
                     <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
@@ -499,13 +608,17 @@ export const CommentCard = React.memo(function CommentCard({
                   <span
                     data-comment-time-separator
                     aria-hidden="true"
-                    className="text-xs text-(--muted) sm:text-sm"
+                    className="text-[0.8125rem] text-(--muted)"
                   >
                     ·
                   </span>
-                  <span className="text-xs text-(--muted) sm:text-sm">
-                    {comment.time}
-                  </span>
+                  {/* The date alone is shown; the pointer brings up the
+                      full moment it was written, to the second. */}
+                  <TimeAgo
+                    value={comment.createdAt}
+                    label={comment.time}
+                    className="text-[0.8125rem] text-(--muted)"
+                  />
                   <span
                     role="img"
                     aria-label={entryLabel}
@@ -532,15 +645,6 @@ export const CommentCard = React.memo(function CommentCard({
                       />
                     )}
                   </span>
-                  {isQuestion && Boolean(comment.isSolved) && (
-                    <span
-                      data-testid="qa-solved-badge"
-                      className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400"
-                    >
-                      <CheckCircle size={13} weight="bold" aria-hidden="true" />
-                      <span>Solved</span>
-                    </span>
-                  )}
                   {Boolean(comment.isLocked) && (
                     <span
                       data-testid="thread-locked-badge"
@@ -575,6 +679,18 @@ export const CommentCard = React.memo(function CommentCard({
                       <span>Following</span>
                     </span>
                   )}
+                  {/* As on the Discussions page: the username on its own
+                      line under the name. */}
+                  {comment.authorUsername && (
+                    <span className="-mt-1 basis-full truncate text-[0.8125rem] text-(--muted)">
+                      <ProfileLink
+                        username={comment.authorUsername}
+                        variant="name"
+                      >
+                        @{comment.authorUsername.replace(/^@+/, "")}
+                      </ProfileLink>
+                    </span>
+                  )}
                 </div>
                 <CommentActionMenu
                   name={comment.name}
@@ -595,7 +711,7 @@ export const CommentCard = React.memo(function CommentCard({
                   onEdit={() => onEdit(comment)}
                   onShare={() =>
                     serverId
-                      ? void shareDiscussionEntry(
+                      ? shareDiscussionEntry(
                           serverId,
                           comment.name,
                           comment.text,
@@ -651,7 +767,7 @@ export const CommentCard = React.memo(function CommentCard({
                 enableInlineTimestamps={Boolean(onSeekToTimestamp)}
                 onSeekToTimestamp={onSeekToTimestamp}
                 preserveSoftBreaks
-                className="mt-0.5 pr-9 sm:pr-10"
+                className="mt-1 pr-0 text-[0.9375rem]! leading-relaxed! text-(--text)! sm:pr-10 sm:text-base!"
               />
 
               {comment.attachments && comment.attachments.length > 0 ? (
@@ -683,7 +799,8 @@ export const CommentCard = React.memo(function CommentCard({
                   {canParticipate && (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(event) => {
+                        if (!isCommentLiked) cheerLike(event.currentTarget);
                         if (!isBackendMode) {
                           setLocalLiked((current) => !current);
                         }
@@ -693,10 +810,15 @@ export const CommentCard = React.memo(function CommentCard({
                       aria-label={isCommentLiked ? "Unlike" : "Like"}
                       className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isCommentLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
                     >
-                      <ThumbsUp
-                        size={19}
-                        weight={isCommentLiked ? "fill" : "regular"}
-                      />
+                      <span
+                        data-like-icon
+                        className="relative inline-grid place-items-center"
+                      >
+                        <ThumbsUp
+                          size={19}
+                          weight={isCommentLiked ? "fill" : "regular"}
+                        />
+                      </span>
                       <span>{comment.likes}</span>
                     </button>
                   )}
@@ -972,8 +1094,6 @@ function ReplyCard({
   const replyLikesCount = isBackendMode
     ? reply.likes
     : reply.likes + (localLiked ? 1 : 0);
-  const canAcceptReply =
-    Boolean(getServerEntityId(reply)) && reply.creationStatus !== "pending";
   const replyClientId = getClientEntityId(reply);
   const replyServerId = getServerEntityId(reply);
   const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
@@ -1006,13 +1126,19 @@ function ReplyCard({
       >
         <div className="min-h-0 overflow-hidden">
           <div className="relative flex gap-3">
-            <DiscussionAvatar
-              src={reply.avatar}
-              className="relative z-10 size-9 sm:size-10"
-              loading="lazy"
-              width={40}
-              height={40}
-            />
+            <ProfileLink
+              username={reply.authorUsername}
+              variant="picture"
+              className="relative z-10"
+            >
+              <DiscussionAvatar
+                src={reply.avatar}
+                className="relative z-10 size-9 sm:size-10"
+                loading="lazy"
+                width={40}
+                height={40}
+              />
+            </ProfileLink>
 
             <div className="min-w-0 flex-1">
               <div
@@ -1020,33 +1146,38 @@ function ReplyCard({
                 className="relative flex items-start gap-2 pr-9"
               >
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-                  <h3 className="text-sm font-semibold text-(--text) sm:text-[15px]">
-                    {reply.name}
+                  <h3 className="text-[0.9375rem] font-bold text-(--text)">
+                    <ProfileLink username={reply.authorUsername} variant="name">
+                      {reply.isOwn ? `${reply.name} (You)` : reply.name}
+                    </ProfileLink>
                   </h3>
                   {reply.role === "Instructor" && (
                     <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
                       Instructor
                     </span>
                   )}
-                  {reply.isAccepted && (
-                    <span
-                      data-testid="accepted-answer-badge"
-                      className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400"
-                    >
-                      <CheckCircle size={13} weight="fill" />
-                      Accepted Answer
-                    </span>
-                  )}
                   <span
                     data-reply-time-separator
                     aria-hidden="true"
-                    className="text-xs text-(--muted) sm:text-sm"
+                    className="text-[0.8125rem] text-(--muted)"
                   >
                     ·
                   </span>
-                  <span className="text-xs text-(--muted) sm:text-sm">
-                    {reply.time}
-                  </span>
+                  <TimeAgo
+                    value={reply.createdAt}
+                    label={reply.time}
+                    className="text-[0.8125rem] text-(--muted)"
+                  />
+                  {reply.authorUsername && (
+                    <span className="-mt-1 basis-full truncate text-[0.8125rem] text-(--muted)">
+                      <ProfileLink
+                        username={reply.authorUsername}
+                        variant="name"
+                      >
+                        @{reply.authorUsername.replace(/^@+/, "")}
+                      </ProfileLink>
+                    </span>
+                  )}
                 </div>
                 <CommentActionMenu
                   name={reply.name}
@@ -1058,26 +1189,6 @@ function ReplyCard({
                     canParticipate &&
                     (!isBackendMode || Boolean(getServerEntityId(reply)))
                   }
-                  canAcceptAnswer={
-                    canParticipate &&
-                    isQuestion &&
-                    canAcceptAnswer &&
-                    canAcceptReply
-                  }
-                  isAccepted={Boolean(reply.isAccepted)}
-                  onToggleAccept={
-                    canParticipate &&
-                    isQuestion &&
-                    canAcceptAnswer &&
-                    onToggleAccept
-                      ? () =>
-                          onToggleAccept(
-                            reply.id,
-                            !reply.isAccepted,
-                            getServerEntityId(reply),
-                          )
-                      : undefined
-                  }
                   onEdit={() => {
                     setEditDraft(
                       reply.content ?? createDiscussionDraft(reply.text),
@@ -1085,14 +1196,9 @@ function ReplyCard({
                     setEditing(true);
                   }}
                   onShare={() =>
-                    void shareDiscussionEntry(
-                      reply.id,
-                      reply.name,
-                      reply.text,
-                      {
-                        parentThreadId,
-                      },
-                    )
+                    shareDiscussionEntry(reply.id, reply.name, reply.text, {
+                      parentThreadId,
+                    })
                   }
                   canDelete={
                     canParticipate &&
@@ -1138,7 +1244,7 @@ function ReplyCard({
                   enableInlineTimestamps={Boolean(onSeekToTimestamp)}
                   onSeekToTimestamp={onSeekToTimestamp}
                   preserveSoftBreaks
-                  className="mt-0.5 pr-9 sm:pr-10"
+                  className="mt-1 pr-0 text-[0.9375rem]! leading-relaxed! text-(--text)! sm:pr-10 sm:text-base!"
                 />
               )}
 
@@ -1153,7 +1259,8 @@ function ReplyCard({
                 {canParticipate && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(event) => {
+                      if (!isReplyLiked) cheerLike(event.currentTarget);
                       if (!isBackendMode) {
                         setLocalLiked((current) => !current);
                       }
@@ -1163,56 +1270,18 @@ function ReplyCard({
                     aria-label={isReplyLiked ? "Unlike reply" : "Like reply"}
                     className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isReplyLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
                   >
-                    <ThumbsUp
-                      size={18}
-                      weight={isReplyLiked ? "fill" : "regular"}
-                    />
+                    <span
+                      data-like-icon
+                      className="relative inline-grid place-items-center"
+                    >
+                      <ThumbsUp
+                        size={18}
+                        weight={isReplyLiked ? "fill" : "regular"}
+                      />
+                    </span>
                     <span>{replyLikesCount}</span>
                   </button>
                 )}
-                {canParticipate &&
-                  isQuestion &&
-                  canAcceptAnswer &&
-                  onToggleAccept && (
-                    <button
-                      type="button"
-                      data-testid={`accept-reply-btn-${reply.id}`}
-                      disabled={
-                        reply.creationStatus === "pending" ||
-                        !getServerEntityId(reply)
-                      }
-                      aria-label={
-                        reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                      }
-                      title={
-                        reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                      }
-                      onClick={() => {
-                        if (
-                          reply.creationStatus === "pending" ||
-                          !getServerEntityId(reply)
-                        ) {
-                          return;
-                        }
-                        onToggleAccept(
-                          reply.id,
-                          !reply.isAccepted,
-                          getServerEntityId(reply),
-                        );
-                      }}
-                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
-                        reply.isAccepted
-                          ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
-                          : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
-                      }`}
-                    >
-                      <CheckCircle
-                        size={16}
-                        weight={reply.isAccepted ? "fill" : "bold"}
-                      />
-                      <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
-                    </button>
-                  )}
                 {canParticipate && (
                   <button
                     type="button"
@@ -1330,14 +1399,28 @@ interface CommentActionMenuProps {
   onToggleBookmark?: () => void;
   isFollowing?: boolean;
   onToggleFollow?: () => void;
+  /**
+   * The post as written, in Markdown. "Copy text" copies it as readable
+   * text (no Markdown signs, a table as tab-separated rows); "Copy
+   * Markdown" copies it as it is.
+   */
   textToCopy?: string;
   onCopyTextNotice?: (message: string) => void;
   onEdit: () => void;
-  onShare: () => void;
+  /**
+   * Resolves to whether a link was copied; to nothing when the share was
+   * handed to the device's own share sheet.
+   */
+  onShare: () => void | Promise<boolean | undefined>;
   onDelete: () => void;
   onReport: () => void;
   className: string;
 }
+
+/** How long a "Copied" label stays up before its menu closes. */
+const COPIED_LABEL_MS = 1300;
+
+type CopyItem = "share" | "text" | "markdown";
 
 export function CommentActionMenu({
   name,
@@ -1364,6 +1447,12 @@ export function CommentActionMenu({
   className,
 }: CommentActionMenuProps) {
   const [open, setOpen] = useState(false);
+  // Moderators of every course may delete anyone's comment, Q&A, reply or
+  // note (the API takes discussion.moderate through an academy-wide role).
+  const { data: currentUser } = useCurrentUser();
+  const moderatesEveryCourse = useCapabilities({
+    enabled: Boolean(currentUser),
+  }).canOnCourse("discussion.moderate", null);
   const isNote = kind === "note";
   const actionLabel = kind === "question" ? "Q&A" : isNote ? "note" : kind;
   const menuLabel =
@@ -1373,14 +1462,72 @@ export function CommentActionMenu({
   const canBookmark = Boolean(onToggleBookmark);
   const canFollow =
     (kind === "comment" || kind === "question") && Boolean(onToggleFollow);
-  const copyTextAction = textToCopy?.trim() ? (
+  // Copying answers inside the menu: the item that was chosen turns into
+  // "Copied" for a moment, then the menu closes.
+  const [copyResult, setCopyResult] = useState<{
+    item: CopyItem;
+    copied: boolean;
+  } | null>(null);
+  const showCopyResult = (item: CopyItem, copied: boolean) => {
+    setCopyResult({ item, copied });
+    window.setTimeout(() => setCopyResult(null), COPIED_LABEL_MS + 200);
+  };
+  const copyLabel = (item: CopyItem, label: string, done: string) =>
+    copyResult?.item === item
+      ? copyResult.copied
+        ? done
+        : "Couldn't copy"
+      : label;
+  const copyIcon = (item: CopyItem, icon: typeof CopySimple) =>
+    copyResult?.item === item && copyResult.copied ? CheckCircle : icon;
+
+  const deleteOthersAction =
+    moderatesEveryCourse && canDelete ? (
+      <>
+        <MenuDivider />
+        <MenuAction
+          Icon={Trash}
+          label={`Delete ${actionLabel}`}
+          destructive
+          onClick={onDelete}
+        />
+      </>
+    ) : null;
+  const shareAction = (
     <MenuAction
-      Icon={CopySimple}
-      label="Copy text"
+      Icon={copyIcon("share", ShareNetwork)}
+      label={copyLabel("share", `Share ${actionLabel}`, "Link copied")}
+      stayOpenMs={COPIED_LABEL_MS}
       onClick={() => {
-        void copyTextToClipboard(textToCopy, onCopyTextNotice);
+        void Promise.resolve(onShare()).then((copied) => {
+          if (typeof copied === "boolean") showCopyResult("share", copied);
+        });
       }}
     />
+  );
+  const copyTextAction = textToCopy?.trim() ? (
+    <>
+      <MenuAction
+        Icon={copyIcon("text", CopySimple)}
+        label={copyLabel("text", "Copy text", "Copied")}
+        stayOpenMs={COPIED_LABEL_MS}
+        onClick={() => {
+          void copyTextToClipboard(markdownToPlainText(textToCopy)).then(
+            (copied) => showCopyResult("text", copied),
+          );
+        }}
+      />
+      <MenuAction
+        Icon={copyIcon("markdown", MarkdownLogo)}
+        label={copyLabel("markdown", "Copy Markdown", "Copied")}
+        stayOpenMs={COPIED_LABEL_MS}
+        onClick={() => {
+          void copyTextToClipboard(textToCopy).then((copied) =>
+            showCopyResult("markdown", copied),
+          );
+        }}
+      />
+    </>
   ) : null;
 
   return (
@@ -1431,18 +1578,14 @@ export function CommentActionMenu({
                 onClick={onToggleBookmark}
               />
             )}
-            <MenuAction
-              Icon={ShareNetwork}
-              label={`Share ${actionLabel}`}
-              onClick={onShare}
-            />
+            {shareAction}
             {copyTextAction}
-            <MenuDivider />
             <MenuAction
               Icon={Flag}
               label={`Report ${actionLabel}`}
               onClick={onReport}
             />
+            {deleteOthersAction}
           </>
         )
       ) : isOwn ? (
@@ -1468,11 +1611,7 @@ export function CommentActionMenu({
               onClick={onToggleFollow}
             />
           )}
-          <MenuAction
-            Icon={ShareNetwork}
-            label={`Share ${actionLabel}`}
-            onClick={onShare}
-          />
+          {shareAction}
           {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
@@ -1514,11 +1653,7 @@ export function CommentActionMenu({
               onClick={onToggleFollow}
             />
           )}
-          <MenuAction
-            Icon={ShareNetwork}
-            label={`Share ${actionLabel}`}
-            onClick={onShare}
-          />
+          {shareAction}
           {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
@@ -1534,35 +1669,70 @@ export function CommentActionMenu({
               onClick={onToggleAccept}
             />
           )}
-          <MenuDivider />
           <MenuAction
             Icon={Flag}
             label={`Report ${actionLabel}`}
             onClick={onReport}
           />
+          {deleteOthersAction}
         </>
       )}
     </CourseActionMenu>
   );
 }
 
+/**
+ * The address that opens a lesson with one comment or question brought to
+ * the top of its discussion and highlighted, the way the home page's comment
+ * cards open one. It carries nothing else from the current address.
+ */
+export function getHighlightedCommentUrl(threadId: string | number): string {
+  const url = new URL(window.location.pathname, window.location.origin);
+  url.searchParams.set("thread", String(threadId));
+  url.searchParams.set("focus", "comment");
+  return url.toString();
+}
+
 export async function shareDiscussionEntry(
   entryId: string | number,
   name: string,
   text: string,
-  options?: { parentThreadId?: string | number; isNote?: boolean },
-) {
-  if (typeof window === "undefined") return;
+  options?: {
+    parentThreadId?: string | number;
+    isNote?: boolean;
+  },
+): Promise<boolean | undefined> {
+  if (typeof window === "undefined") return undefined;
+
+  // A comment or a question is shared as a link straight to it, through the
+  // device's own share sheet. Where there is none, or it will not open (an
+  // embedded browser, most desktop Firefox), the link is copied instead.
+  if (!options?.isNote && !options?.parentThreadId) {
+    const link = getHighlightedCommentUrl(entryId);
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: `${name}'s discussion entry`,
+          text: text.trim() || undefined,
+          url: link,
+        });
+        return undefined;
+      } catch (error) {
+        // Closing the share sheet is not a failure, and not a wish to copy.
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return undefined;
+        }
+      }
+    }
+    return await copyTextToClipboard(link);
+  }
 
   const url = new URL(window.location.href);
   if (options?.isNote) {
     url.hash = `discussion-entry-${entryId}`;
-  } else if (options?.parentThreadId) {
+  } else {
     url.searchParams.set("thread", String(options.parentThreadId));
     url.hash = `discussion-entry-${entryId}`;
-  } else {
-    url.searchParams.set("thread", String(entryId));
-    url.hash = "";
   }
   const shareText = text.trim();
 
@@ -1573,15 +1743,16 @@ export async function shareDiscussionEntry(
         text: shareText || undefined,
         url: url.toString(),
       });
-      return;
+      return undefined;
     }
 
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(
-        [shareText, url.toString()].filter(Boolean).join("\n\n"),
-      );
-    }
+    return await copyTextToClipboard(
+      [shareText, url.toString()].filter(Boolean).join("\n\n"),
+    );
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") return;
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return undefined;
+    }
+    return false;
   }
 }

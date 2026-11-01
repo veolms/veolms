@@ -1,16 +1,22 @@
-import { lazy, Suspense, useState } from "react";
+import { Suspense, useState } from "react";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import "../styles/features/workspace.css";
 import type { CourseRole } from "../courses/catalogue";
 import type { NavigateTo } from "../routing/navigation";
-import { normalizeDiscussionTab } from "../routing/tabSessionState";
-import { DiscussionWorkspaceSkeletonList } from "./DiscussionWorkspaceSkeleton";
+import { definePrerenderedBody } from "../routing/prerenderedBodies";
 
-const DiscussionsWorkspace = lazy(() =>
-  import("./DiscussionsWorkspace").then((module) => ({
-    default: module.DiscussionsWorkspace,
-  })),
+const discussionsWorkspaceBody = definePrerenderedBody(
+  () => import("./DiscussionsWorkspace"),
+  (module) => module.DiscussionsWorkspace,
 );
+const DiscussionsWorkspace = discussionsWorkspaceBody.Body;
+/**
+ * Fetches the Discussions page ahead of a visit. Until it has arrived the
+ * page can only show placeholders, heading and filters included; with it,
+ * those are there at once and only the list waits for its data.
+ */
+export const preloadDiscussionsWorkspace = () =>
+  discussionsWorkspaceBody.preload().then(() => undefined);
 
 export interface WorkspacePageProps {
   section: string;
@@ -19,6 +25,8 @@ export interface WorkspacePageProps {
   onNavigatePage: NavigateTo;
   setNotice?: (message: string) => void;
   onSignOut?: () => void;
+  /** See `DiscussionsWorkspace`. */
+  sessionPending?: boolean;
 }
 
 interface WorkspaceHeaderProps {
@@ -99,22 +107,21 @@ export function WorkspacePage({
   onNavigatePage,
   setNotice,
   onSignOut,
+  sessionPending,
 }: WorkspacePageProps) {
   if (section === "Discussions") {
     return (
-      <Suspense
-        fallback={
-          <DiscussionWorkspaceSkeletonList
-            mode="loading"
-            variant={normalizeDiscussionTab(discussionTab)}
-          />
-        }
-      >
+      // Nothing stands in while the page's code arrives. Placeholders for
+      // the list alone used to, at the top of the page where the heading
+      // goes, and then jumped down under the heading, tabs and filters when
+      // those came. The page shows its own placeholders, in the list.
+      <Suspense fallback={null}>
         <DiscussionsWorkspace
           role={role}
           tab={discussionTab}
           onNavigatePage={onNavigatePage}
           setNotice={setNotice}
+          sessionPending={sessionPending}
         />
       </Suspense>
     );

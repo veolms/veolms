@@ -1,5 +1,19 @@
 import { sql, type Kysely } from "kysely";
 import type { Database, DatabaseExecutor } from "@veolms/database";
+import { hasDiscountBadgeColumn } from "../shared/discount-badge-column.ts";
+import { fuzzyMatchesAny } from "../../../lib/fuzzy-search.ts";
+
+/**
+ * The discount badge flag of a listed course. Before the migration that adds
+ * the column has run, every course reads as "badge off".
+ */
+function discountBadgeColumn(columnExists: boolean) {
+  return columnExists
+    ? sql<boolean | null>`course_pricing.show_discount_badge`.as(
+        "show_discount_badge",
+      )
+    : sql<boolean | null>`false`.as("show_discount_badge");
+}
 
 export async function insertCourse(
   database: Kysely<Database>,
@@ -71,6 +85,73 @@ export async function findCourseBySlug(
     .executeTakeFirst();
 }
 
+const COURSE_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * The facts an access decision needs about a course — who owns it, whether
+ * it is published, and how it is offered — in one query, addressed by id or
+ * slug. Callers apply the access rules themselves.
+ */
+export async function findCourseAccessByIdOrSlug(
+  database: DatabaseExecutor,
+  courseIdOrSlug: string,
+) {
+  return await database
+    .selectFrom("courses")
+    .leftJoin(
+      "course_access_rules",
+      "course_access_rules.course_id",
+      "courses.id",
+    )
+    .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
+    .select([
+      "courses.id",
+      "courses.slug",
+      "courses.creator_id",
+      "courses.status",
+      "course_access_rules.access_type",
+      "course_pricing.pricing_type",
+    ])
+    .where(
+      COURSE_UUID_PATTERN.test(courseIdOrSlug) ? "courses.id" : "courses.slug",
+      "=",
+      courseIdOrSlug,
+    )
+    .where("courses.deleted_at", "is", null)
+    .executeTakeFirst();
+}
+
+/**
+ * Id and slug of the published courses among those named, each by its id or
+ * its slug. Drafts, archived courses and courses in the bin are left out.
+ */
+export async function findPublishedCourseRefs(
+  database: DatabaseExecutor,
+  courseIdsOrSlugs: readonly string[],
+) {
+  const courseIds = courseIdsOrSlugs.filter((value) =>
+    COURSE_UUID_PATTERN.test(value),
+  );
+  const slugs = courseIdsOrSlugs.filter(
+    (value) => !COURSE_UUID_PATTERN.test(value),
+  );
+  if (courseIds.length === 0 && slugs.length === 0) return [];
+
+  return await database
+    .selectFrom("courses")
+    .select(["id", "slug"])
+    .where("status", "=", "published")
+    .where("deleted_at", "is", null)
+    .where((eb) =>
+      eb.or([
+        ...(courseIds.length > 0 ? [eb("id", "in", courseIds)] : []),
+        ...(slugs.length > 0 ? [eb("slug", "in", slugs)] : []),
+      ]),
+    )
+    .execute();
+}
+
 /**
  * Looks up a slug reservation, including courses in the recovery bin. The
  * database keeps slugs globally unique so a course can be restored with its
@@ -87,6 +168,49 @@ export async function findCourseBySlugIncludingDeleted(
     .executeTakeFirst();
 }
 
+/**
+ * What deciding a viewer's access and showing the price need, for courses
+ * by id, or for every published course when no ids are given. No counts, no
+ * thumbnails: it is asked on every page that shows a price.
+ */
+export async function listCourseAccessFacts(
+  database: Kysely<Database>,
+  filter: { courseIds: readonly string[] } | { published: true },
+) {
+  const showDiscountBadge = await hasDiscountBadgeColumn(database);
+  let query = database
+    .selectFrom("courses")
+    .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
+    .leftJoin(
+      "course_access_rules",
+      "course_access_rules.course_id",
+      "courses.id",
+    )
+    .select([
+      "courses.id",
+      "courses.slug",
+      "courses.status",
+      "courses.creator_id",
+      "course_access_rules.access_type",
+      "course_pricing.pricing_type",
+      "course_pricing.price",
+      "course_pricing.currency",
+      "course_pricing.sale_price",
+      discountBadgeColumn(showDiscountBadge),
+    ])
+    .where("courses.deleted_at", "is", null);
+  if ("courseIds" in filter) {
+    if (filter.courseIds.length === 0) return [];
+    query = query.where("courses.id", "in", [...filter.courseIds]);
+  } else {
+    query = query.where("courses.status", "=", "published");
+  }
+  return await query
+    .orderBy("courses.created_at", "asc")
+    .orderBy("courses.id", "asc")
+    .execute();
+}
+
 export async function listPublishedCourses(
   database: Kysely<Database>,
   filters?: {
@@ -97,20 +221,23 @@ export async function listPublishedCourses(
     sort?: "latest" | "title";
   },
 ) {
+  const showDiscountBadge = await hasDiscountBadgeColumn(database);
   let query = database
     .selectFrom("courses")
-    .leftJoin("categories", (join) =>
-      join
-        .onRef("categories.id", "=", "courses.category_id")
-        .on("categories.deleted_at", "is", null),
-    )
-    .leftJoin("users", (join) =>
-      join
-        .onRef("users.id", "=", "courses.creator_id")
-        .on("users.is_deleted", "=", false),
+    .leftJoin(
+      "media_assets as thumbnail_media",
+      "thumbnail_media.id",
+      "courses.thumbnail_media_id",
     )
     .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
     .leftJoin("course_settings", "course_settings.course_id", "courses.id")
+    // One row per course at most (`course_id` is unique), so the join adds
+    // no rows; it is what `canSelfEnroll` is worked out from.
+    .leftJoin(
+      "course_access_rules",
+      "course_access_rules.course_id",
+      "courses.id",
+    )
     .select((eb) => [
       "courses.id",
       "courses.created_at",
@@ -118,32 +245,34 @@ export async function listPublishedCourses(
       "courses.slug",
       "courses.title",
       "courses.short_description",
-      "courses.difficulty",
-      "courses.instructor_alias",
       "courses.thumbnail_media_id",
-      eb
-        .selectFrom("media_assets as thumbnail_media")
-        .select("thumbnail_media.metadata")
-        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
-        .as("thumbnail_metadata"),
-      eb
-        .selectFrom("media_assets as thumbnail_media")
-        .select("thumbnail_media.storage_key")
-        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
-        .as("thumbnail_storage_key"),
-      "categories.name as category_name",
-      "users.display_name as creator_display_name",
+      "thumbnail_media.metadata as thumbnail_metadata",
+      "thumbnail_media.storage_key as thumbnail_storage_key",
+      "course_access_rules.access_type",
       "course_pricing.pricing_type",
       "course_pricing.price",
       "course_pricing.currency",
       "course_pricing.sale_price",
+      discountBadgeColumn(showDiscountBadge),
       "course_settings.certificate_enabled",
       "course_settings.estimated_duration",
+      // Learners only see sections that have a published lesson, so that is
+      // what the catalogue counts too.
       eb
         .selectFrom("course_sections")
-        .select((sub) => sub.fn.count("id").as("count"))
+        .select((sub) => sub.fn.count("course_sections.id").as("count"))
         .whereRef("course_sections.course_id", "=", "courses.id")
         .where("course_sections.deleted_at", "is", null)
+        .where((sub) =>
+          sub.exists(
+            sub
+              .selectFrom("course_lessons")
+              .select("course_lessons.id")
+              .whereRef("course_lessons.section_id", "=", "course_sections.id")
+              .where("course_lessons.is_published", "=", true)
+              .where("course_lessons.deleted_at", "is", null),
+          ),
+        )
         .as("total_sections"),
       eb
         .selectFrom("course_lessons")
@@ -187,6 +316,10 @@ export async function listPublishedCourses(
         eb("courses.title", "ilike", searchPattern),
         eb("courses.short_description", "ilike", searchPattern),
         eb("courses.description", "ilike", searchPattern),
+        fuzzyMatchesAny(filters.search!, [
+          sql.ref("courses.title"),
+          sql.ref("courses.short_description"),
+        ]),
       ]),
     );
   }
@@ -221,8 +354,13 @@ export async function listHomeDiscoveryCourses(
     limit: number;
     order: "popular" | "recent";
     freeOnly?: boolean;
+    /** Restrict the result to these courses (still published only). */
+    courseIds?: readonly string[];
   },
 ) {
+  if (options.courseIds && options.courseIds.length === 0) return [];
+  const showDiscountBadge = await hasDiscountBadgeColumn(database);
+
   const enrollmentCounts = database
     .selectFrom("enrollments")
     .select(["course_id", sql<number>`count(*)::int`.as("enrollment_count")])
@@ -231,50 +369,52 @@ export async function listHomeDiscoveryCourses(
 
   let query = database
     .selectFrom("courses")
-    .leftJoin("categories", (join) =>
-      join
-        .onRef("categories.id", "=", "courses.category_id")
-        .on("categories.deleted_at", "is", null),
-    )
-    .leftJoin("users", (join) =>
-      join
-        .onRef("users.id", "=", "courses.creator_id")
-        .on("users.is_deleted", "=", false),
+    .leftJoin(
+      "media_assets as thumbnail_media",
+      "thumbnail_media.id",
+      "courses.thumbnail_media_id",
     )
     .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
     .leftJoin("course_settings", "course_settings.course_id", "courses.id")
+    // As in the catalogue query: at most one row per course.
+    .leftJoin(
+      "course_access_rules",
+      "course_access_rules.course_id",
+      "courses.id",
+    )
     .leftJoin(enrollmentCounts, "enrollment_counts.course_id", "courses.id")
     .select((eb) => [
       "courses.id",
       "courses.slug",
       "courses.title",
       "courses.short_description",
-      "courses.difficulty",
       "courses.thumbnail_media_id",
-      eb
-        .selectFrom("media_assets as thumbnail_media")
-        .select("thumbnail_media.metadata")
-        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
-        .as("thumbnail_metadata"),
-      eb
-        .selectFrom("media_assets as thumbnail_media")
-        .select("thumbnail_media.storage_key")
-        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
-        .as("thumbnail_storage_key"),
-      "categories.name as category_name",
-      "users.display_name as creator_display_name",
-      "courses.instructor_alias",
+      "thumbnail_media.metadata as thumbnail_metadata",
+      "thumbnail_media.storage_key as thumbnail_storage_key",
+      "course_access_rules.access_type",
       "course_pricing.pricing_type",
       "course_pricing.price",
       "course_pricing.currency",
       "course_pricing.sale_price",
+      discountBadgeColumn(showDiscountBadge),
       "course_settings.certificate_enabled",
       "course_settings.estimated_duration",
+      // Same section count as the catalogue: only sections a learner sees.
       eb
         .selectFrom("course_sections")
-        .select((sub) => sub.fn.count("id").as("count"))
+        .select((sub) => sub.fn.count("course_sections.id").as("count"))
         .whereRef("course_sections.course_id", "=", "courses.id")
         .where("course_sections.deleted_at", "is", null)
+        .where((sub) =>
+          sub.exists(
+            sub
+              .selectFrom("course_lessons")
+              .select("course_lessons.id")
+              .whereRef("course_lessons.section_id", "=", "course_sections.id")
+              .where("course_lessons.is_published", "=", true)
+              .where("course_lessons.deleted_at", "is", null),
+          ),
+        )
         .as("total_sections"),
       eb
         .selectFrom("course_lessons")
@@ -310,6 +450,10 @@ export async function listHomeDiscoveryCourses(
     query = query.where(
       sql<boolean>`coalesce(course_pricing.pricing_type, 'free') = 'free'`,
     );
+  }
+
+  if (options.courseIds) {
+    query = query.where("courses.id", "in", [...options.courseIds]);
   }
 
   if (options.order === "popular") {
@@ -352,15 +496,7 @@ export async function findPublishedCourseBySlug(
 ) {
   const row = await database
     .selectFrom("courses")
-    .select([
-      "id",
-      "slug",
-      "title",
-      "short_description",
-      "description",
-      "status",
-      "creator_id",
-    ])
+    .select(["id", "slug", "title", "short_description", "description"])
     .where("slug", "=", slug)
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
@@ -379,37 +515,43 @@ export async function findPublishedCourseBySlug(
   };
 }
 
-export async function listAllCourses(database: Kysely<Database>) {
-  return await database
+/**
+ * Courses for the authoring/management list: every course when no creator is
+ * given (administrators), otherwise that creator's own. The thumbnail's media
+ * row is joined so the list needs no further query per course.
+ */
+export async function listManagedCourses(
+  database: Kysely<Database>,
+  creatorId?: string,
+) {
+  let query = database
     .selectFrom("courses")
     .leftJoin("course_settings", "course_settings.course_id", "courses.id")
+    .leftJoin(
+      "media_assets as thumbnail_media",
+      "thumbnail_media.id",
+      "courses.thumbnail_media_id",
+    )
     .select((eb) => [
       "courses.id",
       "courses.slug",
       "courses.title",
-      "courses.short_description",
-      "courses.description",
+      // A card shows the short description and falls back to the opening of
+      // the full one; the list never needs the rest of it.
+      sql<
+        string | null
+      >`coalesce(nullif(courses.short_description, ''), left(courses.description, 500))`.as(
+        "short_description",
+      ),
       "courses.difficulty",
       "courses.status",
       "courses.creator_id",
-      "courses.category_id",
       "courses.thumbnail_media_id",
-      eb
-        .selectFrom("media_assets as thumbnail_media")
-        .select("thumbnail_media.metadata")
-        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
-        .as("thumbnail_metadata"),
-      eb
-        .selectFrom("media_assets as thumbnail_media")
-        .select("thumbnail_media.storage_key")
-        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
-        .as("thumbnail_storage_key"),
-      "courses.trailer_media_id",
-      "courses.instructor_alias",
-      "courses.version",
+      "thumbnail_media.metadata as thumbnail_metadata",
+      "thumbnail_media.storage_key as thumbnail_storage_key",
+      "thumbnail_media.owner_id as thumbnail_owner_id",
       "courses.created_at",
       "courses.updated_at",
-      "courses.published_at",
       "course_settings.estimated_duration",
       eb
         .selectFrom("course_sections")
@@ -442,7 +584,13 @@ export async function listAllCourses(database: Kysely<Database>) {
         .where("course_lessons.deleted_at", "is", null)
         .as("lesson_duration_seconds"),
     ])
-    .where("courses.deleted_at", "is", null)
+    .where("courses.deleted_at", "is", null);
+
+  if (creatorId) {
+    query = query.where("courses.creator_id", "=", creatorId);
+  }
+
+  return await query
     .orderBy("courses.updated_at", "desc")
     .orderBy("courses.created_at", "desc")
     .execute();
@@ -458,79 +606,6 @@ export async function listAllCourseScope(database: Kysely<Database>) {
     .execute();
 }
 
-export async function listCoursesByCreator(
-  database: Kysely<Database>,
-  creatorId: string,
-) {
-  return await database
-    .selectFrom("courses")
-    .leftJoin("course_settings", "course_settings.course_id", "courses.id")
-    .select((eb) => [
-      "courses.id",
-      "courses.slug",
-      "courses.title",
-      "courses.short_description",
-      "courses.description",
-      "courses.difficulty",
-      "courses.status",
-      "courses.creator_id",
-      "courses.category_id",
-      "courses.thumbnail_media_id",
-      eb
-        .selectFrom("media_assets as thumbnail_media")
-        .select("thumbnail_media.metadata")
-        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
-        .as("thumbnail_metadata"),
-      eb
-        .selectFrom("media_assets as thumbnail_media")
-        .select("thumbnail_media.storage_key")
-        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
-        .as("thumbnail_storage_key"),
-      "courses.trailer_media_id",
-      "courses.instructor_alias",
-      "courses.version",
-      "courses.created_at",
-      "courses.updated_at",
-      "courses.published_at",
-      "course_settings.estimated_duration",
-      eb
-        .selectFrom("course_sections")
-        .select((sub) => sub.fn.count("id").as("count"))
-        .whereRef("course_sections.course_id", "=", "courses.id")
-        .where("course_sections.deleted_at", "is", null)
-        .as("total_sections"),
-      eb
-        .selectFrom("course_lessons")
-        .select((sub) => sub.fn.count("id").as("count"))
-        .whereRef("course_lessons.course_id", "=", "courses.id")
-        .where("course_lessons.deleted_at", "is", null)
-        .as("total_lessons"),
-      eb
-        .selectFrom("course_lessons")
-        .leftJoin(
-          "media_assets as lesson_media",
-          "lesson_media.id",
-          "course_lessons.content_media_id",
-        )
-        .select((sub) =>
-          sub.fn
-            .coalesce(
-              sub.fn.sum("lesson_media.duration_seconds"),
-              sql<number>`0`,
-            )
-            .as("sum"),
-        )
-        .whereRef("course_lessons.course_id", "=", "courses.id")
-        .where("course_lessons.deleted_at", "is", null)
-        .as("lesson_duration_seconds"),
-    ])
-    .where("courses.creator_id", "=", creatorId)
-    .where("courses.deleted_at", "is", null)
-    .orderBy("courses.updated_at", "desc")
-    .orderBy("courses.created_at", "desc")
-    .execute();
-}
-
 export async function listAvailableCoursesByCreator(
   database: Kysely<Database>,
   creatorId: string,
@@ -543,6 +618,20 @@ export async function listAvailableCoursesByCreator(
     .where("deleted_at", "is", null)
     .orderBy("created_at", "desc")
     .execute();
+}
+
+/** Ids of every non-deleted course a user created, whatever its status. */
+export async function listCourseIdsByCreator(
+  database: Kysely<Database>,
+  creatorId: string,
+) {
+  const rows = await database
+    .selectFrom("courses")
+    .select("id")
+    .where("creator_id", "=", creatorId)
+    .where("deleted_at", "is", null)
+    .execute();
+  return rows.map((row) => row.id);
 }
 
 export async function listAvailableCourseScopeByCreator(
@@ -571,6 +660,7 @@ export async function updateCourse(
     difficulty?: "beginner" | "intermediate" | "advanced" | null;
     thumbnail_media_id?: string | null;
     trailer_media_id?: string | null;
+    banner_media_id?: string | null;
     instructor_alias?: string | null;
     status?: "draft" | "published" | "archived";
     published_at?: Date | null;
@@ -603,10 +693,15 @@ export async function softDeleteCourse(
     .executeTakeFirst();
 }
 
+/**
+ * `expectedVersion`, when given, makes the write conditional on the course
+ * still being at that version (no row is updated otherwise).
+ */
 export async function updateCourseDirect(
   database: Kysely<Database>,
   courseId: string,
   updates: Record<string, unknown>,
+  expectedVersion?: number,
 ) {
   return await database
     .updateTable("courses")
@@ -617,5 +712,8 @@ export async function updateCourseDirect(
     })
     .where("id", "=", courseId)
     .where("deleted_at", "is", null)
+    .$if(expectedVersion !== undefined, (query) =>
+      query.where("version", "=", expectedVersion!),
+    )
     .executeTakeFirst();
 }

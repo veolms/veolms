@@ -21,18 +21,24 @@
 }
 
 .learning-workspace__main {
+  /* This element's own copy of the course content's width: the page's value,
+     or the width a drag of the gutter has reached. The copy is what animates,
+     because it is not inherited (components/split-frame-pane.css explains).
+     Used outside the framed layout; inside it the lesson and the course
+     content are SplitFramePane's two cards. */
+  --learning-split-width: var(
+    --split-frame-drag-width,
+    var(--learning-curriculum-width, 400px)
+  );
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(
-      0,
-      var(--learning-curriculum-width, 400px)
-    );
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--learning-split-width));
   column-gap: 0;
   width: min(100%, 1840px);
   height: 100%;
   min-height: 100vh;
   margin: 0 auto;
   padding: 0;
-  transition: --learning-curriculum-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: --learning-split-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Keep the head bootstrap width on first paint. The registered custom
@@ -41,9 +47,14 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   transition: none;
 }
 
+/* The column is looked for exactly where it is, two levels down (inside the
+   pane that clips it), not anywhere under the lesson: asked the wide way,
+   the browser goes through every lesson in the course content to answer,
+   each time the grid is re-styled, which a drag of the pane's edge does on
+   every frame. */
 @media (min-width: 1081px) {
   .learning-workspace__main:has(
-    .learning-workspace__curriculum-column:not(.is-collapsed)
+    > * > .learning-workspace__curriculum-column:not(.is-collapsed)
   ) {
     --learning-scrollbar-separator-width: 12px;
     --learning-scrollbar-edge-bleed: 1px;
@@ -55,7 +66,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     .courses-main-frame:has(+ .floating-scrollbar--learning-page.is-visible)
     > .courses-main--learning
     .learning-workspace__main:has(
-      .learning-workspace__curriculum-column:not(.is-collapsed)
+      > * > .learning-workspace__curriculum-column:not(.is-collapsed)
     ) {
     --learning-lesson-edge-extension: calc(
       var(--learning-scrollbar-separator-width) +
@@ -64,7 +75,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   }
 
   .learning-workspace__main:has(
-      .learning-workspace__curriculum-column:not(.is-collapsed)
+      > * > .learning-workspace__curriculum-column:not(.is-collapsed)
     )
     > .learning-workspace__lesson-column {
     width: calc(100% + var(--learning-lesson-edge-extension));
@@ -96,11 +107,27 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 }
 
 @media (min-width: 641px) {
+  /* While the video is minimized, the lesson beside and under it shrinks
+     along with it as one sheet and fades (see
+     syncUnifiedDesktopChildExitMotion). The panes that normally clip those
+     parts let them through, or each would be cut off at its own pane's edge
+     as the sheet draws in towards the video. */
   [data-learning-motion-surface][data-learning-player-motion-phase]
     .learning-workspace__curriculum-clip,
   [data-learning-motion-surface][data-learning-player-motion-phase]
     .learning-workspace__lesson-content-clip {
-    overflow: hidden;
+    overflow: visible;
+  }
+
+  /* While the video is being minimized the lesson page gives up its own
+     background, so the page that is coming shows behind it. The lesson
+     (title, description, comments) slides away over that page, and without
+     a background of its own its words were left floating on whatever lay
+     behind from the first moment of a slow swipe. It carries the page
+     colour with it instead, and leaves as one solid sheet. */
+  [data-learning-motion-surface][data-learning-player-motion-phase]
+    .learning-workspace__lesson-content {
+    background: var(--canvas);
   }
 }
 
@@ -218,10 +245,12 @@ html[data-app-hydrated="false"] .learning-workspace__main {
    split is moving. The video remains live; only its decorative glow yields
    until the pointer is released, then the existing opacity transition returns. */
 .courses-app--resizing .learning-persistent-player--full .ambient-canvas,
-.courses-app:has(.learning-workspace.is-curriculum-resizing)
+.courses-app[data-split-frame-resizing]
   .learning-persistent-player--full
   .ambient-canvas {
   opacity: 0;
+  /* Transparent, so not painted either (see .ambient-canvas). */
+  visibility: hidden;
   filter: none;
   transition: none;
 }
@@ -445,6 +474,28 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   letter-spacing: -0.035em;
 }
 
+/* With "Edit" beside it (staff who may edit the lesson), the title button
+   stops short of the edge instead of running under it, and the title keeps
+   to one line, cut short with an ellipsis rather than wrapped. The link sits
+   as low as the title button, which keeps its 8px top margin. */
+.learning-workspace__lesson-header[data-lesson-edit]
+  .learning-workspace__lesson-heading {
+  margin-inline-end: 0;
+  padding-inline-end: 0;
+}
+
+.learning-workspace__lesson-header[data-lesson-edit]
+  .learning-workspace__lesson-heading
+  h1 {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.learning-workspace__lesson-edit {
+  margin-top: 8px;
+}
+
 .learning-workspace__lesson-heading:active {
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 10%, var(--surface));
@@ -531,7 +582,10 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   }
 
   .learning-curriculum__viewport > .learning-curriculum {
-    width: var(--learning-curriculum-expanded-width, 400px);
+    width: var(
+      --learning-curriculum-drag-content-width,
+      var(--learning-curriculum-expanded-width, 400px)
+    );
     max-width: none;
   }
 
@@ -585,333 +639,6 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   height: var(--learning-drawer-collapsed-height, 100%);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .learning-curriculum__search-trigger::before {
-    animation: none;
-    transition: none !important;
-  }
-}
-
-.learning-curriculum__hero {
-  --learning-curriculum-hero-ink: #fff;
-  --learning-curriculum-search-ink: #fff;
-  --learning-curriculum-search-surface: color-mix(
-    in srgb,
-    var(--accent) 26%,
-    rgba(5, 10, 20, 0.72)
-  );
-  --learning-curriculum-search-hover-surface: color-mix(
-    in srgb,
-    var(--accent) 34%,
-    rgba(5, 10, 20, 0.78)
-  );
-  --learning-curriculum-search-active-surface: color-mix(
-    in srgb,
-    var(--accent) 42%,
-    rgba(5, 10, 20, 0.84)
-  );
-  --learning-curriculum-overview-rest-surface: transparent;
-  --learning-curriculum-overview-hover-surface: rgba(7, 17, 32, 0.32);
-  --learning-curriculum-overview-active-surface: rgba(7, 17, 32, 0.48);
-  --learning-curriculum-thumbnail-shade-top: rgba(4, 11, 23, 0.34);
-  --learning-curriculum-thumbnail-shade-middle: rgba(4, 11, 23, 0.62);
-  --learning-curriculum-thumbnail-shade-bottom: rgba(4, 11, 23, 0.82);
-  position: relative;
-  flex: 0 0 auto;
-  overflow: hidden;
-  isolation: isolate;
-  color: #fff;
-  background: color-mix(in srgb, #071120 70%, var(--accent) 30%);
-}
-
-:root[data-theme="light"] .learning-curriculum__hero {
-  --learning-curriculum-overview-hover-surface: rgba(7, 17, 32, 0.154);
-  --learning-curriculum-overview-active-surface: rgba(7, 17, 32, 0.238);
-  --learning-curriculum-thumbnail-shade-top: rgba(4, 11, 23, 0.238);
-  --learning-curriculum-thumbnail-shade-middle: rgba(4, 11, 23, 0.434);
-  --learning-curriculum-thumbnail-shade-bottom: rgba(4, 11, 23, 0.574);
-}
-
-:root[data-palette="codex"] .learning-curriculum__hero {
-  --learning-curriculum-overview-rest-surface: rgba(13, 13, 15, 0.14);
-  --learning-curriculum-overview-hover-surface: transparent;
-  --learning-curriculum-overview-active-surface: rgba(13, 13, 15, 0.26);
-}
-
-:root[data-theme="light"][data-palette="codex"] .learning-curriculum__hero {
-  --learning-curriculum-overview-rest-surface: rgba(13, 13, 15, 0.063);
-  --learning-curriculum-overview-hover-surface: rgba(13, 13, 15, 0.014);
-  --learning-curriculum-overview-active-surface: rgba(13, 13, 15, 0.126);
-}
-
-.learning-curriculum__overview {
-  position: relative;
-  z-index: 3;
-  min-height: 72px;
-  pointer-events: none;
-}
-
-.learning-curriculum__overview-link {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  width: 100%;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  cursor: pointer;
-  background: var(--learning-curriculum-overview-rest-surface);
-  transition: background-color 160ms ease;
-}
-
-.learning-curriculum__overview-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -3px;
-}
-
-.learning-curriculum__cover,
-.learning-curriculum__shade {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.learning-curriculum__cover {
-  z-index: 0;
-  object-fit: cover;
-  object-position: center;
-  opacity: 0.56;
-}
-
-.learning-curriculum__shade {
-  z-index: 1;
-  background:
-    linear-gradient(
-      180deg,
-      var(--learning-curriculum-thumbnail-shade-top) 0%,
-      var(--learning-curriculum-thumbnail-shade-middle) 56%,
-      var(--learning-curriculum-thumbnail-shade-bottom) 100%
-    ),
-    linear-gradient(
-      105deg,
-      color-mix(in srgb, var(--accent) 30%, transparent),
-      transparent 68%
-    );
-}
-
-.learning-curriculum__overview-content {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  height: 100%;
-  min-height: 72px;
-  flex-direction: column;
-  padding: 16px 22px 14px;
-  pointer-events: none;
-}
-
-.learning-curriculum__overview-content :is(button, input) {
-  pointer-events: auto;
-}
-
-.learning-curriculum__title-row {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-}
-
-.learning-curriculum__search-trigger {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border: 0;
-  border-radius: 999px !important;
-  color: var(--learning-curriculum-search-ink);
-}
-
-.learning-curriculum__search-trigger::before {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--learning-curriculum-search-surface);
-  content: "";
-  opacity: 1;
-  transform: scale(1);
-  transition:
-    background-color 180ms ease,
-    opacity 180ms ease,
-    transform 180ms ease;
-}
-
-.learning-curriculum__search-trigger > svg {
-  position: relative;
-  z-index: 1;
-}
-
-.learning-curriculum__search-trigger:hover::before {
-  background: var(--learning-curriculum-search-hover-surface);
-  opacity: 1;
-}
-
-.learning-curriculum__search-trigger:active::before {
-  animation: learning-curriculum-search-press 340ms
-    cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes learning-curriculum-search-press {
-  0% {
-    background: var(--learning-curriculum-search-hover-surface);
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  38% {
-    background: var(--learning-curriculum-search-active-surface);
-    opacity: 1;
-    transform: scale(0.98);
-  }
-
-  100% {
-    background: var(--learning-curriculum-search-hover-surface);
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.learning-curriculum__title-row h2 {
-  display: block;
-  max-width: 100%;
-  margin: 0;
-  overflow: hidden;
-  color: #fff;
-  font-weight: 720;
-  line-height: 1.24;
-  letter-spacing: -0.025em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.learning-curriculum__sticky-meta {
-  position: relative;
-  z-index: 3;
-  flex: 0 0 auto;
-  padding: 12px 22px 14px;
-  pointer-events: none;
-  background: transparent;
-  box-shadow: none;
-}
-
-.learning-curriculum__progress-copy {
-  display: flex;
-  width: calc(100% + 44px);
-  min-height: 38px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: -12px -22px 0;
-  padding: 12px 22px 0;
-  color: var(--learning-curriculum-hero-ink);
-  background: transparent;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-align: left;
-}
-
-.learning-curriculum__overview-link:is(:hover, :focus-visible) {
-  background: var(--learning-curriculum-overview-hover-surface);
-}
-
-.learning-curriculum__overview-link:active {
-  background: var(--learning-curriculum-overview-active-surface);
-}
-
-.learning-curriculum__progress-copy strong {
-  color: var(--learning-curriculum-hero-ink);
-  font-size: 0.95rem;
-  font-weight: 750;
-}
-
-.learning-curriculum__progress-track {
-  height: 7px;
-  margin-top: 9px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.17);
-}
-
-.learning-curriculum__progress-track > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 54%, transparent);
-}
-
-.learning-curriculum__current {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 2px;
-  margin: 8px -6px -4px;
-}
-
-.learning-curriculum__current-action {
-  display: inline-flex;
-  min-width: 0;
-  min-height: 40px;
-  flex: 1 1 0;
-  align-items: center;
-  gap: 4px;
-  overflow: hidden;
-  pointer-events: auto;
-  border: 0;
-  border-radius: min(var(--control-radius-structured, 8px), 8px);
-  padding: 9px 8px;
-  cursor: pointer;
-  color: var(--learning-curriculum-hero-ink);
-  background: transparent;
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 640;
-  line-height: 1.25;
-  text-align: left;
-  white-space: nowrap;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
-}
-
-.learning-curriculum__current-action:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.learning-curriculum__current-action:active {
-  background: rgba(255, 255, 255, 0.17);
-  transform: translateY(1px);
-}
-
-.learning-curriculum__current-action:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.learning-curriculum__current-key {
-  flex: 0 0 auto;
-  color: var(--learning-curriculum-hero-ink);
-  font-weight: 720;
-}
-
-.learning-curriculum__current-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .learning-curriculum__lesson-list {
   min-height: 0;
   flex: 0 0 auto;
@@ -919,18 +646,83 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   padding: 0 0 calc(16px + var(--curriculum-reveal-space, 0px));
 }
 
-.learning-curriculum__section {
+/* In the full panel the sections are blocks of their own (Curriculum.tsx),
+   14px in from the panel's edges and 10px apart, the first 10px under the
+   bar of chips' line (Curriculum.tsx, STICKY_BAR_GAP). */
+.learning-curriculum:not(.learning-curriculum--compact)
+  .learning-curriculum__lesson-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 14px calc(16px + var(--curriculum-reveal-space, 0px));
+}
+
+/* On a phone the blocks run 1px short of the sheet's edges, open or closed. */
+@media (max-width: 820px) {
+  .learning-curriculum:not(.learning-curriculum--compact)
+    .learning-curriculum__lesson-list {
+    padding-inline: 1px;
+  }
+}
+
+/* The ripple that runs out from the seam between the two jump buttons the
+   moment they join (Curriculum.tsx, JUMP_CHIP_RIPPLE_CLASS): a band of light
+   that sets off from the seam, widens and fades as it crosses the button to
+   its far edge. Two keyframe tracks, one for each direction; the band is a
+   quarter of the button wide, so three widths of travel take it across.
+   Keyframes cannot be written as Tailwind utilities. */
+@keyframes curriculum-seam-ripple-start {
+  from {
+    opacity: 0.95;
+    transform: translateX(0) scaleX(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-300%) scaleX(1.8);
+  }
+}
+@keyframes curriculum-seam-ripple-end {
+  from {
+    opacity: 0.95;
+    transform: translateX(0) scaleX(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(300%) scaleX(1.8);
+  }
+}
+/* The sheet's grab thumb, which lies over the seam, is jolted sideways by
+   the same collision (LearningWorkspace, the lessons sheet's swipe handle):
+   a short shake that dies away, left and right only. */
+@keyframes curriculum-seam-thumb-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-3px);
+  }
+  35% {
+    transform: translateX(2.5px);
+  }
+  55% {
+    transform: translateX(-1.5px);
+  }
+  75% {
+    transform: translateX(0.75px);
+  }
+}
+
+/* The mini player's playlist: plain sections with dense single-line
+   headings. The full panel's sections are blocks styled in Curriculum.tsx. */
+.learning-curriculum--compact .learning-curriculum__section {
   overflow: hidden;
   border: 0;
   border-radius: 0;
   background: transparent;
 }
 
-.learning-curriculum__section:last-child {
-  border: 0;
-}
-
-.learning-curriculum__section-toggle {
+.learning-curriculum--compact .learning-curriculum__section-toggle {
   position: relative;
   display: flex;
   min-height: 58px;
@@ -939,7 +731,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   gap: 12px;
   border: 0;
   border-radius: 0;
-  padding: 20px;
+  padding: 10px 20px;
   color: var(--text);
   background: transparent;
   font-size: 0.91rem;
@@ -950,13 +742,21 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     color 150ms ease;
 }
 
-/* The mini player's playlist keeps its dense single-line headers. */
-.learning-curriculum--compact .learning-curriculum__section-toggle {
-  padding-block: 10px;
+.learning-curriculum--compact .learning-curriculum__section-toggle:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
-.learning-curriculum__section-toggle:hover {
-  background: color-mix(in srgb, var(--text) 5%, transparent);
+/* By night the panel has no background of its own: it shows the page's,
+   exactly as the lesson's own column beside it does under the video, so the
+   two are one shade. The lessons and what is picked out stand on it as
+   lighter things: the heading of an open section is the surface's shade. */
+:root:not([data-theme="light"])
+  .learning-workspace__curriculum-column:has(
+    > .learning-curriculum:not(.learning-curriculum--compact)
+  ),
+:root:not([data-theme="light"])
+  .learning-curriculum:not(.learning-curriculum--compact) {
+  background: transparent;
 }
 
 .learning-curriculum__section-arrow {
@@ -983,8 +783,11 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   display: grid;
   grid-template-rows: 0fr;
   padding: 0;
-  background: color-mix(in srgb, var(--surface) 88%, var(--canvas));
   transition: grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.learning-curriculum--compact .learning-curriculum__section-lessons {
+  background: color-mix(in srgb, var(--surface) 88%, var(--canvas));
 }
 
 .learning-curriculum__section-lessons.is-open {
@@ -1071,28 +874,6 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-}
-
-.learning-curriculum__lesson-progress svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  transform: rotate(-90deg);
-}
-
-.learning-curriculum__lesson-progress circle {
-  fill: none;
-  stroke-width: 2.25;
-}
-
-.learning-curriculum__lesson-progress-track {
-  stroke: color-mix(in srgb, var(--accent) 26%, transparent);
-}
-
-.learning-curriculum__lesson-progress-value {
-  stroke: var(--accent);
-  stroke-linecap: round;
 }
 
 .learning-curriculum__lesson-number {
@@ -1483,11 +1264,11 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   }
 }
 
+/* A phone's video scrolls away with the page like a wider screen's, and stays
+   at the top only once shortened (the slot's own classes, LearningWorkspace). */
 @media (max-width: 640px) and (orientation: portrait) {
   .learning-workspace__player-wrap {
-    position: sticky;
     z-index: 40;
-    top: 0;
     background: var(--canvas);
     box-shadow: 0 10px 24px color-mix(in srgb, var(--canvas) 48%, transparent);
   }
@@ -1527,9 +1308,12 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     font-size: 1.125rem;
   }
 
+  /* The discussion scrolls inside its own box here, so room below the box
+     would only cut the comments off above the screen's edge; the room after
+     the last comment is inside the scroller instead (Discussion.tsx). */
   .learning-discussion {
     margin-top: 0;
-    padding: 0 0 22px;
+    padding: 0;
   }
 
   .learning-comment-card {
@@ -1574,6 +1358,13 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 
   .learning-curriculum__section-toggle {
     padding-inline: 16px;
+  }
+
+  /* The header above stands 14px in here, and so do the lessons' cards;
+     the full panel's heading keeps to the same line. */
+  .learning-curriculum:not(.learning-curriculum--compact)
+    .learning-curriculum__section-toggle {
+    padding-inline: 14px;
   }
 }
 

@@ -1,3 +1,5 @@
+import { cacheTags, invalidateCache } from "@veolms/api-core";
+import type { Permission } from "@veolms/contracts";
 import crypto from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
@@ -11,12 +13,17 @@ import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
 import * as curriculumRepo from "./curriculum.repository.ts";
 import * as courseRepo from "../course/course.repository.ts";
-import { createMediaService } from "../../media/index.ts";
+import {
+  cancelLessonYoutubeImports,
+  createMediaService,
+} from "../../media/index.ts";
+import { createLessonProgressResetService } from "../../learning-progress/index.ts";
 import { createChapterSyncService } from "../chapters/chapters.service.ts";
 import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
+import { givesLessonItsFirstMedia } from "./lesson-first-media.ts";
 
 export interface CurriculumServiceOptions {
   database: Kysely<Database>;
@@ -29,6 +36,9 @@ export function createCurriculumService({
 }: CurriculumServiceOptions) {
   const mediaService = createMediaService({ database, services });
   const chapterSyncService = createChapterSyncService({ database, services });
+  const lessonProgressResetService = createLessonProgressResetService({
+    database,
+  });
 
   /**
    * Re-derives a lesson's chapters from its description. Chapters are a
@@ -69,9 +79,16 @@ export function createCurriculumService({
   function getCourseAndVerifyOwner(
     courseId: string,
     creatorId: string,
-    userRoles?: readonly string[],
+    userRoles: readonly string[] | undefined,
+    permission: Permission,
   ) {
-    return verifyCourseOwner(database, courseId, creatorId, userRoles);
+    return verifyCourseOwner(
+      database,
+      courseId,
+      creatorId,
+      userRoles,
+      permission,
+    );
   }
 
   // --- Sections ---
@@ -82,7 +99,12 @@ export function createCurriculumService({
     title: string,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.curriculum.update",
+    );
 
     const maxPos = await curriculumRepo.findMaxSectionPosition(
       database,
@@ -101,7 +123,7 @@ export function createCurriculumService({
       updated_at: now,
     });
 
-    return { id: sectionId, courseId, title, position };
+    return { id: sectionId, title };
   }
 
   async function updateCourseSection(
@@ -111,7 +133,12 @@ export function createCurriculumService({
     title?: string,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.curriculum.update",
+    );
 
     const section = await curriculumRepo.findSectionById(
       database,
@@ -136,7 +163,12 @@ export function createCurriculumService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.curriculum.update",
+    );
 
     const section = await curriculumRepo.findSectionById(
       database,
@@ -181,6 +213,7 @@ export function createCurriculumService({
       courseId,
       creatorId,
       userRoles,
+      "course.curriculum.update",
     );
     if (course.version !== version) {
       throw new AppError(
@@ -242,7 +275,12 @@ export function createCurriculumService({
     payload: CreateCourseLessonRequest,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "lesson.create",
+    );
 
     const section = await curriculumRepo.findSectionById(
       database,
@@ -275,7 +313,7 @@ export function createCurriculumService({
       updated_at: now,
     });
 
-    return { id: lessonId, position };
+    return { id: lessonId };
   }
 
   async function updateCourseLesson(
@@ -286,7 +324,12 @@ export function createCurriculumService({
     logger: FastifyBaseLogger,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "lesson.details.update",
+    );
 
     const lesson = await curriculumRepo.findLessonById(
       database,
@@ -332,7 +375,7 @@ export function createCurriculumService({
     }
 
     const now = new Date();
-    await curriculumRepo.updateLesson(database, lessonId, courseId, {
+    const lessonUpdate = {
       title: payload.title,
       description: payload.description,
       content_type: payload.contentType,
@@ -341,7 +384,29 @@ export function createCurriculumService({
       is_preview: payload.isPreview,
       is_published: payload.isPublished,
       updated_at: now,
-    });
+    };
+    if (givesLessonItsFirstMedia(lesson.content_media_id, effectiveMediaId)) {
+      // A lesson with no video is finished by opening it. Now that it has
+      // one, nobody has watched it: learners' progress on the lesson is
+      // cleared together with the change, or neither happens. Learners who
+      // passed the lesson's quiz keep theirs (see the reset service).
+      await database.transaction().execute(async (trx) => {
+        await curriculumRepo.updateLesson(
+          trx,
+          lessonId,
+          courseId,
+          lessonUpdate,
+        );
+        await lessonProgressResetService.clearLessonProgress(trx, lessonId);
+      });
+    } else {
+      await curriculumRepo.updateLesson(
+        database,
+        lessonId,
+        courseId,
+        lessonUpdate,
+      );
+    }
 
     if (payload.description !== undefined || mediaChanged || typeChanged) {
       await syncLessonChapters(
@@ -371,15 +436,7 @@ export function createCurriculumService({
       );
     }
 
-    if (transcodeJobInfo && transcodeJobInfo.should202) {
-      return {
-        accepted: true as const,
-        videoJobId: transcodeJobInfo.jobId!,
-        processingStatus: "queued" as const,
-      };
-    }
-
-    return { accepted: false as const, success: true };
+    return { accepted: Boolean(transcodeJobInfo?.should202) };
   }
 
   async function deleteCourseLesson(
@@ -388,7 +445,12 @@ export function createCurriculumService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "lesson.delete",
+    );
 
     const lesson = await curriculumRepo.findLessonById(
       database,
@@ -404,6 +466,11 @@ export function createCurriculumService({
       await curriculumRepo.softDeleteLesson(trx, lessonId, courseId, now);
       await curriculumRepo.softDeleteResourcesByLessonId(trx, lessonId, now);
     });
+    // An unfinished YouTube import into the lesson has nowhere to go now.
+    // The lesson is already deleted, so a failure here does not undo that.
+    await cancelLessonYoutubeImports(database, services, lessonId).catch(
+      () => undefined,
+    );
 
     return { success: true };
   }
@@ -420,6 +487,7 @@ export function createCurriculumService({
       courseId,
       creatorId,
       userRoles,
+      "lesson.reorder",
     );
     if (course.version !== version) {
       throw new AppError(
@@ -490,7 +558,12 @@ export function createCurriculumService({
     payload: CreateLessonResourceRequest,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.curriculum.update",
+    );
 
     const lesson = await curriculumRepo.findLessonById(
       database,
@@ -544,12 +617,8 @@ export function createCurriculumService({
 
     return {
       id: resourceId,
-      lessonId,
       mediaAssetId: payload.mediaAssetId,
       title: payload.title,
-      description: payload.description ?? null,
-      position,
-      createdAt: now.toISOString(),
       mediaAsset: {
         originalFilename: media.original_filename,
         mimeType: media.mime_type,
@@ -565,7 +634,12 @@ export function createCurriculumService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.curriculum.update",
+    );
 
     const resource = await curriculumRepo.findResourceById(
       database,
@@ -595,22 +669,81 @@ export function createCurriculumService({
     return await curriculumRepo.findLessonsByCourseId(database, courseId);
   }
 
-  async function listResourcesForLessons(lessonIds: string[]) {
-    return await curriculumRepo.listResourcesForLessons(database, lessonIds);
+  async function listResourcesByCourseId(courseId: string) {
+    return await curriculumRepo.listResourcesByCourseId(database, courseId);
   }
 
-  async function findSectionById(sectionId: string, courseId: string) {
-    return await curriculumRepo.findSectionById(database, sectionId, courseId);
+  /**
+   * Live lessons of live sections in learner order (section, lesson, id),
+   * with only what a lesson list shows.
+   */
+  async function listOrderedLessonsByCourseId(courseId: string) {
+    return await curriculumRepo.listOrderedLessonsByCourseId(
+      database,
+      courseId,
+    );
   }
 
   async function findLessonById(lessonId: string, courseId: string) {
     return await curriculumRepo.findLessonById(database, lessonId, courseId);
   }
 
-  async function findResourceById(resourceId: string, courseId: string) {
-    return await curriculumRepo.findResourceById(
+  /**
+   * Attaches a video that finished processing in the background (a YouTube
+   * import) to the lesson it was made for. The author was authorized when
+   * the import started; this only checks the lesson still holds the video it
+   * had then, so an edit made meanwhile wins. Learners' progress is cleared
+   * when this gives the lesson its first video, as `updateCourseLesson` does.
+   * Chapters are left to the caller, which syncs them for the media.
+   */
+  async function attachProcessedLessonVideo(input: {
+    courseId: string;
+    lessonId: string;
+    expectedMediaId: string | null;
+    mediaId: string;
+  }): Promise<boolean> {
+    const attached = await database.transaction().execute(async (trx) => {
+      // The editor may have attached it already (it attaches a lesson's
+      // first video when it is closed during processing).
+      const current = await curriculumRepo.findLessonById(
+        trx,
+        input.lessonId,
+        input.courseId,
+      );
+      if (current?.content_media_id === input.mediaId) return true;
+      const attached = await curriculumRepo.swapLessonMediaIfUnchanged(
+        trx,
+        input.lessonId,
+        input.courseId,
+        input.expectedMediaId,
+        input.mediaId,
+        new Date(),
+      );
+      if (
+        attached &&
+        givesLessonItsFirstMedia(input.expectedMediaId, input.mediaId)
+      ) {
+        await lessonProgressResetService.clearLessonProgress(
+          trx,
+          input.lessonId,
+        );
+      }
+      return attached;
+    });
+    // The lesson's video changed outside a request to the course: its
+    // cached content is cleared in every process.
+    if (attached) invalidateCache([cacheTags.course(input.courseId)]);
+    return attached;
+  }
+
+  /**
+   * A live lesson of a live section: its description, publish state and
+   * whether it is a preview.
+   */
+  async function findLiveLessonDescription(lessonId: string, courseId: string) {
+    return await curriculumRepo.findLiveLessonDescription(
       database,
-      resourceId,
+      lessonId,
       courseId,
     );
   }
@@ -629,10 +762,11 @@ export function createCurriculumService({
     removeLessonResource,
     findSectionsByCourseId,
     findLessonsByCourseId,
-    listResourcesForLessons,
-    findSectionById,
+    listResourcesByCourseId,
+    listOrderedLessonsByCourseId,
     findLessonById,
-    findResourceById,
+    findLiveLessonDescription,
+    attachProcessedLessonVideo,
   };
 }
 

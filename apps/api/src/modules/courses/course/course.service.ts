@@ -1,33 +1,52 @@
+import type { Permission } from "@veolms/contracts";
 import crypto from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
-import type {
-  Database,
-  AccessType,
-  AccessDurationType,
-  PricingType,
-} from "@veolms/database";
+import type { Database } from "@veolms/database";
 import type {
   CreateCourseRequest,
   UpdateCourseBasicsRequest,
+  CourseBasicsResponse,
+  CourseCreatedResponse,
   CourseListQuery,
   CourseListResponse,
+  CourseOverviewResponse,
   CourseSummary,
+  LessonDescriptionResponse,
   CoursePricingSummary,
+  CoursePublicCurriculum,
+  ManagedCourseSummary,
 } from "@veolms/contracts";
+import { config } from "../../../config.ts";
+import {
+  courseMediaById,
+  getCourseContent,
+  catalogPages,
+  publishedAccessFacts,
+  publishedCourseOptions,
+  type CourseContentKey,
+  type CourseContentSources,
+} from "./course-content.ts";
+import { cacheTags } from "@veolms/api-core";
+import {
+  getCachedPublicCourseContent,
+  type PublicCourseContent,
+} from "../shared/course-content-cache.ts";
 import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
 import {
   slugify,
   assertOptimisticUpdate,
+  canManageCourse,
+  mayManageCourse,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
 import {
   ADMIN_ROLE,
-  INSTRUCTOR_ROLE,
   createAuthService,
   type AuthService,
 } from "../../auth/index.ts";
+import { hasAcademyPermission } from "../../authorization/index.ts";
 import * as courseRepo from "./course.repository.ts";
 import {
   createCategoryService,
@@ -45,7 +64,53 @@ import {
   createIncludesService,
   type IncludesService,
 } from "../includes/includes.service.ts";
+import {
+  createAccessService,
+  isOpenFreeCourse,
+  isRestrictedFreeCourse,
+} from "../../access/index.ts";
+import { resolveCoursePricing } from "../../commerce/index.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
+import { resolveAliasedBasicsUpdate } from "./basics-aliased-field.ts";
+import { resolveBasicsCategoryUpdate } from "./basics-category.ts";
+import { resolveDetailsLevelUpdate } from "./details-level.ts";
+import {
+  isLessonListedInOverview,
+  resolveOverviewVisibility,
+  type OverviewViewer,
+} from "./overview-visibility.ts";
+import {
+  createLessonContentAccess,
+  findFirstPublishedLessonId,
+  isLessonDescriptionPublic,
+} from "./lesson-content-access.ts";
+import {
+  getLessonDurationSeconds,
+  presentAccessRule,
+  presentCourse,
+  presentCurriculum,
+  presentPricing,
+  presentSettings,
+  type CourseThumbnailUrls,
+} from "../shared/courses.presenters.ts";
+
+const accessService = createAccessService();
+
+/**
+ * Resource rows for a viewer who may not download them. Each keeps its place
+ * in its lesson and loses its name: a resource's title starts out as the
+ * name of the uploaded file, so the title says as much as the file name.
+ */
+function redactLockedResources<
+  Resource extends { lesson_id: string; title: string },
+>(resources: readonly Resource[]): Resource[] {
+  const countByLesson = new Map<string, number>();
+  return resources.map((resource) => {
+    const position = (countByLesson.get(resource.lesson_id) ?? 0) + 1;
+    countByLesson.set(resource.lesson_id, position);
+    return { ...resource, title: `Resource ${position}` };
+  });
+}
 
 const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
   "image/jpeg",
@@ -94,11 +159,122 @@ function encodePublishedCourseCursor(
   return `${encodeURIComponent(value)}~${row.id}`;
 }
 
-type PublicThumbnailVariant = {
-  url: string;
-  width: number;
-  height: number;
+type PublicThumbnailVariant = CourseThumbnailUrls["thumbnailSrcSet"][number];
+
+const NO_THUMBNAIL: CourseThumbnailUrls = {
+  thumbnailUrl: null,
+  thumbnailSrcSet: [],
 };
+
+/** `srcset` entries as the learner-facing schemas carry them. */
+function toSrcSet(variants: readonly PublicThumbnailVariant[]) {
+  return variants.map(({ url, width }) => ({ url, width }));
+}
+
+/** What a viewer's access to a course is decided and priced from. */
+export interface CourseAccessFacts {
+  id: string;
+  slug: string;
+  status: string;
+  creatorId: string | null;
+  /**
+   * `course_pricing.pricing_type` as stored: playback and lesson text read
+   * whether a course is open from it, not from the price checkout charges.
+   */
+  storedPricingType: string | null;
+  accessType: string | null;
+  pricing: CoursePricingSummary;
+  canSelfEnroll: boolean;
+}
+
+interface StoredPricingFacts {
+  pricing_type: string | null;
+  price: number | string | null;
+  currency: string | null;
+  sale_price: number | string | null;
+  show_discount_badge: boolean | null;
+}
+
+/** A course's price as every learner-facing answer presents it. */
+function presentPricingSummary(row: StoredPricingFacts): CoursePricingSummary {
+  return row.pricing_type
+    ? {
+        pricingType: row.pricing_type as "free" | "paid",
+        price: Number(row.price ?? 0),
+        currency: row.currency ?? "INR",
+        salePrice:
+          row.sale_price !== null && row.sale_price !== undefined
+            ? Number(row.sale_price)
+            : null,
+        showDiscountBadge: row.show_discount_badge === true,
+      }
+    : {
+        pricingType: "free",
+        price: 0,
+        currency: "INR",
+        salePrice: null,
+        showDiscountBadge: false,
+      };
+}
+
+/**
+ * The same rule, on the same stored values, as the course overview's
+ * `canSelfEnroll`, so a card, the page it opens and the access answers
+ * agree. Whether the course is free is read as checkout reads it: a priced
+ * course that sells for nothing is a free one.
+ */
+function courseOffersSelfEnrollment(
+  row: { pricing_type: string | null; access_type: string | null },
+  pricing: CoursePricingSummary,
+): boolean {
+  return !isRestrictedFreeCourse({
+    pricing_type: resolveCoursePricing(
+      row.pricing_type
+        ? {
+            pricing_type: row.pricing_type,
+            price: pricing.price,
+            sale_price: pricing.salePrice,
+          }
+        : null,
+    ).pricingType,
+    access_type: row.access_type,
+  });
+}
+
+/**
+ * A short fingerprint of a course's public curriculum. Delivery URLs are
+ * read without their query, whose signature and expiry change with every
+ * answer while the image stays the same.
+ */
+function fingerprintPublicCurriculum(curriculum: unknown): string {
+  const stable = JSON.stringify(curriculum, (key, value: unknown) =>
+    (key === "thumbnailUrl" || key === "url") && typeof value === "string"
+      ? value.split("?")[0]
+      : value,
+  );
+  return crypto.createHash("sha256").update(stable).digest("hex").slice(0, 16);
+}
+
+const COURSE_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * A course's length is the sum of its lesson media; one with no timed media
+ * falls back to the instructor's estimate (stored in minutes).
+ */
+function resolveTotalDurationSeconds(
+  lessonDurationSeconds: number,
+  estimatedDurationMinutes: number | null | undefined,
+): number {
+  if (lessonDurationSeconds > 0) return lessonDurationSeconds;
+  return estimatedDurationMinutes && estimatedDurationMinutes > 0
+    ? estimatedDurationMinutes * 60
+    : 0;
+}
 
 const FALLBACK_THUMBNAIL_WIDTHS = [160, 240, 320, 480, 640, 960, 1280] as const;
 
@@ -203,7 +379,9 @@ function resolvePublicThumbnailUrls(
           return [];
         }
         const item = variant as Record<string, unknown>;
-        if (typeof item.width !== "number" || typeof item.height !== "number") {
+        // Sizes go out through schemas that require positive integers; a
+        // malformed variant is skipped rather than failing the whole list.
+        if (!isPositiveInteger(item.width) || !isPositiveInteger(item.height)) {
           return [];
         }
         const persistedKey = getPersistedThumbnailKey(metadata, item.width);
@@ -236,6 +414,8 @@ export interface CourseServiceOptions {
   includesService?: IncludesService;
   mediaService?: MediaService;
   deletionService?: CourseDeletionService;
+  /** See `COURSE_OVERVIEW_LESSON_DESCRIPTIONS`. */
+  overviewLessonDescriptions?: boolean;
 }
 
 export function createCourseService({
@@ -251,32 +431,24 @@ export function createCourseService({
     database,
     storage: services.storage,
   }),
+  overviewLessonDescriptions = config.COURSE_OVERVIEW_LESSON_DESCRIPTIONS,
 }: CourseServiceOptions) {
-  async function toPublicCourseSummary(row: PublicCourseSummaryRow) {
-    const lessonDuration = Number(row.lesson_duration_seconds ?? 0);
-    const totalDurationSeconds =
-      lessonDuration > 0
-        ? lessonDuration
-        : row.estimated_duration && row.estimated_duration > 0
-          ? row.estimated_duration * 60
-          : 0;
+  const contentSources: CourseContentSources = {
+    categoryService,
+    curriculumService,
+    configurationService,
+    includesService,
+    mediaService,
+    authService,
+  };
 
-    const pricing: CoursePricingSummary = row.pricing_type
-      ? {
-          pricingType: row.pricing_type as "free" | "paid",
-          price: Number(row.price ?? 0),
-          currency: row.currency ?? "INR",
-          salePrice:
-            row.sale_price !== null && row.sale_price !== undefined
-              ? Number(row.sale_price)
-              : null,
-        }
-      : {
-          pricingType: "free",
-          price: 0,
-          currency: "INR",
-          salePrice: null,
-        };
+  async function toPublicCourseSummary(row: PublicCourseSummaryRow) {
+    const totalDurationSeconds = resolveTotalDurationSeconds(
+      Number(row.lesson_duration_seconds ?? 0),
+      row.estimated_duration,
+    );
+
+    const pricing = presentPricingSummary(row);
 
     const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
       services,
@@ -290,67 +462,101 @@ export function createCourseService({
       slug: row.slug,
       title: row.title,
       shortDescription: row.short_description ?? "",
-      difficulty:
-        (row.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
-        null,
       thumbnailUrl,
-      thumbnailSrcSet,
-      instructorName: row.instructor_alias || row.creator_display_name || null,
-      categoryName: row.category_name ?? null,
+      thumbnailSrcSet: toSrcSet(thumbnailSrcSet),
       totalSections: Number(row.total_sections ?? 0),
       totalLessons: Number(row.total_lessons ?? 0),
       totalDurationSeconds,
       pricing,
       certificateEnabled: Boolean(row.certificate_enabled ?? false),
+      canSelfEnroll: courseOffersSelfEnrollment(row, pricing),
     } satisfies CourseSummary;
   }
 
   /**
    * Verifies course existence and owner permissions.
    */
+  /** Refuses a category id that names no category. */
+  async function assertCategoryExists(
+    categoryId: string | null | undefined,
+  ): Promise<void> {
+    if (!categoryId) return;
+    if (await categoryService.findCategoryById(categoryId)) return;
+    throw new AppError(
+      400,
+      "INVALID_CATEGORY",
+      "Selected category does not exist.",
+    );
+  }
+
+  /**
+   * The viewer, with whether they may preview every course: drafts and
+   * lessons open to reviewers and editors as they do to the creator.
+   */
+  async function withPreviewReach<Viewer extends OverviewViewer>(
+    user: Viewer | undefined,
+  ): Promise<(Viewer & { previewsEveryCourse: boolean }) | undefined> {
+    if (!user) return undefined;
+    return {
+      ...user,
+      previewsEveryCourse: await hasAcademyPermission(
+        database,
+        user.id,
+        "course.preview",
+      ),
+    };
+  }
+
+  /** Admin, or course.read through a role that reaches every course. */
+  async function seesEveryCourse(
+    userId: string,
+    userRoles?: readonly string[],
+  ): Promise<boolean> {
+    if (userRoles?.includes(ADMIN_ROLE)) return true;
+    return await hasAcademyPermission(database, userId, "course.read");
+  }
+
   function getCourseAndVerifyOwner(
     courseId: string,
     creatorId: string,
-    userRoles?: readonly string[],
+    userRoles: readonly string[] | undefined,
+    permission: Permission,
   ) {
-    return verifyCourseOwner(database, courseId, creatorId, userRoles);
+    return verifyCourseOwner(
+      database,
+      courseId,
+      creatorId,
+      userRoles,
+      permission,
+    );
   }
 
-  async function resolveCourseThumbnailUrls(
-    thumbnailMediaId: string | null | undefined,
+  /**
+   * Thumbnail URLs for a media row the caller has already loaded. A
+   * thumbnail under a public CDN prefix needs no further query; one stored
+   * under a protected prefix is served through a signed delivery URL.
+   */
+  async function resolveThumbnailFromMedia(
+    media: { id: string; metadata: unknown; storage_key: string },
     requestingUserId?: string,
     userRoles?: readonly string[],
-  ): Promise<{
-    thumbnailUrl: string | null;
-    thumbnailSrcSet: PublicThumbnailVariant[];
-  }> {
-    if (!thumbnailMediaId) {
-      return { thumbnailUrl: null, thumbnailSrcSet: [] };
+  ): Promise<CourseThumbnailUrls> {
+    const publicUrls = resolvePublicThumbnailUrls(
+      services,
+      media.metadata,
+      media.id,
+      media.storage_key,
+    );
+    if (
+      publicUrls.thumbnailUrl &&
+      services.storage.isCdnPublicKey(media.storage_key)
+    ) {
+      return publicUrls;
     }
 
     try {
-      const media = await mediaService.getMediaAsset(
-        thumbnailMediaId,
-        requestingUserId,
-        userRoles,
-      );
-      if (!media) return { thumbnailUrl: null, thumbnailSrcSet: [] };
-
-      const publicUrls = resolvePublicThumbnailUrls(
-        services,
-        media.metadata,
-        media.id,
-        media.storage_key,
-      );
-      if (
-        publicUrls.thumbnailUrl &&
-        services.storage.isCdnPublicKey(media.storage_key)
-      ) {
-        return publicUrls;
-      }
-
       const directUrl = await mediaService.getMediaDelivery(
-        thumbnailMediaId,
+        media.id,
         requestingUserId,
         userRoles,
       );
@@ -360,46 +566,51 @@ export function createCourseService({
       // course response. Access and CDN configuration failures still
       // propagate so the caller never silently receives a proxy URL.
       if (error instanceof AppError && error.statusCode === 404) {
-        return { thumbnailUrl: null, thumbnailSrcSet: [] };
+        return NO_THUMBNAIL;
       }
       throw error;
     }
   }
 
-  async function resolveCourseMediaUrls(
+  async function resolveCourseThumbnailUrls(
     thumbnailMediaId: string | null | undefined,
-    trailerMediaId: string | null | undefined,
     requestingUserId?: string,
     userRoles?: readonly string[],
-  ) {
-    const resolve = async (mediaId: string | null | undefined) => {
-      if (!mediaId) return null;
-      try {
-        return (
-          await mediaService.getMediaDelivery(
-            mediaId,
-            requestingUserId,
-            userRoles,
-          )
-        ).url;
-      } catch (error) {
-        // Keep an orphaned media reference from breaking an otherwise valid
-        // course response. Access and CDN configuration failures still
-        // propagate so the caller never silently receives a proxy URL.
-        if (error instanceof AppError && error.statusCode === 404) return null;
-        throw error;
-      }
-    };
+  ): Promise<CourseThumbnailUrls> {
+    if (!thumbnailMediaId) return NO_THUMBNAIL;
 
-    const [thumbnail, trailerUrl] = await Promise.all([
-      resolveCourseThumbnailUrls(thumbnailMediaId, requestingUserId, userRoles),
-      resolve(trailerMediaId),
-    ]);
-    return {
-      thumbnailUrl: thumbnail.thumbnailUrl,
-      thumbnailSrcSet: thumbnail.thumbnailSrcSet,
-      trailerUrl,
-    };
+    const media = await mediaService.getMediaAsset(
+      thumbnailMediaId,
+      requestingUserId,
+      userRoles,
+    );
+    if (!media) return NO_THUMBNAIL;
+
+    return await resolveThumbnailFromMedia(media, requestingUserId, userRoles);
+  }
+
+  /**
+   * One read for every media row a curriculum shows: lesson videos (for
+   * their duration) and resource files (for their name, type and size).
+   */
+  async function loadCurriculumMedia(
+    lessons: readonly { content_media_id: string | null }[],
+    resources: readonly { media_asset_id: string }[],
+    ownerId?: string,
+    userRoles?: readonly string[],
+  ) {
+    const mediaIds = new Set<string>();
+    for (const lesson of lessons) {
+      if (lesson.content_media_id) mediaIds.add(lesson.content_media_id);
+    }
+    for (const resource of resources) mediaIds.add(resource.media_asset_id);
+
+    const assets = await mediaService.getMediaAssets(
+      Array.from(mediaIds),
+      ownerId,
+      userRoles,
+    );
+    return new Map(assets.map((media) => [media.id, media]));
   }
 
   /**
@@ -417,6 +628,27 @@ export function createCourseService({
     // unauthenticated endpoint. Default to the contract's maximum instead —
     // callers that want more pages follow nextCursor.
     const pageLimit = filters?.limit ?? 60;
+    if (filters?.search) {
+      return await buildCataloguePage(filters, sort, cursor, pageLimit);
+    }
+    return await catalogPages.fetch(
+      JSON.stringify([
+        sort,
+        pageLimit,
+        filters?.cursor ?? null,
+        filters?.creatorId ?? null,
+      ]),
+      () => buildCataloguePage(filters, sort, cursor, pageLimit),
+      { tags: [cacheTags.catalog, cacheTags.site] },
+    );
+  }
+
+  async function buildCataloguePage(
+    filters: CourseListQuery | undefined,
+    sort: "latest" | "title",
+    cursor: ReturnType<typeof decodePublishedCourseCursor> | undefined,
+    pageLimit: number,
+  ): Promise<CourseListResponse> {
     const rows = await courseRepo.listPublishedCourses(database, {
       creatorId: filters?.creatorId,
       limit: pageLimit,
@@ -438,7 +670,11 @@ export function createCourseService({
 
   async function listPublishedCourseOptions() {
     return {
-      courses: await courseRepo.listPublishedCourseOptions(database),
+      courses: await publishedCourseOptions.fetch(
+        "options",
+        () => courseRepo.listPublishedCourseOptions(database),
+        { tags: [cacheTags.catalog, cacheTags.site] },
+      ),
     };
   }
 
@@ -470,6 +706,28 @@ export function createCourseService({
   }
 
   /**
+   * Published courses as public summaries, for callers that curate their own
+   * selection (the configurable home page). `courseIds` returns exactly those
+   * courses, in the given order, skipping any that are no longer published.
+   */
+  async function listPublicCourseSummaries(options: {
+    limit: number;
+    order: "popular" | "recent";
+    freeOnly?: boolean;
+    courseIds?: readonly string[];
+  }) {
+    const rows = await courseRepo.listHomeDiscoveryCourses(database, options);
+    const summaries = await Promise.all(rows.map(toPublicCourseSummary));
+    if (!options.courseIds) return summaries;
+
+    const position = new Map(options.courseIds.map((id, index) => [id, index]));
+    return summaries.sort(
+      (left, right) =>
+        (position.get(left.id) ?? 0) - (position.get(right.id) ?? 0),
+    );
+  }
+
+  /**
    * Retrieves a published course by its URL-safe slug.
    */
   async function getPublishedCourseBySlug(slug: string) {
@@ -486,36 +744,14 @@ export function createCourseService({
     );
     return {
       courses: await Promise.all(
-        rows.map(async (row) => {
-          const { thumbnailUrl, thumbnailSrcSet, trailerUrl } =
-            await resolveCourseMediaUrls(
+        rows.map(async (row) =>
+          presentCourse(row, {
+            thumbnail: await resolveCourseThumbnailUrls(
               row.thumbnail_media_id,
-              row.trailer_media_id,
               creatorId,
-            );
-          return {
-            id: row.id,
-            slug: row.slug,
-            title: row.title,
-            shortDescription: row.short_description,
-            description: row.description,
-            difficulty: row.difficulty as
-              "beginner" | "intermediate" | "advanced" | null,
-            status: row.status as "draft" | "published" | "archived",
-            creatorId: row.creator_id as string,
-            categoryId: row.category_id,
-            thumbnailMediaId: row.thumbnail_media_id,
-            trailerMediaId: row.trailer_media_id,
-            thumbnailUrl,
-            thumbnailSrcSet,
-            trailerUrl,
-            instructorAlias: row.instructor_alias ?? null,
-            version: row.version,
-            createdAt: row.created_at.toISOString(),
-            updatedAt: row.updated_at.toISOString(),
-            publishedAt: row.published_at?.toISOString() ?? null,
-          };
-        }),
+            ),
+          }),
+        ),
       ),
     };
   }
@@ -530,7 +766,11 @@ export function createCourseService({
     const data: CreateCourseRequest =
       typeof payload === "string" ? { title: payload } : payload;
     const title = data.title;
-    const baseSlug = slugify(title);
+    // slugify keeps only Latin letters and digits, so a title written entirely
+    // in another script (Hindi, Chinese, emoji) slugified to "" — and an
+    // empty slug fails the catalogue's response schema for every visitor.
+    const baseSlug =
+      slugify(title) || `course-${crypto.randomBytes(4).toString("hex")}`;
     let slug = baseSlug;
     let attempts = 0;
 
@@ -549,6 +789,9 @@ export function createCourseService({
     const shortDescription = data.shortDescription ?? null;
     const description = data.description ?? null;
     const categoryId = data.categoryId ?? null;
+    // The same refusal an edit gives. Without it an unknown id reached the
+    // foreign key and came back as a generic error.
+    await assertCategoryExists(categoryId);
     const difficulty = (data.difficulty ?? data.difficultyLevel ?? null) as
       "beginner" | "intermediate" | "advanced" | null;
     const thumbnailMediaId = data.thumbnailMediaId ?? null;
@@ -609,20 +852,9 @@ export function createCourseService({
       id: courseId,
       slug,
       title,
-      shortDescription,
-      description,
-      difficulty,
-      status: "draft" as const,
-      creatorId,
-      categoryId,
-      thumbnailMediaId,
-      trailerMediaId,
       instructorAlias,
       version: 1,
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-      publishedAt: null,
-    };
+    } satisfies CourseCreatedResponse;
   }
 
   /**
@@ -632,57 +864,63 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdminOrInstructor =
-      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
-    const rows = isAdminOrInstructor
-      ? await courseRepo.listAllCourses(database)
-      : await courseRepo.listCoursesByCreator(database, creatorId);
+    // Admins, and team roles that see every course (a course manager, a
+    // content editor), list every course; an instructor lists only the
+    // courses they created.
+    const isAdmin = await seesEveryCourse(creatorId, userRoles);
+    const rows = await courseRepo.listManagedCourses(
+      database,
+      isAdmin ? undefined : creatorId,
+    );
     const courses = await Promise.all(
       rows.map(async (c) => {
-        const lessonDuration = Number(c.lesson_duration_seconds ?? 0);
-        const totalDurationSeconds =
-          lessonDuration > 0
-            ? lessonDuration
-            : c.estimated_duration && c.estimated_duration > 0
-              ? c.estimated_duration * 60
-              : 0;
-
-        const { thumbnailUrl, thumbnailSrcSet, trailerUrl } =
-          await resolveCourseMediaUrls(
-            c.thumbnail_media_id,
-            c.trailer_media_id,
-            c.creator_id ?? creatorId,
-            userRoles,
-          );
+        // The thumbnail's media row came with the course, so the usual case
+        // costs no query. Only an administrator, or the user the course's
+        // media belongs to, is shown it — the same rule as a media lookup.
+        const mediaOwnerId = c.creator_id ?? creatorId;
+        const thumbnail =
+          c.thumbnail_media_id &&
+          c.thumbnail_storage_key !== null &&
+          (isAdmin || c.thumbnail_owner_id === mediaOwnerId)
+            ? await resolveThumbnailFromMedia(
+                {
+                  id: c.thumbnail_media_id,
+                  metadata: c.thumbnail_metadata,
+                  storage_key: c.thumbnail_storage_key,
+                },
+                mediaOwnerId,
+                userRoles,
+              )
+            : NO_THUMBNAIL;
 
         return {
           id: c.id,
           slug: c.slug,
           title: c.title,
           shortDescription: c.short_description,
-          description: c.description,
-          difficulty: c.difficulty as
-            "beginner" | "intermediate" | "advanced" | null,
-          status: c.status as "draft" | "published" | "archived",
-          creatorId: c.creator_id as string,
-          categoryId: c.category_id,
+          difficulty: c.difficulty,
+          status: c.status,
+          creatorId: c.creator_id,
           thumbnailMediaId: c.thumbnail_media_id,
-          trailerMediaId: c.trailer_media_id,
-          thumbnailUrl,
-          thumbnailSrcSet,
-          trailerUrl,
-          instructorAlias: c.instructor_alias ?? null,
-          version: c.version,
+          thumbnailUrl: thumbnail.thumbnailUrl,
+          thumbnailSrcSet: thumbnail.thumbnailSrcSet,
           createdAt: c.created_at.toISOString(),
           updatedAt: c.updated_at.toISOString(),
-          publishedAt: c.published_at?.toISOString() ?? null,
           totalSections: Number(c.total_sections ?? 0),
           totalLessons: Number(c.total_lessons ?? 0),
-          totalDurationSeconds,
-        };
+          totalDurationSeconds: resolveTotalDurationSeconds(
+            Number(c.lesson_duration_seconds ?? 0),
+            c.estimated_duration,
+          ),
+        } satisfies ManagedCourseSummary;
       }),
     );
     return { courses };
+  }
+
+  /** Ids of every non-deleted course the user created. */
+  async function listOwnedCourseIds(creatorId: string): Promise<string[]> {
+    return await courseRepo.listCourseIdsByCreator(database, creatorId);
   }
 
   /**
@@ -694,9 +932,7 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdminOrInstructor =
-      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
-    const rows = isAdminOrInstructor
+    const rows = (await seesEveryCourse(creatorId, userRoles))
       ? await courseRepo.listAllCourseScope(database)
       : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
 
@@ -720,12 +956,16 @@ export function createCourseService({
   async function listMyCourseSummaries(
     creatorId: string,
     userRoles?: readonly string[],
+    /** Every course in the academy, for a caller cleared for it. */
+    options?: { everyCourse?: boolean },
   ) {
-    const isAdminOrInstructor =
-      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
-    const rows = isAdminOrInstructor
-      ? await courseRepo.listAllCourseScope(database)
-      : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
+    const rows =
+      options?.everyCourse || (await seesEveryCourse(creatorId, userRoles))
+        ? await courseRepo.listAllCourseScope(database)
+        : await courseRepo.listAvailableCourseScopeByCreator(
+            database,
+            creatorId,
+          );
 
     return {
       courses: rows.map((course) => ({
@@ -753,6 +993,7 @@ export function createCourseService({
       courseId,
       creatorId,
       userRoles,
+      "course.details.update",
     );
 
     if (course.version !== version) {
@@ -775,18 +1016,20 @@ export function createCourseService({
       );
     }
 
-    if (updates.categoryId) {
-      const category = await categoryService.findCategoryById(
-        updates.categoryId,
-      );
-      if (!category) {
-        throw new AppError(
-          400,
-          "INVALID_CATEGORY",
-          "Selected category does not exist.",
-        );
-      }
-    }
+    // One value is checked here, written below and reported back: `category`
+    // is an accepted alias, and checking `categoryId` alone let an unknown
+    // or a removed category through under the other name. `null` removes
+    // the category (publishing does not require one, so a published course
+    // may lose it too); `undefined` leaves it alone.
+    const categoryUpdate = resolveBasicsCategoryUpdate(updates);
+    await assertCategoryExists(categoryUpdate);
+    // The level by the same rule (`difficultyLevel` is its alias): `null`
+    // removes it, which `difficulty ?? difficultyLevel` skipped while the
+    // response said it was gone. Publishing does not require a level.
+    const difficultyUpdate = resolveAliasedBasicsUpdate(
+      updates.difficulty,
+      updates.difficultyLevel,
+    );
 
     if (updates.thumbnailMediaId) {
       const thumb = await mediaService.getMediaAsset(
@@ -803,6 +1046,25 @@ export function createCourseService({
           400,
           "INVALID_THUMBNAIL",
           "Thumbnail must be a valid image asset.",
+        );
+      }
+    }
+
+    if (updates.bannerMediaId) {
+      const banner = await mediaService.getMediaAsset(
+        updates.bannerMediaId,
+        creatorId,
+        userRoles,
+      );
+      if (
+        !banner ||
+        banner.type !== "image" ||
+        !ALLOWED_THUMBNAIL_MIME_TYPES.has(banner.mime_type)
+      ) {
+        throw new AppError(
+          400,
+          "INVALID_BANNER",
+          "Banner must be a valid image asset.",
         );
       }
     }
@@ -833,11 +1095,11 @@ export function createCourseService({
         title: updates.title,
         short_description: updates.shortDescription,
         description: updates.description,
-        category_id: updates.categoryId ?? updates.category,
-        difficulty: (updates.difficulty ?? updates.difficultyLevel) as
-          "beginner" | "intermediate" | "advanced" | null | undefined,
+        category_id: categoryUpdate,
+        difficulty: difficultyUpdate,
         thumbnail_media_id: updates.thumbnailMediaId,
         trailer_media_id: updates.trailerMediaId,
+        banner_media_id: updates.bannerMediaId,
         instructor_alias: updates.instructorAlias,
         version: newVersion,
         updated_at: now,
@@ -859,12 +1121,7 @@ export function createCourseService({
     }
 
     if (transcodeJobInfo && transcodeJobInfo.should202) {
-      return {
-        accepted: true as const,
-        videoJobId: transcodeJobInfo.jobId!,
-        processingStatus: "queued" as const,
-        version: newVersion,
-      };
+      return { accepted: true as const, version: newVersion };
     }
 
     return {
@@ -882,35 +1139,15 @@ export function createCourseService({
             ? updates.description
             : course.description,
         difficulty:
-          updates.difficulty !== undefined ||
-          updates.difficultyLevel !== undefined
-            ? ((updates.difficulty ?? updates.difficultyLevel) as
-                "beginner" | "intermediate" | "advanced" | null)
-            : (course.difficulty as
-                "beginner" | "intermediate" | "advanced" | null),
-        status: course.status as "draft" | "published" | "archived",
-        creatorId: course.creator_id as string,
+          difficultyUpdate !== undefined ? difficultyUpdate : course.difficulty,
         categoryId:
-          updates.categoryId !== undefined || updates.category !== undefined
-            ? (updates.categoryId ?? updates.category ?? null)
-            : course.category_id,
-        thumbnailMediaId:
-          updates.thumbnailMediaId !== undefined
-            ? updates.thumbnailMediaId
-            : course.thumbnail_media_id,
-        trailerMediaId:
-          updates.trailerMediaId !== undefined
-            ? updates.trailerMediaId
-            : course.trailer_media_id,
+          categoryUpdate !== undefined ? categoryUpdate : course.category_id,
         instructorAlias:
           updates.instructorAlias !== undefined
             ? updates.instructorAlias
             : (course.instructor_alias ?? null),
         version: newVersion,
-        createdAt: course.created_at.toISOString(),
-        updatedAt: now.toISOString(),
-        publishedAt: course.published_at?.toISOString() ?? null,
-      },
+      } satisfies CourseBasicsResponse,
     };
   }
 
@@ -922,198 +1159,194 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const isInstructor =
-      userRoles?.includes(INSTRUCTOR_ROLE) ||
-      userRoles?.includes("instructor") ||
-      userRoles?.includes("creator");
     const course = await courseRepo.findCourseById(database, courseId);
     if (!course) {
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
     }
-    if (!isAdmin && !isInstructor && course.creator_id !== creatorId) {
+    if (
+      !(await mayManageCourse(
+        database,
+        course,
+        creatorId,
+        userRoles,
+        "course.read",
+      ))
+    ) {
       throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
     }
 
-    const [sections, lessons, accessRules, pricing, settings, includes] =
-      await Promise.all([
-        curriculumService.findSectionsByCourseId(courseId),
-        curriculumService.findLessonsByCourseId(courseId),
-        configurationService.findAccessRuleByCourseId(courseId),
-        configurationService.findPricingByCourseId(courseId),
-        configurationService.findSettingsByCourseId(courseId),
-        includesService.listCourseIncludes(courseId),
-      ]);
-    const lessonIds = lessons.map((l) => l.id);
-    const resources =
-      await curriculumService.listResourcesForLessons(lessonIds);
-    const resourceMediaAssets = await mediaService.getMediaAssets(
-      Array.from(new Set(resources.map((resource) => resource.media_asset_id))),
-      course.creator_id ?? creatorId,
-      userRoles,
-    );
-    const resourceMediaById = new Map(
-      resourceMediaAssets.map((media) => [media.id, media]),
-    );
-    const contentMediaAssets = await mediaService.getMediaAssets(
-      Array.from(
-        new Set(
-          lessons
-            .map((lesson) => lesson.content_media_id)
-            .filter((id): id is string => Boolean(id)),
-        ),
+    // The course's media is read as its creator: an instructor sees the
+    // files they attached, an administrator sees all of them.
+    const mediaOwnerId = course.creator_id ?? creatorId;
+    const [
+      sections,
+      lessons,
+      resources,
+      accessRules,
+      pricing,
+      settings,
+      includes,
+      thumbnail,
+      banner,
+    ] = await Promise.all([
+      curriculumService.findSectionsByCourseId(courseId),
+      curriculumService.findLessonsByCourseId(courseId),
+      curriculumService.listResourcesByCourseId(courseId),
+      configurationService.findAccessRuleByCourseId(courseId),
+      configurationService.findPricingByCourseId(courseId),
+      configurationService.findSettingsByCourseId(courseId),
+      includesService.listIncludesForAuthorizedCourse(courseId),
+      resolveCourseThumbnailUrls(
+        course.thumbnail_media_id,
+        mediaOwnerId,
+        userRoles,
       ),
-      course.creator_id ?? creatorId,
+      resolveCourseThumbnailUrls(
+        course.banner_media_id,
+        mediaOwnerId,
+        userRoles,
+      ),
+    ]);
+    const mediaById = await loadCurriculumMedia(
+      lessons,
+      resources,
+      mediaOwnerId,
       userRoles,
-    );
-    const contentMediaDurations = new Map(
-      contentMediaAssets
-        .filter((media) => media.duration_seconds != null)
-        .map((media) => [media.id, media.duration_seconds ?? 0]),
     );
     const totalDurationSeconds = lessons.reduce(
-      (total, lesson) =>
-        total +
-        (lesson.content_media_id
-          ? (contentMediaDurations.get(lesson.content_media_id) ?? 0)
-          : 0),
+      (total, lesson) => total + getLessonDurationSeconds(lesson, mediaById),
       0,
     );
 
-    const fullSections = sections.map((sec) => {
-      const secLessons = lessons
-        .filter((l) => l.section_id === sec.id)
-        .map((les) => {
-          const lesResources = resources.filter((r) => r.lesson_id === les.id);
-          return {
-            id: les.id,
-            courseId: les.course_id,
-            sectionId: les.section_id,
-            title: les.title,
-            description: les.description,
-            contentType: les.content_type as "video" | "document" | "quiz",
-            contentMediaId: les.content_media_id,
-            durationSeconds: les.content_media_id
-              ? (contentMediaDurations.get(les.content_media_id) ?? 0)
-              : 0,
-            position: les.position,
-            isPreview: les.is_preview,
-            isPublished: les.is_published,
-            resources: lesResources.map((res) => {
-              const resourceMediaAsset = resourceMediaById.get(
-                res.media_asset_id,
-              );
-              return {
-                id: res.id,
-                lessonId: res.lesson_id,
-                mediaAssetId: res.media_asset_id,
-                title: res.title,
-                description: res.description,
-                position: res.position,
-                createdAt: res.created_at.toISOString(),
-                mediaAsset: resourceMediaAsset
-                  ? {
-                      originalFilename: resourceMediaAsset.original_filename,
-                      mimeType: resourceMediaAsset.mime_type,
-                      sizeBytes: Number(resourceMediaAsset.size_bytes),
-                      status: resourceMediaAsset.status,
-                    }
-                  : undefined,
-              };
-            }),
-          };
-        });
-
-      return {
-        id: sec.id,
-        courseId: sec.course_id,
-        title: sec.title,
-        position: sec.position,
-        lessons: secLessons,
-      };
-    });
-
-    const { thumbnailUrl, thumbnailSrcSet, trailerUrl } =
-      await resolveCourseMediaUrls(
-        course.thumbnail_media_id,
-        course.trailer_media_id,
-        course.creator_id ?? creatorId,
-        userRoles,
-      );
-
     return {
-      course: {
-        id: course.id,
-        slug: course.slug,
-        title: course.title,
-        shortDescription: course.short_description,
-        description: course.description,
-        difficulty: course.difficulty as
-          "beginner" | "intermediate" | "advanced" | null,
-        status: course.status as "draft" | "published" | "archived",
-        creatorId: course.creator_id as string,
-        categoryId: course.category_id,
-        thumbnailMediaId: course.thumbnail_media_id,
-        trailerMediaId: course.trailer_media_id,
-        thumbnailUrl,
-        thumbnailSrcSet,
-        trailerUrl,
-        instructorAlias: course.instructor_alias ?? null,
-        version: course.version,
-        createdAt: course.created_at.toISOString(),
-        updatedAt: course.updated_at.toISOString(),
-        publishedAt: course.published_at?.toISOString() ?? null,
+      course: presentCourse(course, {
+        thumbnail,
+        banner,
         totalDurationSeconds,
-      },
-      sections: fullSections,
-      accessRules: accessRules
-        ? {
-            id: accessRules.id,
-            courseId: accessRules.course_id,
-            accessType: accessRules.access_type as AccessType,
-            durationType: accessRules.duration_type as AccessDurationType,
-            durationDays: accessRules.duration_days,
-          }
-        : null,
-      pricing: pricing
-        ? {
-            id: pricing.id,
-            courseId: pricing.course_id,
-            pricingType: pricing.pricing_type as PricingType,
-            price: pricing.price,
-            currency: pricing.currency,
-            salePrice: pricing.sale_price,
-          }
-        : null,
-      settings: settings
-        ? {
-            id: settings.id,
-            courseId: settings.course_id,
-            allowQa: settings.allow_qa,
-            allowComments: settings.allow_comments,
-            allowDownloads: settings.allow_downloads,
-            allowNotes: settings.allow_notes,
-            certificateEnabled: settings.certificate_enabled,
-            showInstructorName: settings.show_instructor_name,
-            language: settings.language,
-            estimatedDuration: settings.estimated_duration,
-          }
-        : null,
+      }),
+      sections: presentCurriculum({ sections, lessons, resources, mediaById }),
+      accessRules: accessRules ? presentAccessRule(accessRules) : null,
+      pricing: pricing ? presentPricing(pricing) : null,
+      settings: settings ? presentSettings(settings) : null,
       includes,
     };
   }
 
   /**
-   * Assembles public course overview data for learners.
+   * Whether a signed-in viewer who does not manage the course has it: the
+   * course is free and unrestricted, or the viewer holds access.
+   */
+  async function viewerHasCourse(
+    userId: string,
+    courseId: string,
+    pricingType: string | null | undefined,
+    accessType: string | null | undefined,
+  ): Promise<boolean> {
+    const isOpen = isOpenFreeCourse({
+      pricing_type: pricingType,
+      access_type: accessType,
+    });
+    return isOpen || accessService.hasActiveAccess(database, userId, courseId);
+  }
+
+  /**
+   * Public course overview data for learners. A signed-out visitor's is the
+   * same for everyone, so it comes from the shared course content cache.
    */
   async function getCourseOverviewData(
     courseIdOrSlug: string,
+    user?: Parameters<typeof buildCourseOverviewData>[1],
+  ): Promise<CourseOverviewResponse> {
+    if (user) return await buildCourseOverviewData(courseIdOrSlug, user);
+    return (await getPublicCourseContent(courseIdOrSlug)).overview;
+  }
+
+  /**
+   * The course's trailer, for whoever may see the course's overview: a
+   * published course's trailer plays for everyone, a draft's for those who
+   * manage it (the course editor's preview).
+   */
+  async function resolveCourseTrailer(
+    courseIdOrSlug: string,
     user?: { id: string; roles?: string[] },
   ) {
-    const isUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        courseIdOrSlug,
+    const course = COURSE_UUID_PATTERN.test(courseIdOrSlug)
+      ? await courseRepo.findCourseById(database, courseIdOrSlug)
+      : await courseRepo.findCourseBySlug(database, courseIdOrSlug);
+    if (!course) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+
+    const visibility = resolveOverviewVisibility(
+      course,
+      await withPreviewReach(user),
+    );
+    if (
+      !visibility.mayOpen &&
+      !(await accessService.isCourseOpenToLearner(database, user?.id, course))
+    ) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
+    }
+
+    const media = course.trailer_media_id
+      ? await mediaService.getMediaAsset(
+          course.trailer_media_id,
+          course.creator_id ?? user?.id,
+          user?.roles,
+        )
+      : undefined;
+    if (!media || media.type !== "video") {
+      throw new AppError(
+        404,
+        "TRAILER_NOT_FOUND",
+        "This course has no trailer.",
       );
+    }
+
+    return {
+      course,
+      media: {
+        id: media.id,
+        type: media.type,
+        status: media.status,
+        storageKey: media.storage_key,
+        durationSeconds: media.duration_seconds,
+      },
+    };
+  }
+
+  async function getCourseTrailerPlayback(
+    courseIdOrSlug: string,
+    user?: { id: string; roles?: string[] },
+  ) {
+    const { course, media } = await resolveCourseTrailer(courseIdOrSlug, user);
+    return await mediaService.getVideoAssetPlayback(media, {
+      mediaKey: `course-trailer-${media.id}`,
+      title: course.title,
+    });
+  }
+
+  async function getCourseTrailerPlaybackToken(
+    courseIdOrSlug: string,
+    user?: { id: string; roles?: string[] },
+  ) {
+    const { media } = await resolveCourseTrailer(courseIdOrSlug, user);
+    return await mediaService.getVideoAssetPlaybackToken(media);
+  }
+
+  /**
+   * Assembles public course overview data for learners.
+   */
+  async function buildCourseOverviewData(
+    courseIdOrSlug: string,
+    user?: {
+      id: string;
+      roles?: string[];
+      /** Answer as for a learner: see `LEARNER_VIEW_HEADER`. */
+      learnerView?: boolean;
+    },
+  ): Promise<CourseOverviewResponse> {
+    const isUuid = COURSE_UUID_PATTERN.test(courseIdOrSlug);
 
     const course = isUuid
       ? await courseRepo.findCourseById(database, courseIdOrSlug)
@@ -1123,169 +1356,124 @@ export function createCourseService({
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
     }
 
-    const isOwner = Boolean(user && user.id === course.creator_id);
-    const isAdmin = Boolean(
-      user && user.roles && user.roles.includes(ADMIN_ROLE),
-    );
-    const isInstructor = Boolean(
-      user &&
-      user.roles &&
-      (user.roles.includes(INSTRUCTOR_ROLE) || user.roles.includes("creator")),
-    );
-
-    if (course.status !== "published") {
-      if (!isOwner && !isAdmin && !isInstructor) {
-        throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
-      }
+    const viewer = await withPreviewReach(user);
+    const visibility = resolveOverviewVisibility(course, viewer);
+    // An archived course is still shown to a learner who holds access to
+    // it, as a learner sees any course; to everyone else it stays unfound.
+    if (
+      !visibility.mayOpen &&
+      !(await accessService.isCourseOpenToLearner(database, user?.id, course))
+    ) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
     }
 
     const courseId = course.id;
+    const viewerManagesCourse = visibility.managesCourse;
 
-    const [
-      creatorUser,
-      cat,
-      sections,
-      allLessons,
-      accessRules,
+    const [content, thumbnail, banner] = await Promise.all([
+      getCourseContent(contentSources, course),
+      resolveCourseThumbnailUrls(
+        course.thumbnail_media_id,
+        course.creator_id ?? user?.id,
+        user?.roles,
+      ),
+      resolveCourseThumbnailUrls(
+        course.banner_media_id,
+        course.creator_id ?? user?.id,
+        user?.roles,
+      ),
+    ]);
+    const {
+      category,
+      sections: allSections,
+      lessons: allLessons,
+      resources: allResources,
+      accessRule,
       pricing,
       settings,
       includes,
-    ] = await Promise.all([
-      course.creator_id ? authService.findUserById(course.creator_id) : null,
-      course.category_id
-        ? categoryService.findCategoryById(course.category_id)
-        : null,
-      curriculumService.findSectionsByCourseId(courseId),
-      curriculumService.findLessonsByCourseId(courseId),
-      configurationService.findAccessRuleByCourseId(courseId),
-      configurationService.findPricingByCourseId(courseId),
-      configurationService.findSettingsByCourseId(courseId),
-      includesService.listCourseIncludes(courseId),
-    ]);
+    } = content;
 
-    const creator = creatorUser
-      ? {
-          id: creatorUser.id,
-          displayName: creatorUser.display_name,
-          username: creatorUser.username,
-        }
-      : null;
-
-    const category = cat
-      ? {
-          id: cat.id,
-          name: cat.name,
-          slug: cat.slug,
-        }
-      : null;
-
-    const lessons =
-      isOwner || isAdmin
-        ? allLessons
-        : allLessons.filter((l) => l.is_published);
-
-    const lessonIds = lessons.map((l) => l.id);
-    const [resources, mediaAssets] = await Promise.all([
-      curriculumService.listResourcesForLessons(lessonIds),
-      mediaService.getMediaAssets(
-        lessons
-          .map((l) => l.content_media_id)
-          .filter((id): id is string => Boolean(id)),
-      ),
-    ]);
-
-    // Learners see what each resource is before downloading it, so its file
-    // details go out with the overview. They are read without an owner
-    // filter: the viewer is not the uploader.
-    const resourceMediaAssets = await mediaService.getMediaAssets(
-      Array.from(new Set(resources.map((resource) => resource.media_asset_id))),
+    // Learners get published lessons only, and only the sections that still
+    // have one: an unpublished section's title is not theirs to see. Lesson
+    // order is untouched, so lesson numbers stay what they were.
+    const lessons = allLessons.filter((lesson) =>
+      isLessonListedInOverview(lesson, visibility),
     );
-    const resourceMediaById = new Map(
-      resourceMediaAssets.map((media) => [media.id, media]),
+    const lessonIds = new Set(lessons.map((lesson) => lesson.id));
+    const sections = viewerManagesCourse
+      ? allSections
+      : allSections.filter((section) =>
+          lessons.some((lesson) => lesson.section_id === section.id),
+        );
+    const resources = allResources.filter((resource) =>
+      lessonIds.has(resource.lesson_id),
     );
 
-    const mediaDurationMap = new Map<string, number>();
-    for (const m of mediaAssets) {
-      if (m.duration_seconds) {
-        mediaDurationMap.set(m.id, m.duration_seconds);
-      }
-    }
+    // What a lesson's files are called and how large they are is shown to
+    // viewers who may download them, by the same rule the download applies:
+    // whoever manages the course, a signed-in learner on a free unrestricted
+    // course, or a learner who holds access. Everyone else sees that a
+    // lesson has resources and how many, nothing about the files.
+    // Asked once, by whichever of the two rules below needs it first.
+    let viewerHoldsCourse: Promise<boolean> | undefined;
+    const holdsCourse = () =>
+      (viewerHoldsCourse ??= user
+        ? viewerHasCourse(
+            user.id,
+            courseId,
+            pricing?.pricing_type,
+            accessRule?.access_type,
+          )
+        : Promise.resolve(false));
+    const viewerMayDownloadResources =
+      viewerManagesCourse ||
+      (user !== undefined && resources.length > 0 && (await holdsCourse()));
+    const visibleResources = viewerMayDownloadResources
+      ? resources
+      : redactLockedResources(resources);
 
-    let totalDurationSeconds = 0;
-    for (const les of lessons) {
-      if (les.content_media_id && mediaDurationMap.has(les.content_media_id)) {
-        totalDurationSeconds += mediaDurationMap.get(les.content_media_id) ?? 0;
-      }
-    }
-
-    const fullSections = sections.map((sec) => {
-      const secLessons = lessons
-        .filter((l) => l.section_id === sec.id)
-        .map((les) => {
-          const lesResources = resources.filter((r) => r.lesson_id === les.id);
-          return {
-            id: les.id,
-            courseId: les.course_id,
-            sectionId: les.section_id,
-            title: les.title,
-            description: les.description,
-            contentType: les.content_type as "video" | "document" | "quiz",
-            contentMediaId: les.content_media_id,
-            durationSeconds: les.content_media_id
-              ? (mediaDurationMap.get(les.content_media_id) ?? 0)
-              : 0,
-            position: les.position,
-            isPreview: les.is_preview,
-            isPublished: les.is_published,
-            resources: lesResources.map((res) => {
-              const resourceMediaAsset = resourceMediaById.get(
-                res.media_asset_id,
-              );
-              return {
-                id: res.id,
-                lessonId: res.lesson_id,
-                mediaAssetId: res.media_asset_id,
-                title: res.title,
-                description: res.description,
-                position: res.position,
-                createdAt: res.created_at.toISOString(),
-                mediaAsset: resourceMediaAsset
-                  ? {
-                      originalFilename: resourceMediaAsset.original_filename,
-                      mimeType: resourceMediaAsset.mime_type,
-                      sizeBytes: Number(resourceMediaAsset.size_bytes),
-                      status: resourceMediaAsset.status,
-                    }
-                  : undefined,
-              };
-            }),
-          };
-        });
-
-      return {
-        id: sec.id,
-        courseId: sec.course_id,
-        title: sec.title,
-        position: sec.position,
-        lessons: secLessons,
-      };
+    // A reading lesson's description is the lesson, so one the viewer may
+    // not open goes out without it, by the rule a video is played by. The
+    // lesson page asks for it on its own and is told to sign in or to get
+    // the course. Any other lesson's description is for everyone (see
+    // `isLessonDescriptionPublic`).
+    const lessonContentAccess = createLessonContentAccess({
+      viewer,
+      course,
+      pricingType: pricing?.pricing_type,
+      accessType: accessRule?.access_type,
+      holdsCourse,
     });
-
-    if (
-      totalDurationSeconds === 0 &&
-      settings?.estimated_duration &&
-      settings.estimated_duration > 0
-    ) {
-      totalDurationSeconds = settings.estimated_duration * 60;
+    const firstLessonId = findFirstPublishedLessonId(sections, lessons);
+    const withheldDescriptionLessonIds = new Set<string>();
+    for (const lesson of lessons) {
+      if (!lesson.description || isLessonDescriptionPublic(lesson)) continue;
+      const access = await lessonContentAccess({
+        is_preview: lesson.is_preview,
+        isFirstLesson: lesson.id === firstLessonId,
+      });
+      if (access !== "open") withheldDescriptionLessonIds.add(lesson.id);
     }
 
-    const { thumbnailUrl, thumbnailSrcSet, trailerUrl } =
-      await resolveCourseMediaUrls(
-        course.thumbnail_media_id,
-        course.trailer_media_id,
-        course.creator_id ?? user?.id,
-        user?.roles,
-      );
+    // "Show instructor name" is the instructor's choice, so it is applied
+    // here rather than left to each client to honour.
+    const instructorHidden =
+      settings?.show_instructor_name === false && !viewerManagesCourse;
+
+    // Learners who may download a resource see what it is first, so its file
+    // details go out with the overview (`omitResourceMedia` below holds them
+    // back from everyone else).
+    const mediaById = courseMediaById(content);
+    const creatorRow = instructorHidden ? undefined : content.creator;
+
+    const totalDurationSeconds = resolveTotalDurationSeconds(
+      lessons.reduce(
+        (total, lesson) => total + getLessonDurationSeconds(lesson, mediaById),
+        0,
+      ),
+      settings?.estimated_duration,
+    );
 
     return {
       course: {
@@ -1294,65 +1482,254 @@ export function createCourseService({
         title: course.title,
         shortDescription: course.short_description,
         description: course.description,
-        difficulty: course.difficulty as
-          "beginner" | "intermediate" | "advanced" | null,
-        status: course.status as "draft" | "published" | "archived",
+        difficulty: course.difficulty,
+        status: course.status,
         creatorId: course.creator_id,
-        categoryId: course.category_id,
-        thumbnailMediaId: course.thumbnail_media_id,
-        thumbnailSrcSet,
+        thumbnailUrl: thumbnail.thumbnailUrl,
+        thumbnailSrcSet: toSrcSet(thumbnail.thumbnailSrcSet),
+        bannerUrl: banner.thumbnailUrl,
+        bannerSrcSet: toSrcSet(banner.thumbnailSrcSet),
         trailerMediaId: course.trailer_media_id,
-        thumbnailUrl,
-        trailerUrl,
-        instructorAlias: course.instructor_alias ?? null,
-        version: course.version,
-        createdAt: course.created_at.toISOString(),
-        updatedAt: course.updated_at.toISOString(),
-        publishedAt: course.published_at?.toISOString() ?? null,
+        instructorAlias: instructorHidden ? null : course.instructor_alias,
       },
-      category,
-      creator,
-      sections: fullSections,
-      accessRules: accessRules
-        ? {
-            id: accessRules.id,
-            courseId: accessRules.course_id,
-            accessType: accessRules.access_type as AccessType,
-            durationType: accessRules.duration_type as AccessDurationType,
-            durationDays: accessRules.duration_days,
-          }
+      category: category ? { name: category.name } : null,
+      creator: creatorRow
+        ? { id: creatorRow.id, displayName: creatorRow.display_name }
         : null,
+      sections: presentCurriculum({
+        sections,
+        lessons,
+        resources: visibleResources,
+        mediaById,
+        // The map also holds every lesson's own media, and a resource can
+        // point at one of those.
+        omitResourceMedia: !viewerMayDownloadResources,
+        // The public curriculum (a visitor's overview) always carries them:
+        // lesson pages are built from it.
+        omitLessonDescriptions: !overviewLessonDescriptions && Boolean(user),
+        withheldDescriptionLessonIds,
+      }),
       pricing: pricing
         ? {
-            id: pricing.id,
-            courseId: pricing.course_id,
-            pricingType: pricing.pricing_type as PricingType,
+            pricingType: pricing.pricing_type,
             price: pricing.price,
             currency: pricing.currency,
             salePrice: pricing.sale_price,
+            // Absent until the migration that adds the column has run.
+            showDiscountBadge: pricing.show_discount_badge === true,
           }
         : null,
       settings: settings
         ? {
-            id: settings.id,
-            courseId: settings.course_id,
             allowQa: settings.allow_qa,
             allowComments: settings.allow_comments,
-            allowDownloads: settings.allow_downloads,
             allowNotes: settings.allow_notes,
-            certificateEnabled: settings.certificate_enabled,
             showInstructorName: settings.show_instructor_name,
             language: settings.language,
             estimatedDuration: settings.estimated_duration,
           }
         : null,
-      includes,
+      includes: includes.map(({ text, position }) => ({ text, position })),
+      // Asked of the rule checkout applies before it prices the course, so
+      // the page offers enrolment exactly when checkout would allow it.
+      // Whether the course is free is read as checkout reads it too: a
+      // priced course that sells for nothing is a free one, and a
+      // restricted free course is entered by a grant from staff only.
+      canSelfEnroll: !isRestrictedFreeCourse({
+        pricing_type: resolveCoursePricing(pricing).pricingType,
+        access_type: accessRule?.access_type,
+      }),
+      accessValidity: accessRule
+        ? {
+            durationType: accessRule.duration_type,
+            durationDays: accessRule.duration_days ?? null,
+          }
+        : null,
       stats: {
         totalSections: sections.length,
         totalLessons: lessons.length,
         totalDurationSeconds,
       },
     };
+  }
+
+  /**
+   * A published course as every visitor sees it: the overview a visitor who
+   * is not signed in gets, without the price, which is read live from the
+   * access answers instead. Being the same for whoever asks, it is what the
+   * course's static pages are built from. A course that is not published
+   * (a draft, an archived course) is not found.
+   */
+  async function getPublicCurriculum(
+    courseIdOrSlug: string,
+  ): Promise<CoursePublicCurriculum> {
+    return (await getPublicCourseContent(courseIdOrSlug)).curriculum;
+  }
+
+  /**
+   * The signed-out overview and the public curriculum built from it, from
+   * the shared cache when it is fresh (see `course-content-cache.ts`).
+   */
+  async function getPublicCourseContent(
+    courseIdOrSlug: string,
+  ): Promise<PublicCourseContent> {
+    return await getCachedPublicCourseContent(
+      courseIdOrSlug,
+      async () => {
+        const overview = await buildCourseOverviewData(
+          courseIdOrSlug,
+          undefined,
+        );
+        const { pricing: _pricing, ...curriculum } = overview;
+        return {
+          courseId: overview.course.id,
+          overview,
+          curriculum: {
+            ...curriculum,
+            version: fingerprintPublicCurriculum(curriculum),
+          },
+        };
+      },
+      COURSE_UUID_PATTERN.test(courseIdOrSlug),
+    );
+  }
+
+  /**
+   * `getPublicCurriculum(courseId).version`. Null for a course with no
+   * public curriculum.
+   */
+  async function getPublicCurriculumVersion(
+    courseId: string,
+  ): Promise<string | null> {
+    return await getPublicCurriculum(courseId).then(
+      (curriculum) => curriculum.version,
+      () => null,
+    );
+  }
+
+  /**
+   * The facts the access answers are decided and priced from: for the
+   * given courses, or for every published course.
+   */
+  async function listCourseAccessFacts(
+    filter: { courseIds: readonly string[] } | { published: true },
+  ): Promise<CourseAccessFacts[]> {
+    const rows =
+      "published" in filter
+        ? await publishedAccessFacts.fetch(
+            "published",
+            () => courseRepo.listCourseAccessFacts(database, filter),
+            { tags: [cacheTags.catalog, cacheTags.site] },
+          )
+        : await courseRepo.listCourseAccessFacts(database, filter);
+    return rows.map((row) => {
+      const pricing = presentPricingSummary(row);
+      return {
+        id: row.id,
+        slug: row.slug,
+        status: row.status,
+        creatorId: row.creator_id,
+        storedPricingType: row.pricing_type,
+        accessType: row.access_type,
+        pricing,
+        canSelfEnroll: courseOffersSelfEnrollment(row, pricing),
+      };
+    });
+  }
+
+  /**
+   * One lesson's description, for the viewers the overview lists that lesson
+   * for and nobody else: the overview is where the lesson page used to read
+   * it, so the two must agree. A listed lesson the viewer may not open (see
+   * `createLessonContentAccess`) is refused as its video is: 401 for a
+   * visitor who is not signed in, 403 for a learner without the course.
+   */
+  async function getLessonDescription(
+    courseId: string,
+    lessonId: string,
+    user?: OverviewViewer,
+  ): Promise<LessonDescriptionResponse> {
+    const course = await courseRepo.findCourseById(database, courseId);
+    const viewer = await withPreviewReach(user);
+    const visibility = course
+      ? resolveOverviewVisibility(course, viewer)
+      : undefined;
+    if (
+      !course ||
+      !visibility ||
+      // The overview's rule, archived courses included.
+      (!visibility.mayOpen &&
+        !(await accessService.isCourseOpenToLearner(
+          database,
+          user?.id,
+          course,
+        )))
+    ) {
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    }
+
+    const lesson = await curriculumService.findLiveLessonDescription(
+      lessonId,
+      course.id,
+    );
+    if (!lesson || !isLessonListedInOverview(lesson, visibility)) {
+      throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
+    }
+    if (isLessonDescriptionPublic(lesson)) {
+      return { lessonId: lesson.id, description: lesson.description };
+    }
+
+    const [accessRule, pricing] = await Promise.all([
+      configurationService.findAccessRuleByCourseId(course.id),
+      configurationService.findPricingByCourseId(course.id),
+    ]);
+    const lessonContentAccess = createLessonContentAccess({
+      viewer,
+      course,
+      pricingType: pricing?.pricing_type,
+      accessType: accessRule?.access_type,
+      holdsCourse: () =>
+        user
+          ? viewerHasCourse(
+              user.id,
+              course.id,
+              pricing?.pricing_type,
+              accessRule?.access_type,
+            )
+          : Promise.resolve(false),
+    });
+    const access = await lessonContentAccess({
+      is_preview: lesson.is_preview,
+      // Only a visitor on an open free course is let in by this, so the
+      // course's lessons are read for nobody else.
+      isFirstLesson:
+        !user &&
+        isOpenFreeCourse({
+          pricing_type: pricing?.pricing_type,
+          access_type: accessRule?.access_type,
+        }) &&
+        (await curriculumService.listOrderedLessonsByCourseId(course.id)).find(
+          (ordered) => ordered.is_published,
+        )?.id === lesson.id,
+    });
+    if (access === "login") {
+      // Not `UNAUTHORIZED`: the web client reads that as a session that has
+      // ended, and this visitor has none.
+      throw new AppError(
+        401,
+        "LESSON_LOGIN_REQUIRED",
+        "Sign in to read this lesson.",
+      );
+    }
+    if (access === "access") {
+      throw new AppError(
+        403,
+        "COURSE_ACCESS_DENIED",
+        "You do not have access to this course.",
+      );
+    }
+
+    return { lessonId: lesson.id, description: lesson.description };
   }
 
   /**
@@ -1380,6 +1757,58 @@ export function createCourseService({
     return courseRepo.findCourseById(database, courseId);
   }
 
+  /** The same lookup by slug, for the same trusted callers. */
+  async function findCourseBySlug(slug: string) {
+    return courseRepo.findCourseBySlug(database, slug);
+  }
+
+  /**
+   * Title, slug, status and thumbnail of each of a list of courses, whatever
+   * their status: what a list that names courses needs. For module services
+   * that decide for themselves which of them the viewer may be told about (a
+   * learner's history is one). A course that has been deleted is left out.
+   */
+  async function listCourseCardsByIds(courseIds: readonly string[]) {
+    const courses = await courseRepo.findCoursesByIds(database, [
+      ...new Set(courseIds),
+    ]);
+    return await Promise.all(
+      courses.map(async (course) => {
+        const thumbnail = course.thumbnail_media_id
+          ? await resolveCourseThumbnailUrls(
+              course.thumbnail_media_id,
+              course.creator_id ?? undefined,
+            )
+          : { thumbnailUrl: course.thumbnail_url ?? null, thumbnailSrcSet: [] };
+        return {
+          id: course.id,
+          slug: course.slug,
+          title: course.title,
+          status: course.status,
+          thumbnailUrl: thumbnail.thumbnailUrl,
+          thumbnailSrcSet: thumbnail.thumbnailSrcSet,
+        };
+      }),
+    );
+  }
+
+  /**
+   * Id and slug of the published courses among those named (each by id or
+   * slug): what a learner may be told exists. For lists that only name
+   * courses, such as a wishlist.
+   */
+  async function listPublishedCourseRefs(courseIdsOrSlugs: readonly string[]) {
+    return courseRepo.findPublishedCourseRefs(database, courseIdsOrSlugs);
+  }
+
+  /**
+   * Owner, status, access type and pricing type of a course addressed by id
+   * or slug, in one query, for services that decide access themselves.
+   */
+  async function findCourseAccessByIdOrSlug(courseIdOrSlug: string) {
+    return courseRepo.findCourseAccessByIdOrSlug(database, courseIdOrSlug);
+  }
+
   async function formatCourseDto(
     c: NonNullable<Awaited<ReturnType<typeof courseRepo.findCourseById>>>,
   ) {
@@ -1389,50 +1818,89 @@ export function createCourseService({
           c.creator_id ?? undefined,
         )
       : { thumbnailUrl: c.thumbnail_url ?? null, thumbnailSrcSet: [] };
+    const banner = await resolveCourseThumbnailUrls(
+      c.banner_media_id,
+      c.creator_id ?? undefined,
+    );
 
-    return {
-      id: c.id,
-      slug: c.slug,
-      title: c.title,
-      shortDescription: c.short_description ?? null,
-      description: c.description ?? null,
-      difficulty:
-        (c.difficulty as "beginner" | "intermediate" | "advanced" | null) ??
-        null,
-      status: c.status as "draft" | "published" | "archived",
-      creatorId: c.creator_id as string,
-      categoryId: c.category_id ?? null,
-      thumbnailMediaId: c.thumbnail_media_id ?? null,
-      trailerMediaId: c.trailer_media_id ?? null,
-      thumbnailUrl: thumbnail.thumbnailUrl,
-      thumbnailSrcSet: thumbnail.thumbnailSrcSet,
-      instructorAlias: c.instructor_alias ?? null,
-      version: c.version,
-      createdAt: c.created_at
-        ? new Date(c.created_at).toISOString()
-        : new Date().toISOString(),
-      updatedAt: c.updated_at
-        ? new Date(c.updated_at).toISOString()
-        : new Date().toISOString(),
-      publishedAt: c.published_at
-        ? new Date(c.published_at).toISOString()
-        : null,
-    };
+    return presentCourse(c, { thumbnail, banner });
+  }
+
+  /**
+   * The three direct-update endpoints below (thumbnail, details, archive)
+   * were guarded by a route permission only, so anyone holding that
+   * permission could change ANY course. They go through the same ownership
+   * gate as every other course mutation.
+   *
+   * Thumbnail and details accept the course `version` the caller last read.
+   * When it is sent, a course that has changed since is refused with the
+   * same 409 as the basics form; a caller that sends none is not checked.
+   */
+  function assertDirectUpdateVersion(
+    course: { version: number },
+    expectedVersion: number | undefined,
+  ) {
+    if (expectedVersion !== undefined && course.version !== expectedVersion) {
+      throw new AppError(
+        409,
+        "OPTIMISTIC_LOCK_CONFLICT",
+        "Course has been updated by another action. Please reload.",
+      );
+    }
   }
 
   async function updateCourseThumbnail(
     courseId: string,
-    payload: { thumbnailUrl: string; thumbnailMediaId?: string | null },
+    creatorId: string,
+    userRoles: readonly string[] | undefined,
+    payload: {
+      thumbnailUrl: string;
+      thumbnailMediaId?: string | null;
+      version?: number;
+    },
   ) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.thumbnail.update",
+    );
+    assertDirectUpdateVersion(course, payload.version);
+
+    // Same rule as updateCourseBasics: the asset must be an image the caller
+    // owns. Unchecked, any media id could be attached here — and a media
+    // asset attached to a published course is served publicly, which turned
+    // this endpoint into a way to expose paid lesson files.
+    if (payload.thumbnailMediaId) {
+      const thumb = await mediaService.getMediaAsset(
+        payload.thumbnailMediaId,
+        creatorId,
+        userRoles,
+      );
+      if (
+        !thumb ||
+        thumb.type !== "image" ||
+        !ALLOWED_THUMBNAIL_MIME_TYPES.has(thumb.mime_type)
+      ) {
+        throw new AppError(
+          400,
+          "INVALID_THUMBNAIL",
+          "Thumbnail must be a valid image asset.",
+        );
+      }
     }
 
-    await courseRepo.updateCourseDirect(database, courseId, {
-      thumbnail_url: payload.thumbnailUrl,
-      thumbnail_media_id: payload.thumbnailMediaId ?? null,
-    });
+    const updateResult = await courseRepo.updateCourseDirect(
+      database,
+      courseId,
+      {
+        thumbnail_url: payload.thumbnailUrl,
+        thumbnail_media_id: payload.thumbnailMediaId ?? null,
+      },
+      payload.version,
+    );
+    // A write that landed between the read above and this one.
+    if (payload.version !== undefined) assertOptimisticUpdate(updateResult);
 
     const updated = await courseRepo.findCourseById(database, courseId);
     return await formatCourseDto(updated!);
@@ -1440,6 +1908,8 @@ export function createCourseService({
 
   async function updateCourseDetails(
     courseId: string,
+    creatorId: string,
+    userRoles: readonly string[] | undefined,
     payload: {
       title?: string;
       subtitle?: string | null;
@@ -1447,12 +1917,17 @@ export function createCourseService({
       language?: string;
       level?: "beginner" | "intermediate" | "advanced" | "all_levels";
       categoryId?: string | null;
+      version?: number;
     },
   ) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    }
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.details.update",
+    );
+    assertDirectUpdateVersion(course, payload.version);
+    await assertCategoryExists(payload.categoryId);
 
     const updates: Record<string, unknown> = {};
     if (payload.title !== undefined) updates.title = payload.title;
@@ -1462,20 +1937,32 @@ export function createCourseService({
       updates.description = payload.description;
     if (payload.categoryId !== undefined)
       updates.category_id = payload.categoryId;
-    if (payload.level !== undefined && payload.level !== "all_levels") {
-      updates.difficulty = payload.level;
-    }
+    // "all_levels" is stored as no level (see resolveDetailsLevelUpdate).
+    const difficulty = resolveDetailsLevelUpdate(payload.level);
+    if (difficulty !== undefined) updates.difficulty = difficulty;
 
-    await courseRepo.updateCourseDirect(database, courseId, updates);
+    const updateResult = await courseRepo.updateCourseDirect(
+      database,
+      courseId,
+      updates,
+      payload.version,
+    );
+    if (payload.version !== undefined) assertOptimisticUpdate(updateResult);
     const updated = await courseRepo.findCourseById(database, courseId);
     return await formatCourseDto(updated!);
   }
 
-  async function archiveCourse(courseId: string) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    }
+  async function archiveCourse(
+    courseId: string,
+    creatorId: string,
+    userRoles: readonly string[] | undefined,
+  ) {
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.archive",
+    );
 
     await courseRepo.updateCourseDirect(database, courseId, {
       status: "archived",
@@ -1491,9 +1978,11 @@ export function createCourseService({
     createCourse,
     listMyCourses,
     listMyCourseScope,
+    listOwnedCourseIds,
     listMyCourseSummaries,
     listPublishedCourses,
     getHomeDiscovery,
+    listPublicCourseSummaries,
     listPublishedCourseOptions,
     getPublishedCourseBySlug,
     listAvailableCoursesByCreator,
@@ -1503,9 +1992,25 @@ export function createCourseService({
     archiveCourse,
     getCourseEditorData,
     getCourseOverviewData,
+    getCourseTrailerPlayback,
+    getCourseTrailerPlaybackToken,
+    getPublicCurriculum,
+    getPublicCurriculumVersion,
+    /**
+     * What is the same for every viewer of a course (see course-content.ts),
+     * for read paths only.
+     */
+    getCourseContent: (course: CourseContentKey) =>
+      getCourseContent(contentSources, course),
+    listCourseAccessFacts,
+    getLessonDescription,
     deleteCourse,
     findLessonById,
     findCourseById,
+    findCourseBySlug,
+    listCourseCardsByIds,
+    listPublishedCourseRefs,
+    findCourseAccessByIdOrSlug,
   };
 }
 

@@ -11,7 +11,6 @@ import {
 
 export function adaptLearningReplyToCommentReply(
   reply: LearningReply | LearningReplyEntity,
-  currentUserId?: string,
 ): CommentReply {
   const contentDraft = createDiscussionDraft(reply.content);
   if (reply.plainText) {
@@ -24,15 +23,16 @@ export function adaptLearningReplyToCommentReply(
     serverId: getServerEntityId(reply),
     creationStatus: isPendingClientEntity(reply) ? "pending" : "confirmed",
     name: reply.author.displayName || reply.author.username || "Learner",
+    authorUsername: reply.author.username ?? undefined,
     time: formatRelativeTime(reply.createdAt),
+    createdAt: reply.createdAt,
     avatar: reply.author.avatarUrl || "",
     text: reply.plainText || reply.content,
     content: contentDraft,
     likes: reply.likesCount ?? 0,
     liked: Boolean(reply.isLiked),
     role: reply.author.role === "Instructor" ? "Instructor" : undefined,
-    isOwn:
-      reply.isOwn ?? (currentUserId ? reply.userId === currentUserId : false),
+    isOwn: Boolean(reply.isOwn),
     isAccepted: Boolean(reply.isAccepted),
     attachments: reply.attachments || [],
   };

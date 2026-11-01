@@ -1,12 +1,19 @@
+import { DISPLAY_NAME_MAX_LENGTH } from "../shared/auth.constants.ts";
 import type { AuthContext } from "../shared/auth.context.ts";
 import {
   clearSessionCookie,
   setSessionCookie,
 } from "../shared/auth.cookies.ts";
-import { presentAvatar, presentLogin } from "../shared/auth.presenters.ts";
+import {
+  presentAvatar,
+  presentLogin,
+  presentUserProfile,
+} from "../shared/auth.presenters.ts";
+import type { SessionUser } from "../shared/auth.types.ts";
 import {
   normalizePhoneIdentifier,
   resolveIdentifier,
+  toUserProfileFields,
 } from "../shared/auth.utils.ts";
 import type {
   AvatarUploadCompleteRequest,
@@ -18,9 +25,11 @@ import type {
   SelectAvatarRequest,
 } from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { requestLocation } from "../shared/request-location.ts";
 
 export function createAuthController(context: AuthContext) {
-  const { authService, oauthService, sessionService } = context;
+  const { authService, oauthService, sessionService, platformSettings } =
+    context;
 
   async function login(
     request: FastifyRequest<{ Body: LoginRequest }>,
@@ -35,6 +44,7 @@ export function createAuthController(context: AuthContext) {
       request: {
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
+        location: requestLocation(request.headers),
         existingSessionToken,
       },
     });
@@ -71,6 +81,7 @@ export function createAuthController(context: AuthContext) {
       request: {
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
+        location: requestLocation(request.headers),
         existingSessionToken,
       },
     });
@@ -81,7 +92,11 @@ export function createAuthController(context: AuthContext) {
   }
 
   async function getConfig() {
-    return oauthService.getPublicConfig();
+    const [oauthConfig, requireVerifiedPhoneForEnrollment] = await Promise.all([
+      oauthService.getPublicConfig(),
+      platformSettings.requiresVerifiedPhoneForEnrollment(),
+    ]);
+    return { ...oauthConfig, requireVerifiedPhoneForEnrollment };
   }
 
   async function publicProfile(
@@ -91,7 +106,9 @@ export function createAuthController(context: AuthContext) {
 
     return {
       username: user.username,
-      displayName: user.display_name,
+      // A name stored before display names were bounded can be longer than
+      // this response allows.
+      displayName: user.display_name.slice(0, DISPLAY_NAME_MAX_LENGTH),
       ...presentAvatar(user.avatar_data_url),
       bio: user.bio,
       email:
@@ -125,70 +142,37 @@ export function createAuthController(context: AuthContext) {
       return null;
     }
 
-    return {
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName,
-      ...presentAvatar(user.avatarDataUrl),
-      bio: user.bio,
-      emailPublic: Boolean(
-        user.emailPublic && user.email && user.emailVerified,
-      ),
-      mobilePublic: Boolean(
-        user.mobilePublic && user.phoneNo && user.mobileVerified,
-      ),
-      linkedinUrl: user.linkedinUrl,
-      linkedinPublic: Boolean(user.linkedinPublic && user.linkedinUrl),
-      githubUrl: user.githubUrl,
-      githubPublic: Boolean(user.githubPublic && user.githubUrl),
-      websiteUrl: user.websiteUrl,
-      websitePublic: Boolean(user.websitePublic && user.websiteUrl),
-      email: user.email,
-      emailVerified: user.emailVerified,
-      phoneNo: user.phoneNo,
-      mobileVerified: user.mobileVerified,
-      roles: user.roles,
+    return presentUserProfile(user, user.roles, {
       mfaVerified: session.mfa_verified,
       totpEnabled: user.totpEnabled,
       passkeyEnabled: user.passkeyEnabled,
       mfaMandatory: user.mfaMandatory,
-    };
+    });
+  }
+
+  /** The profile as saved, with the MFA state of the session that saved it. */
+  function presentUpdatedProfile(
+    request: FastifyRequest,
+    updated: SessionUser & { roles: string[] },
+  ) {
+    const user = request.user!;
+
+    return presentUserProfile(toUserProfileFields(updated), updated.roles, {
+      mfaVerified: request.session?.mfa_verified ?? false,
+      totpEnabled: user.totpEnabled,
+      passkeyEnabled: user.passkeyEnabled,
+      mfaMandatory: user.mfaMandatory,
+    });
   }
 
   async function updateProfile(
     request: FastifyRequest<{ Body: ProfileUpdateRequest }>,
   ) {
-    const user = request.user!;
-
-    const updated = await authService.updateProfile(user.id, request.body);
-    return {
-      id: updated.id,
-      username: updated.username,
-      displayName: updated.display_name,
-      ...presentAvatar(updated.avatar_data_url),
-      bio: updated.bio,
-      emailPublic: Boolean(
-        updated.email_public && updated.email && updated.email_verified_at,
-      ),
-      mobilePublic: Boolean(
-        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
-      ),
-      linkedinUrl: updated.linkedin_url,
-      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
-      githubUrl: updated.github_url,
-      githubPublic: Boolean(updated.github_public && updated.github_url),
-      websiteUrl: updated.website_url,
-      websitePublic: Boolean(updated.website_public && updated.website_url),
-      email: updated.email,
-      emailVerified: Boolean(updated.email_verified_at),
-      phoneNo: updated.phone_no,
-      mobileVerified: Boolean(updated.phone_verified_at),
-      roles: updated.roles,
-      mfaVerified: request.session?.mfa_verified ?? false,
-      totpEnabled: user.totpEnabled,
-      passkeyEnabled: user.passkeyEnabled,
-      mfaMandatory: user.mfaMandatory,
-    };
+    const updated = await authService.updateProfile(
+      request.user!.id,
+      request.body,
+    );
+    return presentUpdatedProfile(request, updated);
   }
 
   async function presignAvatarUpload(
@@ -201,40 +185,11 @@ export function createAuthController(context: AuthContext) {
   async function completeAvatarUpload(
     request: FastifyRequest<{ Body: AvatarUploadCompleteRequest }>,
   ) {
-    const user = request.user!;
     const updated = await authService.completeAvatarUpload(
-      user.id,
+      request.user!.id,
       request.body,
     );
-
-    return {
-      id: updated.id,
-      username: updated.username,
-      displayName: updated.display_name,
-      ...presentAvatar(updated.avatar_data_url),
-      bio: updated.bio,
-      emailPublic: Boolean(
-        updated.email_public && updated.email && updated.email_verified_at,
-      ),
-      mobilePublic: Boolean(
-        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
-      ),
-      linkedinUrl: updated.linkedin_url,
-      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
-      githubUrl: updated.github_url,
-      githubPublic: Boolean(updated.github_public && updated.github_url),
-      websiteUrl: updated.website_url,
-      websitePublic: Boolean(updated.website_public && updated.website_url),
-      email: updated.email,
-      emailVerified: Boolean(updated.email_verified_at),
-      phoneNo: updated.phone_no,
-      mobileVerified: Boolean(updated.phone_verified_at),
-      roles: updated.roles,
-      mfaVerified: request.session?.mfa_verified ?? false,
-      totpEnabled: user.totpEnabled,
-      passkeyEnabled: user.passkeyEnabled,
-      mfaMandatory: user.mfaMandatory,
-    };
+    return presentUpdatedProfile(request, updated);
   }
 
   async function listAvatars(request: FastifyRequest) {
@@ -244,74 +199,16 @@ export function createAuthController(context: AuthContext) {
   async function selectAvatar(
     request: FastifyRequest<{ Body: SelectAvatarRequest }>,
   ) {
-    const user = request.user!;
     const updated = await authService.selectAvatar(
-      user.id,
+      request.user!.id,
       request.body.avatarId,
     );
-
-    return {
-      id: updated.id,
-      username: updated.username,
-      displayName: updated.display_name,
-      ...presentAvatar(updated.avatar_data_url),
-      bio: updated.bio,
-      emailPublic: Boolean(
-        updated.email_public && updated.email && updated.email_verified_at,
-      ),
-      mobilePublic: Boolean(
-        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
-      ),
-      linkedinUrl: updated.linkedin_url,
-      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
-      githubUrl: updated.github_url,
-      githubPublic: Boolean(updated.github_public && updated.github_url),
-      websiteUrl: updated.website_url,
-      websitePublic: Boolean(updated.website_public && updated.website_url),
-      email: updated.email,
-      emailVerified: Boolean(updated.email_verified_at),
-      phoneNo: updated.phone_no,
-      mobileVerified: Boolean(updated.phone_verified_at),
-      roles: updated.roles,
-      mfaVerified: request.session?.mfa_verified ?? false,
-      totpEnabled: user.totpEnabled,
-      passkeyEnabled: user.passkeyEnabled,
-      mfaMandatory: user.mfaMandatory,
-    };
+    return presentUpdatedProfile(request, updated);
   }
 
   async function deleteUploadedAvatars(request: FastifyRequest) {
-    const user = request.user!;
-    const updated = await authService.deleteUploadedAvatars(user.id);
-
-    return {
-      id: updated.id,
-      username: updated.username,
-      displayName: updated.display_name,
-      ...presentAvatar(updated.avatar_data_url),
-      bio: updated.bio,
-      emailPublic: Boolean(
-        updated.email_public && updated.email && updated.email_verified_at,
-      ),
-      mobilePublic: Boolean(
-        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
-      ),
-      linkedinUrl: updated.linkedin_url,
-      linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
-      githubUrl: updated.github_url,
-      githubPublic: Boolean(updated.github_public && updated.github_url),
-      websiteUrl: updated.website_url,
-      websitePublic: Boolean(updated.website_public && updated.website_url),
-      email: updated.email,
-      emailVerified: Boolean(updated.email_verified_at),
-      phoneNo: updated.phone_no,
-      mobileVerified: Boolean(updated.phone_verified_at),
-      roles: updated.roles,
-      mfaVerified: request.session?.mfa_verified ?? false,
-      totpEnabled: user.totpEnabled,
-      passkeyEnabled: user.passkeyEnabled,
-      mfaMandatory: user.mfaMandatory,
-    };
+    const updated = await authService.deleteUploadedAvatars(request.user!.id);
+    return presentUpdatedProfile(request, updated);
   }
 
   async function deactivateAccount(

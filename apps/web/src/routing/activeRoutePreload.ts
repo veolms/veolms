@@ -1,4 +1,5 @@
 import { isCourseEditorPath } from "../courses/courseEditorRouting";
+import { settingsPageBody, workspacePageBody } from "./prerenderedBodies";
 
 export type ShellRouteModuleKey =
   "settings" | "catalogue" | "placeholder" | "workspace";
@@ -43,7 +44,9 @@ export function loadShellRouteModule<Module>(
  */
 export async function preloadActiveRouteForHydration(pathname: string) {
   if (pathname.startsWith("/settings")) {
-    await loadShellRouteModule("settings", () => import("../SettingsPage"));
+    // Through the page's own body, so that it renders with the first
+    // render instead of after a placeholder.
+    await loadShellRouteModule("settings", () => settingsPageBody.preload());
     return;
   }
 
@@ -51,6 +54,7 @@ export async function preloadActiveRouteForHydration(pathname: string) {
     pathname === "/courses" ||
     pathname === "/courses/enrolled" ||
     pathname === "/courses/not-enrolled" ||
+    pathname === "/courses/free" ||
     pathname === "/courses/wishlist" ||
     pathname === "/wishlist"
   ) {
@@ -70,10 +74,16 @@ export async function preloadActiveRouteForHydration(pathname: string) {
   }
 
   if (pathname === "/discussions" || pathname.startsWith("/discussions/")) {
-    await loadShellRouteModule(
-      "workspace",
-      () => import("../workspace/WorkspacePages"),
-    );
+    // Both of the page's pieces, for the same reason: its heading, tabs and
+    // filters are then there from the first render.
+    await loadShellRouteModule("workspace", async () => {
+      const module = await import("../workspace/WorkspacePages");
+      await Promise.all([
+        workspacePageBody.preload(),
+        module.preloadDiscussionsWorkspace(),
+      ]);
+      return module;
+    });
     return;
   }
 

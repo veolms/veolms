@@ -25,7 +25,7 @@ const categoryRoutes: RoutePlugin = async (app, options) => {
           200: jsonResponse("List of categories", z.array(categorySchema)),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorize("course.read", "platform"),
     },
     controller.listCategories,
   );
@@ -43,7 +43,10 @@ const categoryRoutes: RoutePlugin = async (app, options) => {
           400: errorResponse("Category slug already exists"),
         },
       },
-      preHandler: ctx.requireCourseAuthor,
+      preHandler: ctx.authorizeAny(
+        ["category.manage", "course.create"],
+        "platform",
+      ),
     },
     controller.createCategory,
   );
@@ -64,7 +67,7 @@ const categoryRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Category not found"),
         },
       },
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.authorize("category.manage", "academy"),
     },
     controller.deleteCategory,
   );

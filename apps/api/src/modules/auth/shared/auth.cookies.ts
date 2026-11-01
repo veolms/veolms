@@ -2,6 +2,8 @@ import type { FastifyReply } from "fastify";
 
 import { config } from "../../../config.ts";
 import {
+  DEVICE_SIGN_IN_COOKIE,
+  DEVICE_SIGN_IN_TTL_SECONDS,
   OAUTH_STATE_COOKIE,
   OAUTH_STATE_TTL_SECONDS,
   SESSION_COOKIE,
@@ -66,4 +68,18 @@ export function setSetupCookie(reply: FastifyReply, expiresAt: number): void {
 
 export function clearSetupCookie(reply: FastifyReply): void {
   reply.clearCookie(SETUP_COOKIE, { path: "/" });
+}
+
+export function setDeviceSignInCookie(
+  reply: FastifyReply,
+  token: string,
+): void {
+  reply.setCookie(DEVICE_SIGN_IN_COOKIE, token, {
+    ...baseOptions,
+    maxAge: DEVICE_SIGN_IN_TTL_SECONDS,
+  });
+}
+
+export function clearDeviceSignInCookie(reply: FastifyReply): void {
+  reply.clearCookie(DEVICE_SIGN_IN_COOKIE, { path: "/" });
 }

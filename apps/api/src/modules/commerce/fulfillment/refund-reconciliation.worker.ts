@@ -5,10 +5,11 @@ import type { GatewayRefundDetails, PaymentGateway } from "@veolms/contracts";
 import * as refundRepo from "../refunds/refund.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
-import { toMinorUnits } from "../shared/currency.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
 import { mapWithConcurrency } from "../../../lib/concurrency.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
+import { settleExtraPaymentRefund } from "../payments/extra-payment-refund.service.ts";
+import { SURPLUS_CAPTURE_ERROR_CODE } from "../payments/surplus-payment.ts";
 
 export interface RefundReconciliationWorkerOptions {
   database: Kysely<Database>;
@@ -33,6 +34,9 @@ export interface RefundReconciliationWorkerOptions {
   concurrency?: number;
 }
 
+/** How long an unconfirmed refund reservation may wait for the gateway. */
+const STRANDED_RESERVATION_HOURS = 24;
+
 export function createRefundReconciliationWorker({
   database,
   paymentGateway,
@@ -55,6 +59,29 @@ export function createRefundReconciliationWorker({
     errors: number;
   }> {
     const log = logger?.child({ job: "refund-reconciliation-worker" });
+
+    // Reservations with no gateway refund id cannot be reconciled below
+    // (there is nothing to look up). After a day without a webhook claiming
+    // them they are released so they stop blocking further refunds. Logged
+    // at error level: someone should confirm in the gateway dashboard that
+    // no refund was actually issued for them.
+    const stranded = await refundRepo.failStrandedReservations(
+      database,
+      STRANDED_RESERVATION_HOURS,
+    );
+    for (const reservation of stranded) {
+      log?.error(
+        {
+          refundId: reservation.id,
+          orderId: reservation.order_id,
+          amount: reservation.amount,
+          currency: reservation.currency,
+          reservedAt: reservation.created_at,
+        },
+        "Released a refund reservation that never received a gateway refund id; verify in the gateway dashboard that no refund was issued",
+      );
+    }
+
     const staleRefunds = await refundRepo.listStaleRefunds(
       database,
       staleAfterMinutes,
@@ -119,6 +146,32 @@ export function createRefundReconciliationWorker({
         }
 
         if (gatewayRefund.status === "processed") {
+          // A refund of an extra payment (payments/extra-payment.ts) is not
+          // a refund of the order: its status and its access stay as they
+          // are. It is completed the way its own answer or the gateway's
+          // event would have completed it.
+          const refundedPayment = await paymentRepo.findPaymentById(
+            database,
+            refund.payment_id,
+          );
+          if (refundedPayment?.error_code === SURPLUS_CAPTURE_ERROR_CODE) {
+            await database.transaction().execute((trx) =>
+              settleExtraPaymentRefund(trx, {
+                paymentId: refundedPayment.id,
+                gatewayRefundId: gatewayRefund.gatewayRefundId,
+                amount: gatewayRefund.amount,
+                currency: gatewayRefund.currency,
+                now: new Date(),
+              }),
+            );
+            log?.info(
+              { refundId: refund.id, paymentId: refundedPayment.id },
+              "Refund of an extra payment reconciled to processed; the order was not changed",
+            );
+            resolved++;
+            continue;
+          }
+
           const order = await orderRepo.findOrderById(
             database,
             refund.order_id,
@@ -143,18 +196,13 @@ export function createRefundReconciliationWorker({
             });
           const totalProcessed = totalOtherRefundsAlready + refund.amount;
 
-          // Refund amounts are gateway minor units (paise), while
-          // `orders.total_amount` is major units (rupees) — see
-          // shared/currency.ts. Compare against the captured payment's
-          // amount, which is already stored in minor units; fall back to
-          // converting the order total only if the payment row is missing.
+          // Compare against the captured payment's amount; fall back to the
+          // order total (also minor units) only if the payment row is missing.
           const payment = await paymentRepo.findPaymentById(
             database,
             refund.payment_id,
           );
-          const orderTotalMinorUnits =
-            payment?.amount ??
-            toMinorUnits(order.total_amount, refund.currency);
+          const orderTotalMinorUnits = payment?.amount ?? order.total_amount;
 
           await database.transaction().execute(async (trx) => {
             await refundRepo.updateRefundStatus(trx, refund.id, {
@@ -183,9 +231,11 @@ export function createRefundReconciliationWorker({
               );
               if (targetItem) {
                 await courseAccessService.revokeAccessForOrderItem(trx, order, {
+                  id: targetItem.id,
                   item_type: targetItem.item_type,
                   course_id: targetItem.course_id,
                   bundle_id: targetItem.bundle_id,
+                  quiz_pricing_id: targetItem.quiz_pricing_id,
                 });
               }
             }

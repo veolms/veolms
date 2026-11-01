@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import type { ApiError } from "../lib/api-client";
 import {
@@ -11,6 +11,11 @@ import { normalizeAppPath, sanitizeReturnTo } from "../routing/routeAccess";
 import { resolvePostAuthPath } from "./postAuthNavigation";
 import { ToastNotification } from "../ToastNotification";
 import { GoogleBrandIcon } from "./SocialBrandIcons";
+import type { CredentialAccount } from "./OneTapSigningInCard";
+import {
+  readLastGoogleAccount,
+  rememberGoogleSignIn,
+} from "./lastGoogleAccount";
 
 const GOOGLE_IDENTITY_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -106,6 +111,22 @@ function loadGoogleIdentityServices(): Promise<void> {
   return googleIdentityScript;
 }
 
+type SigningInModule = typeof import("./OneTapSigningInCard");
+type SigningInCard = SigningInModule["OneTapSigningInCard"];
+
+let signingInModule: Promise<SigningInModule> | null = null;
+
+// The "Signing in…" card (or Android's sheet) is only needed once Google's
+// prompt has been answered, so its code is fetched when the prompt goes up
+// rather than with every page.
+function loadSigningInModule(): Promise<SigningInModule> {
+  signingInModule ??= import("./OneTapSigningInCard").catch((error) => {
+    signingInModule = null;
+    throw error;
+  });
+  return signingInModule;
+}
+
 const ONE_TAP_FAILED_MESSAGE = "Google sign-in failed. Please try again.";
 
 // Token-verification failures carry internal detail ("audience is invalid"),
@@ -118,7 +139,13 @@ function toOneTapErrorMessage(error: ApiError): string {
   return ONE_TAP_FAILED_MESSAGE;
 }
 
+// Whether this tab has put a One Tap prompt up that has not been called off.
+let oneTapPromptStarted = false;
+
+/** Calls off a One Tap prompt this tab started. Does nothing otherwise. */
 export function cancelGoogleOneTap(): void {
+  if (!oneTapPromptStarted) return;
+  oneTapPromptStarted = false;
   window.google?.accounts?.id?.cancel();
 }
 
@@ -174,6 +201,7 @@ export function GoogleOneTap({
                 { credential: response.credential },
                 {
                   onSuccess: (result) => {
+                    rememberGoogleSignIn(result.user);
                     navigateRef.current(
                       resolvePostAuthPath(result, returnToRef.current),
                       { replace: true },
@@ -187,6 +215,7 @@ export function GoogleOneTap({
               );
             },
           });
+          oneTapPromptStarted = true;
           googleIdentity.prompt();
         })
         .catch(() => {
@@ -204,35 +233,38 @@ export function GoogleOneTap({
   return null;
 }
 
-function OneTapVerifyingOverlay() {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs px-4 text-(--text) animate-in fade-in duration-200"
-      role="status"
-      aria-live="polite"
-      aria-label="Signing in with Google"
-    >
-      <div className="relative flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-(--border-subtle) bg-(--surface) p-6 text-center shadow-(--surface-depth-shadow)">
-        <div className="grid size-14 place-items-center rounded-2xl bg-(--surface-active) shadow-(--surface-depth-shadow)">
-          <GoogleBrandIcon size={32} />
-        </div>
-        <div className="space-y-1">
-          <p className="text-base font-semibold tracking-tight text-(--text)">
-            Signing you in with Google
-          </p>
-          <p className="text-xs leading-5 text-(--muted)">
-            Verifying your account… please wait a moment.
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 pt-1" aria-hidden="true">
-          <span className="size-1.5 animate-pulse rounded-full bg-(--accent) motion-reduce:animate-none" />
-          <span className="size-1.5 animate-pulse rounded-full bg-(--accent) [animation-delay:160ms] motion-reduce:animate-none" />
-          <span className="size-1.5 animate-pulse rounded-full bg-(--accent) [animation-delay:320ms] motion-reduce:animate-none" />
-        </div>
-      </div>
-    </div>
-  );
+/**
+ * Who the credential Google handed over is for, read from its payload only
+ * to say so while it is checked. Nothing here is trusted: the API verifies
+ * the credential itself.
+ */
+function readCredentialAccount(credential: string): CredentialAccount {
+  try {
+    const part = credential.split(".")[1] ?? "";
+    const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const bytes = Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+    const claims = JSON.parse(new TextDecoder().decode(bytes)) as Record<
+      string,
+      unknown
+    >;
+    const text = (value: unknown) =>
+      typeof value === "string" ? value.trim() : "";
+    const picture =
+      typeof claims.picture === "string" && /^https:\/\//.test(claims.picture)
+        ? claims.picture
+        : undefined;
+    return {
+      // The whole name and the address, as the browser's card shows them.
+      name: text(claims.name) || text(claims.given_name),
+      email: text(claims.email),
+      ...(picture ? { picture } : {}),
+    };
+  } catch {
+    return { name: "", email: "" };
+  }
 }
+
 const EXCLUDED_ONE_TAP_PATHS = new Set([
   "/mfa-setup",
   "/auth/callback",
@@ -252,7 +284,18 @@ export function GlobalGoogleOneTap() {
   const { data: authConfig } = useAuthConfig();
   const login = useGoogleOneTapLogin();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
+  // The account being checked after Google's prompt, while it is.
+  const [verifyingAccount, setVerifyingAccount] =
+    useState<CredentialAccount | null>(null);
+  // The check is over: the card or sheet is on its way out.
+  const [verifyingDone, setVerifyingDone] = useState(false);
+  const [SigningInCard, setSigningInCard] = useState<SigningInCard | null>(
+    null,
+  );
+  const handleSigningInLeft = useCallback(() => {
+    setVerifyingAccount(null);
+    setVerifyingDone(false);
+  }, []);
 
   const clientId = authConfig?.googleClientId || "";
   const normalizedPath = normalizeAppPath(location.pathname);
@@ -303,26 +346,38 @@ export function GlobalGoogleOneTap() {
             callback: (response) => {
               if (!active || !response.credential) return;
 
-              setIsVerifying(true);
+              setVerifyingDone(false);
+              setVerifyingAccount(readCredentialAccount(response.credential));
               loginRef.current(
                 { credential: response.credential },
                 {
                   onSuccess: (result) => {
-                    setIsVerifying(false);
+                    rememberGoogleSignIn(result.user);
+                    setVerifyingDone(true);
                     navigateRef.current(
                       resolvePostAuthPath(result, returnToRef.current),
                       { replace: true },
                     );
                   },
                   onError: (error) => {
-                    setIsVerifying(false);
+                    setVerifyingDone(true);
                     setErrorMessage(toOneTapErrorMessage(error));
                   },
                 },
               );
             },
           });
+          oneTapPromptStarted = true;
           googleIdentity.prompt();
+          void loadSigningInModule()
+            .then((module) => {
+              if (!active) return;
+              module.prepareOneTapSigningIn(readLastGoogleAccount()?.avatarUrl);
+              setSigningInCard(() => module.OneTapSigningInCard);
+            })
+            .catch(() => {
+              // Signing in still works, without the card.
+            });
         })
         .catch(() => {
           // Fallback gracefully
@@ -334,11 +389,22 @@ export function GlobalGoogleOneTap() {
       cancelScheduledLoad();
       cancelGoogleOneTap();
     };
-  }, [shouldPrompt, clientId, normalizedPath]);
+    // Not the path: where the visitor is only matters through shouldPrompt
+    // (excluded pages) and returnTo (read through a ref). With the path
+    // listed, every navigation called the prompt off and put it up again,
+    // and for a signed-in user asked Google to cancel a prompt that was
+    // never shown.
+  }, [shouldPrompt, clientId]);
 
   return (
     <>
-      {isVerifying ? <OneTapVerifyingOverlay /> : null}
+      {verifyingAccount && SigningInCard ? (
+        <SigningInCard
+          account={verifyingAccount}
+          leaving={verifyingDone}
+          onLeft={handleSigningInLeft}
+        />
+      ) : null}
       {errorMessage ? (
         <ToastNotification
           message={errorMessage}

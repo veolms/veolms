@@ -55,7 +55,15 @@ function parseFrameRate(rateStr?: string): number | undefined {
  */
 export async function probeVideoSource(
   videoSourceUrlOrPath: string,
-  options: { ffprobePath?: string; timeoutMs?: number } = {},
+  options: {
+    ffprobePath?: string;
+    timeoutMs?: number;
+    /**
+     * Told why a probe failed. The caller owns the log: a service passes its
+     * request logger, so the line carries the request it belongs to.
+     */
+    onWarning?: (message: string) => void;
+  } = {},
 ): Promise<ProbedVideoMetadata | null> {
   const ffprobePath =
     options.ffprobePath || process.env["FFPROBE_PATH"] || "ffprobe";
@@ -117,7 +125,9 @@ export async function probeVideoSource(
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[video-prober] Failed to probe video metadata: ${message}`);
+    options.onWarning?.(
+      `[video-prober] Failed to probe video metadata: ${message}`,
+    );
     return null;
   }
 }

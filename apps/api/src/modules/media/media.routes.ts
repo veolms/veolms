@@ -1,5 +1,12 @@
 import { z } from "zod";
 import {
+  multipartUploadAbortResponseSchema,
+  multipartUploadCompleteRequestSchema,
+  multipartUploadPartUrlsRequestSchema,
+  multipartUploadPartUrlsResponseSchema,
+  multipartUploadStartRequestSchema,
+  multipartUploadStartResponseSchema,
+  multipartUploadStatusResponseSchema,
   presignMediaRequestSchema,
   presignMediaResponseSchema,
   lessonResourceDownloadResponseSchema,
@@ -7,11 +14,15 @@ import {
   mediaImageVariantManifestSchema,
   mediaUploadCompleteResponseSchema,
   videoJobProgressResponseSchema,
+  videoPlaybackBootstrapQuerySchema,
   videoPlaybackBootstrapSchema,
   videoPlaybackTokenSchema,
+  videoTranscodeCancelResponseSchema,
+  videoTranscodeRetryResponseSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../lib/errors.ts";
+import { createLessonPositionReader } from "../learning-progress/index.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createAuthMiddleware } from "../../middlewares/auth.middleware.ts";
@@ -49,12 +60,15 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       "course.create",
       "course.curriculum.update",
       "lesson.video.update",
+      "course.thumbnail.update",
+      "lesson.thumbnail.update",
     ]),
   ];
 
   const service = createMediaService({
     database: options.database,
     services: options.services,
+    lessonPositions: createLessonPositionReader({ database: options.database }),
   });
   const controller = createMediaController({ service });
 
@@ -71,6 +85,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           idOrSlug: z.string().min(1).max(160),
           lessonNumber: z.coerce.number().int().positive(),
         }),
+        querystring: videoPlaybackBootstrapQuerySchema,
         response: {
           200: jsonResponse(
             "Authorized video playback bootstrap",
@@ -132,7 +147,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
         tags: ["Media"],
         summary: "Resolve an authorized download link for a lesson resource",
         description:
-          "Returns a short-lived link that downloads one resource of the lesson. The same session and course-access rules as lesson playback are applied; the lesson does not need a video.",
+          "Returns a short-lived link that downloads one resource of the lesson. The caller must be signed in and have the course: its owner, an administrator, a learner with access, or any signed-in learner when the course is free and unrestricted. Being able to watch a preview lesson is not enough. The lesson does not need a video.",
         params: z.object({
           idOrSlug: z.string().min(1).max(160),
           lessonNumber: z.coerce.number().int().positive(),
@@ -174,6 +189,119 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       preHandler: requireMediaAuthor,
     },
     controller.presignMediaUpload,
+  );
+
+  app.post(
+    "/media/multipart/start",
+    {
+      schema: {
+        operationId: "startMultipartMediaUpload",
+        tags: ["Media"],
+        summary: "Start a resumable video upload",
+        body: multipartUploadStartRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Resumable upload started",
+            multipartUploadStartResponseSchema,
+          ),
+          400: errorResponse("Invalid upload request"),
+          503: errorResponse("Storage is unavailable"),
+        },
+      },
+      preHandler: requireMediaAuthor,
+    },
+    controller.startMultipartUpload,
+  );
+
+  app.get(
+    "/media/:mediaId/multipart",
+    {
+      schema: {
+        operationId: "getMultipartMediaUploadStatus",
+        tags: ["Media"],
+        summary: "List the parts storage already holds for a resumable upload",
+        params: z.object({ mediaId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Resumable upload status",
+            multipartUploadStatusResponseSchema,
+          ),
+          404: errorResponse("Media not found"),
+          409: errorResponse("Upload is not resumable or has expired"),
+        },
+      },
+      preHandler: requireMediaAuthor,
+    },
+    controller.getMultipartUploadStatus,
+  );
+
+  app.post(
+    "/media/:mediaId/multipart/parts",
+    {
+      schema: {
+        operationId: "presignMultipartMediaUploadParts",
+        tags: ["Media"],
+        summary: "Get pre-signed URLs for the remaining upload parts",
+        params: z.object({ mediaId: z.uuid() }),
+        body: multipartUploadPartUrlsRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Pre-signed upload parts",
+            multipartUploadPartUrlsResponseSchema,
+          ),
+          400: errorResponse("Invalid part number"),
+          404: errorResponse("Media not found"),
+          409: errorResponse("Upload is not resumable or has expired"),
+        },
+      },
+      preHandler: requireMediaAuthor,
+    },
+    controller.presignMultipartUploadParts,
+  );
+
+  app.post(
+    "/media/:mediaId/multipart/complete",
+    {
+      schema: {
+        operationId: "completeMultipartMediaUpload",
+        tags: ["Media"],
+        summary: "Join the uploaded parts and start processing",
+        params: z.object({ mediaId: z.uuid() }),
+        body: multipartUploadCompleteRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Upload confirmed",
+            mediaUploadCompleteResponseSchema,
+          ),
+          400: errorResponse("Uploaded parts are incomplete"),
+          404: errorResponse("Media not found"),
+          409: errorResponse("Upload is not resumable or has expired"),
+        },
+      },
+      preHandler: requireMediaAuthor,
+    },
+    controller.completeMultipartUpload,
+  );
+
+  app.post(
+    "/media/:mediaId/multipart/abort",
+    {
+      schema: {
+        operationId: "abortMultipartMediaUpload",
+        tags: ["Media"],
+        summary: "Discard an interrupted resumable upload",
+        params: z.object({ mediaId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Upload aborted",
+            multipartUploadAbortResponseSchema,
+          ),
+          404: errorResponse("Media not found"),
+        },
+      },
+      preHandler: requireMediaAuthor,
+    },
+    controller.abortMultipartUpload,
   );
 
   app.post(
@@ -224,7 +352,20 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     "/media/:mediaId/transcode/retry",
     {
       preHandler: requireMediaAuthor,
-      schema: { params: z.object({ mediaId: z.uuid() }) },
+      schema: {
+        operationId: "retryVideoTranscode",
+        tags: ["Media"],
+        summary: "Queue a failed video for transcoding again",
+        params: z.object({ mediaId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Transcoding retry accepted",
+            videoTranscodeRetryResponseSchema,
+          ),
+          404: errorResponse("Video not found"),
+          409: errorResponse("Video is not in a retryable state"),
+        },
+      },
     },
     controller.retryVideoJob,
   );
@@ -233,7 +374,20 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     "/media/:mediaId/transcode/cancel",
     {
       preHandler: requireMediaAuthor,
-      schema: { params: z.object({ mediaId: z.uuid() }) },
+      schema: {
+        operationId: "cancelVideoTranscode",
+        tags: ["Media"],
+        summary: "Cancel a video that is being transcoded",
+        params: z.object({ mediaId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Transcoding cancelled",
+            videoTranscodeCancelResponseSchema,
+          ),
+          404: errorResponse("Video not found"),
+          409: errorResponse("Video is not being transcoded"),
+        },
+      },
     },
     controller.cancelVideoJob,
   );
@@ -303,7 +457,10 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           width: z.coerce.number().int().positive(),
         }),
       },
-      preHandler: [authMiddleware.authenticate],
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
     },
     controller.getImageVariantStream,
   );
@@ -314,7 +471,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "getMediaAssetStream",
         tags: ["Media"],
-        summary: "Stream media file content by media ID",
+        summary: "Resolve the delivery URL of a media asset",
         params: z.object({ mediaId: z.string().uuid() }),
         response: {
           200: jsonResponse(
@@ -325,7 +482,10 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("CDN delivery is not configured"),
         },
       },
-      preHandler: [authMiddleware.authenticate],
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
     },
     controller.getMediaDelivery,
   );

@@ -15,6 +15,13 @@ type ResponsiveAvatarProps = Omit<
 const AVATAR_PREFIX_PATTERN =
   /^(.*\/public\/avatars\/[A-Za-z0-9_-]{1,200})(?:\/(?:(?:45|96|160)\.webp|original\.(?:jpg|jpeg|png|webp|gif)))?([?#].*)?$/u;
 
+/**
+ * The widths the CDN serves an avatar at. It answers 400 for any other, 96
+ * included, which older API responses still list: a browser that picked it
+ * showed nothing until it had fallen back to the original file.
+ */
+const CDN_AVATAR_WIDTHS: readonly number[] = [45, 160];
+
 // Global in-memory cache to remember working original avatar URLs across component mounts
 const resolvedAvatarCache = new Map<string, string>();
 
@@ -64,8 +71,11 @@ export function ResponsiveAvatar({
   }, [avatarPrefix]);
 
   let activeSrc: string | undefined = src ?? undefined;
-  let activeSrcSet: string | undefined = srcSet?.length
-    ? srcSet.map((variant) => `${variant.url} ${variant.width}w`).join(", ")
+  const offered = srcSet?.filter(
+    (variant) => !avatarPrefix || CDN_AVATAR_WIDTHS.includes(variant.width),
+  );
+  let activeSrcSet: string | undefined = offered?.length
+    ? offered.map((variant) => `${variant.url} ${variant.width}w`).join(", ")
     : undefined;
 
   if (avatarPrefix) {
@@ -90,12 +100,10 @@ export function ResponsiveAvatar({
       // slots (the largest variant is 160px, which cannot serve large
       // avatars sharply); a failed load falls back through the original
       // files via onError.
-      activeSrcSet = [45, 96, 160]
-        .map(
-          (variantWidth) =>
-            `${avatarPrefix}/${variantWidth}.webp${querySuffix} ${variantWidth}w`,
-        )
-        .join(", ");
+      activeSrcSet = CDN_AVATAR_WIDTHS.map(
+        (variantWidth) =>
+          `${avatarPrefix}/${variantWidth}.webp${querySuffix} ${variantWidth}w`,
+      ).join(", ");
     }
   } else if (useRawSrcOnly) {
     activeSrcSet = undefined;

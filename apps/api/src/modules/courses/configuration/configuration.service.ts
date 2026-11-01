@@ -1,13 +1,32 @@
+import type { Permission } from "@veolms/contracts";
 import crypto from "node:crypto";
 import type { Kysely } from "kysely";
-import type { Database } from "@veolms/database";
+import type { Database, DatabaseExecutor } from "@veolms/database";
 import type {
   UpdateCourseAccessRuleRequest,
   UpdateCoursePricingRequest,
   UpdateCourseSettingsRequest,
 } from "@veolms/contracts";
+import { httpError } from "../../../lib/errors.ts";
+import { hasDiscountBadgeColumn } from "../shared/discount-badge-column.ts";
 import * as configRepo from "./configuration.repository.ts";
 import { getCourseAndVerifyOwner as verifyCourseOwner } from "../shared/courses.utils.ts";
+import {
+  presentAccessRule,
+  presentPricing,
+  presentSettings,
+} from "../shared/courses.presenters.ts";
+
+/**
+ * A course's settings row, for another module that reads it with its own
+ * executor (inside its own transaction, for one).
+ */
+export async function findCourseSettings(
+  database: DatabaseExecutor,
+  courseId: string,
+) {
+  return await configRepo.findSettingsByCourseId(database, courseId);
+}
 
 export interface ConfigurationServiceOptions {
   database: Kysely<Database>;
@@ -19,9 +38,16 @@ export function createConfigurationService({
   function getCourseAndVerifyOwner(
     courseId: string,
     creatorId: string,
-    userRoles?: readonly string[],
+    userRoles: readonly string[] | undefined,
+    permission: Permission,
   ) {
-    return verifyCourseOwner(database, courseId, creatorId, userRoles);
+    return verifyCourseOwner(
+      database,
+      courseId,
+      creatorId,
+      userRoles,
+      permission,
+    );
   }
 
   async function upsertCourseAccessRules(
@@ -30,7 +56,12 @@ export function createConfigurationService({
     updates: UpdateCourseAccessRuleRequest,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.details.update",
+    );
 
     const now = new Date();
 
@@ -50,13 +81,12 @@ export function createConfigurationService({
       updated_at: now,
     });
 
-    return {
+    return presentAccessRule({
       id,
-      courseId,
-      accessType: updates.accessType,
-      durationType,
-      durationDays,
-    };
+      access_type: updates.accessType,
+      duration_type: durationType,
+      duration_days: durationDays,
+    });
   }
 
   async function upsertCoursePricing(
@@ -65,34 +95,56 @@ export function createConfigurationService({
     updates: UpdateCoursePricingRequest,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.pricing.update",
+    );
 
     const now = new Date();
 
-    const price = updates.pricingType === "free" ? 0 : updates.price;
+    // A course has both prices: what is paid, and the marked price it is
+    // struck through from (the same when there is no discount). Selling it
+    // for zero is what makes it free, so the pricing type is derived here
+    // and whatever the client sent for it is ignored.
+    const price = updates.price;
     const currency = updates.currency ?? "INR";
-    const salePrice =
-      updates.pricingType === "free" ? null : (updates.salePrice ?? null);
+    const salePrice = updates.salePrice;
+    const pricingType: "free" | "paid" = salePrice === 0 ? "free" : "paid";
+
+    // A badge needs a discount to announce.
+    const showDiscountBadge =
+      price > salePrice && updates.showDiscountBadge === true;
+    const canStoreBadge = await hasDiscountBadgeColumn(database);
+    if (showDiscountBadge && !canStoreBadge) {
+      throw httpError(
+        503,
+        "DISCOUNT_BADGE_UNAVAILABLE",
+        "The discount badge cannot be turned on until the database migration that adds it has been run.",
+      );
+    }
 
     const id = await configRepo.upsertPricing(database, {
       id: crypto.randomUUID(),
       course_id: courseId,
-      pricing_type: updates.pricingType,
+      pricing_type: pricingType,
       price,
       currency,
       sale_price: salePrice,
+      ...(canStoreBadge ? { show_discount_badge: showDiscountBadge } : {}),
       created_at: now,
       updated_at: now,
     });
 
-    return {
+    return presentPricing({
       id,
-      courseId,
-      pricingType: updates.pricingType,
+      pricing_type: pricingType,
       price,
       currency,
-      salePrice,
-    };
+      sale_price: salePrice,
+      show_discount_badge: showDiscountBadge,
+    });
   }
 
   async function upsertCourseSettings(
@@ -101,7 +153,12 @@ export function createConfigurationService({
     updates: UpdateCourseSettingsRequest,
     userRoles?: readonly string[],
   ) {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.details.update",
+    );
 
     const now = new Date();
 
@@ -158,18 +215,17 @@ export function createConfigurationService({
       updated_at: now,
     });
 
-    return {
+    return presentSettings({
       id,
-      courseId,
-      allowQa,
-      allowComments,
-      allowDownloads,
-      allowNotes,
-      certificateEnabled,
-      showInstructorName,
+      allow_qa: allowQa,
+      allow_comments: allowComments,
+      allow_downloads: allowDownloads,
+      allow_notes: allowNotes,
+      certificate_enabled: certificateEnabled,
+      show_instructor_name: showInstructorName,
       language,
-      estimatedDuration,
-    };
+      estimated_duration: estimatedDuration,
+    });
   }
 
   async function findAccessRuleByCourseId(courseId: string) {
@@ -189,11 +245,8 @@ export function createConfigurationService({
     upsertCoursePricing,
     upsertCourseSettings,
     findAccessRuleByCourseId,
-    getAccessRuleByCourseId: findAccessRuleByCourseId,
     findPricingByCourseId,
-    getPricingByCourseId: findPricingByCourseId,
     findSettingsByCourseId,
-    getSettingsByCourseId: findSettingsByCourseId,
   };
 }
 

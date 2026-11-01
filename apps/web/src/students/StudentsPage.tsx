@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -13,11 +14,13 @@ import {
   DEFAULT_DEBOUNCE_DELAY_MS,
   useDebounceValue,
 } from "../hooks/useDebounce";
+import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
 import { useCourseOptions } from "../services/courses";
 import { useStudents } from "../services/students";
 import { StudentsTable } from "./StudentsTable";
 import { StudentFiltersBar } from "./StudentFiltersBar";
 import { StudentsTableSkeleton } from "./StudentsTableSkeleton";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface StudentsPageProps {
   onNavigatePage?: NavigateTo;
@@ -39,11 +42,32 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
   >("recent");
   const [isCourseFilterOpen, setIsCourseFilterOpen] = useState(false);
 
+  // A course card's "Manage Students" link opens this page with ?course=<id>,
+  // which used to be ignored. It is read once and becomes the course filter
+  // only if it is one of the filter's own options.
+  const [searchParams] = useSearchParams();
+  const [requestedCourseId, setRequestedCourseId] = useState(
+    () => searchParams.get("course") || null,
+  );
+
   // Load academy courses for the course filter dropdown
   const { data: coursesData } = useCourseOptions({
-    enabled: isCourseFilterOpen,
+    enabled: isCourseFilterOpen || requestedCourseId !== null,
   });
   const courseRecords = coursesData?.courses;
+
+  useEffect(() => {
+    if (!requestedCourseId || !courseRecords) return;
+    setRequestedCourseId(null);
+    if (courseRecords.some((course) => course.id === requestedCourseId)) {
+      setCourseFilter(requestedCourseId);
+    }
+  }, [requestedCourseId, courseRecords]);
+
+  const changeCourseFilter = (course: string) => {
+    setRequestedCourseId(null);
+    setCourseFilter(course);
+  };
   const availableCourses = useMemo(() => {
     if (!courseRecords) return [];
     return courseRecords.map(({ id, title }) => ({ id, title }));
@@ -75,26 +99,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
     refetch,
   } = useStudents(queryFilter);
 
-  // Keyboard shortcut listener (/ or Cmd+K to search)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
-      const isInput =
-        activeTag === "input" ||
-        activeTag === "textarea" ||
-        (document.activeElement as HTMLElement)?.isContentEditable;
-
-      if (!isInput) {
-        if (e.key === "/" || ((e.metaKey || e.ctrlKey) && e.key === "k")) {
-          e.preventDefault();
-          document.getElementById("students-search-input")?.focus();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  usePageSearchShortcut("students-search-input");
 
   const students = useMemo(() => {
     return data?.pages.flatMap((page) => page.students) || [];
@@ -129,6 +134,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
   const resetFilters = () => {
     setSearchQuery("");
     searchControls.setValueImmediately("");
+    setRequestedCourseId(null);
     setCourseFilter("all");
     setStatusFilter("all");
     setSortBy("recent");
@@ -164,9 +170,9 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
       {/* Key Stats Summary Banner */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3.5 mb-6">
         {/* Card 1: Total Learners */}
-        <div
-          className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-          style={{ boxShadow: "var(--card-shadow)" }}
+        <ElevatedCard
+          as="div"
+          className="p-3 sm:p-5 transition-all duration-200"
         >
           <div className="flex items-center justify-between gap-1.5 sm:gap-2">
             <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -180,12 +186,12 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
             {totalCount.toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-(--muted)">Academy learners</p>
-        </div>
+        </ElevatedCard>
 
         {/* Card 2: Active Learners */}
-        <div
-          className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-          style={{ boxShadow: "var(--card-shadow)" }}
+        <ElevatedCard
+          as="div"
+          className="p-3 sm:p-5 transition-all duration-200"
         >
           <div className="flex items-center justify-between gap-1.5 sm:gap-2">
             <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -199,12 +205,12 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
             {metrics.activeLearnersCount.toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-(--muted)">Enrolled in courses</p>
-        </div>
+        </ElevatedCard>
 
         {/* Card 3: Total Enrollments */}
-        <div
-          className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-          style={{ boxShadow: "var(--card-shadow)" }}
+        <ElevatedCard
+          as="div"
+          className="p-3 sm:p-5 transition-all duration-200"
         >
           <div className="flex items-center justify-between gap-1.5 sm:gap-2">
             <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -218,12 +224,12 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
             {metrics.totalEnrollmentsCount.toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-(--muted)">Course enrollments</p>
-        </div>
+        </ElevatedCard>
 
         {/* Card 4: Avg Completion */}
-        <div
-          className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-          style={{ boxShadow: "var(--card-shadow)" }}
+        <ElevatedCard
+          as="div"
+          className="p-3 sm:p-5 transition-all duration-200"
         >
           <div className="flex items-center justify-between gap-1.5 sm:gap-2">
             <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -237,7 +243,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
             {metrics.avgProgress}%
           </p>
           <p className="mt-1 text-xs text-(--muted)">Overall learning rate</p>
-        </div>
+        </ElevatedCard>
       </div>
 
       {/* Filter toolbar */}
@@ -246,7 +252,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           courseFilter={courseFilter}
-          onCourseFilterChange={setCourseFilter}
+          onCourseFilterChange={changeCourseFilter}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           sortBy={sortBy}
@@ -264,9 +270,9 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
           <StudentsTableSkeleton />
         ) : isError ? (
           // Error State
-          <div
-            className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
-            style={{ boxShadow: "var(--card-shadow)" }}
+          <ElevatedCard
+            as="div"
+            className="flex flex-col items-center justify-center p-12 text-center"
           >
             <WarningCircle size={36} className="text-rose-400 mb-3" />
             <h3 className="text-base font-semibold text-(--text)">
@@ -284,7 +290,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
               <ArrowCounterClockwise size={14} />
               <span>Retry</span>
             </button>
-          </div>
+          </ElevatedCard>
         ) : students.length > 0 ? (
           // Modern ProCodrr Students Table
           <StudentsTable
@@ -302,9 +308,9 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
           />
         ) : (
           // Empty State
-          <div
-            className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
-            style={{ boxShadow: "var(--card-shadow)" }}
+          <ElevatedCard
+            as="div"
+            className="flex flex-col items-center justify-center p-12 text-center"
           >
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-(--hover) text-(--muted) mb-3">
               <Users size={28} weight="duotone" />
@@ -329,7 +335,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
                 <span>Reset filters</span>
               </button>
             )}
-          </div>
+          </ElevatedCard>
         )}
       </main>
     </div>

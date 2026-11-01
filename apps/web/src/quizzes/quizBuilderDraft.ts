@@ -160,6 +160,45 @@ export function parseQuizBuilderBrowserDraft(
   }
 }
 
+/**
+ * The options of a question as they are sent to the server.
+ *
+ * A short answer is a free response: the learner writes anything and there
+ * is no key to match it against, so it is sent with no options. A draft that
+ * was a choice question a moment ago may still be holding some.
+ */
+export function sendableQuizOptions(
+  questionType: QuizQuestionType,
+  options: readonly QuizBuilderOptionDraft[],
+): QuizBuilderOptionDraft[] {
+  return questionType === "short_answer" ? [] : [...options];
+}
+
+/**
+ * What keeps a question from being saved, as an instruction the author can
+ * act on; null when nothing does. The server refuses a question with an
+ * empty prompt or an empty option, and its own wording for that ("Too small:
+ * expected string to have >=1 characters") names neither the question nor
+ * the field.
+ */
+export function quizQuestionProblem(question: {
+  questionType: QuizQuestionType;
+  prompt: string;
+  options: readonly QuizBuilderOptionDraft[];
+}): string | null {
+  if (!question.prompt.trim()) return "write the question";
+  // Nothing more to fill in: a short answer has no options.
+  if (question.questionType === "short_answer") return null;
+  if (question.options.length === 0) return "add at least one option";
+  if (question.options.some((option) => !option.text.trim())) {
+    return "fill in or remove the empty option";
+  }
+  if (!question.options.some((option) => option.isCorrect)) {
+    return "mark the correct option";
+  }
+  return null;
+}
+
 export function toCreateQuizQuestionRequest(
   question: QuizBuilderQuestionDraft,
   position: number,
@@ -170,10 +209,12 @@ export function toCreateQuizQuestionRequest(
     points: question.points,
     position,
     explanation: question.explanation.trim() || null,
-    options: question.options.map((option, optionPosition) => ({
-      text: option.text.trim(),
-      isCorrect: option.isCorrect,
-      position: optionPosition,
-    })),
+    options: sendableQuizOptions(question.questionType, question.options).map(
+      (option, optionPosition) => ({
+        text: option.text.trim(),
+        isCorrect: option.isCorrect,
+        position: optionPosition,
+      }),
+    ),
   };
 }

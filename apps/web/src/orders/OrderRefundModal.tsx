@@ -1,6 +1,6 @@
-import { memo, useState, useEffect } from "react";
+import { memo, useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import type { Order } from "@veolms/contracts";
+import type { AdminOrder } from "@veolms/contracts";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
@@ -8,7 +8,18 @@ import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/Warnin
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { useRefundOrder } from "../services/orders";
 import { getApiError } from "../lib/api-error";
-import { formatCurrency } from "./orderHelpers";
+import {
+  minorUnitsPerMajor,
+  toMajorUnits,
+} from "@veolms/contracts/commerce/money";
+import { formatCurrency, getCurrencySymbol } from "./orderHelpers";
+import {
+  OUTSIDE_REFUND_EXPLANATION,
+  OUTSIDE_REFUND_REFERENCE_LABEL,
+  OUTSIDE_REFUND_REFERENCE_MAX_LENGTH,
+  isPaidByManualTransfer,
+  toOutsideRefundInput,
+} from "./orderRefundHelpers";
 
 // 3D design system surface tokens: 0 borders, pure tactile depth via theme-adaptive shadows & highlights
 const MODAL_FRAME_CLASS =
@@ -21,7 +32,7 @@ const SECONDARY_ACTION_CLASS =
   "inline-flex h-9.5 items-center justify-center rounded-[10px] border-none bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--text)_13%,var(--surface))] active:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] px-5 text-[0.82rem] font-semibold text-(--text) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))] transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap";
 
 export interface OrderRefundModalProps {
-  order: Order | null;
+  order: AdminOrder | null;
   onClose: () => void;
   setNotice?: (message: string) => void;
 }
@@ -36,13 +47,33 @@ export const OrderRefundModal = memo(function OrderRefundModal({
   const [refundType, setRefundType] = useState<"full" | "partial">("full");
   const [partialAmountInr, setPartialAmountInr] = useState<string>("");
   const [reason, setReason] = useState<string>("");
+  const [transferReference, setTransferReference] = useState<string>("");
   const [preserveAccess, setPreserveAccess] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Lock body scroll and listen for ESC key
+  // One key per opened dialog. If a submit fails with an unknown outcome
+  // (timeout, dropped connection) and the admin clicks again, the retry
+  // carries the same key, so the server resumes the first refund instead of
+  // issuing a second one. Reopening the dialog starts a new refund.
+  const openOrderId = order?.id;
+  const idempotencyKey = useMemo(
+    () => (openOrderId ? crypto.randomUUID() : undefined),
+    [openOrderId],
+  );
+
+  // Lock body scroll and listen for ESC key, only while the dialog is open.
+  // This component stays mounted while closed, and locking then left the
+  // Orders page unable to scroll wherever the window is the scroller.
   useEffect(() => {
+    if (!openOrderId) return;
+
+    // When the refund is started from the details drawer, the drawer already
+    // holds the lock and re-applies it on every render. Writing "hidden" back
+    // from here after the drawer released it made the drawer save "hidden" as
+    // the page's own value, and scrolling stayed locked after both closed.
     const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const lockedHere = originalOverflow !== "hidden";
+    if (lockedHere) document.body.style.overflow = "hidden";
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -50,14 +81,20 @@ export const OrderRefundModal = memo(function OrderRefundModal({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = originalOverflow;
+      if (lockedHere) document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, openOrderId]);
 
   if (!order) return null;
 
-  const totalPaidInr = Math.round(order.totalAmount / 100);
+  // order.totalAmount is minor units; the input is typed in major units.
+  const totalPaid = toMajorUnits(order.totalAmount, order.currency);
+  // The field was labelled ₹ whatever currency the order was paid in.
+  const currencySymbol = getCurrencySymbol(order.currency);
+  // An order paid by manual transfer has no gateway payment to refund: staff
+  // send the money back themselves and this dialog only records it.
+  const paidByManualTransfer = isPaidByManualTransfer(order);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,13 +107,22 @@ export const OrderRefundModal = memo(function OrderRefundModal({
         setErrorMessage("Please enter a valid partial refund amount.");
         return;
       }
-      if (parsedInr > totalPaidInr) {
+      if (parsedInr > totalPaid) {
         setErrorMessage(
-          `Partial refund cannot exceed total paid amount (₹${totalPaidInr}).`,
+          `Partial refund cannot exceed total paid amount (${formatCurrency(order.totalAmount, order.currency)}).`,
         );
         return;
       }
-      amountPaise = Math.round(parsedInr * 100);
+      amountPaise = Math.round(parsedInr * minorUnitsPerMajor(order.currency));
+    }
+
+    const outside = toOutsideRefundInput(
+      paidByManualTransfer,
+      transferReference,
+    );
+    if (!outside.ok) {
+      setErrorMessage(outside.message);
+      return;
     }
 
     try {
@@ -86,21 +132,30 @@ export const OrderRefundModal = memo(function OrderRefundModal({
           amount: amountPaise,
           reason: reason.trim() || undefined,
           preserveAccess,
+          idempotencyKey,
+          outsideRefund: outside.outsideRefund,
         },
       });
 
       setNotice?.(
-        `Refund processed successfully for order ${order.orderNumber}.`,
+        paidByManualTransfer
+          ? `Refund recorded successfully for order ${order.orderNumber}.`
+          : `Refund processed successfully for order ${order.orderNumber}.`,
       );
       onClose();
     } catch (err) {
-      setErrorMessage(getApiError(err).message || "Failed to process refund.");
+      setErrorMessage(
+        getApiError(err).message ||
+          (paidByManualTransfer
+            ? "Failed to record refund."
+            : "Failed to process refund."),
+      );
     }
   };
 
   const content = (
     <div
-      className="fixed inset-0 z-[1200] flex items-center justify-center overflow-y-auto bg-black/60 p-2 sm:p-4 backdrop-blur-[8px] animate-in fade-in duration-150"
+      className="fixed inset-0 z-[1200] flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-xs p-2 sm:p-4 animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
       aria-labelledby="refund-modal-title"
@@ -121,7 +176,7 @@ export const OrderRefundModal = memo(function OrderRefundModal({
                 id="refund-modal-title"
                 className="m-0 truncate text-[0.98rem] sm:text-[1.05rem] font-semibold tracking-[-0.01em] text-(--text)"
               >
-                Issue Refund
+                {paidByManualTransfer ? "Record Refund" : "Issue Refund"}
               </h2>
               <p className="m-0 mt-0.5 truncate text-[0.72rem] sm:text-[0.74rem] text-(--muted) font-mono">
                 Order #{order.orderNumber}
@@ -152,6 +207,18 @@ export const OrderRefundModal = memo(function OrderRefundModal({
                   className="shrink-0 text-rose-500"
                 />
                 <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* Manual transfer: the app moves no money */}
+            {paidByManualTransfer && (
+              <div
+                className={`${RAISED_CARD_CLASS} p-3 sm:p-3.5 text-[0.76rem] leading-snug text-(--text-secondary)`}
+              >
+                <span className="block font-semibold text-(--text)">
+                  This order was paid by manual transfer.
+                </span>
+                <span className="block mt-1">{OUTSIDE_REFUND_EXPLANATION}</span>
               </div>
             )}
 
@@ -218,25 +285,50 @@ export const OrderRefundModal = memo(function OrderRefundModal({
                   htmlFor="refund-amount"
                   className="block text-[0.78rem] font-semibold text-(--text-secondary) mb-1.5"
                 >
-                  Refund Amount (₹)
+                  Refund Amount ({currencySymbol})
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[0.84rem] font-semibold text-(--muted)">
-                    ₹
+                    {currencySymbol}
                   </span>
                   <input
                     id="refund-amount"
                     type="number"
                     min="1"
-                    max={totalPaidInr}
+                    max={totalPaid}
                     step="1"
-                    placeholder={`Max ₹${totalPaidInr}`}
+                    placeholder={`Max ${formatCurrency(order.totalAmount, order.currency)}`}
                     value={partialAmountInr}
                     onChange={(e) => setPartialAmountInr(e.target.value)}
-                    className="w-full rounded-[12px] border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-8 pr-3.5 py-2.5 text-[0.82rem] sm:text-[0.85rem] text-(--text) outline-none placeholder:text-(--muted) shadow-[inset_0_2px_4px_color-mix(in_srgb,black_20%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] focus:shadow-[inset_0_0_0_1.5px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all"
+                    className={`w-full rounded-[12px] border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] ${
+                      // Room for a symbol longer than one character (A$, CHF).
+                      currencySymbol.length > 1 ? "pl-14" : "pl-8"
+                    } pr-3.5 py-2.5 text-[0.82rem] sm:text-[0.85rem] text-(--text) outline-none placeholder:text-(--muted) shadow-[inset_0_2px_4px_color-mix(in_srgb,black_20%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] focus:shadow-[inset_0_0_0_1.5px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all`}
                     required
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Transfer Reference Field (manual transfer only) */}
+            {paidByManualTransfer && (
+              <div>
+                <label
+                  htmlFor="refund-reference"
+                  className="block text-[0.78rem] font-semibold text-(--text-secondary) mb-1.5"
+                >
+                  {OUTSIDE_REFUND_REFERENCE_LABEL}
+                </label>
+                <input
+                  id="refund-reference"
+                  type="text"
+                  maxLength={OUTSIDE_REFUND_REFERENCE_MAX_LENGTH}
+                  placeholder="e.g. UTR of the transfer you sent to the student"
+                  value={transferReference}
+                  onChange={(e) => setTransferReference(e.target.value)}
+                  className="w-full rounded-[12px] border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-3.5 py-2.5 text-[0.82rem] sm:text-[0.85rem] text-(--text) outline-none placeholder:text-(--muted) shadow-[inset_0_2px_4px_color-mix(in_srgb,black_20%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] focus:shadow-[inset_0_0_0_1.5px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all"
+                  required
+                />
               </div>
             )}
 
@@ -288,7 +380,9 @@ export const OrderRefundModal = memo(function OrderRefundModal({
               {refundMutation.isPending && (
                 <CircleNotch size={14} className="animate-spin" />
               )}
-              <span>Confirm Refund</span>
+              <span>
+                {paidByManualTransfer ? "Record Refund" : "Confirm Refund"}
+              </span>
             </button>
           </div>
         </form>

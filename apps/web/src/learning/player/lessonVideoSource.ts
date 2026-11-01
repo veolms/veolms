@@ -1,15 +1,16 @@
+import type { VideoPlaybackSubtitle } from "@veolms/contracts";
 import type { ExternalTextTrack, VideoSource } from "@veolms/video-player";
 import type { CourseVideo } from "../courseContent";
 import {
   createLearningHlsRequestFilter,
   LEARNING_HLS_MIME_TYPE,
-  LEARNING_HLS_STREAMING,
+  learningHlsStreaming,
   toAbsoluteLearningMediaUrl,
 } from "./learningHlsConstants";
 
 export {
   LEARNING_HLS_MIME_TYPE,
-  LEARNING_HLS_STREAMING,
+  learningHlsStreaming,
 } from "./learningHlsConstants";
 export { createLearningHlsPreloadSource } from "./learningHlsPreloadSource";
 
@@ -37,12 +38,15 @@ export function isStreamingUrl(src: string): boolean {
 
 export function createLearningLessonVideoSource(options: {
   media: CourseVideo;
-  lessonTitle: string;
   mediaKey: string;
   startTime: number;
   protectedPlayback?: boolean;
   segmentToken?: string;
   segmentTokenExpiresAt?: number;
+  /** The master playlist from the bootstrap, served in place of fetching it. */
+  inlinedMasterManifest?: string;
+  /** The video's subtitle tracks from the bootstrap (WebVTT). */
+  subtitles?: readonly VideoPlaybackSubtitle[];
   refreshSegmentToken?: () => Promise<{
     token: string;
     expiresAt?: number;
@@ -68,9 +72,10 @@ export function createLearningLessonVideoSource(options: {
     startTime: options.startTime,
     metadata: {
       duration: options.media.duration,
-      title: options.lessonTitle,
+      // Editable lesson titles belong to the UI, not the media load request.
     },
-    streaming: streaming ? { ...LEARNING_HLS_STREAMING } : undefined,
+    streaming: streaming ? learningHlsStreaming() : undefined,
+    inlinedManifest: streaming ? options.inlinedMasterManifest : undefined,
     networking: streaming
       ? {
           requestFilter: createLearningHlsRequestFilter({
@@ -81,6 +86,14 @@ export function createLearningLessonVideoSource(options: {
           }),
         }
       : undefined,
-    textTracks: undefined,
+    textTracks: options.subtitles?.length
+      ? options.subtitles.map((track): ExternalTextTrack => ({
+          src: track.url,
+          language: track.language,
+          label: track.label,
+          kind: track.kind,
+          mimeType: "text/vtt",
+        }))
+      : undefined,
   };
 }

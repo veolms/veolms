@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { scrollEventTarget, setScrollTopAtOnce } from "./pageScrollport";
 import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
@@ -8,7 +9,8 @@ import type { ElasticScrollGestureSide } from "../../settings/settingsPreference
 import {
   ELASTIC_SCROLL_CONTROL_DRAG_DEAD_ZONE,
   ELASTIC_SCROLL_CONTROL_DRAG_MAX_DISTANCE,
-  ELASTIC_SCROLL_CONTROL_IDLE_DELAY_MS,
+  ELASTIC_SCROLL_CONTROL_EDGE_INSET,
+  getElasticScrollEndPositions,
   ELASTIC_SCROLL_CONTROL_INLINE_MAX_DISTANCE,
   ELASTIC_SCROLL_CONTROL_LOCK_THRESHOLD,
   ELASTIC_SCROLL_CONTROL_LONG_PRESS_DELAY_MS,
@@ -19,6 +21,7 @@ import {
   getScrollProgress,
 } from "./elasticScrollerModel";
 import type {
+  ElasticScrollDragRoom,
   ElasticScrollMode,
   ScrollDirection,
 } from "./elasticScrollerModel";
@@ -28,6 +31,9 @@ interface UseElasticScrollerOptions {
   contentRevision: string | number;
   lockSide: ElasticScrollGestureSide;
   unlockSide: ElasticScrollGestureSide;
+  /** How long the control stays after scrolling stops (the viewer's
+   * setting, 1-10 seconds). */
+  hideDelaySeconds: number;
   disabled?: boolean;
 }
 
@@ -48,12 +54,14 @@ export function useElasticScroller({
   contentRevision,
   lockSide,
   unlockSide,
+  hideDelaySeconds,
   disabled = false,
 }: UseElasticScrollerOptions) {
   const [visible, setVisible] = useState(false);
   const [direction, setDirection] = useState<ScrollDirection>("up");
   const [mode, setMode] = useState<ElasticScrollMode>("idle");
   const [dragOffset, setDragOffset] = useState(0);
+  const [dragRoom, setDragRoom] = useState<ElasticScrollDragRoom | null>(null);
   const [dragInlineOffset, setDragInlineOffset] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
@@ -103,8 +111,8 @@ export function useElasticScroller({
         return;
       }
       setVisible(false);
-    }, ELASTIC_SCROLL_CONTROL_IDLE_DELAY_MS);
-  }, [clearIdleTimer]);
+    }, hideDelaySeconds * 1000);
+  }, [clearIdleTimer, hideDelaySeconds]);
 
   const clearLongPressTimer = useCallback(() => {
     if (longPressTimerRef.current === null) return;
@@ -283,7 +291,8 @@ export function useElasticScroller({
       }
     };
 
-    scrollport.addEventListener("scroll", updateControl, { passive: true });
+    const scrollEvents = scrollEventTarget(scrollport);
+    scrollEvents.addEventListener("scroll", updateControl, { passive: true });
     scrollport.addEventListener("wheel", interruptAutomatedScroll, {
       passive: true,
     });
@@ -293,7 +302,7 @@ export function useElasticScroller({
     scrollport.addEventListener("pointerdown", beginScrollbarScroll);
     scrollport.addEventListener("keydown", interruptFromKeyboard);
     return () => {
-      scrollport.removeEventListener("scroll", updateControl);
+      scrollEvents.removeEventListener("scroll", updateControl);
       scrollport.removeEventListener("wheel", interruptAutomatedScroll);
       scrollport.removeEventListener("touchmove", interruptAutomatedScroll);
       scrollport.removeEventListener("pointerdown", beginScrollbarScroll);
@@ -364,7 +373,7 @@ export function useElasticScroller({
       setVisible(true);
       setMode("edge");
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        scrollport.scrollTop = target;
+        setScrollTopAtOnce(scrollport, target);
         syncDirectionAtEdge(nextDirection);
         setMode("idle");
         scheduleHide();
@@ -380,14 +389,14 @@ export function useElasticScroller({
         if (startedAt === null) startedAt = timestamp;
         const progress = Math.min(1, (timestamp - startedAt) / duration);
         const easedProgress = 1 - Math.pow(1 - progress, 4);
-        scrollport.scrollTop = start + distance * easedProgress;
+        setScrollTopAtOnce(scrollport, start + distance * easedProgress);
 
         if (progress < 1) {
           edgeScrollFrameRef.current = window.requestAnimationFrame(advance);
           return;
         }
 
-        scrollport.scrollTop = target;
+        setScrollTopAtOnce(scrollport, target);
         edgeScrollFrameRef.current = null;
         syncDirectionAtEdge(nextDirection);
         setMode("idle");
@@ -439,7 +448,7 @@ export function useElasticScroller({
         maximumScrollTop,
         Math.max(0, requestedScrollTop),
       );
-      scrollport.scrollTop = nextScrollTop;
+      setScrollTopAtOnce(scrollport, nextScrollTop);
 
       const reachedLockedEdge =
         lockedRef.current &&
@@ -518,6 +527,24 @@ export function useElasticScroller({
       dragPointerBaseOffsetRef.current = startedLocked
         ? lockedOffsetRef.current
         : 0;
+      // How far the ends may go before they would leave what can be seen
+      // of the scrollport (and of the window), from where the control
+      // rests: a locked control is drawn already pulled.
+      const restingCenterY =
+        controlBounds.top +
+        controlBounds.height / 2 -
+        (startedLocked ? lockedOffsetRef.current : 0);
+      const scrollportBounds = scrollportRef.current?.getBoundingClientRect();
+      const visibleTop = Math.max(0, scrollportBounds?.top ?? 0);
+      const visibleBottom = Math.min(
+        window.innerHeight,
+        scrollportBounds?.bottom ?? window.innerHeight,
+      );
+      setDragRoom({
+        above: restingCenterY - visibleTop - ELASTIC_SCROLL_CONTROL_EDGE_INSET,
+        below:
+          visibleBottom - restingCenterY - ELASTIC_SCROLL_CONTROL_EDGE_INSET,
+      });
       dragPointerOffsetRef.current = dragPointerBaseOffsetRef.current;
       setScrollOffset(dragPointerBaseOffsetRef.current);
 
@@ -540,6 +567,7 @@ export function useElasticScroller({
       clearGestureFeedback,
       clearIdleTimer,
       clearLongPressTimer,
+      scrollportRef,
       startDragScroll,
     ],
   );
@@ -784,12 +812,37 @@ export function useElasticScroller({
     [cancelDragScroll, clearPointerGesture, syncDirectionAtEdge],
   );
 
+  /**
+   * Ends the scroll drag a press began without the pointer being lifted,
+   * for a press that turns out to be something else (holding the control
+   * to move it). The pointer stays captured, and the click that follows
+   * its release does nothing.
+   */
+  const abandonPointerGesture = useCallback(() => {
+    if (dragPointerIdRef.current === null) return;
+    clearPointerGesture();
+    preserveDirectionRef.current = false;
+    cancelDragScroll();
+    syncDirectionAtEdge(directionRef.current);
+    pointerDownStoppedEdgeRef.current = false;
+    suppressClickRef.current = true;
+  }, [cancelDragScroll, clearPointerGesture, syncDirectionAtEdge]);
+
+  /**
+   * Shows the control and starts its idle wait afresh, for when something
+   * that kept it in view (being held, being moved) has just ended.
+   */
+  const stayVisible = useCallback(() => {
+    setVisible(true);
+    scheduleHide();
+  }, [scheduleHide]);
+
   const scrollToStart = useCallback(() => {
     const scrollport = scrollportRef.current;
     if (!scrollport) return;
     cancelAutomatedScroll();
     lastScrollTopRef.current = 0;
-    scrollport.scrollTop = 0;
+    setScrollTopAtOnce(scrollport, 0);
   }, [cancelAutomatedScroll, scrollportRef]);
 
   let lockFeedback: "closed" | null = null;
@@ -810,6 +863,7 @@ export function useElasticScroller({
     direction,
     mode,
     dragOffset,
+    dragEnds: getElasticScrollEndPositions(dragOffset, dragRoom),
     dragInlineOffset,
     dragIntensity: getElasticScrollDragIntensity(scrollOffset),
     isLocked,
@@ -823,6 +877,8 @@ export function useElasticScroller({
     handlePointerMove,
     handlePointerFinish,
     handlePointerCancel,
+    abandonPointerGesture,
+    stayVisible,
     stop: cancelAutomatedScroll,
     scrollToStart,
   };

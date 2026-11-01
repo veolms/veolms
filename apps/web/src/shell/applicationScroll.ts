@@ -66,27 +66,93 @@ export const followApplicationScrollPosition = (
   return stop;
 };
 
+/**
+ * The element whose smooth-scroll rule an instant scroll has switched off,
+ * the value it had, and the frame that will put it back.
+ */
+let instantScrollHold: {
+  element: HTMLElement;
+  previous: string;
+  frame: number;
+} | null = null;
+
+/**
+ * Keeps the global smooth-scroll rule off on `element` until two frames
+ * after the last instant scroll. Switched back at once, it was on again
+ * for what the browser did next: the page shrinking as it changed (which
+ * moves the scroll), or the restore repeated a frame later, and the page
+ * glided to the top in front of the reader instead of opening there.
+ */
+const holdInstantScroll = (element: HTMLElement) => {
+  if (instantScrollHold && instantScrollHold.element !== element) {
+    window.cancelAnimationFrame(instantScrollHold.frame);
+    instantScrollHold.element.style.scrollBehavior = instantScrollHold.previous;
+    instantScrollHold = null;
+  }
+  const previous = instantScrollHold?.previous ?? element.style.scrollBehavior;
+  if (instantScrollHold) window.cancelAnimationFrame(instantScrollHold.frame);
+  element.style.scrollBehavior = "auto";
+  const frame = window.requestAnimationFrame(() => {
+    const next = window.requestAnimationFrame(() => {
+      element.style.scrollBehavior = previous;
+      instantScrollHold = null;
+    });
+    if (instantScrollHold) instantScrollHold.frame = next;
+  });
+  instantScrollHold = { element, previous, frame };
+};
+
 export const scrollApplicationTo = (options: ScrollToOptions): void => {
   const scrollElement = getApplicationScrollElement();
   const behaviorElement = scrollElement ?? document.documentElement;
-  const previousScrollBehavior = behaviorElement.style.scrollBehavior;
 
   // `auto` normally inherits the global smooth-scroll rule. Route restoration
-  // must be synchronous so an old page position is never animated on screen.
-  if (options.behavior === "auto") {
-    behaviorElement.style.scrollBehavior = "auto";
-  }
+  // must be instant so an old page position is never animated on screen.
+  if (options.behavior === "auto") holdInstantScroll(behaviorElement);
 
-  try {
-    if (scrollElement) {
-      scrollElement.scrollTo(options);
-      return;
-    }
-
-    window.scrollTo(options);
-  } finally {
-    if (options.behavior === "auto") {
-      behaviorElement.style.scrollBehavior = previousScrollBehavior;
-    }
+  if (scrollElement) {
+    scrollElement.scrollTo(options);
+    return;
   }
+  window.scrollTo(options);
 };
+
+/**
+ * Navigation state that tells the app shell to leave the scroll position
+ * where it is. The shell normally puts a page back at its remembered
+ * position (or the top) whenever the address changes; a page that only
+ * tidies its own address (a lesson settling on its canonical address, a
+ * link's one-off parameters being dropped) passes this so the reader is not
+ * moved.
+ */
+export const KEEP_SCROLL_NAVIGATION_STATE = "academyKeepScroll";
+
+export function withKeepScroll(state: unknown): Record<string, unknown> {
+  return {
+    ...(typeof state === "object" && state !== null ? state : {}),
+    [KEEP_SCROLL_NAVIGATION_STATE]: true,
+  };
+}
+
+/**
+ * Takes the keep-scroll request back out of the current history entry once
+ * the shell has acted on it, so returning to the entry later restores its
+ * position like any other.
+ */
+export function forgetKeepScrollRequest(): void {
+  const entry: unknown = window.history.state;
+  if (typeof entry !== "object" || entry === null) return;
+  const { usr } = entry as { usr?: unknown };
+  if (!asksToKeepScroll(usr)) return;
+  const rest = { ...(usr as Record<string, unknown>) };
+  delete rest[KEEP_SCROLL_NAVIGATION_STATE];
+  window.history.replaceState({ ...entry, usr: rest }, "");
+}
+
+export function asksToKeepScroll(state: unknown): boolean {
+  return (
+    typeof state === "object" &&
+    state !== null &&
+    (state as Record<string, unknown>)[KEEP_SCROLL_NAVIGATION_STATE] === true
+  );
+}

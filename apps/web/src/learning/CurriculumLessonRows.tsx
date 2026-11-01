@@ -1,52 +1,52 @@
-import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
-import {
-  memo,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
+import { memo } from "react";
+import type { RefObject } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
+import { ProgressRing } from "../components/ProgressRing";
 import type { LessonResource } from "@veolms/contracts";
 import type { Lesson } from "./courseContent";
 import { CurriculumLessonCard } from "./CurriculumLessonCard";
+import { useLessonHoverPreload } from "./useLessonHoverPreload";
 
-const VIRTUALIZED_LESSON_THRESHOLD = 50;
-const LESSON_ROW_ESTIMATED_SIZE = 46;
-// Cards grow with their title, so a virtualized list measures each one. This
-// is only the height assumed for a card before it has been measured.
-const LESSON_CARD_ESTIMATED_SIZE = 86;
-const LESSON_CARD_GAP = 8;
-const LESSON_LIST_OVERSCAN = 8;
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
 
 interface CurriculumLessonButtonProps {
   lesson: Lesson;
+  /** The number the lesson is shown with (see `lessonNumberBase`). */
+  displayNumber: number;
   progress: number;
   isActive: boolean;
   isAvailable: boolean;
   onSelectLesson: (lessonNumber: number) => void;
   onClose?: () => void;
   activeLessonRef?: RefObject<HTMLButtonElement | null>;
-  virtualIndex?: number;
-  onVirtualizedKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
+  /**
+   * The course to preload the lesson through while the pointer rests on
+   * it. Left out, the lesson is not preloaded.
+   */
+  hoverPreloadCourseKey?: string;
+  /** Extra classes for the row itself (how it behaves off screen). */
+  className?: string;
 }
 
 const CurriculumLessonButton = memo(function CurriculumLessonButton({
   lesson,
+  displayNumber,
   progress,
   isActive,
   isAvailable,
   onSelectLesson,
   onClose,
   activeLessonRef,
-  virtualIndex,
-  onVirtualizedKeyDown,
+  hoverPreloadCourseKey,
+  className = "",
 }: CurriculumLessonButtonProps) {
-  const [number, title, duration, status] = lesson;
+  const [number, title, duration, status, , contentType] = lesson;
+  const hoverPreload = useLessonHoverPreload(
+    hoverPreloadCourseKey,
+    number,
+    isAvailable && !isActive && (contentType ?? "video") === "video",
+  );
   const completed =
     status === "done" || progress >= LESSON_PROGRESS_COMPLETE_THRESHOLD;
   const showProgress = isActive || progress > 0;
@@ -58,14 +58,17 @@ const CurriculumLessonButton = memo(function CurriculumLessonButton({
       disabled={!isAvailable}
       title={isAvailable ? undefined : "Log in to watch this lecture"}
       aria-label={isAvailable ? undefined : `${title} (log in to watch)`}
-      data-curriculum-lesson-index={virtualIndex}
-      onKeyDown={onVirtualizedKeyDown}
+      onPointerEnter={hoverPreload?.onPointerEnter}
+      onPointerLeave={hoverPreload?.onPointerLeave}
+      onFocus={hoverPreload?.onFocus}
+      onBlur={hoverPreload?.onBlur}
       onClick={() => {
         if (!isAvailable) return;
+        hoverPreload?.cancel();
         onSelectLesson(number);
         onClose?.();
       }}
-      className={`learning-curriculum__lesson ${isActive ? "is-active" : ""} ${!isAvailable ? "cursor-not-allowed opacity-50" : ""}`}
+      className={`${className} learning-curriculum__lesson ${isActive ? "is-active" : ""} ${!isAvailable ? "cursor-not-allowed opacity-50" : ""}`}
     >
       {completed ? (
         <span
@@ -78,29 +81,18 @@ const CurriculumLessonButton = memo(function CurriculumLessonButton({
         <span
           className="learning-curriculum__lesson-progress"
           role="progressbar"
-          aria-label={`Lecture ${number} progress`}
+          aria-label={`Lecture ${displayNumber} progress`}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(progress)}
           aria-valuetext={`${Math.round(progress)}% watched`}
         >
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <circle
-              className="learning-curriculum__lesson-progress-track"
-              cx="10"
-              cy="10"
-              r="8"
-            />
-            <circle
-              className="learning-curriculum__lesson-progress-value"
-              cx="10"
-              cy="10"
-              r="8"
-              pathLength="100"
-              strokeDasharray="100"
-              strokeDashoffset={100 - progress}
-            />
-          </svg>
+          <ProgressRing
+            share={progress / 100}
+            stroke={4.5}
+            animate={false}
+            className="size-full"
+          />
         </span>
       ) : (
         <Circle
@@ -108,7 +100,9 @@ const CurriculumLessonButton = memo(function CurriculumLessonButton({
           className="learning-curriculum__lesson-status learning-curriculum__lesson-status--todo"
         />
       )}
-      <span className="learning-curriculum__lesson-number">{number}.</span>
+      <span className="learning-curriculum__lesson-number">
+        {displayNumber}.
+      </span>
       <span className="min-w-0 flex-1 truncate">{title}</span>
       <span className="learning-curriculum__lesson-duration">{duration}</span>
     </button>
@@ -119,17 +113,23 @@ interface CurriculumLessonRowsProps {
   sectionId: number;
   sectionTitle: string;
   lessons: readonly Lesson[];
-  forceVirtualized?: boolean;
   selectedLesson: number;
   lessonProgress: Readonly<Record<number, number>>;
   onSelectLesson: (lessonNumber: number) => void;
   isLessonAvailable?: (lessonNumber: number) => boolean;
+  /** Lessons the visitor cannot play yet; their cards show a lock. */
+  lockedLessonNumbers?: ReadonlySet<number>;
   onClose?: () => void;
   activeLessonRef: RefObject<HTMLButtonElement | null>;
-  scrollportRef: RefObject<HTMLElement | null>;
-  layoutRevision: number;
   /** The mini player's playlist keeps the dense single-line rows. */
   compact?: boolean;
+  /**
+   * What is taken off a lesson's number in the course to give the number
+   * it is shown with: 0 when lessons are numbered straight through the
+   * course, or one less than the section's first lesson when every section
+   * starts again at 1.
+   */
+  lessonNumberBase?: number;
   lessonResources?: ReadonlyMap<number, readonly LessonResource[]>;
   resourceCourseKey?: string;
   quizLessonNumbers?: ReadonlySet<number>;
@@ -138,50 +138,113 @@ interface CurriculumLessonRowsProps {
   portalContainer?: RefObject<HTMLElement | null>;
 }
 
-export function CurriculumLessonRows(props: CurriculumLessonRowsProps) {
-  if (
-    !props.forceVirtualized &&
-    props.lessons.length < VIRTUALIZED_LESSON_THRESHOLD
-  ) {
-    const rows = props.lessons.map((lesson) => (
-      <CurriculumLesson key={lesson[0]} rows={props} lesson={lesson} />
-    ));
-    return props.compact ? (
-      <>{rows}</>
-    ) : (
-      <div className="flex flex-col gap-2 p-2">{rows}</div>
-    );
-  }
+/**
+ * Every lesson of the section is in the page; none is added or taken away
+ * as the panel scrolls, so scrolling is the browser's own and costs no
+ * script. What keeps a long course cheap is `content-visibility`: a lesson
+ * off screen is not laid out or painted until it comes near, and holds its
+ * place meanwhile at the height it was last seen with (or the usual one).
+ *
+ * The lesson being played is left out of that: the containment would cut
+ * off the shadow it casts.
+ */
+const CARD_HEIGHT = 86;
+const CARD_GAP = 6;
+/**
+ * The list's own padding: a little above its first card, and under its
+ * last as much as the block's bottom corners are deep: once the last card
+ * has passed behind a heading that holds to the top of the panel
+ * (Curriculum.tsx), only that rounded foot is left under it, which the
+ * heading then takes over.
+ */
+const CARD_LIST_PADDING_TOP = 8;
+const CARD_LIST_PADDING_BOTTOM = 16;
+const OFFSCREEN_CARD_CLASSES =
+  "[content-visibility:auto] [contain-intrinsic-size:auto_86px]";
+const OFFSCREEN_ROW_CLASSES =
+  "[content-visibility:auto] [contain-intrinsic-size:auto_46px]";
 
-  return <VirtualizedCurriculumLessonRows {...props} />;
-}
+/**
+ * It is kept from rendering again unless something of its own changes: the
+ * panel renders for many reasons that are none of a section's business (a
+ * drag of its edge, another section opening), and a long course has several
+ * hundred lessons to go through each time.
+ */
+export const CurriculumLessonRows = memo(function CurriculumLessonRows(
+  props: CurriculumLessonRowsProps,
+) {
+  const offscreenClasses = props.compact
+    ? OFFSCREEN_ROW_CLASSES
+    : OFFSCREEN_CARD_CLASSES;
+  // The classes go on the lesson's own element: a wrapper for each would
+  // be one more element per lesson for every style pass to walk.
+  const rows = props.lessons.map((lesson) => (
+    <CurriculumLesson
+      key={lesson[0]}
+      rows={props}
+      lesson={lesson}
+      className={
+        lesson[0] === props.selectedLesson ? undefined : offscreenClasses
+      }
+    />
+  ));
+  if (props.compact) return <>{rows}</>;
+
+  const count = props.lessons.length;
+  return (
+    // The cards stand inside their section's block, right under its
+    // heading (whose progress bar parts the two), with the same small room
+    // around them as the course page's outline gives its lessons.
+    //
+    // The whole list is skipped too while the section is off screen, so a
+    // change to the panel's width lays out the sections in view and passes
+    // over the rest as one box each. Until it has been seen it stands at
+    // the height its lessons usually come to. A different number of
+    // lessons (a search) starts it afresh: the height it was last seen
+    // with would no longer be its own.
+    //
+    // The skipping is a plain block's around the list, not the padded list's
+    // own: Safari held a skipped list at its padding and gaps (its cards
+    // counted as nothing) instead of that height, so the panel's scroll
+    // height jumped once a later section came near; a plain block keeps it.
+    // Unpadded, the block's placeholder is also the list's whole height,
+    // padding included.
+    <div
+      key={count}
+      className="[content-visibility:auto]"
+      style={{
+        containIntrinsicBlockSize: `auto ${count * (CARD_HEIGHT + CARD_GAP) - CARD_GAP + CARD_LIST_PADDING_TOP + CARD_LIST_PADDING_BOTTOM}px`,
+      }}
+    >
+      <div className="flex flex-col gap-1.5 px-2 pt-2 pb-4">{rows}</div>
+    </div>
+  );
+});
 
 interface CurriculumLessonProps {
   rows: CurriculumLessonRowsProps;
   lesson: Lesson;
-  virtualIndex?: number;
-  onVirtualizedKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
+  className?: string;
 }
 
 /** A lesson in whichever presentation the list uses. */
-function CurriculumLesson({
-  rows,
-  lesson,
-  virtualIndex,
-  onVirtualizedKeyDown,
-}: CurriculumLessonProps) {
+function CurriculumLesson({ rows, lesson, className }: CurriculumLessonProps) {
   const number = lesson[0];
   const isActive = rows.selectedLesson === number;
   const shared = {
     lesson,
+    displayNumber: number - (rows.lessonNumberBase ?? 0),
     progress: getLessonProgress(rows.lessonProgress, lesson),
     isActive,
     isAvailable: rows.isLessonAvailable?.(number) ?? true,
     onSelectLesson: rows.onSelectLesson,
     onClose: rows.onClose,
     activeLessonRef: isActive ? rows.activeLessonRef : undefined,
-    virtualIndex,
-    onVirtualizedKeyDown,
+    // A locked lesson would only be refused; nothing to preload.
+    hoverPreloadCourseKey: rows.lockedLessonNumbers?.has(number)
+      ? undefined
+      : rows.resourceCourseKey,
+    className,
   };
 
   if (rows.compact) return <CurriculumLessonButton {...shared} />;
@@ -189,6 +252,7 @@ function CurriculumLesson({
   return (
     <CurriculumLessonCard
       {...shared}
+      isLocked={rows.lockedLessonNumbers?.has(number) ?? false}
       resources={rows.lessonResources?.get(number)}
       resourceCourseKey={rows.resourceCourseKey}
       hasQuiz={rows.quizLessonNumbers?.has(number) ?? false}
@@ -196,154 +260,6 @@ function CurriculumLesson({
       onOpenQuiz={rows.onOpenLessonQuiz}
       portalContainer={rows.portalContainer}
     />
-  );
-}
-
-function VirtualizedCurriculumLessonRows(props: CurriculumLessonRowsProps) {
-  const {
-    sectionId,
-    sectionTitle,
-    lessons,
-    selectedLesson,
-    isLessonAvailable,
-    scrollportRef,
-    layoutRevision,
-    compact = false,
-  } = props;
-  const listRef = useRef<HTMLDivElement>(null);
-  const pendingFocusIndexRef = useRef<number | null>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-  const activeIndex = useMemo(
-    () => lessons.findIndex(([number]) => number === selectedLesson),
-    [lessons, selectedLesson],
-  );
-  const rangeExtractor = useCallback(
-    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
-      const indices = new Set(defaultRangeExtractor(range));
-      indices.add(0);
-      indices.add(lessons.length - 1);
-      if (activeIndex >= 0) indices.add(activeIndex);
-      return [...indices].sort((left, right) => left - right);
-    },
-    [activeIndex, lessons.length],
-  );
-
-  useLayoutEffect(() => {
-    const scrollport = scrollportRef.current;
-    const list = listRef.current;
-    if (!scrollport || !list) return;
-
-    const nextScrollMargin = Math.max(
-      0,
-      list.getBoundingClientRect().top -
-        scrollport.getBoundingClientRect().top +
-        scrollport.scrollTop,
-    );
-    setScrollMargin((current) =>
-      Math.abs(current - nextScrollMargin) > 1 ? nextScrollMargin : current,
-    );
-  }, [layoutRevision, scrollportRef, sectionId]);
-
-  // TanStack Virtual exposes a mutable virtualizer API by design.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const virtualizer = useVirtualizer({
-    count: lessons.length,
-    getScrollElement: () => scrollportRef.current,
-    estimateSize: () =>
-      compact ? LESSON_ROW_ESTIMATED_SIZE : LESSON_CARD_ESTIMATED_SIZE,
-    gap: compact ? 0 : LESSON_CARD_GAP,
-    paddingStart: compact ? 0 : LESSON_CARD_GAP,
-    paddingEnd: compact ? 0 : LESSON_CARD_GAP,
-    getItemKey: (index) => lessons[index]?.[0] ?? index,
-    initialRect: { width: 1024, height: 768 },
-    overscan: LESSON_LIST_OVERSCAN,
-    rangeExtractor,
-    scrollMargin,
-  });
-  const virtualizerRef = useRef(virtualizer);
-  virtualizerRef.current = virtualizer;
-  const virtualItems = virtualizer.getVirtualItems();
-
-  useLayoutEffect(() => {
-    const pendingFocusIndex = pendingFocusIndexRef.current;
-    if (pendingFocusIndex === null) return;
-    const target = listRef.current?.querySelector<HTMLButtonElement>(
-      `[data-curriculum-lesson-index="${pendingFocusIndex}"]`,
-    );
-    if (!target) return;
-    pendingFocusIndexRef.current = null;
-    target.focus();
-  }, [virtualItems]);
-
-  const handleVirtualizedTab = useCallback(
-    (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-      if (event.key !== "Tab") return;
-      const currentIndex = Number(
-        event.currentTarget.dataset.curriculumLessonIndex,
-      );
-      if (!Number.isInteger(currentIndex)) return;
-
-      const direction = event.shiftKey ? -1 : 1;
-      let nextIndex = currentIndex + direction;
-      while (
-        nextIndex >= 0 &&
-        nextIndex < lessons.length &&
-        !(isLessonAvailable?.(lessons[nextIndex]![0]) ?? true)
-      ) {
-        nextIndex += direction;
-      }
-      if (nextIndex < 0 || nextIndex >= lessons.length) return;
-      const nextButton = listRef.current?.querySelector(
-        `[data-curriculum-lesson-index="${nextIndex}"]`,
-      );
-      if (nextButton && !nextButton.hasAttribute("disabled")) return;
-
-      event.preventDefault();
-      pendingFocusIndexRef.current = nextIndex;
-      virtualizerRef.current.scrollToIndex(nextIndex, { align: "auto" });
-    },
-    [isLessonAvailable, lessons],
-  );
-
-  return (
-    <div
-      ref={listRef}
-      className="relative w-full"
-      role="list"
-      aria-label={`Section ${sectionId}: ${sectionTitle} lessons`}
-      data-curriculum-virtualized-lessons
-      data-section-id={sectionId}
-      data-section-title={sectionTitle}
-      data-lesson-count={lessons.length}
-      style={{ height: `${virtualizer.getTotalSize()}px` }}
-    >
-      {virtualItems.map((virtualItem) => {
-        const lesson = lessons[virtualItem.index];
-        if (!lesson) return null;
-        return (
-          <div
-            key={lesson[0]}
-            ref={compact ? undefined : virtualizer.measureElement}
-            className={`absolute top-0 ${compact ? "inset-x-0" : "inset-x-2"}`}
-            role="listitem"
-            aria-posinset={virtualItem.index + 1}
-            aria-setsize={lessons.length}
-            data-index={virtualItem.index}
-            style={{
-              height: compact ? `${LESSON_ROW_ESTIMATED_SIZE}px` : undefined,
-              transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-            }}
-          >
-            <CurriculumLesson
-              rows={props}
-              lesson={lesson}
-              virtualIndex={virtualItem.index}
-              onVirtualizedKeyDown={handleVirtualizedTab}
-            />
-          </div>
-        );
-      })}
-    </div>
   );
 }
 

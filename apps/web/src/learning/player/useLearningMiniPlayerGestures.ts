@@ -10,13 +10,19 @@ import {
   type RefObject,
 } from "react";
 import {
+  isAnyDrawerOpen,
+  subscribeToDrawerPresence,
+} from "../../components/ui/drawerPresence";
+import {
   LEARNING_MINI_PLAYER_ASPECT_RATIO as MINI_PLAYER_ASPECT_RATIO,
   LEARNING_MINI_PLAYER_MARGIN as MINI_PLAYER_MARGIN,
   clampLearningPlayerValue as clamp,
   clearLearningPlayerMinimizeMotionStyles,
   getDefaultLearningMiniPlayerLayout,
+  setLearningMiniPlayerPreferredLeft,
   getLearningMiniPlayerBottomEdge as getSettledBottomEdge,
   getLearningMiniPlayerHeight,
+  getLearningMiniPlayerLeftDock as getLeftDock,
   getLearningMiniPlayerPointerResizeLayout,
   getLearningMiniPlayerWidthBounds as getWidthBounds,
   getLearningMiniPlayerPlaylistHeight as getPlaylistHeight,
@@ -26,8 +32,10 @@ import {
   type LearningMiniPlayerResizeEdges,
   type LearningPlayerViewportBounds as ViewportBounds,
 } from "./learningPlayerMotion";
+import { observeMobileNavigationShown } from "./mobileNavigationFollow";
 import {
   readMiniPlayerWidthPreference,
+  writeMiniPlayerSidePreference,
   writeMiniPlayerWidthPreference,
 } from "./lessonPlayerPersistence";
 
@@ -38,7 +46,34 @@ const DOCK_FLICK_VELOCITY = 0.5;
 const DISMISS_DISTANCE = 56;
 const DISMISS_VELOCITY = 0.45;
 const DISMISS_DURATION = 200;
-const SETTLE_DURATION = 240;
+type MiniPlayerDismissDirection = "down" | "left" | "right" | "up";
+/** Dragged this much out of the window (by area) and let go, it closes. */
+const DISMISS_OUTSIDE_FRACTION = 0.5;
+/** How long it takes to come to rest once let go: an unhurried glide. */
+const SETTLE_DURATION = 560;
+
+/**
+ * Remembers which side the mini player has come to rest on, for the next
+ * flick that minimizes a video (see useLessonPlayerMinimizeGesture).
+ */
+const rememberRestingSide = (layout: MiniPlayerLayout) => {
+  const viewport = getViewportBounds();
+  writeMiniPlayerSidePreference(
+    layout.left + layout.width / 2 < viewport.left + viewport.width / 2
+      ? "left"
+      : "right",
+  );
+};
+/**
+ * On a wide screen a flick carries it on by this many milliseconds of the
+ * speed it was let go at: a gentle one a short way, a hard one all the way
+ * to the edge of the screen, where it stops.
+ */
+const GLIDE_MS = 420;
+/** Held still for longer than this before letting go, it does not glide. */
+const GLIDE_PAUSE_MS = 90;
+/** Let go slower than this (pixels a millisecond), it does not glide. */
+const GLIDE_MIN_VELOCITY = 0.12;
 
 interface PointerSample {
   id: number;
@@ -68,6 +103,25 @@ interface PinchGesture {
 
 type MiniPlayerGestureMode =
   "idle" | "dragging" | "resizing" | "settling" | "dismissing";
+
+/**
+ * Where the mini player was last put to rest (by a gesture, or where it
+ * first appeared), and whether that was against the right and bottom edges,
+ * or in the bottom-left corner beside the sidebar. A change of the viewport's
+ * size (or of the sidebar's width) fits this again rather than the place the
+ * last change squeezed it into, so it keeps to its edges as the window grows,
+ * stays clear of a sidebar that widens, and comes back to its size when a
+ * squeeze is undone.
+ */
+interface MiniPlayerRestingPlace {
+  layout: MiniPlayerLayout;
+  againstRight: boolean;
+  againstBottom: boolean;
+  againstLeftDock: boolean;
+}
+
+/** Within this many pixels of an edge, the player counts as resting on it. */
+const EDGE_TOLERANCE = 2;
 
 const clampLayout = (
   layout: MiniPlayerLayout,
@@ -151,9 +205,31 @@ const getFlickDirectedCornerLayout = (
   velocityY: number,
   viewport = getViewportBounds(),
   isExpanded = false,
+  /**
+   * How it comes to rest. On a phone it always ends in a corner: the one
+   * it was flicked towards, or else the nearest. On a wide screen it glides
+   * on from where it was let go, in the direction and as far as the flick
+   * carries it (see GLIDE_MS), slowing to a stop wherever that is, and no
+   * further than the edge of the screen. Let go without a flick, it stays
+   * put.
+   */
+  unflickedAxis: "nearest-corner" | "where-dropped" = "nearest-corner",
 ): MiniPlayerLayout => {
-  const nearestCorner = getNearestCornerLayout(layout, viewport, isExpanded);
   const peakVelocity = Math.max(Math.abs(velocityX), Math.abs(velocityY));
+  if (unflickedAxis === "where-dropped") {
+    return clampLayout(
+      peakVelocity < GLIDE_MIN_VELOCITY
+        ? layout
+        : {
+            ...layout,
+            left: layout.left + velocityX * GLIDE_MS,
+            top: layout.top + velocityY * GLIDE_MS,
+          },
+      viewport,
+      isExpanded,
+    );
+  }
+  const nearestCorner = getNearestCornerLayout(layout, viewport, isExpanded);
   if (peakVelocity < DOCK_FLICK_VELOCITY) return nearestCorner;
 
   const isDesktop = isDesktopLearningMinimizeViewport();
@@ -203,6 +279,63 @@ const getFlickDirectedCornerLayout = (
 
 const getReleaseVelocity = (recent: number, average: number) =>
   Math.abs(recent) >= DOCK_FLICK_VELOCITY ? recent : average;
+
+/** How far the player goes past each edge of the window, in px. */
+const getOverflow = (layout: MiniPlayerLayout, isExpanded: boolean) => {
+  const viewport = getViewportBounds();
+  const height = getLearningMiniPlayerHeight(
+    layout.width,
+    isDesktopLearningMinimizeViewport(),
+    isExpanded,
+    getPlaylistHeight(layout),
+  );
+  return {
+    height,
+    left: Math.max(0, viewport.left - layout.left),
+    right: Math.max(
+      0,
+      layout.left + layout.width - (viewport.left + viewport.width),
+    ),
+    up: Math.max(0, viewport.top - layout.top),
+    down: Math.max(0, layout.top + height - (viewport.top + viewport.height)),
+  };
+};
+
+/** How much of the player is out of the window, by area: 0 to 1. */
+const getOutsideFraction = (layout: MiniPlayerLayout, isExpanded: boolean) => {
+  const overflow = getOverflow(layout, isExpanded);
+  if (layout.width <= 0 || overflow.height <= 0) return 0;
+  const insideWidth = Math.max(
+    0,
+    layout.width - overflow.left - overflow.right,
+  );
+  const insideHeight = Math.max(
+    0,
+    overflow.height - overflow.up - overflow.down,
+  );
+  return clamp(
+    1 - (insideWidth * insideHeight) / (layout.width * overflow.height),
+    0,
+    1,
+  );
+};
+
+/** The edge the player is furthest past, which it leaves by. */
+const getOutsideDirection = (
+  layout: MiniPlayerLayout,
+  isExpanded: boolean,
+): MiniPlayerDismissDirection => {
+  const overflow = getOverflow(layout, isExpanded);
+  const sides = [
+    ["down", overflow.down / overflow.height],
+    ["up", overflow.up / overflow.height],
+    ["left", overflow.left / layout.width],
+    ["right", overflow.right / layout.width],
+  ] as const;
+  return sides.reduce((furthest, side) =>
+    side[1] > furthest[1] ? side : furthest,
+  )[0];
+};
 
 const getDownmostLayout = (
   layout: MiniPlayerLayout,
@@ -261,7 +394,12 @@ export function useLearningMiniPlayerGestures(
   const [layout, setLayout] = useState<MiniPlayerLayout | null>(null);
   const [mode, setMode] = useState<MiniPlayerGestureMode>("idle");
   const [dismissDistance, setDismissDistance] = useState(0);
+  const [dismissShift, setDismissShift] = useState(0);
+  // How much of the player is dragged out of the window, 0 to 1: its
+  // sound drops by as much (see useMiniPlayerSwipeVolume).
+  const [outsideFraction, setOutsideFraction] = useState(0);
   const layoutRef = useRef<MiniPlayerLayout | null>(null);
+  const restingPlaceRef = useRef<MiniPlayerRestingPlace | null>(null);
   const modeRef = useRef<MiniPlayerGestureMode>("idle");
   const pointersRef = useRef(new Map<number, PointerSample>());
   const singleGestureRef = useRef<SinglePointerGesture | null>(null);
@@ -312,18 +450,38 @@ export function useLearningMiniPlayerGestures(
       }
     };
 
-    const restackPopoverAboveFullscreen = () => {
-      // Document fullscreen promotes <html> into the top layer, which covers
-      // an already-open popover. Close and reopen to restack above it.
+    const closePopover = () => {
       try {
         container.hidePopover();
       } catch {
         // Already closed, or the popover attribute was removed.
       }
+    };
+
+    const restackPopoverAboveFullscreen = () => {
+      // Document fullscreen promotes <html> into the top layer, which covers
+      // an already-open popover. Close and reopen to restack above it.
+      if (isAnyDrawerOpen()) return;
+      closePopover();
       openPopover();
     };
 
-    openPopover();
+    // A bottom sheet (the menu, a lesson list) is not in the top layer: the
+    // mini player steps out of it while one is open, and its own z-index
+    // keeps it under the sheet; it goes back on top once the sheet closes.
+    // (A closed popover is not drawn at all, so it stops being one instead,
+    // and stays in view under the sheet.)
+    const stepDownForDrawer = () => {
+      closePopover();
+      container.removeAttribute("popover");
+    };
+    const stopFollowingDrawers = subscribeToDrawerPresence((drawerOpen) => {
+      if (drawerOpen) stepDownForDrawer();
+      else openPopover();
+    });
+
+    if (isAnyDrawerOpen()) stepDownForDrawer();
+    else openPopover();
     document.addEventListener(
       "fullscreenchange",
       restackPopoverAboveFullscreen,
@@ -334,6 +492,7 @@ export function useLearningMiniPlayerGestures(
     );
 
     return () => {
+      stopFollowingDrawers();
       document.removeEventListener(
         "fullscreenchange",
         restackPopoverAboveFullscreen,
@@ -351,17 +510,53 @@ export function useLearningMiniPlayerGestures(
     };
   }, [containerRef, enabled]);
 
+  const rememberRestingPlace = useCallback(
+    (restingLayout: MiniPlayerLayout) => {
+      const viewport = getViewportBounds();
+      const height = getLearningMiniPlayerHeight(
+        restingLayout.width,
+        isDesktopLearningMinimizeViewport(),
+        isExpanded,
+        getPlaylistHeight(restingLayout),
+      );
+      const rightmostLeft =
+        viewport.left +
+        viewport.width -
+        MINI_PLAYER_MARGIN -
+        restingLayout.width;
+      const downmostTop = getSettledBottomEdge(viewport) - height;
+      const againstRight =
+        Math.abs(restingLayout.left - rightmostLeft) <= EDGE_TOLERANCE;
+      restingPlaceRef.current = {
+        layout: restingLayout,
+        againstRight,
+        againstBottom:
+          Math.abs(restingLayout.top - downmostTop) <= EDGE_TOLERANCE,
+        againstLeftDock:
+          !againstRight &&
+          Math.abs(restingLayout.left - getLeftDock(viewport)) <=
+            EDGE_TOLERANCE,
+      };
+    },
+    [isExpanded],
+  );
+
   const commitLayout = useCallback(
-    (nextLayout: MiniPlayerLayout) => {
+    (
+      nextLayout: MiniPlayerLayout,
+      { fromViewportChange = false }: { fromViewportChange?: boolean } = {},
+    ) => {
       const isDesktop = isDesktopLearningMinimizeViewport();
       const targetLayout = isDesktop
         ? clampLayout(nextLayout, undefined, isExpanded)
         : getNearestCornerLayout(nextLayout, undefined, isExpanded);
       layoutRef.current = targetLayout;
       setLayout(targetLayout);
+      rememberRestingSide(targetLayout);
+      if (!fromViewportChange) rememberRestingPlace(targetLayout);
       return targetLayout;
     },
-    [isExpanded],
+    [isExpanded, rememberRestingPlace],
   );
 
   const showLiveLayout = useCallback((nextLayout: MiniPlayerLayout) => {
@@ -387,6 +582,8 @@ export function useLearningMiniPlayerGestures(
         settleTimerRef.current = null;
       }
       showLiveLayout(settledLayout);
+      rememberRestingSide(settledLayout);
+      rememberRestingPlace(settledLayout);
       needsSettleRef.current = false;
       settleCandidateRef.current = null;
 
@@ -404,7 +601,7 @@ export function useLearningMiniPlayerGestures(
       }
       return settledLayout;
     },
-    [isExpanded, showLiveLayout, updateMode],
+    [isExpanded, rememberRestingPlace, showLiveLayout, updateMode],
   );
 
   const measureLayout = useCallback(() => {
@@ -416,12 +613,18 @@ export function useLearningMiniPlayerGestures(
       clearLearningPlayerMinimizeMotionStyles(container);
     }
     const rect = container?.getBoundingClientRect();
-    return commitLayout(
+    const measuredLayout =
       rect && rect.width > 0
         ? { left: rect.left, top: rect.top, width: rect.width }
-        : fallback,
-    );
-  }, [commitLayout, containerRef, getInitialLayout]);
+        : fallback;
+    // On a phone a swipe can let the video go anywhere along the bottom,
+    // under the finger, and the mini player rests in a corner. It glides
+    // there from where it was let go (the read above has just fixed that
+    // place as the one to start from) instead of appearing there at once.
+    return isDesktopLearningMinimizeViewport()
+      ? commitLayout(measuredLayout)
+      : settleLayout(measuredLayout);
+  }, [commitLayout, containerRef, getInitialLayout, settleLayout]);
 
   useLayoutEffect(() => {
     if (enabled) {
@@ -429,11 +632,16 @@ export function useLearningMiniPlayerGestures(
       return;
     }
 
+    // The place a minimizing swipe asked for was for that mini player.
+    setLearningMiniPlayerPreferredLeft(null);
     layoutRef.current = null;
+    restingPlaceRef.current = null;
     setLayout(null);
     modeRef.current = "idle";
     setMode("idle");
     setDismissDistance(0);
+    setDismissShift(0);
+    setOutsideFraction(0);
     pointersRef.current.clear();
     singleGestureRef.current = null;
     pinchGestureRef.current = null;
@@ -455,21 +663,84 @@ export function useLearningMiniPlayerGestures(
     }
   }, [enabled, measureLayout]);
 
+  // On a phone the mini player rests on the bottom menu. When the menu
+  // hides or shows it is settled again, which carries it down or up to its
+  // new resting place with the settle's own easing instead of leaving it
+  // where the menu used to be.
+  useEffect(() => {
+    if (!enabled) return undefined;
+    return observeMobileNavigationShown(() => {
+      if (isDesktopLearningMinimizeViewport()) return;
+      if (layoutRef.current) settleLayout(layoutRef.current);
+    });
+  }, [enabled, settleLayout]);
+
   useEffect(() => {
     if (!enabled) return undefined;
     const handleViewportResize = () => {
-      if (layoutRef.current) commitLayout(layoutRef.current);
+      const currentLayout = layoutRef.current;
+      if (!currentLayout) return;
+      const restingPlace = restingPlaceRef.current;
+      const isAtRest =
+        modeRef.current === "idle" || modeRef.current === "settling";
+      // Mid-gesture, the place under the finger is the one to keep in view.
+      if (!restingPlace || !isAtRest) {
+        commitLayout(currentLayout, { fromViewportChange: true });
+        return;
+      }
+      const viewport = getViewportBounds();
+      const { maximumWidth, minimumWidth } = getWidthBounds(viewport);
+      const width = clamp(
+        restingPlace.layout.width,
+        minimumWidth,
+        maximumWidth,
+      );
+      const height = getLearningMiniPlayerHeight(
+        width,
+        isDesktopLearningMinimizeViewport(),
+        isExpanded,
+        getPlaylistHeight(restingPlace.layout),
+      );
+      const rightmostLeft =
+        viewport.left + viewport.width - MINI_PLAYER_MARGIN - width;
+      commitLayout(
+        {
+          ...restingPlace.layout,
+          width,
+          left: restingPlace.againstRight
+            ? rightmostLeft
+            : restingPlace.againstLeftDock
+              ? Math.min(getLeftDock(viewport), rightmostLeft)
+              : restingPlace.layout.left,
+          top: restingPlace.againstBottom
+            ? getSettledBottomEdge(viewport) - height
+            : restingPlace.layout.top,
+        },
+        { fromViewportChange: true },
+      );
+    };
+    // The sidebar widens and collapses on its own (its toggle, or a resize
+    // that changes the layout), and a player beside it moves with it.
+    const handleSidebarResize = () => {
+      if (restingPlaceRef.current?.againstLeftDock) handleViewportResize();
     };
     const viewport = window.visualViewport;
     window.addEventListener("resize", handleViewportResize);
     viewport?.addEventListener("resize", handleViewportResize);
     viewport?.addEventListener("scroll", handleViewportResize);
+    const sidebar = document.querySelector(".courses-sidebar");
+    const sidebarSizes =
+      sidebar && typeof ResizeObserver === "function"
+        ? new ResizeObserver(handleSidebarResize)
+        : null;
+    if (sidebar) sidebarSizes?.observe(sidebar);
     return () => {
       window.removeEventListener("resize", handleViewportResize);
       viewport?.removeEventListener("resize", handleViewportResize);
       viewport?.removeEventListener("scroll", handleViewportResize);
+      sidebarSizes?.disconnect();
     };
-  }, [commitLayout, enabled]);
+  }, [commitLayout, enabled, isExpanded]);
 
   const isExpandedRef = useRef(isExpanded);
   useEffect(() => {
@@ -599,15 +870,44 @@ export function useLearningMiniPlayerGestures(
     }, 0);
   }, []);
 
-  const dismiss = useCallback(() => {
-    const currentLayout = measureLayout();
-    const viewport = getViewportBounds();
-    setDismissDistance(
-      viewport.top + viewport.height - currentLayout.top + MINI_PLAYER_MARGIN,
-    );
-    updateMode("dismissing");
-    dismissTimerRef.current = window.setTimeout(onDismiss, DISMISS_DURATION);
-  }, [measureLayout, onDismiss, updateMode]);
+  const dismiss = useCallback(
+    (direction: MiniPlayerDismissDirection = "down") => {
+      const currentLayout = measureLayout();
+      const viewport = getViewportBounds();
+      const height =
+        containerRef.current?.getBoundingClientRect().height ??
+        currentLayout.width;
+      // Far enough that the whole of it has left the screen on that side.
+      setDismissDistance(
+        direction === "down"
+          ? viewport.top +
+              viewport.height -
+              currentLayout.top +
+              MINI_PLAYER_MARGIN
+          : direction === "up"
+            ? -(currentLayout.top - viewport.top + height + MINI_PLAYER_MARGIN)
+            : 0,
+      );
+      setDismissShift(
+        direction === "right"
+          ? viewport.left +
+              viewport.width -
+              currentLayout.left +
+              MINI_PLAYER_MARGIN
+          : direction === "left"
+            ? -(
+                currentLayout.left -
+                viewport.left +
+                currentLayout.width +
+                MINI_PLAYER_MARGIN
+              )
+            : 0,
+      );
+      updateMode("dismissing");
+      dismissTimerRef.current = window.setTimeout(onDismiss, DISMISS_DURATION);
+    },
+    [containerRef, measureLayout, onDismiss, updateMode],
+  );
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
@@ -668,6 +968,21 @@ export function useLearningMiniPlayerGestures(
             event.currentTarget.setPointerCapture(event.pointerId);
           } catch {
             // Resize handles are narrow, but document delivery remains a fallback.
+          }
+        } else if (
+          event.pointerType === "mouse" &&
+          event.target instanceof Element
+        ) {
+          // A finger stays with what it pressed; a mouse does not, so a
+          // quick move off a button (a drag may start on any of them) went
+          // to the page and never reached this window. Holding the mouse to
+          // the pressed element keeps its moves coming here, and a press
+          // let go in place still clicks that element. A drag takes the
+          // hold over for the window (see handlePointerMove).
+          try {
+            event.target.setPointerCapture(event.pointerId);
+          } catch {
+            // Without it, a drag still starts while the mouse is over the window.
           }
         }
         startSingleGesture(
@@ -794,6 +1109,7 @@ export function useLearningMiniPlayerGestures(
       };
       settleCandidateRef.current = nextLayout;
       showLiveLayout(nextLayout);
+      setOutsideFraction(getOutsideFraction(nextLayout, isExpanded));
     },
     [
       enabled,
@@ -836,6 +1152,15 @@ export function useLearningMiniPlayerGestures(
           single.velocityY,
           averageVelocityY,
         );
+        // What carries it on after it is let go on a wide screen: the speed
+        // it was moving at in its last moments, and nothing at all if the
+        // pointer had come to rest before it was lifted. (The figures above
+        // fall back on the average over the whole drag, which would send a
+        // slow, deliberate move gliding on past where it was put.)
+        const stoppedBeforeRelease =
+          sample.time - single.last.time > GLIDE_PAUSE_MS;
+        const glideVelocityX = stoppedBeforeRelease ? 0 : single.velocityX;
+        const glideVelocityY = stoppedBeforeRelease ? 0 : single.velocityY;
         const nextLayout = {
           left: single.initialLayout.left + deltaX,
           playlistHeight: getPlaylistHeight(single.initialLayout),
@@ -845,22 +1170,58 @@ export function useLearningMiniPlayerGestures(
         const directPointer =
           event.pointerType === "touch" || event.pointerType === "pen";
         const isDesktop = isDesktopLearningMinimizeViewport();
-        settleCandidateRef.current =
-          cancelled || isDesktop || !directPointer
-            ? nextLayout
-            : getFlickDirectedCornerLayout(
+        // Where it comes to rest. On a wide screen a flick carries it on a
+        // distance that depends on how hard it was (see
+        // getFlickDirectedCornerLayout), and anything slower leaves it where
+        // it was dropped. On a phone a finger always lands it in a corner.
+        settleCandidateRef.current = cancelled
+          ? nextLayout
+          : isDesktop
+            ? getFlickDirectedCornerLayout(
                 nextLayout,
                 deltaX,
                 deltaY,
-                velocityX,
-                velocityY,
-              );
+                glideVelocityX,
+                glideVelocityY,
+                undefined,
+                isExpanded,
+                "where-dropped",
+              )
+            : directPointer
+              ? getFlickDirectedCornerLayout(
+                  nextLayout,
+                  deltaX,
+                  deltaY,
+                  velocityX,
+                  velocityY,
+                )
+              : nextLayout;
         showLiveLayout(nextLayout);
 
+        // Let go with half of it or more out of the window, it goes on out
+        // on that side and closes; with less, but some, it goes back to
+        // where it was before the drag.
+        const outside = cancelled
+          ? 0
+          : getOutsideFraction(nextLayout, isExpanded);
+        if (outside >= DISMISS_OUTSIDE_FRACTION) {
+          pointersRef.current.clear();
+          singleGestureRef.current = null;
+          pinchGestureRef.current = null;
+          settleCandidateRef.current = null;
+          scheduleClickRelease();
+          dismiss(getOutsideDirection(nextLayout, isExpanded));
+          return;
+        }
+        setOutsideFraction(0);
+
+        // It also closes when swiped downwards while it is already resting
+        // at the bottom (a flick: little of it need be out of the window).
+        // Flicked or dragged towards any other edge, or downwards from
+        // higher up, it just moves.
         const downwardSwipe =
           !cancelled &&
-          !isDesktop &&
-          directPointer &&
+          (isDesktop || directPointer) &&
           Math.abs(deltaX) <= deltaY * 1.25 + 32 &&
           (deltaY >= DISMISS_DISTANCE ||
             (deltaY >= DRAG_START_DISTANCE &&
@@ -872,11 +1233,17 @@ export function useLearningMiniPlayerGestures(
             singleGestureRef.current = null;
             pinchGestureRef.current = null;
             settleCandidateRef.current = null;
+            // The click that follows a mouse release must not reach a control.
+            scheduleClickRelease();
             dismiss();
             return;
           }
-          settleCandidateRef.current = getDownmostLayout(nextLayout);
+          // A phone drops it to the bottom first; the next swipe closes it.
+          if (!isDesktop) {
+            settleCandidateRef.current = getDownmostLayout(nextLayout);
+          }
         }
+        if (outside > 0) settleCandidateRef.current = single.initialLayout;
       }
 
       if (shouldRestoreFromDirectTap) {
@@ -927,6 +1294,7 @@ export function useLearningMiniPlayerGestures(
             writeMiniPlayerWidthPreference(settledLayout.width);
           }
         } else {
+          if (currentLayout) rememberRestingPlace(currentLayout);
           updateMode("idle");
         }
         scheduleClickRelease();
@@ -934,6 +1302,8 @@ export function useLearningMiniPlayerGestures(
     },
     [
       dismiss,
+      isExpanded,
+      rememberRestingPlace,
       scheduleClickRelease,
       settleLayout,
       showLiveLayout,
@@ -975,14 +1345,13 @@ export function useLearningMiniPlayerGestures(
         ["--learning-mini-player-playlist-height" as string]: `${getPlaylistHeight(visibleLayout)}px`,
         ...(mode === "settling"
           ? {
-              transition:
-                "left 240ms cubic-bezier(0.16, 1, 0.3, 1), top 240ms cubic-bezier(0.16, 1, 0.3, 1), width 240ms cubic-bezier(0.16, 1, 0.3, 1)",
+              transition: `left ${SETTLE_DURATION}ms cubic-bezier(0.16, 1, 0.3, 1), top ${SETTLE_DURATION}ms cubic-bezier(0.16, 1, 0.3, 1), width ${SETTLE_DURATION}ms cubic-bezier(0.16, 1, 0.3, 1)`,
             }
           : undefined),
         ...(mode === "dismissing"
           ? {
               opacity: 0,
-              transform: `translate3d(0, ${dismissDistance}px, 0)`,
+              transform: `translate3d(${dismissShift}px, ${dismissDistance}px, 0)`,
             }
           : undefined),
       }
@@ -990,6 +1359,7 @@ export function useLearningMiniPlayerGestures(
 
   return {
     mode,
+    outsideFraction,
     style,
     gestureProps: {
       onClickCapture: handleClickCapture,

@@ -8,7 +8,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@veolms/plugin-sdk": "workspace:*",
-    "axios": "^1.7.9"
+    "@veolms/plugin-sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18.2 <20"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18"
   }
 }

@@ -10,14 +10,7 @@ import type { Executor } from "../shared/repository.types.ts";
 export function findTotpCredential(database: Executor, userId: string) {
   return database
     .selectFrom("user_totp_credentials")
-    .select([
-      "id",
-      "secret_encrypted",
-      "enabled",
-      "last_used_step",
-      "failed_attempts",
-      "locked_until",
-    ])
+    .select(["id", "secret_encrypted", "enabled", "locked_until"])
     .where("user_id", "=", userId)
     .executeTakeFirst();
 }
@@ -69,11 +62,31 @@ export async function deleteTotpCredential(
     .deleteFrom("user_totp_credentials")
     .where("user_id", "=", userId)
     .execute();
+}
 
+export async function deleteBackupCodes(
+  database: Executor,
+  userId: string,
+): Promise<void> {
   await database
     .deleteFrom("mfa_backup_codes")
     .where("user_id", "=", userId)
     .execute();
+}
+
+export async function hasUnusedBackupCode(
+  database: Executor,
+  userId: string,
+): Promise<boolean> {
+  const row = await database
+    .selectFrom("mfa_backup_codes")
+    .select("id")
+    .where("user_id", "=", userId)
+    .where("used_at", "is", null)
+    .limit(1)
+    .executeTakeFirst();
+
+  return Boolean(row);
 }
 
 export async function advanceTotpStep(
@@ -183,6 +196,38 @@ export async function countUserPasskeys(
   return Number(row?.count ?? 0);
 }
 
+/**
+ * Both enrolled-factor facts in a single round trip. Session establishment
+ * and per-request authentication need the pair together; issuing
+ * isTotpEnabled and countUserPasskeys separately costs two pooled
+ * connections (or two serial round trips) for the same answer.
+ */
+export async function findMfaFactorState(
+  database: Executor,
+  userId: string,
+): Promise<{ totpEnabled: boolean; passkeyCount: number }> {
+  const row = await database
+    .selectNoFrom((eb) => [
+      eb
+        .selectFrom("user_totp_credentials")
+        .select("enabled")
+        .where("user_id", "=", userId)
+        .limit(1)
+        .as("totp_enabled"),
+      eb
+        .selectFrom("passkeys")
+        .select((passkeys) => passkeys.fn.count<string>("id").as("count"))
+        .where("user_id", "=", userId)
+        .as("passkey_count"),
+    ])
+    .executeTakeFirst();
+
+  return {
+    totpEnabled: Boolean(row?.totp_enabled),
+    passkeyCount: Number(row?.passkey_count ?? 0),
+  };
+}
+
 export async function deleteAllUserPasskeys(
   database: Executor,
   userId: string,
@@ -197,7 +242,7 @@ export function findUserPasskey(
 ) {
   return database
     .selectFrom("passkeys")
-    .selectAll()
+    .select(["id", "credential_id", "public_key", "counter"])
     .where("user_id", "=", userId)
     .where("credential_id", "=", credentialId)
     .executeTakeFirst();
@@ -275,7 +320,7 @@ export function findActiveChallenge(
 ) {
   return database
     .selectFrom("webauthn_challenges")
-    .selectAll()
+    .select(["id", "challenge"])
     .where("user_id", "=", userId)
     .where("type", "=", type)
     .where("expires_at", ">", new Date())

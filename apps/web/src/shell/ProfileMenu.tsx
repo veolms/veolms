@@ -1,4 +1,5 @@
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
@@ -9,9 +10,12 @@ import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { ShellProfileAvatar } from "./ShellProfileAvatar";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useLocation } from "react-router";
 import type { AvatarImageVariant } from "@veolms/contracts";
+import { isValidPublicProfileUsername } from "@veolms/contracts/username-rules";
 import type { CourseRole } from "../courses/catalogue";
-import { getRoleDisplayName } from "./workspaceRole";
+import { getRoleDisplayName, hasAdminRole } from "./workspaceRole";
+import { useWebContributions } from "../lib/web-contributions";
 
 export interface ProfileIdentityData {
   displayName: string;
@@ -37,7 +41,13 @@ export function ProfileMenuIdentity({
   onNavigate,
   onClose,
 }: ProfileMenuIdentityProps) {
-  const profilePath = `/${encodeURIComponent(username)}`;
+  // A username that cannot be a profile address (an old account's, shorter
+  // than a profile address allows) has no profile page to open. The link
+  // goes to the profile settings instead, where a line under the username
+  // field says why and lets them choose another.
+  const profilePath = isValidPublicProfileUsername(username)
+    ? `/${encodeURIComponent(username)}`
+    : "/settings/profile";
   const handleProfileClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (
       event.button !== 0 ||
@@ -134,6 +144,13 @@ interface ProfileMenuProps {
   onLogout: () => void;
 }
 
+/** How long the closing slide takes (`profile-menu-slide-shut`). */
+const PROFILE_MENU_SHUT_MS = 260;
+
+/** The settings menu's mark for the page that is open (courses.css). */
+const currentPageItemClasses =
+  "aria-[current=page]:text-(--text) aria-[current=page]:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))]! aria-[current=page]:hover:bg-[color-mix(in_srgb,var(--accent)_30%,var(--surface-strong))]!";
+
 export function ProfileMenu({
   role,
   allowedRoles,
@@ -152,6 +169,25 @@ export function ProfileMenu({
   onToggleSidebar,
   onLogout,
 }: ProfileMenuProps) {
+  // The closing slide is played by a menu marked as having been open. The
+  // mark comes off once that slide is over: left on, the slide played again
+  // every time the sidebar was expanded, since the collapsed sidebar turns
+  // the animation off and expanding it turns it back on.
+  const [hasOpened, setHasOpened] = useState(false);
+  if (isOpen && !hasOpened) setHasOpened(true);
+  // The page the learner is on is marked in the menu, as the settings menu
+  // marks its tab.
+  const { pathname } = useLocation();
+  const isCurrentPage = (path: string) =>
+    pathname === path || pathname.startsWith(`${path}/`);
+  useEffect(() => {
+    if (isOpen || !hasOpened) return undefined;
+    const timer = window.setTimeout(
+      () => setHasOpened(false),
+      PROFILE_MENU_SHUT_MS + 60,
+    );
+    return () => window.clearTimeout(timer);
+  }, [hasOpened, isOpen]);
   const selectRole = (nextRole: CourseRole) => {
     onRoleChange(nextRole);
     onClose();
@@ -173,6 +209,14 @@ export function ProfileMenu({
     event.preventDefault();
     onNavigate(path);
   };
+
+  // Links plugins add to the account section (see web-core contributions).
+  const isAdmin = hasAdminRole(userRoles);
+  const contributedLinks = useWebContributions().profileMenuLinks.filter(
+    (link) =>
+      (!link.roles || link.roles.includes(role)) &&
+      (!link.adminOnly || isAdmin),
+  );
 
   const canPreviewAsStudent = allowedRoles.includes("student");
   const canPreviewAsCreator = allowedRoles.includes("creator");
@@ -197,6 +241,9 @@ export function ProfileMenu({
       aria-hidden={!isOpen ? true : undefined}
       inert={!isOpen ? true : undefined}
       data-open={isOpen ? "true" : "false"}
+      // A menu that has been open may play its closing; one that has never
+      // been opened must not (see `.profile-menu--animated` in courses.css).
+      data-has-opened={hasOpened ? "" : undefined}
     >
       {identity ? (
         <ProfileMenuIdentity
@@ -269,14 +316,16 @@ export function ProfileMenu({
 
       <div className="profile-menu__group profile-menu__group--account">
         <a
-          className="profile-menu__item profile-menu__item--notifications"
+          className={`profile-menu__item profile-menu__item--notifications ${currentPageItemClasses}${isCurrentPage("/notifications") ? " is-active" : ""}`}
           role="menuitem"
           href="/notifications"
+          aria-current={isCurrentPage("/notifications") ? "page" : undefined}
           onClick={(event) => openDestination(event, "/notifications")}
         >
           <Bell
             className="profile-menu__item-icon profile-menu__item-icon--notifications"
             size={21}
+            weight={isCurrentPage("/notifications") ? "fill" : "regular"}
           />
           <span>Notifications</span>
           {unreadNotificationCount > 0 ? (
@@ -301,16 +350,48 @@ export function ProfileMenu({
             </span>
           ) : null}
         </a>
+        <a
+          className={`profile-menu__item ${currentPageItemClasses}${isCurrentPage("/progress") ? " is-active" : ""}`}
+          role="menuitem"
+          href="/progress"
+          aria-current={isCurrentPage("/progress") ? "page" : undefined}
+          onClick={(event) => openDestination(event, "/progress")}
+        >
+          <ChartLineUp
+            className="profile-menu__item-icon text-[#fb923c]"
+            size={21}
+            weight={isCurrentPage("/progress") ? "fill" : "regular"}
+          />
+          <span>Progress</span>
+        </a>
+        {contributedLinks.map(({ id: linkId, label, href, icon: LinkIcon }) => (
+          <a
+            key={linkId}
+            className="profile-menu__item"
+            role="menuitem"
+            href={href}
+            onClick={(event) => openDestination(event, href)}
+          >
+            {LinkIcon ? (
+              <LinkIcon className="profile-menu__item-icon" size={21} />
+            ) : null}
+            <span>{label}</span>
+          </a>
+        ))}
         {role === "student" ? (
           <a
-            className="profile-menu__item profile-menu__item--orders"
+            className={`profile-menu__item profile-menu__item--orders ${currentPageItemClasses}${isCurrentPage("/purchase-history") ? " is-active" : ""}`}
             role="menuitem"
             href="/purchase-history"
+            aria-current={
+              isCurrentPage("/purchase-history") ? "page" : undefined
+            }
             onClick={(event) => openDestination(event, "/purchase-history")}
           >
             <Receipt
               className="profile-menu__item-icon profile-menu__item-icon--orders"
               size={21}
+              weight={isCurrentPage("/purchase-history") ? "fill" : "regular"}
             />
             <span>Purchase History</span>
           </a>

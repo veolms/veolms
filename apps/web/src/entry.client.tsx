@@ -3,7 +3,10 @@ import { flushSync } from "react-dom";
 import { hydrateRoot } from "react-dom/client";
 import { HydratedRouter } from "react-router/dom";
 import { prepareDocumentForHydration } from "./bootstrap/documentHydration";
-import { preloadPrerenderedBodies } from "./routing/prerenderedBodies";
+import {
+  loginDialogBody,
+  preloadPrerenderedBodies,
+} from "./routing/prerenderedBodies";
 
 const hydrateApplication = () => {
   // Extensions such as Dark Mode mutate the SSR document at document_start
@@ -54,6 +57,56 @@ const waitForFirstFrame = () =>
     requestAnimationFrame(() => setTimeout(resolve, 0));
     setTimeout(resolve, FIRST_FRAME_BUDGET_MS);
   });
+// A prerendered page paints from inline critical CSS and loads the app's
+// large stylesheets without blocking that paint (scripts/inline-critical-
+// css.mjs marks them `data-deferred-style`). Hydration renders UI that is not
+// in the prerendered markup and so has no inline rules, so it waits for
+// those stylesheets; a stylesheet that never answers holds it back no longer
+// than the budget.
+const DEFERRED_STYLE_BUDGET_MS = 10_000;
+const finishDeferredStylesheet = (link: HTMLLinkElement) => {
+  if (link.media === "print") link.media = "all";
+  // The full stylesheet now sits in the same place with every inline rule,
+  // so the inline copy changes nothing; without it the head is the same as
+  // with blocking links, and no copy outlives its link when the page that
+  // links it is left.
+  const href = link.getAttribute("href");
+  if (!href) return;
+  for (const style of document.head.querySelectorAll<HTMLStyleElement>(
+    "style[data-critical-css]",
+  )) {
+    if (style.dataset.criticalCss === href) style.remove();
+  }
+};
+const waitForDeferredStylesheets = (): Promise<void> | null => {
+  const links = Array.from(
+    document.querySelectorAll<HTMLLinkElement>("link[data-deferred-style]"),
+  );
+  if (links.length === 0) return null;
+  const pending = links.map(
+    (link) =>
+      new Promise<void>((resolve) => {
+        if (link.sheet) {
+          finishDeferredStylesheet(link);
+          resolve();
+          return;
+        }
+        link.addEventListener(
+          "load",
+          () => {
+            finishDeferredStylesheet(link);
+            resolve();
+          },
+          { once: true },
+        );
+        link.addEventListener("error", () => resolve(), { once: true });
+      }),
+  );
+  return new Promise<void>((resolve) => {
+    void Promise.all(pending).then(() => resolve());
+    setTimeout(resolve, DEFERRED_STYLE_BUDGET_MS);
+  });
+};
 const hydrateWhenReady = () => {
   let started = false;
   const start = () => {
@@ -62,9 +115,30 @@ const hydrateWhenReady = () => {
     hydrateApplication();
   };
   const bodies = preloadPrerenderedBodies() ?? Promise.resolve();
-  Promise.all([bodies, waitForFirstFrame()]).then(start, start);
-  setTimeout(start, BODY_PRELOAD_BUDGET_MS);
+  const deferredStylesheets = waitForDeferredStylesheets();
+  if (!deferredStylesheets) {
+    Promise.all([bodies, waitForFirstFrame()]).then(start, start);
+    setTimeout(start, BODY_PRELOAD_BUDGET_MS);
+    return;
+  }
+  const bodiesOrBudget = new Promise<void>((resolve) => {
+    Promise.all([bodies, waitForFirstFrame()]).then(
+      () => resolve(),
+      () => resolve(),
+    );
+    setTimeout(resolve, BODY_PRELOAD_BUDGET_MS);
+  });
+  void Promise.all([bodiesOrBudget, deferredStylesheets]).then(start);
 };
+
+// A page opened with the login pop-up asked for (`?login=1`, which is also
+// where the login address leads) shows it as soon as the app has started.
+// Its code is fetched alongside the app's instead of after it. The name is
+// `LOGIN_DIALOG_PARAM`, written out so this entry does not import the
+// routing rules for one word.
+if (new URLSearchParams(window.location.search).has("login")) {
+  void loginDialogBody.preload();
+}
 
 // The generated route context is streamed through scripts at the end of the
 // document. The async entry module can finish before the parser reaches those

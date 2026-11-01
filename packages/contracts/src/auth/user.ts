@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { emailInput } from "./email-input.ts";
 import {
   PUBLIC_PROFILE_USERNAME_MAX_LENGTH,
   PUBLIC_PROFILE_USERNAME_MIN_LENGTH,
@@ -7,10 +8,7 @@ import {
 
 export const otpSendRequestSchema = z
   .object({
-    email: z
-      .email("Invalid email address")
-      .max(255)
-      .toLowerCase()
+    email: emailInput("Invalid email address")
       .meta({ example: "ada@example.com" })
       .optional(),
     phoneNo: z
@@ -26,12 +24,7 @@ export const otpSendRequestSchema = z
 
 export const otpVerifyRequestSchema = z
   .object({
-    email: z
-      .email()
-      .max(255)
-      .toLowerCase()
-      .meta({ example: "ada@example.com" })
-      .optional(),
+    email: emailInput().meta({ example: "ada@example.com" }).optional(),
     phoneNo: z.string().meta({ example: "+15551234567" }).optional(),
     code: z
       .string()
@@ -44,11 +37,15 @@ export const otpVerifyRequestSchema = z
     path: ["email"],
   });
 
-const phoneNumberSchema = z
+// An international number is at most "+" and 15 digits: 16 characters. That
+// is what first-admin setup and the code service accept, and what the
+// responses allow for a stored number; capped at 15 here, a 15-digit number
+// entered at setup could never be confirmed from the profile.
+export const phoneNumberSchema = z
   .string()
   .trim()
   .min(8, "Phone number is too short")
-  .max(15, "Phone number is too long")
+  .max(16, "Phone number is too long")
   .regex(
     /^\+?[0-9\s().-]+$/,
     "Phone number can contain digits, spaces, and + ( ) - only",
@@ -80,10 +77,7 @@ export const emailVerificationVerifyRequestSchema = z.strictObject({
 
 export const registerRequestSchema = z
   .object({
-    email: z
-      .email("Invalid email address")
-      .max(255)
-      .toLowerCase()
+    email: emailInput("Invalid email address")
       .meta({ example: "ada@example.com" })
       .optional(),
     phoneNo: z
@@ -178,7 +172,7 @@ export const authUserSchema = z.object({
   username: z.string().max(30),
   displayName: z.string().max(100),
   email: z.email().max(255).nullable(),
-  phoneNo: z.string().max(15).nullable(),
+  phoneNo: z.string().max(16).nullable(),
   emailVerified: z.boolean().default(false),
   mobileVerified: z.boolean().default(false),
   roles: z.array(z.string().max(50)).default([]),
@@ -191,7 +185,7 @@ export const userProfileResponseSchema = z.object({
   username: z.string().max(30),
   displayName: z.string().max(100),
   email: z.email().max(255).nullable(),
-  phoneNo: z.string().max(15).nullable(),
+  phoneNo: z.string().max(16).nullable(),
   emailVerified: z.boolean(),
   mobileVerified: z.boolean(),
   roles: z.array(z.string().max(50)),
@@ -238,7 +232,7 @@ export const publicProfileResponseSchema = z.strictObject({
   avatarSrcSet: z.array(avatarImageVariantSchema),
   bio: z.string().max(160).nullable(),
   email: z.email().max(255).nullable(),
-  phoneNo: z.string().max(15).nullable(),
+  phoneNo: z.string().max(16).nullable(),
   linkedinUrl: z.string().max(500).nullable(),
   githubUrl: z.string().max(500).nullable(),
   websiteUrl: z.string().max(500).nullable(),
@@ -253,14 +247,18 @@ export const creatorRegisterRequestSchema = z.object({
     .min(1, "Name is required")
     .max(100)
     .meta({ example: "Ada Lovelace" }),
-  email: z
-    .email("Invalid email address")
-    .max(255)
-    .toLowerCase()
-    .meta({ example: "ada@example.com" }),
+  email: emailInput("Invalid email address").meta({
+    example: "ada@example.com",
+  }),
   phoneNo: z
     .string()
+    .trim()
     .min(8)
+    .max(32)
+    .regex(
+      /^\+?[0-9\s().-]+$/,
+      "Phone number can contain digits, spaces, and + ( ) - only",
+    )
     .meta({ example: "+15551234567" })
     .nullable()
     .optional(),

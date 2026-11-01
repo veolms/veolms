@@ -41,6 +41,18 @@ const cdnUrlSchema = z
   }, "CDN URL must be an absolute HTTP(S) URL or a root-relative path such as /cdn")
   .transform((value) => value.replace(/\/+$/u, "") || "/");
 
+/**
+ * Seconds before another one-time code can be sent to the same email address
+ * or mobile number. One setting on purpose: the API enforces it and the login
+ * form counts it down, and the two must not disagree.
+ */
+const otpResendCooldownSecondsSchema = z.coerce
+  .number()
+  .int()
+  .min(1)
+  .max(3600)
+  .default(60);
+
 const folderListSchema = (defaultValue: string) =>
   z
     .string()
@@ -70,6 +82,17 @@ const serverConfigSchema = z.object({
    */
   API_RESPONSE_DELAY_MS: z.coerce.number().int().min(0).max(60_000).default(0),
   API_PUBLIC_URL: z.string().optional(),
+  /**
+   * Whether the course overview carries every lesson's description. The
+   * lesson page reads the open lesson's description from its own endpoint
+   * and only falls back to the overview's. Set to false once no browser is
+   * still running a web build from before that endpoint: each lesson then
+   * goes out with a null description, and the overview shrinks by the size
+   * of all of them. The editor is not affected, nor is a visitor's overview,
+   * the public curriculum lesson pages are built from.
+   */
+  COURSE_OVERVIEW_LESSON_DESCRIPTIONS:
+    booleanEnvironmentValueSchema.default(true),
   COURSE_STATIC_REFRESH_GITHUB_TOKEN: z.string().optional(),
   COURSE_STATIC_REFRESH_REPOSITORY: z.string().optional(),
   COURSE_STATIC_REFRESH_REF: z.string().min(1).default("development"),
@@ -101,18 +124,90 @@ const serverConfigSchema = z.object({
     .default("default_session_secret_at_least_32_chars_long"),
   SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
   /**
-   * TTL for the process-local per-request authentication cache (ms).
-   * Bounds how long a role/MFA-factor change made OUTSIDE the session
-   * repository — or on another instance — can be served stale. Session
-   * revocation/rotation/MFA verification evict immediately in-process.
-   * 0 disables the cache.
+   * How much a learner may upload to discussions and notes in any 24 hours,
+   * in megabytes. One file is capped at 50 MB separately. 0 means no limit.
+   */
+  DISCUSSION_UPLOAD_DAILY_QUOTA_MB: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000)
+    .default(500),
+  /**
+   * The same allowance for accounts with any role beyond student
+   * (instructors, administrators), who post teaching material. 0 means no
+   * limit.
+   */
+  DISCUSSION_UPLOAD_DAILY_QUOTA_STAFF_MB: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000)
+    .default(5000),
+  /**
+   * Days an upload that was never attached to a post is kept before the
+   * retention job may remove it.
+   */
+  DISCUSSION_UPLOAD_ORPHAN_RETENTION_DAYS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(3650)
+    .default(7),
+  /**
+   * How often, in hours, the API itself removes those uploads (the same
+   * work as `purge:discussion-uploads -- --apply`). 0, the default, leaves
+   * it off: nothing is removed unless an operator turns this on or runs the
+   * script. At most a week.
+   */
+  DISCUSSION_UPLOAD_PURGE_INTERVAL_HOURS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(168)
+    .default(0),
+  /**
+   * TTL (ms) for what is cached per signed-in user: the sign-in itself, the
+   * roles behind permission checks, the side navigation. Revocation, role
+   * and MFA changes clear them in every process at once (the cache bus);
+   * this bounds only a change the bus did not carry (a lost message, a
+   * write outside the API that does not publish). 0 disables them.
    */
   SESSION_AUTH_CACHE_TTL_MS: z.coerce
     .number()
     .int()
     .min(0)
     .max(60_000)
-    .default(10_000),
+    .default(30_000),
+  /**
+   * TTL for the process-local cache of a course as every visitor sees it
+   * (the signed-out overview, the public curriculum and its version), in
+   * ms. A change made through the API clears that course at once in the
+   * process that made it; other instances, and writes from the CLI or a
+   * background job, are seen when the entry expires. At most 30 s so a
+   * signed thumbnail URL in a cached answer (valid for at least 60 s, see
+   * CDN_TOKEN_TTL_SECONDS) is never handed out expired. 0 disables it.
+   */
+  COURSE_CACHE_TTL_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(30_000)
+    .default(30_000),
+  /**
+   * Master switch for every process-local cache built on api-core's
+   * `createCache`. Off, every read goes to the database: for diagnosing a
+   * suspected stale answer without a deploy.
+   */
+  CACHE_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Tells the other API processes when cached data changes (Postgres
+   * LISTEN/NOTIFY, one extra connection per process), so a write made in one
+   * process is not served stale by another until its TTL runs out. Needs a
+   * direct connection: LISTEN does not work through a transaction-mode
+   * pooler. Off, other processes see a change when their entry expires.
+   */
+  CACHE_BUS_ENABLED: booleanEnvironmentValueSchema.default(true),
   /**
    * Runs the notification outbox/email processor inside the API process.
    * Nothing in the repository schedules the standalone worker scripts, so
@@ -142,7 +237,18 @@ const serverConfigSchema = z.object({
 
   // WebAuthn Passkeys Config
   RP_ID: z.string().optional(),
-  RP_NAME: z.string().default("VeoLMS"),
+  /**
+   * The academy's name, as passkey prompts, authenticator apps, text
+   * messages and notices show it, and as emails show it until the academy
+   * has its own name (set during setup, changed in the admin settings).
+   */
+  ACADEMY_NAME: z.string().trim().optional(),
+  /**
+   * The former name of ACADEMY_NAME ("relying party name", the passkey
+   * standard's term). Still read when ACADEMY_NAME is not set.
+   * @deprecated Set ACADEMY_NAME.
+   */
+  RP_NAME: z.string().trim().optional(),
   WEBAUTHN_ORIGINS: z.string().optional(),
   CORS_ORIGINS: z.string().optional(),
 
@@ -150,6 +256,92 @@ const serverConfigSchema = z.object({
   TOTP_STEP_SECONDS: z.coerce.number().int().min(1).default(30),
   TOTP_BACKWARD_STEPS: z.coerce.number().int().min(0).default(1),
   TOTP_FORWARD_STEPS: z.coerce.number().int().min(0).default(0),
+
+  // One-time passcodes
+  OTP_RESEND_COOLDOWN_SECONDS: otpResendCooldownSecondsSchema,
+  /**
+   * How long a sign-in or verification code can be used, in minutes. Quoted
+   * in the code's email and text, and told to the web with each send so the
+   * sign-in screen knows when the code in the inbox stops working.
+   */
+  OTP_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
+  /**
+   * Whether a learner must have verified a mobile number before buying or
+   * enrolling in a course. Sign-up asks only for an email, so the number is
+   * asked for at the first enrolment. Needs a working SMS provider; off by
+   * default for an academy without one.
+   */
+  REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT:
+    booleanEnvironmentValueSchema.default(false),
+  /**
+   * Codes one network address may request in any ten minutes, across every
+   * destination. Counted in the database, so it holds across API instances.
+   * Many learners can share one address (a campus, an office); raise it for
+   * such an audience. 0 turns the limit off.
+   */
+  OTP_IP_WINDOW_LIMIT: z.coerce.number().int().min(0).max(100_000).default(50),
+  /**
+   * Different addresses and numbers with no account that one network
+   * address may send a sign-up code to in a day. Bounds using the platform
+   * to send mail or texts to strangers. 0 turns the limit off.
+   */
+  OTP_IP_DAILY_SIGNUP_LIMIT: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000)
+    .default(200),
+
+  /**
+   * Shared test accounts that sign in with a fixed code instead of an emailed
+   * one, as comma-separated `email:code` pairs (for example
+   * "tester1@example.com:482913,tester2@example.com:771204"). Anyone who
+   * knows a pair can sign in as that account, so list only addresses kept
+   * for testing. Unset disables the feature.
+   */
+  TEST_LOGIN_ACCOUNTS: z
+    .string()
+    .optional()
+    .transform((value, context) => {
+      const accounts = new Map<string, string>();
+      const pairs = (value ?? "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      for (const pair of pairs) {
+        const separator = pair.lastIndexOf(":");
+        const email = pair.slice(0, separator).trim().toLowerCase();
+        const code = pair.slice(separator + 1).trim();
+        if (
+          separator < 1 ||
+          !z.email().safeParse(email).success ||
+          !/^\d{6}$/u.test(code) ||
+          accounts.has(email)
+        ) {
+          context.addIssue({
+            code: "custom",
+            message:
+              'Expected comma-separated "email:code" pairs with a six-digit code and no repeated email, such as "tester1@example.com:482913".',
+          });
+          return z.NEVER;
+        }
+        accounts.set(email, code);
+      }
+      return accounts;
+    }),
+
+  /**
+   * Local development only: every sign-in, email and phone verification
+   * code is this six-digit code (for example "123456"), and none is emailed
+   * or texted; the send limits do not apply either. Any account, staff
+   * included, signs in with it, so it is honoured only when `NODE_ENV` is
+   * `development` and the API refuses to start in production with it set.
+   * Unset (the default) sends real codes as usual.
+   */
+  LOCAL_FIXED_OTP: z
+    .string()
+    .regex(/^\d{6}$/u, "Expected a six-digit code, such as 123456.")
+    .optional(),
 
   /**
    * Enables the `mock_<email>` OAuth short-circuit, which skips both the
@@ -161,7 +353,9 @@ const serverConfigSchema = z.object({
 
   /**
    * When enabled (true), MFA enforcement, step-up challenges, and mandatory
-   * MFA enrollment are skipped for administrator accounts.
+   * MFA enrollment are skipped for every staff account: admins, instructors
+   * and all team roles, custom ones included. Students are unaffected. For
+   * development and testing; keep it false in production.
    */
   SKIP_ADMIN_MFA: booleanEnvironmentValueSchema.default(false),
 
@@ -198,6 +392,30 @@ const serverConfigSchema = z.object({
     .default(30),
 
   // SMS Delivery
+  /**
+   * Country calling codes one-time codes may be sent to, comma separated
+   * (for example "+91" or "+91,+1"). Unset allows every country. SMS is paid
+   * per message and some destinations are premium-rate, so set this to the
+   * countries the academy actually serves.
+   */
+  SMS_ALLOWED_COUNTRY_CODES: z
+    .string()
+    .optional()
+    .transform((value, context) => {
+      const codes = (value ?? "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (codes.some((code) => !/^\+[1-9]\d{0,3}$/u.test(code))) {
+        context.addIssue({
+          code: "custom",
+          message:
+            'Expected a comma-separated list of country calling codes such as "+91,+1".',
+        });
+        return z.NEVER;
+      }
+      return codes;
+    }),
   SMS_PROVIDER: z
     .enum(["auto", "msg91", "vonage", "twilio", "console"])
     .default("auto"),
@@ -260,6 +478,42 @@ const serverConfigSchema = z.object({
     ])
     .default("mediaconvert"),
 
+  /**
+   * "Import from YouTube" in the lesson editor. Off by default: the API
+   * then downloads with yt-dlp, runs ffmpeg (and, with the cloud DRM
+   * plugin, Shaka Packager) on this host, so an operator turns it on where
+   * there is disk and CPU for it.
+   */
+  YOUTUBE_IMPORT_ENABLED: booleanEnvironmentValueSchema.default(false),
+  /** Imports one API instance works on at once. */
+  YOUTUBE_IMPORT_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(1),
+  /** Disk-backed scratch folder; defaults to the CLI's (VEOLMS_IMPORT_TMP, /var/lib/veolms/import, …). */
+  YOUTUBE_IMPORT_SCRATCH_DIR: z.string().optional(),
+  /** The most scratch space all imports on one instance may hold, in GiB. */
+  YOUTUBE_IMPORT_MAX_SCRATCH_GB: z.coerce.number().min(1).max(500).default(20),
+  /** An import does not start when less than this is free on the scratch disk, in GiB. */
+  YOUTUBE_IMPORT_MIN_FREE_DISK_GB: z.coerce.number().min(0).max(500).default(8),
+  /** Heights to keep from YouTube's ladder, highest first. */
+  YOUTUBE_IMPORT_QUALITIES: z
+    .string()
+    .default("1080,720,480,360")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim().replace(/p$/i, ""))
+        .filter((item) => /^\d{3,4}$/.test(item)),
+    ),
+  /** A yt-dlp binary to use instead of the managed ~/.veolms/bin copy. */
+  YTDLP_PATH: z.string().optional(),
+  /**
+   * Netscape-format cookies for yt-dlp, for hosts YouTube asks to "confirm
+   * you're not a bot". Keep it outside the repository, readable only by the
+   * API's user.
+   */
+  YTDLP_COOKIES_FILE: z.string().optional(),
+  /** An ffmpeg binary; otherwise ~/.veolms/bin, PATH, or a downloaded static build. */
+  FFMPEG_PATH: z.string().optional(),
+
   // AWS MediaConvert Configuration
   MEDIACONVERT_ENDPOINT: z.string().optional(),
   MEDIACONVERT_REGION: z.string().optional(),
@@ -301,6 +555,16 @@ const serverConfigSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+
+  // An extra payment taken by the gateway (a second payment for a paid
+  // order, or a late payment for something the buyer already has) is sent
+  // back to the buyer automatically. Set to false to only list such
+  // payments for staff, who then refund them by hand.
+  AUTO_REFUND_EXTRA_PAYMENTS: booleanEnvironmentValueSchema.default(true),
+  // How many days a bank transfer a buyer reported keeps the gateway closed
+  // for that purchase while staff have not answered it. After that the buyer
+  // can pay another way; the request still waits for staff.
+  MANUAL_PAYMENT_BLOCK_DAYS: z.coerce.number().int().min(1).max(365).default(7),
 });
 
 const webConfigSchema = z.object({
@@ -310,6 +574,7 @@ const webConfigSchema = z.object({
   VITE_CDN_URL: cdnUrlSchema.default("/cdn"),
   CDN_URL: cdnUrlSchema.default("/cdn"),
   STATIC_BUILD_API_URL: z.url().default("http://localhost:4000/v1"),
+  OTP_RESEND_COOLDOWN_SECONDS: otpResendCooldownSecondsSchema,
 });
 
 const INSECURE_DEFAULTS: Record<string, string> = {
@@ -453,8 +718,9 @@ function resolveCorsOrigins(parsed: ParsedServerConfig): string[] {
 
 export type ServerConfig = Omit<
   ParsedServerConfig,
-  "RP_ID" | "WEBAUTHN_ORIGINS" | "CORS_ORIGINS"
+  "RP_ID" | "WEBAUTHN_ORIGINS" | "CORS_ORIGINS" | "ACADEMY_NAME" | "RP_NAME"
 > & {
+  ACADEMY_NAME: string;
   EMAIL_TRANSPORT: "smtp" | "console";
   RP_ID: string;
   WEBAUTHN_ORIGINS: string[];
@@ -470,6 +736,12 @@ export function loadServerConfig(
   const missingRequired = findMissingRequiredInProduction(parsed);
 
   if (parsed.NODE_ENV === "production") {
+    if (parsed.LOCAL_FIXED_OTP) {
+      throw new Error(
+        "Refusing to start in production with LOCAL_FIXED_OTP set: it lets anyone sign in to any account. " +
+          "Remove it from the environment.",
+      );
+    }
     if (offenders.length > 0) {
       throw new Error(
         `Refusing to start in production with default value(s) for: ${offenders.join(", ")}. ` +
@@ -480,6 +752,15 @@ export function loadServerConfig(
       throw new Error(
         `Refusing to start in production without required value(s) for: ${missingRequired.join(", ")}. ` +
           `Set these via environment variables — a payment gateway must never boot with missing credentials.`,
+      );
+    }
+    if (parsed.TRUST_PROXY === true) {
+      // Not refused: a deployment may rely on it. With "true", the client
+      // address is whatever the X-Forwarded-For header claims, and every
+      // per-address limit (sign-in codes, sign-in attempts) keys on it.
+      console.warn(
+        "[SECURITY WARNING] TRUST_PROXY=true trusts any X-Forwarded-For value a client sends. " +
+          "Set it to the number of proxies in front of the API, or to their addresses, so per-address limits cannot be sidestepped.",
       );
     }
   } else if (offenders.length > 0) {
@@ -495,8 +776,10 @@ export function loadServerConfig(
   const rpIds = resolveWebAuthnRpIds(resolvedRpId, origins);
   const corsOrigins = resolveCorsOrigins(parsed);
 
+  const { RP_NAME: legacyAcademyName, ...current } = parsed;
   return {
-    ...parsed,
+    ...current,
+    ACADEMY_NAME: parsed.ACADEMY_NAME || legacyAcademyName || "VeoLMS",
     EMAIL_TRANSPORT: resolveEmailTransport(parsed),
     RP_ID: resolvedRpId,
     WEBAUTHN_ORIGINS: origins,

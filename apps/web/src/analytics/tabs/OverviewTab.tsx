@@ -1,30 +1,51 @@
+import { useMemo } from "react";
 import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
 import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/ShoppingCart";
-import { UsersIcon as Users } from "@phosphor-icons/react/Users";
-import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
+import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
+import { ArrowUUpLeftIcon as ArrowUUpLeft } from "@phosphor-icons/react/ArrowUUpLeft";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { toMajorUnits } from "@veolms/contracts/commerce/money";
 import type { AnalyticsOverviewResponse } from "@veolms/contracts";
-import { TrendChart } from "../../components/analytics/Charts";
+import type { AnalyticsTabProps } from "@veolms/web-core";
 import {
   ChartSection,
-  CoursePerformanceTable,
-  FunnelList,
+  DataTable,
   InsightsPanel,
   KpiCard,
+  ProgressCell,
+  SeriesChart,
+  TitleCell,
+  formatChartCurrency,
   formatCurrencyAmount,
-  formatHours,
   formatPercent,
+  formatPrecisePercent,
+  formatTrendDate,
   formatWholeNumber,
   kpiGridClass,
-  toChartData,
-} from "../analyticsShared";
+  type DataTableColumn,
+} from "@veolms/analytics-ui";
+import { useAnalyticsOverview } from "../../services/analytics";
+import { percentCell, useTabExport } from "../analyticsShared";
+import { OVERVIEW_PLACEHOLDER } from "../analyticsPlaceholders";
+import { TabState } from "./TabState";
 
-export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
+type CourseRow =
+  AnalyticsOverviewResponse["overview"]["coursePerformance"][number];
+
+/** Whether the answer carries money; it does not for a caller without the revenue permission. */
+function includesRevenue(data: AnalyticsOverviewResponse): boolean {
+  return data.includesRevenue !== false;
+}
+
+/** Money columns and rows, kept only when the answer carries money. */
+const MONEY_COURSE_COLUMNS = new Set(["orders", "netRevenue"]);
+
+function buildInsights(data: AnalyticsOverviewResponse): string[] {
   const { overview, currency } = data;
-
+  const revenue = includesRevenue(data);
   const insights: string[] = [];
-  if (overview.netRevenue.changePercent !== null) {
+  if (revenue && overview.netRevenue.changePercent !== null) {
     insights.push(
       `Net revenue is ${overview.netRevenue.changePercent >= 0 ? "up" : "down"} ${Math.abs(
         overview.netRevenue.changePercent,
@@ -33,64 +54,275 @@ export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
       )}% vs the previous period, at ${formatCurrencyAmount(overview.netRevenue.value, currency)}.`,
     );
   }
-  if (overview.orderFunnel.created > 0) {
-    const payRate =
-      (overview.orderFunnel.paid / overview.orderFunnel.created) * 100;
+  if (overview.newEnrollments.changePercent !== null) {
     insights.push(
-      `${formatPercent(payRate)} of created orders convert to a paid order.`,
+      `${formatWholeNumber(overview.newEnrollments.value)} new enrollments, ${overview.newEnrollments.changePercent >= 0 ? "up" : "down"} ${Math.abs(
+        overview.newEnrollments.changePercent,
+      ).toFixed(1)}% on the period before.`,
     );
   }
-  if (overview.learningFunnel.enrolled > 0) {
-    const startRate =
-      (overview.learningFunnel.started / overview.learningFunnel.enrolled) *
-      100;
+  if (revenue && overview.refundRate.value > 0) {
     insights.push(
-      `${formatPercent(startRate)} of enrolled learners have started at least one lesson.`,
+      `${formatPrecisePercent(overview.refundRate.value)} of paid orders were refunded in this period.`,
     );
   }
-  if (overview.coursePerformance[0]) {
+  const top = overview.coursePerformance[0];
+  if (top) {
     insights.push(
-      `${overview.coursePerformance[0].title} leads this period with ${formatWholeNumber(
-        overview.coursePerformance[0].enrollments,
-      )} enrollments.`,
+      `${top.title} leads this period with ${formatWholeNumber(top.enrollments)} enrollments.`,
+    );
+  }
+  return insights;
+}
+
+export default function OverviewTab({
+  filters,
+  isAdmin,
+  onExportChange,
+}: AnalyticsTabProps) {
+  const query = useAnalyticsOverview(isAdmin ? "admin" : "instructor", {
+    from: filters.from,
+    to: filters.to,
+    courseId: filters.courseId,
+  });
+  const data = query.data;
+
+  useTabExport(onExportChange, data, (data) => {
+    if (!includesRevenue(data)) {
+      return [
+        {
+          title: "Overview",
+          headers: ["Metric", "Value", "Change %"],
+          rows: [
+            [
+              "New enrollments",
+              data.overview.newEnrollments.value,
+              data.overview.newEnrollments.changePercent,
+            ],
+            [
+              "Total students",
+              data.overview.totalStudents.value,
+              data.overview.totalStudents.changePercent,
+            ],
+            [
+              "Completion rate %",
+              percentCell(data.overview.completionRate.value),
+              data.overview.completionRate.changePercent,
+            ],
+          ],
+        },
+        {
+          title: "Course performance",
+          headers: ["Course", "Enrollments", "Completion %", "Avg progress %"],
+          rows: data.overview.coursePerformance.map((row) => [
+            row.title,
+            row.enrollments,
+            percentCell(row.completionRate),
+            percentCell(row.averageProgressPercent),
+          ]),
+        },
+      ];
+    }
+    return [
+      {
+        title: "Overview",
+        headers: ["Metric", "Value", "Change %"],
+        rows: [
+          [
+            "Net revenue",
+            toMajorUnits(data.overview.netRevenue.value, data.currency),
+            data.overview.netRevenue.changePercent,
+          ],
+          [
+            "Orders",
+            data.overview.orders.value,
+            data.overview.orders.changePercent,
+          ],
+          [
+            "New enrollments",
+            data.overview.newEnrollments.value,
+            data.overview.newEnrollments.changePercent,
+          ],
+          [
+            "Total students",
+            data.overview.totalStudents.value,
+            data.overview.totalStudents.changePercent,
+          ],
+          [
+            "Refund rate %",
+            percentCell(data.overview.refundRate.value),
+            data.overview.refundRate.changePercent,
+          ],
+          [
+            "Completion rate %",
+            percentCell(data.overview.completionRate.value),
+            data.overview.completionRate.changePercent,
+          ],
+        ],
+      },
+      {
+        title: "Daily",
+        headers: [
+          "Date",
+          "Gross sales",
+          "Net revenue",
+          "Orders",
+          "Refunded",
+          "Refunds",
+          "Enrollments",
+        ],
+        rows: data.overview.dailyOrders.map((day, index) => [
+          day.date,
+          toMajorUnits(day.grossSales, data.currency),
+          toMajorUnits(day.netRevenue, data.currency),
+          day.orders,
+          toMajorUnits(day.refundedAmount, data.currency),
+          day.refunds,
+          data.overview.dailyEnrollments[index]?.value ?? 0,
+        ]),
+      },
+      {
+        title: "Course performance",
+        headers: [
+          "Course",
+          "Enrollments",
+          "Orders",
+          "Net revenue",
+          "Completion %",
+          "Avg progress %",
+        ],
+        rows: data.overview.coursePerformance.map((row) => [
+          row.title,
+          row.enrollments,
+          row.orders,
+          toMajorUnits(row.netRevenue, data.currency),
+          percentCell(row.completionRate),
+          percentCell(row.averageProgressPercent),
+        ]),
+      },
+    ];
+  });
+
+  const performanceData = useMemo(
+    () =>
+      data
+        ? data.overview.dailyOrders.map((day) => ({
+            label: formatTrendDate(day.date),
+            netRevenue: toMajorUnits(day.netRevenue, data.currency),
+            orders: day.orders,
+          }))
+        : [],
+    [data],
+  );
+
+  if (!data) {
+    return (
+      <TabState
+        isLoading={query.isLoading}
+        isError={query.isError}
+        onRetry={() => void query.refetch()}
+        placeholder={OVERVIEW_PLACEHOLDER}
+      />
     );
   }
 
+  const { overview, currency } = data;
+  const revenue = includesRevenue(data);
+  const money = (value: number) => formatCurrencyAmount(value, currency);
+  const chartMoney = (value: number) => formatChartCurrency(value, currency);
+
+  const allCourseColumns: DataTableColumn<CourseRow>[] = [
+    {
+      key: "course",
+      header: "Course",
+      render: (row, index) => <TitleCell title={row.title} index={index} />,
+    },
+    {
+      key: "enrollments",
+      header: "Enrollments",
+      numeric: true,
+      render: (row) => formatWholeNumber(row.enrollments),
+    },
+    {
+      key: "orders",
+      header: "Orders",
+      numeric: true,
+      hideOnPhone: true,
+      render: (row) => formatWholeNumber(row.orders),
+    },
+    {
+      key: "netRevenue",
+      header: "Net Revenue",
+      numeric: true,
+      render: (row) => money(row.netRevenue),
+    },
+    {
+      key: "completion",
+      header: "Completion",
+      numeric: true,
+      hideOnPhone: true,
+      render: (row) => formatPercent(row.completionRate),
+    },
+    {
+      key: "progress",
+      header: "Avg Progress",
+      numeric: true,
+      hideOnPhone: true,
+      render: (row) => <ProgressCell percent={row.averageProgressPercent} />,
+    },
+  ];
+  const courseColumns = revenue
+    ? allCourseColumns
+    : allCourseColumns.filter(
+        (column) => !MONEY_COURSE_COLUMNS.has(column.key),
+      );
+
   return (
-    <div className="grid gap-3.5 sm:gap-6">
+    <div className="grid grid-cols-1 gap-3.5 sm:gap-6">
       <section className={kpiGridClass}>
-        <KpiCard
-          icon={<CurrencyInr size={20} weight="bold" />}
-          label="Net Revenue"
-          kpi={overview.netRevenue}
-          format={(value) => formatCurrencyAmount(value, currency)}
-          tone="accent"
-        />
-        <KpiCard
-          icon={<ShoppingCart size={20} weight="bold" />}
-          label="Orders"
-          kpi={overview.orders}
-          tone="blue"
-        />
+        {revenue ? (
+          <>
+            <KpiCard
+              icon={<CurrencyInr size={20} weight="bold" />}
+              label="Net Revenue"
+              kpi={overview.netRevenue}
+              format={money}
+              tone="accent"
+              trend={overview.dailyOrders.map((day) => day.netRevenue)}
+            />
+            <KpiCard
+              icon={<ShoppingCart size={20} weight="bold" />}
+              label="Orders"
+              kpi={overview.orders}
+              tone="blue"
+              trend={overview.dailyOrders.map((day) => day.orders)}
+            />
+          </>
+        ) : null}
         <KpiCard
           icon={<Student size={20} weight="bold" />}
           label="New Enrollments"
           kpi={overview.newEnrollments}
           tone="emerald"
+          trend={overview.dailyEnrollments.map((day) => day.value)}
         />
         <KpiCard
-          icon={<Users size={20} weight="bold" />}
-          label="Active Learners"
-          kpi={overview.activeLearners}
+          icon={<UsersThree size={20} weight="bold" />}
+          label="Total Students"
+          kpi={overview.totalStudents}
           tone="violet"
         />
-        <KpiCard
-          icon={<Clock size={20} weight="bold" />}
-          label="Est. Watch Time"
-          kpi={overview.estimatedWatchHours}
-          format={formatHours}
-          tone="amber"
-        />
+        {revenue ? (
+          <KpiCard
+            icon={<ArrowUUpLeft size={20} weight="bold" />}
+            label="Refund Rate"
+            kpi={overview.refundRate}
+            format={formatPrecisePercent}
+            tone="rose"
+            invertTrend
+            changeSuffix="% vs previous"
+          />
+        ) : null}
         <KpiCard
           icon={<CheckCircle size={20} weight="bold" />}
           label="Completion Rate"
@@ -100,75 +332,47 @@ export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
         />
       </section>
 
-      <ChartSection title="Revenue Trend" description="Net revenue per day">
-        <TrendChart
-          data={toChartData(overview.revenueTrend)}
-          valueFormatter={(value) => formatCurrencyAmount(value, currency)}
-        />
-      </ChartSection>
-
-      <div className="grid gap-3.5 sm:gap-6 lg:grid-cols-2">
+      {revenue ? (
         <ChartSection
-          title="Order Funnel"
-          description="Orders created, paid, and refunded in this period"
+          title="Performance Over Time"
+          description="Net revenue and paid orders per UTC day"
         >
-          <FunnelList
-            rows={[
+          <SeriesChart
+            data={performanceData}
+            series={[
               {
-                label: "Created",
-                value: overview.orderFunnel.created,
+                key: "netRevenue",
+                name: `Net revenue (${currency})`,
+                tone: "accent",
+                format: chartMoney,
+              },
+              {
+                key: "orders",
+                name: "Orders",
                 tone: "blue",
-              },
-              {
-                label: "Paid",
-                value: overview.orderFunnel.paid,
-                tone: "emerald",
-              },
-              {
-                label: "Refunded",
-                value: overview.orderFunnel.refunded,
-                tone: "rose",
+                kind: "bar",
+                axis: "right",
+                format: formatWholeNumber,
               },
             ]}
           />
         </ChartSection>
-        <ChartSection
-          title="Learning Funnel"
-          description="Enrolled learners who started and completed a lesson"
-        >
-          <FunnelList
-            rows={[
-              {
-                label: "Enrolled",
-                value: overview.learningFunnel.enrolled,
-                tone: "violet",
-              },
-              {
-                label: "Started",
-                value: overview.learningFunnel.started,
-                tone: "amber",
-              },
-              {
-                label: "Completed",
-                value: overview.learningFunnel.completed,
-                tone: "teal",
-              },
-            ]}
-          />
-        </ChartSection>
-      </div>
+      ) : null}
 
       <ChartSection
         title="Course Performance"
-        description="Top courses by enrollment"
+        description="Top courses by enrollments in this period"
       >
-        <CoursePerformanceTable
+        <DataTable
           rows={overview.coursePerformance}
-          currency={currency}
+          columns={courseColumns}
+          rowKey={(row) => row.courseId}
+          emptyTitle="No course activity yet"
+          emptyMessage="Course performance will show up here once there's enrollment activity."
         />
       </ChartSection>
 
-      <InsightsPanel insights={insights} />
+      <InsightsPanel insights={buildInsights(data)} />
     </div>
   );
 }

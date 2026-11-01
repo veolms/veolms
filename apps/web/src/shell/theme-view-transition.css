@@ -66,6 +66,20 @@
   cursor: pointer;
 }
 
+/* While a light/dark or palette reveal runs, the reveal alone shows the
+ * change. Without this, every element with its own colour or shadow
+ * transition (about 110 on a lesson page) starts one at the commit, and
+ * those cannot run on the compositor, so the page restyled and repainted
+ * them on the main thread for up to 420ms, exactly while the reveal and the
+ * light/dark switch were moving (most frames were dropped). The switch's own
+ * transitions are important Tailwind utilities, which outrank this
+ * unlayered rule, so its motion still plays. */
+:root[data-theme-transition] *,
+:root[data-theme-transition] *::before,
+:root[data-theme-transition] *::after {
+  transition: none !important;
+}
+
 :root[data-theme-transition="mode"] [data-appearance-mode-icon] {
   transform-origin: center;
   animation: appearance-mode-icon-arrive 280ms cubic-bezier(0.16, 1, 0.3, 1)

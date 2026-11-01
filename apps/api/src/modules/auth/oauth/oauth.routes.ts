@@ -31,6 +31,7 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
             "URL generated successfully.",
             oauthUrlResponseSchema,
           ),
+          400: errorResponse("The return address is not allowed."),
         },
       },
     },

@@ -13,6 +13,19 @@ export const autosyncPersister = createAsyncStoragePersister({
   throttleTime: 100,
 });
 
+function isRejectedByServer(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const status = (error as { status?: unknown }).status;
+  // 408 and 429 are worth another try; every other 4xx is a final answer.
+  return (
+    typeof status === "number" &&
+    status >= 400 &&
+    status < 500 &&
+    status !== 408 &&
+    status !== 429
+  );
+}
+
 export const getAutosyncMutationOptions = <TData, TVariables>(
   key: AutosyncKey,
   mutationFn: MutationFunction<TData, TVariables>,
@@ -21,7 +34,10 @@ export const getAutosyncMutationOptions = <TData, TVariables>(
   scope: { id: getAutosyncMutationScopeKey(key) },
   networkMode: "online" as const,
   mutationFn,
-  retry: 3,
+  // A request the server rejected (taken username, failed validation) fails
+  // the same way every time; retrying it only kept "Saving…" on screen.
+  retry: (failureCount: number, error: unknown) =>
+    failureCount < 3 && !isRejectedByServer(error),
   retryDelay: (attemptIndex: number) =>
     Math.min(1_000 * 2 ** attemptIndex, 30_000),
 });

@@ -1,0 +1,47 @@
+/*
+ * Plain-CSS exception: a mask of three layers with their own sizes, clips and
+ * compositing reads as one value here and could not be followed as a Tailwind
+ * arbitrary property.
+ *
+ * The collapsed sidebar's square buttons (menu items, the profile button and
+ * the dock's buttons) are squircles drawn with `corner-shape: squircle`.
+ * Where that is not supported (Firefox, Safari) the same squircle is cut out
+ * with a mask instead: |x|^4 + |y|^4 = 1, the curve `squircle` names,
+ * stretched to the button. A mask hides whatever it does not cover, shadows
+ * included, so it also covers everything outside the button: the outer
+ * shadows still show there. Inside the button only the squircle shows. The
+ * buttons keep 15px corners (academyShellClasses.ts) under the mask, the
+ * ordinary radius that lies closest outside the squircle, so the shadows'
+ * own outline stays within about half a pixel of it.
+ */
+@supports not (corner-shape: squircle) {
+  @container (max-width: 60px) {
+    :is(.courses-app--collapsed, [data-sidebar-state="collapsed"] .courses-app)
+      :is(
+        .sidebar-squircle,
+        .sidebar-squircle-dock
+          button:not(
+            [data-theme-swatch],
+            [data-palette-menu] *,
+            [data-reading-mode-menu] *
+          )
+      ) {
+      mask-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M100 50L99.95 62.79L99.79 68.06L99.52 72.08L99.14 75.44L98.66 78.35L98.06 80.93L97.35 83.25L96.53 85.36L95.59 87.27L94.54 89.01L93.35 90.6L92.04 92.04L90.6 93.35L89.01 94.54L87.27 95.59L85.36 96.53L83.25 97.35L80.93 98.06L78.35 98.66L75.44 99.14L72.08 99.52L68.06 99.79L62.79 99.95L50 100L37.21 99.95L31.94 99.79L27.92 99.52L24.56 99.14L21.65 98.66L19.07 98.06L16.75 97.35L14.64 96.53L12.73 95.59L10.99 94.54L9.4 93.35L7.96 92.04L6.65 90.6L5.46 89.01L4.41 87.27L3.47 85.36L2.65 83.25L1.94 80.93L1.34 78.35L0.86 75.44L0.48 72.08L0.21 68.06L0.05 62.79L0 50L0.05 37.21L0.21 31.94L0.48 27.92L0.86 24.56L1.34 21.65L1.94 19.07L2.65 16.75L3.47 14.64L4.41 12.73L5.46 10.99L6.65 9.4L7.96 7.96L9.4 6.65L10.99 5.46L12.73 4.41L14.64 3.47L16.75 2.65L19.07 1.94L21.65 1.34L24.56 0.86L27.92 0.48L31.94 0.21L37.21 0.05L50 0L62.79 0.05L68.06 0.21L72.08 0.48L75.44 0.86L78.35 1.34L80.93 1.94L83.25 2.65L85.36 3.47L87.27 4.41L89.01 5.46L90.6 6.65L92.04 7.96L93.35 9.4L94.54 10.99L95.59 12.73L96.53 14.64L97.35 16.75L98.06 19.07L98.66 21.65L99.14 24.56L99.52 27.92L99.79 31.94L99.95 37.21Z'/%3E%3C/svg%3E"),
+        linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+      mask-size:
+        100% 100%,
+        100% 100%,
+        calc(100% + 240px) calc(100% + 240px);
+      mask-position:
+        0 0,
+        0 0,
+        -120px -120px;
+      mask-repeat: no-repeat;
+      mask-origin: border-box;
+      mask-clip: border-box, border-box, no-clip;
+      /* Bottom up: the large layer, less the button's box, plus the squircle. */
+      mask-composite: add, exclude;
+    }
+  }
+}

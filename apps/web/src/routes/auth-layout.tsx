@@ -1,17 +1,21 @@
 import type { Route } from "./+types/auth-layout";
 import "../auth/auth.css";
 import "../styles/components/toast-notification.css";
-import { Outlet, redirect } from "react-router";
+import { redirect } from "react-router";
+import { AuthPageFrame } from "../auth/AuthPageFrame";
 import { useAuthAppearance } from "../auth/useAuthAppearance";
 import { queryClient } from "../lib/query-client";
+import { loginDialogBody } from "../routing/prerenderedBodies";
 import { AuthRouteGuard } from "../routing/RouteGuards";
 import {
+  buildLoginDialogPath,
+  LOGIN_PATH,
+  readLoginPurpose,
   normalizeAppPath,
   resolveAuthenticatedDestination,
   resolveSessionAccess,
 } from "../routing/routeAccess";
 import { authKeys, currentUserQueryOptions } from "../services/auth";
-import { productName } from "../routing/routeDescriptors";
 import { authStore } from "../store/auth.store";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -49,25 +53,37 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     }
   }
 
+  // Logging in happens in a pop-up over a page. A visitor who opens /login
+  // is sent to the page they were heading for (or the home page) with the
+  // pop-up open. A session still waiting on two-factor is left to the route
+  // guard, which either keeps it on this screen or calls the sign-in off.
+  if (!user && path === LOGIN_PATH) {
+    // The pop-up's code is asked for now instead of once that page has
+    // rendered and found it is wanted.
+    void loginDialogBody.preload();
+    return redirect(
+      buildLoginDialogPath(
+        url.searchParams.get("returnTo"),
+        null,
+        readLoginPurpose(url.search),
+      ),
+    );
+  }
+
   return null;
 }
 
+// While this loader waits on the session check the root HydrateFallback
+// draws the auth frame: React Router allows that export only on the root
+// route while the dev server runs without prerendering.
 clientLoader.hydrate = true as const;
 
 export default function AuthLayout() {
   useAuthAppearance();
 
   return (
-    <div className="auth-page">
-      <div className="auth-page__container">
-        <div className="auth-page__form-column">
-          <AuthRouteGuard />
-        </div>
-      </div>
-
-      <p className="auth-page__footer">
-        <span>&copy; 2026 {productName}. All rights reserved.</span>
-      </p>
-    </div>
+    <AuthPageFrame>
+      <AuthRouteGuard />
+    </AuthPageFrame>
   );
 }

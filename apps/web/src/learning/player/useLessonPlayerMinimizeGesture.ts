@@ -19,17 +19,31 @@ import {
   getLearningMinimizeGeometry,
   getLearningMotionSurfaceElement,
   getLearningPersistentPlayerElement,
+  LEARNING_MINI_PLAYER_MARGIN,
+  getLearningPlayerViewportBounds,
   isUnifiedDesktopPlayerMinimize,
+  setLearningMiniPlayerPreferredLeft,
   syncUnifiedDesktopChildExitMotion,
 } from "./learningPlayerMotion";
 import { readMiniPlayerWidthPreference } from "./lessonPlayerPersistence";
 
-const PHONE_VIEWPORT_QUERY = "(max-width: 640px)";
 const ACTIVATION_DISTANCE = 8;
 const DIRECTION_RATIO = 1.15;
 const COMMIT_PROGRESS = 0.5;
-const FLING_PROGRESS = 0.18;
+/**
+ * A flick down minimizes once it has gone this share of the way, at this
+ * speed (px/ms) or faster: a short flick is enough.
+ */
+const FLING_PROGRESS = 0.1;
+const FLING_COMMIT_VELOCITY = 0.7;
 const FLING_VELOCITY = 0.85;
+/**
+ * A finger that rested this long before it lifted was not flicking, however
+ * fast it had been moving before.
+ */
+const FLICK_RELEASE_MAX_PAUSE_MS = 100;
+/** A swipe over within this long is a flick, whatever its last move was. */
+const FLICK_MAX_DURATION_MS = 250;
 const SETTLE_FALLBACK_BUFFER_MS = 80;
 
 export type LessonPlayerMinimizeGesturePhase =
@@ -54,6 +68,15 @@ interface ActiveGesture extends GestureGeometry {
   lastY: number;
   motionTarget: HTMLElement;
   pointerId: number;
+  /** The video's left edge and the mini player's width, for following. */
+  startLeft: number;
+  /**
+   * How far across the usual corner is (the bottom one on the side the
+   * mini player last rested on), where a flick sends the video.
+   */
+  cornerTargetX: number;
+  startTimestamp: number;
+  miniWidth: number;
   startX: number;
   startY: number;
   velocityY: number;
@@ -88,9 +111,27 @@ const getGeometry = (element: HTMLElement): GestureGeometry =>
     preferredWidth: readMiniPlayerWidthPreference() ?? undefined,
   });
 
-const isExcludedTarget = (target: EventTarget | null) =>
-  target instanceof Element &&
-  Boolean(target.closest("[data-video-player-mobile-sheet]"));
+/**
+ * Marks a part of the player that scrolls by itself (a reading lesson's
+ * text). The swipe leaves it alone while the text has further up to go: a
+ * finger moving down a text is reading it, not putting the player away.
+ * At the top of the text (or a text that fits), a swipe down has nothing
+ * left to scroll and puts the reading away as it does a video; the text
+ * leaves that one direction to the page there (`LessonReadingStage`). Not
+ * in full screen, which is left by its own button.
+ */
+export const LESSON_READING_SCROLL_ATTRIBUTE = "data-lesson-reading-scroll";
+
+const isExcludedTarget = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return false;
+  if (target.closest("[data-video-player-mobile-sheet]")) return true;
+  const reading = target.closest<HTMLElement>(
+    `[${LESSON_READING_SCROLL_ATTRIBUTE}]`,
+  );
+  return Boolean(
+    reading && (reading.scrollTop > 0 || document.fullscreenElement !== null),
+  );
+};
 
 /**
  * On desktop the motion target is the player's slot in the lesson layout,
@@ -225,6 +266,8 @@ export function useLessonPlayerMinimizeGesture({
           durationMs,
           exitX: geometry.targetX * progress,
           exitY: nextState.offsetY,
+          progress,
+          scale,
         });
       }
       onStateChangeRef.current?.(nextState);
@@ -335,12 +378,15 @@ export function useLessonPlayerMinimizeGesture({
   const settleBack = useCallback(() => {
     const current = pendingStateRef.current ?? currentStateRef.current;
     if (current.phase === "idle") return;
+    setLearningMiniPlayerPreferredLeft(null);
     settleTo({ offsetY: 0, phase: "settling-back", progress: 0 }, () =>
       applyState(IDLE_STATE),
     );
   }, [applyState, settleTo]);
 
   const animateMinimize = useCallback(() => {
+    // Minimized from a button or the keyboard, it goes to its usual corner.
+    setLearningMiniPlayerPreferredLeft(null);
     if (!enabled) {
       commitRef.current();
       return;
@@ -446,8 +492,9 @@ export function useLessonPlayerMinimizeGesture({
       if (
         event.defaultPrevented ||
         !enabled ||
+        // A finger or pen at any width: a tablet swipes the video down
+        // into the mini player just as a phone does. A mouse never does.
         event.pointerType === "mouse" ||
-        !window.matchMedia(PHONE_VIEWPORT_QUERY).matches ||
         fullscreen() ||
         isExcludedTarget(event.target)
       ) {
@@ -479,13 +526,21 @@ export function useLessonPlayerMinimizeGesture({
       }
 
       onGestureStartRef.current?.();
+      // A swipe says where the mini player goes; nothing is asked for yet,
+      // so the geometry below is the usual corner's.
+      setLearningMiniPlayerPreferredLeft(null);
       const nextMotionTarget = motionTarget?.() ?? event.currentTarget;
       const nextGeometry = getGeometry(nextMotionTarget);
       const timestamp = event.timeStamp || performance.now();
       motionElementRef.current = nextMotionTarget;
       geometryRef.current = nextGeometry;
+      const startBounds = nextMotionTarget.getBoundingClientRect();
       gestureRef.current = {
         ...nextGeometry,
+        cornerTargetX: nextGeometry.targetX,
+        startTimestamp: timestamp,
+        startLeft: startBounds.left,
+        miniWidth: startBounds.width * nextGeometry.targetScale,
         active: false,
         captureTarget: event.currentTarget,
         lastTimestamp: timestamp,
@@ -550,6 +605,29 @@ export function useLessonPlayerMinimizeGesture({
       gesture.lastY = event.clientY;
       gesture.lastTimestamp = timestamp;
 
+      // The mini player forms under the finger, not always in the right
+      // hand corner: its place along the bottom follows the finger from
+      // side to side, as far as the edges of the screen allow, and that is
+      // where it is when the video is let go.
+      const viewport = getLearningPlayerViewportBounds();
+      const miniLeft = clamp(
+        event.clientX - gesture.miniWidth / 2,
+        viewport.left + LEARNING_MINI_PLAYER_MARGIN,
+        Math.max(
+          viewport.left + LEARNING_MINI_PLAYER_MARGIN,
+          viewport.left +
+            viewport.width -
+            LEARNING_MINI_PLAYER_MARGIN -
+            gesture.miniWidth,
+        ),
+      );
+      gesture.targetX = miniLeft - gesture.startLeft;
+      geometryRef.current = {
+        ...geometryRef.current,
+        targetX: gesture.targetX,
+      };
+      setLearningMiniPlayerPreferredLeft(miniLeft);
+
       const offsetY = clamp(deltaY, 0, gesture.targetY);
       scheduleState({
         offsetY,
@@ -593,11 +671,31 @@ export function useLessonPlayerMinimizeGesture({
       const shouldCommit =
         !cancelled &&
         (progress >= COMMIT_PROGRESS ||
-          (progress >= FLING_PROGRESS && gesture.velocityY >= FLING_VELOCITY));
+          (progress >= FLING_PROGRESS &&
+            gesture.velocityY >= FLING_COMMIT_VELOCITY));
 
       if (!shouldCommit) {
         settleBack();
         return;
+      }
+
+      // A quick flick down puts the video away in the bottom corner on the
+      // side the mini player last rested on in this tab (the right one if it
+      // has not been minimized yet), whichever way the flick leaned. Only a
+      // finger that kept on dragging takes it somewhere else along the
+      // bottom: where it was let go.
+      const releaseTimestamp = event.timeStamp || performance.now();
+      const flicked =
+        releaseTimestamp - gesture.startTimestamp <= FLICK_MAX_DURATION_MS ||
+        (releaseTimestamp - gesture.lastTimestamp <=
+          FLICK_RELEASE_MAX_PAUSE_MS &&
+          gesture.velocityY >= FLING_VELOCITY);
+      if (flicked) {
+        setLearningMiniPlayerPreferredLeft(null);
+        geometryRef.current = {
+          ...geometryRef.current,
+          targetX: gesture.cornerTargetX,
+        };
       }
 
       settleTo(

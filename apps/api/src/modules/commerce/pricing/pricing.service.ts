@@ -5,6 +5,7 @@ import type {
 } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { isRestrictedFreeCourse } from "../../access/index.ts";
 import * as quizRepo from "../../quizzes/shared/quiz.repository.ts";
 import * as quizPricingRepo from "../../quizzes/shared/quiz-pricing.repository.ts";
 import * as courseRepo from "../../courses/course/course.repository.ts";
@@ -17,6 +18,7 @@ import {
   resolveCourseCharge,
 } from "./pricing.amount.ts";
 import { resolveQuizCharge } from "./quiz-pricing.amount.ts";
+import { courseSaleState, resolveCoursePricing } from "./purchasable.ts";
 
 export interface CalculatePricingParams {
   userId?: string | null;
@@ -82,11 +84,16 @@ export function createPricingService({
     ) {
       throw CommerceErrors.QUIZ_NOT_FOUND(params.quizAssignmentId);
     }
-    // Unpublished courses are only visible to their creator and admins.
+    // An unpublished course, or a quiz on a lesson that is not released yet,
+    // is only visible to the course creator and admins.
     const isPrivileged =
       Boolean(params.isAdmin) ||
       (Boolean(params.userId) && offering.course_creator_id === params.userId);
-    if (offering.course_status !== "published" && !isPrivileged) {
+    if (
+      (offering.course_status !== "published" ||
+        !offering.lesson_is_published) &&
+      !isPrivileged
+    ) {
       throw CommerceErrors.QUIZ_NOT_FOUND(params.quizAssignmentId);
     }
     const charge = resolveQuizCharge(quizPricingRepo.toPricingRow(offering));
@@ -132,6 +139,21 @@ export function createPricingService({
 
     if (!items || items.length === 0) {
       throw CommerceErrors.EMPTY_CHECKOUT_ITEMS();
+    }
+
+    // Every entry becomes an order line of its own, so a course or bundle
+    // named twice was charged twice for one enrolment. (Quiz passes have the
+    // same check below, with their own message.)
+    const seenItems = new Set<string>();
+    for (const it of items) {
+      if (it.itemType === "quiz") continue;
+      const key = `${it.itemType}:${it.courseId ?? it.bundleId ?? ""}`;
+      if (seenItems.has(key)) {
+        throw CommerceErrors.PRICE_CALCULATION_FAILED(
+          "The same item appears more than once in this request.",
+        );
+      }
+      seenItems.add(key);
     }
 
     // 1. Fetch user enrollments if authenticated to prevent duplicate ownership
@@ -188,17 +210,27 @@ export function createPricingService({
       }
     }
 
-    const [courseRows, pricingRows, bundleRows, bundleCourseRows, quizRows] =
-      await Promise.all([
-        courseRepo.findCoursesByIds(database, courseIds),
-        courseConfigRepo.findPricingByCourseIds(database, courseIds),
-        bundleRepo.findBundlesByIds(database, bundleIds),
-        bundleRepo.listBundleCoursesForBundleIds(database, bundleIds),
-        quizPricingRepo.listOfferingsByPricingIds(database, quizPricingIds),
-      ]);
+    const [
+      courseRows,
+      pricingRows,
+      accessTypeRows,
+      bundleRows,
+      bundleCourseRows,
+      quizRows,
+    ] = await Promise.all([
+      courseRepo.findCoursesByIds(database, courseIds),
+      courseConfigRepo.findPricingByCourseIds(database, courseIds),
+      courseConfigRepo.findAccessTypesByCourseIds(database, courseIds),
+      bundleRepo.findBundlesByIds(database, bundleIds),
+      bundleRepo.listBundleCoursesForBundleIds(database, bundleIds),
+      quizPricingRepo.listOfferingsByPricingIds(database, quizPricingIds),
+    ]);
 
     const coursesById = new Map(courseRows.map((c) => [c.id, c]));
     const pricingByCourseId = new Map(pricingRows.map((p) => [p.course_id, p]));
+    const accessTypeByCourseId = new Map(
+      accessTypeRows.map((rule) => [rule.course_id, rule.access_type]),
+    );
     const bundlesById = new Map(bundleRows.map((b) => [b.id, b]));
     const bundleCoursesByBundleId = new Map<string, typeof bundleCourseRows>();
     for (const bc of bundleCourseRows) {
@@ -212,26 +244,47 @@ export function createPricingService({
       if (item.itemType === "course") {
         const courseId = item.courseId!;
         const course = coursesById.get(courseId);
-        if (!course) {
-          throw CommerceErrors.COURSE_NOT_FOUND(courseId);
+        // An unpublished course answers exactly like a missing one: this runs
+        // for anonymous callers too, and naming the course would disclose a
+        // draft's title to anyone holding its id.
+        //
+        // An archived course was on sale once and is known to those who
+        // saw it, so it says what it is: no longer sold. Those who have it
+        // keep it; nobody can buy it.
+        const saleState = courseSaleState(course?.status);
+        if (saleState === "archived") {
+          throw CommerceErrors.COURSE_NOT_AVAILABLE();
         }
-        if (course.status !== "published") {
-          throw CommerceErrors.COURSE_NOT_AVAILABLE(course.title);
+        if (!course || saleState !== "on_sale") {
+          throw CommerceErrors.COURSE_NOT_FOUND(courseId);
         }
         if (enrolledCourseIds.has(courseId)) {
           throw CommerceErrors.COURSE_ALREADY_OWNED(course.title);
         }
 
         const pricing = pricingByCourseId.get(courseId);
-        const isPaidCourse = Boolean(
-          pricing && pricing.pricing_type === "paid",
-        );
-        const catalogPrice =
-          isPaidCourse && pricing
-            ? pricing.sale_price !== null && pricing.sale_price !== undefined
-              ? pricing.sale_price
-              : pricing.price
-            : 0;
+        // A restricted course with no price is entered by a grant from
+        // staff and by nothing else. Priced here it would become a
+        // zero-amount order, the order a grant, and the restriction would
+        // be something any signed-in learner could lift for themselves. A
+        // voluntary amount does not change that: a tip buys no way in.
+        // Asked after the ownership check, so a learner who was given
+        // access is told they are enrolled, as for any other course.
+        //
+        // A course that sells for nothing is a free course here, whatever
+        // was stored as its pricing type (resolveCoursePricing): a sale
+        // price of zero must not turn a restricted course into one anyone
+        // can enrol in.
+        const { pricingType, catalogPrice } = resolveCoursePricing(pricing);
+        if (
+          isRestrictedFreeCourse({
+            pricing_type: pricingType,
+            access_type: accessTypeByCourseId.get(courseId),
+          })
+        ) {
+          throw CommerceErrors.COURSE_ACCESS_RESTRICTED(course.title);
+        }
+        const isPaidCourse = pricingType === "paid";
         const itemCurrency = pricing?.currency ?? "INR";
         const { unitPrice, couponBase } = resolveCourseCharge({
           isPaidCourse,
@@ -264,15 +317,22 @@ export function createPricingService({
       } else if (item.itemType === "bundle") {
         const bundleId = item.bundleId!;
         const bundle = bundlesById.get(bundleId);
-        if (!bundle) {
+        if (!bundle || bundle.status !== "published") {
           throw CommerceErrors.BUNDLE_NOT_FOUND(bundleId);
-        }
-        if (bundle.status !== "published") {
-          throw CommerceErrors.BUNDLE_NOT_AVAILABLE(bundle.title);
         }
 
         const bundleCourses = bundleCoursesByBundleId.get(bundleId) ?? [];
         const bundleCourseIds = bundleCourses.map((c) => c.course_id);
+
+        // A bundle is sold whole. With a course in it that is no longer
+        // sold, buying the bundle would be buying that course.
+        if (
+          bundleCourses.some(
+            (c) => courseSaleState(c.course_status) === "archived",
+          )
+        ) {
+          throw CommerceErrors.BUNDLE_COURSE_NOT_AVAILABLE(bundle.title);
+        }
 
         // Check if student already owns ALL courses in bundle
         const allOwned =
@@ -281,6 +341,18 @@ export function createPricingService({
 
         if (allOwned) {
           throw CommerceErrors.BUNDLE_ALL_COURSES_OWNED(bundle.title);
+        }
+
+        // A bundle is one price for all its courses, so buying it with one
+        // of them already owned paid for that course a second time.
+        const ownedCourses = bundleCourses.filter((c) =>
+          enrolledCourseIds.has(c.course_id),
+        );
+        if (ownedCourses.length > 0) {
+          throw CommerceErrors.BUNDLE_CONTAINS_OWNED_COURSE(
+            bundle.title,
+            ownedCourses.map((c) => c.course_title),
+          );
         }
 
         const unitPrice = bundle.price;
@@ -309,13 +381,10 @@ export function createPricingService({
       } else if (item.itemType === "quiz") {
         const quizPricingId = item.quizPricingId!;
         const offering = quizzesByPricingId.get(quizPricingId);
-        if (!offering) {
+        if (!offering || offering.course_status !== "published") {
           throw CommerceErrors.QUIZ_NOT_FOUND(quizPricingId);
         }
         const passTitle = `Quiz pass: ${offering.course_title}`;
-        if (offering.course_status !== "published") {
-          throw CommerceErrors.QUIZ_NOT_AVAILABLE(passTitle);
-        }
         const charge = resolveQuizCharge(offering);
         if (!charge.isPaid) {
           throw CommerceErrors.QUIZ_NOT_PURCHASABLE(passTitle);
@@ -367,6 +436,29 @@ export function createPricingService({
         subtotalAmount += charge.effectivePrice;
         itemCourseMap.set(quizPricingId, [offering.course_id]);
       }
+    }
+
+    // A course bought on its own next to a bundle that already contains it
+    // would be paid for twice. Checked once every item is known to be on
+    // sale, so the answer says nothing about an unpublished course.
+    //
+    // The same holds between bundles: two bundles that share a course were
+    // each charged in full for the one enrolment in that course.
+    const requestedCourseIds = new Set(courseIds);
+    const bundledCourseIds = new Set<string>();
+    for (const bundleId of bundleIds) {
+      const included = itemCourseMap.get(bundleId) ?? [];
+      if (included.some((courseId) => requestedCourseIds.has(courseId))) {
+        throw CommerceErrors.PRICE_CALCULATION_FAILED(
+          "A course in this request is already part of a bundle in the same request.",
+        );
+      }
+      if (included.some((courseId) => bundledCourseIds.has(courseId))) {
+        throw CommerceErrors.PRICE_CALCULATION_FAILED(
+          "Two bundles in this request contain the same course.",
+        );
+      }
+      for (const courseId of included) bundledCourseIds.add(courseId);
     }
 
     // 3. Process Coupon if provided
@@ -441,12 +533,36 @@ export function createPricingService({
             isEligible = false;
           }
         }
+        const hasBundleRestriction = Boolean(
+          coupon.restricted_bundle_ids &&
+          coupon.restricted_bundle_ids.length > 0,
+        );
+        const hasCourseRestriction = Boolean(
+          coupon.restricted_course_ids &&
+          coupon.restricted_course_ids.length > 0,
+        );
+        // The mirror of the rule below: a coupon limited to specific bundles
+        // is for those bundles only, and used to discount every course too.
+        if (
+          hasBundleRestriction &&
+          !hasCourseRestriction &&
+          item.itemType === "course"
+        ) {
+          isEligible = false;
+        }
         if (
           coupon.restricted_course_ids &&
           coupon.restricted_course_ids.length > 0
         ) {
           const restricted = new Set(coupon.restricted_course_ids);
           if (item.itemType === "course" && !restricted.has(item.itemId)) {
+            isEligible = false;
+          }
+          // A coupon limited to specific courses is for those courses only.
+          // Without this, it still discounted every bundle — so a coupon an
+          // instructor scoped to their own course could be spent on any
+          // bundle in the academy.
+          if (item.itemType === "bundle" && !hasBundleRestriction) {
             isEligible = false;
           }
         }

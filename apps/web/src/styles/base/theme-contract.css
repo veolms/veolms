@@ -5,8 +5,11 @@
 }
 
 :root {
-  font-family:
+  /* The app's typeface, as a variable for embedded widgets that take their
+     font through a custom property of their own (the discussion editor). */
+  --app-font-family:
     "Manrope Variable", Manrope, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--app-font-family);
   color-scheme: dark;
   --canvas: #060b14;
   --header: #060a12;

@@ -10,6 +10,12 @@ import {
 } from "../searchShortcut";
 import type { RatingFilterOption, SortOption } from "./useReviewsFilter";
 
+import {
+  FilterBar,
+  filterButtonSizeClasses,
+  filterControlClasses,
+  filterSelectTriggerClasses,
+} from "../components/FilterBar";
 export interface ReviewFiltersBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -60,13 +66,12 @@ export function ReviewFiltersBar({
   };
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-[15px] border border-(--border) bg-(--card-surface) p-3 md:p-3.5 transition-all"
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
+    <FilterBar className="gap-3">
       <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         {/* Search Input */}
-        <label className="flex min-h-9.75 min-w-52.5 flex-1 items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all cursor-text">
+        <label
+          className={`${filterControlClasses} min-w-52.5 flex-1 gap-2.5 cursor-text`}
+        >
           <MagnifyingGlass
             size={17}
             className="text-(--muted) shrink-0"
@@ -97,26 +102,26 @@ export function ReviewFiltersBar({
         </label>
 
         {/* Rating Select Container */}
-        <div className="flex min-h-9.75 w-35 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all">
+        <div className={`${filterControlClasses} w-35`}>
           <ThemedSelect
             id="reviews-rating-filter"
             value={ratingFilter}
             onValueChange={onRatingFilterChange}
             options={ratingOptions}
             ariaLabel="Filter by rating"
-            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full"
+            triggerClassName={`${filterSelectTriggerClasses} w-full`}
           />
         </div>
 
         {/* Sort Select Container */}
-        <div className="flex min-h-9.75 w-36.25 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all">
+        <div className={`${filterControlClasses} w-36.25`}>
           <ThemedSelect
             id="reviews-sort-filter"
             value={sortBy}
             onValueChange={onSortByChange}
             options={sortOptions}
             ariaLabel="Sort reviews by"
-            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full"
+            triggerClassName={`${filterSelectTriggerClasses} w-full`}
           />
         </div>
 
@@ -126,7 +131,7 @@ export function ReviewFiltersBar({
           role="checkbox"
           aria-checked={verifiedOnly}
           onClick={onToggleVerified}
-          className={`flex min-h-9.75 items-center gap-2 rounded-[9px] px-3.5 text-xs md:text-sm font-medium transition-all cursor-pointer select-none ${
+          className={`flex min-h-11 items-center gap-2 rounded-xl px-3.5 text-xs md:text-sm font-medium transition-all cursor-pointer select-none ${
             verifiedOnly
               ? "bg-(--accent-soft) text-(--accent) shadow-[inset_0_0_0_1px_var(--accent)]"
               : "bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] text-(--muted) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] hover:text-(--text)"
@@ -150,7 +155,7 @@ export function ReviewFiltersBar({
           onClick={handleFilterClick}
           aria-label="Toggle filters"
           aria-expanded={extraFiltersOpen}
-          className="flex min-h-9.75 items-center gap-1.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] px-3.5 text-xs md:text-sm font-medium text-(--text) transition-all hover:bg-(--hover) cursor-pointer"
+          className={`${filterButtonSizeClasses} flex items-center gap-1.5 bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] px-3.5 text-xs md:text-sm font-medium text-(--text) transition-all hover:bg-(--hover) cursor-pointer`}
         >
           <Funnel size={15} />
           <span>Filters</span>
@@ -184,6 +189,6 @@ export function ReviewFiltersBar({
           </button>
         </div>
       )}
-    </div>
+    </FilterBar>
   );
 }

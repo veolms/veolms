@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import type {
+  LearnerRefundRequest,
   RefundRequest,
   RefundRequestStatus,
   CreateStudentRefundRequest,
@@ -10,7 +11,13 @@ import type {
 import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as orderRepo from "../orders/order.repository.ts";
+import * as paymentRepo from "../payments/payment.repository.ts";
+import { isManualTransferProvider } from "./outside-refund.ts";
 import * as refundRequestRepo from "./refund-request.repository.ts";
+import {
+  toLearnerRefundRequest,
+  toRefundRequestContract,
+} from "./refund.mapper.ts";
 import type { RefundService } from "./refund.service.ts";
 
 export interface RefundRequestService {
@@ -18,8 +25,8 @@ export interface RefundRequestService {
     userId: string,
     orderId: string,
     request: CreateStudentRefundRequest,
-  ): Promise<RefundRequest>;
-  listStudentRefundRequests(userId: string): Promise<RefundRequest[]>;
+  ): Promise<LearnerRefundRequest>;
+  listStudentRefundRequests(userId: string): Promise<LearnerRefundRequest[]>;
   listAllRefundRequests(status?: RefundRequestStatus): Promise<RefundRequest[]>;
   reviewRefundRequest(
     adminUserId: string,
@@ -35,11 +42,26 @@ export function createRefundRequestService({
   database: Executor;
   refundService: RefundService;
 }): RefundRequestService {
+  /** Of these orders, the ones paid by manual bank or UPI transfer. */
+  async function ordersPaidByManualTransfer(
+    orderIds: string[],
+  ): Promise<Set<string>> {
+    const payments = await paymentRepo.listPaymentProvidersByOrderIds(
+      database,
+      [...new Set(orderIds)],
+    );
+    return new Set(
+      payments
+        .filter((payment) => isManualTransferProvider(payment.gateway_provider))
+        .map((payment) => payment.order_id),
+    );
+  }
+
   async function submitStudentRefundRequest(
     userId: string,
     orderId: string,
     request: CreateStudentRefundRequest,
-  ): Promise<RefundRequest> {
+  ): Promise<LearnerRefundRequest> {
     const order = await orderRepo.findOrderById(database, orderId);
     if (!order || order.user_id !== userId) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
@@ -76,37 +98,17 @@ export function createRefundRequestService({
       updated_at: now,
     });
 
-    return {
-      id: row.id,
-      orderId: row.order_id,
-      userId: row.user_id,
-      reason: row.reason,
-      status: row.status as RefundRequest["status"],
-      adminNotes: row.admin_notes,
-      resolvedAt: row.resolved_at,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    return toLearnerRefundRequest(row);
   }
 
   async function listStudentRefundRequests(
     userId: string,
-  ): Promise<RefundRequest[]> {
+  ): Promise<LearnerRefundRequest[]> {
     const rows = await refundRequestRepo.listRefundRequestsByUser(
       database,
       userId,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      orderId: r.order_id,
-      userId: r.user_id,
-      reason: r.reason,
-      status: r.status as RefundRequest["status"],
-      adminNotes: r.admin_notes,
-      resolvedAt: r.resolved_at,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }));
+    return rows.map(toLearnerRefundRequest);
   }
 
   async function listAllRefundRequests(
@@ -116,17 +118,12 @@ export function createRefundRequestService({
       database,
       status,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      orderId: r.order_id,
-      userId: r.user_id,
-      reason: r.reason,
-      status: r.status as RefundRequest["status"],
-      adminNotes: r.admin_notes,
-      resolvedAt: r.resolved_at,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }));
+    const manual = await ordersPaidByManualTransfer(
+      rows.map((row) => row.order_id),
+    );
+    return rows.map((row) =>
+      toRefundRequestContract(row, manual.has(row.order_id)),
+    );
   }
 
   async function reviewRefundRequest(
@@ -154,15 +151,38 @@ export function createRefundRequestService({
       );
     }
 
+    // A reference says money went back. Dropping it quietly on a rejection
+    // would leave staff believing a refund had been recorded.
+    if (request.action === "reject" && request.outsideRefund) {
+      throw new AppError(
+        400,
+        "REFUND_REQUEST_REFERENCE_NOT_ALLOWED",
+        "A transfer reference can only be recorded when the refund request is approved.",
+      );
+    }
+
     const now = new Date();
     let refund: Refund | undefined;
+    const paidByManualTransfer = (
+      await ordersPaidByManualTransfer([refundReq.order_id])
+    ).has(refundReq.order_id);
 
     if (request.action === "approve") {
-      // Execute the refund
+      // Execute the refund. For an order paid by manual transfer staff have
+      // already sent the money back, and `outsideRefund` carries the
+      // reference of that transfer: the refund is recorded, not made. The
+      // refund service decides whether the marker fits the payment (required
+      // for a manual transfer, refused for a gateway payment, one reference
+      // recorded once), so approving here and refunding from the order
+      // answer alike. Anything it refuses is thrown before the request is
+      // touched, which leaves it pending.
       refund = await refundService.processRefund(adminUserId, {
         orderId: refundReq.order_id,
         reason: `Approved student request: ${refundReq.reason}`,
         preserveAccess: request.preserveAccess ?? false,
+        ...(request.outsideRefund
+          ? { outsideRefund: request.outsideRefund }
+          : {}),
       });
 
       const updated = await refundRequestRepo.updateRefundRequestStatus(
@@ -176,17 +196,7 @@ export function createRefundRequestService({
       );
 
       return {
-        refundRequest: {
-          id: updated!.id,
-          orderId: updated!.order_id,
-          userId: updated!.user_id,
-          reason: updated!.reason,
-          status: updated!.status as RefundRequest["status"],
-          adminNotes: updated!.admin_notes,
-          resolvedAt: updated!.resolved_at,
-          createdAt: updated!.created_at,
-          updatedAt: updated!.updated_at,
-        },
+        refundRequest: toRefundRequestContract(updated!, paidByManualTransfer),
         refund,
       };
     } else {
@@ -201,17 +211,7 @@ export function createRefundRequestService({
       );
 
       return {
-        refundRequest: {
-          id: updated!.id,
-          orderId: updated!.order_id,
-          userId: updated!.user_id,
-          reason: updated!.reason,
-          status: updated!.status as RefundRequest["status"],
-          adminNotes: updated!.admin_notes,
-          resolvedAt: updated!.resolved_at,
-          createdAt: updated!.created_at,
-          updatedAt: updated!.updated_at,
-        },
+        refundRequest: toRefundRequestContract(updated!, paidByManualTransfer),
       };
     }
   }

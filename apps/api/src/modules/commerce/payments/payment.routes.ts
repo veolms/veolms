@@ -3,6 +3,8 @@ import {
   verifyPaymentRequestSchema,
   verifyPaymentResponseSchema,
   manualPaymentRequestSchema,
+  manualPaymentStatusSchema,
+  learnerManualPaymentRequestSchema,
   submitManualPaymentRequestSchema,
   verifyManualPaymentRequestSchema,
 } from "@veolms/contracts";
@@ -20,6 +22,7 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
   const service = createPaymentService({
     database: options.database,
     paymentGateway: options.services.paymentGateway,
+    logger: app.log,
   });
   const controller = createPaymentController({ service });
 
@@ -75,7 +78,7 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
         response: {
           201: jsonResponse(
             "Manual payment submitted",
-            manualPaymentRequestSchema,
+            learnerManualPaymentRequestSchema,
           ),
           400: errorResponse("Invalid order or status"),
           401: errorResponse("Unauthorized"),
@@ -85,6 +88,33 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
       },
     },
     manualController.submitPayment,
+  );
+
+  // 2b. POST /orders/:orderId/manual-payment/withdraw - The buyer takes a
+  //     reported transfer back while staff have not answered it
+  app.post(
+    "/orders/:orderId/manual-payment/withdraw",
+    {
+      preHandler: ctx.requireAuthenticated,
+      schema: {
+        operationId: "withdrawManualPayment",
+        tags: ["Commerce - Manual Payments"],
+        summary: "Withdraw a reported transfer that is still being checked",
+        description:
+          "Takes back the bank or UPI transfer the buyer reported for their own order, while staff have not verified or rejected it. The order can then be paid another way.",
+        params: z.object({ orderId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "The withdrawn request",
+            learnerManualPaymentRequestSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          404: errorResponse("Order not found"),
+          409: errorResponse("No transfer is waiting to be checked"),
+        },
+      },
+    },
+    manualController.withdrawPayment,
   );
 
   // 3. GET /manual-payments/my - List student's manual payments
@@ -99,7 +129,7 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "List of manual payment submissions",
-            z.array(manualPaymentRequestSchema),
+            z.array(learnerManualPaymentRequestSchema),
           ),
           401: errorResponse("Unauthorized"),
         },
@@ -112,13 +142,13 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/manual-payments",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("payment.manual.verify"),
       schema: {
         operationId: "listManualPayments",
         tags: ["Commerce - Manual Payments"],
         summary: "List manual payments queue for review",
         querystring: z.object({
-          status: z.enum(["pending", "verified", "rejected"]).optional(),
+          status: manualPaymentStatusSchema.optional(),
         }),
         response: {
           200: jsonResponse(
@@ -137,7 +167,7 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/manual-payments/:requestId/verify",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("payment.manual.verify"),
       schema: {
         operationId: "verifyManualPayment",
         tags: ["Commerce - Manual Payments"],

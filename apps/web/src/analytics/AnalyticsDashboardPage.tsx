@@ -1,124 +1,225 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
-import { LoadingCards } from "../components/analytics/StatTiles";
-import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
-import { useMyCourses } from "../services/courses";
 import {
-  useAdminAnalyticsOverview,
-  useInstructorAnalyticsOverview,
-} from "../services/analytics";
-import { selectTriggerClass } from "./analyticsShared";
-import { OverviewTab } from "./tabs/OverviewTab";
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useSearchParams } from "react-router";
+import { downloadCsv } from "@veolms/analytics-ui";
+import type {
+  AnalyticsExportSection,
+  AnalyticsTabFilters,
+} from "@veolms/web-core";
+import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
+import type { NavigateTo } from "../routing/navigation";
+import type { ThemedSelectOption } from "../ThemedSelect";
+import { useCapabilities } from "../services/authorization";
+import { useMyCourses } from "../services/courses";
+import { useSettingsTabShortcuts } from "../settings/useSettingsTabShortcuts";
+import {
+  ANALYTICS_DEFAULT_RANGE,
+  ANALYTICS_DEFAULT_TAB,
+  AnalyticsPageChrome,
+  AnalyticsPageLoading,
+  AnalyticsTabLoading,
+  formatDay,
+  isAnalyticsRangeKey,
+  parseDay,
+  rangeLengthInDays,
+  resolveAnalyticsTab,
+  useAnalyticsTabs,
+  type AnalyticsRangeKey,
+  type CustomDateRange,
+} from "./AnalyticsPageChrome";
+import "../styles/features/settings/foundation.css";
+import "../styles/features/settings/preferences-responsive.css";
 
 interface Props {
   role: "student" | "creator";
   isAdmin: boolean;
-  onNavigatePage?: (destination: string) => void;
+  /** The section from the path (`/analytics/<tab>`); the overview without one. */
+  tab?: string;
+  onNavigatePage?: NavigateTo;
 }
 
-type RangeKey = "7d" | "30d" | "3m" | "1y";
+const ANALYTICS_PATH = "/analytics";
 
-const RANGE_OPTIONS: ReadonlyArray<{
-  key: RangeKey;
-  label: string;
-  days: number;
-}> = [
-  { key: "7d", label: "7D", days: 7 },
-  { key: "30d", label: "30D", days: 30 },
-  { key: "3m", label: "3M", days: 90 },
-  { key: "1y", label: "1Y", days: 365 },
-];
+/** `/analytics` for the overview, `/analytics/<tab>` for any other section. */
+export function analyticsTabPath(tabId: string): string {
+  return tabId === ANALYTICS_DEFAULT_TAB
+    ? ANALYTICS_PATH
+    : `${ANALYTICS_PATH}/${tabId}`;
+}
 
-function useDateRangeParams(rangeKey: RangeKey) {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The end of today (UTC): see `useDateRangeParams`. */
+function endOfToday(): Date {
+  const to = new Date();
+  to.setUTCHours(24, 0, 0, 0);
+  return to;
+}
+
+/** The days a preset covers, as a custom range to start from. */
+function presetAsCustom(rangeKey: AnalyticsRangeKey): CustomDateRange {
+  const days = rangeLengthInDays(rangeKey);
+  const to = endOfToday();
+  return {
+    from: formatDay(new Date(to.getTime() - days * DAY_MS)),
+    to: formatDay(new Date(to.getTime() - DAY_MS)),
+  };
+}
+
+function useDateRangeParams(
+  rangeKey: AnalyticsRangeKey,
+  custom: CustomDateRange | undefined,
+) {
+  const customFrom = custom?.from;
+  const customTo = custom?.to;
   return useMemo(() => {
-    const option = RANGE_OPTIONS.find(
-      (candidate) => candidate.key === rangeKey,
-    )!;
-    const to = new Date();
-    const from = new Date(to.getTime() - option.days * 24 * 60 * 60 * 1000);
+    // A custom range runs from the start of its first day to the end of its
+    // last (UTC): the same days on every request.
+    const fromDay = parseDay(customFrom);
+    const toDay = parseDay(customTo);
+    if (rangeKey === "custom" && fromDay && toDay) {
+      return {
+        from: fromDay.toISOString(),
+        to: new Date(toDay.getTime() + DAY_MS).toISOString(),
+      };
+    }
+    // Through the end of today (UTC), so the range is the same for every
+    // request made today. With "now" to the millisecond no two requests
+    // matched: the server's response cache never hit, and this page
+    // refetched everything each time it was opened.
+    const to = endOfToday();
+    const from = new Date(to.getTime() - rangeLengthInDays(rangeKey) * DAY_MS);
     return { from: from.toISOString(), to: to.toISOString() };
-  }, [rangeKey]);
+  }, [rangeKey, customFrom, customTo]);
 }
 
-function DateRangeTabs({
-  value,
-  onChange,
+/**
+ * The analytics page, laid out like Settings: the heading scrolls away, the
+ * section tabs stay pinned (same bar, same colours, same Alt+1… and arrow
+ * shortcuts, same swipe between sections on touch), and the filters and
+ * the open section scroll under them. A section is a path of its own.
+ */
+function AnalyticsContent({
+  isAdmin,
+  tab,
+  onNavigatePage,
 }: {
-  value: RangeKey;
-  onChange: (value: RangeKey) => void;
+  isAdmin: boolean;
+  tab: string | undefined;
+  onNavigatePage: NavigateTo | undefined;
 }) {
-  return (
-    <div
-      role="tablist"
-      aria-label="Date range"
-      className="flex gap-1 sm:gap-1.5 rounded-[12px] sm:rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 sm:p-1.5"
-    >
-      {RANGE_OPTIONS.map((option) => (
-        <button
-          key={option.key}
-          type="button"
-          role="tab"
-          aria-selected={value === option.key}
-          tabIndex={value === option.key ? 0 : -1}
-          onClick={() => onChange(option.key)}
-          onKeyDown={handleRovingTabKeyDown}
-          className={`rounded-[8px] sm:rounded-[10px] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-            value === option.key
-              ? "bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--card-compact-shadow)]"
-              : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabListRef = useRef<HTMLElement>(null);
 
-function PageHeader({
-  title,
-  description,
-  action,
-}: {
-  eyebrow?: string;
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
-  return (
-    <header className="pt-2 sm:pt-0 flex flex-col gap-3.5 sm:gap-5 border-b border-(--border) pb-4.5 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
-          {title}
-        </h1>
-        <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
-          {description}
-        </p>
-      </div>
-      {action ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 pt-2 pb-0.5 sm:py-0">
-          {action}
-        </div>
-      ) : null}
-    </header>
-  );
-}
+  const tabs = useAnalyticsTabs(isAdmin);
+  const tabIds = useMemo(() => tabs.map((entry) => entry.id), [tabs]);
+  const activeTab = resolveAnalyticsTab(tabs, tab);
+  const activeTabRef = useRef(activeTab.id);
+  activeTabRef.current = activeTab.id;
 
-function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
-  const [range, setRange] = useState<RangeKey>("30d");
+  // The sections used to live in `?tab=`; a saved link of that shape opens
+  // the same section at its path, with the rest of the query kept.
+  const legacyTab = searchParams.get("tab");
+  useEffect(() => {
+    if (!legacyTab) return;
+    const rest = new URLSearchParams(searchParams);
+    rest.delete("tab");
+    const query = rest.toString();
+    const destination = `${analyticsTabPath(legacyTab)}${query ? `?${query}` : ""}`;
+    if (onNavigatePage) onNavigatePage(destination);
+    else window.history.replaceState(window.history.state, "", destination);
+  }, [legacyTab, onNavigatePage, searchParams]);
+
+  const requestedRange = searchParams.get("range");
+  const range: AnalyticsRangeKey = isAnalyticsRangeKey(requestedRange)
+    ? requestedRange
+    : ANALYTICS_DEFAULT_RANGE;
+  // A custom range keeps its days in the address (`?from=…&to=…`), so a
+  // link or a reload opens the same days; the last week until picked.
+  const requestedFrom = searchParams.get("from");
+  const requestedTo = searchParams.get("to");
+  const customRange = useMemo<CustomDateRange | undefined>(() => {
+    if (range !== "custom") return undefined;
+    const from = parseDay(requestedFrom);
+    const to = parseDay(requestedTo);
+    return from && to && from <= to
+      ? { from: formatDay(from), to: formatDay(to) }
+      : presetAsCustom("7d");
+  }, [range, requestedFrom, requestedTo]);
   const [courseId, setCourseId] = useState<string>("all");
-  const dateRangeParams = useDateRangeParams(range);
+  const dateRangeParams = useDateRangeParams(range, customRange);
   const myCourses = useMyCourses();
 
-  const params = {
-    ...dateRangeParams,
-    courseId: courseId === "all" ? undefined : courseId,
-  };
-  const adminQuery = useAdminAnalyticsOverview(params, { enabled: isAdmin });
-  const instructorQuery = useInstructorAnalyticsOverview(params, {
-    enabled: !isAdmin,
+  const updateParams = useCallback(
+    (changes: Record<string, string | null>) => {
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          for (const [key, value] of Object.entries(changes)) {
+            if (value === null) next.delete(key);
+            else next.set(key, value);
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  // A section is a path of its own (`/analytics/revenue`), as on Settings;
+  // the range and course stay in the query string and travel with it.
+  const selectTab = useCallback(
+    (id: string) => {
+      if (id === activeTabRef.current) return;
+      const query = window.location.search.replace(/^\?/, "");
+      const destination = `${analyticsTabPath(id)}${query ? `?${query}` : ""}`;
+      if (onNavigatePage) onNavigatePage(destination, { resetScroll: true });
+      else window.location.assign(destination);
+    },
+    [onNavigatePage],
+  );
+  const getCurrentTab = useCallback(() => activeTabRef.current, []);
+  useSettingsTabShortcuts({
+    tabIds,
+    getCurrentTab,
+    onNavigate: selectTab,
   });
-  const { data, isLoading } = isAdmin ? adminQuery : instructorQuery;
+
+  // A course card's "Analytics" link opens this page with ?course=<id>, which
+  // used to be ignored. It is read once and becomes the selected course only
+  // if it is one of the courses in the list below.
+  const [requestedCourseId, setRequestedCourseId] = useState(
+    () => searchParams.get("course") || null,
+  );
+  const myCourseRecords = myCourses.data?.courses;
+  useEffect(() => {
+    if (!requestedCourseId || !myCourseRecords) return;
+    setRequestedCourseId(null);
+    if (myCourseRecords.some((course) => course.id === requestedCourseId)) {
+      setCourseId(requestedCourseId);
+    }
+  }, [requestedCourseId, myCourseRecords]);
+
+  const changeCourse = useCallback((nextCourseId: string) => {
+    setRequestedCourseId(null);
+    setCourseId(nextCourseId);
+  }, []);
+
+  const filters: AnalyticsTabFilters = useMemo(
+    () => ({
+      ...dateRangeParams,
+      courseId: courseId === "all" ? undefined : courseId,
+      rangeKey: range,
+    }),
+    [dateRangeParams, courseId, range],
+  );
 
   const courseOptions: ThemedSelectOption<string>[] = [
     [
@@ -130,44 +231,127 @@ function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
     ),
   ];
 
-  return (
-    <main className="mx-auto grid w-full max-w-[1800px] gap-6">
-      <PageHeader
-        title="Analytics"
-        description={
-          isAdmin
-            ? "Track your academy's performance with actionable insights."
-            : "See how your courses are performing — revenue, enrollments, completion, and engagement."
-        }
-        action={
-          <>
-            <ThemedSelect
-              value={courseId}
-              onValueChange={setCourseId}
-              options={courseOptions}
-              ariaLabel="Course"
-              searchable
-              triggerClassName={selectTriggerClass}
-            />
-            <DateRangeTabs value={range} onChange={setRange} />
-          </>
-        }
-      />
+  const [exportSections, setExportSections] = useState<
+    AnalyticsExportSection[] | null
+  >(null);
+  const handleExportChange = useCallback(
+    (sections: AnalyticsExportSection[] | null) => setExportSections(sections),
+    [],
+  );
+  const exportCsv = () => {
+    if (!exportSections) return;
+    const day = (iso: string) => iso.slice(0, 10);
+    downloadCsv(
+      `analytics-${activeTab.id}-${day(filters.from)}-to-${day(filters.to)}.csv`,
+      exportSections,
+    );
+  };
 
-      {isLoading || !data ? (
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 xl:grid-cols-6">
-          <LoadingCards />
-        </div>
-      ) : (
-        <OverviewTab data={data} />
-      )}
-    </main>
+  const isFiltered = range !== ANALYTICS_DEFAULT_RANGE || courseId !== "all";
+  const resetFilters = () => {
+    setRequestedCourseId(null);
+    setCourseId("all");
+    updateParams({ range: null, course: null, from: null, to: null });
+  };
+  const changeRange = useCallback(
+    (next: AnalyticsRangeKey) => {
+      // Custom starts from the days the preset showed, ready to adjust.
+      const start = next === "custom" ? presetAsCustom(range) : null;
+      updateParams({
+        range: next === ANALYTICS_DEFAULT_RANGE ? null : next,
+        from: start?.from ?? null,
+        to: start?.to ?? null,
+      });
+    },
+    [range, updateParams],
+  );
+  const changeCustomRange = useCallback(
+    (next: CustomDateRange) => {
+      // Keep the two days in order when one is moved past the other.
+      const [from, to] =
+        next.from <= next.to ? [next.from, next.to] : [next.to, next.from];
+      updateParams({ range: "custom", from, to });
+    },
+    [updateParams],
+  );
+
+  const TabComponent = activeTab.component;
+
+  return (
+    <AnalyticsPageChrome
+      tabs={tabs}
+      activeTab={activeTab}
+      isAdmin={isAdmin}
+      range={range}
+      customRange={customRange}
+      courseId={courseId}
+      courseOptions={courseOptions}
+      onSelectTab={selectTab}
+      onRangeChange={changeRange}
+      onCustomRangeChange={changeCustomRange}
+      onCourseChange={changeCourse}
+      onExport={exportCsv}
+      exportDisabled={!exportSections}
+      onReset={isFiltered ? resetFilters : undefined}
+      navRef={tabListRef}
+    >
+      <SwipeableTabPanel
+        tabs={tabIds}
+        activeTab={activeTab.id}
+        onTabChange={selectTab}
+        tabListRef={tabListRef}
+        id="analytics-tab-panel"
+        className="settings-tab-content pb-8"
+        stateAttribute="data-analytics-tab"
+        labelledBy={`analytics-tab-${activeTab.id}`}
+        nativeOnFinePointer
+        focusable={false}
+      >
+        {(panelTab) =>
+          panelTab === activeTab.id ? (
+            <Suspense fallback={<AnalyticsTabLoading tab={activeTab} />}>
+              <TabComponent
+                key={activeTab.id}
+                filters={filters}
+                isAdmin={isAdmin}
+                onExportChange={handleExportChange}
+              />
+            </Suspense>
+          ) : null
+        }
+      </SwipeableTabPanel>
+    </AnalyticsPageChrome>
   );
 }
 
-export function AnalyticsDashboardPage({ role, isAdmin }: Props) {
+export function AnalyticsDashboardPage({
+  role,
+  isAdmin,
+  tab,
+  onNavigatePage,
+}: Props) {
+  // The sections a person sees follow their permissions; until those are
+  // known the page keeps its loading frame rather than pick a section.
+  const capabilities = useCapabilities({ enabled: !isAdmin });
+  const tabs = useAnalyticsTabs(isAdmin);
   if (role !== "creator") {
     return null;
   }
-  return <AnalyticsContent isAdmin={isAdmin} />;
+  if (!isAdmin && !capabilities.data) {
+    return <AnalyticsPageLoading isAdmin={isAdmin} tab={tab} />;
+  }
+  if (tabs.length === 0) {
+    return (
+      <p className="mx-auto mt-10 max-w-md text-center text-sm text-(--muted)">
+        Your roles do not open any analytics section here.
+      </p>
+    );
+  }
+  return (
+    <AnalyticsContent
+      isAdmin={isAdmin}
+      tab={tab}
+      onNavigatePage={onNavigatePage}
+    />
+  );
 }

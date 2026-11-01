@@ -38,14 +38,24 @@ export interface EstablishedSession {
   token: string;
   sessionId: string;
   mfa: MfaState;
+  /** Role names read while establishing the session. */
+  roles: string[];
 }
 
 export type ChallengeType = "registration" | "authentication";
 
-export interface AuthenticatedUserContext {
+/**
+ * The request logger, as far as a service needs it: a place to record a
+ * provider or library error whose text must not be returned to the client.
+ */
+export interface AuthLogger {
+  warn(details: object, message: string): void;
+}
+
+/** A user's own profile, in the names the API responds with. */
+export interface UserProfileFields {
   id: string;
   username: string;
-  name: string;
   displayName: string;
   avatarDataUrl: string | null;
   bio: string | null;
@@ -61,6 +71,10 @@ export interface AuthenticatedUserContext {
   emailVerified: boolean;
   phoneNo: string | null;
   mobileVerified: boolean;
+}
+
+export interface AuthenticatedUserContext extends UserProfileFields {
+  name: string;
   roles: string[];
   totpEnabled: boolean;
   passkeyEnabled: boolean;

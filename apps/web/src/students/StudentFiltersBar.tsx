@@ -7,6 +7,12 @@ import {
   SearchShortcutHint,
 } from "../searchShortcut";
 
+import {
+  FilterBar,
+  filterButtonSizeClasses,
+  filterControlClasses,
+  filterSelectTriggerClasses,
+} from "../components/FilterBar";
 export interface StudentFiltersBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -64,13 +70,12 @@ export function StudentFiltersBar({
     sortBy !== "recent";
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-[15px] border border-(--border) bg-(--card-surface) p-3 md:p-3.5 transition-all"
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
+    <FilterBar className="gap-3">
       <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         {/* Search Input */}
-        <label className="flex min-h-9.75 min-w-56 flex-1 items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all cursor-text">
+        <label
+          className={`${filterControlClasses} min-w-56 flex-1 gap-2.5 cursor-text`}
+        >
           <MagnifyingGlass
             size={17}
             className="text-(--muted) shrink-0"
@@ -81,7 +86,7 @@ export function StudentFiltersBar({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search students by name, @username, or email..."
+            placeholder="Search by name, @username, email or phone..."
             aria-label="Search students"
             aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
             data-search-shortcut-target
@@ -101,7 +106,7 @@ export function StudentFiltersBar({
         </label>
 
         {/* Course Filter Dropdown */}
-        <div className="flex min-h-9.75 min-w-40 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all">
+        <div className={`${filterControlClasses} min-w-40`}>
           <ThemedSelect
             id="students-course-filter"
             value={courseFilter}
@@ -113,12 +118,12 @@ export function StudentFiltersBar({
             searchPlaceholder="Search courses..."
             defaultLimit={8}
             ariaLabel="Filter by course"
-            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full"
+            triggerClassName={`${filterSelectTriggerClasses} w-full`}
           />
         </div>
 
         {/* Status Filter Dropdown */}
-        <div className="flex min-h-9.75 min-w-36 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all">
+        <div className={`${filterControlClasses} min-w-36`}>
           <ThemedSelect
             id="students-status-filter"
             value={statusFilter}
@@ -129,12 +134,12 @@ export function StudentFiltersBar({
             }
             options={statusOptions}
             ariaLabel="Filter by status"
-            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full"
+            triggerClassName={`${filterSelectTriggerClasses} w-full`}
           />
         </div>
 
         {/* Sort Dropdown */}
-        <div className="flex min-h-9.75 min-w-38 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all">
+        <div className={`${filterControlClasses} min-w-38`}>
           <ThemedSelect
             id="students-sort-filter"
             value={sortBy}
@@ -143,7 +148,7 @@ export function StudentFiltersBar({
             }
             options={sortOptions}
             ariaLabel="Sort students"
-            triggerClassName="min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full"
+            triggerClassName={`${filterSelectTriggerClasses} w-full`}
           />
         </div>
 
@@ -152,7 +157,7 @@ export function StudentFiltersBar({
           <button
             type="button"
             onClick={onResetFilters}
-            className="flex min-h-9.75 items-center gap-1.5 rounded-[9px] border border-(--border) bg-(--card-surface) px-3 py-1.5 text-xs font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+            className={`${filterButtonSizeClasses} flex items-center gap-1.5 border border-(--border) bg-(--card-surface) px-3 py-1.5 text-xs font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer`}
             title="Reset all filters"
           >
             <ArrowCounterClockwise size={14} />
@@ -160,6 +165,6 @@ export function StudentFiltersBar({
           </button>
         )}
       </div>
-    </div>
+    </FilterBar>
   );
 }

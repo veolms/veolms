@@ -1,17 +1,15 @@
-import type { DatabaseExecutor, LearningReplyTable } from "@veolms/database";
+import type { DatabaseExecutor } from "@veolms/database";
 import type {
   InteractionStatus,
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
-import type { Selectable } from "kysely";
 import { sql } from "kysely";
 import {
   authorRoleSql,
   type DiscussionListCursor,
 } from "../shared/discussion.utils.ts";
-
-export type LearningReplyRow = Selectable<LearningReplyTable>;
+import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
 
 export interface ReplyRowWithAuthor {
   id: string;
@@ -31,11 +29,7 @@ export interface ReplyRowWithAuthor {
   authorName: string | null;
   authorUsername: string | null;
   authorAvatarUrl: string | null;
-  authorEmail: string | null;
   authorRole: string | null;
-  replyToUsername: string | null;
-  replyToDisplayName: string | null;
-  replyToContent: string | null;
 }
 
 export interface RepliesRepository {
@@ -95,6 +89,25 @@ export interface RepliesRepository {
     replyId: string,
     delta: number,
   ): Promise<void>;
+
+  /**
+   * Attaches the owner's own ready, still-unattached uploads to the reply
+   * in one statement and returns the ids that were attached.
+   */
+  attachOwnedUploads(
+    db: DatabaseExecutor,
+    input: { attachmentIds: string[]; ownerId: string; replyId: string },
+  ): Promise<Array<{ id: string }>>;
+
+  /** Marks every attachment of the reply as deleted. */
+  markAttachmentsDeleted(db: DatabaseExecutor, replyId: string): Promise<void>;
+
+  /** Which of the given replies the user has liked. */
+  listReplyLikes(
+    db: DatabaseExecutor,
+    userId: string,
+    replyIds: string[],
+  ): Promise<Array<{ target_id: string }>>;
 }
 
 export function createRepliesRepository(): RepliesRepository {
@@ -122,9 +135,11 @@ export function createRepliesRepository(): RepliesRepository {
     async findReplyById(db, replyId) {
       const row = await db
         .selectFrom("learning_replies as r")
-        .innerJoin("users as u", "u.id", "r.user_id")
-        .leftJoin("learning_replies as rr", "rr.id", "r.reply_to_reply_id")
-        .leftJoin("users as ru", "ru.id", "r.reply_to_user_id")
+        // Active accounts only: a reply by a deactivated account stays in
+        // the thread and is presented without an author.
+        .leftJoin("users as u", (join) =>
+          join.onRef("u.id", "=", "r.user_id").on("u.is_deleted", "=", false),
+        )
         .select([
           "r.id as id",
           "r.thread_id as threadId",
@@ -143,11 +158,7 @@ export function createRepliesRepository(): RepliesRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
-          "u.email as authorEmail",
           authorRoleSql("r.user_id"),
-          "ru.username as replyToUsername",
-          "ru.display_name as replyToDisplayName",
-          "rr.plain_text as replyToContent",
         ])
         .where("r.id", "=", replyId)
         .executeTakeFirst();
@@ -158,9 +169,11 @@ export function createRepliesRepository(): RepliesRepository {
     async listRepliesByThreadId(db, threadId, options) {
       let query = db
         .selectFrom("learning_replies as r")
-        .innerJoin("users as u", "u.id", "r.user_id")
-        .leftJoin("learning_replies as rr", "rr.id", "r.reply_to_reply_id")
-        .leftJoin("users as ru", "ru.id", "r.reply_to_user_id")
+        // Active accounts only: a reply by a deactivated account stays in
+        // the thread and is presented without an author.
+        .leftJoin("users as u", (join) =>
+          join.onRef("u.id", "=", "r.user_id").on("u.is_deleted", "=", false),
+        )
         .select([
           "r.id as id",
           "r.thread_id as threadId",
@@ -179,11 +192,7 @@ export function createRepliesRepository(): RepliesRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
-          "u.email as authorEmail",
           authorRoleSql("r.user_id"),
-          "ru.username as replyToUsername",
-          "ru.display_name as replyToDisplayName",
-          "rr.plain_text as replyToContent",
         ])
         .where("r.thread_id", "=", threadId)
         .where("r.status", "=", "active");
@@ -191,14 +200,20 @@ export function createRepliesRepository(): RepliesRepository {
       if (options.pageCursor) {
         const cursor = options.pageCursor;
         const accepted = cursor.isAccepted === true;
+        const createdAt = exactCursorTimestamp(
+          ["learning_replies"],
+          "created_at",
+          cursor.id,
+          cursor.createdAt,
+        );
         query = query.where(
           sql<boolean>`(
             (
               r.is_accepted = ${accepted}
               and (
-                r.created_at < ${cursor.createdAt}
+                r.created_at < ${createdAt}
                 or (
-                  r.created_at = ${cursor.createdAt}
+                  r.created_at = ${createdAt}
                   and r.id < ${cursor.id}::uuid
                 )
               )
@@ -293,6 +308,40 @@ export function createRepliesRepository(): RepliesRepository {
           updated_at: new Date(),
         }))
         .where("id", "=", replyId)
+        .execute();
+    },
+
+    async attachOwnedUploads(db, { attachmentIds, ownerId, replyId }) {
+      return db
+        .updateTable("learning_attachments")
+        .set({
+          target_type: "reply",
+          target_id: replyId,
+        })
+        .where("id", "in", attachmentIds)
+        .where("owner_id", "=", ownerId)
+        .where("status", "=", "ready")
+        .where("target_id", "is", null)
+        .returning("id")
+        .execute();
+    },
+
+    async markAttachmentsDeleted(db, replyId) {
+      await db
+        .updateTable("learning_attachments")
+        .set({ status: "deleted" })
+        .where("target_type", "=", "reply")
+        .where("target_id", "=", replyId)
+        .execute();
+    },
+
+    async listReplyLikes(db, userId, replyIds) {
+      return db
+        .selectFrom("learning_likes")
+        .select("target_id")
+        .where("user_id", "=", userId)
+        .where("target_type", "=", "reply")
+        .where("target_id", "in", replyIds)
         .execute();
     },
   };

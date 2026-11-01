@@ -13,7 +13,11 @@ export function useCouponsList(options?: {
   const limit = options?.limit ?? 30;
   const courseId = options?.courseId ?? undefined;
   const enabled = options?.enabled ?? true;
-  const refetchInterval = options?.refetchInterval ?? 30_000;
+  // No polling unless a caller asks for it. Every loaded page of this list
+  // used to be fetched again every 30 seconds for as long as it was on
+  // screen, as did the copy the orders filter keeps. Creating, editing and
+  // deleting a coupon refresh it, and so does coming back to it once stale.
+  const refetchInterval = options?.refetchInterval ?? false;
 
   return useInfiniteQuery<CouponListResponse, ApiError>({
     queryKey: couponKeys.list({ courseId, limit }),

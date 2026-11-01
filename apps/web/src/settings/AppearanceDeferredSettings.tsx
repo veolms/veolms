@@ -34,6 +34,7 @@ import type { PageTabColors } from "./settingsPreferences";
 import { RadioGroup, SettingRow, SettingsToggle } from "./SettingsControls";
 import { ReadingModeSettings } from "./ReadingModeSettings";
 import { ScrollbarSettings } from "./scrollbars/ScrollbarSettings";
+import { useAdminOnlySettings } from "./useAdminOnlySettings";
 
 interface AppearanceAdditionalSettingsProps {
   pageTabColors: PageTabColors;
@@ -85,22 +86,37 @@ export default function AppearanceAdditionalSettings({
     setStorageReady(true);
   }, []);
 
+  // Reduce animations, high contrast, compact layout and text size take
+  // effect only while this page is open (their attribute is set here alone,
+  // and their rules are in the settings stylesheet), so they are shown to
+  // admins alone (see `useAdminOnlySettings`). Anyone else gets the
+  // defaults here too, so a value chosen before they were hidden does not
+  // stay on with no switch left to turn it off.
+  const showAdminSettings = useAdminOnlySettings();
   useEffect(() => {
     if (!storageReady) return;
-    document.documentElement.dataset.reduceAnimations =
-      String(reduceAnimations);
+    document.documentElement.dataset.reduceAnimations = String(
+      showAdminSettings && reduceAnimations,
+    );
+    if (!showAdminSettings) return;
     localStorage.setItem("veolms-reduce-animations", String(reduceAnimations));
-  }, [reduceAnimations, storageReady]);
+  }, [reduceAnimations, showAdminSettings, storageReady]);
   useEffect(() => {
     if (!storageReady) return;
-    document.documentElement.dataset.highContrast = String(highContrast);
+    document.documentElement.dataset.highContrast = String(
+      showAdminSettings && highContrast,
+    );
+    if (!showAdminSettings) return;
     localStorage.setItem("veolms-high-contrast", String(highContrast));
-  }, [highContrast, storageReady]);
+  }, [highContrast, showAdminSettings, storageReady]);
   useEffect(() => {
     if (!storageReady) return;
-    document.documentElement.dataset.compactLayout = String(compactLayout);
+    document.documentElement.dataset.compactLayout = String(
+      showAdminSettings && compactLayout,
+    );
+    if (!showAdminSettings) return;
     localStorage.setItem("veolms-compact-layout", String(compactLayout));
-  }, [compactLayout, storageReady]);
+  }, [compactLayout, showAdminSettings, storageReady]);
   useEffect(() => {
     if (!storageReady) return;
     document.documentElement.dataset.elevatedSurfaces =
@@ -277,39 +293,43 @@ export default function AppearanceAdditionalSettings({
               )}
             </div>
           </SettingRow>
-          <SettingRow
-            icon={Sparkle}
-            label="Reduce animations"
-            note="Minimize motion for a calmer experience"
-          >
-            <SettingsToggle
-              checked={reduceAnimations}
-              onChange={setReduceAnimations}
-              label="Reduce animations"
-            />
-          </SettingRow>
-          <SettingRow
-            icon={CircleHalf}
-            label="High contrast mode"
-            note="Increase contrast for better visibility"
-          >
-            <SettingsToggle
-              checked={highContrast}
-              onChange={setHighContrast}
-              label="High contrast mode"
-            />
-          </SettingRow>
-          <SettingRow
-            icon={ArrowsInLineHorizontal}
-            label="Compact layout"
-            note="Show more content in less space"
-          >
-            <SettingsToggle
-              checked={compactLayout}
-              onChange={setCompactLayout}
-              label="Compact layout"
-            />
-          </SettingRow>
+          {showAdminSettings ? (
+            <>
+              <SettingRow
+                icon={Sparkle}
+                label="Reduce animations"
+                note="Minimize motion for a calmer experience"
+              >
+                <SettingsToggle
+                  checked={reduceAnimations}
+                  onChange={setReduceAnimations}
+                  label="Reduce animations"
+                />
+              </SettingRow>
+              <SettingRow
+                icon={CircleHalf}
+                label="High contrast mode"
+                note="Increase contrast for better visibility"
+              >
+                <SettingsToggle
+                  checked={highContrast}
+                  onChange={setHighContrast}
+                  label="High contrast mode"
+                />
+              </SettingRow>
+              <SettingRow
+                icon={ArrowsInLineHorizontal}
+                label="Compact layout"
+                note="Show more content in less space"
+              >
+                <SettingsToggle
+                  checked={compactLayout}
+                  onChange={setCompactLayout}
+                  label="Compact layout"
+                />
+              </SettingRow>
+            </>
+          ) : null}
           <SettingRow
             icon={Stack}
             label="Elevated surfaces"
@@ -357,38 +377,40 @@ export default function AppearanceAdditionalSettings({
               ))}
             </RadioGroup>
           </SettingRow>
-          <SettingRow
-            className="settings-row--text-size"
-            icon={TextAa}
-            label="Text size"
-            note="Adjust the size of text across the application"
-          >
-            <RadioGroup
+          {showAdminSettings ? (
+            <SettingRow
+              className="settings-row--text-size"
+              icon={TextAa}
               label="Text size"
-              className="settings-segmented settings-segmented--text-size"
+              note="Adjust the size of text across the application"
             >
-              {(
-                [
-                  ["small", "Small"],
-                  ["default", "Default"],
-                  ["large", "Large"],
-                  ["extra-large", "Extra large"],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  type="button"
-                  key={value}
-                  role="radio"
-                  aria-checked={textSize === value}
-                  tabIndex={textSize === value ? 0 : -1}
-                  className={textSize === value ? "is-selected" : ""}
-                  onClick={() => setTextSize(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </RadioGroup>
-          </SettingRow>
+              <RadioGroup
+                label="Text size"
+                className="settings-segmented settings-segmented--text-size"
+              >
+                {(
+                  [
+                    ["small", "Small"],
+                    ["default", "Default"],
+                    ["large", "Large"],
+                    ["extra-large", "Extra large"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    type="button"
+                    key={value}
+                    role="radio"
+                    aria-checked={textSize === value}
+                    tabIndex={textSize === value ? 0 : -1}
+                    className={textSize === value ? "is-selected" : ""}
+                    onClick={() => setTextSize(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </RadioGroup>
+            </SettingRow>
+          ) : null}
           <SettingRow
             className="settings-row--page-tab-colors"
             icon={Tabs}

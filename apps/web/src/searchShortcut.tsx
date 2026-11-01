@@ -47,23 +47,49 @@ export function SearchShortcutHint({ className = "" }: { className?: string }) {
   );
 }
 
+/**
+ * Whether a key press is the search shortcut. The platform's own modifier
+ * (Cmd on a Mac, Ctrl elsewhere) counts wherever the focus is. The other one
+ * counts only while nothing is being typed into: in a text field on a Mac,
+ * Ctrl+K deletes to the end of the line.
+ */
+export function isSearchShortcutKey(
+  event: Pick<
+    KeyboardEvent,
+    "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"
+  >,
+  platform: ShortcutPlatform,
+  typing: boolean,
+) {
+  if (
+    event.ctrlKey === event.metaKey ||
+    event.altKey ||
+    event.shiftKey ||
+    event.key.toLowerCase() !== "k"
+  ) {
+    return false;
+  }
+  const platformModifierPressed =
+    platform === "mac" ? event.metaKey : event.ctrlKey;
+  return platformModifierPressed || !typing;
+}
+
+const isTypingTarget = (element: Element | null) =>
+  element instanceof HTMLElement &&
+  (element.tagName === "INPUT" ||
+    element.tagName === "TEXTAREA" ||
+    element.isContentEditable);
+
 export function useGlobalSearchShortcut(platform: ShortcutPlatform) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const modifierPressed =
-        platform === "mac"
-          ? event.metaKey && !event.ctrlKey
-          : event.ctrlKey && !event.metaKey;
+      const activeElement = document.activeElement;
       if (
-        !modifierPressed ||
-        event.altKey ||
-        event.shiftKey ||
-        event.key.toLowerCase() !== "k"
+        !isSearchShortcutKey(event, platform, isTypingTarget(activeElement))
       ) {
         return;
       }
 
-      const activeElement = document.activeElement;
       const searchInputs = [
         ...document.querySelectorAll<HTMLInputElement>(
           SEARCH_SHORTCUT_SELECTOR,

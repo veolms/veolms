@@ -6,7 +6,10 @@
   --atomic-editor-muted: var(--muted);
   --atomic-editor-link: var(--accent-ink, var(--accent));
   --atomic-editor-measure: none;
-  --atomic-editor-font: inherit;
+  /* A real font list, never `inherit`: on a custom property that keyword
+   * makes the property itself inherit (here, nothing), and the editor then
+   * falls back to its own system-ui default. */
+  --atomic-editor-font: var(--app-font-family);
   --atomic-editor-body-size: 0.9375rem;
   --atomic-editor-body-leading: 1.6;
 

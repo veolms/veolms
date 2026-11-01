@@ -1,10 +1,16 @@
 /* Discussion workspace views */
 .discussion-hub {
-  --swipeable-tab-panel-inline-start: var(
-    --application-page-inline-gutter,
-    0px
+  /* The tab panel bleeds through the page gutter and the hub's own side
+     padding (phones), so the list's rows can reach the screen's edges; its
+     slides pad by the same amount, which keeps their content in line. */
+  --swipeable-tab-panel-inline-start: calc(
+    var(--application-page-inline-gutter, 0px) +
+      var(--discussion-hub-inline-padding, 0px)
   );
-  --swipeable-tab-panel-inline-end: var(--application-page-inline-gutter, 0px);
+  --swipeable-tab-panel-inline-end: calc(
+    var(--application-page-inline-gutter, 0px) +
+      var(--discussion-hub-inline-padding, 0px)
+  );
   --discussion-badge-qna-ink: #8b5cf6;
   --discussion-badge-qna-fill: color-mix(in srgb, #8b5cf6 20%, var(--surface));
   --discussion-badge-comment-ink: #3b82f6;
@@ -92,7 +98,7 @@
   z-index: 26;
   margin-top: 23px;
   margin-bottom: 0;
-  background: var(--main-surface);
+  background: var(--card-ground, var(--main-surface));
 }
 
 .discussion-hub__sticky-region .discussion-hub__tabs {
@@ -104,7 +110,7 @@
 
 .discussion-hub__sticky-region .discussion-hub__filters {
   margin-top: 0;
-  background: var(--main-surface);
+  background: var(--card-ground, var(--main-surface));
 }
 
 .discussion-hub__sticky-region ~ .swipeable-tab-panel .discussion-hub__layout {
@@ -116,42 +122,63 @@
   top: var(--page-tabs-sticky-top, 0px);
   z-index: 26;
   display: flex;
+  flex-wrap: nowrap;
   min-width: 0;
-  gap: 8px;
+  gap: 4px 8px;
   margin: 23px calc(-1 * var(--application-page-inline-gutter, 0px)) 0;
-  padding: 6px var(--application-page-inline-gutter, 0px) 0;
+  padding: 0 var(--application-page-inline-gutter, 0px);
   overflow-x: auto;
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  background: color-mix(in srgb, var(--main-surface) 95%, transparent);
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--card-ground, var(--main-surface)) 95%,
+    transparent
+  );
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
+.discussion-hub__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* The same tab as the Settings page, value for value (.settings-tabs button
+   in settings/foundation.css): height, spacing, type, and a hover that
+   brightens the label without drawing a block behind it. The two had drifted
+   apart: these were taller, wider, heavier, and filled in on hover. A change
+   to one belongs in the other. */
 .discussion-hub__tabs button {
   position: relative;
   display: inline-flex;
-  min-height: 51px;
+  min-height: 46px;
   flex: 0 0 auto;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   border: 0;
   border-bottom: 2px solid transparent;
-  border-radius: 9px 9px 0 0;
-  padding: 0 15px;
+  border-radius: 8px 8px 0 0;
+  padding: 0 14px;
   color: var(--muted);
   background: transparent;
   font: inherit;
-  font-size: 0.87rem;
-  font-weight: 650;
-  transition:
-    color 150ms ease,
-    background-color 150ms ease,
-    border-color 150ms ease;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: none;
 }
 
 .discussion-hub__tabs button:hover {
   color: var(--text);
-  background: color-mix(in srgb, var(--surface) 46%, transparent);
+  background: transparent;
+}
+
+@media (max-width: 640px) {
+  .discussion-hub__tabs button {
+    min-height: 43px;
+  }
 }
 .discussion-hub__tabs button.is-active {
   border-bottom-color: var(--page-tab-active-indicator);
@@ -187,26 +214,23 @@
   padding-inline: var(--application-page-inline-gutter, 0px);
   border: 1px solid transparent;
   border-radius: 0;
-  background: var(--main-surface);
+  background: var(--card-ground, var(--main-surface));
 }
 
 .discussion-hub__filter-toolbar {
   display: grid;
+  /* Takes back the 1px line around `.discussion-hub__filters`, so the
+     controls end exactly where the cards do. */
   margin-inline: -1px;
   min-width: 0;
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
   gap: inherit;
-  min-height: 39px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  border-radius: 14px;
-  background: var(--card-surface, var(--surface));
-  box-shadow: var(--surface-depth-edge-shadow);
-}
-
-:root[data-theme="light"] .discussion-hub__filter-toolbar {
-  box-shadow: var(--card-compact-shadow);
+  min-height: 44px;
+  /* No box of its own: the search field and the filters lie straight on
+     the page, in line with the cards under them. */
+  padding: 0;
+  border: 0;
 }
 
 .discussion-hub__filter-controls {
@@ -340,10 +364,10 @@
 .discussion-hub__select {
   display: flex;
   min-width: 0;
-  min-height: 39px;
+  min-height: 44px;
   align-items: center;
   gap: 8px;
-  border-radius: 9px;
+  border-radius: 12px;
   padding: 0 10px;
   color: var(--muted);
   background: color-mix(in srgb, var(--surface-strong) 72%, var(--canvas));
@@ -364,7 +388,7 @@
   color: var(--text-secondary);
   background: transparent;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 
 .discussion-hub__search input::placeholder {
@@ -375,7 +399,7 @@
   gap: 7px;
 }
 .discussion-hub__select .themed-select__trigger {
-  min-height: 39px;
+  min-height: 44px;
   padding: 0;
   border-radius: inherit;
   color: var(--text-secondary);
@@ -408,7 +432,7 @@
   display: grid;
   gap: 12px;
   margin-top: 15px;
-  border-radius: 15px;
+  border-radius: 16px;
   padding: 16px;
   background: var(--card-surface);
   box-shadow: var(--card-shadow);
@@ -496,9 +520,6 @@
 }
 
 .discussion-hub__thread-list {
-  --card-shadow: var(--surface-depth-edge-shadow), var(--card-compact-shadow);
-  --card-hover-shadow:
-    var(--surface-depth-edge-shadow), var(--card-compact-shadow);
   display: grid;
   gap: 10px;
   margin-top: 4px;
@@ -512,7 +533,7 @@
   align-items: center;
   min-width: 0;
   min-height: 126px;
-  border-radius: 15px;
+  border-radius: 16px;
   padding: 17px;
   background: var(--card-surface-raised);
   box-shadow: var(--card-shadow);
@@ -762,7 +783,7 @@
   display: grid;
   justify-items: center;
   gap: 7px;
-  border-radius: 15px;
+  border-radius: 16px;
   padding: 44px 22px;
   color: var(--muted);
   text-align: center;
@@ -820,13 +841,13 @@
   .discussion-hub__mobile-filter-trigger {
     display: inline-flex;
     min-width: 0;
-    min-height: 39px;
+    min-height: 44px;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
     gap: 7px;
     border: 0;
-    border-radius: 9px;
+    border-radius: 12px;
     padding: 0 12px;
     color: var(--text-secondary);
     background: color-mix(in srgb, var(--surface-strong) 72%, var(--canvas));
@@ -928,8 +949,9 @@
 
 @media (max-width: 520px) {
   .discussion-hub {
-    padding-right: 12px;
-    padding-left: 12px;
+    --discussion-hub-inline-padding: 12px;
+    padding-right: var(--discussion-hub-inline-padding);
+    padding-left: var(--discussion-hub-inline-padding);
   }
   .discussion-hub__header-icon {
     width: 52px;
@@ -945,11 +967,6 @@
     margin-left: -12px;
     padding-right: 12px;
     padding-left: 12px;
-  }
-  .discussion-hub__tabs button {
-    min-height: 47px;
-    padding: 0 12px;
-    font-size: 0.81rem;
   }
   .discussion-hub__filters {
     grid-template-columns: 1fr 1fr;
@@ -1005,14 +1022,10 @@
 .discussion-thread--question {
   min-height: 0;
   padding: 13px 17px;
-  box-shadow:
-    var(--card-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow: var(--card-shadow);
 }
 .discussion-thread--question:hover {
-  box-shadow:
-    var(--card-hover-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--card-hover-shadow);
 }
 .discussion-thread--question.is-collapsed {
   box-sizing: border-box;
@@ -1470,14 +1483,10 @@
 .discussion-thread--comment {
   min-height: 0;
   padding: 13px 17px;
-  box-shadow:
-    var(--card-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow: var(--card-shadow);
 }
 .discussion-thread--comment:hover {
-  box-shadow:
-    var(--card-hover-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--card-hover-shadow);
 }
 .discussion-thread--comment.is-collapsed {
   box-sizing: border-box;
@@ -1836,14 +1845,10 @@
 .discussion-thread--mention {
   min-height: 0;
   padding: 13px 17px;
-  box-shadow:
-    var(--card-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow: var(--card-shadow);
 }
 .discussion-thread--mention:hover {
-  box-shadow:
-    var(--card-hover-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--card-hover-shadow);
 }
 .discussion-thread--mention.is-collapsed {
   box-sizing: border-box;
@@ -2265,14 +2270,10 @@
 .discussion-thread--note {
   min-height: 0;
   padding: 13px 17px;
-  box-shadow:
-    var(--card-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow: var(--card-shadow);
 }
 .discussion-thread--note:hover {
-  box-shadow:
-    var(--card-hover-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--card-hover-shadow);
 }
 .discussion-thread--note.is-collapsed {
   box-sizing: border-box;
@@ -2655,14 +2656,10 @@
 .discussion-thread--following {
   min-height: 0;
   padding: 13px 17px;
-  box-shadow:
-    var(--card-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow: var(--card-shadow);
 }
 .discussion-thread--following:hover {
-  box-shadow:
-    var(--card-hover-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--card-hover-shadow);
 }
 .discussion-thread--following.is-collapsed {
   box-sizing: border-box;
@@ -3111,15 +3108,11 @@
 .discussion-thread--bookmark {
   min-height: 0;
   padding: 13px 17px;
-  box-shadow:
-    var(--card-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 .discussion-thread--bookmark:hover {
-  box-shadow:
-    var(--card-hover-shadow),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--card-hover-shadow);
 }
 
 .discussion-thread--bookmark.is-collapsed {

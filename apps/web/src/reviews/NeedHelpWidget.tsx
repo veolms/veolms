@@ -1,4 +1,5 @@
 import { HeadsetIcon as Headset } from "@phosphor-icons/react/Headset";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface NeedHelpWidgetProps {
   onContactSupport: () => void;
@@ -6,10 +7,9 @@ export interface NeedHelpWidgetProps {
 
 export function NeedHelpWidget({ onContactSupport }: NeedHelpWidgetProps) {
   return (
-    <section
+    <ElevatedCard
       aria-labelledby="need-help-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="p-5 md:p-6 transition-all"
     >
       <h3
         id="need-help-heading"
@@ -30,6 +30,6 @@ export function NeedHelpWidget({ onContactSupport }: NeedHelpWidgetProps) {
         <Headset size={17} />
         <span>Contact support</span>
       </button>
-    </section>
+    </ElevatedCard>
   );
 }

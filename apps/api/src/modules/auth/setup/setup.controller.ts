@@ -16,6 +16,7 @@ import {
   setSetupCookie,
 } from "../shared/auth.cookies.ts";
 import { presentLogin } from "../shared/auth.presenters.ts";
+import { requestLocation } from "../shared/request-location.ts";
 
 export function createSetupController(context: AuthContext) {
   const { setupService } = context;
@@ -43,6 +44,7 @@ export function createSetupController(context: AuthContext) {
     const result = await setupService.registerCreator(request.body, {
       ip: request.ip,
       userAgent: request.headers["user-agent"] ?? null,
+      location: requestLocation(request.headers),
     });
 
     setSessionCookie(reply, result.session.token);

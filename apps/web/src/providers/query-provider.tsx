@@ -6,6 +6,9 @@ import {
   persistQueryClientSubscribe,
 } from "@tanstack/react-query-persist-client";
 import { queryClient } from "../lib/query-client";
+import { startAccountSessionCopies } from "../services/accountSessionCopies";
+import { authKeys } from "../services/auth/auth.keys";
+import { SESSION_PRESENCE_KEY } from "../store/sessionPresence";
 // Not the autosync barrel: that would pull the autosave UI into the startup
 // bundle of every page.
 import { autosyncManager } from "../lib/autosync/manager";
@@ -67,9 +70,41 @@ function AutosyncPersistenceBootstrap() {
   return null;
 }
 
+/**
+ * Puts the tab's copies of the learner's answers (enrolled courses,
+ * wishlist, the open course's access) in place after hydration. It comes
+ * before the rest of the app, so its effect runs before any of theirs asks
+ * for them.
+ */
+function AccountSessionCopies() {
+  useEffect(() => startAccountSessionCopies(queryClient), []);
+  return null;
+}
+
+/**
+ * Signing in or out in another tab of this site changes the "was signed in"
+ * flag in local storage, which every other tab is told about. They check
+ * their session at once instead of carrying on with the old one until a
+ * request fails: the session check's answer does the rest (no account:
+ * the tab is signed out; another account: it switches).
+ */
+function SessionChangesInOtherTabs() {
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== SESSION_PRESENCE_KEY && event.key !== null) return;
+      void queryClient.invalidateQueries({ queryKey: authKeys.me() });
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  return null;
+}
+
 export function QueryProvider({ children }: QueryProviderProps) {
   return (
     <QueryClientProvider client={queryClient}>
+      <AccountSessionCopies />
+      <SessionChangesInOtherTabs />
       <AutosyncPersistenceBootstrap />
       {children}
     </QueryClientProvider>

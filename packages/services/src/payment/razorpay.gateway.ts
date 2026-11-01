@@ -21,6 +21,9 @@ export interface RazorpayGatewayConfig {
   baseUrl?: string;
 }
 
+/** Upper bound for any single Razorpay API call. */
+const REQUEST_TIMEOUT_MS = 10_000;
+
 /**
  * Lightweight Razorpay Gateway Adapter encapsulating the Razorpay REST API
  * and cryptographic signature verification.
@@ -50,6 +53,19 @@ export class RazorpayPaymentGateway implements PaymentGateway {
     endpoint: string,
     options: RequestInit = {},
   ): Promise<T> {
+    // Without credentials there is nothing to ask: the provider would only
+    // answer "unauthorised", and this answers the same way, which callers
+    // already treat as a definite refusal. Outside production the API
+    // starts without them (with a warning), so this is where a paid checkout
+    // stops, before any request leaves the machine.
+    if (!this.keyId || !this.keySecret) {
+      throw new AppError(
+        401,
+        "PAYMENT_GATEWAY_ERROR",
+        "Payment gateway is not configured",
+      );
+    }
+
     const url = `${this.baseUrl}${endpoint}`;
     const headers = {
       Authorization: this.getBasicAuthHeader(),
@@ -57,10 +73,40 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       ...options.headers,
     };
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+        // Without this, a hung gateway holds the request (and its pool
+        // slot / event-loop continuation) for undici's ~300s defaults.
+        // Checkout and verify call this synchronously in the request path.
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if ((err as Error)?.name === "TimeoutError") {
+        // 504 so callers treat the outcome as UNKNOWN (the gateway may
+        // have processed it) — isDefinitiveGatewayRejection stays false.
+        throw new AppError(
+          504,
+          "PAYMENT_GATEWAY_ERROR",
+          "Payment gateway request timed out",
+        );
+      }
+      // Anything else fetch rejects with is the network's doing: the name
+      // did not resolve, the connection was refused or it dropped. Rethrown
+      // as it was, it carried no gateway code, so checkout answered a plain
+      // 500 and the buyer was not told that payments were unavailable. A
+      // 5xx, like the timeout: the request may or may not have arrived, so
+      // the outcome is unknown and isDefinitiveGatewayRejection stays false.
+      const unreachable = new AppError(
+        502,
+        "PAYMENT_GATEWAY_ERROR",
+        "Payment gateway could not be reached",
+      );
+      unreachable.cause = err;
+      throw unreachable;
+    }
 
     if (!response.ok) {
       let errorBody:
@@ -407,12 +453,34 @@ export class RazorpayPaymentGateway implements PaymentGateway {
         break;
     }
 
+    // The provider's own event id (a request header) when there is one.
+    // Without it the id is built from the event name and the entity it is
+    // about. The bare entity id used to stand in, which made every event
+    // about one payment look like a repeat of the first: an "authorized"
+    // notice was stored, and the "captured" one that followed was dropped
+    // as a duplicate. The same held for a refund's created and processed.
+    const entityId = refundEntity?.id ?? paymentEntity?.id;
     const resolvedEventId =
       eventId ||
       payloadObj?.id ||
-      paymentEntity?.id ||
-      refundEntity?.id ||
+      (entityId ? `${event ?? "event"}:${entityId}` : undefined) ||
       crypto.randomUUID();
+
+    // Razorpay refund webhooks carry BOTH the refund entity and the payment
+    // entity. For refund events the meaningful amount is the refund's own
+    // (partial) amount — preferring the payment entity here would report the
+    // full payment amount and make downstream logic treat a partial refund
+    // as a full one.
+    const isRefundEvent =
+      eventType === "refund.succeeded" ||
+      eventType === "refund.pending" ||
+      eventType === "refund.failed";
+    const amount = isRefundEvent
+      ? (refundEntity?.amount ?? paymentEntity?.amount)
+      : (paymentEntity?.amount ?? refundEntity?.amount);
+    const currency = isRefundEvent
+      ? (refundEntity?.currency ?? paymentEntity?.currency)
+      : (paymentEntity?.currency ?? refundEntity?.currency);
 
     return {
       eventId: resolvedEventId,
@@ -422,8 +490,8 @@ export class RazorpayPaymentGateway implements PaymentGateway {
         paymentEntity?.order_id ?? payloadObj?.payload?.order?.entity?.id,
       gatewayPaymentId: paymentEntity?.id ?? refundEntity?.payment_id,
       gatewayRefundId: refundEntity?.id,
-      amount: paymentEntity?.amount ?? refundEntity?.amount,
-      currency: paymentEntity?.currency ?? refundEntity?.currency,
+      amount,
+      currency,
       paymentMethod: paymentEntity?.method
         ? {
             method: paymentEntity.method,

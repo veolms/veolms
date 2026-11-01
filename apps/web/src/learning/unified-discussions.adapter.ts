@@ -51,7 +51,6 @@ export function adaptUnifiedDiscussionItem(
     item.sourceType === "thread"
       ? adaptLearningThreadToComment(
           shadow && "kind" in shadow ? shadow : item.thread,
-          currentUserId,
         )
       : adaptLearningNoteToComment(
           shadow && "authorName" in shadow ? shadow : item.note,

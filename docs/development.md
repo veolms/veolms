@@ -137,10 +137,9 @@ pnpm dlx wrangler@4 deploy --config wrangler.cdn.jsonc
 
 Keep the R2 bucket private. Configure the Worker route as `/cdn/*` when
 `CDN_URL=/cdn`, or attach a custom domain and set `CDN_URL` to that full
-domain. Streaming manifests (`.m3u8` and `.mpd`) are public, while
-non-manifest objects in `CDN_PUBLIC_FOLDERS` are served without a token and
-`CDN_PRIVATE_FOLDERS` require a short-lived token (`?t=` compact 40-character
-hex token, or legacy `?veo_token=`) issued by the API.
+domain. `.m3u8` files are public, while non-manifest objects in
+`CDN_PUBLIC_FOLDERS` are served without a token and
+`CDN_PRIVATE_FOLDERS` require the short-lived `veo_token` issued by the API.
 `CDN_TOKEN_TTL_SECONDS` controls normal protected-media URLs and
 `CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs.
 New direct uploads use `public/...` or `protected/...` keys. Course thumbnail
@@ -170,23 +169,13 @@ avatar uploads use `POST /auth/me/avatar/presign`, a browser `PUT` to the
 returned storage URL, and `POST /auth/me/avatar/complete`. Authenticated
 discussion attachments use `protected/discussion-uploads/<fileName>`.
 
-## Development UI deployment
+## Web deployment
 
-Every push to `development` runs `.github/workflows/deploy-development-ui.yml`. The workflow type-checks and tests the Web application, builds it, synchronises `apps/web/build/client` to S3 while preserving the separately managed `course-videos/` prefix, uploads `index.html` last with a no-cache policy, and waits for a CloudFront `/*` invalidation to finish. It can also be started manually from GitHub Actions.
-
-The workflow uses the GitHub `development` environment and exchanges GitHub's OIDC token for short-lived AWS credentials. Configure these GitHub Actions variables on that environment:
-
-- `AWS_DEPLOY_ROLE_ARN`
-- `AWS_ACCOUNT_ID`
-- `AWS_REGION`
-- `AWS_S3_BUCKET`
-- `AWS_CLOUDFRONT_DISTRIBUTION_ID`
-- `VITE_API_BASE_URL` (optional; defaults to `https://api.procodrr.dev/v1` so
-  static hosts do not send API requests to their SPA fallback)
-- `VITE_CDN_URL` (optional; use a full CDN domain or `/cdn` when the host routes `/cdn/*` to the Worker)
-- `CDN_URL` remains the API/Worker setting and is used as a build fallback when `VITE_CDN_URL` is not configured.
-
-Do not add long-lived AWS access keys as GitHub secrets. Restrict the role's trust policy to the repository's immutable `development` environment subject, `repo:veolms@301170291/veolms@1320067532:environment:development`. Its permissions should be limited to listing the deployment bucket, putting and deleting objects in that bucket, and creating and reading invalidations for the development CloudFront distribution.
+Cloudflare Workers Builds builds and deploys the web app on dev.veolms.org from
+the `dev` branch, with `wrangler.jsonc`, on every push. No GitHub workflow
+builds or deploys it. A failed build shows only as the "Workers Builds: dev"
+check on the commit (its log is in the Cloudflare dashboard) and leaves the
+site on the previous version.
 
 ## Development API deployment
 

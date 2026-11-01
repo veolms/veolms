@@ -1,4 +1,4 @@
-import { otpSendRequestSchema } from "@veolms/contracts";
+import { otpSendRequestSchema } from "@veolms/contracts/auth/user";
 
 export type IdentifierMethod = "email" | "mobile";
 
@@ -549,6 +549,24 @@ export function findCountryByPhoneNumber(
     )[0];
 }
 
+const DEFAULT_EMAIL_DOMAIN = "gmail.com";
+
+/**
+ * What the login sends when only a name was typed: "anurag" (or "anurag@")
+ * becomes "anurag@gmail.com". The field keeps what was typed; the code step
+ * shows the full address. Anything with a domain of its own is left as is.
+ */
+export function withDefaultEmailDomain(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+
+  const at = trimmed.indexOf("@");
+  if (at === -1) return `${trimmed}@${DEFAULT_EMAIL_DOMAIN}`;
+  return at === trimmed.length - 1
+    ? `${trimmed}${DEFAULT_EMAIL_DOMAIN}`
+    : trimmed;
+}
+
 export function normalizeEmail(value: string): string {
   const trimmed = value.trim();
   const result = otpSendRequestSchema.safeParse({ email: trimmed });
@@ -612,7 +630,9 @@ export function formatNationalPhoneNumber(
 }
 
 function invalidMobileMessage(country: CountryOption): string {
-  return `Please enter a valid ${country.nationalDigits}-digit mobile number for ${country.name}.`;
+  // Short enough for one line beside the field's label; the country is in
+  // the picker next to the field.
+  return `Enter a valid ${country.nationalDigits}-digit number.`;
 }
 
 export function validateMobile(

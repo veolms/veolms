@@ -20,6 +20,14 @@ const setupRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/verify-token",
     {
+      // The setup token is the only thing protecting first-admin creation;
+      // an unthrottled endpoint that says yes/no to a guess is an oracle.
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         operationId: "verifySetupToken",
         tags: ["Auth"],
@@ -43,6 +51,12 @@ const setupRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/creator/register",
     {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         operationId: "registerInitialAdmin",
         tags: ["Auth"],

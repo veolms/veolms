@@ -7,11 +7,11 @@ export {
   avatarStoragePrefix,
   avatarSrcSetFromUrl,
   detectImageContentType,
+  displayAvatarUrl,
   isStoredAvatarUrl,
   removeAvatarVariants,
   removeOtherAvatarOriginals,
   removeAvatarPrefix,
-  removeAvatar,
   storeAvatarBuffer,
   storeAvatarFromUrl,
 } from "./avatar-storage.ts";

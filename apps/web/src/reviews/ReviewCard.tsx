@@ -7,6 +7,7 @@ import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import type { ReviewItem } from "./reviewsData";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface ReviewCardProps {
   review: ReviewItem;
@@ -41,10 +42,10 @@ export function ReviewCard({
   };
 
   return (
-    <article
+    <ElevatedCard
+      as="article"
       id={review.id}
-      className="group relative rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) p-5 md:p-6 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover))"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="group relative p-5 md:p-6 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover))"
     >
       {/* Header Row */}
       <div className="flex items-start justify-between gap-3">
@@ -209,6 +210,6 @@ export function ReviewCard({
           <span>Report</span>
         </button>
       </div>
-    </article>
+    </ElevatedCard>
   );
 }

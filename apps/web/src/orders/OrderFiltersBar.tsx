@@ -13,6 +13,12 @@ import {
 } from "../searchShortcut";
 import type { DateRangePreset } from "./useOrdersFilter";
 
+import {
+  FilterBar,
+  filterButtonSizeClasses,
+  filterControlClasses,
+  filterSelectTriggerClasses,
+} from "../components/FilterBar";
 export interface OrderFiltersBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -71,11 +77,9 @@ const datePresetOptions: readonly ThemedSelectOption<DateRangePreset>[] = [
   ],
 ];
 
-const selectBoxContainerClass =
-  "flex min-h-9.75 items-center rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all";
+const selectBoxContainerClass = filterControlClasses;
 
-const selectTriggerClass =
-  "min-h-9.75! p-0! bg-transparent! shadow-none! border-0! text-xs md:text-sm font-medium text-(--text-secondary) hover:bg-transparent! hover:text-(--text)! focus:outline-none! flex items-center justify-between w-full";
+const selectTriggerClass = `${filterSelectTriggerClasses} w-full`;
 
 export const OrderFiltersBar = memo(function OrderFiltersBar({
   searchQuery,
@@ -124,13 +128,12 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
   }, [couponsData]);
 
   return (
-    <div
-      className="flex flex-col gap-2.5 sm:gap-3 rounded-[15px] border border-(--border) bg-(--card-surface) p-2.5 sm:p-3.5 transition-all"
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
+    <FilterBar className="gap-2.5 sm:gap-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2.5">
         {/* Search Input */}
-        <label className="flex min-h-9.75 w-full sm:min-w-56 sm:flex-1 items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition-all cursor-text">
+        <label
+          className={`${filterControlClasses} w-full sm:min-w-56 sm:flex-1 gap-2.5 cursor-text`}
+        >
           <MagnifyingGlass
             size={17}
             className="text-(--muted) shrink-0"
@@ -160,10 +163,12 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
           )}
         </label>
 
-        {/* Dropdown Filters: 2 per row grid on mobile, flex on desktop */}
-        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:w-auto sm:items-center sm:gap-2.5">
+        {/* Dropdown filters: always one line, scrolled sideways when they
+            do not fit (a phone, or the order panel open beside the list).
+            The padding keeps the focus ring inside the scroller's clip. */}
+        <div className="-m-1 flex max-w-[calc(100%+0.5rem)] min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain p-1 [scrollbar-width:none] sm:gap-2.5 [&::-webkit-scrollbar]:hidden">
           {/* Date Range Select */}
-          <div className={`${selectBoxContainerClass} min-w-0 sm:min-w-38`}>
+          <div className={`${selectBoxContainerClass} shrink-0 min-w-38`}>
             <ThemedSelect
               id="orders-date-filter"
               value={datePreset}
@@ -177,7 +182,7 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
           </div>
 
           {/* Course Filter Dropdown */}
-          <div className={`${selectBoxContainerClass} min-w-0 sm:min-w-40`}>
+          <div className={`${selectBoxContainerClass} shrink-0 min-w-40`}>
             <ThemedSelect
               id="orders-course-filter"
               value={courseFilter || "all"}
@@ -196,7 +201,7 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
           </div>
 
           {/* Coupon Filter Dropdown */}
-          <div className={`${selectBoxContainerClass} min-w-0 sm:min-w-36`}>
+          <div className={`${selectBoxContainerClass} shrink-0 min-w-36`}>
             <ThemedSelect
               id="orders-coupon-filter"
               value={couponFilter || "all"}
@@ -215,7 +220,7 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
           </div>
 
           {/* Status Filter Dropdown */}
-          <div className={`${selectBoxContainerClass} min-w-0 sm:min-w-36`}>
+          <div className={`${selectBoxContainerClass} shrink-0 min-w-36`}>
             <ThemedSelect
               id="orders-status-filter"
               value={statusFilter || "all"}
@@ -236,7 +241,7 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
           <button
             type="button"
             onClick={onResetFilters}
-            className="flex min-h-9.75 items-center justify-center gap-1.5 rounded-[9px] border border-(--border) bg-(--card-surface) px-3 py-1.5 text-xs font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer w-full sm:w-auto shrink-0"
+            className={`${filterButtonSizeClasses} flex items-center justify-center gap-1.5 border border-(--border) bg-(--card-surface) px-3 py-1.5 text-xs font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer w-full sm:w-auto shrink-0`}
             title="Reset all filters"
           >
             <ArrowCounterClockwise size={14} />
@@ -244,6 +249,6 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
           </button>
         )}
       </div>
-    </div>
+    </FilterBar>
   );
 });

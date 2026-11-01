@@ -77,6 +77,8 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         channels: commonChannels,
         mandatory: false,
         deepLink: "/orders",
+        // The purchase email carries the order's invoice.
+        emailAttachments: [{ kind: "order-invoice", orderId: event.orderId }],
       },
     ];
   },
@@ -470,6 +472,9 @@ export async function createNotificationIntents(
   payload: Json,
   dependencies: NotificationHandlerDependencies,
 ): Promise<NotificationIntent[]> {
+  // Team events are kept for the audit trail; the team module emails the
+  // people concerned itself, so they raise no notifications.
+  if (eventType.startsWith("team.")) return [];
   const handler = notificationHandlers[eventType];
   if (!handler) throw new UnknownNotificationEventError(eventType);
   return await handler(payload, dependencies);

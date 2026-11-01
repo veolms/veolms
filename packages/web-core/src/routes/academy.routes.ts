@@ -30,6 +30,10 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "courses-not-enrolled",
       caseSensitive: true,
     }),
+    route("courses/free", marker, {
+      id: "courses-free",
+      caseSensitive: true,
+    }),
     route("courses/wishlist", marker, {
       id: "courses-wishlist",
       caseSensitive: true,
@@ -42,6 +46,11 @@ export function getAcademyRoutes(): RouteConfigEntry {
     route("students", marker, { id: "students", caseSensitive: true }),
     route("students/:username", marker, {
       id: "student-details",
+      caseSensitive: true,
+    }),
+    route("progress", marker, { id: "progress", caseSensitive: true }),
+    route("progress/:username", marker, {
+      id: "progress-learner",
       caseSensitive: true,
     }),
     route("reviews", marker, { id: "reviews", caseSensitive: true }),
@@ -59,6 +68,10 @@ export function getAcademyRoutes(): RouteConfigEntry {
       caseSensitive: true,
     }),
     route("discussions", marker, { id: "discussions", caseSensitive: true }),
+    route("discussions/all", marker, {
+      id: "discussions-all",
+      caseSensitive: true,
+    }),
     route("discussions/q-and-a", marker, {
       id: "discussions-q-and-a",
       caseSensitive: true,
@@ -83,7 +96,10 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "discussions-saved",
       caseSensitive: true,
     }),
-    route("analytics", marker, { id: "analytics", caseSensitive: true }),
+    route("analytics/:analyticsTab?", "routes/analytics-marker.tsx", {
+      id: "analytics",
+      caseSensitive: true,
+    }),
     route("orders", marker, { id: "orders", caseSensitive: true }),
     route("messages", marker, { id: "messages", caseSensitive: true }),
     route("purchase-history", marker, {
@@ -99,6 +115,21 @@ export function getAcademyRoutes(): RouteConfigEntry {
       caseSensitive: true,
     }),
     route("coupons", marker, { id: "coupons", caseSensitive: true }),
+    // The Home Page screen became the Platform page's first tab; the old
+    // address leads there.
+    route("home-page", marker, {
+      id: "home-page-settings",
+      caseSensitive: true,
+    }),
+    route("platform/:platformTab?", "routes/platform-marker.tsx", {
+      id: "platform",
+      caseSensitive: true,
+    }),
+    route("team/:teamTab?", "routes/platform-marker.tsx", {
+      id: "team",
+      caseSensitive: true,
+    }),
+    route("invite/:token", marker, { id: "invite", caseSensitive: true }),
     route("coupons/create", marker, {
       id: "coupon-create",
       caseSensitive: true,

@@ -1,4 +1,12 @@
-import { readMiniPlayerWidthPreference } from "./lessonPlayerPersistence";
+import {
+  getMobileNavigation,
+  getMobileNavigationRestingTop,
+  isMobileNavigationUnderMiniPlayer,
+} from "./mobileNavigationFollow";
+import {
+  readMiniPlayerSidePreference,
+  readMiniPlayerWidthPreference,
+} from "./lessonPlayerPersistence";
 
 export const LEARNING_PLAYER_MOTION_DURATION_MS = 500;
 export const LEARNING_PLAYER_MOTION_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
@@ -119,28 +127,72 @@ const clearInlineMinimizeCorner = (element: HTMLElement) => {
   element.style.removeProperty("transition-property");
 };
 
+/**
+ * Where each of the lesson's other parts lies from the video's top left
+ * corner while the page is at rest, measured once as a minimize begins.
+ */
+const unifiedDesktopExitOffsets = new WeakMap<
+  HTMLElement,
+  { x: number; y: number }
+>();
+/** The lesson's other parts are gone by the time the video is this far. */
+const UNIFIED_DESKTOP_EXIT_FADE_END_PROGRESS = 0.5;
+
+/**
+ * Takes the rest of the lesson (what is beside the video and what is under
+ * it) along with the video as it is minimized: the whole page shrinks as one
+ * sheet, about the video's top left corner, instead of the video shrinking
+ * away from parts that only slid down. Those parts fade as they go and are
+ * gone by half way, which is when the mini player's own bar starts to show
+ * under the video.
+ *
+ * `scale` and the two offsets are the video window's own at this moment.
+ */
 export function syncUnifiedDesktopChildExitMotion(
   surface: HTMLElement,
   options: {
     durationMs: number;
     exitX: number;
     exitY: number;
+    progress?: number;
+    scale?: number;
   },
 ): void {
   if (!isUnifiedDesktopLearningMotionSurface(surface)) return;
 
   const duration = `${Math.max(0, options.durationMs)}ms`;
-  const transform = `translate3d(${options.exitX.toFixed(3)}px, ${options.exitY.toFixed(3)}px, 0)`;
+  const scale = options.scale ?? 1;
+  const opacity =
+    1 -
+    clampLearningPlayerValue(
+      (options.progress ?? 0) / UNIFIED_DESKTOP_EXIT_FADE_END_PROGRESS,
+      0,
+      1,
+    );
+  const video = surface
+    .querySelector<HTMLElement>(".learning-workspace__player-wrap")
+    ?.getBoundingClientRect();
 
   for (const selector of UNIFIED_DESKTOP_EXIT_SELECTORS) {
     const child = surface.querySelector<HTMLElement>(selector);
     if (!child) continue;
-    child.style.transform = transform;
+    let offset = unifiedDesktopExitOffsets.get(child);
+    if (!offset && video && child.style.transform === "") {
+      const bounds = child.getBoundingClientRect();
+      offset = { x: bounds.left - video.left, y: bounds.top - video.top };
+      unifiedDesktopExitOffsets.set(child, offset);
+    }
+    // A part that lies some way from the video's corner comes that much
+    // closer to it as the sheet shrinks.
+    const x = options.exitX + (offset?.x ?? 0) * (scale - 1);
+    const y = options.exitY + (offset?.y ?? 0) * (scale - 1);
+    child.style.transform = `translate3d(${x.toFixed(3)}px, ${y.toFixed(3)}px, 0) scale(${scale.toFixed(5)})`;
     child.style.transformOrigin = "top left";
+    child.style.opacity = opacity.toFixed(3);
     child.style.transitionDuration = duration;
-    child.style.transitionProperty = "transform";
+    child.style.transitionProperty = "transform, opacity";
     child.style.transitionTimingFunction = LEARNING_PLAYER_MOTION_EASING;
-    child.style.willChange = "transform";
+    child.style.willChange = "transform, opacity";
   }
 }
 
@@ -148,8 +200,10 @@ export function clearUnifiedDesktopChildExitMotion(surface: HTMLElement) {
   for (const selector of UNIFIED_DESKTOP_EXIT_SELECTORS) {
     const child = surface.querySelector<HTMLElement>(selector);
     if (!child) continue;
+    unifiedDesktopExitOffsets.delete(child);
     child.style.removeProperty("transform");
     child.style.removeProperty("transform-origin");
+    child.style.removeProperty("opacity");
     child.style.removeProperty("transition-duration");
     child.style.removeProperty("transition-property");
     child.style.removeProperty("transition-timing-function");
@@ -221,6 +275,22 @@ export const getLearningPersistentPlayerElement = (): HTMLElement | null =>
 /** Matches the mini window's `rounded-xl` corners. */
 export const LEARNING_MINI_PLAYER_CORNER_RADIUS_PX = 12;
 const WINDOW_INVERSE_SCALE_PROPERTY = "--learning-player-window-inverse-scale";
+/** The inverse of the scale the window has at this moment of a drag. */
+const WINDOW_CURRENT_INVERSE_SCALE_PROPERTY =
+  "--learning-player-window-current-inverse-scale";
+/** How far the info bar under the moving window has faded in, 0 to 1. */
+const WINDOW_INFO_OPACITY_PROPERTY = "--learning-player-window-info-opacity";
+/**
+ * The info bar (the lesson's title, under the moving window) takes over from
+ * the lesson's real title, which is under the video too and fades out with
+ * the rest of the page by half way (UNIFIED_DESKTOP_EXIT_FADE_END_PROGRESS).
+ * The bar follows a little behind: it starts once the real title is most of
+ * the way out and is whole shortly after that one is gone. Brought in over
+ * the very same stretch, the two titles showed through each other, both at
+ * half strength at once.
+ */
+const WINDOW_INFO_FADE_START_PROGRESS = 0.32;
+const WINDOW_INFO_FADE_END_PROGRESS = 0.6;
 
 /**
  * Marks the persistent player as a window in motion. While marked, the host
@@ -246,6 +316,8 @@ function markLearningPlayerWindowMotion(
 function unmarkLearningPlayerWindowMotion(host: HTMLElement) {
   delete host.dataset.learningPlayerWindowMotion;
   host.style.removeProperty(WINDOW_INVERSE_SCALE_PROPERTY);
+  host.style.removeProperty(WINDOW_CURRENT_INVERSE_SCALE_PROPERTY);
+  host.style.removeProperty(WINDOW_INFO_OPACITY_PROPERTY);
 }
 
 /**
@@ -278,12 +350,39 @@ export function applyLearningPlayerWindowMinimizeMotion(
     options.targetScale,
     options.returning === true,
   );
-  // The radius is scaled with the window, so it is authored at layout size:
-  // it lands on the mini window's radius exactly when the scale does.
+  // The info bar under the window (the lesson's title) is enlarged against
+  // the window's scale so its words read at their real, mini player size.
+  // That used to be the scale the window ends at, so at the start of a slow
+  // swipe, with the window still nearly full size, the title was more than
+  // twice too big; it is now the scale the window has at this moment, which
+  // keeps the title one size all the way. And it fades in as the lesson's
+  // own title fades out (see WINDOW_INFO_FADE_START_PROGRESS).
+  host.style.setProperty(
+    WINDOW_CURRENT_INVERSE_SCALE_PROPERTY,
+    (1 / Math.max(options.scale, 0.01)).toFixed(5),
+  );
+  host.style.setProperty(
+    WINDOW_INFO_OPACITY_PROPERTY,
+    clampLearningPlayerValue(
+      (options.progress - WINDOW_INFO_FADE_START_PROGRESS) /
+        (WINDOW_INFO_FADE_END_PROGRESS - WINDOW_INFO_FADE_START_PROGRESS),
+      0,
+      1,
+    ).toFixed(3),
+  );
+  // The corners are the mini window's from the moment the window starts to
+  // move, not rounded off gradually on the way. The radius is scaled along
+  // with the window, so it is authored at layout size: divided by the scale
+  // the window has right now, it shows as the same radius throughout.
   const radius =
-    (LEARNING_MINI_PLAYER_CORNER_RADIUS_PX /
-      Math.max(options.targetScale, 0.01)) *
-    options.progress;
+    LEARNING_MINI_PLAYER_CORNER_RADIUS_PX / Math.max(options.scale, 0.01);
+  // A window brought back to where it rests (progress 0) is against the
+  // top of the page again, with the lesson under it: its bottom corners
+  // are square, as they are at rest. Its top corners stay round. At rest
+  // it is the page's frame that rounds them, and the frame does not cut
+  // the window while it is being moved, so squared here they showed as
+  // sharp corners for the moment before the frame took over again.
+  const bottomRadius = options.progress > 0 ? radius : 0;
   if (!options.keepPosition) {
     host.style.setProperty(
       "translate",
@@ -298,7 +397,7 @@ export function applyLearningPlayerWindowMinimizeMotion(
   host.style.willChange = "translate, scale";
   host.style.zIndex = "190";
   host.style.overflow = "hidden";
-  host.style.borderRadius = `${radius.toFixed(2)}px`;
+  host.style.borderRadius = `${radius.toFixed(2)}px ${radius.toFixed(2)}px ${bottomRadius.toFixed(2)}px ${bottomRadius.toFixed(2)}px`;
 }
 
 export function clearLearningPlayerWindowMinimizeMotion(host: HTMLElement) {
@@ -324,7 +423,7 @@ export function getLearningMinimizeGeometry(
   } = {},
 ): LearningMinimizeGeometry {
   const bounds = element.getBoundingClientRect();
-  const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+  const viewportWidth = getLearningPlayerViewportBounds().width;
   const startWidth = bounds.width || viewportWidth;
   const startLeft = Number.isFinite(bounds.left) ? bounds.left : 0;
   const startTop = Number.isFinite(bounds.top) ? bounds.top : 0;
@@ -513,9 +612,29 @@ export const clearLearningPlayerMinimizeMotionStyles = (
   delete element.dataset.learningPlayerMotionPhase;
 };
 
+/**
+ * The area the mini player is kept inside.
+ *
+ * Normally that is the visual viewport, which is what shrinks when an
+ * on-screen keyboard opens. A page that has been pinch-zoomed is different:
+ * there the visual viewport is only the magnified part being looked at, and
+ * following it made the mini player jump to that part's corner and stay
+ * there at its magnified size. While the page is zoomed the whole layout
+ * viewport is used instead, so the mini player keeps its place on the page
+ * and is zoomed and panned with everything else.
+ */
 export const getLearningPlayerViewportBounds =
   (): LearningPlayerViewportBounds => {
     const viewport = window.visualViewport;
+    if (viewport && viewport.scale > 1.01) {
+      const root = document.documentElement;
+      return {
+        height: root.clientHeight || window.innerHeight,
+        left: 0,
+        top: 0,
+        width: root.clientWidth || window.innerWidth,
+      };
+    }
     return {
       height: viewport?.height ?? window.innerHeight,
       left: viewport?.offsetLeft ?? 0,
@@ -528,17 +647,14 @@ export const getLearningMiniPlayerBottomEdge = (
   viewport = getLearningPlayerViewportBounds(),
 ) => {
   const viewportBottom = viewport.top + viewport.height;
-  const mobileNavigation = document.querySelector<HTMLElement>(
-    ".mobile-bottom-nav:not(.is-scroll-hidden)",
-  );
-  const navigationRect = mobileNavigation?.getBoundingClientRect();
-  if (
-    navigationRect &&
-    navigationRect.height > 0 &&
-    navigationRect.top < viewportBottom &&
-    navigationRect.bottom > viewport.top
-  ) {
-    return navigationRect.top - LEARNING_MINI_PLAYER_MARGIN;
+  // On a phone the mini player rests on the bottom menu, measured where the
+  // menu stands once shown (see `mobileNavigationFollow`).
+  const mobileNavigation = getMobileNavigation();
+  if (mobileNavigation && isMobileNavigationUnderMiniPlayer(mobileNavigation)) {
+    const navigationTop = getMobileNavigationRestingTop(mobileNavigation);
+    if (navigationTop < viewportBottom && navigationTop > viewport.top) {
+      return navigationTop - LEARNING_MINI_PLAYER_MARGIN;
+    }
   }
   return viewportBottom - LEARNING_MINI_PLAYER_MARGIN;
 };
@@ -566,6 +682,44 @@ export const getPreferredLearningMiniPlayerWidth = (viewportWidth: number) => {
   return LEARNING_MINI_PLAYER_DESKTOP_WIDTH;
 };
 
+/**
+ * Where along the bottom the mini player should appear, when a swipe that
+ * minimized the video asked for somewhere other than its usual corner (see
+ * useLessonPlayerMinimizeGesture: it lands under the finger). Null means the
+ * usual corner: the bottom one on the side the mini player last rested on in
+ * this tab, the right one until it has rested anywhere.
+ */
+let preferredMiniPlayerLeft: number | null = null;
+
+export const setLearningMiniPlayerPreferredLeft = (left: number | null) => {
+  preferredMiniPlayerLeft = left;
+};
+
+/**
+ * How far in from the viewport's left edge the sidebar reaches, when one
+ * stands there in view (the wide and collapsed layouts); 0 otherwise (the
+ * phone layout, or a sidebar hidden off screen). The bottom-left corner the
+ * mini player rests in starts past it, so the player does not lie over the
+ * sidebar's profile and appearance controls.
+ */
+const getLeftSidebarInset = (viewport: LearningPlayerViewportBounds) => {
+  const sidebar = document.querySelector(".courses-sidebar");
+  if (!sidebar) return 0;
+  const rect = sidebar.getBoundingClientRect();
+  const standsAtLeftEdge =
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.left <= viewport.left + LEARNING_MINI_PLAYER_MARGIN &&
+    rect.right > viewport.left;
+  return standsAtLeftEdge ? rect.right - viewport.left : 0;
+};
+
+/** The left edge of the bottom-left corner the mini player rests in. */
+export const getLearningMiniPlayerLeftDock = (
+  viewport = getLearningPlayerViewportBounds(),
+) =>
+  viewport.left + getLeftSidebarInset(viewport) + LEARNING_MINI_PLAYER_MARGIN;
+
 export const getDefaultLearningMiniPlayerLayout = (
   maximumSourceWidth = Number.POSITIVE_INFINITY,
   viewport = getLearningPlayerViewportBounds(),
@@ -578,8 +732,21 @@ export const getDefaultLearningMiniPlayerLayout = (
     clampLearningPlayerValue(preferredWidth, minimumWidth, maximumWidth),
   );
   const height = getLearningMiniPlayerHeight(width);
+  const cornerLeft =
+    viewport.left + viewport.width - LEARNING_MINI_PLAYER_MARGIN - width;
+  const usualLeft =
+    readMiniPlayerSidePreference() === "left"
+      ? Math.min(getLearningMiniPlayerLeftDock(viewport), cornerLeft)
+      : cornerLeft;
   return {
-    left: viewport.left + viewport.width - LEARNING_MINI_PLAYER_MARGIN - width,
+    left:
+      preferredMiniPlayerLeft === null
+        ? usualLeft
+        : clampLearningPlayerValue(
+            preferredMiniPlayerLeft,
+            viewport.left + LEARNING_MINI_PLAYER_MARGIN,
+            Math.max(viewport.left + LEARNING_MINI_PLAYER_MARGIN, cornerLeft),
+          ),
     top: Math.max(
       viewport.top + LEARNING_MINI_PLAYER_MARGIN,
       getLearningMiniPlayerBottomEdge(viewport) - height,

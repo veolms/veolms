@@ -65,7 +65,7 @@
   max-width: 980px;
   margin: clamp(32px, 7vw, 76px) auto 0;
   padding: 48px 24px;
-  border-radius: 22px;
+  border-radius: 16px;
   background:
     radial-gradient(
       circle at 50% 0%,
@@ -104,6 +104,13 @@
   color: var(--muted);
   font-size: 0.88rem;
   line-height: 1.65;
+}
+
+.courses-placeholder-empty p a {
+  color: var(--accent);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 @media (max-width: 640px) {

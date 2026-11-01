@@ -5,6 +5,7 @@ import type {
   Json,
 } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
+import { CHECKOUT_HAND_OUT_ATTEMPT_STATUS } from "../shared/open-orders.ts";
 
 export async function findPaymentById(database: Executor, paymentId: string) {
   return await database
@@ -14,6 +15,13 @@ export async function findPaymentById(database: Executor, paymentId: string) {
     .executeTakeFirst();
 }
 
+// Which of an order's payment rows `findPaymentByOrderId` returns. The order
+// screens rank theirs differently (orders/order.repository.ts's
+// listPaymentsForOrders puts `refunded` and `processing` ahead of
+// `initiated`); the two are kept apart on purpose, because aligning them
+// would change which payment existing orders resolve to here.
+const paymentRankForOrder = sql`CASE WHEN status = 'captured' THEN 0 WHEN status = 'authorized' THEN 1 WHEN status = 'pending' THEN 2 WHEN status = 'initiated' THEN 3 ELSE 4 END`;
+
 export async function findPaymentByOrderId(
   database: Executor,
   orderId: string,
@@ -22,10 +30,42 @@ export async function findPaymentByOrderId(
     .selectFrom("payments")
     .selectAll()
     .where("order_id", "=", orderId)
-    .orderBy(
-      sql`CASE WHEN status = 'captured' THEN 0 WHEN status = 'authorized' THEN 1 WHEN status = 'pending' THEN 2 WHEN status = 'initiated' THEN 3 ELSE 4 END`,
-      "asc",
-    )
+    .orderBy(paymentRankForOrder, "asc")
+    .orderBy("created_at", "desc")
+    .executeTakeFirst();
+}
+
+/**
+ * For each of these orders, the provider of the payment
+ * `findPaymentByOrderId` would return. An order with no payment row is left
+ * out.
+ */
+export async function listPaymentProvidersByOrderIds(
+  database: Executor,
+  orderIds: string[],
+) {
+  if (orderIds.length === 0) return [];
+  return await database
+    .selectFrom("payments")
+    .distinctOn("order_id")
+    .select(["order_id", "gateway_provider"])
+    .where("order_id", "in", orderIds)
+    .orderBy("order_id")
+    .orderBy(paymentRankForOrder, "asc")
+    .orderBy("created_at", "desc")
+    .execute();
+}
+
+/** The gateway ids of the payment `findPaymentByOrderId` would return. */
+export async function findPaymentReferenceByOrderId(
+  database: Executor,
+  orderId: string,
+) {
+  return await database
+    .selectFrom("payments")
+    .select(["gateway_payment_id", "gateway_order_id"])
+    .where("order_id", "=", orderId)
+    .orderBy(paymentRankForOrder, "asc")
     .orderBy("created_at", "desc")
     .executeTakeFirst();
 }
@@ -49,6 +89,27 @@ export async function findPaymentByGatewayPaymentId(
     .selectFrom("payments")
     .selectAll()
     .where("gateway_payment_id", "=", gatewayPaymentId)
+    .executeTakeFirst();
+}
+
+/**
+ * The manual payment recorded under a transfer reference, if there is one.
+ * `gatewayPaymentId` is the normalised id (`manual_pay_` plus the reference
+ * with no whitespace, in upper case). The stored id is compared the same
+ * way, so a payment verified before references were normalised, which holds
+ * the reference as it was typed, is found too.
+ */
+export async function findManualPaymentByReference(
+  database: Executor,
+  gatewayPaymentId: string,
+) {
+  return await database
+    .selectFrom("payments")
+    .select("id")
+    .where("gateway_provider", "=", "manual")
+    .where(
+      sql<boolean>`upper(regexp_replace(gateway_payment_id, '[[:space:]]+', '', 'g')) = upper(${gatewayPaymentId})`,
+    )
     .executeTakeFirst();
 }
 
@@ -143,30 +204,6 @@ export async function transitionPaymentStatus(
     .executeTakeFirst();
 }
 
-export async function updatePayment(
-  database: Executor,
-  paymentId: string,
-  updates: {
-    gateway_order_id?: string;
-    gateway_payment_id?: string | null;
-    gateway_key_id?: string | null;
-    amount?: number;
-    currency?: string;
-    status?: PaymentStatus;
-    payment_method?: Json | null;
-    error_code?: string | null;
-    error_description?: string | null;
-    updated_at?: Date;
-  },
-) {
-  return await database
-    .updateTable("payments")
-    .set(updates)
-    .where("id", "=", paymentId)
-    .returningAll()
-    .executeTakeFirst();
-}
-
 /**
  * Points an existing payment row at a freshly created gateway order, but
  * only while the payment is not in a final state. The guard matters: a
@@ -201,16 +238,63 @@ export async function reinitializePaymentIfNotFinal(
     .executeTakeFirst();
 }
 
-export async function listPaymentAttempts(
+/**
+ * Closes whatever gateway payment an order still has open, when the order
+ * has been settled some other way. The row stops being treated as a payment
+ * in progress; a capture that still arrives for it is not lost (a failed
+ * payment can be claimed): it is recorded as a surplus payment, because its
+ * order is already paid (see surplus-payment.ts).
+ */
+export async function closeOpenPaymentsForOrder(
   database: Executor,
-  paymentId: string,
+  orderId: string,
+  reason: { error_code: string; error_description: string; now: Date },
 ) {
   return await database
-    .selectFrom("payment_attempts")
-    .selectAll()
-    .where("payment_id", "=", paymentId)
-    .orderBy("attempt_number", "asc")
+    .updateTable("payments")
+    .set({
+      status: "failed",
+      error_code: reason.error_code,
+      error_description: reason.error_description,
+      updated_at: reason.now,
+    })
+    .where("order_id", "=", orderId)
+    .where("status", "in", ["initiated", "processing"])
+    .returning("id")
     .execute();
+}
+
+/**
+ * The last time an order's gateway order was returned to the buyer. Every
+ * hand-out records an attempt, so this is the newest such attempt on the
+ * order's gateway payment; undefined when it never had one.
+ */
+export async function findLastCheckoutHandOutAt(
+  database: Executor,
+  orderId: string,
+): Promise<Date | undefined> {
+  const row = await database
+    .selectFrom("payment_attempts as a")
+    .innerJoin("payments as p", "p.id", "a.payment_id")
+    .select((eb) => eb.fn.max("a.created_at").as("at"))
+    .where("p.order_id", "=", orderId)
+    .where("p.gateway_provider", "not in", ["free", "manual"])
+    .where("a.status", "=", CHECKOUT_HAND_OUT_ATTEMPT_STATUS)
+    .executeTakeFirst();
+  return row?.at ?? undefined;
+}
+
+/** Attempts recorded so far; the next attempt's number is this plus one. */
+export async function countPaymentAttempts(
+  database: Executor,
+  paymentId: string,
+): Promise<number> {
+  const row = await database
+    .selectFrom("payment_attempts")
+    .select((eb) => eb.fn.countAll().as("count"))
+    .where("payment_id", "=", paymentId)
+    .executeTakeFirst();
+  return Number(row?.count ?? 0);
 }
 
 export async function insertPaymentAttempt(

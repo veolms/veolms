@@ -1,7 +1,11 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListPartsCommand,
   PutObjectCommand,
   PutBucketCorsCommand,
   S3Client,
@@ -9,6 +13,7 @@ import {
   S3ServiceException,
   DeleteObjectsCommand,
   ListObjectsV2Command,
+  UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createHmac } from "node:crypto";
@@ -73,6 +78,13 @@ export interface StorageUploadItem {
   contentType?: string;
 }
 
+export interface UploadFilesOptions {
+  /** Stops starting new uploads (and retries) once aborted. */
+  signal?: AbortSignal;
+  /** Called after each file is uploaded, with the running count and the file. */
+  onUploaded?: (uploadedCount: number, item: StorageUploadItem) => void;
+}
+
 export type StorageVisibility = "public" | "protected";
 
 /**
@@ -93,6 +105,9 @@ export function assertVisibilityPrefixedKey(key: string): string {
   return normalized;
 }
 
+/** How long a failed bucket CORS call is left alone before it is retried. */
+const BUCKET_CORS_RETRY_MS = 5 * 60 * 1000;
+
 export class S3StorageService {
   private client: S3Client;
   private bucket: string;
@@ -103,6 +118,8 @@ export class S3StorageService {
   private cdnPublicFolders: readonly string[];
   private requireVisibilityPrefix: boolean;
   private bucketCorsEnsured: Promise<void> | null = null;
+  /** Earliest time the bucket CORS call may be made again after failing. */
+  private bucketCorsRetryAt = 0;
 
   constructor(options: StorageOptions) {
     if (!options.bucket) {
@@ -344,6 +361,7 @@ export class S3StorageService {
   async uploadFiles(
     files: readonly StorageUploadItem[],
     concurrency = 6,
+    options: UploadFilesOptions = {},
   ): Promise<number> {
     if (files.length === 0) {
       return 0;
@@ -354,6 +372,7 @@ export class S3StorageService {
 
     const uploadWorker = async (): Promise<void> => {
       while (cursor < files.length) {
+        options.signal?.throwIfAborted();
         const itemIndex = cursor++;
         const item = files[itemIndex];
         if (!item) {
@@ -369,10 +388,11 @@ export class S3StorageService {
           try {
             await this.uploadFile(item.key, item.localFilePath, contentType);
             uploadedCount++;
+            options.onUploaded?.(uploadedCount, item);
             break;
           } catch (err) {
             attempts++;
-            if (attempts >= maxRetries) {
+            if (attempts >= maxRetries || options.signal?.aborted) {
               throw err;
             }
             await new Promise((resolve) =>
@@ -443,7 +463,10 @@ export class S3StorageService {
    * upload request) await the same cached result instead of re-issuing it.
    */
   async ensureBucketCors(): Promise<void> {
-    if (!this.bucketCorsEnsured) {
+    // After a failure it is not tried again straight away. A bucket that
+    // refuses the setting (no permission, say) otherwise cost every upload
+    // request a failed call of its own.
+    if (!this.bucketCorsEnsured && Date.now() >= this.bucketCorsRetryAt) {
       this.bucketCorsEnsured = this.client
         .send(
           new PutBucketCorsCommand({
@@ -476,6 +499,7 @@ export class S3StorageService {
           () => undefined,
           (error) => {
             this.bucketCorsEnsured = null;
+            this.bucketCorsRetryAt = Date.now() + BUCKET_CORS_RETRY_MS;
             console.warn(
               `[storage] Failed to set S3 bucket CORS for ${this.bucket}:`,
               error instanceof Error ? error.message : error,
@@ -492,12 +516,19 @@ export class S3StorageService {
    *
    * The URL is single-use and expires after `expiresIn` seconds (default 300).
    * Callers must set Content-Type on the PUT request to match `contentType`.
+   *
+   * By default nothing enforces that: the presigner leaves Content-Type out
+   * of the signature, so the holder of the URL can store the object under
+   * any type. `bindContentType` signs it, and storage then refuses a PUT
+   * whose Content-Type differs. Use it wherever the stored type decides how
+   * the object is served to other people (anything under a public prefix).
    */
   async getPresignedPutUrl(
     key: string,
     contentType: string,
     contentLength?: number,
     expiresIn = 300,
+    options?: { bindContentType?: boolean },
   ): Promise<string> {
     await this.ensureBucketCors().catch(() => {});
     const storageKey = this.keyForWrite(key);
@@ -510,7 +541,117 @@ export class S3StorageService {
     return getSignedUrl(this.client, command, {
       expiresIn,
       unhoistableHeaders: new Set(["content-length"]),
+      ...(options?.bindContentType
+        ? { signableHeaders: new Set(["content-type"]) }
+        : {}),
     });
+  }
+
+  /**
+   * Starts an S3/R2 multipart upload. The upload id is the durable handle a
+   * client (or the API on its behalf) uses to resume after an interruption.
+   */
+  async createMultipartUpload(
+    key: string,
+    contentType: string,
+  ): Promise<string> {
+    const storageKey = this.keyForWrite(key);
+    const response = await this.client.send(
+      new CreateMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: storageKey,
+        ContentType: contentType,
+      }),
+    );
+    if (!response.UploadId) {
+      throw new Error("Storage did not return a multipart upload id.");
+    }
+    return response.UploadId;
+  }
+
+  /** Presigns one `UploadPart` request for a resumable upload. */
+  async getPresignedUploadPartUrl(
+    key: string,
+    uploadId: string,
+    partNumber: number,
+    expiresIn = 3_600,
+  ): Promise<string> {
+    const command = new UploadPartCommand({
+      Bucket: this.bucket,
+      Key: this.keyForWrite(key),
+      UploadId: uploadId,
+      PartNumber: partNumber,
+    });
+    return getSignedUrl(this.client, command, { expiresIn });
+  }
+
+  /**
+   * Lists the parts storage has already accepted. This is the source of truth
+   * when a client reconnects: it can skip those parts instead of restarting.
+   */
+  async listMultipartUploadParts(
+    key: string,
+    uploadId: string,
+  ): Promise<Array<{ partNumber: number; etag: string; size: number }>> {
+    const storageKey = this.keyForWrite(key);
+    const parts: Array<{ partNumber: number; etag: string; size: number }> = [];
+    let marker: string | undefined;
+
+    do {
+      const response = await this.client.send(
+        new ListPartsCommand({
+          Bucket: this.bucket,
+          Key: storageKey,
+          UploadId: uploadId,
+          PartNumberMarker: marker,
+        }),
+      );
+      for (const part of response.Parts ?? []) {
+        if (part.PartNumber === undefined || !part.ETag) continue;
+        parts.push({
+          partNumber: part.PartNumber,
+          etag: part.ETag,
+          size: part.Size ?? 0,
+        });
+      }
+      marker = response.IsTruncated ? response.NextPartNumberMarker : undefined;
+    } while (marker);
+
+    return parts;
+  }
+
+  /** Finalizes a multipart upload from the parts storage has accepted. */
+  async completeMultipartUpload(
+    key: string,
+    uploadId: string,
+    parts: ReadonlyArray<{ partNumber: number; etag: string }>,
+  ): Promise<void> {
+    await this.client.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: this.keyForWrite(key),
+        UploadId: uploadId,
+        MultipartUpload: {
+          Parts: parts
+            .map((part) => ({
+              PartNumber: part.partNumber,
+              ETag: part.etag,
+            }))
+            .sort((left, right) => left.PartNumber! - right.PartNumber!),
+        },
+      }),
+    );
+  }
+
+  /** Discards an in-flight multipart upload and its uploaded parts. */
+  async abortMultipartUpload(key: string, uploadId: string): Promise<void> {
+    await this.client.send(
+      new AbortMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: this.keyForWrite(key),
+        UploadId: uploadId,
+      }),
+    );
   }
 
   /**
@@ -704,8 +845,20 @@ export function getMimeType(filename: string): string {
   if (filename.endsWith(".ts")) {
     return "video/mp2t";
   }
+  if (filename.endsWith(".mpd")) {
+    return "application/dash+xml";
+  }
+  if (filename.endsWith(".m4s")) {
+    return "video/iso.segment";
+  }
+  if (filename.endsWith(".vtt")) {
+    return "text/vtt";
+  }
   if (filename.endsWith(".mp4")) {
     return "video/mp4";
+  }
+  if (filename.endsWith(".m4s")) {
+    return "video/iso.segment";
   }
   if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
     return "image/jpeg";

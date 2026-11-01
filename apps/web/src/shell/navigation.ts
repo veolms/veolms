@@ -4,11 +4,14 @@ import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { HouseIcon as House } from "@phosphor-icons/react/House";
 import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
+import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import type { Icon } from "@phosphor-icons/react";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
+import { canOpenNavigationPath } from "./navigationPermissions";
 
 export interface NavigationItemMetadata {
   id: string;
@@ -88,15 +91,54 @@ const adminNavigation: readonly NavigationItem[] = [
     "/analytics",
   ),
   createNavigationItem("admin-coupons", "Coupons", Tag, "/coupons"),
+  // Academy-wide settings, the home page among them.
+  createNavigationItem(
+    "admin-platform",
+    "Platform",
+    SlidersHorizontal,
+    "/platform",
+  ),
+  // Who works on the academy and what each person may do.
+  createNavigationItem("admin-team", "Team", UsersThree, "/team"),
   createNavigationItem("creator-settings", "Settings", GearSix, "/settings"),
 ];
+
+/** What the sidebar knows of a team member beyond admin or instructor. */
+export interface TeamNavigationAccess {
+  roles: readonly string[];
+  /** Null while capabilities load: only pages anyone may open show. */
+  permissions: readonly string[] | null;
+}
+
+/** On the team in some role other than (or besides) instructor. */
+function holdsOtherTeamRole(roles: readonly string[]): boolean {
+  return roles.some((role) => {
+    const name = role.trim().toLowerCase();
+    return name !== "student" && name !== "instructor" && name !== "creator";
+  });
+}
 
 export function getRoleNavigationItems(
   role: "student" | "creator",
   isAdmin = false,
+  team?: TeamNavigationAccess,
 ): readonly NavigationItem[] {
   if (role === "student") return studentNavigation;
-  return isAdmin ? adminNavigation : creatorNavigation;
+  if (isAdmin) return adminNavigation;
+  if (!team) return creatorNavigation;
+  // An instructor alone keeps their usual menu, less any page their
+  // permissions do not open; it shows whole while those load. Any other team
+  // role gets the staff menu, cut down the same way; until permissions are
+  // known, only pages that need none, so nothing appears and then vanishes.
+  const permissions = new Set(team.permissions ?? []);
+  const opens = ([, , metadata]: NavigationItem) =>
+    canOpenNavigationPath(metadata?.routeLink ?? "/", permissions);
+  if (!holdsOtherTeamRole(team.roles)) {
+    return team.permissions
+      ? creatorNavigation.filter(opens)
+      : creatorNavigation;
+  }
+  return adminNavigation.filter(opens);
 }
 
 /** Public visitors get the same navigation as a student while `/auth/me` is resolving. */
@@ -111,10 +153,13 @@ const navigationTones: Record<string, string> = {
   Dashboard: "#5da9ff",
   Courses: "#f472b6",
   Coupons: "#fbbf24",
+  Platform: "#38bdf8",
+  Team: "#818cf8",
   Students: "#2dd4bf",
   Reviews: "#f1be4b",
   "My Quiz": "#f87171",
   Discussions: "#4ade80",
+  Progress: "#fb923c",
   Analytics: "#f09c4e",
   Orders: "#d68eea",
   "Purchase History": "#d68eea",
@@ -122,7 +167,8 @@ const navigationTones: Record<string, string> = {
   Notifications: "#f1be4b",
   Settings: "#a16cff",
   // Dock controls that are not pages.
-  Appearance: "#fbbf24",
+  // The colour theme button takes the theme's own primary colour.
+  Appearance: "var(--accent)",
   "Reading mode": "#34d399",
   Fullscreen: "#ff8a55",
   Logout: "#8c9294",
@@ -147,6 +193,15 @@ export function getNavigationPreferenceStorageKey(
     : `veolms-navigation-${preference}-${role}`;
 }
 
+/**
+ * Menu items that took a new name, by their old one: a saved menu order keeps
+ * the item where its owner put it.
+ */
+const RENAMED_ITEMS: Readonly<Record<string, string>> = {
+  // The Home Page screen became the Platform page's first tab.
+  "Home Page": "Platform",
+};
+
 export function getInitialNavigationOrder(
   role: string,
   navigationItems: readonly NavigationItemWithMetadata[],
@@ -162,10 +217,14 @@ export function getInitialNavigationOrder(
       ) || "[]",
     );
     if (!Array.isArray(parsedOrder)) return defaultOrder;
-    const savedOrder = parsedOrder.filter(
-      (label): label is string =>
-        typeof label === "string" && defaultOrder.includes(label),
-    );
+    const savedOrder = parsedOrder
+      .map((label: unknown) =>
+        typeof label === "string" ? (RENAMED_ITEMS[label] ?? label) : label,
+      )
+      .filter(
+        (label): label is string =>
+          typeof label === "string" && defaultOrder.includes(label),
+      );
     const validSavedOrder = savedOrder.filter(
       (label, index) =>
         defaultOrder.includes(label) && savedOrder.indexOf(label) === index,

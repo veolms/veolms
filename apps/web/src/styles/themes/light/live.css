@@ -1,0 +1,29 @@
+/* live palette - light mode: white and light grey with a vivid red. */
+:root[data-theme="light"][data-palette="live"] {
+  --canvas: #ececec;
+  --header: #eeeeee;
+  --surface: #ffffff;
+  --hover: #ebebeb;
+  --selected: #e5e5e5;
+  --track: #e0e0e0;
+  --border: transparent;
+  --border-strong: transparent;
+  --text: #0f0f0f;
+  --text-secondary: #3d3d3d;
+  --muted: #606060;
+  --accent: #ff0033;
+  --accent-hover: #e0002d;
+  --accent-soft: rgba(255, 0, 51, 0.12);
+  --accent-border: rgba(255, 0, 51, 0.3);
+  --accent-shadow: rgba(204, 0, 41, 0.16);
+  --on-accent: #ffffff;
+  --app-shell: #e2e2e2;
+  --main-surface: #f2f2f2;
+  --surface-strong: #f0f0f0;
+  --progress-track: #c4c4c4;
+  --on-accent-glyph: #ffffff;
+  --card-surface: #ffffff;
+  --card-surface-raised: #f0f0f0;
+  --card-surface-soft: #f9f9f9;
+  --card-surface-hover: #f2f2f2;
+}

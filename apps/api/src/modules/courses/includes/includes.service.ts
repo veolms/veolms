@@ -1,3 +1,4 @@
+import type { Permission } from "@veolms/contracts";
 import crypto from "node:crypto";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
@@ -8,7 +9,10 @@ import type {
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import * as includesRepo from "./includes.repository.ts";
-import { getCourseAndVerifyOwner as verifyCourseOwner } from "../shared/courses.utils.ts";
+import {
+  getCourseAndVerifyOwner as verifyCourseOwner,
+  getCourseForViewer,
+} from "../shared/courses.utils.ts";
 
 export interface IncludesServiceOptions {
   database: Kysely<Database>;
@@ -18,28 +22,27 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
   function getCourseAndVerifyOwner(
     courseId: string,
     creatorId: string,
-    userRoles?: readonly string[],
+    userRoles: readonly string[] | undefined,
+    permission: Permission,
   ) {
-    return verifyCourseOwner(database, courseId, creatorId, userRoles);
+    return verifyCourseOwner(
+      database,
+      courseId,
+      creatorId,
+      userRoles,
+      permission,
+    );
   }
 
   function formatInclude(row: {
     id: string;
-    course_id: string;
     text: string;
-    icon: string | null;
     position: number;
-    created_at: Date;
-    updated_at: Date;
   }): CourseIncludeItem {
     return {
       id: row.id,
-      courseId: row.course_id,
       text: row.text,
-      icon: row.icon ?? null,
       position: row.position,
-      createdAt: row.created_at.toISOString(),
-      updatedAt: row.updated_at.toISOString(),
     };
   }
 
@@ -49,7 +52,12 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     payload: CreateCourseIncludeRequest,
     userRoles?: readonly string[],
   ): Promise<CourseIncludeItem> {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.details.update",
+    );
 
     let position = payload.position;
     if (position === undefined) {
@@ -73,41 +81,30 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       updated_at: now,
     });
 
-    return {
-      id: includeId,
-      courseId,
-      text: payload.text,
-      icon: payload.icon ?? null,
-      position,
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    };
+    return formatInclude({ id: includeId, text: payload.text, position });
   }
 
   async function listCourseIncludes(
     courseId: string,
+    viewer?: { id: string; roles?: readonly string[] } | null,
+  ): Promise<CourseIncludeItem[]> {
+    // This list is public for published courses, but the route had no check
+    // at all, so the includes of any draft could be read by course id.
+    await getCourseForViewer(database, courseId, viewer);
+    return await listIncludesForAuthorizedCourse(courseId);
+  }
+
+  /**
+   * The same list without the viewer check, for callers that have already
+   * decided the viewer may see this course (the editor and the overview).
+   * Going through listCourseIncludes there re-read the course and, with no
+   * viewer to pass, answered 404 for every draft.
+   */
+  async function listIncludesForAuthorizedCourse(
+    courseId: string,
   ): Promise<CourseIncludeItem[]> {
     const rows = await includesRepo.findIncludesByCourseId(database, courseId);
     return rows.map(formatInclude);
-  }
-
-  async function getCourseInclude(
-    courseId: string,
-    includeId: string,
-  ): Promise<CourseIncludeItem> {
-    const row = await includesRepo.findIncludeById(
-      database,
-      includeId,
-      courseId,
-    );
-    if (!row) {
-      throw new AppError(
-        404,
-        "INCLUDE_NOT_FOUND",
-        "Course include item not found.",
-      );
-    }
-    return formatInclude(row);
   }
 
   async function updateCourseInclude(
@@ -117,7 +114,12 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     payload: UpdateCourseIncludeRequest,
     userRoles?: readonly string[],
   ): Promise<CourseIncludeItem> {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.details.update",
+    );
 
     const existing = await includesRepo.findIncludeById(
       database,
@@ -154,7 +156,12 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     creatorId: string,
     userRoles?: readonly string[],
   ): Promise<{ success: boolean }> {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.details.update",
+    );
 
     const existing = await includesRepo.findIncludeById(
       database,
@@ -179,7 +186,12 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     orderedIds: string[],
     userRoles?: readonly string[],
   ): Promise<{ success: boolean }> {
-    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.details.update",
+    );
 
     const currentItems = await includesRepo.findIncludesByCourseId(
       database,
@@ -217,7 +229,7 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
   return {
     createCourseInclude,
     listCourseIncludes,
-    getCourseInclude,
+    listIncludesForAuthorizedCourse,
     updateCourseInclude,
     deleteCourseInclude,
     reorderCourseIncludes,

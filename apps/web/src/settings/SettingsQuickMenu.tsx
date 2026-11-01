@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { MouseEvent } from "react";
 import type { SettingsTab } from "../routing/tabSessionState";
-import { SETTINGS_TABS } from "./settingsTabs";
+import { getSettingsTabs } from "./settingsTabs";
 
 interface SettingsQuickMenuProps {
   id: string;
@@ -9,6 +9,8 @@ interface SettingsQuickMenuProps {
   isOpen: boolean;
   activeTab: SettingsTab | null;
   onNavigate: (tab: SettingsTab) => void;
+  /** Profile, notifications, privacy and account: signed-in accounts only. */
+  showSignedInTabs: boolean;
 }
 
 export function SettingsQuickMenu({
@@ -17,12 +19,12 @@ export function SettingsQuickMenu({
   isOpen,
   activeTab,
   onNavigate,
+  showSignedInTabs,
 }: SettingsQuickMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
-  const activeIndex = SETTINGS_TABS.findIndex(
-    ({ id: tab }) => tab === activeTab,
-  );
+  const tabs = getSettingsTabs(showSignedInTabs);
+  const activeIndex = tabs.findIndex(({ id: tab }) => tab === activeTab);
 
   useLayoutEffect(() => {
     if (!isOpen) return;
@@ -98,7 +100,7 @@ export function SettingsQuickMenu({
     >
       <p className="profile-menu__section">Settings</p>
       <div className="page-tabs settings-quick-menu__items" role="group">
-        {SETTINGS_TABS.map(({ id: tab, label, Icon, tone }, index) => (
+        {tabs.map(({ id: tab, label, Icon, tone }, index) => (
           <a
             key={tab}
             ref={(element) => {

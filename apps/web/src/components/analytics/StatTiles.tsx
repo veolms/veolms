@@ -1,5 +1,17 @@
 import type { ReactNode } from "react";
 
+import { ElevatedCard } from "../ElevatedCard";
+
+// The analytics page's shared pieces moved to `@veolms/analytics-ui` so a
+// plugin's tab can use them too. The other pages that used them from here
+// (Progress, quiz analytics, the route skeleton) keep this import path.
+export {
+  EmptyState,
+  LoadingCards,
+  LoadingRows,
+  SectionHeading,
+} from "@veolms/analytics-ui";
+
 export function StatCard({
   icon,
   label,
@@ -16,11 +28,11 @@ export function StatCard({
   compact?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) transition-all duration-200 hover:shadow-(--card-hover-shadow) ${
+    <ElevatedCard
+      as="div"
+      className={` transition-all duration-200 ${
         compact ? "p-2 sm:p-3.5" : "p-2.5 sm:p-5"
       }`}
-      style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
         <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
@@ -48,7 +60,7 @@ export function StatCard({
           {detail}
         </p>
       ) : null}
-    </div>
+    </ElevatedCard>
   );
 }
 
@@ -64,84 +76,5 @@ export function MetricTile({
       <p className="text-xs text-(--muted)">{label}</p>
       <p className="mt-1 text-xl font-semibold">{value}</p>
     </div>
-  );
-}
-
-export function SectionHeading({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2.5 sm:p-7">
-      <div>
-        <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
-          {title}
-        </h2>
-        {description ? (
-          <p className="mt-0.5 text-xs text-(--muted)">{description}</p>
-        ) : null}
-      </div>
-      {action}
-    </div>
-  );
-}
-
-export function EmptyState({
-  icon,
-  title,
-  message,
-  action,
-  compact = false,
-}: {
-  icon: ReactNode;
-  title: string;
-  message: string;
-  action?: ReactNode;
-  compact?: boolean;
-}) {
-  return (
-    <div
-      className={`grid place-items-center text-center ${compact ? "p-5 sm:p-7" : "p-6 sm:p-12"}`}
-    >
-      <span className="flex size-10 sm:size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
-        {icon}
-      </span>
-      <h3 className="mt-2.5 sm:mt-3 text-sm font-semibold">{title}</h3>
-      <p className="mt-1 max-w-sm text-xs leading-5 text-(--muted)">
-        {message}
-      </p>
-      {action ? <div className="mt-3.5 sm:mt-4">{action}</div> : null}
-    </div>
-  );
-}
-
-export function LoadingRows() {
-  return (
-    <div className="grid gap-2.5 sm:gap-3 p-3 sm:p-7">
-      {[1, 2, 3].map((item) => (
-        <div
-          key={item}
-          className="h-16 animate-pulse rounded-xl bg-(--canvas)"
-        />
-      ))}
-    </div>
-  );
-}
-
-export function LoadingCards() {
-  return (
-    <>
-      {[1, 2, 3].map((item) => (
-        <div
-          key={item}
-          className="h-56 animate-pulse rounded-xl bg-(--canvas)"
-        />
-      ))}
-    </>
   );
 }

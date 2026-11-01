@@ -1,9 +1,22 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import { sql } from "kysely";
 import { httpError } from "../../../../lib/errors.ts";
+import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
+import { getAcademyId } from "../../../auth/index.ts";
+import { createDiscussionRepository } from "./discussion.repository.ts";
+import {
+  fuzzyMatchesAny,
+  termFromContainsPattern,
+} from "../../../../lib/fuzzy-search.ts";
+
+const discussionRepo = createDiscussionRepository();
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+// Lives in lib/ so the searches outside Discussions (notifications,
+// students) can use it without importing this feature's internals.
+export { containsPattern } from "../../../../lib/like-pattern.ts";
 
 export interface DiscussionListCursor {
   id: string;
@@ -125,14 +138,22 @@ export function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
+/** `table` is the table behind `alias`: the cursor row is read back from it. */
 export function createdAtIdDescSql(
   alias: string,
   cursor: DiscussionListCursor,
+  table: string,
 ) {
+  const boundary = exactCursorTimestamp(
+    [table],
+    "created_at",
+    cursor.id,
+    cursor.createdAt,
+  );
   return sql<boolean>`(
-    ${sql.raw(`${alias}.created_at`)} < ${cursor.createdAt}
+    ${sql.raw(`${alias}.created_at`)} < ${boundary}
     or (
-      ${sql.raw(`${alias}.created_at`)} = ${cursor.createdAt}
+      ${sql.raw(`${alias}.created_at`)} = ${boundary}
       and ${sql.raw(`${alias}.id`)} < ${cursor.id}::uuid
     )
   )`;
@@ -141,26 +162,23 @@ export function createdAtIdDescSql(
 export function updatedAtIdDescSql(
   alias: string,
   cursor: DiscussionListCursor,
+  table: string,
 ) {
   if (!cursor.updatedAt) {
     throw httpError(400, "INVALID_CURSOR", "The pagination cursor is invalid.");
   }
 
+  const boundary = exactCursorTimestamp(
+    [table],
+    "updated_at",
+    cursor.id,
+    cursor.updatedAt,
+  );
   return sql<boolean>`(
-    ${sql.raw(`${alias}.updated_at`)} < ${cursor.updatedAt}
+    ${sql.raw(`${alias}.updated_at`)} < ${boundary}
     or (
-      ${sql.raw(`${alias}.updated_at`)} = ${cursor.updatedAt}
+      ${sql.raw(`${alias}.updated_at`)} = ${boundary}
       and ${sql.raw(`${alias}.id`)} < ${cursor.id}::uuid
-    )
-  )`;
-}
-
-export function createdAtIdAscSql(alias: string, cursor: DiscussionListCursor) {
-  return sql<boolean>`(
-    ${sql.raw(`${alias}.created_at`)} > ${cursor.createdAt}
-    or (
-      ${sql.raw(`${alias}.created_at`)} = ${cursor.createdAt}
-      and ${sql.raw(`${alias}.id`)} > ${cursor.id}::uuid
     )
   )`;
 }
@@ -190,28 +208,58 @@ export function mapAuthorRole(
 }
 
 /**
- * The academy is a singleton whose id is assigned once at setup and never
- * changes afterwards (later setup steps update its columns, not its id) —
- * yet this lookup ran on EVERY discussion request, often more than once
- * per request (feed hydration re-resolves it). Cache the id for the
- * process lifetime; the not-configured case is deliberately not cached so
- * setup completing is picked up on the next call.
+ * The academy's id (one academy per installation, read from the shared
+ * cache): discussion requests ask for it, often more than once.
  */
-let cachedAcademyId: string | null = null;
-
 export async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
-  if (cachedAcademyId) return cachedAcademyId;
-  const academy = await db
-    .selectFrom("academy")
-    .select("id")
-    .executeTakeFirst();
-  if (!academy?.id) {
+  const academyId = await getAcademyId(db);
+  if (!academyId) {
     throw httpError(
       500,
       "ACADEMY_NOT_CONFIGURED",
       "Academy is not configured.",
     );
   }
-  cachedAcademyId = academy.id;
-  return academy.id;
+  return academyId;
+}
+
+/**
+ * A search pattern (containsPattern) matching the member whose id is in
+ * `userIdColumn`: their display name, username or email. Active accounts
+ * only.
+ */
+export function authorMatchesSql(userIdColumn: string, pattern: string) {
+  return sql<boolean>`exists (
+    select 1 from users su
+    where su.id = ${sql.ref(userIdColumn)}
+      and su.is_deleted = false
+      and (
+        lower(su.display_name) like ${pattern}
+        or lower(su.username) like ${pattern}
+        or lower(coalesce(su.email, '')) like ${pattern}
+        or ${fuzzyMatchesAny(termFromContainsPattern(pattern), [
+          sql.ref("su.display_name"),
+          sql.ref("su.username"),
+        ])}
+      )
+  )`;
+}
+
+/**
+ * The thread in `threadIdColumn` has a reply (at any depth) whose text, or
+ * whose author's name, username or email, matches the pattern.
+ */
+export function threadRepliesMatchSql(threadIdColumn: string, pattern: string) {
+  return sql<boolean>`exists (
+    select 1 from learning_replies sr
+    left join users sru on sru.id = sr.user_id and sru.is_deleted = false
+    where sr.thread_id = ${sql.ref(threadIdColumn)}
+      and sr.status = 'active'
+      and (
+        lower(sr.plain_text) like ${pattern}
+        or lower(coalesce(sru.display_name, '')) like ${pattern}
+        or lower(coalesce(sru.username, '')) like ${pattern}
+        or lower(coalesce(sru.email, '')) like ${pattern}
+      )
+  )`;
 }

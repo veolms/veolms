@@ -18,6 +18,49 @@ export const getNumberShortcutIndex = (
   return Number(digit) - 1;
 };
 
+/**
+ * The right-side panel's shortcut, the partner of Ctrl/⌘+B for the left
+ * sidebar: it opens and closes the panel beside the page (the Discussions
+ * page's discussion, the lesson page's course content). Matched by the key's
+ * place, because Alt/⌥ changes the character it types.
+ */
+export const isRightPanelShortcut = (
+  event: Pick<
+    KeyboardEvent,
+    "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"
+  >,
+): boolean =>
+  (event.ctrlKey || event.metaKey) &&
+  event.altKey &&
+  !event.shiftKey &&
+  event.code === "KeyB";
+
+export const RIGHT_PANEL_SHORTCUT_ARIA = "Control+Alt+B Meta+Alt+B";
+
+/**
+ * The lesson page's course content had Alt/⌥+C before the right-side
+ * panel's shortcut existed; it still works there, so nobody who learned it
+ * loses it. Matched as it always was: by the key's place or its letter.
+ */
+export const isLegacyCourseContentShortcut = (
+  event: Pick<
+    KeyboardEvent,
+    "code" | "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"
+  >,
+): boolean =>
+  event.altKey &&
+  !event.ctrlKey &&
+  !event.metaKey &&
+  !event.shiftKey &&
+  (event.code === "KeyC" || event.key.toLowerCase() === "c");
+
+/** The course content's shortcuts, as `aria-keyshortcuts` lists them. */
+export const COURSE_CONTENT_SHORTCUT_ARIA = `${RIGHT_PANEL_SHORTCUT_ARIA} Alt+C`;
+
+export const getRightPanelShortcutLabel = (
+  platform: "windows" | "mac",
+): "⌘+⌥+B" | "Ctrl+Alt+B" => (platform === "mac" ? "⌘+⌥+B" : "Ctrl+Alt+B");
+
 export const isApplePlatform = (platform: string): boolean =>
   /Mac|iPhone|iPad|iPod/i.test(platform);
 

@@ -5,7 +5,9 @@ import type {
   LearningGoalSettings,
   LearningReminderDay,
 } from "@veolms/contracts";
+import { DEFAULT_DAILY_GOAL_MINUTES } from "@veolms/contracts/learning-goal-defaults";
 import { ThemedSelect } from "../ThemedSelect";
+import { getDeviceTimeZone } from "../lib/device-time-zone";
 import {
   useLearningGoalSettings,
   useUpdateLearningGoalSettings,
@@ -26,13 +28,11 @@ function formatGoalOption(minutes: number): string {
   return `${value} ${hours === 1 ? "hour" : "hours"} / day`;
 }
 
-const GOAL_OPTIONS: Array<[string, string]> = [
-  ["none", "No goal"],
-  ...GOAL_MINUTE_STEPS.map((minutes): [string, string] => [
-    String(minutes),
-    formatGoalOption(minutes),
-  ]),
-];
+// Every learner has a goal (the API gives one who has not chosen
+// `DEFAULT_DAILY_GOAL_MINUTES`), so there is no "No goal" to pick.
+const GOAL_OPTIONS: Array<[string, string]> = GOAL_MINUTE_STEPS.map(
+  (minutes): [string, string] => [String(minutes), formatGoalOption(minutes)],
+);
 
 /** Every half hour across the day, labelled in 12-hour time. */
 const REMINDER_TIME_OPTIONS: Array<[string, string]> = Array.from(
@@ -48,20 +48,12 @@ const REMINDER_TIME_OPTIONS: Array<[string, string]> = Array.from(
 );
 
 const FALLBACK_SETTINGS: LearningGoalSettings = {
-  dailyGoalMinutes: null,
+  dailyGoalMinutes: DEFAULT_DAILY_GOAL_MINUTES,
   remindersEnabled: false,
   reminderDays: ["mon", "tue", "wed", "thu", "fri"],
   reminderTime: "19:00",
   timeZone: "UTC",
 };
-
-function getDeviceTimeZone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
 
 const COMMON_TIME_ZONES: Array<[string, string]> = [
   ["Asia/Kolkata", "Asia/Kolkata (IST)"],
@@ -80,20 +72,32 @@ export function LearningGoalSettingsCard({
   const update = useUpdateLearningGoalSettings();
   const deviceTimeZone = getDeviceTimeZone();
 
+  // Nothing saved yet: the server's zone is a placeholder ("UTC"), so the
+  // device zone is shown and is what the first save stores. Without this a
+  // learner's days, streak and reminder time silently ran on UTC.
+  const loadedSettings: LearningGoalSettings | undefined = query.data
+    ? query.data.hasSavedSettings === false
+      ? { ...query.data.settings, timeZone: deviceTimeZone }
+      : query.data.settings
+    : undefined;
+
   // Immediate-mutate: while a save is in flight the UI reflects the value
   // just chosen; afterwards the server response (written to the query
   // cache) is the source of truth.
   const settings: LearningGoalSettings =
     update.isPending && update.variables
       ? update.variables
-      : (query.data?.settings ?? FALLBACK_SETTINGS);
+      : (loadedSettings ?? FALLBACK_SETTINGS);
 
   const isSaving = update.isPending;
   const hasSaveError = query.isError || update.isError;
-  const controlsDisabled = !isAuthenticated || query.isPending || isSaving;
+  // Also disabled when the settings could not be loaded: a save merges one
+  // change into what is on screen, and saving over placeholder defaults
+  // would wipe the learner's real goal and reminder schedule.
+  const controlsDisabled = !isAuthenticated || !loadedSettings || isSaving;
 
   const save = (next: Partial<LearningGoalSettings>) => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !loadedSettings) return;
     update.mutate({ ...settings, ...next });
   };
 
@@ -116,17 +120,17 @@ export function LearningGoalSettingsCard({
   // The API accepts any 15..720 minutes and any HH:MM, so a value saved
   // elsewhere may sit off this select's grid — surface it as an extra
   // option instead of rendering an empty control.
-  const goalOptions: Array<[string, string]> =
-    settings.dailyGoalMinutes !== null &&
-    !GOAL_MINUTE_STEPS.some((minutes) => minutes === settings.dailyGoalMinutes)
-      ? [
-          ...GOAL_OPTIONS,
-          [
-            String(settings.dailyGoalMinutes),
-            formatGoalOption(settings.dailyGoalMinutes),
-          ],
-        ]
-      : GOAL_OPTIONS;
+  // An API that predates the default goal still answers with none.
+  const dailyGoalMinutes =
+    settings.dailyGoalMinutes ?? DEFAULT_DAILY_GOAL_MINUTES;
+  const goalOptions: Array<[string, string]> = GOAL_MINUTE_STEPS.some(
+    (minutes) => minutes === dailyGoalMinutes,
+  )
+    ? GOAL_OPTIONS
+    : [
+        ...GOAL_OPTIONS,
+        [String(dailyGoalMinutes), formatGoalOption(dailyGoalMinutes)],
+      ];
 
   const reminderTimeOptions: Array<[string, string]> =
     REMINDER_TIME_OPTIONS.some(([value]) => value === settings.reminderTime)
@@ -169,17 +173,18 @@ export function LearningGoalSettingsCard({
           id="learning-daily-goal"
           label="Daily learning goal"
           note="Set how much you want to learn each day. Your home widget and streak use this."
-          value={
-            settings.dailyGoalMinutes === null
-              ? "none"
-              : String(settings.dailyGoalMinutes)
-          }
-          onChange={(value) =>
-            save({
-              dailyGoalMinutes: value === "none" ? null : Number(value),
-            })
-          }
+          value={String(dailyGoalMinutes)}
+          onChange={(value) => save({ dailyGoalMinutes: Number(value) })}
           options={goalOptions}
+          disabled={controlsDisabled}
+        />
+        <LearningSelectRow
+          id="learning-time-zone"
+          label="Time zone"
+          note="Your learning day, streak and reminder time follow this zone."
+          value={settings.timeZone}
+          onChange={(timeZone) => save({ timeZone })}
+          options={timeZoneOptions}
           disabled={controlsDisabled}
         />
         <LearningToggleRow
@@ -218,16 +223,6 @@ export function LearningGoalSettingsCard({
                 onValueChange={(reminderTime) => save({ reminderTime })}
                 ariaLabel="Reminder time"
                 options={reminderTimeOptions}
-              />
-            </div>
-            <div>
-              <span>Time zone</span>
-              <ThemedSelect
-                id="learning-time-zone"
-                value={settings.timeZone}
-                onValueChange={(timeZone) => save({ timeZone })}
-                ariaLabel="Reminder time zone"
-                options={timeZoneOptions}
               />
             </div>
           </div>

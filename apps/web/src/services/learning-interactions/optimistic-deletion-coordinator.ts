@@ -12,6 +12,7 @@ import {
   type LearningThreadCacheResponse,
 } from "./interaction-entities";
 import { learningInteractionKeys } from "./learning-interactions.keys";
+import { learningInteractionsService } from "./learning-interactions.service";
 import { optimisticEditCoordinator } from "./optimistic-edit-coordinator";
 import { isInfiniteCacheData, mapPaginatedCache } from "./paginated-cache";
 
@@ -252,6 +253,27 @@ export class OptimisticDeletionCoordinator {
     this.notify();
   }
 
+  /**
+   * The undo window lives only in a timer, so closing or reloading the tab
+   * inside it used to cancel the delete without a word and leave the entry
+   * in place for everyone. When the page is being left, every deletion that
+   * is still undoable is committed now, with a request that outlives the
+   * page. Going through `commit` moves the record out of the undoable phase
+   * and clears its timer, so a page that survives (back/forward cache) can
+   * neither send the delete a second time nor offer an Undo for it.
+   */
+  commitUndoableOnPageHide(): void {
+    for (const [key, record] of Array.from(this.records)) {
+      if (record.phase !== "undoable") continue;
+      record.commit = () =>
+        learningInteractionsService.deleteKeepalive(
+          record.kind,
+          record.serverId,
+        );
+      this.commit(key, record.authGeneration);
+    }
+  }
+
   private commit(key: string, generation: number): void {
     const record = this.records.get(key);
     if (
@@ -456,6 +478,14 @@ export const optimisticDeletionCoordinator =
 // See interaction-reset-registry: keeps the API client from bundling this
 // module on pages that never load learning interactions.
 registerInteractionResetHandler(() => optimisticDeletionCoordinator.reset());
+
+// `pagehide` only: it fires when the tab closes, reloads or leaves the site.
+// Switching tabs fires `visibilitychange` instead and must keep Undo available.
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () =>
+    optimisticDeletionCoordinator.commitUndoableOnPageHide(),
+  );
+}
 
 /** React bridge for projections and tombstone presentation. */
 export function useOptimisticDeletionRevision(): number {

@@ -1,3 +1,5 @@
+import type { Permission } from "@veolms/contracts";
+import { hasAcademyPermission } from "../authorization/index.ts";
 import crypto from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
@@ -5,22 +7,39 @@ import type { Database, MediaAssetStatus } from "@veolms/database";
 import type {
   LessonResourceDownloadResponse,
   MediaImageVariantManifest,
+  MultipartUploadPartUrlsRequest,
+  MultipartUploadPartUrlsResponse,
+  MultipartUploadStartResponse,
+  MultipartUploadStatusResponse,
   PresignMediaRequest,
   VideoPlaybackBootstrap,
+  HeroVideoPlayback,
   VideoPlaybackToken,
   VideoQualityLevel,
 } from "@veolms/contracts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
 import { ADMIN_ROLE } from "../auth/index.ts";
-import { createAccessService } from "../access/index.ts";
+import { createAccessService, isOpenFreeCourse } from "../access/index.ts";
+import type { LessonPositionReader } from "../learning-progress/index.ts";
 import { listLessonChaptersForPlayback } from "../courses/chapters/chapters.playback.service.ts";
 import { createChapterSyncService } from "../courses/chapters/chapters.service.ts";
+import { listLessonSubtitlesForPlayback } from "../courses/subtitles/subtitles.playback.service.ts";
 import { findLessonResourceForDownload } from "../courses/curriculum/lesson-resource.download.service.ts";
 import * as mediaRepo from "./media.repository.ts";
+import { findYoutubeImportProgress } from "./youtube-import/youtube-import.progress.ts";
 import { enqueueImageJob } from "@veolms/database";
 import { probeVideoSource } from "../../lib/video-prober.ts";
 import { getCdnDeliveryUrl } from "../../services/cdn-delivery.ts";
+import {
+  createMasterManifestCache,
+  MASTER_MANIFEST_MAX_BYTES,
+} from "./master-manifest-cache.ts";
+import {
+  createStoryboardPresenceCache,
+  STORYBOARD_INDEX_MAX_BYTES,
+  storyboardIndexKeyFor,
+} from "./storyboard-presence-cache.ts";
 import type {
   MediaConvertWebhookPayload,
   MediaConvertWebhookResponse,
@@ -29,17 +48,60 @@ import type {
 export interface MediaServiceOptions {
   database: Kysely<Database>;
   services: AppServices;
+  /**
+   * Where a learner last was in a lesson's video (the learning-progress
+   * module's), for the playback bootstrap's `resumePosition`. Only the
+   * media routes pass it; without it the bootstrap leaves the field out.
+   */
+  lessonPositions?: LessonPositionReader;
 }
 
 const VIDEO_QUALITIES: VideoQualityLevel[] = ["360p", "720p", "1080p"];
+// S3/R2 require at least 5 MiB per non-final part. 8 MiB keeps a 5 GiB video
+// under 10,000 parts while keeping each retry cheap.
+const MULTIPART_MIN_PART_SIZE = 8 * 1024 * 1024;
+const MULTIPART_MAX_PARTS = 10_000;
+const MULTIPART_PART_URL_TTL_SECONDS = 3_600;
 // Long enough to start a download after the click, short enough that a
 // copied link is of little use to anyone else.
 const LESSON_RESOURCE_DOWNLOAD_TTL_SECONDS = 300;
 const accessService = createAccessService();
+// Shared by every request this process serves; see master-manifest-cache.ts.
+const MASTER_MANIFEST_CACHE = createMasterManifestCache();
+// Likewise for storyboards; see storyboard-presence-cache.ts.
+const STORYBOARD_PRESENCE_CACHE = createStoryboardPresenceCache();
+
+/** Reads a small text object, giving up past `maxBytes`. */
+async function readStorageText(
+  storage: AppServices["storage"],
+  key: string,
+  maxBytes: number,
+): Promise<string | null> {
+  const file = await storage.getObject(key);
+  if (!file) return null;
+  if (file.contentLength !== undefined && file.contentLength > maxBytes) {
+    file.body.destroy();
+    return null;
+  }
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of file.body) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += buffer.length;
+    if (bytes > maxBytes) {
+      file.body.destroy();
+      return null;
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
 
 type PlaybackUser = {
   id: string;
   roles?: readonly string[];
+  /** Answer as for a learner: see `LEARNER_VIEW_HEADER`. */
+  learnerView?: boolean;
 };
 
 /**
@@ -62,6 +124,14 @@ function buildAttachmentDisposition(fileName: string): string {
 
 function normalizeOutputPrefix(outputPrefix: string): string {
   return outputPrefix.replace(/^\/+|\/+$/g, "");
+}
+
+function isYoutubeImportMedia(metadata: unknown): boolean {
+  return (
+    typeof metadata === "object" &&
+    metadata !== null &&
+    (metadata as { source?: unknown }).source === "youtube"
+  );
 }
 
 function resolveMediaVisibility(storageKey: string): "public" | "protected" {
@@ -96,6 +166,108 @@ function resolveImageExtension(filename: string, contentType: string): string {
   return mimeSubtype.replace(/[^a-z0-9]/giu, "").slice(0, 12) || "bin";
 }
 
+/**
+ * File extensions a publicly stored object's address may end in. A public
+ * object is fetched by address, and a delivery layer may choose how to serve
+ * it from the ending, so the ending comes from this list or is left off:
+ * never from whatever the uploaded file happened to be called.
+ */
+const PUBLIC_IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
+  "avif",
+  "bmp",
+  "gif",
+  "heic",
+  "heif",
+  "ico",
+  "jpeg",
+  "jpg",
+  "png",
+  "tif",
+  "tiff",
+  "webp",
+]);
+const PUBLIC_VIDEO_EXTENSIONS: ReadonlySet<string> = new Set([
+  "3gp",
+  "avi",
+  "flv",
+  "m2ts",
+  "m4v",
+  "mkv",
+  "mov",
+  "mp4",
+  "mpeg",
+  "mpg",
+  "mts",
+  "ogv",
+  "ts",
+  "webm",
+  "wmv",
+]);
+
+function resolvePublicImageExtension(
+  filename: string,
+  contentType: string,
+): string {
+  const fromFile = resolveImageExtension(filename, contentType);
+  if (PUBLIC_IMAGE_EXTENSIONS.has(fromFile)) return fromFile;
+
+  const fromType =
+    IMAGE_EXTENSION_BY_MIME_TYPE[baseMimeType(contentType)] ?? "";
+  return PUBLIC_IMAGE_EXTENSIONS.has(fromType) ? fromType : "bin";
+}
+
+function baseMimeType(contentType: string): string {
+  return contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+}
+
+/** Storage answered that the multipart upload no longer exists. */
+function isNoSuchUploadError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "NoSuchUpload" || /NoSuchUpload/i.test(error.message))
+  );
+}
+
+/** The object key a newly presigned upload will be written to. */
+function resolveUploadStorageKey(
+  ownerId: string,
+  payload: PresignMediaRequest,
+  mediaId: string,
+): string {
+  const ext = payload.filename.includes(".")
+    ? payload.filename
+        .split(".")
+        .pop()
+        ?.replace(/[^a-z0-9]/giu, "")
+        .toLowerCase()
+    : "";
+  const isPublic = payload.visibility === "public";
+  const visibilityPrefix = isPublic ? "public" : "protected";
+  const imageExtension = isPublic
+    ? resolvePublicImageExtension(payload.filename, payload.contentType)
+    : resolveImageExtension(payload.filename, payload.contentType);
+  const fileExtension =
+    isPublic && !(ext && PUBLIC_VIDEO_EXTENSIONS.has(ext)) ? "" : ext;
+
+  return payload.type === "image"
+    ? `${visibilityPrefix}/thumbnails/${mediaId}/original.${imageExtension}`
+    : `${visibilityPrefix}/media/${ownerId}/${mediaId}${fileExtension ? `.${fileExtension}` : ""}`;
+}
+
+/**
+ * Picks a part size that covers the whole file within the object store's
+ * 10,000-part limit and is a whole number of MiB, so every resume computes
+ * byte ranges identically.
+ */
+function resolveMultipartPartSize(fileSize: number): number {
+  const minimumForPartLimit = Math.ceil(fileSize / MULTIPART_MAX_PARTS);
+  const mebibyte = 1024 * 1024;
+  return Math.max(
+    MULTIPART_MIN_PART_SIZE,
+    Math.ceil(minimumForPartLimit / mebibyte) * mebibyte,
+  );
+}
+
 function resolveImageThumbnailPrefix(
   storageKey: string,
   mediaId: string,
@@ -110,19 +282,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function getPersistedImageVariantKey(
   metadata: unknown,
-  variant: "full" | number,
+  width: number,
 ): string | null {
   if (!isRecord(metadata)) return null;
 
-  if (variant === "full") {
-    const full = metadata.full;
-    if (!isRecord(full) || typeof full.key !== "string") return null;
-    return full.key.trim() || null;
-  }
-
   if (!Array.isArray(metadata.variants)) return null;
   const matchingVariant = metadata.variants.find(
-    (item) => isRecord(item) && item.width === variant,
+    (item) => isRecord(item) && item.width === width,
   );
   if (!isRecord(matchingVariant) || typeof matchingVariant.key !== "string") {
     return null;
@@ -161,9 +327,28 @@ function hlsContentType(path: string): string {
   return "application/octet-stream";
 }
 
+/**
+ * What an author is told when transcoding failed. The stored error is the
+ * provider's or dispatcher's own text and is not for clients.
+ */
+const VIDEO_JOB_FAILED_MESSAGE = "Video processing failed. Please try again.";
+
+/** One answer for every webhook authentication failure. */
+const WEBHOOK_UNAUTHORIZED_MESSAGE = "Webhook authentication failed.";
+
+/** A video asset as `getVideoAssetPlayback` needs it. */
+export interface VideoAssetForPlayback {
+  id: string;
+  type: string | null;
+  status: string | null;
+  storageKey: string | null;
+  durationSeconds: number | string | null;
+}
+
 export function createMediaService({
   database,
   services,
+  lessonPositions,
 }: MediaServiceOptions) {
   const chapterSyncService = createChapterSyncService({ database, services });
 
@@ -175,24 +360,19 @@ export function createMediaService({
     payload: PresignMediaRequest,
   ) {
     const mediaId = crypto.randomUUID();
-    const ext = payload.filename.includes(".")
-      ? payload.filename
-          .split(".")
-          .pop()
-          ?.replace(/[^a-z0-9]/giu, "")
-          .toLowerCase()
-      : "";
-    const visibilityPrefix =
-      payload.visibility === "public" ? "public" : "protected";
-    const storageKey =
-      payload.type === "image"
-        ? `${visibilityPrefix}/thumbnails/${mediaId}/original.${resolveImageExtension(payload.filename, payload.contentType)}`
-        : `${visibilityPrefix}/media/${ownerId}/${mediaId}${ext ? `.${ext}` : ""}`;
+    const isPublic = payload.visibility === "public";
+    const storageKey = resolveUploadStorageKey(ownerId, payload, mediaId);
 
+    // The request was only allowed to declare a picture or a video for a
+    // public upload. The type is signed into the URL as well: otherwise the
+    // upload itself could still be sent as a web page and be stored, and
+    // served to visitors, as one.
     const uploadUrl = await services.storage.getPresignedPutUrl(
       storageKey,
       payload.contentType,
       payload.fileSize,
+      undefined,
+      { bindContentType: isPublic },
     );
 
     await services.storage.ensureBucketCors();
@@ -216,23 +396,379 @@ export function createMediaService({
   }
 
   /**
+   * Starts a resumable multipart upload for a video. The returned media id is
+   * the anchor a client stores locally: after a reload it asks the API which
+   * parts storage already has and uploads only the rest.
+   */
+  async function startMultipartUpload(
+    ownerId: string,
+    payload: PresignMediaRequest,
+    logger?: FastifyBaseLogger,
+  ): Promise<MultipartUploadStartResponse> {
+    if (payload.type !== "video") {
+      throw new AppError(
+        400,
+        "MULTIPART_UNSUPPORTED",
+        "Only videos can be uploaded in resumable parts.",
+      );
+    }
+
+    const mediaId = crypto.randomUUID();
+    const storageKey = resolveUploadStorageKey(ownerId, payload, mediaId);
+    const partSize = resolveMultipartPartSize(payload.fileSize);
+    const totalParts = Math.ceil(payload.fileSize / partSize);
+
+    let uploadId: string;
+    try {
+      uploadId = await services.storage.createMultipartUpload(
+        storageKey,
+        payload.contentType,
+      );
+    } catch (error) {
+      logger?.error(
+        { err: error },
+        "Storage rejected the multipart upload start",
+      );
+      throw new AppError(
+        503,
+        "STORAGE_UNAVAILABLE",
+        "The storage service rejected the upload request. Check the storage configuration and try again.",
+      );
+    }
+
+    try {
+      await mediaRepo.insertMediaAsset(database, {
+        id: mediaId,
+        owner_id: ownerId,
+        type: payload.type,
+        storage_provider: "s3",
+        storage_key: storageKey,
+        original_filename: payload.filename,
+        mime_type: payload.contentType,
+        size_bytes: payload.fileSize,
+        status: "uploading",
+        upload_id: uploadId,
+        upload_part_size: partSize,
+      });
+    } catch (error) {
+      // Never leave an orphaned multipart upload behind when the asset row
+      // could not be written.
+      await services.storage
+        .abortMultipartUpload(storageKey, uploadId)
+        .catch(() => undefined);
+      throw error;
+    }
+
+    await services.storage.ensureBucketCors();
+
+    return { mediaAssetId: mediaId, partSize, totalParts };
+  }
+
+  /** The in-flight multipart asset, authorized for the caller. */
+  async function findMultipartUpload(
+    mediaId: string,
+    ownerId: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
+    const media = await mediaRepo.findMediaAssetSummaryById(
+      database,
+      mediaId,
+      isAdmin ? undefined : ownerId,
+    );
+
+    if (!media) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+    if (media.status !== "uploading") {
+      throw new AppError(
+        409,
+        "UPLOAD_ALREADY_COMPLETED",
+        "This upload has already been completed.",
+      );
+    }
+    if (!media.upload_id || !media.upload_part_size) {
+      throw new AppError(
+        409,
+        "MULTIPART_UPLOAD_NOT_ACTIVE",
+        "This media asset has no resumable upload in progress.",
+      );
+    }
+
+    return media;
+  }
+
+  function multipartGeometry(media: {
+    size_bytes: number | string;
+    upload_part_size: number | null;
+  }) {
+    const fileSize = Number(media.size_bytes);
+    const partSize = Number(media.upload_part_size);
+    return {
+      fileSize,
+      partSize,
+      totalParts: Math.max(1, Math.ceil(fileSize / partSize)),
+    };
+  }
+
+  /**
+   * The size storage must report for a part. Every part is `partSize` bytes
+   * except the last, which carries the remainder. Checking this before joining
+   * stops a client from bypassing the declared file size through a part URL.
+   */
+  function expectedMultipartPartSize(
+    partNumber: number,
+    partSize: number,
+    fileSize: number,
+  ) {
+    return Math.min(partSize, fileSize - (partNumber - 1) * partSize);
+  }
+
+  /** What storage already holds, so a client can resume from that point. */
+  async function getMultipartUploadStatus(
+    mediaId: string,
+    ownerId: string,
+    userRoles?: readonly string[],
+  ): Promise<MultipartUploadStatusResponse> {
+    const media = await findMultipartUpload(mediaId, ownerId, userRoles);
+    const { fileSize, partSize, totalParts } = multipartGeometry(media);
+
+    try {
+      const parts = await services.storage.listMultipartUploadParts(
+        media.storage_key,
+        media.upload_id!,
+      );
+      return {
+        partSize,
+        totalParts,
+        uploadedParts: parts.filter(
+          (part) =>
+            part.partNumber >= 1 &&
+            part.partNumber <= totalParts &&
+            part.size ===
+              expectedMultipartPartSize(part.partNumber, partSize, fileSize),
+        ),
+      };
+    } catch (error) {
+      if (!isNoSuchUploadError(error)) throw error;
+      await mediaRepo.updateMediaAssetUploadSession(database, mediaId, {
+        uploadId: null,
+        partSize: null,
+      });
+      throw new AppError(
+        409,
+        "UPLOAD_SESSION_EXPIRED",
+        "This upload session has expired. Start the upload again.",
+      );
+    }
+  }
+
+  /** Fresh presigned URLs for the parts a client still has to send. */
+  async function presignMultipartUploadParts(
+    mediaId: string,
+    payload: MultipartUploadPartUrlsRequest,
+    ownerId: string,
+    userRoles?: readonly string[],
+  ): Promise<MultipartUploadPartUrlsResponse> {
+    const media = await findMultipartUpload(mediaId, ownerId, userRoles);
+    const { totalParts } = multipartGeometry(media);
+    const invalidPart = payload.partNumbers.find(
+      (partNumber) => partNumber > totalParts,
+    );
+    if (invalidPart !== undefined) {
+      throw new AppError(
+        400,
+        "INVALID_PART_NUMBER",
+        `Part ${invalidPart} is outside this upload's ${totalParts} parts.`,
+      );
+    }
+
+    const parts = await Promise.all(
+      payload.partNumbers.map(async (partNumber) => ({
+        partNumber,
+        url: await services.storage.getPresignedUploadPartUrl(
+          media.storage_key,
+          media.upload_id!,
+          partNumber,
+          MULTIPART_PART_URL_TTL_SECONDS,
+        ),
+      })),
+    );
+
+    return { parts };
+  }
+
+  /**
+   * Joins the uploaded parts and confirms the asset exactly like a
+   * single-request upload, so transcoding starts through the same path.
+   */
+  async function completeMultipartUpload(
+    mediaId: string,
+    ownerId: string,
+    logger?: FastifyBaseLogger,
+    userRoles?: readonly string[],
+  ): Promise<{ status: MediaAssetStatus }> {
+    const media = await findMultipartUpload(mediaId, ownerId, userRoles);
+    const { fileSize, partSize, totalParts } = multipartGeometry(media);
+
+    // Storage is the authority on which parts exist and their ETags. Reading
+    // them here means completion does not depend on the browser being allowed
+    // to read ETag response headers through CORS. Parts with the wrong size are
+    // treated as missing so a client cannot join a file larger than declared.
+    let uploadedParts: Array<{ partNumber: number; etag: string }>;
+    try {
+      const listed = await services.storage.listMultipartUploadParts(
+        media.storage_key,
+        media.upload_id!,
+      );
+      uploadedParts = listed
+        .filter(
+          (part) =>
+            part.partNumber >= 1 &&
+            part.partNumber <= totalParts &&
+            part.size ===
+              expectedMultipartPartSize(part.partNumber, partSize, fileSize),
+        )
+        .map((part) => ({ partNumber: part.partNumber, etag: part.etag }))
+        .sort((left, right) => left.partNumber - right.partNumber);
+    } catch (error) {
+      if (!isNoSuchUploadError(error)) throw error;
+      await mediaRepo.updateMediaAssetUploadSession(database, mediaId, {
+        uploadId: null,
+        partSize: null,
+      });
+      throw new AppError(
+        409,
+        "UPLOAD_SESSION_EXPIRED",
+        "This upload session has expired. Start the upload again.",
+      );
+    }
+
+    if (uploadedParts.length !== totalParts) {
+      throw new AppError(
+        400,
+        "MULTIPART_PARTS_INCOMPLETE",
+        "Every part must be uploaded before the upload can be completed.",
+      );
+    }
+
+    try {
+      await services.storage.completeMultipartUpload(
+        media.storage_key,
+        media.upload_id!,
+        uploadedParts,
+      );
+    } catch (error) {
+      if (!isNoSuchUploadError(error)) throw error;
+      await mediaRepo.updateMediaAssetUploadSession(database, mediaId, {
+        uploadId: null,
+        partSize: null,
+      });
+      throw new AppError(
+        409,
+        "UPLOAD_SESSION_EXPIRED",
+        "This upload session has expired. Start the upload again.",
+      );
+    }
+
+    await mediaRepo.updateMediaAssetUploadSession(database, mediaId, {
+      uploadId: null,
+      partSize: null,
+    });
+
+    return await confirmUpload(mediaId, ownerId, logger, userRoles);
+  }
+
+  /**
+   * Abandons an interrupted upload: discards its parts and the unattached
+   * media row. Already-completed uploads are left untouched.
+   */
+  async function abortMultipartUpload(
+    mediaId: string,
+    ownerId: string,
+    userRoles?: readonly string[],
+    logger?: FastifyBaseLogger,
+  ): Promise<{ aborted: true }> {
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
+    const media = await mediaRepo.findMediaAssetSummaryById(
+      database,
+      mediaId,
+      isAdmin ? undefined : ownerId,
+    );
+
+    if (!media) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+
+    if (media.upload_id) {
+      try {
+        await services.storage.abortMultipartUpload(
+          media.storage_key,
+          media.upload_id,
+        );
+      } catch (error) {
+        // The row (and its upload id) is about to go, so a bucket lifecycle
+        // rule is the last line of defence for the parts storage still holds.
+        logger?.warn(
+          { err: error, mediaId, storageKey: media.storage_key },
+          "Failed to abort multipart upload; storage may keep the parts",
+        );
+      }
+    }
+
+    if (media.status === "uploading") {
+      await mediaRepo.deleteMediaAssets(database, [mediaId]);
+    } else {
+      await mediaRepo.updateMediaAssetUploadSession(database, mediaId, {
+        uploadId: null,
+        partSize: null,
+      });
+    }
+
+    return { aborted: true };
+  }
+
+  /**
    * Verifies that a media file is uploaded and exists, then sets status to 'uploaded'.
    * If it's a video, automatically queues and triggers transcoding.
    */
+  /**
+   * Admin, or a team role that reaches every course: "view" lets reviewers
+   * and editors play and download any course's media; "manage" lets those
+   * who edit every course's content handle uploads that are not their own.
+   */
+  async function reachesAllMedia(
+    userId: string | null | undefined,
+    userRoles: readonly string[] | undefined,
+    purpose: "view" | "manage",
+  ): Promise<boolean> {
+    if (userRoles?.some((role) => role.toLowerCase() === ADMIN_ROLE)) {
+      return true;
+    }
+    if (!userId) return false;
+    const keys: Permission[] =
+      purpose === "view"
+        ? ["course.preview"]
+        : [
+            "course.curriculum.update",
+            "lesson.video.update",
+            "course.thumbnail.update",
+            "lesson.thumbnail.update",
+          ];
+    for (const key of keys) {
+      if (await hasAcademyPermission(database, userId, key)) return true;
+    }
+    return false;
+  }
+
   async function confirmUpload(
     mediaId: string,
     ownerId: string,
     logger?: FastifyBaseLogger,
     userRoles?: readonly string[],
-  ): Promise<{
-    status: MediaAssetStatus;
-    jobId?: string | null;
-    deliveryUrl?: string;
-    deliveryUrlExpiresAt?: number;
-    thumbnailUrl?: string;
-  }> {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(
+  ): Promise<{ status: MediaAssetStatus }> {
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
+    const media = await mediaRepo.findMediaAssetSummaryById(
       database,
       mediaId,
       isAdmin ? undefined : ownerId,
@@ -243,29 +779,7 @@ export function createMediaService({
     }
 
     if (media.status !== "uploading") {
-      let existingJobId: string | null = null;
-      if (media.type === "video") {
-        const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
-        existingJobId = job ? job.id : null;
-      }
-      const delivery = getDirectDelivery(media.storage_key);
-      let thumbnailUrl: string | undefined;
-      if (media.type === "video") {
-        try {
-          thumbnailUrl = getDirectDelivery(
-            `public/thumbnails/${media.id}/original.webp`,
-          ).url;
-        } catch {
-          // Ignore
-        }
-      }
-      return {
-        status: media.status,
-        jobId: existingJobId,
-        deliveryUrl: delivery.url,
-        deliveryUrlExpiresAt: delivery.expiresAt,
-        ...(thumbnailUrl ? { thumbnailUrl } : {}),
-      };
+      return { status: media.status };
     }
 
     const metadata = await services.storage.headObject(media.storage_key);
@@ -275,6 +789,24 @@ export function createMediaService({
         400,
         "FILE_NOT_FOUND",
         "File could not be found in storage.",
+      );
+    }
+
+    // A public object is served to anyone under the type it was stored
+    // with. The signed upload URL already holds that to the declared type;
+    // this refuses, and removes, one that differs all the same.
+    if (
+      resolveMediaVisibility(media.storage_key) === "public" &&
+      metadata.contentType &&
+      baseMimeType(metadata.contentType) !== baseMimeType(media.mime_type)
+    ) {
+      await services.storage
+        .deleteObject(media.storage_key)
+        .catch(() => undefined);
+      throw new AppError(
+        400,
+        "FILE_TYPE_MISMATCH",
+        "Uploaded file type does not match the type that was declared.",
       );
     }
 
@@ -308,39 +840,15 @@ export function createMediaService({
       const jobId = crypto.randomUUID();
       await enqueueImageJob(database, { id: jobId, media_id: mediaId });
       await mediaRepo.updateMediaAssetStatus(database, mediaId, "processing");
-      return { status: "processing", jobId };
+      return { status: "processing" };
     }
 
-    let jobId: string | null = null;
     // Once video is uploaded, automatically queue and dispatch it for processing
     if (media.type === "video" && logger) {
-      const transcodeResult = await queueTranscodeJob(
-        mediaId,
-        ownerId,
-        logger,
-        userRoles,
-      );
-      jobId = transcodeResult.jobId;
+      await queueTranscodeJob(mediaId, ownerId, logger, userRoles);
     }
 
-    const delivery = getDirectDelivery(media.storage_key);
-    let thumbnailUrl: string | undefined;
-    if (media.type === "video") {
-      try {
-        thumbnailUrl = getDirectDelivery(
-          `public/thumbnails/${media.id}/original.webp`,
-        ).url;
-      } catch {
-        // Ignore
-      }
-    }
-    return {
-      status: "uploaded",
-      jobId,
-      deliveryUrl: delivery.url,
-      deliveryUrlExpiresAt: delivery.expiresAt,
-      ...(thumbnailUrl ? { thumbnailUrl } : {}),
-    };
+    return { status: "uploaded" };
   }
 
   /**
@@ -354,7 +862,7 @@ export function createMediaService({
     logger?: FastifyBaseLogger,
     userRoles?: readonly string[],
   ): Promise<{ should202: boolean; jobId: string | null }> {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
     const media = await mediaRepo.findMediaAssetById(
       database,
       mediaId,
@@ -373,6 +881,12 @@ export function createMediaService({
       return { should202: false, jobId: null };
     }
 
+    // A YouTube import is packaged by its own worker, never transcoded:
+    // attaching one (to a new lesson, or again) only waits for it.
+    if (isYoutubeImportMedia(media.metadata)) {
+      return { should202: media.status !== "ready", jobId: null };
+    }
+
     if (
       media.status !== "uploaded" &&
       media.status !== "ready" &&
@@ -389,7 +903,7 @@ export function createMediaService({
       await mediaRepo.updateMediaAssetStatus(database, media.id, "uploaded");
     }
 
-    const existingJob = await mediaRepo.findVideoJobByVideoId(
+    const existingJob = await mediaRepo.findVideoJobStateByVideoId(
       database,
       media.id,
     );
@@ -444,7 +958,9 @@ export function createMediaService({
           { mediaId: media.id, storageKey: media.storage_key },
           "[media-service] Probing video source with ffprobe to extract size and dimensions before dispatch",
         );
-        const probed = await probeVideoSource(presignedUrl);
+        const probed = await probeVideoSource(presignedUrl, {
+          onWarning: (message) => logger?.warn({ mediaId: media.id }, message),
+        });
         if (probed) {
           if (videoSize <= 0 && probed.sizeBytes > 0) {
             videoSize = probed.sizeBytes;
@@ -520,7 +1036,7 @@ export function createMediaService({
       });
     } catch (insertErr) {
       if (isUniqueViolation(insertErr)) {
-        const raceWinner = await mediaRepo.findVideoJobByVideoId(
+        const raceWinner = await mediaRepo.findVideoJobStateByVideoId(
           database,
           media.id,
         );
@@ -584,8 +1100,8 @@ export function createMediaService({
     logger?: FastifyBaseLogger,
     userRoles?: readonly string[],
   ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
+    const media = await mediaRepo.findMediaAssetSummaryById(
       database,
       mediaId,
       isAdmin ? undefined : ownerId,
@@ -627,7 +1143,9 @@ export function createMediaService({
         const presignedUrl = await services.storage.getPresignedGetUrl(
           media.storage_key,
         );
-        const probed = await probeVideoSource(presignedUrl);
+        const probed = await probeVideoSource(presignedUrl, {
+          onWarning: (message) => logger?.warn({ mediaId: media.id }, message),
+        });
         if (probed) {
           if (retryVideoSize <= 0 && probed.sizeBytes > 0) {
             retryVideoSize = probed.sizeBytes;
@@ -697,8 +1215,8 @@ export function createMediaService({
     logger?: FastifyBaseLogger,
     userRoles?: readonly string[],
   ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
+    const media = await mediaRepo.findMediaAssetSummaryById(
       database,
       mediaId,
       isAdmin ? undefined : ownerId,
@@ -762,7 +1280,7 @@ export function createMediaService({
     ownerId?: string,
     userRoles?: readonly string[],
   ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
     return await mediaRepo.findMediaAssetById(
       database,
       mediaId,
@@ -813,7 +1331,7 @@ export function createMediaService({
     ownerId?: string,
     userRoles?: readonly string[],
   ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
     return await mediaRepo.findMediaAssetsByIds(
       database,
       mediaIds,
@@ -829,18 +1347,23 @@ export function createMediaService({
     ownerId?: string,
     userRoles?: readonly string[],
   ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
+    // This runs every 1.5s for each open progress stream, so it reads only
+    // the two statuses and the percentage, in one query.
+    const progress = await mediaRepo.findVideoJobProgress(
       database,
       videoId,
       isAdmin ? undefined : ownerId,
     );
-    if (!media) {
+    if (!progress) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
 
-    const job = await mediaRepo.findVideoJobByVideoId(database, videoId);
-    if (!job) {
+    if (!progress.job_id || !progress.job_status) {
+      // A video being imported from YouTube has no transcode job until the
+      // import finishes; its import job reports the progress instead.
+      const imported = await findYoutubeImportProgress(database, videoId);
+      if (imported) return imported;
       throw new AppError(
         404,
         "JOB_NOT_FOUND",
@@ -848,35 +1371,34 @@ export function createMediaService({
       );
     }
 
-    if (job.status === "completed" && media.status !== "ready") {
+    let status = progress.job_status;
+    let progressPercent = Number(progress.progress_percent ?? 0);
+
+    if (status === "completed" && progress.media_status !== "ready") {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "ready");
-    } else if (job.status === "failed" && media.status !== "failed") {
+    } else if (status === "failed" && progress.media_status !== "failed") {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "failed");
-    } else if (media.status === "ready" && job.status !== "completed") {
-      job.status = "completed";
-      job.progress_percent = 100;
-      await database
-        .updateTable("video_jobs")
-        .set({
+    } else if (progress.media_status === "ready" && status !== "completed") {
+      status = "completed";
+      progressPercent = 100;
+      await mediaRepo
+        .updateVideoJobStatus(database, progress.job_id, {
           status: "completed",
           progress_percent: 100,
-          updated_at: new Date(),
         })
-        .where("id", "=", job.id)
-        .execute()
         .catch(() => {});
     }
 
     return {
-      status: job.status,
+      status,
       // The worker reports live FFmpeg progress to worker_monitoring. The
       // video_jobs value is the durable fallback used before a worker is
       // assigned and after the worker is released.
-      progressPercent: Math.max(
-        0,
-        Math.min(100, Math.floor(Number(job.progress_percent))),
-      ),
-      error: job.error_message,
+      progressPercent: Math.max(0, Math.min(100, Math.floor(progressPercent))),
+      // video_jobs.error_message holds the provider's or dispatcher's own
+      // text (AWS account ids, role and queue ARNs, bucket paths). It stays
+      // in the database and the logs; the author sees a fixed message.
+      error: status === "failed" ? VIDEO_JOB_FAILED_MESSAGE : null,
     };
   }
 
@@ -886,19 +1408,28 @@ export function createMediaService({
       course_status: string;
       course_creator_id: string | null;
       pricing_type: string | null;
+      access_type: string | null;
       is_preview: boolean;
       is_published?: boolean;
+      /** The course's first published lesson. */
+      is_first_lesson?: boolean;
     },
     user?: PlaybackUser,
   ): Promise<void> {
     const isOwner = Boolean(user && context.course_creator_id === user.id);
-    const isAdmin = Boolean(
-      user?.roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
-    );
+    const isAdmin =
+      isOwner || (await reachesAllMedia(user?.id, user?.roles, "view"));
 
     if (isOwner || isAdmin) return;
 
-    if (context.course_status !== "published") {
+    // An archived course plays on for a learner who holds access to it.
+    // Nobody else is played anything from it, a preview lesson included.
+    if (
+      !(await accessService.isCourseOpenToLearner(database, user?.id, {
+        id: context.course_id,
+        status: context.course_status,
+      }))
+    ) {
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
     }
 
@@ -906,8 +1437,16 @@ export function createMediaService({
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    // Preview lessons and explicitly free courses are intentionally public.
-    if (context.is_preview || context.pricing_type === "free") return;
+    // Preview lessons are public. A free course that is not
+    // access-restricted is open to anyone who is signed in; a visitor who
+    // is not gets its first lesson only.
+    if (context.is_preview) return;
+    if (
+      isOpenFreeCourse(context) &&
+      (user || context.is_first_lesson === true)
+    ) {
+      return;
+    }
 
     if (!user) {
       throw new AppError(
@@ -931,19 +1470,24 @@ export function createMediaService({
     }
   }
 
+  /**
+   * `media` is the asset as the playback context read it alongside the
+   * lesson; its fields are null when the lesson's media row is gone.
+   */
   async function getReadyPlaybackOutput(
     mediaId: string,
+    media: {
+      media_type: string | null;
+      media_status: string | null;
+      media_storage_key: string | null;
+    },
     options: { verifyManifest?: boolean } = {},
   ) {
-    const [media, outputs] = await Promise.all([
-      mediaRepo.findMediaAssetById(database, mediaId),
-      mediaRepo.findVideoOutputsByVideoIds(database, [mediaId]),
-    ]);
-    if (!media || media.type !== "video") {
+    if (media.media_type !== "video" || media.media_storage_key === null) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
     }
 
-    if (media.status !== "ready") {
+    if (media.media_status !== "ready") {
       throw new AppError(
         409,
         "MEDIA_NOT_READY",
@@ -951,10 +1495,11 @@ export function createMediaService({
       );
     }
 
-    const outputPrefix = normalizeOutputPrefix(media.storage_key);
-    const latestOutput = outputs
-      .filter((output) => output.video_id === mediaId)
-      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0];
+    const outputPrefix = normalizeOutputPrefix(media.media_storage_key);
+    const latestOutput = await mediaRepo.findLatestVideoOutput(
+      database,
+      mediaId,
+    );
     const manifestKey = normalizeOutputPrefix(
       latestOutput?.master_playlist_path || `${outputPrefix}/master.m3u8`,
     );
@@ -969,11 +1514,34 @@ export function createMediaService({
       }
     }
 
-    return { media, outputPrefix, manifestKey };
+    // A new transcode adds a new output row; its id tells the copies apart.
+    return { outputPrefix, manifestKey, outputVersion: latestOutput?.id ?? "" };
   }
 
   function getDirectDelivery(storageKey: string) {
     return getCdnDeliveryUrl(services.storage, storageKey);
+  }
+
+  /**
+   * Whether the asset is the thumbnail or trailer of an archived course the
+   * viewer holds access to. Such a course is no longer public, so its
+   * picture and trailer are not either, but its learners still open it.
+   */
+  async function isMediaOfHeldArchivedCourse(
+    mediaId: string,
+    userId: string | undefined,
+  ): Promise<boolean> {
+    if (!userId) return false;
+    const courseIds = await mediaRepo.listArchivedCourseIdsShowingMedia(
+      database,
+      mediaId,
+    );
+    for (const courseId of courseIds) {
+      if (await accessService.hasActiveAccess(database, userId, courseId)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async function getMediaDelivery(
@@ -981,8 +1549,8 @@ export function createMediaService({
     requestingUserId?: string,
     userRoles?: readonly string[],
   ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(database, mediaId);
+    const isAdmin = await reachesAllMedia(requestingUserId, userRoles, "view");
+    const media = await mediaRepo.findMediaAssetSummaryById(database, mediaId);
     if (!media) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
@@ -991,7 +1559,12 @@ export function createMediaService({
       database,
       mediaId,
     );
-    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin) {
+    if (
+      !isPublic &&
+      media.owner_id !== requestingUserId &&
+      !isAdmin &&
+      !(await isMediaOfHeldArchivedCourse(mediaId, requestingUserId))
+    ) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
 
@@ -1014,9 +1587,55 @@ export function createMediaService({
   }
 
   /**
+   * Whether the viewer may download a course's lesson files. Being able to
+   * watch a lesson is not enough: a preview lesson, and a free course's
+   * first lesson, play for anyone, signed in or not. The files are for the
+   * people the course itself is open to: its owner, an administrator, a
+   * signed-in learner on a free course that is not restricted, and a
+   * learner who holds access.
+   */
+  async function assertResourceDownloadAccess(
+    context: {
+      course_id: string;
+      course_creator_id: string | null;
+      pricing_type: string | null;
+      access_type: string | null;
+    },
+    user?: PlaybackUser,
+  ): Promise<void> {
+    const isOwner = Boolean(user && context.course_creator_id === user.id);
+    const isAdmin =
+      isOwner || (await reachesAllMedia(user?.id, user?.roles, "view"));
+    if (isOwner || isAdmin) return;
+
+    if (!user) {
+      throw new AppError(
+        401,
+        "UNAUTHORIZED",
+        "Sign in to download this lesson's resources.",
+      );
+    }
+
+    if (isOpenFreeCourse(context)) return;
+
+    const hasAccess = await accessService.hasActiveAccess(
+      database,
+      user.id,
+      context.course_id,
+    );
+    if (!hasAccess) {
+      throw new AppError(
+        403,
+        "COURSE_ACCESS_DENIED",
+        "You do not have access to this course.",
+      );
+    }
+  }
+
+  /**
    * Resolves a lesson by its public number and applies the access rules of
-   * watching it. Everything a learner gets from a lesson (the video, its
-   * resources) goes through this, so the rules cannot drift apart.
+   * watching it. A lesson's resources go through this too, and then through
+   * assertResourceDownloadAccess, which asks for more.
    */
   async function resolveAuthorizedLesson(
     courseIdOrSlug: string,
@@ -1032,30 +1651,22 @@ export function createMediaService({
         courseIdOrSlug,
       );
     const course = await (isUuid
-      ? database
-          .selectFrom("courses")
-          .select(["id", "creator_id", "status"])
-          .where("id", "=", courseIdOrSlug)
-          .where("deleted_at", "is", null)
-          .executeTakeFirst()
-      : database
-          .selectFrom("courses")
-          .select(["id", "creator_id", "status"])
-          .where("slug", "=", courseIdOrSlug)
-          .where("deleted_at", "is", null)
-          .executeTakeFirst());
+      ? mediaRepo.findPlaybackCourseById(database, courseIdOrSlug)
+      : mediaRepo.findPlaybackCourseBySlug(database, courseIdOrSlug));
 
     if (!course) {
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
     }
 
     const isOwner = Boolean(user && user.id === course.creator_id);
-    const isAdmin = Boolean(
-      user?.roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
-    );
+    const isAdmin =
+      isOwner || (await reachesAllMedia(user?.id, user?.roles, "view"));
     const canManageCourse = isOwner || isAdmin;
 
-    if (course.status !== "published" && !canManageCourse) {
+    if (
+      !canManageCourse &&
+      !(await accessService.isCourseOpenToLearner(database, user?.id, course))
+    ) {
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
     }
 
@@ -1063,13 +1674,21 @@ export function createMediaService({
       database,
       course.id,
       lessonNumber,
-      { includeUnpublished: canManageCourse },
+      // Lesson numbers count the lessons the viewer is shown, so a manager
+      // in their Student view is counted through published lessons only,
+      // as the course overview and the resume context count them.
+      { includeUnpublished: canManageCourse && !user?.learnerView },
     );
     if (!context) {
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    await assertPlaybackAccess(context, user);
+    // Lesson numbers count the published lessons in order, so number one is
+    // the course's first lesson for everyone this rule applies to.
+    await assertPlaybackAccess(
+      { ...context, is_first_lesson: lessonNumber === 1 },
+      user,
+    );
     return context;
   }
 
@@ -1095,7 +1714,7 @@ export function createMediaService({
   }
 
   /**
-   * Gives a learner who may watch the lesson a link to download one of its
+   * Gives a learner who has the course a link to download one of a lesson's
    * resources. A lesson does not need a video to have resources.
    */
   async function getLessonResourceDownload(
@@ -1109,6 +1728,8 @@ export function createMediaService({
       lessonNumber,
       user,
     );
+    await assertResourceDownloadAccess(lesson, user);
+
     const resource = await findLessonResourceForDownload(
       database,
       lesson.lesson_id,
@@ -1118,7 +1739,7 @@ export function createMediaService({
       throw new AppError(404, "RESOURCE_NOT_FOUND", "Resource not found.");
     }
 
-    const media = await mediaRepo.findMediaAssetById(
+    const media = await mediaRepo.findMediaAssetSummaryById(
       database,
       resource.media_asset_id,
     );
@@ -1132,12 +1753,7 @@ export function createMediaService({
       LESSON_RESOURCE_DOWNLOAD_TTL_SECONDS,
       { responseContentDisposition: buildAttachmentDisposition(fileName) },
     );
-    return {
-      url,
-      fileName,
-      expiresAt:
-        Math.floor(Date.now() / 1000) + LESSON_RESOURCE_DOWNLOAD_TTL_SECONDS,
-    };
+    return { url };
   }
 
   function createPlaybackSegmentToken(
@@ -1146,9 +1762,17 @@ export function createMediaService({
     const manifestPrefix = manifestKey.replace(/\/[^/]+$/u, "");
     if (services.storage.isCdnPublicKey(manifestPrefix)) return null;
 
+    // A token is its expiry plus a signature of the folder, so two learners
+    // given one in the same second would share it, and the CDN binds a token
+    // to the first client that uses it. Spreading expiries over up to a
+    // quarter of the lifetime (at most an hour) keeps their tokens apart.
+    const ttlSeconds = services.storage.getCdnHlsTokenTtlSeconds();
+    const expiryJitterSeconds = crypto.randomInt(
+      0,
+      Math.max(1, Math.min(3_600, Math.floor(ttlSeconds / 4))),
+    );
     const expiresAt =
-      Math.floor(Date.now() / 1000) +
-      services.storage.getCdnHlsTokenTtlSeconds();
+      Math.floor(Date.now() / 1000) + ttlSeconds - expiryJitterSeconds;
     const token = services.storage.createCdnAccessToken(
       manifestPrefix,
       expiresAt,
@@ -1163,10 +1787,89 @@ export function createMediaService({
     return { token, expiresAt };
   }
 
+  /**
+   * The HLS master playlist or DASH MPD to hand the player with its
+   * bootstrap, when it can be had within a few hundred milliseconds. Never
+   * fails the bootstrap.
+   */
+  async function readInlinedMasterManifest(
+    manifestKey: string,
+    outputVersion: string,
+    logger?: FastifyBaseLogger,
+  ): Promise<string | undefined> {
+    if (!/\.(?:m3u8|mpd)$/iu.test(manifestKey)) return undefined;
+    try {
+      // Keyed by output too: a re-transcode writes the same key, and the
+      // cached copy of the old manifest must not outlive it.
+      const text = await MASTER_MANIFEST_CACHE.resolve(
+        `${manifestKey}#${outputVersion}`,
+        () =>
+          readStorageText(
+            services.storage,
+            manifestKey,
+            MASTER_MANIFEST_MAX_BYTES,
+          ),
+      );
+      if (text === undefined) {
+        logger?.debug(
+          { manifestKey },
+          "Master playlist not inlined; the player fetches it from the CDN.",
+        );
+      }
+      return text;
+    } catch (error) {
+      logger?.warn(
+        { err: error, manifestKey },
+        "Master playlist inline failed.",
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * The CDN address of the video's storyboard index when one was made from
+   * this output. Never fails the bootstrap.
+   */
+  async function readStoryboardUrl(
+    manifestKey: string,
+    outputVersion: string,
+    logger?: FastifyBaseLogger,
+  ): Promise<string | undefined> {
+    const indexKey = storyboardIndexKeyFor(manifestKey);
+    try {
+      const indexPath = await STORYBOARD_PRESENCE_CACHE.resolve(
+        indexKey,
+        outputVersion,
+        (key) =>
+          readStorageText(services.storage, key, STORYBOARD_INDEX_MAX_BYTES),
+      );
+      if (indexPath === false) return undefined;
+      // Not known yet (slow or failed read) is offered too, as the folder's
+      // own index; see storyboard-presence-cache.ts.
+      const playerIndexKey =
+        indexPath === null
+          ? indexKey
+          : indexKey.replace(/index\.json$/u, indexPath);
+      return services.storage.getCdnObjectUrl(playerIndexKey) ?? undefined;
+    } catch (error) {
+      logger?.warn({ err: error, indexKey }, "Storyboard lookup failed.");
+      return undefined;
+    }
+  }
+
   async function getPlaybackBootstrap(
     courseIdOrSlug: string,
     lessonNumber: number,
     user?: PlaybackUser,
+    options: {
+      inlineManifest?: boolean;
+      storyboard?: boolean;
+      /** Include where this learner last was in the video. */
+      resume?: boolean;
+      /** Include the video's subtitle tracks. */
+      subtitles?: boolean;
+      logger?: FastifyBaseLogger;
+    } = {},
   ): Promise<VideoPlaybackBootstrap> {
     const context = await resolveAuthorizedPlaybackLesson(
       courseIdOrSlug,
@@ -1174,14 +1877,32 @@ export function createMediaService({
       user,
     );
 
+    // Chapter stills are an enhancement; never let them block playback.
+    // They depend only on the authorized lesson, so the read overlaps the
+    // output lookup below instead of following it.
+    const chapterRowsPromise = listLessonChaptersForPlayback(
+      database,
+      context.lesson_id,
+    ).catch(() => []);
+    // Subtitles are optional too: a failed read plays without them.
+    const subtitleRowsPromise = options.subtitles
+      ? listLessonSubtitlesForPlayback(
+          database,
+          context.lesson_id,
+          context.content_media_id!,
+        ).catch((error: unknown) => {
+          options.logger?.warn({ err: error }, "Subtitle lookup failed.");
+          return [];
+        })
+      : Promise.resolve([]);
+
     // The transcode worker only marks a job completed after publishing its
     // output. Avoid an extra storage HEAD round-trip on every first play;
     // the CDN manifest request itself remains the authoritative final check.
-    const { media, manifestKey } = await getReadyPlaybackOutput(
+    const { manifestKey, outputVersion } = await getReadyPlaybackOutput(
       context.content_media_id!,
-      {
-        verifyManifest: false,
-      },
+      context,
+      { verifyManifest: false },
     );
     const manifestUrl = services.storage.getCdnObjectUrl(manifestKey);
     if (!manifestUrl) {
@@ -1192,11 +1913,51 @@ export function createMediaService({
       );
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
-    // Chapter stills are an enhancement; never let them block playback.
-    const chapterRows = await listLessonChaptersForPlayback(
-      database,
-      context.lesson_id,
-    ).catch(() => []);
+    // Read alongside the chapters; access has already been checked above.
+    const inlinedMasterManifestPromise = options.inlineManifest
+      ? readInlinedMasterManifest(manifestKey, outputVersion, options.logger)
+      : Promise.resolve(undefined);
+    const storyboardUrlPromise = options.storyboard
+      ? readStoryboardUrl(manifestKey, outputVersion, options.logger)
+      : Promise.resolve(undefined);
+    // Where this learner left the video, from whichever device. Optional:
+    // a failure plays from wherever this browser says.
+    const resumePositionPromise =
+      options.resume && user && lessonPositions
+        ? lessonPositions
+            .findLessonPosition(user.id, context.course_id, context.lesson_id)
+            .catch(() => null)
+        : Promise.resolve(null);
+    const [
+      chapterRows,
+      inlinedMasterManifest,
+      storyboardUrl,
+      resumePosition,
+      subtitleRows,
+    ] = await Promise.all([
+      chapterRowsPromise,
+      inlinedMasterManifestPromise,
+      storyboardUrlPromise,
+      resumePositionPromise,
+      subtitleRowsPromise,
+    ]);
+    // The playback token covers the video's folder only, so a track kept
+    // anywhere else could not be loaded and is left out.
+    const outputFolder = manifestKey.replace(/[^/]+$/u, "");
+    const subtitles = subtitleRows.flatMap((track) => {
+      if (!track.storage_key.startsWith(outputFolder)) return [];
+      const url = services.storage.getCdnObjectUrl(track.storage_key);
+      return url
+        ? [
+            {
+              url,
+              language: track.language,
+              label: track.label,
+              kind: track.kind,
+            },
+          ]
+        : [];
+    });
     const chapters = chapterRows.map((chapter) => {
       let thumbnailUrl: string | undefined;
       if (chapter.thumbnail_key) {
@@ -1224,13 +1985,24 @@ export function createMediaService({
             segmentTokenExpiresAt: playbackToken.expiresAt,
           }
         : {}),
-      ...(media.duration_seconds !== null &&
-      media.duration_seconds !== undefined
-        ? { duration: Number(media.duration_seconds) }
+      ...(context.duration_seconds !== null &&
+      context.duration_seconds !== undefined
+        ? { duration: Number(context.duration_seconds) }
         : {}),
       ...(chapters.length > 0 ? { chapters } : {}),
       title: context.lesson_title,
       source: "paid-bootstrap-api",
+      ...(inlinedMasterManifest ? { inlinedMasterManifest } : {}),
+      ...(storyboardUrl ? { storyboardUrl } : {}),
+      ...(resumePosition
+        ? {
+            resumePosition: {
+              seconds: resumePosition.seconds,
+              savedAt: resumePosition.savedAt.toISOString(),
+            },
+          }
+        : {}),
+      ...(subtitles.length > 0 ? { subtitles } : {}),
     };
   }
 
@@ -1246,6 +2018,7 @@ export function createMediaService({
     );
     const { manifestKey } = await getReadyPlaybackOutput(
       context.content_media_id!,
+      context,
       { verifyManifest: false },
     );
     const playbackToken = createPlaybackSegmentToken(manifestKey);
@@ -1270,7 +2043,7 @@ export function createMediaService({
     }
 
     await assertPlaybackAccess(context, user);
-    const { outputPrefix } = await getReadyPlaybackOutput(mediaId, {
+    const { outputPrefix } = await getReadyPlaybackOutput(mediaId, context, {
       verifyManifest: false,
     });
     const hlsPath = requestedPath.replace(/^\/+/, "");
@@ -1288,71 +2061,28 @@ export function createMediaService({
       contentType: hlsContentType(hlsPath),
       contentLength: file.contentLength,
       isManifest: /\.m3u8$/i.test(hlsPath),
+      // Only what a signed-out visitor may play is cacheable for everyone.
       isPublic:
         context.course_status === "published" &&
-        (context.is_preview || context.pricing_type === "free"),
+        (context.is_preview ||
+          (isOpenFreeCourse(context) && context.is_first_lesson === true)),
     };
   }
 
   /**
-   * Fetches the media file stream and metadata from storage.
+   * Streams one responsive variant of an image.
    *
-   * Access rule: an asset is servable without restriction if it's the
-   * thumbnail/trailer of a published course (those render as plain
-   * <img>/<video> src on public, logged-out marketing pages). Anything
-   * else — draft-course assets, unattached uploads, other media types —
-   * is only servable to its owner. `requestingUserId` is undefined for
-   * anonymous requests.
+   * Access rule: an image is servable to anyone when it is the thumbnail of
+   * a published course (it renders as a plain <img> on public, logged-out
+   * pages). Anything else — draft-course images, unattached uploads — is
+   * only servable to its owner or an admin. `requestingUserId` is undefined
+   * for anonymous requests. `isPublic` tells the caller which case applied,
+   * so a privately served image is never marked cacheable by shared caches.
    *
    * Returns MEDIA_NOT_FOUND (not 403) for an authorization failure too, so
    * a caller can't distinguish "doesn't exist" from "exists but isn't
    * yours" by probing IDs.
    */
-  async function getMediaStream(
-    mediaId: string,
-    requestingUserId?: string,
-    userRoles?: readonly string[],
-  ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(database, mediaId);
-    if (!media) {
-      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
-    }
-
-    const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(
-      database,
-      mediaId,
-    );
-    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin) {
-      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
-    }
-
-    const isReadyImage = media.type === "image" && media.status === "ready";
-    const fullKey = isReadyImage
-      ? (getPersistedImageVariantKey(media.metadata, "full") ??
-        `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/full.webp`)
-      : media.storage_key;
-    const file = await services.storage.getObject(fullKey);
-    if (!file) {
-      throw new AppError(
-        404,
-        "FILE_NOT_FOUND",
-        "Media file not found in storage.",
-      );
-    }
-    return {
-      stream: file.body,
-      contentType: isReadyImage
-        ? "image/webp"
-        : media.mime_type || file.contentType || "application/octet-stream",
-      contentLength:
-        file.contentLength ??
-        (media.size_bytes ? Number(media.size_bytes) : undefined),
-      filename: media.original_filename,
-      isPublic,
-    };
-  }
-
   async function getImageVariantStream(
     mediaId: string,
     width: number,
@@ -1362,12 +2092,17 @@ export function createMediaService({
     const media = await mediaRepo.findMediaAssetById(database, mediaId);
     if (!media || media.type !== "image")
       throw new AppError(404, "MEDIA_NOT_FOUND", "Image asset not found.");
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
+    const isAdmin = await reachesAllMedia(requestingUserId, userRoles, "view");
     const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(
       database,
       mediaId,
     );
-    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin)
+    if (
+      !isPublic &&
+      media.owner_id !== requestingUserId &&
+      !isAdmin &&
+      !(await isMediaOfHeldArchivedCourse(mediaId, requestingUserId))
+    )
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     const variants =
       isRecord(media.metadata) && Array.isArray(media.metadata.variants)
@@ -1396,6 +2131,7 @@ export function createMediaService({
       stream: file.body,
       contentType: "image/webp",
       contentLength: file.contentLength,
+      isPublic,
     };
   }
 
@@ -1410,13 +2146,15 @@ export function createMediaService({
     body: MediaConvertWebhookPayload;
     logger?: FastifyBaseLogger;
   }): Promise<MediaConvertWebhookResponse> {
+    // Every authentication failure answers the same way: an unauthenticated
+    // caller learns neither whether a secret is configured nor which check
+    // rejected it. The reason goes to the log instead.
     const webhookSecret = services.config?.MEDIACONVERT_WEBHOOK_SECRET;
     if (!webhookSecret) {
-      throw new AppError(
-        401,
-        "UNAUTHORIZED",
-        "MediaConvert webhook secret is not configured.",
+      logger?.warn(
+        "[mediaconvert-webhook] Rejected: MEDIACONVERT_WEBHOOK_SECRET is not configured",
       );
+      throw new AppError(401, "UNAUTHORIZED", WEBHOOK_UNAUTHORIZED_MESSAGE);
     }
 
     const signatureHeader =
@@ -1424,11 +2162,8 @@ export function createMediaService({
       headers["x-hub-signature-256"] ||
       headers["x-mediaconvert-signature"];
     if (!signatureHeader) {
-      throw new AppError(
-        401,
-        "UNAUTHORIZED",
-        "Missing MediaConvert webhook signature header.",
-      );
+      logger?.warn("[mediaconvert-webhook] Rejected: no signature header");
+      throw new AppError(401, "UNAUTHORIZED", WEBHOOK_UNAUTHORIZED_MESSAGE);
     }
     const rawPayload = rawBody
       ? typeof rawBody === "string"
@@ -1449,11 +2184,8 @@ export function createMediaService({
       sigBuf.length !== expBuf.length ||
       !crypto.timingSafeEqual(sigBuf, expBuf)
     ) {
-      throw new AppError(
-        401,
-        "UNAUTHORIZED",
-        "Invalid MediaConvert webhook signature.",
-      );
+      logger?.warn("[mediaconvert-webhook] Rejected: signature mismatch");
+      throw new AppError(401, "UNAUTHORIZED", WEBHOOK_UNAUTHORIZED_MESSAGE);
     }
 
     const eventDetail = body?.detail || body;
@@ -1505,12 +2237,13 @@ export function createMediaService({
         val,
       );
 
-    let job: Awaited<ReturnType<typeof mediaRepo.findVideoJobById>> | undefined;
+    let job:
+      Awaited<ReturnType<typeof mediaRepo.findVideoJobStateById>> | undefined;
     if (jobId && isUuid(jobId)) {
-      job = await mediaRepo.findVideoJobById(database, jobId);
+      job = await mediaRepo.findVideoJobStateById(database, jobId);
     }
     if (!job && videoId && isUuid(videoId)) {
-      job = await mediaRepo.findVideoJobByVideoId(database, videoId);
+      job = await mediaRepo.findVideoJobStateByVideoId(database, videoId);
     }
 
     if (!job) {
@@ -1576,24 +2309,31 @@ export function createMediaService({
       await mediaRepo.updateMediaAssetStatus(database, job.video_id, "ready");
 
       if (durationSeconds) {
-        await database
-          .updateTable("media_assets")
-          .set({ duration_seconds: durationSeconds, updated_at: new Date() })
-          .where("id", "=", job.video_id)
-          .execute();
+        await mediaRepo.updateMediaAssetDuration(
+          database,
+          job.video_id,
+          durationSeconds,
+        );
       }
 
+      const outputId = crypto.randomUUID();
       await mediaRepo.insertVideoOutput(database, {
-        id: crypto.randomUUID(),
+        id: outputId,
         video_id: job.video_id,
         master_playlist_path: normalizedMaster,
         created_at: new Date(),
+      });
+      services.analyticsEvents?.emit("media.video.ready", {
+        mediaId: job.video_id,
+        manifestKey: normalizedMaster,
+        outputId,
+        at: new Date(),
       });
 
       // The duration is only reliable now, so chapters authored before the
       // upload finished are derived (and their frames requested) here.
       try {
-        const readyMedia = await mediaRepo.findMediaAssetById(
+        const readyMedia = await mediaRepo.findMediaAssetSummaryById(
           database,
           job.video_id,
         );
@@ -1661,16 +2401,7 @@ export function createMediaService({
             ? body.progressPercent
             : 50;
 
-      await database
-        .updateTable("video_jobs")
-        .set({
-          status: "processing",
-          progress_percent: progressPercent,
-          updated_at: new Date(),
-        })
-        .where("id", "=", job.id)
-        .where("status", "not in", ["completed", "failed", "cancelled"])
-        .execute();
+      await mediaRepo.markVideoJobProcessing(database, job.id, progressPercent);
       return { success: true, status: "processing", jobId: job.id };
     }
 
@@ -1685,8 +2416,81 @@ export function createMediaService({
     return { success: true, status: statusRaw.toLowerCase(), jobId: job.id };
   }
 
+  /**
+   * Playback for a video asset whose viewer the caller has already
+   * authorized (the home page's hero video, which an admin made public).
+   * No course or lesson access rule is applied here.
+   */
+  async function getVideoAssetPlayback(
+    media: VideoAssetForPlayback,
+    details: { mediaKey: string; title?: string | null },
+  ): Promise<HeroVideoPlayback> {
+    const { manifestKey } = await getReadyPlaybackOutput(
+      media.id,
+      {
+        media_type: media.type,
+        media_status: media.status,
+        media_storage_key: media.storageKey,
+      },
+      { verifyManifest: false },
+    );
+    const manifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    if (!manifestUrl) {
+      throw new AppError(
+        503,
+        "CDN_NOT_CONFIGURED",
+        "Media delivery is not configured.",
+      );
+    }
+    const playbackToken = createPlaybackSegmentToken(manifestKey);
+    return {
+      mediaKey: details.mediaKey,
+      manifestUrl,
+      ...(playbackToken
+        ? {
+            segmentToken: playbackToken.token,
+            segmentTokenExpiresAt: playbackToken.expiresAt,
+          }
+        : {}),
+      ...(media.durationSeconds !== null
+        ? { duration: Number(media.durationSeconds) }
+        : {}),
+      ...(details.title ? { title: details.title } : {}),
+    };
+  }
+
+  /** A fresh segment token for `getVideoAssetPlayback`'s stream. */
+  async function getVideoAssetPlaybackToken(
+    media: VideoAssetForPlayback,
+  ): Promise<VideoPlaybackToken> {
+    const { manifestKey } = await getReadyPlaybackOutput(
+      media.id,
+      {
+        media_type: media.type,
+        media_status: media.status,
+        media_storage_key: media.storageKey,
+      },
+      { verifyManifest: false },
+    );
+    const playbackToken = createPlaybackSegmentToken(manifestKey);
+    if (!playbackToken) {
+      throw new AppError(
+        409,
+        "CDN_TOKEN_NOT_REQUIRED",
+        "This video does not require a protected playback token.",
+      );
+    }
+    return playbackToken;
+  }
+
   return {
+    reachesAllMedia,
     presignMediaUpload,
+    startMultipartUpload,
+    getMultipartUploadStatus,
+    presignMultipartUploadParts,
+    completeMultipartUpload,
+    abortMultipartUpload,
     confirmUpload,
     queueTranscodeJob,
     retryTranscodeJob,
@@ -1697,10 +2501,11 @@ export function createMediaService({
     getVideoJobProgress,
     getPlaybackBootstrap,
     getPlaybackToken,
+    getVideoAssetPlayback,
+    getVideoAssetPlaybackToken,
     getLessonResourceDownload,
     getMediaDelivery,
     getHlsStream,
-    getMediaStream,
     getImageVariantStream,
     handleMediaConvertWebhook,
   };

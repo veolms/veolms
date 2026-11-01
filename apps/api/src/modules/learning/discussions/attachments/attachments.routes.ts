@@ -2,17 +2,16 @@ import { z } from "zod";
 import fastifyMultipart from "@fastify/multipart";
 import {
   completeAttachmentUploadRequestSchema,
-  createLinkPreviewRequestSchema,
   initiateAttachmentUploadRequestSchema,
   initiateAttachmentUploadResponseSchema,
-  learningAttachmentSchema,
   learningUploadResponseSchema,
-  linkPreviewResponseSchema,
+  uploadedAttachmentSchema,
 } from "@veolms/contracts";
 import { errorResponse } from "../../../../lib/errors.ts";
 import { jsonResponse } from "../../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
 import { createDiscussionUploadStore } from "../../../discussion-uploads/index.ts";
+import { DISCUSSION_UPLOAD_RATE_LIMIT } from "../shared/discussion.constants.ts";
 import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createAttachmentsController } from "./attachments.controller.ts";
 import { createAttachmentsRepository } from "./attachments.repository.ts";
@@ -40,7 +39,10 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/initiate",
     {
-      preHandler: permissions.requireAuthenticated,
+      config: { rateLimit: DISCUSSION_UPLOAD_RATE_LIMIT },
+      // A list of its own: the limiter is appended to the list it is given,
+      // and the shared one is used by every route in this file.
+      preHandler: [...permissions.requireAuthenticated],
       schema: {
         operationId: "initiateAttachmentUpload",
         tags: ["Learning Attachments"],
@@ -63,7 +65,10 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/:attachmentId/upload",
     {
-      preHandler: permissions.requireAuthenticated,
+      config: { rateLimit: DISCUSSION_UPLOAD_RATE_LIMIT },
+      // A list of its own: the limiter is appended to the list it is given,
+      // and the shared one is used by every route in this file.
+      preHandler: [...permissions.requireAuthenticated],
       schema: {
         operationId: "uploadAttachmentBinary",
         tags: ["Learning Attachments"],
@@ -71,7 +76,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ attachmentId: z.uuid() }),
         consumes: ["multipart/form-data"],
         response: {
-          200: jsonResponse("File uploaded", learningAttachmentSchema),
+          200: jsonResponse("File uploaded", uploadedAttachmentSchema),
           400: errorResponse("File is required"),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Attachment slot not found"),
@@ -92,9 +97,12 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
         summary: "Complete attachment upload verification",
         body: completeAttachmentUploadRequestSchema,
         response: {
-          200: jsonResponse("Attachment completed", learningAttachmentSchema),
+          200: jsonResponse("Attachment completed", uploadedAttachmentSchema),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Attachment not found"),
+          503: errorResponse(
+            "The file store could not be reached; the request can be repeated.",
+          ),
         },
       },
     },
@@ -105,7 +113,10 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/upload",
     {
-      preHandler: permissions.requireAuthenticated,
+      config: { rateLimit: DISCUSSION_UPLOAD_RATE_LIMIT },
+      // A list of its own: the limiter is appended to the list it is given,
+      // and the shared one is used by every route in this file.
+      preHandler: [...permissions.requireAuthenticated],
       schema: {
         operationId: "uploadLearningAttachment",
         tags: ["Learning Attachments"],
@@ -123,26 +134,6 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.uploadAttachment,
-  );
-
-  // 5. POST /attachments/link-preview - External link preview
-  app.post(
-    "/attachments/link-preview",
-    {
-      preHandler: permissions.requireAuthenticated,
-      schema: {
-        operationId: "getLearningLinkPreview",
-        tags: ["Learning Attachments"],
-        summary: "Fetch metadata preview for external link",
-        body: createLinkPreviewRequestSchema,
-        response: {
-          200: jsonResponse("Link preview metadata", linkPreviewResponseSchema),
-          400: errorResponse("Invalid URL"),
-          401: errorResponse("Unauthorized"),
-        },
-      },
-    },
-    controller.getLinkPreview,
   );
 };
 

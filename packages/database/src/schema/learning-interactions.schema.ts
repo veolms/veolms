@@ -32,6 +32,8 @@ export interface LearningThreadTable {
   visibility: DiscussionVisibility;
   status: Generated<InteractionStatus>;
   is_locked: Generated<boolean>;
+  /** Who locked the thread; only they or staff may unlock it. */
+  locked_by_user_id: string | null;
   accepted_answer_id: string | null;
   likes_count: Generated<number>;
   replies_count: Generated<number>;
@@ -99,6 +101,8 @@ export interface LearningNoteTable {
   plain_text: string;
   tags: Generated<string[]>;
   visibility: Generated<DiscussionVisibility>;
+  /** Set when a moderator made the note private; it cannot be re-shared. */
+  moderated_private_at: Date | null;
   likes_count: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;

@@ -19,6 +19,12 @@ export const notificationSchema = z.strictObject({
   createdAt: z.iso.datetime(),
 });
 
+/** The read state of one notification after it was marked read or unread. */
+export const notificationReadStateSchema = z.strictObject({
+  id: z.uuid(),
+  readAt: z.iso.datetime().nullable(),
+});
+
 const queryBooleanSchema = z
   .enum(["true", "false"])
   .transform((value) => value === "true");
@@ -87,6 +93,7 @@ export const updateNotificationPreferencesSchema = z.strictObject({
 export type NotificationChannel = z.infer<typeof notificationChannelSchema>;
 export type NotificationCategory = z.infer<typeof notificationCategorySchema>;
 export type Notification = z.infer<typeof notificationSchema>;
+export type NotificationReadState = z.infer<typeof notificationReadStateSchema>;
 export type NotificationListQuery = z.output<
   typeof notificationListQuerySchema
 >;

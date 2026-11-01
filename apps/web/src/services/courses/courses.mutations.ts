@@ -1,13 +1,20 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type {
   Category,
-  Course,
   CourseAccessRule,
+  CourseBasicsResponse,
+  CourseCreatedResponse,
   CourseDeleteResponse,
   CourseEditorDataResponse,
   CoursePricing,
   CourseSettings,
+  CourseStatusResponse,
   CourseIncludeItem,
+  LinkedCoursesListResponse,
   CreateCategoryRequest,
   CreateCourseIncludeRequest,
   CreateCourseLessonRequest,
@@ -31,10 +38,28 @@ import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 
+/**
+ * What learners see of a course, and the state of its public page rebuild.
+ *
+ * Overviews are cached under the slug on learner screens and under the id
+ * in the editor, so an edit that refreshed only the id entry left the
+ * public page showing the old curriculum — and edits to pricing, settings,
+ * access rules, includes and resources refreshed neither.
+ */
+function invalidateCoursePublicViews(
+  queryClient: QueryClient,
+  courseId: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: courseKeys.overviews() });
+  void queryClient.invalidateQueries({
+    queryKey: courseKeys.staticPageRefresh(courseId),
+  });
+}
+
 export function useCreateCourse() {
   const queryClient = useQueryClient();
 
-  return useMutation<Course, ApiError, CreateCourseRequest>({
+  return useMutation<CourseCreatedResponse, ApiError, CreateCourseRequest>({
     mutationFn: (payload) => coursesService.createCourse(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
@@ -58,7 +83,7 @@ export function useUpdateCourseBasics() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    Course,
+    CourseBasicsResponse,
     ApiError,
     { id: string; payload: UpdateCourseBasicsRequest }
   >({
@@ -133,7 +158,7 @@ export function useCreateSection() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { id: string; courseId: string; title: string; position: number },
+    { id: string; title: string },
     ApiError,
     { courseId: string; payload: CreateCourseSectionRequest }
   >({
@@ -146,9 +171,7 @@ export function useCreateSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -174,9 +197,7 @@ export function useUpdateCourseSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -199,9 +220,7 @@ export function useDeleteCourseSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -273,9 +292,7 @@ export function useReorderCourseSections() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -285,7 +302,7 @@ export function useCreateLesson() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { id: string; position: number },
+    { id: string },
     ApiError,
     {
       courseId: string;
@@ -302,9 +319,7 @@ export function useCreateLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -313,7 +328,7 @@ export function useUpdateCourseLesson() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { success: boolean; videoJobId?: string; processingStatus?: string },
+    { success: boolean },
     ApiError,
     {
       courseId: string;
@@ -330,9 +345,7 @@ export function useUpdateCourseLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -355,9 +368,7 @@ export function useDeleteCourseLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -384,6 +395,7 @@ export function useCreateLessonResource() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -405,6 +417,7 @@ export function useDeleteLessonResource() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -484,9 +497,7 @@ export function useReorderSectionLessons() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -516,6 +527,7 @@ export function useUpsertAccessRules() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -548,6 +560,7 @@ export function useUpsertSettings() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -577,6 +590,7 @@ export function useUpsertPricing() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -585,7 +599,7 @@ export const useUpsertCoursePricing = useUpsertPricing;
 export function usePublishCourse() {
   const queryClient = useQueryClient();
 
-  return useMutation<Course, ApiError, string>({
+  return useMutation<CourseStatusResponse, ApiError, string>({
     mutationFn: (courseId) => coursesService.publishCourse(courseId),
     onSuccess: (updatedCourse) => {
       queryClient.invalidateQueries({
@@ -607,7 +621,7 @@ export function usePublishCourse() {
 export function useUnpublishCourse() {
   const queryClient = useQueryClient();
 
-  return useMutation<Course, ApiError, string>({
+  return useMutation<CourseStatusResponse, ApiError, string>({
     mutationFn: (courseId) => coursesService.unpublishCourse(courseId),
     onSuccess: (updatedCourse) => {
       queryClient.invalidateQueries({
@@ -643,6 +657,7 @@ export function useCreateCourseInclude() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -664,6 +679,7 @@ export function useUpdateCourseInclude() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -685,6 +701,7 @@ export function useDeleteCourseInclude() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -706,6 +723,29 @@ export function useReorderCourseIncludes() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
+    },
+  });
+}
+
+/** Links or unlinks a course; the response is the course's new list. */
+export function useSetLinkedCourse() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    LinkedCoursesListResponse,
+    ApiError,
+    { courseId: string; linkedCourseId: string; linked: boolean }
+  >({
+    mutationFn: ({ courseId, linkedCourseId, linked }) =>
+      linked
+        ? coursesService.addLinkedCourse(courseId, linkedCourseId)
+        : coursesService.removeLinkedCourse(courseId, linkedCourseId),
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(
+        courseKeys.linkedCourses(variables.courseId),
+        data,
+      );
     },
   });
 }

@@ -1,21 +1,46 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
-import { Exam } from "@phosphor-icons/react/Exam";
 import { Lock } from "@phosphor-icons/react/Lock";
 import { Tag } from "@phosphor-icons/react/Tag";
+import { CHECKOUT_WINDOW_SECONDS } from "@veolms/contracts";
 import { Button } from "../components/Button";
-import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
+import { productName } from "../routing/routeDescriptors";
 import { useCurrentUser } from "../services/auth";
+import { readCheckoutStartError } from "../services/payments/checkoutError";
 import {
+  CHECKOUT_WINDOW_BLOCKED_MESSAGE,
+  openCheckoutWindow,
+} from "../services/payments/checkoutWindowLoad";
+import "../services/payments/razorpay-checkout.css";
+import {
+  useAwaitPaidOrder,
   useCreateCheckoutOrder,
+  useReleaseCheckoutOrder,
   useVerifyPayment,
 } from "../services/payments/payment.mutations";
+import {
+  PAYMENT_BEING_CONFIRMED_MESSAGE,
+  paymentConfirmationDelayedMessage,
+} from "../services/payments/paymentConfirmation";
 import { quizKeys } from "../services/quizzes/quizzes.keys";
+import { trackAnalyticsEvent } from "../lib/analytics-track";
 import { useQuizPricingPreview } from "../services/quizzes/quizzes.queries";
+import {
+  QUIZ_EYEBROW,
+  QUIZ_HAIRLINE,
+  QUIZ_PRIMARY_ACTION,
+  QUIZ_RAISED_SURFACE,
+  QUIZ_SECONDARY_ACTION,
+  QuizNotice,
+  QuizStage,
+  QuizStageBar,
+  QuizStageBody,
+} from "./attempt/QuizStage";
+import { QuizStageMessage } from "./attempt/QuizStageMessage";
 
 async function loadRazorpay(): Promise<void> {
   if (typeof window === "undefined") return;
@@ -58,10 +83,20 @@ export function QuizEnrollmentCard({
   const { data: user } = useCurrentUser();
   const pricingPreviewQuery = useQuizPricingPreview(courseId, assignmentId);
   const createOrder = useCreateCheckoutOrder();
+  const checkoutIntentRef = useRef<{ intent: string; key: string } | null>(
+    null,
+  );
+  const releaseOrder = useReleaseCheckoutOrder();
   const verify = useVerifyPayment();
+  const awaitPaidOrder = useAwaitPaidOrder();
+  const paymentConfirmationRef = useRef<AbortController | null>(null);
+  useEffect(() => () => paymentConfirmationRef.current?.abort(), []);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [confirmationNotice, setConfirmationNotice] = useState<string | null>(
+    null,
+  );
 
   const preview = pricingPreviewQuery.data;
 
@@ -90,46 +125,39 @@ export function QuizEnrollmentCard({
 
   if (pricingPreviewQuery.isLoading) {
     return (
-      <section
-        className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-5 sm:p-8 text-(--text)"
-        style={{ boxShadow: "var(--card-shadow)" }}
-      >
-        <CenteredLoadingSpinner
-          label="Loading quiz access details"
-          className="min-h-40"
-          size={24}
-        />
-      </section>
+      <QuizStageMessage
+        lessonBadge={lessonBadge}
+        onBackToVideo={onBackToVideo}
+        role="status"
+        label="Loading quiz access details"
+        visual={
+          <span className="text-(--muted)">
+            <LoadingSpinnerIcon size={26} />
+          </span>
+        }
+      />
     );
   }
 
   if (pricingPreviewQuery.isError || !preview) {
     return (
-      <section
-        className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-red-500/20 bg-(--card-surface,var(--surface)) p-5 sm:p-8 text-(--text)"
-        style={{ boxShadow: "var(--card-shadow)" }}
-      >
-        {onBackToVideo ? (
-          <button
-            type="button"
-            onClick={onBackToVideo}
-            className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+      <QuizStageMessage
+        lessonBadge={lessonBadge}
+        onBackToVideo={onBackToVideo}
+        role="alert"
+        title="Unable to check quiz access"
+        actions={
+          <Button
+            motion="static"
+            onClick={() => void pricingPreviewQuery.refetch()}
+            className={QUIZ_SECONDARY_ACTION}
           >
-            <ArrowLeft size={13} weight="bold" />
-            <span>Back to video</span>
-          </button>
-        ) : null}
-        <p className="text-sm text-red-400">
-          Unable to check quiz access.{" "}
-          {pricingPreviewQuery.error?.message ?? "Please try again."}
-        </p>
-        <Button
-          onClick={() => void pricingPreviewQuery.refetch()}
-          className="mt-4 h-9 px-4 text-xs font-semibold"
-        >
-          Try again
-        </Button>
-      </section>
+            Try again
+          </Button>
+        }
+      >
+        {pricingPreviewQuery.error?.message ?? "Please try again."}
+      </QuizStageMessage>
     );
   }
 
@@ -144,6 +172,53 @@ export function QuizEnrollmentCard({
 
   const isFree = pricingType === "free";
 
+  /** Access is in place: refresh what the page knows and hand over. */
+  const finishEnrollment = async (kind: "free" | "paid", orderId: string) => {
+    if (kind === "paid") {
+      trackAnalyticsEvent("payment_confirmed", {
+        courseId,
+        orderId,
+        props: { item: "quiz" },
+      });
+    }
+    trackAnalyticsEvent("enrollment_completed", {
+      courseId,
+      props: { kind, item: "quiz" },
+    });
+    await queryClient.invalidateQueries({ queryKey: quizKeys.all });
+    await pricingPreviewQuery.refetch();
+    setIsProcessing(false);
+    onEnrolled();
+  };
+
+  /**
+   * The gateway has taken the payment but this page could not confirm it.
+   * The server still marks the order paid from the gateway's webhook or its
+   * recovery cycle, so the card waits for that, as the course page does,
+   * and keeps the pay button out of reach meanwhile.
+   */
+  const confirmPaidOrder = async (orderId: string) => {
+    paymentConfirmationRef.current?.abort();
+    const confirmation = new AbortController();
+    paymentConfirmationRef.current = confirmation;
+
+    setErrorMessage(null);
+    setConfirmationNotice(PAYMENT_BEING_CONFIRMED_MESSAGE);
+    setIsProcessing(true);
+
+    const paid = await awaitPaidOrder(orderId, confirmation.signal);
+    if (confirmation.signal.aborted) return;
+    paymentConfirmationRef.current = null;
+
+    setConfirmationNotice(null);
+    if (paid) {
+      await finishEnrollment("paid", orderId);
+      return;
+    }
+    setIsProcessing(false);
+    setErrorMessage(paymentConfirmationDelayedMessage("quiz"));
+  };
+
   const handleEnrollment = async () => {
     setIsProcessing(true);
     setErrorMessage(null);
@@ -155,6 +230,13 @@ export function QuizEnrollmentCard({
         throw new Error("This quiz is not available for purchase.");
       }
 
+      // The key identifies this purchase, not this click: a second click on
+      // the same quiz must reach the same order. A new key per click made
+      // the server see every retry as a new purchase.
+      const intent = preview.quizPricingId;
+      if (checkoutIntentRef.current?.intent !== intent) {
+        checkoutIntentRef.current = { intent, key: crypto.randomUUID() };
+      }
       const order = await createOrder.mutateAsync({
         items: [
           {
@@ -162,14 +244,21 @@ export function QuizEnrollmentCard({
             quizPricingId: preview.quizPricingId,
           },
         ],
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: checkoutIntentRef.current.key,
+      });
+      trackAnalyticsEvent("checkout_start", {
+        courseId,
+        orderId: order.order.id,
+        outcome: order.gateway ? "payment" : "free",
+        props: { item: "quiz" },
       });
 
-      if (!order.gateway) {
-        await queryClient.invalidateQueries({ queryKey: quizKeys.all });
-        await pricingPreviewQuery.refetch();
-        setIsProcessing(false);
-        onEnrolled();
+      // No payment step (nothing to pay), or the same purchase was already
+      // paid on an earlier attempt whose confirmation did not reach this
+      // page: access is granted, and reopening the gateway would only show
+      // an error for an order that is complete.
+      if (!order.gateway || order.order.status === "paid") {
+        await finishEnrollment(order.gateway ? "paid" : "free", order.order.id);
         return;
       }
 
@@ -178,13 +267,19 @@ export function QuizEnrollmentCard({
         throw new Error("Payment gateway is unavailable. Please try again.");
       }
 
+      // The gateway refused to load its window here (see
+      // openCheckoutWindow); its own close then says nothing more.
+      let windowBlocked = false;
       const rzp = new window.Razorpay({
         key: order.gateway.keyId,
         amount: order.gateway.amount,
         currency: order.gateway.currency,
-        name: "VeoLMS",
+        name: productName,
         description: `Quiz Access - ${quizTitle || "Assessment"}`,
         order_id: order.gateway.gatewayOrderId,
+        // The window closes itself, so a payment cannot be completed in it
+        // long after the server has let the buyer start another one.
+        timeout: CHECKOUT_WINDOW_SECONDS,
         prefill: {
           name: user?.displayName || user?.username || "",
           email: user?.email || "",
@@ -201,165 +296,178 @@ export function QuizEnrollmentCard({
               gatewayPaymentId: response.razorpay_payment_id,
               gatewaySignature: response.razorpay_signature,
             });
-            await queryClient.invalidateQueries({ queryKey: quizKeys.all });
-            await pricingPreviewQuery.refetch();
-            setIsProcessing(false);
-            onEnrolled();
-          } catch (err: unknown) {
-            setIsProcessing(false);
-            setErrorMessage(
-              err instanceof Error
-                ? err.message
-                : "Payment verification failed. Please contact support.",
-            );
+            await finishEnrollment("paid", order.order.id);
+          } catch {
+            // The gateway has taken the payment; only our confirmation call
+            // failed. This used to read "Payment verification failed.
+            // Please contact support." every time (the rejection is a plain
+            // object, so the `instanceof Error` test never matched), which
+            // told a learner who had been charged that they had not paid.
+            await confirmPaidOrder(order.order.id);
           }
         },
         modal: {
           ondismiss: () => {
-            setIsProcessing(false);
+            if (windowBlocked) return;
+            // A payment that went through is being confirmed; the gateway
+            // closing its own window afterwards is not a cancellation.
+            const confirmation = paymentConfirmationRef.current;
+            if (confirmation && !confirmation.signal.aborted) return;
+            trackAnalyticsEvent("payment_result", {
+              courseId,
+              orderId: order.order.id,
+              outcome: "dismissed",
+              props: { item: "quiz" },
+            });
+            // As on the course page: the order is cancelled on the server
+            // (unless a payment for it may still arrive), so buying again
+            // is not refused while the closed window's time runs out.
+            void releaseOrder
+              .mutateAsync(order.order.id)
+              .then((result) => {
+                if (result.released) checkoutIntentRef.current = null;
+              })
+              .catch(() => undefined)
+              .finally(() => setIsProcessing(false));
           },
         },
       });
 
-      rzp.open();
+      // Opens the window. If it never comes up, nothing can have been paid
+      // in it, so the order is let go and the button given back with the
+      // reason.
+      openCheckoutWindow(rzp, () => {
+        windowBlocked = true;
+        trackAnalyticsEvent("payment_result", {
+          courseId,
+          orderId: order.order.id,
+          outcome: "blocked",
+          props: { item: "quiz" },
+        });
+        setErrorMessage(CHECKOUT_WINDOW_BLOCKED_MESSAGE);
+        void releaseOrder
+          .mutateAsync(order.order.id)
+          .then((result) => {
+            if (result.released) checkoutIntentRef.current = null;
+          })
+          .catch(() => undefined)
+          .finally(() => setIsProcessing(false));
+      });
     } catch (err: unknown) {
       setIsProcessing(false);
+      // A refusal from the server is a plain object, not an `Error`; read
+      // the same way as the course checkout so its reason is shown.
       setErrorMessage(
-        err instanceof Error
-          ? err.message
-          : "Failed to initiate quiz enrollment.",
+        readCheckoutStartError(err, "Failed to initiate quiz enrollment."),
       );
     }
   };
 
+  const onSale = salePrice !== null && salePrice < catalogPrice;
+
   return (
-    <section
-      data-quiz-surface=""
-      className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-8 text-(--text)"
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
-      {onBackToVideo || lessonBadge ? (
-        <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-          {onBackToVideo ? (
-            <button
-              type="button"
-              onClick={onBackToVideo}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
-            >
-              <ArrowLeft size={13} weight="bold" />
-              <span>Back to video</span>
-            </button>
-          ) : (
-            <span />
-          )}
-          {lessonBadge ? (
-            <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-              <Exam size={14} className="text-(--accent)" weight="bold" />
-              <span>{lessonBadge}</span>
-            </div>
-          ) : null}
+    <QuizStage label="Quiz access">
+      <QuizStageBar onBackToVideo={onBackToVideo} context={lessonBadge} />
+      <QuizStageBody width="narrow" className="pt-4 pb-6 sm:pt-7 sm:pb-9">
+        <div className="flex items-start gap-3.5">
+          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent-ink,var(--accent))">
+            {isFree ? (
+              <CheckCircle size={22} weight="duotone" aria-hidden="true" />
+            ) : (
+              <Lock size={22} weight="duotone" aria-hidden="true" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className={QUIZ_EYEBROW}>
+              {isFree ? "Quiz access" : "Paid assessment"}
+            </p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight wrap-break-word text-(--text) sm:text-[1.75rem]">
+              {quizTitle || "Lesson assessment"}
+            </h1>
+          </div>
         </div>
-      ) : null}
 
-      <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-(--accent)/10 text-(--accent)">
-          {isFree ? (
-            <CheckCircle size={18} weight="bold" />
-          ) : (
-            <Lock size={18} weight="bold" />
-          )}
-        </div>
-        <div>
-          <p className="text-[0.65rem] sm:text-[0.7rem] font-bold uppercase tracking-[0.14em] text-(--accent)">
-            {isFree ? "Quiz Access" : "Paid Assessment"}
-          </p>
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-(--text)">
-            {quizTitle || "Lesson Assessment"}
-          </h1>
-        </div>
-      </div>
+        <p className="mt-3 text-sm leading-relaxed text-(--text-secondary)">
+          {pricingType === "free"
+            ? "This quiz is included with your course enrollment. Start whenever you are ready."
+            : "This is a premium assessment that tests and certifies your grasp of what this lesson covers."}
+        </p>
 
-      <p className="text-xs sm:text-sm text-(--muted) mt-1 leading-relaxed">
-        {pricingType === "free"
-          ? "This quiz is included with your course enrollment. Click below to start your attempt."
-          : "This is a premium assessment designed to test and certify your mastery of the concepts covered in this lesson."}
-      </p>
-
-      {pricingType === "paid" ? (
-        <div className="mt-5 space-y-4">
-          {/* Pricing Breakdown Card */}
-          <div className="rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-3.5 sm:p-4.5 space-y-2.5">
-            <div className="flex items-center justify-between text-xs sm:text-sm text-(--muted)">
-              <span>Catalog Price</span>
-              <span
+        {pricingType === "paid" ? (
+          <dl
+            className={`mt-5 grid gap-2.5 rounded-[14px] p-4 text-sm ${QUIZ_RAISED_SURFACE}`}
+          >
+            <div className="flex items-center justify-between gap-3 text-(--text-secondary)">
+              <dt>Catalog price</dt>
+              <dd
                 className={
-                  salePrice !== null && salePrice < catalogPrice
+                  onSale
                     ? "line-through opacity-70"
-                    : "font-medium text-(--text)"
+                    : "font-semibold text-(--text)"
                 }
               >
                 {formatPrice(catalogPrice, currency)}
-              </span>
+              </dd>
             </div>
 
-            {salePrice !== null && salePrice < catalogPrice ? (
-              <div className="flex items-center justify-between text-xs sm:text-sm text-emerald-400">
-                <span className="flex items-center gap-1">
-                  <Tag size={13} weight="bold" />
-                  <span>Special Sale Price</span>
-                </span>
-                <span className="font-semibold">
+            {onSale ? (
+              <div className="flex items-center justify-between gap-3 text-(--quiz-positive)">
+                <dt className="flex items-center gap-1.5">
+                  <Tag size={14} weight="bold" aria-hidden="true" />
+                  <span>Sale price</span>
+                </dt>
+                <dd className="font-semibold">
                   {formatPrice(salePrice, currency)}
-                </span>
+                </dd>
               </div>
             ) : null}
 
-            <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-2.5 flex items-center justify-between">
-              <span className="text-xs sm:text-sm font-bold text-(--text)">
-                Total Payable
-              </span>
-              <span className="text-base sm:text-xl font-bold text-(--text)">
+            <div
+              className={`flex items-center justify-between gap-3 border-t pt-2.5 ${QUIZ_HAIRLINE}`}
+            >
+              <dt className="font-bold text-(--text)">Total payable</dt>
+              <dd className="text-xl font-bold text-(--text) tabular-nums">
                 {formatPrice(activePrice, currency)}
-              </span>
+              </dd>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {errorMessage ? (
-        <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs sm:text-sm text-red-400">
-          {errorMessage}
-        </div>
-      ) : null}
-
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <Button
-          onClick={handleEnrollment}
-          disabled={isProcessing}
-          className="h-10 px-5 font-semibold text-xs sm:text-sm"
-        >
-          {isProcessing ? (
-            <>
-              <CircleNotch size={15} className="animate-spin mr-2" />
-              <span>Processing...</span>
-            </>
-          ) : isFree ? (
-            "Start Quiz"
-          ) : (
-            `Pay ${formatPrice(activePrice, currency)} & Unlock Quiz`
-          )}
-        </Button>
-
-        {onBackToVideo ? (
-          <Button
-            motion="static"
-            className="h-10 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) px-4 text-xs sm:text-sm text-(--text) shadow-none hover:bg-(--hover)"
-            onClick={onBackToVideo}
-          >
-            Back to video
-          </Button>
+          </dl>
         ) : null}
-      </div>
-    </section>
+
+        {confirmationNotice ? (
+          <div className="mt-4">
+            <QuizNotice tone="caution" role="status">
+              {confirmationNotice}
+            </QuizNotice>
+          </div>
+        ) : null}
+
+        {errorMessage ? (
+          <div className="mt-4">
+            <QuizNotice tone="negative" role="alert">
+              {errorMessage}
+            </QuizNotice>
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
+          <Button
+            onClick={handleEnrollment}
+            disabled={isProcessing}
+            className={QUIZ_PRIMARY_ACTION}
+          >
+            {isProcessing ? (
+              <>
+                <CircleNotch size={16} className="animate-spin" />
+                <span>Processing…</span>
+              </>
+            ) : isFree ? (
+              "Start quiz"
+            ) : (
+              `Pay ${formatPrice(activePrice, currency)} & unlock quiz`
+            )}
+          </Button>
+        </div>
+      </QuizStageBody>
+    </QuizStage>
   );
 }

@@ -38,6 +38,28 @@ export const isFullLearningPlayerSwipeTarget = (
   );
 };
 
+/**
+ * How much of the video, from its top, starts a sideways swipe that opens or
+ * closes the side menu or the course content. The rest, along the bottom,
+ * holds the timeline: a thumb slipping sideways while seeking there must not
+ * move a panel.
+ */
+export const VIDEO_PANEL_SWIPE_AREA_FROM_TOP = 0.7;
+
+/** True for a touch on the bottom of a video, where panel swipes never start. */
+export const isVideoTimelineSwipeZone = (
+  target: EventTarget | null,
+  point: { clientY: number },
+) => {
+  if (!(target instanceof Element)) return false;
+  const video = target.closest("[data-video-player-root]");
+  if (!video) return false;
+  const bounds = video.getBoundingClientRect();
+  return (
+    point.clientY > bounds.top + bounds.height * VIDEO_PANEL_SWIPE_AREA_FROM_TOP
+  );
+};
+
 export const getLearningPlayerSwipeSplitX = (playerAnchor: Element) => {
   const playerBounds = playerAnchor.getBoundingClientRect();
   const courseDrawer = document.querySelector(

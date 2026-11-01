@@ -12,6 +12,7 @@ import type {
 } from "@veolms/contracts";
 import type { S3StorageService } from "@veolms/storage";
 import { httpError } from "../../../../lib/errors.ts";
+import { hasAcademyPermission } from "../../../authorization/index.ts";
 import {
   decodeDiscussionCursor,
   encodeDiscussionCursor,
@@ -31,26 +32,21 @@ import {
 } from "../shared/discussion.mentions.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
-import type { NoteRow, NotesRepository } from "./notes.repository.ts";
+import { createDiscussionRepository } from "../shared/discussion.repository.ts";
+import type {
+  NoteAttachmentRow,
+  NoteRow,
+  NotesRepository,
+} from "./notes.repository.ts";
 
-interface NoteAttachmentItem {
-  id: string;
-  kind: "image" | "screenshot" | "code" | "document";
-  file_name: string;
-  storage_key: string;
-  file_url: string;
-  mime_type: string;
-  file_size: number;
-  metadata: unknown;
-}
-
-export type NotesListQuery = ListLearningNotesQuery & {
-  ids?: readonly string[];
-};
+type NoteAttachmentItem = NoteAttachmentRow;
 
 // Links caller-owned, ready attachments to a note in two batched queries
 // (one lookup + one update) instead of one round trip per attachment id.
+// An attachment that already belongs to a thread, reply or note stays there:
+// linking it again would silently take it away from that post.
 async function linkOwnedAttachments(
+  notesRepo: NotesRepository,
   trx: Transaction<Database>,
   attachmentIds: string[],
   ownerId: string,
@@ -58,23 +54,21 @@ async function linkOwnedAttachments(
 ): Promise<void> {
   if (attachmentIds.length === 0) return;
 
-  const attachments = await trx
-    .selectFrom("learning_attachments")
-    .select(["id", "owner_id", "status"])
-    .where("id", "in", attachmentIds)
-    .execute();
+  const attachments = await notesRepo.listAttachmentLinkCandidates(
+    trx,
+    attachmentIds,
+  );
 
   const validIds = attachments
-    .filter((a) => a.owner_id === ownerId && a.status === "ready")
+    .filter(
+      (a) =>
+        a.owner_id === ownerId && a.status === "ready" && a.target_id === null,
+    )
     .map((a) => a.id);
 
   if (validIds.length === 0) return;
 
-  await trx
-    .updateTable("learning_attachments")
-    .set({ target_type: "note", target_id: noteId })
-    .where("id", "in", validIds)
-    .execute();
+  await notesRepo.linkAttachmentsToNote(trx, validIds, noteId);
 }
 
 export interface NotesService {
@@ -103,8 +97,24 @@ export interface NotesService {
   listNotes(
     db: DatabaseExecutor,
     actor: DiscussionActor,
-    query: NotesListQuery,
+    query: ListLearningNotesQuery,
   ): Promise<LearningNotesListResponse>;
+
+  /**
+   * Hydrates notes a caller has already selected and already authorised for
+   * this lesson (the lesson feed). Unlike `listNotes` it does not repeat the
+   * course access check, page, or count.
+   */
+  listNotesByIds(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    input: {
+      courseId: string;
+      lessonId: string;
+      ids: readonly string[];
+      mine?: boolean;
+    },
+  ): Promise<LearningNote[]>;
 
   getCourseNotesOverview(
     db: DatabaseExecutor,
@@ -132,6 +142,7 @@ export function createNotesService(
 ): NotesService {
   const courseAccess = createDiscussionAccess();
   const outbox = createDiscussionOutbox();
+  const discussionRepo = createDiscussionRepository();
 
   function mapNoteRow(
     row: NoteRow,
@@ -148,19 +159,7 @@ export function createNotesService(
       authorUsername: row.authorUsername ?? null,
       authorAvatarUrl: row.authorAvatarUrl ?? null,
       courseId: row.courseId,
-      courseTitle: row.courseTitle,
-      sectionId: row.sectionId ?? undefined,
-      sectionTitle: row.sectionTitle ?? undefined,
-      sectionPosition:
-        row.sectionPosition !== undefined && row.sectionPosition !== null
-          ? Number(row.sectionPosition)
-          : undefined,
       lessonId: row.lessonId,
-      lessonTitle: row.lessonTitle,
-      lessonPosition:
-        row.lessonPosition !== undefined && row.lessonPosition !== null
-          ? Number(row.lessonPosition)
-          : undefined,
       timestampSeconds: row.timestampSeconds ?? null,
       title: row.title ?? null,
       content: row.content,
@@ -182,11 +181,6 @@ export function createNotesService(
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
         ...getAttachmentDimensionFields(a.metadata),
-        metadata: a.metadata
-          ? typeof a.metadata === "string"
-            ? JSON.parse(a.metadata)
-            : (a.metadata as Record<string, unknown>)
-          : null,
       })),
       createdAt:
         row.createdAt instanceof Date
@@ -197,6 +191,46 @@ export function createNotesService(
           ? row.updatedAt.toISOString()
           : String(row.updatedAt),
     };
+  }
+
+  // The viewer's likes and bookmarks plus each note's attachments, in three
+  // batched reads, for every response that returns more than one note.
+  async function presentNotes(
+    db: DatabaseExecutor,
+    userId: string,
+    rows: readonly NoteRow[],
+  ): Promise<LearningNote[]> {
+    if (rows.length === 0) return [];
+
+    const noteIds = rows.map((n) => n.id);
+    const [likes, bookmarks, attachments] = await Promise.all([
+      notesRepo.listNoteLikes(db, userId, noteIds),
+      notesRepo.listNoteBookmarks(db, userId, noteIds),
+      notesRepo.listReadyAttachmentsOfNotes(db, noteIds),
+    ]);
+
+    const likedNoteIds = new Set(likes.map((l) => l.target_id));
+    const bookmarkedNoteIds = new Set(
+      bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
+    );
+    const attachmentsByNoteId = new Map<string, NoteAttachmentItem[]>();
+    for (const att of attachments) {
+      if (att.target_id) {
+        const list = attachmentsByNoteId.get(att.target_id) || [];
+        list.push(att);
+        attachmentsByNoteId.set(att.target_id, list);
+      }
+    }
+
+    return rows.map((row) =>
+      mapNoteRow(
+        row,
+        userId,
+        attachmentsByNoteId.get(row.id) || [],
+        likedNoteIds.has(row.id),
+        bookmarkedNoteIds.has(row.id),
+      ),
+    );
   }
 
   function assertOwnNote<T extends { userId: string } | null>(
@@ -213,11 +247,7 @@ export function createNotesService(
       const academyId = await resolveAcademyId(db);
 
       // Validate course and lesson hierarchy
-      const course = await db
-        .selectFrom("courses")
-        .selectAll()
-        .where("id", "=", input.courseId)
-        .executeTakeFirst();
+      const course = await discussionRepo.findCourseId(db, input.courseId);
 
       if (!course) {
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
@@ -235,11 +265,11 @@ export function createNotesService(
       );
       await courseAccess.assertNotesEnabled(db, input.courseId);
 
-      const lesson = await db
-        .selectFrom("course_lessons")
-        .selectAll()
-        .where("id", "=", input.lessonId)
-        .executeTakeFirst();
+      // Not under a lesson that has been removed (see threads.service.ts).
+      const lesson = await discussionRepo.findActiveLessonCourseId(
+        db,
+        input.lessonId,
+      );
 
       if (!lesson || lesson.course_id !== input.courseId) {
         throw httpError(
@@ -252,6 +282,17 @@ export function createNotesService(
       const id = crypto.randomUUID();
       const plainText = extractPlainText(input.content);
       const visibility = input.visibility ?? "private";
+      // A shared note is posted to the course like a comment, so a learner
+      // suspended from commenting cannot share one. Private notes are their
+      // own study material and stay available.
+      if (visibility !== "private") {
+        await courseAccess.assertNotSuspended(
+          db,
+          input.userId,
+          input.courseId,
+          "comment",
+        );
+      }
 
       return withWriteTransaction(db, async (trx) => {
         await notesRepo.createNote(trx, {
@@ -283,6 +324,7 @@ export function createNotesService(
         // Link verified attachments owned by the caller
         if (input.attachmentIds && input.attachmentIds.length > 0) {
           await linkOwnedAttachments(
+            notesRepo,
             trx,
             input.attachmentIds,
             input.userId,
@@ -299,23 +341,7 @@ export function createNotesService(
           );
         }
 
-        const attachments = await trx
-          .selectFrom("learning_attachments")
-          .select([
-            "id",
-            "kind",
-            "file_name",
-            "storage_key",
-            "file_url",
-            "mime_type",
-            "file_size",
-            "metadata",
-          ])
-          .where("target_type", "=", "note")
-          .where("target_id", "=", id)
-          .where("status", "=", "ready")
-          .orderBy("created_at", "asc")
-          .execute();
+        const attachments = await notesRepo.listReadyNoteAttachments(trx, id);
 
         return mapNoteRow(created, input.userId, attachments, false);
       });
@@ -330,36 +356,9 @@ export function createNotesService(
       await courseAccess.assertCanAccessNote(db, actor, note);
 
       const [attachments, likeRow, bookmarkRow] = await Promise.all([
-        db
-          .selectFrom("learning_attachments")
-          .select([
-            "id",
-            "kind",
-            "file_name",
-            "storage_key",
-            "file_url",
-            "mime_type",
-            "file_size",
-            "metadata",
-          ])
-          .where("target_type", "=", "note")
-          .where("target_id", "=", noteId)
-          .where("status", "=", "ready")
-          .orderBy("created_at", "asc")
-          .execute(),
-        db
-          .selectFrom("learning_likes")
-          .select("id")
-          .where("user_id", "=", actor.userId)
-          .where("target_type", "=", "note")
-          .where("target_id", "=", noteId)
-          .executeTakeFirst(),
-        db
-          .selectFrom("learning_bookmarks")
-          .select("id")
-          .where("user_id", "=", actor.userId)
-          .where("note_id", "=", noteId)
-          .executeTakeFirst(),
+        notesRepo.listReadyNoteAttachments(db, noteId),
+        notesRepo.findNoteLike(db, actor.userId, noteId),
+        notesRepo.findNoteBookmark(db, actor.userId, noteId),
       ]);
 
       return mapNoteRow(
@@ -403,69 +402,7 @@ export function createNotesService(
       ]);
 
       const { page, hasMore } = takePage(rows, query.limit);
-
-      let likedNoteIds = new Set<string>();
-      let bookmarkedNoteIds = new Set<string>();
-      const attachmentsByNoteId = new Map<string, NoteAttachmentItem[]>();
-
-      if (page.length > 0) {
-        const noteIds = page.map((n) => n.id);
-        const [likes, bookmarks, attachments] = await Promise.all([
-          db
-            .selectFrom("learning_likes")
-            .select("target_id")
-            .where("user_id", "=", actor.userId)
-            .where("target_type", "=", "note")
-            .where("target_id", "in", noteIds)
-            .execute(),
-          db
-            .selectFrom("learning_bookmarks")
-            .select("note_id")
-            .where("user_id", "=", actor.userId)
-            .where("note_id", "in", noteIds)
-            .execute(),
-          db
-            .selectFrom("learning_attachments")
-            .select([
-              "id",
-              "target_id",
-              "kind",
-              "file_name",
-              "storage_key",
-              "file_url",
-              "mime_type",
-              "file_size",
-              "metadata",
-            ])
-            .where("target_type", "=", "note")
-            .where("target_id", "in", noteIds)
-            .where("status", "=", "ready")
-            .orderBy("created_at", "asc")
-            .execute(),
-        ]);
-
-        likedNoteIds = new Set(likes.map((l) => l.target_id));
-        bookmarkedNoteIds = new Set(
-          bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
-        );
-        for (const att of attachments) {
-          if (att.target_id) {
-            const list = attachmentsByNoteId.get(att.target_id) || [];
-            list.push(att);
-            attachmentsByNoteId.set(att.target_id, list);
-          }
-        }
-      }
-
-      const notes = page.map((row) =>
-        mapNoteRow(
-          row,
-          actor.userId,
-          attachmentsByNoteId.get(row.id) || [],
-          likedNoteIds.has(row.id),
-          bookmarkedNoteIds.has(row.id),
-        ),
-      );
+      const notes = await presentNotes(db, actor.userId, page);
       const last = page.at(-1);
 
       return {
@@ -481,7 +418,17 @@ export function createNotesService(
       };
     },
 
+    async listNotesByIds(db, actor, input) {
+      const rows = await notesRepo.listNotesByIds(db, actor.userId, input);
+      return presentNotes(db, actor.userId, rows);
+    },
+
     async getCourseNotesOverview(db, courseId, actor) {
+      // Authorise before reading anything: a caller without access gets the
+      // same answer whether or not the course exists, and no course data is
+      // loaded for them.
+      await courseAccess.assertCanAccessCourse(db, actor, courseId);
+
       const overview = await notesRepo.getCourseNotesOverview(
         db,
         courseId,
@@ -491,70 +438,7 @@ export function createNotesService(
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
 
-      await courseAccess.assertCanAccessCourse(db, actor, courseId);
-
-      const noteIds = overview.notes.map((n) => n.id);
-      let likedNoteIds = new Set<string>();
-      let bookmarkedNoteIds = new Set<string>();
-      const attachmentsByNoteId = new Map<string, NoteAttachmentItem[]>();
-
-      if (noteIds.length > 0) {
-        const [likes, bookmarks, attachments] = await Promise.all([
-          db
-            .selectFrom("learning_likes")
-            .select("target_id")
-            .where("user_id", "=", actor.userId)
-            .where("target_type", "=", "note")
-            .where("target_id", "in", noteIds)
-            .execute(),
-          db
-            .selectFrom("learning_bookmarks")
-            .select("note_id")
-            .where("user_id", "=", actor.userId)
-            .where("note_id", "in", noteIds)
-            .execute(),
-          db
-            .selectFrom("learning_attachments")
-            .select([
-              "id",
-              "target_id",
-              "kind",
-              "file_name",
-              "storage_key",
-              "file_url",
-              "mime_type",
-              "file_size",
-              "metadata",
-            ])
-            .where("target_type", "=", "note")
-            .where("target_id", "in", noteIds)
-            .where("status", "=", "ready")
-            .orderBy("created_at", "asc")
-            .execute(),
-        ]);
-
-        likedNoteIds = new Set(likes.map((l) => l.target_id));
-        bookmarkedNoteIds = new Set(
-          bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
-        );
-        for (const att of attachments) {
-          if (att.target_id) {
-            const list = attachmentsByNoteId.get(att.target_id) || [];
-            list.push(att);
-            attachmentsByNoteId.set(att.target_id, list);
-          }
-        }
-      }
-
-      const allNotes = overview.notes.map((row) =>
-        mapNoteRow(
-          row,
-          actor.userId,
-          attachmentsByNoteId.get(row.id) || [],
-          likedNoteIds.has(row.id),
-          bookmarkedNoteIds.has(row.id),
-        ),
-      );
+      const allNotes = await presentNotes(db, actor.userId, overview.notes);
       const notesByLessonId = new Map<string, LearningNote[]>();
 
       for (const note of allNotes) {
@@ -624,7 +508,7 @@ export function createNotesService(
     },
 
     async updateNote(db, noteId, actor, updates) {
-      const note = await notesRepo.findNoteById(db, noteId);
+      const note = await notesRepo.findNoteAccessTarget(db, noteId);
       assertOwnNote(note, actor.userId);
       await courseAccess.assertCanParticipateInCourse(db, actor, note.courseId);
       await courseAccess.assertNotesEnabled(db, note.courseId);
@@ -634,6 +518,21 @@ export function createNotesService(
           ? extractPlainText(updates.content)
           : undefined;
       const finalVisibility = updates.visibility ?? note.visibility;
+      if (finalVisibility !== "private") {
+        await courseAccess.assertNotSuspended(
+          db,
+          actor.userId,
+          note.courseId,
+          "comment",
+        );
+        if (note.heldPrivate) {
+          throw httpError(
+            403,
+            "NOTE_SHARING_DISABLED",
+            "A moderator made this note private. It can no longer be shared.",
+          );
+        }
+      }
 
       return withWriteTransaction(db, async (trx) => {
         await notesRepo.updateNote(trx, noteId, {
@@ -641,12 +540,16 @@ export function createNotesService(
           ...(plainText !== undefined ? { plainText } : {}),
         });
 
+        // Read the saved note once: it supplies the content for the mention
+        // sync below and is the row the response is built from. Neither the
+        // mention sync nor attachment linking changes the note row itself.
+        const updated = await notesRepo.findNoteById(trx, noteId);
+        if (!updated) {
+          throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+        }
+
         if (finalVisibility === "private") {
-          await trx
-            .deleteFrom("learning_mentions")
-            .where("source_type", "=", "note")
-            .where("source_id", "=", noteId)
-            .execute();
+          await discussionRepo.deleteMentionsBySource(trx, "note", noteId);
         } else if (
           updates.content !== undefined ||
           note.visibility === "private"
@@ -655,15 +558,16 @@ export function createNotesService(
             sourceType: "note",
             sourceId: noteId,
             actorUserId: actor.userId,
-            content: updates.content ?? note.content,
+            content: updated.content,
             courseId: note.courseId,
             lessonId: note.lessonId,
-            plainText: plainText ?? note.plainText,
+            plainText: updated.plainText,
           });
         }
 
         if (updates.attachmentIds && updates.attachmentIds.length > 0) {
           await linkOwnedAttachments(
+            notesRepo,
             trx,
             updates.attachmentIds,
             actor.userId,
@@ -671,42 +575,10 @@ export function createNotesService(
           );
         }
 
-        const updated = await notesRepo.findNoteById(trx, noteId);
-        if (!updated) {
-          throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
-        }
-
         const [attachments, likeRow, bookmarkRow] = await Promise.all([
-          trx
-            .selectFrom("learning_attachments")
-            .select([
-              "id",
-              "kind",
-              "file_name",
-              "storage_key",
-              "file_url",
-              "mime_type",
-              "file_size",
-              "metadata",
-            ])
-            .where("target_type", "=", "note")
-            .where("target_id", "=", noteId)
-            .where("status", "=", "ready")
-            .orderBy("created_at", "asc")
-            .execute(),
-          trx
-            .selectFrom("learning_likes")
-            .select("id")
-            .where("user_id", "=", actor.userId)
-            .where("target_type", "=", "note")
-            .where("target_id", "=", noteId)
-            .executeTakeFirst(),
-          trx
-            .selectFrom("learning_bookmarks")
-            .select("id")
-            .where("user_id", "=", actor.userId)
-            .where("note_id", "=", noteId)
-            .executeTakeFirst(),
+          notesRepo.listReadyNoteAttachments(trx, noteId),
+          notesRepo.findNoteLike(trx, actor.userId, noteId),
+          notesRepo.findNoteBookmark(trx, actor.userId, noteId),
         ]);
 
         return mapNoteRow(
@@ -720,8 +592,17 @@ export function createNotesService(
     },
 
     async deleteNote(db, noteId, actor) {
-      const note = await notesRepo.findNoteById(db, noteId);
-      assertOwnNote(note, actor.userId);
+      const note = await notesRepo.findNoteAccessTarget(db, noteId);
+      // Moderators of every course may delete anyone's note; everyone else
+      // only their own.
+      if (
+        !(await hasAcademyPermission(db, actor.userId, "discussion.moderate"))
+      ) {
+        assertOwnNote(note, actor.userId);
+      }
+      if (!note) {
+        throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+      }
       await courseAccess.assertCanParticipateInCourse(db, actor, note.courseId);
       await notesRepo.deleteNote(db, noteId);
     },

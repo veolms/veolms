@@ -7,6 +7,7 @@ import {
 } from "../settings/SettingsControls";
 import type { ReadingModePreferences } from "./readingModePreferences";
 import {
+  getReadingModeGrainSizeLabel,
   getReadingModeTemperatureLabel,
   READING_MODE_COLOR_OPTIONS,
 } from "./readingModeUi";
@@ -26,6 +27,9 @@ export function ReadingModeQuickMenu({
 }: ReadingModeQuickMenuProps) {
   const temperatureLabel = getReadingModeTemperatureLabel(
     preferences.colorTemperature,
+  );
+  const grainSizeLabel = getReadingModeGrainSizeLabel(
+    preferences.textureGrainSize,
   );
 
   return (
@@ -109,6 +113,33 @@ export function ReadingModeQuickMenu({
           <span>None</span>
           <span>Fine</span>
           <span>Paper</span>
+        </div>
+      </div>
+
+      <div className="reading-mode-quick-menu__control">
+        <div className="reading-mode-quick-menu__label">
+          <label htmlFor={`${id}-grain-size`}>Grain size</label>
+          <output htmlFor={`${id}-grain-size`}>{grainSizeLabel}</output>
+        </div>
+        <AppSlider
+          id={`${id}-grain-size`}
+          min="0"
+          max="100"
+          step="1"
+          value={preferences.textureGrainSize}
+          aria-label="Quick grain size"
+          aria-valuetext={`${grainSizeLabel} grain`}
+          onChange={(event) =>
+            onChange({ textureGrainSize: Number(event.currentTarget.value) })
+          }
+        />
+        <div
+          className="reading-mode-quick-menu__range-labels"
+          aria-hidden="true"
+        >
+          <span>Fine</span>
+          <span>Medium</span>
+          <span>Coarse</span>
         </div>
       </div>
 

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { DatabaseExecutor } from "@veolms/database";
 import type { S3StorageService } from "@veolms/storage";
 import type {
@@ -7,9 +8,8 @@ import type {
   LessonDiscussionsListResponse,
   ListLessonDiscussionsQuery,
 } from "@veolms/contracts";
-import { findSettingsByCourseId } from "../../../courses/configuration/configuration.repository.ts";
+import { findCourseSettings } from "../../../courses/index.ts";
 import { httpError } from "../../../../lib/errors.ts";
-import { sql } from "kysely";
 import {
   decodeCursor,
   encodeCursor,
@@ -31,18 +31,17 @@ import { createThreadsRepository } from "../threads/threads.repository.ts";
 import { createAttachmentsRepository } from "../attachments/attachments.repository.ts";
 import {
   createNotesService,
-  type NotesListQuery,
   type NotesService,
 } from "../notes/notes.service.ts";
 import { createNotesRepository } from "../notes/notes.repository.ts";
-import { discussionVisibilityPredicate } from "../shared/discussion.visibility.ts";
+import {
+  createDiscussionsFeedRepository,
+  FEED_SOURCE_RANK as SOURCE_RANK,
+  type FeedCandidate,
+  type FeedSourceType as SourceType,
+} from "./discussions-feed.repository.ts";
 
-const SOURCE_RANK = {
-  note: 1,
-  thread: 2,
-} as const;
-
-type SourceType = keyof typeof SOURCE_RANK;
+const feedRepo = createDiscussionsFeedRepository();
 
 interface FeedCapabilities {
   allowComments: boolean;
@@ -57,6 +56,11 @@ interface FeedContext {
   kind: LessonDiscussionKind;
   sort: LessonDiscussionSort;
   mine: boolean;
+  /**
+   * A hash of the search, which keeps the cursor short whatever was typed.
+   * Absent from cursors written before the feed could be searched.
+   */
+  searchKey?: string | null;
   publicOnly: boolean;
   capabilities: FeedCapabilities;
 }
@@ -71,16 +75,15 @@ interface FeedCursor {
   context: FeedContext;
 }
 
-interface FeedCandidate {
-  entityId: string;
-  sourceType: SourceType;
-  sourceRank: number;
-  createdAt: Date;
-  score: number;
-}
-
 function invalidCursor(): never {
   throw httpError(400, "INVALID_CURSOR", "The pagination cursor is invalid.");
+}
+
+function searchKey(search: string): string {
+  return createHash("sha256")
+    .update(search.toLowerCase())
+    .digest("base64url")
+    .slice(0, 22);
 }
 
 function sameContext(left: FeedContext, right: FeedContext): boolean {
@@ -91,6 +94,7 @@ function sameContext(left: FeedContext, right: FeedContext): boolean {
     left.kind === right.kind &&
     left.sort === right.sort &&
     left.mine === right.mine &&
+    (left.searchKey ?? null) === (right.searchKey ?? null) &&
     left.publicOnly === right.publicOnly &&
     left.capabilities.allowComments === right.capabilities.allowComments &&
     left.capabilities.allowQa === right.capabilities.allowQa &&
@@ -119,8 +123,13 @@ function isFeedContext(value: unknown): value is FeedContext {
       candidate.kind === "comment" ||
       candidate.kind === "question" ||
       candidate.kind === "note") &&
-    (candidate.sort === "newest" || candidate.sort === "top") &&
+    (candidate.sort === "newest" ||
+      candidate.sort === "oldest" ||
+      candidate.sort === "top") &&
     typeof candidate.mine === "boolean" &&
+    (candidate.searchKey === undefined ||
+      candidate.searchKey === null ||
+      typeof candidate.searchKey === "string") &&
     typeof candidate.publicOnly === "boolean" &&
     Boolean(capabilities) &&
     typeof capabilities?.allowComments === "boolean" &&
@@ -192,117 +201,26 @@ async function listCandidates(
   actor: DiscussionActor | null,
   academyId: string,
   context: FeedContext,
+  search: string | undefined,
   cursor: ReturnType<typeof decodeFeedCursor>,
   limit: number,
 ): Promise<FeedCandidate[]> {
-  const sources = [];
-  const kinds = threadKinds(context);
-
-  if (kinds.length > 0) {
-    const kindPredicate = sql` t.kind in (${sql.join(
-      kinds.map((kind) => sql`${kind}`),
-      sql`, `,
-    )})`;
-    sources.push(sql`
-      select
-        t.id as "entityId",
-        'thread'::text as "sourceType",
-        ${SOURCE_RANK.thread}::int as "sourceRank",
-        t.created_at as "createdAt",
-        (coalesce(t.likes_count, 0) + coalesce(t.replies_count, 0))::int as score
-      from learning_threads as t
-      where t.academy_id = ${academyId}
-        and t.course_id = ${context.courseId}
-        and t.lesson_id = ${context.lessonId}
-        and t.status = 'active'
-        and ${kindPredicate}
-        and ${discussionVisibilityPredicate(
-          "t",
-          context.publicOnly ? null : actor?.userId,
-          context.mine,
-        )}
-    `);
-  }
-
-  if (
-    context.kind !== "comment" &&
-    context.kind !== "question" &&
-    context.capabilities.allowNotes
-  ) {
-    sources.push(sql`
-      select
-        n.id as "entityId",
-        'note'::text as "sourceType",
-        ${SOURCE_RANK.note}::int as "sourceRank",
-        n.created_at as "createdAt",
-        coalesce(n.likes_count, 0)::int as score
-      from learning_notes as n
-      where n.academy_id = ${academyId}
-        and n.course_id = ${context.courseId}
-        and n.lesson_id = ${context.lessonId}
-        and ${discussionVisibilityPredicate(
-          "n",
-          context.publicOnly ? null : actor?.userId,
-          context.mine,
-        )}
-    `);
-  }
-
-  if (sources.length === 0) return [];
-
-  const cursorWhere = cursor
-    ? context.sort === "top"
-      ? sql`where (
-          score < ${cursor.score}
-          or (
-            score = ${cursor.score}
-            and "createdAt" < ${cursor.createdAt}
-          )
-          or (
-            score = ${cursor.score}
-            and "createdAt" = ${cursor.createdAt}
-            and "sourceRank" < ${cursor.sourceRank}
-          )
-          or (
-            score = ${cursor.score}
-            and "createdAt" = ${cursor.createdAt}
-            and "sourceRank" = ${cursor.sourceRank}
-            and "entityId" < ${cursor.entityId}::uuid
-          )
-        )`
-      : sql`where (
-          "createdAt" < ${cursor.createdAt}
-          or (
-            "createdAt" = ${cursor.createdAt}
-            and "sourceRank" < ${cursor.sourceRank}
-          )
-          or (
-            "createdAt" = ${cursor.createdAt}
-            and "sourceRank" = ${cursor.sourceRank}
-            and "entityId" < ${cursor.entityId}::uuid
-          )
-        )`
-    : sql``;
-
-  const orderBy =
-    context.sort === "top"
-      ? sql`order by score desc, "createdAt" desc, "sourceRank" desc, "entityId" desc`
-      : sql`order by "createdAt" desc, "sourceRank" desc, "entityId" desc`;
-
-  const result = await sql<FeedCandidate>`
-    select *
-    from (${sql.join(sources, sql` union all `)}) as feed
-    ${cursorWhere}
-    ${orderBy}
-    limit ${limit + 1}
-  `.execute(db);
-
-  return result.rows.map((row) => ({
-    ...row,
-    createdAt: toDate(row.createdAt),
-    sourceRank: Number(row.sourceRank),
-    score: Number(row.score),
-  }));
+  return feedRepo.listCandidates(db, {
+    academyId,
+    courseId: context.courseId,
+    lessonId: context.lessonId,
+    threadKinds: threadKinds(context),
+    includeNotes:
+      context.kind !== "comment" &&
+      context.kind !== "question" &&
+      context.capabilities.allowNotes,
+    viewerUserId: context.publicOnly ? null : actor?.userId,
+    mine: context.mine,
+    search,
+    sort: context.sort,
+    cursor,
+    limit,
+  });
 }
 
 export interface LearningDiscussionsFeedService {
@@ -346,7 +264,7 @@ export function createLearningDiscussionsFeedService(options?: {
         actor,
       });
 
-      const settings = await findSettingsByCourseId(db, courseId);
+      const settings = await findCourseSettings(db, courseId);
       const capabilities: FeedCapabilities = {
         allowComments: settings?.allow_comments !== false,
         allowQa: settings?.allow_qa !== false,
@@ -360,6 +278,7 @@ export function createLearningDiscussionsFeedService(options?: {
         kind: query.kind,
         sort: query.sort,
         mine: Boolean(query.mine && actor && readAccess.canReadPrivateState),
+        searchKey: query.search ? searchKey(query.search) : null,
         publicOnly: !readAccess.canReadPrivateState,
         capabilities,
       };
@@ -371,6 +290,7 @@ export function createLearningDiscussionsFeedService(options?: {
         actor,
         academyId,
         context,
+        query.search || undefined,
         cursor,
         query.limit,
       );
@@ -397,29 +317,25 @@ export function createLearningDiscussionsFeedService(options?: {
         limit: Math.max(1, threadIds.length),
         ids: threadIds,
       };
-      const noteQuery: NotesListQuery = {
-        courseId,
-        lessonId,
-        ...(context.mine ? { mine: true } : {}),
-        limit: Math.max(1, noteIds.length),
-        ids: noteIds,
-      };
 
-      const [threadResponse, noteResponse] = await Promise.all([
+      const [threadResponse, feedNotes] = await Promise.all([
         threadIds.length > 0
           ? threads.listThreads(db, threadQuery)
           : Promise.resolve({ threads: [], nextCursor: null }),
         noteIds.length > 0
-          ? notes.listNotes(db, actor!, noteQuery)
-          : Promise.resolve({ notes: [], nextCursor: null }),
+          ? notes.listNotesByIds(db, actor!, {
+              courseId,
+              lessonId,
+              ids: noteIds,
+              mine: context.mine,
+            })
+          : Promise.resolve([]),
       ]);
 
       const threadsById = new Map(
         threadResponse.threads.map((thread) => [thread.id, thread]),
       );
-      const notesById = new Map(
-        noteResponse.notes.map((note) => [note.id, note]),
-      );
+      const notesById = new Map(feedNotes.map((note) => [note.id, note]));
       const items: LessonDiscussionItem[] = [];
 
       for (const row of page) {
@@ -438,7 +354,6 @@ export function createLearningDiscussionsFeedService(options?: {
             sourceType: "thread",
             identity: `thread:${thread.id}`,
             entityId: thread.id,
-            kind,
             thread,
           });
         } else {
@@ -448,7 +363,6 @@ export function createLearningDiscussionsFeedService(options?: {
             sourceType: "note",
             identity: `note:${note.id}`,
             entityId: note.id,
-            kind: "note",
             note,
           });
         }

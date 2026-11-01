@@ -1,5 +1,7 @@
 import {
+  useCallback,
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
   type FormEvent,
@@ -7,6 +9,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import "../styles/features/workspace.css";
+// The authenticator and backup-code dialogs on this page are styled by this
+// sheet. It was only ever imported by the sign-in screens, so on a settings
+// page opened directly the dialog had no styles: it was added to the end of
+// the document, unpositioned, and "Set up" appeared to do nothing.
+import "../auth/mfa-setup.css";
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { FingerprintIcon as Fingerprint } from "@phosphor-icons/react/Fingerprint";
 import { LaptopIcon as Laptop } from "@phosphor-icons/react/Laptop";
@@ -15,7 +22,8 @@ import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldChec
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { TimerIcon as Timer } from "@phosphor-icons/react/Timer";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import { RecommendedBadge, SettingRow } from "./SettingsControls";
+import { RecommendedBadge, SettingRow, StatusNote } from "./SettingsControls";
+import { isStaffRole } from "../shell/workspaceRole";
 import {
   CenteredLoadingSpinner,
   LoadingSpinnerIcon,
@@ -40,6 +48,7 @@ import {
   usePasskeyRegisterOptions,
   usePasskeyRegisterVerify,
   useDeletePasskeys,
+  useRegenerateBackupCodes,
   useSessions,
   useRevokeSession,
   useRevokeAllOtherSessions,
@@ -116,7 +125,7 @@ function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
 
         <p className="auth-mfa-setup__modal-body">
           Store these codes somewhere safe. Each can be used once if you lose
-          access to your authenticator app.
+          access to your passkey or authenticator app.
         </p>
 
         <ul className="auth-mfa-setup__backup-codes" aria-label="Backup codes">
@@ -162,7 +171,10 @@ interface TotpSetupModalProps {
 }
 
 function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
-  const [step, setStep] = useState<"loading" | "qr" | "verify">("loading");
+  const [step, setStep] = useState<"loading" | "error" | "qr" | "verify">(
+    "loading",
+  );
+  const [setupError, setSetupError] = useState<string | null>(null);
   const [secret, setSecret] = useState("");
   const [uri, setUri] = useState("");
   const [code, setCode] = useState("");
@@ -171,21 +183,33 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
   const setupMutation = useSetupTotp();
   const enableMutation = useEnableTotp();
 
-  const startSetup = async () => {
+  const requestSetup = setupMutation.mutateAsync;
+  const startSetup = useCallback(async () => {
+    setSetupError(null);
+    setStep("loading");
     try {
-      const data = await setupMutation.mutateAsync();
+      const data = await requestSetup();
       setSecret(data.secret);
       setUri(data.uri);
       setStep("qr");
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
-      setCodeError(errorObj?.message || "Could not start authenticator setup.");
+      setSetupError(
+        errorObj?.message || "Could not start authenticator setup.",
+      );
+      setStep("error");
     }
-  };
+  }, [requestSetup]);
 
-  if (step === "loading" && !setupMutation.isPending) {
+  // Started once when the dialog opens. It used to be started from render
+  // whenever no request was in flight, so a failing request was sent again
+  // on every render, without pause, for as long as the dialog stayed open.
+  const setupStartedRef = useRef(false);
+  useEffect(() => {
+    if (setupStartedRef.current) return;
+    setupStartedRef.current = true;
     void startSetup();
-  }
+  }, [startSetup]);
 
   const queryClient = useQueryClient();
 
@@ -244,6 +268,33 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
             label="Preparing authenticator setup"
             className="min-h-24 w-full"
           />
+        )}
+
+        {step === "error" && (
+          <>
+            <p className="auth-mfa-setup__modal-body" role="alert">
+              {setupError}
+            </p>
+            <div
+              className="auth-mfa-setup__modal-actions"
+              style={{ justifyContent: "flex-end", marginTop: "8px" }}
+            >
+              <button
+                className="settings-action settings-action--quiet"
+                onClick={onClose}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="settings-action"
+                onClick={() => void startSetup()}
+                type="button"
+              >
+                Try again
+              </button>
+            </div>
+          </>
         )}
 
         {step === "qr" && (
@@ -319,7 +370,7 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
 
             {codeError ? (
               <p
-                className="auth-form__error"
+                className={`${SETTINGS_ERROR_TEXT}`}
                 id="totp-setup-error"
                 role="alert"
                 style={{ textAlign: "center" }}
@@ -355,16 +406,15 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
   );
 }
 
+/**
+ * Error text on this page. It used a class from the sign-in stylesheet,
+ * which this page does not load.
+ */
+const SETTINGS_ERROR_TEXT =
+  "m-0 text-[0.72rem] leading-[1.4] text-(--danger,#f27991)";
+
 const SECURITY_ROW_CLASS =
   "max-[480px]:[grid-template-columns:2rem_minmax(0,1fr)] max-[480px]:[&_.settings-row__control]:col-start-2 max-[480px]:[&_.settings-row__control]:justify-stretch max-[480px]:[&_.settings-action]:w-full";
-
-function StatusNote({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 text-[0.72rem] font-semibold whitespace-nowrap text-(--muted)">
-      {children}
-    </span>
-  );
-}
 
 export function SecuritySettings({
   isAuthenticated = true,
@@ -388,9 +438,16 @@ export function SecuritySettings({
   const [passkeySuccess, setPasskeySuccess] = useState(false);
   const [totpSuccess, setTotpSuccess] = useState(false);
   const [totpError, setTotpError] = useState<string | null>(null);
+  const [backupCodesError, setBackupCodesError] = useState<string | null>(null);
+  const regenerateBackupCodes = useRegenerateBackupCodes();
 
   const totpEnabled = currentUser?.totpEnabled ?? false;
   const passkeyEnabled = currentUser?.passkeyEnabled ?? false;
+  // Two-factor sign-in is for the academy's team only: a student can
+  // neither add a factor nor be asked for one, so none of it is shown.
+  const offersTwoFactor = Boolean(
+    currentUser && isStaffRole(currentUser.roles),
+  );
   const showEnrollmentSetup = Boolean(
     isAuthenticated &&
     currentUser &&
@@ -411,8 +468,12 @@ export function SecuritySettings({
     try {
       const serverOptions = await passkeyOptionsMutation.mutateAsync();
       const credential = await startPasskeyRegistration(serverOptions);
-      await passkeyVerifyMutation.mutateAsync(credential);
+      const result = await passkeyVerifyMutation.mutateAsync(credential);
       setPasskeySuccess(true);
+      // Returned when the account had no backup code left to fall back on.
+      if (result.backupCodes?.length) {
+        setBackupCodes(result.backupCodes);
+      }
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
       setPasskeyError(
@@ -452,6 +513,21 @@ export function SecuritySettings({
     }
   };
 
+  const handleRegenerateBackupCodes = async () => {
+    if (!isAuthenticated || regenerateBackupCodes.isPending) return;
+    setBackupCodesError(null);
+    try {
+      const result = await regenerateBackupCodes.mutateAsync();
+      setBackupCodes(result.backupCodes);
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setBackupCodesError(
+        errorObj?.message ||
+          "Could not create new backup codes. Please try again.",
+      );
+    }
+  };
+
   const handleTotpSuccess = (codes: string[]) => {
     setShowTotpModal(false);
     setTotpSuccess(true);
@@ -480,6 +556,7 @@ export function SecuritySettings({
     if (isAuthenticated) return;
     setShowTotpModal(false);
     setBackupCodes(null);
+    setBackupCodesError(null);
     setPasskeyError(null);
     setPasskeySuccess(false);
     setTotpSuccess(false);
@@ -508,7 +585,7 @@ export function SecuritySettings({
         </div>
       </header>
 
-      {showEnrollmentSetup ? (
+      {!offersTwoFactor ? null : showEnrollmentSetup ? (
         <section
           className="settings-section"
           aria-labelledby="mfa-enrollment-heading"
@@ -591,7 +668,7 @@ export function SecuritySettings({
           ) : null}
 
           {passkeyError ? (
-            <p className="auth-form__error px-3.5 py-1" role="alert">
+            <p className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`} role="alert">
               {passkeyError}
             </p>
           ) : null}
@@ -699,7 +776,10 @@ export function SecuritySettings({
                 )}
 
                 {passkeyError && (
-                  <p className="auth-form__error px-3.5 py-1" role="alert">
+                  <p
+                    className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`}
+                    role="alert"
+                  >
                     {passkeyError}
                   </p>
                 )}
@@ -784,8 +864,61 @@ export function SecuritySettings({
                 )}
 
                 {totpError && (
-                  <p className="auth-form__error px-3.5 py-1" role="alert">
+                  <p
+                    className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`}
+                    role="alert"
+                  >
                     {totpError}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {(passkeyEnabled || totpEnabled) && (
+            <section
+              className="settings-section"
+              aria-labelledby="backup-codes-heading"
+            >
+              <header className="settings-section__heading">
+                <LockKey size={20} weight="duotone" />
+                <div>
+                  <h3 id="backup-codes-heading">Backup codes</h3>
+                  <p>
+                    Single-use codes for signing in when your passkey or
+                    authenticator app is not at hand.
+                  </p>
+                </div>
+              </header>
+
+              <div className="settings-row-list">
+                <SettingRow
+                  className={SECURITY_ROW_CLASS}
+                  icon={LockKey}
+                  label="Account recovery"
+                  note="Creating a new set replaces the codes you saved before."
+                >
+                  <button
+                    aria-busy={regenerateBackupCodes.isPending}
+                    className="settings-action settings-action--quiet"
+                    disabled={
+                      !isAuthenticated || regenerateBackupCodes.isPending
+                    }
+                    onClick={handleRegenerateBackupCodes}
+                    type="button"
+                  >
+                    {regenerateBackupCodes.isPending
+                      ? "Creating…"
+                      : "Create new codes"}
+                  </button>
+                </SettingRow>
+
+                {backupCodesError && (
+                  <p
+                    className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`}
+                    role="alert"
+                  >
+                    {backupCodesError}
                   </p>
                 )}
               </div>
@@ -818,7 +951,7 @@ export function SecuritySettings({
         )}
 
         {isAuthenticated && sessionQuery.isError && (
-          <p className="auth-form__error" role="alert">
+          <p className={`${SETTINGS_ERROR_TEXT}`} role="alert">
             Could not load sessions. Please refresh.
           </p>
         )}
@@ -849,7 +982,9 @@ export function SecuritySettings({
                         </strong>
                         <small>
                           <span className="truncate">
-                            {session.ipAddress ?? "Unknown IP"}
+                            {session.location ??
+                              session.ipAddress ??
+                              "Unknown IP"}
                           </span>
                           <span aria-hidden className="shrink-0">
                             ·

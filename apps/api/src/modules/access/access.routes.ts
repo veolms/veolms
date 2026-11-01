@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   accessGrantSchema,
+  courseAccessChangeResponseSchema,
+  courseAccessParamsSchema,
   createManualAccessGrantRequestSchema,
 } from "@veolms/contracts";
 import { jsonResponse } from "../../lib/responses.ts";
@@ -22,7 +24,7 @@ const accessRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/access/grants",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("student.access.manage"),
       schema: {
         operationId: "grantManualAccess",
         tags: ["Access Grants"],
@@ -45,7 +47,7 @@ const accessRoutes: RoutePlugin = async (app, options) => {
   app.delete(
     "/access/grants/:grantId",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("student.access.manage"),
       schema: {
         operationId: "revokeAccessGrant",
         tags: ["Access Grants"],
@@ -60,6 +62,7 @@ const accessRoutes: RoutePlugin = async (app, options) => {
           ),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
+          404: errorResponse("Access grant not found"),
         },
       },
     },
@@ -70,7 +73,7 @@ const accessRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/access/users/:userId/grants",
     {
-      preHandler: ctx.requireAdmin,
+      preHandler: ctx.requires("student.access.manage"),
       schema: {
         operationId: "listUserAccessGrants",
         tags: ["Access Grants"],
@@ -87,6 +90,56 @@ const accessRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.listUserGrants,
+  );
+
+  // 4. DELETE /access/users/:userId/courses/:courseId - Revoke a learner's access to a course (Admin)
+  app.delete(
+    "/access/users/:userId/courses/:courseId",
+    {
+      preHandler: ctx.requires("student.access.manage"),
+      schema: {
+        operationId: "revokeCourseAccess",
+        tags: ["Access Grants"],
+        summary: "Revoke a learner's access to a course",
+        description:
+          "Revokes the learner's access grant and enrollment for the course, however the access was obtained. The order that paid for it is not changed and no money is returned; progress is kept.",
+        params: courseAccessParamsSchema,
+        response: {
+          200: jsonResponse("Access revoked", courseAccessChangeResponseSchema),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Admin required"),
+          404: errorResponse("No active access to this course"),
+        },
+      },
+    },
+    controller.revokeCourseAccess,
+  );
+
+  // 5. POST /access/users/:userId/courses/:courseId/restore - Give revoked access back (Admin)
+  app.post(
+    "/access/users/:userId/courses/:courseId/restore",
+    {
+      preHandler: ctx.requires("student.access.manage"),
+      schema: {
+        operationId: "restoreCourseAccess",
+        tags: ["Access Grants"],
+        summary: "Restore a learner's revoked access to a course",
+        description:
+          "Makes a revoked access grant and enrollment active again with the order, source and access period they had before.",
+        params: courseAccessParamsSchema,
+        response: {
+          200: jsonResponse(
+            "Access restored",
+            courseAccessChangeResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Admin required"),
+          404: errorResponse("Learner was never enrolled in this course"),
+          409: errorResponse("Access is not revoked"),
+        },
+      },
+    },
+    controller.restoreCourseAccess,
   );
 };
 

@@ -10,7 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { useVirtualizer, useWindowVirtualizer } from "@tanstack/react-virtual";
-import type { Order, OrderSortOrder } from "@veolms/contracts";
+import type { AdminOrder, OrderSortOrder } from "@veolms/contracts";
 import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/ArrowDown";
 import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/ArrowUp";
 import {
@@ -23,13 +23,14 @@ import { UserIcon as User } from "@phosphor-icons/react/User";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
-import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { getApplicationScrollElement } from "../shell/applicationScroll";
 import type { NavigateTo } from "../routing/navigation";
 import { ordersService } from "../services/orders";
+import { useCapabilities } from "../services/authorization";
 import {
   formatCurrency,
   formatOrderDate,
@@ -37,6 +38,7 @@ import {
   getOrderStatusStyle,
 } from "./orderHelpers";
 import { StudentAvatar } from "./StudentAvatar";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 const ORDER_ROW_ESTIMATE = 76;
 const ORDER_MOBILE_ROW_ESTIMATE = 118;
@@ -53,7 +55,7 @@ const orderListGridColumns =
   "grid-cols-[minmax(220px,1.4fr)_minmax(210px,1.5fr)_minmax(110px,0.8fr)_minmax(130px,0.9fr)_minmax(130px,0.9fr)_minmax(120px,0.8fr)_minmax(56px,0.35fr)]";
 
 export interface OrdersTableProps {
-  orders: readonly Order[];
+  orders: readonly AdminOrder[];
   isLoading: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -62,11 +64,20 @@ export interface OrdersTableProps {
   onToggleSortOrder: () => void;
   selectedOrderId: string | null;
   onSelectOrder: (orderId: string) => void;
-  onRequestRefund: (order: Order) => void;
+  onRequestRefund: (order: AdminOrder) => void;
   onNavigatePage?: NavigateTo;
   setNotice?: (message: string) => void;
   isFiltered?: boolean;
   onResetFilters?: () => void;
+  loadError?: "forbidden" | "failed" | null;
+  onRetry?: () => void;
+  /**
+   * Changes whenever something above the table on the page changes height
+   * (the refund notice appearing or shrinking). The rows are positioned
+   * from the table's distance to the top of the scroll area, which is
+   * measured again when this changes.
+   */
+  layoutRevision?: number;
 }
 
 function getOrderListScrollMargin(
@@ -104,6 +115,7 @@ function useOrderScrollMargin(
   feedRef: RefObject<HTMLDivElement | null>,
   useWindowScroll: boolean,
   itemCount: number,
+  layoutRevision: number,
 ) {
   const [scrollMargin, setScrollMargin] = useState(0);
 
@@ -120,13 +132,13 @@ function useOrderScrollMargin(
     syncScrollMargin();
     window.addEventListener("resize", syncScrollMargin);
     return () => window.removeEventListener("resize", syncScrollMargin);
-  }, [feedRef, itemCount, useWindowScroll]);
+  }, [feedRef, itemCount, layoutRevision, useWindowScroll]);
 
   return scrollMargin;
 }
 
 interface OrderRowProps {
-  order: Order;
+  order: AdminOrder;
   dataIndex: number;
   isSelected: boolean;
   isMenuOpen: boolean;
@@ -134,7 +146,8 @@ interface OrderRowProps {
   measureElement: (element: Element | null) => void;
   transform: string;
   onSelectOrder: (orderId: string) => void;
-  onRequestRefund: (order: Order) => void;
+  /** Left out for a viewer without billing.manage: no "Issue refund". */
+  onRequestRefund?: (order: AdminOrder) => void;
   onNavigatePage?: NavigateTo;
   setNotice?: (message: string) => void;
 }
@@ -228,6 +241,7 @@ const OrderRow = memo(function OrderRow({
           <StudentAvatar
             name={studentName}
             username={student?.username}
+            avatarUrl={student?.avatarUrl}
             size="md"
           />
           <div className="min-w-0">
@@ -390,34 +404,25 @@ const OrderRow = memo(function OrderRow({
           />
 
           {/* 5. Issue refund */}
-          <MenuAction
-            Icon={ArrowCounterClockwise}
-            label="Issue refund"
-            destructive
-            onClick={() => onRequestRefund(order)}
-          />
-
-          {/* 6. Send receipt */}
-          <MenuAction
-            Icon={EnvelopeSimple}
-            label="Send receipt"
-            onClick={() => {
-              setNotice?.(
-                `Receipt sent to ${studentEmail !== "—" ? studentEmail : "student email"}.`,
-              );
-            }}
-          />
+          {onRequestRefund && (
+            <MenuAction
+              Icon={ArrowCounterClockwise}
+              label="Issue refund"
+              destructive
+              onClick={() => onRequestRefund(order)}
+            />
+          )}
 
           <MenuDivider />
 
-          {/* 7. Copy order ID */}
+          {/* 6. Copy order ID */}
           <MenuAction
             Icon={Copy}
             label="Copy order ID"
             onClick={() => handleCopy(order.orderNumber, "Order ID")}
           />
 
-          {/* 8. Copy payment ID */}
+          {/* 7. Copy payment ID */}
           <MenuAction
             Icon={Copy}
             label="Copy payment ID"
@@ -474,14 +479,20 @@ export const OrdersTable = memo(function OrdersTable({
   setNotice,
   isFiltered,
   onResetFilters,
+  loadError,
+  onRetry,
+  layoutRevision = 0,
 }: OrdersTableProps) {
   const [openMenuOrderId, setOpenMenuOrderId] = useState<string | null>(null);
+  // Refunds take billing.manage; reading the orders only billing.read.
+  const issuesRefunds = useCapabilities().can("billing.manage");
   const feedRef = useRef<HTMLDivElement>(null);
   const useWindowScroll = useOrderScrollMode();
   const scrollMargin = useOrderScrollMargin(
     feedRef,
     useWindowScroll,
     orders.length,
+    layoutRevision,
   );
 
   // TanStack Virtualizer
@@ -530,9 +541,9 @@ export const OrdersTable = memo(function OrdersTable({
   // Loading Initial Skeleton
   if (isLoading && orders.length === 0) {
     return (
-      <div
-        className="w-full overflow-hidden rounded-[18px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-12 text-center"
-        style={{ boxShadow: "var(--card-shadow)" }}
+      <ElevatedCard
+        as="div"
+        className="w-full overflow-hidden p-12 text-center"
       >
         <div
           role="status"
@@ -541,7 +552,41 @@ export const OrdersTable = memo(function OrdersTable({
         >
           <CircleNotch size={32} className="animate-spin text-(--accent)" />
         </div>
-      </div>
+      </ElevatedCard>
+    );
+  }
+
+  // Load Error State. A refused or failed request has no rows either, and
+  // used to fall through to "No orders found" as if the academy had no sales.
+  if (!isLoading && loadError && orders.length === 0) {
+    return (
+      <ElevatedCard
+        as="div"
+        role="alert"
+        className="relative w-full overflow-hidden p-8 sm:p-12 text-center"
+      >
+        <div
+          className="mx-auto mb-4 flex size-14 sm:size-16 items-center justify-center rounded-2xl sm:rounded-[20px] border border-rose-500/25 bg-rose-500/10 text-rose-400"
+          aria-hidden="true"
+        >
+          <WarningCircle size={30} weight="duotone" />
+        </div>
+        <h3 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
+          {loadError === "forbidden"
+            ? "You don't have access to orders."
+            : "Orders could not be loaded."}
+        </h3>
+        {loadError === "failed" && onRetry && (
+          <button
+            type="button"
+            onClick={() => onRetry()}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-(--accent) px-4 py-2 text-xs sm:text-sm font-semibold text-(--on-accent,#fff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] cursor-pointer"
+          >
+            <ArrowCounterClockwise size={15} />
+            <span>Try again</span>
+          </button>
+        )}
+      </ElevatedCard>
     );
   }
 
@@ -586,10 +631,7 @@ export const OrdersTable = memo(function OrdersTable({
 
   return (
     <div className="w-full">
-      <div
-        className="overflow-hidden rounded-[18px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface))"
-        style={{ boxShadow: "var(--card-shadow)" }}
-      >
+      <ElevatedCard as="div" className="overflow-hidden">
         <div className="@container/orders overflow-x-auto">
           <div role="table" aria-label="Orders list" className="min-w-0 w-full">
             {/* Table Header */}
@@ -667,7 +709,9 @@ export const OrdersTable = memo(function OrdersTable({
                     measureElement={virtualizer.measureElement}
                     transform={`translateY(${virtualItem.start - scrollMargin}px)`}
                     onSelectOrder={onSelectOrder}
-                    onRequestRefund={onRequestRefund}
+                    onRequestRefund={
+                      issuesRefunds ? onRequestRefund : undefined
+                    }
                     onNavigatePage={onNavigatePage}
                     setNotice={setNotice}
                   />
@@ -676,7 +720,7 @@ export const OrdersTable = memo(function OrdersTable({
             </div>
           </div>
         </div>
-      </div>
+      </ElevatedCard>
 
       {/* Infinite Scroll Footer Spinner */}
       {isFetchingNextPage && (

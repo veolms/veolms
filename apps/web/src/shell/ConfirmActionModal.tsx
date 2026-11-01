@@ -4,6 +4,11 @@ import type { ComponentType, ReactNode } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "../components/Button";
+import {
+  loginButtonClasses,
+  loginCardCornerButtonClasses,
+} from "../auth/LoginCardParts";
+import { cn } from "../lib/utils";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 
 type ModalIconWeight = "bold" | "duotone" | "fill" | "regular";
@@ -17,6 +22,12 @@ export interface ConfirmActionModalProps {
   id: string;
   isOpen: boolean;
   isPending?: boolean;
+  /**
+   * Holds the confirming button back until the caller is satisfied, for an
+   * action that asks for more than a click (a phrase typed in the
+   * description, say).
+   */
+  confirmDisabled?: boolean;
   onClose: () => void;
   onConfirm: () => void;
   icon: ModalIcon;
@@ -34,6 +45,26 @@ export interface ConfirmActionModalProps {
    * the confirming button first, unhighlighted.
    */
   emphasis?: "confirm" | "cancel";
+  /**
+   * Close first, then confirm: for an action that takes effect elsewhere
+   * (signing out moves the page on). The dialog's Back-button history entry
+   * is gone by the time `onConfirm` runs, so stepping it back cannot undo a
+   * navigation the action starts.
+   */
+  closeOnConfirm?: boolean;
+  /**
+   * Form fields under the description, for an action that needs a few
+   * values. The first field takes focus when the dialog opens, and Enter in
+   * a field confirms.
+   */
+  children?: ReactNode;
+  /**
+   * "loginCard": the login pop-up's look (see auth/LoginCardParts): a large
+   * title over one quiet line, the confirming button full width with the
+   * accent's fill and the other quieter under it, the close in the corner.
+   * For a short question that needs no fields.
+   */
+  appearance?: "default" | "loginCard";
 }
 
 const ACTION_BUTTON_CLASS =
@@ -46,6 +77,7 @@ export function ConfirmActionModal({
   id,
   isOpen,
   isPending = false,
+  confirmDisabled = false,
   onClose,
   onConfirm,
   icon: Icon,
@@ -57,7 +89,12 @@ export function ConfirmActionModal({
   pendingLabel,
   tone = "accent",
   emphasis = "confirm",
+  closeOnConfirm = false,
+  children,
+  appearance = "default",
 }: ConfirmActionModalProps) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const fieldsRef = useRef<HTMLFormElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const cancelBtnRef = useRef<HTMLButtonElement | null>(null);
   const confirmBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -92,12 +129,12 @@ export function ConfirmActionModal({
 
       if (event.key !== "Tab") return;
 
-      const focusableElements = [
-        closeBtnRef.current,
-        ...(cancelEmphasized
-          ? [confirmBtnRef.current, cancelBtnRef.current]
-          : [cancelBtnRef.current, confirmBtnRef.current]),
-      ].filter((element): element is HTMLButtonElement => element !== null);
+      // In page order: the close button, any fields, then the two actions.
+      const focusableElements = Array.from(
+        dialogRef.current?.querySelectorAll<
+          HTMLButtonElement | HTMLInputElement
+        >("button, input") ?? [],
+      ).filter((element) => !element.disabled);
 
       if (!focusableElements.length) return;
       const first = focusableElements[0]!;
@@ -114,7 +151,11 @@ export function ConfirmActionModal({
 
     window.addEventListener("keydown", handleKeyDown);
     const focusTimer = window.setTimeout(
-      () => cancelBtnRef.current?.focus(),
+      () =>
+        (
+          fieldsRef.current?.querySelector<HTMLInputElement>("input") ??
+          cancelBtnRef.current
+        )?.focus(),
       50,
     );
 
@@ -123,7 +164,7 @@ export function ConfirmActionModal({
       window.clearTimeout(focusTimer);
       previousActiveElement?.focus();
     };
-  }, [cancelEmphasized, dismissModal, isOpen]);
+  }, [dismissModal, isOpen]);
 
   if (!isOpen || typeof document === "undefined") return null;
 
@@ -149,8 +190,8 @@ export function ConfirmActionModal({
       ref={confirmBtnRef}
       motion="static"
       className={`${ACTION_BUTTON_CLASS}${cancelEmphasized ? ` ${QUIET_ACTION_BUTTON_CLASS}` : ""}`}
-      onClick={onConfirm}
-      disabled={isPending}
+      onClick={closeOnConfirm ? () => dismissThen(onConfirm) : onConfirm}
+      disabled={isPending || confirmDisabled}
       aria-busy={isPending}
     >
       {isPending && <CircleNotch size={15} className="animate-spin" />}
@@ -158,9 +199,103 @@ export function ConfirmActionModal({
     </Button>
   );
 
+  if (appearance === "loginCard") {
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-xs animate-in fade-in duration-150"
+        onClick={dismissModal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+      >
+        <div
+          ref={dialogRef}
+          className="relative w-full max-w-95 rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) px-[clamp(20px,6vw,28px)] pt-7 pb-6 text-(--text) animate-in zoom-in-95 duration-150"
+          style={{
+            boxShadow: "var(--card-floating-shadow,var(--card-shadow))",
+          }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            ref={closeBtnRef}
+            type="button"
+            className={cn(loginCardCornerButtonClasses, "right-3.5")}
+            onClick={dismissModal}
+            disabled={isPending}
+            aria-label="Close dialog"
+          >
+            <X size={18} weight="bold" aria-hidden="true" />
+          </button>
+          <div
+            className={cn(
+              "flex size-12 items-center justify-center rounded-[14px]",
+              iconClassName,
+            )}
+            aria-hidden="true"
+          >
+            <Icon size={24} weight={iconWeight} />
+          </div>
+          <h2
+            id={titleId}
+            className="mt-5 mb-0 text-2xl leading-7.5 font-bold tracking-[-0.3px] text-(--text)"
+          >
+            {title}
+          </h2>
+          <p
+            id={descriptionId}
+            className="mt-1.5 mb-0 text-[0.9375rem] leading-5.5 text-(--muted)"
+          >
+            {description}
+          </p>
+          <div className="mt-7 flex flex-col gap-2.5">
+            <button
+              ref={confirmBtnRef}
+              type="button"
+              className={cn(
+                loginButtonClasses.base,
+                isDanger
+                  ? "border-0 bg-(--danger) text-white hover:bg-[color-mix(in_srgb,var(--danger)_88%,black)] disabled:opacity-70"
+                  : loginButtonClasses.primary,
+              )}
+              onClick={
+                closeOnConfirm ? () => dismissThen(onConfirm) : onConfirm
+              }
+              disabled={isPending || confirmDisabled}
+              aria-busy={isPending}
+            >
+              {isPending ? (
+                <CircleNotch
+                  size={16}
+                  weight="bold"
+                  className="animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {isPending ? pendingLabel : confirmLabel}
+            </button>
+            <button
+              ref={cancelBtnRef}
+              type="button"
+              className={cn(
+                loginButtonClasses.base,
+                loginButtonClasses.secondary,
+              )}
+              onClick={dismissModal}
+              disabled={isPending}
+            >
+              {cancelLabel}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-4 animate-in fade-in duration-150"
       onClick={dismissModal}
       role="dialog"
       aria-modal="true"
@@ -168,6 +303,7 @@ export function ConfirmActionModal({
       aria-describedby={descriptionId}
     >
       <div
+        ref={dialogRef}
         className="relative w-full max-w-md rounded-[20px] border border-(--border) bg-(--card-surface,var(--surface)) p-6 text-(--text) shadow-2xl animate-in zoom-in-95 duration-150"
         style={{ boxShadow: "var(--card-floating-shadow,var(--card-shadow))" }}
         onClick={(event) => event.stopPropagation()}
@@ -206,6 +342,22 @@ export function ConfirmActionModal({
         >
           {description}
         </p>
+
+        {children ? (
+          <form
+            ref={fieldsRef}
+            className="mt-4 flex flex-col gap-3"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!isPending && !confirmDisabled) onConfirm();
+            }}
+          >
+            {children}
+            {/* Lets Enter in a field submit the form. */}
+            <button type="submit" hidden tabIndex={-1} />
+          </form>
+        ) : null}
 
         <div className="mt-6 flex items-center justify-end gap-2.5 max-[480px]:flex-col-reverse">
           {cancelEmphasized

@@ -37,7 +37,6 @@ export const discussionTabSchema = z.enum([
   "mentions",
   "following",
   "saved",
-  "reports",
 ]);
 export type DiscussionTab = z.infer<typeof discussionTabSchema>;
 
@@ -59,6 +58,27 @@ export const learningAuthorSchema = z.object({
 });
 export type LearningAuthor = z.infer<typeof learningAuthorSchema>;
 
+/**
+ * The author shown on a thread or reply. It carries no user id: a caller only
+ * needs to know whether a post is its own, which `isOwn` answers. The
+ * username is null when the account behind the post is no longer active.
+ */
+export const discussionAuthorSchema = z.object({
+  displayName: z.string().min(1).max(120),
+  username: z.string().min(1).max(80).nullable(),
+  avatarUrl: z.string().nullable().optional(),
+  role: z.enum(["Student", "Instructor", "Admin"]).default("Student"),
+});
+export type DiscussionAuthor = z.infer<typeof discussionAuthorSchema>;
+
+/** The author of a workspace feed item, which shows no role badge. */
+export const workspaceDiscussionAuthorSchema = discussionAuthorSchema.omit({
+  role: true,
+});
+export type WorkspaceDiscussionAuthor = z.infer<
+  typeof workspaceDiscussionAuthorSchema
+>;
+
 export const learningThreadAttachmentSummarySchema = z.object({
   id: z.uuid(),
   kind: z.enum(["image", "screenshot", "code", "document"]),
@@ -68,7 +88,6 @@ export const learningThreadAttachmentSummarySchema = z.object({
   fileSize: z.number().int().nonnegative(),
   width: z.number().int().positive().nullable().optional(),
   height: z.number().int().positive().nullable().optional(),
-  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 export type LearningThreadAttachmentSummary = z.infer<
   typeof learningThreadAttachmentSummarySchema
@@ -86,35 +105,42 @@ export type DiscussionAttachmentSummary = z.infer<
 
 export const learningThreadSchema = z.object({
   id: z.uuid(),
-  academyId: z.uuid(),
   courseId: z.uuid(),
-  courseTitle: z.string().nullable().optional(),
   lessonId: z.uuid().nullable().optional(),
-  lessonTitle: z.string().nullable().optional(),
-  userId: z.uuid(),
-  author: learningAuthorSchema,
+  author: discussionAuthorSchema,
   kind: discussionEntryKindSchema,
   title: z.string().max(255).nullable().optional(),
   content: z.string().min(1).max(20000),
   plainText: z.string().max(20000),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   visibility: discussionVisibilitySchema,
-  status: interactionStatusSchema,
   isLocked: z.boolean().default(false),
   acceptedAnswerId: z.uuid().nullable().optional(),
   likesCount: z.number().int().nonnegative().default(0),
   repliesCount: z.number().int().nonnegative().default(0),
-  tags: z.array(z.string()).optional(),
   attachments: z.array(learningThreadAttachmentSummarySchema).optional(),
   isLiked: z.boolean().optional(),
   isBookmarked: z.boolean().optional(),
   isFollowing: z.boolean().optional(),
-  isMentioned: z.boolean().optional(),
   isOwn: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type LearningThread = z.infer<typeof learningThreadSchema>;
+
+/** What an edit returns: the fields an edit can change, and nothing else. */
+export const learningThreadEditResponseSchema = z.object({
+  id: z.uuid(),
+  title: z.string().max(255).nullable(),
+  content: z.string().min(1).max(20000),
+  plainText: z.string().max(20000),
+  timestampSeconds: z.number().int().nonnegative().nullable(),
+  visibility: discussionVisibilitySchema,
+  updatedAt: z.string(),
+});
+export type LearningThreadEditResponse = z.infer<
+  typeof learningThreadEditResponseSchema
+>;
 
 export const createLearningThreadRequestSchema = z
   .object({
@@ -125,8 +151,8 @@ export const createLearningThreadRequestSchema = z
     content: z.string().min(1).max(20000),
     timestampSeconds: z.number().int().nonnegative().nullable().optional(),
     visibility: discussionVisibilitySchema.default("public"),
-    attachmentIds: z.array(z.uuid()).optional(),
-    tags: z.array(z.string().min(1).max(50)).optional(),
+    // Bounded: each id is looked up and attached.
+    attachmentIds: z.array(z.uuid()).max(50).optional(),
   })
   .refine(
     (data) => {
@@ -150,7 +176,6 @@ export const updateLearningThreadRequestSchema = z.object({
   content: z.string().min(1).max(20000).optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   visibility: discussionVisibilitySchema.optional(),
-  tags: z.array(z.string().min(1).max(50)).optional(),
 });
 export type UpdateLearningThreadRequest = z.infer<
   typeof updateLearningThreadRequestSchema
@@ -176,7 +201,6 @@ export type ListLearningThreadsQuery = z.infer<
 export const learningThreadsListResponseSchema = z.object({
   threads: z.array(learningThreadSchema),
   nextCursor: z.string().nullable(),
-  totalCount: z.number().int().nonnegative().optional(),
 });
 export type LearningThreadsListResponse = z.infer<
   typeof learningThreadsListResponseSchema
@@ -221,7 +245,10 @@ export type UserMentionsListResponse = z.infer<
 export const discussionsWorkspaceCourseOptionSchema = z.object({
   id: z.uuid(),
   title: z.string().min(1),
-  slug: z.string().optional(),
+  /** The course's thumbnail, for the small picture beside a discussion:
+   * its stored address, and its media id for the CDN's sized copies. */
+  thumbnailUrl: z.string().nullable().optional(),
+  thumbnailMediaId: z.string().nullable().optional(),
 });
 export type DiscussionsWorkspaceCourseOption = z.infer<
   typeof discussionsWorkspaceCourseOptionSchema
@@ -229,7 +256,7 @@ export type DiscussionsWorkspaceCourseOption = z.infer<
 
 export const workspaceDiscussionItemSchema = z.object({
   id: z.uuid(),
-  itemType: z.enum(["thread", "note", "reply", "report"]),
+  itemType: z.enum(["thread", "note", "reply"]),
   kind: discussionEntryKindSchema,
   title: z.string().nullable().optional(),
   parentThreadId: z.uuid().nullable().optional(),
@@ -240,32 +267,22 @@ export const workspaceDiscussionItemSchema = z.object({
   courseTitle: z.string().nullable().optional(),
   lessonId: z.uuid().nullable().optional(),
   lessonTitle: z.string().nullable().optional(),
+  /** The lesson's number in its course, 1 to the last, across sections. */
+  lessonNumber: z.number().int().positive().nullable().optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
-  author: learningAuthorSchema,
+  author: workspaceDiscussionAuthorSchema,
   status: questionFilterStatusSchema.optional(),
   visibility: discussionVisibilitySchema.optional(),
   isLocked: z.boolean().optional(),
   repliesCount: z.number().int().nonnegative().default(0),
   likesCount: z.number().int().nonnegative().default(0),
-  isLiked: z.boolean().optional(),
   isBookmarked: z.boolean().optional(),
   isFollowing: z.boolean().optional(),
-  isMentioned: z.boolean().optional(),
   isOwn: z.boolean().optional(),
+  /** Whether the viewer has liked this thread, reply or note. */
+  isLiked: z.boolean().optional(),
   mentionedAt: z.string().optional(),
   attachmentSummary: discussionAttachmentSummarySchema,
-  reportDetails: z
-    .object({
-      targetType: z.enum(["thread", "reply", "note"]),
-      targetId: z.uuid(),
-      reason: z.string(),
-      details: z.string().nullable().optional(),
-      status: z
-        .enum(["pending", "reviewed", "dismissed", "actioned"])
-        .optional(),
-      actionTaken: z.string().nullable().optional(),
-    })
-    .optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   // Present for bookmark workspace items; omitted by existing tabs.
@@ -277,9 +294,9 @@ export type WorkspaceDiscussionItem = z.infer<
 
 export const discussionsWorkspaceResponseSchema = z.object({
   items: z.array(workspaceDiscussionItemSchema),
+  /** The course filter options. Sent with the first page only. */
   courses: z.array(discussionsWorkspaceCourseOptionSchema),
   nextCursor: z.string().nullable(),
-  totalCount: z.number().int().nonnegative(),
 });
 export type DiscussionsWorkspaceResponse = z.infer<
   typeof discussionsWorkspaceResponseSchema

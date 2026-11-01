@@ -151,6 +151,7 @@ Match existing screens for hierarchy, density, loading/empty/error treatment, an
 - Use canonical Tailwind CSS v4 syntax. Prefer custom-property shorthand such as `bg-(--surface)`, `text-(--text)`, and `h-(--panel-height)` over arbitrary values such as `bg-[var(--surface)]`, `text-[var(--text)]`, and `h-[var(--panel-height)]`.
 - Prefer Tailwind v4's generated numeric utilities such as `h-18`, `w-59.5`, or `max-w-345` when the value is derived from the spacing scale. Use an arbitrary dimension such as `h-[73px]` only when no canonical utility represents the intentional value.
 - Keep arbitrary values for expressions Tailwind cannot represent canonically, including `calc(...)`, `color-mix(...)`, unusual units, and complex grid or shadow declarations.
+- Do not use Tailwind's `group-has-[…]` variants. The rule they generate puts `:has()` inside `:is()`, and with such a rule in the stylesheet Chrome restyles the whole page every time any element is added or removed, on every page, whether the class is used there or not (measured 2026-10-13 on a lesson page: about 20 ms per change, 1 ms without them). Write the same condition as an arbitrary variant, `[:where(<the group element>):has(…)_&]:…`, which matches the same elements with the same specificity; `learning/player/MiniPlayerControls.tsx` shows the form. `peer-has-[…]` generates the same shape of rule and should be avoided the same way. Plain `has-[…]` on the element itself is fine.
 
 ---
 

@@ -489,8 +489,10 @@
 
 .sidebar-appearance
   > .reading-mode-quick-menu:not(.reading-mode-quick-menu--collapsed) {
+  /* On the same line as the colour menu (navigation.css) and the settings
+     menu (courses.css): 8px above the dock. */
   right: 0;
-  bottom: calc(100% + 2px);
+  bottom: calc(100% + 8px);
   left: 0;
   width: auto;
   max-width: none;
@@ -595,14 +597,12 @@
   min-width: var(--radix-select-trigger-width);
 }
 
+/* Beside the collapsed rail every menu sits on the sidebar's bottom edge,
+   as the colour and settings menus do. */
 .courses-app--collapsed .reading-mode-quick-menu--collapsed {
   top: auto;
   right: auto;
-  bottom: calc(
-    4px +
-      (var(--sidebar-dock-count, 1) - var(--reading-mode-dock-index, 0) - 1) *
-      42px
-  );
+  bottom: 0;
   left: calc(100% + 2px);
   width: 264px;
 }
@@ -622,27 +622,26 @@
   overflow-y: auto;
 }
 
+/* The sidebar's menus fade in where they stand. They used to grow into
+   place from a slightly smaller size as well, which moved every icon and
+   word in them by a pixel or two just after they opened. */
 @keyframes reading-mode-quick-menu-in {
   from {
     opacity: 0;
-    transform: translateY(4px) scale(0.985);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
 @keyframes sidebar-quick-menu-in {
   from {
     opacity: 0;
-    transform: translateX(-4px) scale(0.985);
   }
 
   to {
     opacity: 1;
-    transform: translateX(0) scale(1);
   }
 }
 

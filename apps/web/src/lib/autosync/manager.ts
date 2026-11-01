@@ -45,6 +45,18 @@ class AutosyncManager {
     };
   }
 
+  /**
+   * Whether an open editor has changes the server has not confirmed yet.
+   * Only then does signing out have to wait for `requireSynced`.
+   */
+  hasUnsavedWork(): boolean {
+    return [...this.registrations.values()].some(
+      (registration) =>
+        registration.isDirty() ||
+        !["idle", "saved"].includes(registration.getStatus()),
+    );
+  }
+
   async recover(): Promise<ReturnType<typeof getDirtyAutosyncDrafts>> {
     return getDirtyAutosyncDrafts();
   }

@@ -2,11 +2,15 @@ import crypto from "node:crypto";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
   AuditLogsListResponse,
+  CourseAuditLog,
+  CourseAuditLogsListResponse,
+  CourseLearningReport,
+  CourseReportsListResponse,
   CreateReportRequest,
-  LearningAuditLog,
-  LearningReport,
+  LearningAuditLogDetails,
   ListAuditLogsQuery,
   ListReportsQuery,
+  ModerateNoteRequest,
   ModerateReplyRequest,
   ModerateThreadRequest,
   ReportsListResponse,
@@ -16,6 +20,7 @@ import type {
   UserSuspension,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { createAccessService } from "../../../access/index.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
   createDiscussionAccess,
@@ -25,6 +30,7 @@ import {
   createDiscussionOutbox,
   withWriteTransaction,
 } from "../shared/discussion.mentions.ts";
+import { createDiscussionRepository } from "../shared/discussion.repository.ts";
 import {
   decodeDiscussionCursor,
   encodeDiscussionCursor,
@@ -42,7 +48,7 @@ import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type {
   AuditLogRowWithActor,
   ModerationRepository,
-  ReportRowWithReporter,
+  ReportRow,
 } from "./moderation.repository.ts";
 
 function parseAuditLogDetails(value: string): Record<string, unknown> | null {
@@ -57,6 +63,91 @@ function parseAuditLogDetails(value: string): Record<string, unknown> | null {
   }
 }
 
+/**
+ * Audit details are stored as free-form JSON. Only the keys the moderation
+ * actions write are returned, and only when they hold text, so nothing else
+ * that ends up in that column reaches a client.
+ */
+function presentAuditLogDetails(
+  value: unknown,
+): LearningAuditLogDetails | null {
+  const source =
+    typeof value === "string"
+      ? parseAuditLogDetails(value)
+      : value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null;
+  if (!source) return null;
+
+  const details: LearningAuditLogDetails = {};
+  for (const key of [
+    "reason",
+    "actionTaken",
+    "courseId",
+    "expiresAt",
+  ] as const) {
+    const entry = source[key];
+    if (typeof entry === "string" || entry === null) details[key] = entry;
+  }
+  for (const key of ["reportId", "status", "scope"] as const) {
+    const entry = source[key];
+    if (typeof entry === "string") details[key] = entry;
+  }
+  return details;
+}
+
+function toIsoString(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+function presentReport(row: ReportRow): CourseLearningReport {
+  return {
+    id: row.id,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    courseId: row.courseId ?? null,
+    reason: row.reason,
+    details: row.details,
+    status: row.status,
+    reviewedByUserId: row.reviewedByUserId ?? null,
+    actionTaken: row.actionTaken ?? null,
+    createdAt: toIsoString(row.createdAt),
+    updatedAt: toIsoString(row.updatedAt),
+  };
+}
+
+function presentAuditLog(row: AuditLogRowWithActor): CourseAuditLog {
+  return {
+    id: row.id,
+    courseId: row.courseId ?? null,
+    actorUserId: row.actorUserId ?? null,
+    actor: row.actorUserId
+      ? {
+          id: row.actorUserId,
+          displayName: row.actorName || "Staff Member",
+          username: row.actorUsername || "staff",
+          avatarUrl: null,
+          role: mapAuthorRole(row.authorRole),
+        }
+      : undefined,
+    action: row.action,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    details: presentAuditLogDetails(row.details),
+    createdAt: toIsoString(row.createdAt),
+  };
+}
+
+function nextPageCursor(
+  page: readonly { id: string; createdAt: Date | string }[],
+  hasMore: boolean,
+): string | null {
+  const last = page.at(-1);
+  return hasMore && last
+    ? encodeDiscussionCursor({ id: last.id, createdAt: toDate(last.createdAt) })
+    : null;
+}
+
 export interface ModerationService {
   createReport(
     db: DatabaseExecutor,
@@ -69,7 +160,7 @@ export interface ModerationService {
     actor: DiscussionActor,
     query: ListReportsQuery,
     scope: "course" | "platform",
-  ): Promise<ReportsListResponse>;
+  ): Promise<CourseReportsListResponse | ReportsListResponse>;
 
   updateReportStatus(
     db: DatabaseExecutor,
@@ -98,6 +189,15 @@ export interface ModerationService {
     ipAddress?: string,
   ): Promise<void>;
 
+  moderateNote(
+    db: DatabaseExecutor,
+    noteId: string,
+    actor: DiscussionActor,
+    input: ModerateNoteRequest,
+    courseId?: string,
+    ipAddress?: string,
+  ): Promise<void>;
+
   suspendUser(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -117,7 +217,7 @@ export interface ModerationService {
     actor: DiscussionActor,
     query: ListAuditLogsQuery,
     scope: "course" | "platform",
-  ): Promise<AuditLogsListResponse>;
+  ): Promise<CourseAuditLogsListResponse | AuditLogsListResponse>;
 }
 
 export function createModerationService({
@@ -132,7 +232,46 @@ export function createModerationService({
   moderationRepo: ModerationRepository;
 }): ModerationService {
   const courseAccess = createDiscussionAccess();
+  const access = createAccessService();
   const outbox = createDiscussionOutbox();
+  const discussionRepo = createDiscussionRepository();
+
+  /**
+   * A course moderator suspends that course's participants, nobody else.
+   * The suspension notice carries the moderator's own words to the target by
+   * in-app message and email, so without this any course owner could send
+   * arbitrary text to any account, or lock an administrator out of a course.
+   */
+  async function assertCourseSuspensionTarget(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    userId: string,
+    courseId: string,
+  ): Promise<void> {
+    if (userId === actor.userId) {
+      throw httpError(403, "FORBIDDEN", "You cannot suspend yourself.");
+    }
+
+    const target = await moderationRepo.findSuspensionTarget(db, userId);
+    // Any grant counts, active or not: someone whose access has lapsed can
+    // still have posts in the course that need acting on.
+    const grants = target ? await access.listUserGrants(db, userId) : [];
+    if (!target || !grants.some((grant) => grant.courseId === courseId)) {
+      throw httpError(
+        403,
+        "FORBIDDEN",
+        "Only participants of this course can be suspended from it.",
+      );
+    }
+
+    if (mapAuthorRole(target.authorRole) === "Admin") {
+      throw httpError(
+        403,
+        "FORBIDDEN",
+        "Administrators cannot be suspended from a course.",
+      );
+    }
+  }
 
   async function assertModerationScope(
     db: DatabaseExecutor,
@@ -142,7 +281,26 @@ export function createModerationService({
     if (courseId) {
       await courseAccess.assertCanModerateCourse(db, actor, courseId);
     } else {
-      courseAccess.assertCanModeratePlatform(actor);
+      await courseAccess.assertCanModeratePlatform(db, actor);
+    }
+  }
+
+  /**
+   * A report is accepted only for content the reporter can open. Without
+   * this, any signed-in user could probe which thread and reply ids exist
+   * and fill the report queue of a course they are not part of. Reported as
+   * "not found" either way, so the check reveals nothing.
+   */
+  async function assertReporterCanSee(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    thread: Parameters<typeof courseAccess.assertCanAccessThread>[2],
+    label: string,
+  ): Promise<void> {
+    try {
+      await courseAccess.assertCanAccessThread(db, actor, thread);
+    } catch {
+      throw httpError(404, "TARGET_NOT_FOUND", `Reported ${label} not found`);
     }
   }
 
@@ -165,6 +323,7 @@ export function createModerationService({
             "Reported discussion thread not found",
           );
         }
+        await assertReporterCanSee(db, actor, thread, "discussion thread");
         courseId = thread.courseId;
       } else if (input.targetType === "reply") {
         const reply = await repliesRepo.findReplyById(db, input.targetId);
@@ -172,9 +331,13 @@ export function createModerationService({
           throw httpError(404, "TARGET_NOT_FOUND", "Reported reply not found");
         }
         const thread = await threadsRepo.findThreadById(db, reply.threadId);
-        courseId = thread?.courseId ?? null;
+        if (!thread) {
+          throw httpError(404, "TARGET_NOT_FOUND", "Reported reply not found");
+        }
+        await assertReporterCanSee(db, actor, thread, "reply");
+        courseId = thread.courseId;
       } else if (input.targetType === "note") {
-        const note = await notesRepo.findNoteById(db, input.targetId);
+        const note = await notesRepo.findNoteAccessTarget(db, input.targetId);
         if (!note) {
           throw httpError(404, "TARGET_NOT_FOUND", "Reported note not found");
         }
@@ -231,51 +394,41 @@ export function createModerationService({
         scope === "course" ? query.courseId : null,
       );
       const pageCursor = decodeDiscussionCursor(query.cursor);
+      const options = { ...query, pageCursor };
+
+      if (scope === "platform") {
+        const [rows, totalCount] = await Promise.all([
+          moderationRepo.listReportsWithReporter(db, options),
+          moderationRepo.countReports(db, query),
+        ]);
+        const { page, hasMore } = takePage(rows, query.limit);
+        return {
+          reports: page.map((row) => ({
+            ...presentReport(row),
+            reporterId: row.reporterId,
+            reporter: {
+              id: row.reporterId,
+              displayName: row.reporterName || "Learner",
+              username: row.reporterUsername || "user",
+              avatarUrl: null,
+              role: mapAuthorRole(row.authorRole),
+            },
+          })),
+          nextCursor: nextPageCursor(page, hasMore),
+          totalCount,
+        };
+      }
+
+      // Course scope never reads the reporter: the course owner moderates
+      // their own course and is often the person who was reported.
       const [rows, totalCount] = await Promise.all([
-        moderationRepo.listReports(db, { ...query, pageCursor }),
+        moderationRepo.listReports(db, options),
         moderationRepo.countReports(db, query),
       ]);
       const { page, hasMore } = takePage(rows, query.limit);
-      const reports: LearningReport[] = page.map((r) => ({
-        id: r.id,
-        reporterId: r.reporterId,
-        reporter: {
-          id: r.reporterId,
-          displayName: r.reporterName || "Learner",
-          username:
-            (r.reporterUsername || r.reporterEmail || "user").split("@")[0] ||
-            "user",
-          avatarUrl: null,
-          role: mapAuthorRole(r.authorRole),
-        },
-        targetType: r.targetType,
-        targetId: r.targetId,
-        courseId: r.courseId ?? null,
-        reason: r.reason,
-        details: r.details,
-        status: r.status,
-        reviewedByUserId: r.reviewedByUserId ?? null,
-        actionTaken: r.actionTaken ?? null,
-        createdAt:
-          r.createdAt instanceof Date
-            ? r.createdAt.toISOString()
-            : String(r.createdAt),
-        updatedAt:
-          r.updatedAt instanceof Date
-            ? r.updatedAt.toISOString()
-            : String(r.updatedAt),
-      }));
-
-      const last = page.at(-1);
       return {
-        reports,
-        nextCursor:
-          hasMore && last
-            ? encodeDiscussionCursor({
-                id: last.id,
-                createdAt: toDate(last.createdAt),
-              })
-            : null,
+        reports: page.map(presentReport),
+        nextCursor: nextPageCursor(page, hasMore),
         totalCount,
       };
     },
@@ -283,11 +436,7 @@ export function createModerationService({
     async updateReportStatus(db, reportId, actor, input, courseId, ipAddress) {
       await assertModerationScope(db, actor, courseId);
       return withWriteTransaction(db, async (trx) => {
-        const report = await trx
-          .selectFrom("learning_reports")
-          .selectAll()
-          .where("id", "=", reportId)
-          .executeTakeFirst();
+        const report = await moderationRepo.findReportTarget(trx, reportId);
         if (!report) {
           throw httpError(404, "REPORT_NOT_FOUND", "Report not found");
         }
@@ -369,21 +518,19 @@ export function createModerationService({
         } else if (input.action === "unhide") {
           await threadsRepo.setStatus(trx, threadId, "active");
         } else if (input.action === "lock") {
-          await threadsRepo.setLocked(trx, threadId, true);
+          await threadsRepo.setLocked(trx, threadId, true, actor.userId);
         } else if (input.action === "unlock") {
-          await threadsRepo.setLocked(trx, threadId, false);
+          await threadsRepo.setLocked(trx, threadId, false, actor.userId);
         } else if (input.action === "delete") {
           await threadsRepo.deleteThread(trx, threadId);
         }
 
         // Fetch pending reports before updating so we know who to notify
-        const pendingReports = await trx
-          .selectFrom("learning_reports")
-          .select(["id", "reporter_id"])
-          .where("target_type", "=", "thread")
-          .where("target_id", "=", threadId)
-          .where("status", "=", "pending")
-          .execute();
+        const pendingReports = await moderationRepo.listPendingReportsForTarget(
+          trx,
+          "thread",
+          threadId,
+        );
 
         // Transition pending reports on this thread to actioned or reviewed
         const targetReportStatus =
@@ -392,18 +539,13 @@ export function createModerationService({
           input.action === "delete"
             ? "actioned"
             : "reviewed";
-        await trx
-          .updateTable("learning_reports")
-          .set({
-            status: targetReportStatus,
-            reviewed_by_user_id: actor.userId,
-            action_taken: input.action,
-            updated_at: new Date(),
-          })
-          .where("target_type", "=", "thread")
-          .where("target_id", "=", threadId)
-          .where("status", "=", "pending")
-          .execute();
+        await moderationRepo.resolvePendingReportsForTarget(trx, {
+          targetType: "thread",
+          targetId: threadId,
+          status: targetReportStatus,
+          reviewedByUserId: actor.userId,
+          actionTaken: input.action,
+        });
 
         const academyId = await resolveAcademyId(trx);
         await moderationRepo.createAuditLog(trx, {
@@ -459,6 +601,87 @@ export function createModerationService({
       });
     },
 
+    async moderateNote(db, noteId, actor, input, courseId, ipAddress) {
+      await assertModerationScope(db, actor, courseId);
+      return withWriteTransaction(db, async (trx) => {
+        const note = await notesRepo.findNoteAccessTarget(trx, noteId);
+        // A private note is nobody's business but its author's: moderators
+        // act on shared notes only, and cannot tell a private one exists.
+        if (!note || note.visibility === "private") {
+          throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+        }
+        if (courseId && note.courseId !== courseId) {
+          throw httpError(
+            403,
+            "FORBIDDEN",
+            "Learning note does not belong to this course",
+          );
+        }
+
+        await notesRepo.holdPrivate(trx, noteId);
+        // Nobody else can open it now, so nobody stays mentioned in it.
+        await discussionRepo.deleteMentionsBySource(trx, "note", noteId);
+
+        const pendingReports = await moderationRepo.listPendingReportsForTarget(
+          trx,
+          "note",
+          noteId,
+        );
+        await moderationRepo.resolvePendingReportsForTarget(trx, {
+          targetType: "note",
+          targetId: noteId,
+          status: "actioned",
+          reviewedByUserId: actor.userId,
+          actionTaken: input.action,
+        });
+
+        const academyId = await resolveAcademyId(trx);
+        await moderationRepo.createAuditLog(trx, {
+          id: crypto.randomUUID(),
+          academyId,
+          courseId: note.courseId,
+          actorUserId: actor.userId,
+          action: `${input.action}_note`,
+          targetType: "note",
+          targetId: noteId,
+          details: { reason: input.reason || null },
+          ipAddress,
+        });
+
+        if (note.userId !== actor.userId) {
+          await outbox.publish(trx, {
+            type: "moderation.content_moderated",
+            version: 1,
+            dedupeKey: `moderation.content_moderated:note:${noteId}:${input.action}`,
+            occurredAt: new Date(),
+            payload: {
+              recipientUserId: note.userId,
+              contentType: "note",
+              action: input.action,
+              reason: input.reason || null,
+            },
+          });
+        }
+
+        for (const report of pendingReports) {
+          if (report.reporter_id !== actor.userId) {
+            await outbox.publish(trx, {
+              type: "moderation.report_resolved",
+              version: 1,
+              dedupeKey: `moderation.report_resolved:${report.id}:actioned`,
+              occurredAt: new Date(),
+              payload: {
+                recipientUserId: report.reporter_id,
+                targetType: "note",
+                status: "actioned",
+                actionTaken: input.action,
+              },
+            });
+          }
+        }
+      });
+    },
+
     async moderateReply(db, replyId, actor, input, courseId, ipAddress) {
       await assertModerationScope(db, actor, courseId);
       return withWriteTransaction(db, async (trx) => {
@@ -468,7 +691,9 @@ export function createModerationService({
         }
 
         const thread = await threadsRepo.findThreadById(trx, reply.threadId);
-        if (courseId && thread && thread.courseId !== courseId) {
+        // Fails closed: a reply whose thread cannot be read is not shown to
+        // belong to this course, so a course moderator may not act on it.
+        if (courseId && (!thread || thread.courseId !== courseId)) {
           throw httpError(
             403,
             "FORBIDDEN",
@@ -478,17 +703,24 @@ export function createModerationService({
 
         if (input.action === "hide") {
           await repliesRepo.setStatus(trx, replyId, "hidden");
+          // A hidden reply is no longer the accepted answer. Left accepted,
+          // the question stayed "answered" by something nobody could read,
+          // and its author could not accept another in its place.
+          if (reply.isAccepted || thread?.acceptedAnswerId === replyId) {
+            await repliesRepo.setAcceptedStatus(trx, replyId, false);
+            await threadsRepo.setAcceptedAnswer(trx, reply.threadId, null);
+          }
         } else if (input.action === "unhide") {
           await repliesRepo.setStatus(trx, replyId, "active");
         } else if (input.action === "delete") {
           const deleted = await repliesRepo.deleteReply(trx, replyId);
           if (deleted) {
-            await trx
-              .updateTable("learning_attachments")
-              .set({ status: "deleted" })
-              .where("target_type", "=", "reply")
-              .where("target_id", "=", replyId)
-              .execute();
+            // As when its author deletes it: nobody stays mentioned in a
+            // reply that is gone. Left behind, the mention came back in the
+            // mentioned person's Mentions if the reply was ever made active
+            // again.
+            await discussionRepo.deleteMentionsBySource(trx, "reply", replyId);
+            await repliesRepo.markAttachmentsDeleted(trx, replyId);
             await threadsRepo.incrementRepliesCount(trx, reply.threadId, -1);
             if (reply.isAccepted || thread?.acceptedAnswerId === replyId) {
               await repliesRepo.setAcceptedStatus(trx, replyId, false);
@@ -498,31 +730,24 @@ export function createModerationService({
         }
 
         // Fetch pending reports before updating
-        const pendingReports = await trx
-          .selectFrom("learning_reports")
-          .select(["id", "reporter_id"])
-          .where("target_type", "=", "reply")
-          .where("target_id", "=", replyId)
-          .where("status", "=", "pending")
-          .execute();
+        const pendingReports = await moderationRepo.listPendingReportsForTarget(
+          trx,
+          "reply",
+          replyId,
+        );
 
         // Transition pending reports on this reply to actioned or reviewed
         const targetReportStatus =
           input.action === "hide" || input.action === "delete"
             ? "actioned"
             : "reviewed";
-        await trx
-          .updateTable("learning_reports")
-          .set({
-            status: targetReportStatus,
-            reviewed_by_user_id: actor.userId,
-            action_taken: input.action,
-            updated_at: new Date(),
-          })
-          .where("target_type", "=", "reply")
-          .where("target_id", "=", replyId)
-          .where("status", "=", "pending")
-          .execute();
+        await moderationRepo.resolvePendingReportsForTarget(trx, {
+          targetType: "reply",
+          targetId: replyId,
+          status: targetReportStatus,
+          reviewedByUserId: actor.userId,
+          actionTaken: input.action,
+        });
 
         const academyId = await resolveAcademyId(trx);
         await moderationRepo.createAuditLog(trx, {
@@ -578,6 +803,14 @@ export function createModerationService({
 
     async suspendUser(db, actor, input, ipAddress) {
       await assertModerationScope(db, actor, input.courseId);
+      if (input.courseId) {
+        await assertCourseSuspensionTarget(
+          db,
+          actor,
+          input.userId,
+          input.courseId,
+        );
+      }
       return withWriteTransaction(db, async (trx) => {
         const academyId = await resolveAcademyId(trx);
         const id = crypto.randomUUID();
@@ -630,7 +863,6 @@ export function createModerationService({
 
         return {
           id,
-          academyId,
           courseId: input.courseId || null,
           userId: input.userId,
           suspendedByUserId: actor.userId,
@@ -698,52 +930,28 @@ export function createModerationService({
       );
       const academyId = await resolveAcademyId(db);
       const pageCursor = decodeDiscussionCursor(query.cursor);
+      // Only the platform (administrator) trail carries network addresses.
+      // A course owner reads entries written by administrators too, and has
+      // no business with where those administrators connected from.
+      const includeIpAddress = scope === "platform";
       const rows = await moderationRepo.listAuditLogs(db, academyId, {
         ...query,
         pageCursor,
+        includeIpAddress,
       });
       const { page, hasMore } = takePage(rows, query.limit);
-      const logs: LearningAuditLog[] = page.map((r) => ({
-        id: r.id,
-        academyId: r.academyId,
-        courseId: r.courseId ?? null,
-        actorUserId: r.actorUserId ?? null,
-        actor: r.actorUserId
-          ? {
-              id: r.actorUserId,
-              displayName: r.actorName || "Staff Member",
-              username:
-                (r.actorUsername || r.actorEmail || "staff").split("@")[0] ||
-                "staff",
-              avatarUrl: null,
-              role: mapAuthorRole(r.authorRole),
-            }
-          : undefined,
-        action: r.action,
-        targetType: r.targetType,
-        targetId: r.targetId,
-        details:
-          typeof r.details === "string"
-            ? parseAuditLogDetails(r.details)
-            : (r.details as Record<string, unknown> | null),
-        ipAddress: r.ipAddress ?? null,
-        createdAt:
-          r.createdAt instanceof Date
-            ? r.createdAt.toISOString()
-            : String(r.createdAt),
-      }));
+      const nextCursor = nextPageCursor(page, hasMore);
 
-      const last = page.at(-1);
-      return {
-        logs,
-        nextCursor:
-          hasMore && last
-            ? encodeDiscussionCursor({
-                id: last.id,
-                createdAt: toDate(last.createdAt),
-              })
-            : null,
-      };
+      if (includeIpAddress) {
+        return {
+          logs: page.map((row) => ({
+            ...presentAuditLog(row),
+            ipAddress: row.ipAddress ?? null,
+          })),
+          nextCursor,
+        };
+      }
+      return { logs: page.map(presentAuditLog), nextCursor };
     },
   };
 }

@@ -4,18 +4,23 @@ import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
+import { TimerIcon as Timer } from "@phosphor-icons/react/Timer";
 import { useEffect, useState } from "react";
 import {
   ElasticScrollerGlyph,
   ElasticScrollerSocket,
   elasticScrollerButtonSurface,
 } from "../../components/elastic-scroller";
+import { AppSlider } from "../../AppSlider";
 import {
+  ELASTIC_SCROLL_HIDE_DELAY_MAX,
+  ELASTIC_SCROLL_HIDE_DELAY_MIN,
   ELASTIC_SCROLL_PREFERENCES_DEFAULT,
   HIDE_SCROLLBARS_DEFAULT,
   HIDE_SCROLLBARS_KEY,
   SCROLLBAR_STYLE_DEFAULT,
   SCROLLBAR_STYLE_KEY,
+  normalizeElasticScrollHideDelay,
   normalizeScrollbarStyle,
   persistElasticScrollPreferences,
   readElasticScrollPreferences,
@@ -552,6 +557,41 @@ export function ScrollbarSettings() {
               }
               label="Animate direction changes"
             />
+          </SettingRow>
+          <SettingRow
+            icon={Timer}
+            label="Hide after scrolling stops"
+            note={`How long the scroll control stays on screen once scrolling stops, from ${ELASTIC_SCROLL_HIDE_DELAY_MIN} to ${ELASTIC_SCROLL_HIDE_DELAY_MAX} seconds`}
+          >
+            <div className="flex w-48 max-w-full items-center gap-3">
+              <AppSlider
+                id="elastic-scroll-hide-delay"
+                className="min-w-0 flex-1"
+                min={ELASTIC_SCROLL_HIDE_DELAY_MIN}
+                max={ELASTIC_SCROLL_HIDE_DELAY_MAX}
+                step={1}
+                value={elasticScrollPreferences.hideDelaySeconds}
+                aria-label="Hide the scroll control after this many seconds"
+                aria-valuetext={`${elasticScrollPreferences.hideDelaySeconds} seconds`}
+                onChange={(event) => {
+                  // Read now: the event lets go of its target before the
+                  // update below runs.
+                  const hideDelaySeconds = normalizeElasticScrollHideDelay(
+                    event.currentTarget.value,
+                  );
+                  setElasticScrollPreferences((current) => ({
+                    ...current,
+                    hideDelaySeconds,
+                  }));
+                }}
+              />
+              <output
+                htmlFor="elastic-scroll-hide-delay"
+                className="w-7 shrink-0 text-right text-xs font-semibold text-(--text) tabular-nums"
+              >
+                {elasticScrollPreferences.hideDelaySeconds}s
+              </output>
+            </div>
           </SettingRow>
         </div>
       </section>

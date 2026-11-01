@@ -137,15 +137,6 @@ export function toLearningThreadEntity(
   };
 }
 
-function getOptimisticAuthor() {
-  return {
-    id: "optimistic-user",
-    displayName: "You",
-    username: "you",
-    role: "Student" as const,
-  };
-}
-
 function getOptimisticPlainText(content: string): string {
   return content
     .replace(/<[^>]*>/g, " ")
@@ -157,7 +148,6 @@ function getOptimisticPlainText(content: string): string {
 export interface OptimisticThreadContext {
   clientId?: string;
   attachments?: readonly InteractionAttachment[];
-  userId?: string;
   displayName?: string;
   username?: string;
   avatarUrl?: string | null;
@@ -171,8 +161,6 @@ export function createOptimisticLearningThread(
   const clientId = context.clientId ?? createClientEntityId("thread");
   const now = new Date().toISOString();
   const author = {
-    ...getOptimisticAuthor(),
-    id: context.userId ?? "optimistic-user",
     displayName: context.displayName?.trim() || "You",
     username: context.username?.trim() || "you",
     avatarUrl: context.avatarUrl ?? null,
@@ -183,10 +171,8 @@ export function createOptimisticLearningThread(
     id: clientId,
     clientId,
     creationStatus: "pending",
-    academyId: "optimistic-academy",
     courseId: payload.courseId,
     lessonId: payload.lessonId ?? null,
-    userId: author.id,
     author,
     kind: payload.kind ?? "comment",
     title: payload.title ?? null,
@@ -194,12 +180,10 @@ export function createOptimisticLearningThread(
     plainText: getOptimisticPlainText(payload.content),
     timestampSeconds: payload.timestampSeconds ?? null,
     visibility: payload.visibility ?? "public",
-    status: "active",
     isLocked: false,
     acceptedAnswerId: null,
     likesCount: 0,
     repliesCount: 0,
-    tags: payload.tags,
     attachments: [...(context.attachments ?? [])],
     isLiked: false,
     isBookmarked: false,
@@ -224,7 +208,6 @@ export interface OptimisticReplyContext {
   parentServerId?: string;
   localSequence: number;
   attachments?: readonly InteractionAttachment[];
-  userId?: string;
   displayName?: string;
   username?: string;
   avatarUrl?: string | null;
@@ -290,7 +273,6 @@ export function createOptimisticLearningReply(
   const clientId = context.clientId ?? createClientEntityId("reply");
   const now = new Date().toISOString();
   const author = {
-    id: context.userId ?? "optimistic-user",
     displayName: context.displayName?.trim() || "You",
     username: context.username?.trim() || "you",
     avatarUrl: context.avatarUrl ?? null,
@@ -303,22 +285,15 @@ export function createOptimisticLearningReply(
     serverId: undefined,
     creationStatus: "pending",
     threadId: context.parentServerId ?? context.parentClientId,
-    parentReplyId: payload.parentReplyId,
-    replyToReplyId: payload.replyToReplyId,
-    replyToUserId: payload.replyToUserId,
-    userId: author.id,
     author,
     content: payload.content,
     plainText: getOptimisticReplyPlainText(payload.content),
-    timestampSeconds: payload.timestampSeconds ?? null,
     isAccepted: false,
-    status: "active",
     likesCount: 0,
     attachments: [...(context.attachments ?? [])],
     isLiked: false,
     isOwn: true,
     createdAt: now,
-    updatedAt: now,
     parentClientId: context.parentClientId,
     parentServerId: context.parentServerId,
     localSequence: context.localSequence,

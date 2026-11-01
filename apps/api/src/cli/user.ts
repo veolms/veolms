@@ -1,7 +1,9 @@
+/* eslint-disable no-console -- an operator CLI: the terminal is its output */
 import crypto from "node:crypto";
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { createDatabase } from "@veolms/database";
+import { cacheTags, publishCacheInvalidation } from "@veolms/api-core";
+import { createDatabase, grantPlatformRole } from "@veolms/database";
 import { config } from "../config.ts";
 import {
   createEmailService,
@@ -10,10 +12,9 @@ import {
 import {
   ADMIN_ROLE,
   INSTRUCTOR_ROLE,
-  OTP_TTL_MINUTES,
-  OTP_TTL_MS,
 } from "../modules/auth/shared/auth.constants.ts";
 import { hashToken } from "../modules/auth/shared/auth.utils.ts";
+import { createAcademyBrandService } from "../modules/academy/academy-brand.service.ts";
 
 // ANSI color helpers
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
@@ -201,18 +202,20 @@ async function main() {
         purpose,
         code_hash: hashToken(code),
         attempts: 0,
-        expires_at: new Date(now.getTime() + OTP_TTL_MS),
+        expires_at: new Date(now.getTime() + config.OTP_TTL_MINUTES * 60_000),
         consumed_at: null,
       })
       .execute();
 
     // 3. Send OTP email
+    const brand = await createAcademyBrandService({ database }).readBrand();
     const emailResult = await emailService.send(
       email,
       otpVerificationEmail({
         code,
-        academyName: config.RP_NAME,
-        expiresInMinutes: OTP_TTL_MINUTES,
+        academyName: brand.name,
+        logoUrl: brand.logoUrl,
+        expiresInMinutes: config.OTP_TTL_MINUTES,
       }),
     );
 
@@ -224,7 +227,7 @@ async function main() {
     // If email was logged (e.g. console transport in development), show code for convenience
     if (emailResult.status === "logged" || config.NODE_ENV !== "production") {
       console.log(
-        `${dim(`[Dev] Generated OTP code: ${bold(code)} (expires in ${OTP_TTL_MINUTES}m)`)}`,
+        `${dim(`[Dev] Generated OTP code: ${bold(code)} (expires in ${config.OTP_TTL_MINUTES}m)`)}`,
       );
     }
 
@@ -299,39 +302,12 @@ async function main() {
           .execute();
       }
 
-      // Assign role in user_roles
-      await database
-        .insertInto("user_roles")
-        .values({
-          user_id: userId,
-          role_id: targetRoleRecord.id,
-        })
-        .onConflict((oc) => oc.doNothing())
-        .execute();
-
-      // For Administrator, also ensure platform-scoped role_assignment exists
-      if (isAdministrator) {
-        const existingAssignment = await database
-          .selectFrom("role_assignments")
-          .select("id")
-          .where("user_id", "=", userId)
-          .where("role_id", "=", targetRoleRecord.id)
-          .where("scope_type", "=", "platform")
-          .executeTakeFirst();
-
-        if (!existingAssignment) {
-          await database
-            .insertInto("role_assignments")
-            .values({
-              id: crypto.randomUUID(),
-              user_id: userId,
-              role_id: targetRoleRecord.id,
-              scope_type: "platform",
-              course_id: null,
-            })
-            .execute();
-        }
-      }
+      await grantPlatformRole(database, {
+        userId,
+        roleId: targetRoleRecord.id,
+      });
+      // A running API drops what it cached about this user's roles.
+      await publishCacheInvalidation(database, [cacheTags.user(userId)]);
 
       console.log(`\n${green("✓ OTP verified successfully!")}`);
       console.log(`${green(`✓ User upgraded to ${roleDisplayName}:`)}`);
@@ -344,7 +320,8 @@ async function main() {
           .split("@")[0]!
           .toLowerCase()
           .replace(/[^a-z0-9_]/g, "_")
-          .slice(0, 30) || selectedRole;
+          // Room for the "_N" suffix below within the 30 a username may be.
+          .slice(0, 26) || selectedRole;
 
       username = baseUsername;
       let suffix = 1;
@@ -377,29 +354,10 @@ async function main() {
         })
         .execute();
 
-      // Assign role in user_roles
-      await database
-        .insertInto("user_roles")
-        .values({
-          user_id: userId,
-          role_id: targetRoleRecord.id,
-        })
-        .onConflict((oc) => oc.doNothing())
-        .execute();
-
-      // For Administrator, assign platform-scoped role_assignment
-      if (isAdministrator) {
-        await database
-          .insertInto("role_assignments")
-          .values({
-            id: crypto.randomUUID(),
-            user_id: userId,
-            role_id: targetRoleRecord.id,
-            scope_type: "platform",
-            course_id: null,
-          })
-          .execute();
-      }
+      await grantPlatformRole(database, {
+        userId,
+        roleId: targetRoleRecord.id,
+      });
 
       console.log(`\n${green("✓ OTP verified successfully!")}`);
       console.log(`${green(`✓ ${roleDisplayName} account created:`)}`);

@@ -8,4 +8,4 @@ reviews:
     enabled: true
     auto_incremental_review: true
     base_branches:
-      - "development"
+      - "dev"

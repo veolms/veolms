@@ -2,6 +2,7 @@ import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { FolderOpenIcon as FolderOpen } from "@phosphor-icons/react/FolderOpen";
+import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { useMemo } from "react";
 import type { RefObject } from "react";
@@ -32,6 +33,16 @@ interface LessonResourcesMenuProps {
 
 const HEADER_ACTION_CLASS =
   "inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-(--text-secondary) transition-colors duration-150 hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:cursor-default disabled:opacity-60";
+
+/**
+ * The chip is blue, and so is the active lesson card in the palettes whose
+ * accent is blue (Ocean, Midnight, Brainwave): there the two barely differ.
+ * In those palettes the chip is amber instead, which stands clear of a blue
+ * card in both themes.
+ */
+// Written out in full: Tailwind only generates classes it can read whole.
+const RESOURCES_CHIP_ON_BLUE_PALETTE_CLASS =
+  "[:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:bg-[color-mix(in_srgb,#f0a030_30%,var(--canvas))] [:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:text-[#f7bd5c] [:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:hover:bg-[color-mix(in_srgb,#f0a030_44%,var(--canvas))] [:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:data-popup-open:bg-[color-mix(in_srgb,#f0a030_48%,var(--canvas))] [[data-theme=light]:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:text-amber-800";
 
 export function LessonResourcesMenu({
   courseKey,
@@ -65,7 +76,7 @@ export function LessonResourcesMenu({
   return (
     <Popover>
       <PopoverTrigger
-        className={`${LESSON_CARD_ACTION_CLASS} gap-1 bg-[color-mix(in_srgb,#2590f2_28%,var(--canvas))] px-2 text-[#4fa6f6] hover:bg-[color-mix(in_srgb,#2590f2_42%,var(--canvas))] data-popup-open:bg-[color-mix(in_srgb,#2590f2_46%,var(--canvas))] [[data-theme=light]_&]:text-blue-700`}
+        className={`${LESSON_CARD_ACTION_CLASS} gap-1 bg-[color-mix(in_srgb,#2590f2_28%,var(--canvas))] px-2 text-[#4fa6f6] hover:bg-[color-mix(in_srgb,#2590f2_42%,var(--canvas))] data-popup-open:bg-[color-mix(in_srgb,#2590f2_46%,var(--canvas))] [[data-theme=light]_&]:text-blue-700 ${RESOURCES_CHIP_ON_BLUE_PALETTE_CLASS}`}
         aria-label={`Resources for lecture ${lessonNumber}: ${lessonTitle} (${items.length})`}
         title="Resources"
       >
@@ -87,20 +98,24 @@ export function LessonResourcesMenu({
             Resources{" "}
             <span className="font-medium text-(--muted)">({items.length})</span>
           </PopoverTitle>
-          <button
-            type="button"
-            className={HEADER_ACTION_CLASS}
-            disabled={downloadingAll}
-            aria-label={`Download all ${items.length} resources`}
-            title="Download all"
-            onClick={() => void downloadAll(items)}
-          >
-            {downloadingAll ? (
-              <CircleNotch size={17} className="animate-spin" />
-            ) : (
-              <DownloadSimple size={18} weight="bold" />
-            )}
-          </button>
+          {/* One resource has its own download in the list; "all" is only
+              worth a button when there are several. */}
+          {items.length > 1 && (
+            <button
+              type="button"
+              className={HEADER_ACTION_CLASS}
+              disabled={downloadingAll}
+              aria-label={`Download all ${items.length} resources`}
+              title="Download all"
+              onClick={() => void downloadAll(items)}
+            >
+              {downloadingAll ? (
+                <CircleNotch size={17} className="animate-spin" />
+              ) : (
+                <DownloadSimple size={18} weight="bold" />
+              )}
+            </button>
+          )}
         </div>
         <ul className="m-0 flex min-h-0 list-none flex-col gap-0.5 overflow-y-auto px-1.5 pb-1.5">
           {items.map((item) => {
@@ -128,7 +143,11 @@ export function LessonResourcesMenu({
                     <span className="block truncate text-[0.72rem] text-(--muted)">
                       {status === "failed"
                         ? "Couldn't download. Try again."
-                        : item.meta}
+                        : status === "signInRequired"
+                          ? "Log in to download this resource."
+                          : status === "accessRequired"
+                            ? "Enroll in this course to download."
+                            : item.meta}
                     </span>
                   </span>
                   <ResourceDownloadGlyph status={status} />
@@ -168,6 +187,16 @@ function ResourceDownloadGlyph({
         size={17}
         weight="bold"
         className={`${className} text-(--success)`}
+        aria-hidden="true"
+      />
+    );
+  }
+  if (status === "signInRequired" || status === "accessRequired") {
+    return (
+      <LockSimple
+        size={17}
+        weight="fill"
+        className={`${className} text-(--muted)`}
         aria-hidden="true"
       />
     );

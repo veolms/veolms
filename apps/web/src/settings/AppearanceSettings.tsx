@@ -1,7 +1,4 @@
-import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
-import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
-import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
 import { academyThemes, DEFAULT_ACADEMY_THEME } from "../themes";
 import type { AcademyTheme } from "../themes";
 import { themeRevealOriginFromClick } from "../shell/themeViewTransition";
@@ -16,25 +13,13 @@ import {
 } from "./SettingsControls";
 import { MiniSurface } from "./SettingsPreviews";
 
-export type DisplayMode = "light" | "dark" | "device";
+import {
+  DISPLAY_MODES,
+  displayModePreview,
+  type DisplayMode,
+} from "./displayModes";
 
-interface DisplayModeOption {
-  id: DisplayMode;
-  label: string;
-  note: string;
-  icon: typeof Sun;
-}
-
-const DISPLAY_MODES: readonly DisplayModeOption[] = [
-  { id: "light", label: "Light", note: "Use a light color scheme", icon: Sun },
-  { id: "dark", label: "Dark", note: "Use a dark color scheme", icon: Moon },
-  {
-    id: "device",
-    label: "Use device setting",
-    note: "Match your system preference",
-    icon: DeviceMobile,
-  },
-];
+export type { DisplayMode } from "./displayModes";
 
 // Keep Settings in lockstep with the sidebar and mobile palette menus.
 const COLOR_THEMES = academyThemes;
@@ -98,9 +83,7 @@ export function AppearanceSettings({
               preview={
                 <MiniSurface
                   variant={selectedColor}
-                  previewMode={
-                    id === "light" ? "light" : id === "dark" ? "dark" : "device"
-                  }
+                  previewMode={displayModePreview(id)}
                 />
               }
             />

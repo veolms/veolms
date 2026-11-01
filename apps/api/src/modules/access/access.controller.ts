@@ -1,5 +1,9 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import type { CreateManualAccessGrantRequest } from "@veolms/contracts";
+import type {
+  CourseAccessChangeResponse,
+  CourseAccessParams,
+  CreateManualAccessGrantRequest,
+} from "@veolms/contracts";
 import type { AccessService } from "./access.service.ts";
 import type { Executor } from "./access.repository.ts";
 
@@ -12,6 +16,12 @@ export interface AccessController {
     request: FastifyRequest<{ Params: { grantId: string } }>,
     reply: FastifyReply,
   ): Promise<void>;
+  revokeCourseAccess(
+    request: FastifyRequest<{ Params: CourseAccessParams }>,
+  ): Promise<CourseAccessChangeResponse>;
+  restoreCourseAccess(
+    request: FastifyRequest<{ Params: CourseAccessParams }>,
+  ): Promise<CourseAccessChangeResponse>;
   listUserGrants(
     request: FastifyRequest<{ Params: { userId: string } }>,
     reply: FastifyReply,
@@ -33,9 +43,15 @@ export function createAccessController({
     const result = await service.grantManualAccess(database, {
       userId,
       courseId,
-      validUntil: validUntil ? new Date(validUntil) : null,
+      // Only an absent or null value means lifetime. An empty string used to
+      // fall through to lifetime too; it now reaches the service as an
+      // unreadable date and is refused there (INVALID_VALID_UNTIL).
+      validUntil:
+        validUntil === undefined || validUntil === null
+          ? null
+          : new Date(validUntil),
     });
-    reply.status(201).send(result);
+    await reply.status(201).send(result);
   }
 
   async function revokeAccessGrant(
@@ -44,7 +60,25 @@ export function createAccessController({
   ) {
     const { grantId } = request.params;
     await service.revokeAccessGrantById(database, grantId);
-    reply.status(200).send({ message: "Access grant revoked successfully." });
+    await reply
+      .status(200)
+      .send({ message: "Access grant revoked successfully." });
+  }
+
+  async function revokeCourseAccess(
+    request: FastifyRequest<{ Params: CourseAccessParams }>,
+  ): Promise<CourseAccessChangeResponse> {
+    const { userId, courseId } = request.params;
+    await service.revokeCourseAccess(database, userId, courseId);
+    return { userId, courseId, status: "revoked" };
+  }
+
+  async function restoreCourseAccess(
+    request: FastifyRequest<{ Params: CourseAccessParams }>,
+  ): Promise<CourseAccessChangeResponse> {
+    const { userId, courseId } = request.params;
+    await service.restoreCourseAccess(database, userId, courseId);
+    return { userId, courseId, status: "active" };
   }
 
   async function listUserGrants(
@@ -53,12 +87,14 @@ export function createAccessController({
   ) {
     const { userId } = request.params;
     const grants = await service.listUserGrants(database, userId);
-    reply.status(200).send(grants);
+    await reply.status(200).send(grants);
   }
 
   return {
     grantManualAccess,
     revokeAccessGrant,
+    revokeCourseAccess,
+    restoreCourseAccess,
     listUserGrants,
   };
 }

@@ -18,7 +18,7 @@ const countsRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/courses/:courseId/lessons/:lessonId/discussions/counts",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.optionalAuthenticated,
       schema: {
         operationId: "getLessonDiscussionCounts",
         tags: ["Learning Discussions"],

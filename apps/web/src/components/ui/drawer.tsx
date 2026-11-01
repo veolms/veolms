@@ -3,6 +3,35 @@ import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 
 import { cn } from "../../lib/utils";
 import { useBackDismiss } from "../../navigation/useBackDismiss";
+import { markDrawerOpen } from "./drawerPresence";
+import { speedUpSwipeClose } from "./drawerSwipeClose";
+
+// The popup derives its position from these variables, and Base UI changes
+// their inputs on every frame of a drag. Left as ordinary custom properties
+// they are inherited, so each drag frame restyled every element in the sheet
+// (about 1.7ms a frame on a desktop CPU for the 31-element guest menu, four
+// times that on a phone-speed CPU). Registered as non-inherited, like Base
+// UI's own drawer variables, only the popup restyles. A descendant that needs
+// one sets it to `inherit` (see styles/shell/mobile-navigation.css).
+const POPUP_LOCAL_PROPERTIES = [
+  "--translate-x",
+  "--translate-y",
+  "--stack-progress",
+  "--stack-scale-base",
+  "--stack-scale",
+  "--stack-shrink",
+  "--stack-peek-offset",
+  "--stack-height",
+];
+if (typeof CSS !== "undefined" && "registerProperty" in CSS) {
+  for (const name of POPUP_LOCAL_PROPERTIES) {
+    try {
+      CSS.registerProperty({ name, syntax: "*", inherits: false });
+    } catch {
+      // Already registered (a hot reload re-runs this module).
+    }
+  }
+}
 
 type DrawerContextProps = {
   hasSnapPoints: boolean;
@@ -35,6 +64,7 @@ function Drawer({
   open: openProp,
   defaultOpen = false,
   onOpenChange,
+  onSnapPointChange,
   actionsRef: externalActionsRef,
   dismissThenRef,
   ...props
@@ -45,6 +75,48 @@ function Drawer({
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen);
   const open = openProp ?? uncontrolledOpen;
+  // Base UI reports a swipe dismissal from inside the touchend task and then
+  // flushes React, so the owner's re-render ran before the close could paint
+  // and the sheet froze under the finger. A controlled drawer therefore
+  // closes itself at once and hands the owner `onSnapPointChange(null)` and
+  // `onOpenChange(false)` after the first frame of the close, while the
+  // compositor slides it out. (Base UI reverts a controlled close that has
+  // not reached `open` by the next frame, so the owner cannot simply be
+  // updated in a transition.)
+  const [swipeDismissed, setSwipeDismissed] = React.useState(false);
+  // The owner has caught up with the close.
+  if (swipeDismissed && openProp === false) setSwipeDismissed(false);
+  const rootOpen = swipeDismissed ? false : openProp;
+
+  const deferredCallsRef = React.useRef<(() => void)[]>([]);
+  const deferredFrameRef = React.useRef<number | null>(null);
+  const deferredTimeoutRef = React.useRef<number | null>(null);
+  const deferUntilAfterFirstFrame = React.useCallback((call: () => void) => {
+    deferredCallsRef.current.push(call);
+    if (
+      deferredFrameRef.current !== null ||
+      deferredTimeoutRef.current !== null
+    )
+      return;
+    deferredFrameRef.current = window.requestAnimationFrame(() => {
+      deferredFrameRef.current = null;
+      deferredTimeoutRef.current = window.setTimeout(() => {
+        deferredTimeoutRef.current = null;
+        const calls = deferredCallsRef.current;
+        deferredCallsRef.current = [];
+        for (const deferredCall of calls) deferredCall();
+      });
+    });
+  }, []);
+  React.useEffect(
+    () => () => {
+      if (deferredFrameRef.current !== null)
+        window.cancelAnimationFrame(deferredFrameRef.current);
+      if (deferredTimeoutRef.current !== null)
+        window.clearTimeout(deferredTimeoutRef.current);
+    },
+    [],
+  );
   const drawerActionsRef = React.useRef<DrawerPrimitive.Root.Actions | null>(
     null,
   );
@@ -75,9 +147,35 @@ function Drawer({
   >(
     (nextOpen, eventDetails) => {
       if (openProp === undefined) setUncontrolledOpen(nextOpen);
+      const swipeClose = !nextOpen && eventDetails.reason === "swipe";
+      if (swipeClose) speedUpSwipeClose(eventDetails.event);
+      if (swipeClose && openProp !== undefined) {
+        setSwipeDismissed(true);
+        deferUntilAfterFirstFrame(() => onOpenChange?.(nextOpen, eventDetails));
+        return;
+      }
       onOpenChange?.(nextOpen, eventDetails);
     },
-    [onOpenChange, openProp],
+    [deferUntilAfterFirstFrame, onOpenChange, openProp],
+  );
+
+  const handleSnapPointChange = React.useCallback<
+    NonNullable<DrawerPrimitive.Root.Props["onSnapPointChange"]>
+  >(
+    (snapPoint, eventDetails) => {
+      if (
+        openProp !== undefined &&
+        snapPoint === null &&
+        eventDetails.reason === "swipe"
+      ) {
+        deferUntilAfterFirstFrame(() =>
+          onSnapPointChange?.(snapPoint, eventDetails),
+        );
+        return;
+      }
+      onSnapPointChange?.(snapPoint, eventDetails);
+    },
+    [deferUntilAfterFirstFrame, onSnapPointChange, openProp],
   );
 
   const hasSnapPoints = snapPoints != null && snapPoints.length > 0;
@@ -103,9 +201,12 @@ function Drawer({
       <DrawerPrimitive.Root
         data-slot="drawer"
         modal={modal}
-        open={openProp}
+        open={rootOpen}
         defaultOpen={defaultOpen}
         onOpenChange={handleOpenChange}
+        onSnapPointChange={
+          onSnapPointChange ? handleSnapPointChange : undefined
+        }
         actionsRef={actionsRef}
         snapPoints={snapPoints}
         swipeDirection={swipeDirection}
@@ -166,6 +267,12 @@ type DrawerContentProps = DrawerPrimitive.Popup.Props & {
   floatingContent?: React.ReactNode;
 };
 
+/** Counts this sheet as on screen for as long as its portal is mounted. */
+function DrawerPresenceMark() {
+  React.useLayoutEffect(() => markDrawerOpen(), []);
+  return null;
+}
+
 function DrawerContent({
   className,
   children,
@@ -198,6 +305,7 @@ function DrawerContent({
         )}
         style={viewportStyle}
       >
+        <DrawerPresenceMark />
         <DrawerPrimitive.Popup
           data-slot="drawer-popup"
           data-swipe-axis={swipeAxis}

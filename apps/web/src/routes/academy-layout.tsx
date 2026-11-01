@@ -43,6 +43,9 @@ import type {
   RegisterPersistentLearningPlayer,
 } from "../learning/player/PersistentLearningPlayerHost";
 import type { LessonPlayerMinimizeGestureState } from "../learning/player/useLessonPlayerMinimizeGesture";
+import { resetLessonPlayerHeight } from "../learning/player/LessonPlayerHeightHandle";
+import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
+import { requestLessonAutoplay } from "../learning/lessonAutoplayRequest";
 import {
   easeLearningPlayerMotionProgress,
   getLearningBackgroundMotionState,
@@ -67,13 +70,9 @@ import {
   VideoPlaybackBootstrapError,
 } from "../learning/videoPlaybackBootstrap";
 
-const loadPersistentLearningPlayerHost = () =>
-  import("../learning/player/PersistentLearningPlayerHost");
-const PersistentLearningPlayerHost = lazy(() =>
-  loadPersistentLearningPlayerHost().then((module) => ({
-    default: module.PersistentLearningPlayerHost,
-  })),
-);
+const loadPersistentLearningPlayerHost =
+  persistentLearningPlayerHostBody.preload;
+const PersistentLearningPlayerHost = persistentLearningPlayerHostBody.Body;
 const loadLearningMiniPlayer = () =>
   import("../learning/player/LearningMiniPlayer");
 const LearningMiniPlayer = lazy(() =>
@@ -88,10 +87,22 @@ import {
   getLearningMiniPlayerSnapshot,
   openLearningMiniPlayerSession,
   subscribeToLearningMiniPlayer,
+  syncStoredLearningMiniPlayerLesson,
 } from "../learning/player/learningMiniPlayerStore";
 import type { NavigateTo, NavigationOptions } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
-import { buildLoginPath } from "../routing/routeAccess";
+import { persistentLearningPlayerHostBody } from "../routing/prerenderedBodies";
+import { useCapabilities } from "../services/authorization/authorization.queries";
+import { ProfileNavigationProvider } from "../profiles/ProfileLink";
+import { ProfilePreviewHost } from "../profiles/ProfilePreviewHost";
+import {
+  buildLoginDialogPath,
+  buildLoginPath,
+  isPublicProfilePath,
+  LOGIN_PATH,
+  readLoginPurpose,
+} from "../routing/routeAccess";
+import { LoginDialogHost } from "../auth/LoginDialogHost";
 import {
   getNavigationDestination,
   getRoleNavigationItems,
@@ -105,7 +116,9 @@ import {
   resolveWorkspaceRole,
 } from "../shell/workspaceRole";
 import {
+  asksToKeepScroll,
   followApplicationScrollPosition,
+  forgetKeepScrollRequest,
   readApplicationScrollPosition,
   scrollApplicationTo,
   type ApplicationScrollPosition,
@@ -120,11 +133,21 @@ import {
   isEditingShortcutTarget,
 } from "../keyboardShortcuts";
 import {
+  getNavigationMatch,
+  resolveActiveRouteSection,
+} from "../routing/activeRouteSection";
+import { useHydrated } from "../courses/viewerCourseState";
+import { rememberNavigationOrigin } from "../routing/navigationOriginEarlyState";
+import { NO_VIDEO_NOTICE } from "../learning/lessonWithoutVideo";
+import { videoPlaybackFailureNotice } from "../learning/videoPlaybackFailure";
+import {
   getDestinationPath,
   getMatchedRouteDescriptor,
   getStaticRouteDescriptor,
   normalizeNavigationPath,
 } from "../routing/routeDescriptors";
+import { useCourseOverviewDocumentTitle } from "../routing/useCourseDocumentTitle";
+import { showLoginDialogAhead } from "../store/loginDialogIntent";
 
 export const links: Route.LinksFunction = () => [
   { rel: "stylesheet", href: academyShellStylesheet },
@@ -139,6 +162,8 @@ export interface AcademyOutletContext {
   ) => void;
   onMiniPlayerRestoreReady: () => void;
   openLearningMiniPlayer: (session: LearningMiniPlayerSession) => void;
+  /** See `openCourseToUnlock`. */
+  openCourseToUnlock: (courseSlug: string) => void;
   persistentPlayerMounted: boolean;
   registerPersistentPlayer: RegisterPersistentLearningPlayer;
 }
@@ -150,6 +175,8 @@ interface LearningBackgroundSurface {
   pathname: string;
   section?: string;
   settingsTab?: string;
+  platformTab?: string;
+  analyticsTab?: string;
 }
 
 interface ApplicationScrollRestorationEntry {
@@ -164,6 +191,18 @@ const getApplicationScrollStorageKey = (
 
 const ACADEMY_NAVIGATION_ORIGIN_PATH = "academyNavigationOriginPath";
 const ACADEMY_NAVIGATION_ORIGIN_SECTION = "academyNavigationOriginSection";
+/**
+ * The lesson a course's page or a member's profile was opened from (the
+ * course picture in the lesson page's content panel, or a name or picture in
+ * its discussion, leads there). The origin above is a menu page and is
+ * carried through the lesson unchanged, so "back" on the course's page used
+ * to skip the lesson and return to that menu page; with this the page goes
+ * back to the lesson it came from, and says so.
+ */
+const ACADEMY_NAVIGATION_LESSON_RETURN_PATH =
+  "academyNavigationLessonReturnPath";
+/** What the back link is called when it returns to a lesson. */
+const LESSON_RETURN_LABEL = "Learning page";
 
 function readAcademyNavigationState(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -171,36 +210,11 @@ function readAcademyNavigationState(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function getNavigationMatch(
-  pathname: string,
-  items: readonly NavigationItemWithMetadata[],
-) {
-  const path = normalizeNavigationPath(pathname.split(/[?#]/, 1)[0] || "/");
-  let bestMatch:
-    { label: string; path: string; exact: boolean; length: number } | undefined;
-
-  for (const [label, , metadata] of items) {
-    const itemPath = normalizeNavigationPath(metadata?.routeLink ?? "/");
-    // The Discussions menu resolves to the last tab visited in this session,
-    // so its tab URLs are still the menu's destination rather than a detail
-    // page that should inherit the previously selected section.
-    const isDiscussionTab =
-      itemPath === "/discussions" && path.startsWith("/discussions/");
-    const exact = path === itemPath || isDiscussionTab;
-    const isChild =
-      itemPath !== "/" && path.startsWith(`${itemPath.replace(/\/$/, "")}/`);
-    if (!exact && !isChild) continue;
-    if (!bestMatch || itemPath.length > bestMatch.length) {
-      bestMatch = { label, path: itemPath, exact, length: itemPath.length };
-    }
-  }
-
-  return bestMatch;
-}
-
 function getWorkspaceNavigationItems(
   user: { id?: string } | null | undefined,
   settingsDocked: boolean,
+  /** The user's permissions, null while they load (see navigation.ts). */
+  permissions: readonly string[] | null,
 ) {
   const roles = getUserRoles(user);
   let storedRole: string | null = null;
@@ -220,6 +234,7 @@ function getWorkspaceNavigationItems(
   const navigation = getRoleNavigationItems(
     resolveWorkspaceRole(roles, rolePreference),
     hasAdminRole(roles),
+    { roles: roles ?? [], permissions },
   );
   return navigation.filter(
     ([label]) => label !== "Settings" || !settingsDocked,
@@ -237,7 +252,41 @@ function getFallbackNavigationPath(
   return items[0]?.[2]?.routeLink ?? "/";
 }
 
+/**
+ * The application frame is one element, and the moment a minimize begins it
+ * takes the shape of the page that is coming (one wide frame) in place of the
+ * lesson's (a frame for the lesson and one for the course content). So that
+ * the new frame does not simply appear, its surface is faded in step with the
+ * page shown behind the video: told here how far that page has been
+ * revealed, and over how long to get there (see learning-split-layout.css).
+ * When the page settles in for good (a timed reveal to the whole of it) the
+ * frame also takes back its drop shadow, faded in over the same time, so that
+ * it is already there when the page takes over from the stand-in.
+ */
+const setLearningFrameReveal = (
+  stage: HTMLElement,
+  reveal: string,
+  duration: string,
+) => {
+  const frame = stage.closest<HTMLElement>(".courses-main-frame");
+  if (!frame) return;
+  frame.dataset.learningFrameReveal = "";
+  frame.style.setProperty("--learning-frame-reveal", reveal);
+  frame.style.setProperty("--learning-frame-reveal-duration", duration);
+  frame.toggleAttribute(
+    "data-learning-frame-revealed",
+    reveal === "1" && duration !== "0ms",
+  );
+};
+
 const clearLearningPlayerMotionProperties = (element: HTMLElement) => {
+  const frame = element.closest<HTMLElement>(".courses-main-frame");
+  if (frame) {
+    delete frame.dataset.learningFrameReveal;
+    delete frame.dataset.learningFrameRevealed;
+    frame.style.removeProperty("--learning-frame-reveal");
+    frame.style.removeProperty("--learning-frame-reveal-duration");
+  }
   element.style.removeProperty("--learning-background-reveal");
   element.style.removeProperty("--learning-background-reveal-duration");
   element.style.removeProperty("--learning-player-content-motion-duration");
@@ -277,6 +326,8 @@ const resolveLearningBackgroundSurface = (
         descriptor.section ??
         (descriptor.page === "courses" ? "Courses" : undefined),
       settingsTab: descriptor.settingsTab,
+      platformTab: descriptor.platformTab,
+      analyticsTab: descriptor.analyticsTab,
     };
   } catch {
     return null;
@@ -306,6 +357,21 @@ const isLearningReturnCandidate = (path: string) =>
 const isLessonOpenedFromSettings = (path: string) =>
   isLearningRoutePath(path) && isSettingsPath(getLearningReturnLocation().path);
 
+/** The course a course-overview address is for; null for any other address. */
+const getCourseOverviewRouteKey = (path: string) => {
+  const pathname = normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/");
+  const parts = pathname.split("/").filter(Boolean);
+  if (
+    parts.length !== 3 ||
+    parts[0] !== "courses" ||
+    !parts[1] ||
+    parts[2] !== "overview"
+  ) {
+    return null;
+  }
+  return parts[1];
+};
+
 const getLearningCourseRouteKey = (path: string) => {
   const pathname = normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/");
   const parts = pathname.split("/").filter(Boolean);
@@ -316,6 +382,11 @@ const getLearningCourseRouteKey = (path: string) => {
     return parts[1];
   }
 };
+
+/** The page behind a swiped-down video starts to show at this progress. */
+const SWIPE_BACKGROUND_REVEAL_START_PROGRESS = 0.1;
+/** ...and is fully showing by this one. */
+const SWIPE_BACKGROUND_REVEAL_END_PROGRESS = 0.45;
 
 export default function AcademyLayout() {
   const matches = useMatches();
@@ -364,6 +435,9 @@ export default function AcademyLayout() {
   >(() => {});
   const playerPresentationRef = useRef<LearningPlayerPresentation>("full");
   const persistentRegistrationTokenRef = useRef<symbol | null>(null);
+  // Set when the lesson page is left to unlock its course: the player it
+  // leaves behind is closed then, not minimized. See `openCourseToUnlock`.
+  const closePlayerOnLeaveRef = useRef(false);
   const playerRestoreVersionRef = useRef(0);
   const learningBackgroundMountedRef = useRef(false);
   const learningMotionStageRef = useRef<HTMLDivElement>(null);
@@ -381,6 +455,7 @@ export default function AcademyLayout() {
   const selectLessonTokenRef = useRef(0);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
+  useCourseOverviewDocumentTitle(route.kind === "course-overview");
   const staticCourseRouteData = matches.find((match) => match.id === "root")
     ?.loaderData as AcademyStaticPageData | undefined;
   const {
@@ -390,6 +465,14 @@ export default function AcademyLayout() {
   } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
+  // The menu a team member has is cut to their permissions; the shortcuts
+  // and fallbacks below read the same menu.
+  const navigationPermissions =
+    useCapabilities({ enabled: Boolean(activeUser) }).data?.permissions ?? null;
+  const navigationPermissionsRef = useRef(navigationPermissions);
+  useEffect(() => {
+    navigationPermissionsRef.current = navigationPermissions;
+  }, [navigationPermissions]);
   const settingsDocked = normalizeSidebarDockItems(
     getInitialSidebarPreferences().dockItems,
   ).includes("settings");
@@ -399,32 +482,77 @@ export default function AcademyLayout() {
   // switch left this list on the old role's menu, so the new role's extra
   // pages were not recognised as menu pages and never showed as selected.
   const workspaceNavigationItems = useMemo(
-    () => getWorkspaceNavigationItems(activeUser, settingsDocked),
+    () =>
+      getWorkspaceNavigationItems(
+        activeUser,
+        settingsDocked,
+        navigationPermissions,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- location.key is the re-read trigger
-    [activeUser, settingsDocked, location.key],
+    [activeUser, settingsDocked, navigationPermissions, location.key],
   );
   const currentNavigationState = readAcademyNavigationState(location.state);
   const originPathValue =
     currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
   const originSectionValue =
     currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+  // The page is built without knowing where the reader came from; what the
+  // origin changes (the highlighted menu item, the back link's words) is
+  // applied in the render after hydration, an update React does apply. In
+  // the hydrating render itself it would differ from the built page, and
+  // React keeps a built attribute it disagrees with: the menu item stayed
+  // on Courses after a reload of a course page opened from Home. Before
+  // the first paint the document's head shows the origin already (see
+  // `routing/navigationOriginEarlyState.ts`).
+  const hydrated = useHydrated();
   const hasValidNavigationOrigin =
+    hydrated &&
     typeof originPathValue === "string" &&
     originPathValue.startsWith("/") &&
     !originPathValue.startsWith("//") &&
     typeof originSectionValue === "string" &&
     workspaceNavigationItems.some(([label]) => label === originSectionValue);
+  const lessonReturnPathValue =
+    currentNavigationState[ACADEMY_NAVIGATION_LESSON_RETURN_PATH];
+  // Only a profile returns to a lesson, and only to a lesson address. A
+  // course's page goes back to the menu section the reader is in (Courses,
+  // Home), not to the lesson it was opened from.
+  const lessonReturnPath =
+    route.kind === "shell" &&
+    route.page === "public-profile" &&
+    typeof lessonReturnPathValue === "string" &&
+    isLearningRoutePath(lessonReturnPathValue)
+      ? lessonReturnPathValue
+      : null;
   const currentNavigationMatch = getNavigationMatch(
     location.pathname,
     workspaceNavigationItems,
   );
-  const activeRouteSection = hasValidNavigationOrigin
-    ? originSectionValue
-    : (currentNavigationMatch?.label ??
-      (workspaceNavigationItems.some(([label]) => label === route.section)
-        ? route.section
-        : workspaceNavigationItems[0]?.[0]));
+  // "Not found" is no sidebar entry, but it is the section the page has to
+  // be told about, and it comes before everything else that could name a
+  // section (see `resolveActiveRouteSection`).
+  const activeRouteSection = resolveActiveRouteSection({
+    routeSection: route.section,
+    originSection: hasValidNavigationOrigin ? originSectionValue : undefined,
+    navigationMatch: currentNavigationMatch,
+    navigationItems: workspaceNavigationItems,
+    menuKnown: authUserFetched || Boolean(storeUser),
+  });
   const showRouteBackButton = !currentNavigationMatch?.exact;
+  // Kept for a reload of this page in this tab: the hosted site's redirect
+  // to the address with a trailing slash drops the history state.
+  useEffect(() => {
+    if (!hasValidNavigationOrigin) return;
+    rememberNavigationOrigin(location.pathname, {
+      section: originSectionValue as string,
+      path: originPathValue as string,
+    });
+  }, [
+    hasValidNavigationOrigin,
+    location.pathname,
+    originPathValue,
+    originSectionValue,
+  ]);
 
   useLayoutEffect(() => {
     locationPathRef.current = currentLocationPath;
@@ -479,11 +607,11 @@ export default function AcademyLayout() {
   useEffect(() => {
     const pathname = normalizeNavigationPath(location.pathname);
     if (pathname === "/logout") {
-      void signOut().catch(() => {
-        // A critical sync barrier must be allowed to stop logout. Return to
-        // the previous screen so an offline/blocked draft is not stranded on
-        // a route with no actionable UI.
-        void navigate(-1);
+      void signOut().then((result) => {
+        // Signed out: the home page, as a visitor. Still signed in (the
+        // server did not end the session): back to where they came from.
+        if (result === "signed-out") void navigate("/", { replace: true });
+        else void navigate(-1);
       });
       return;
     }
@@ -496,6 +624,15 @@ export default function AcademyLayout() {
     const previousPath = renderedLocationPathRef.current;
     const pending = pendingScrollPositionRef.current;
     if (previousPath === currentLocationPath && !pending) return;
+    // The page only tidied its own address: the reader stays where they are.
+    if (
+      previousPath !== currentLocationPath &&
+      !pending &&
+      asksToKeepScroll(location.state)
+    ) {
+      renderedLocationPathRef.current = currentLocationPath;
+      return;
+    }
 
     if (previousPath !== currentLocationPath) {
       if (pending?.sourcePath !== previousPath) {
@@ -550,6 +687,13 @@ export default function AcademyLayout() {
     };
   }, [currentLocationPath]);
 
+  // A request to keep the scroll position is for that one address change:
+  // coming back to the entry through the browser history restores its
+  // position as usual. Runs after the effect above has read it.
+  useLayoutEffect(() => {
+    if (asksToKeepScroll(location.state)) forgetKeepScrollRequest();
+  }, [location.key, location.state]);
+
   useEffect(() => {
     const previousScrollRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
@@ -557,6 +701,23 @@ export default function AcademyLayout() {
       window.history.scrollRestoration = previousScrollRestoration;
     };
   }, []);
+
+  // The address a route change was asked for is recorded before it arrives,
+  // so a second request made meanwhile compares against it. A change can be
+  // cancelled on the way (a Back or another navigation took over); the page
+  // then stays where it was, and the recorded address must follow it, or
+  // every later request for the same page would look like "already there"
+  // and do nothing.
+  const followNavigation = useCallback(
+    (path: string, navigation: void | Promise<void>) => {
+      void Promise.resolve(navigation).then(() => {
+        if (locationPathRef.current !== path) return;
+        const { pathname, search, hash } = window.location;
+        locationPathRef.current = `${pathname}${search}${hash}`;
+      });
+    },
+    [],
+  );
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
@@ -579,7 +740,35 @@ export default function AcademyLayout() {
         // Keep the confirmed signed-out state fresh so the login route can
         // render immediately without revalidating the same session query.
         queryClient.setQueryData(authKeys.me(), null);
-        void navigate(buildLoginPath(requestedPath), { replace: true });
+        void navigate(
+          buildLoginDialogPath(requestedPath, locationPathRef.current),
+        );
+        return;
+      }
+
+      // "Log in" from anywhere opens the pop-up over the page the visitor
+      // is on (or the page the link was heading for), not a login page.
+      if (requestedPathname === LOGIN_PATH) {
+        const loginSearch = requestedPath.split("#", 1)[0]?.split("?")[1] ?? "";
+        const loginReturnTo = new URLSearchParams(loginSearch).get("returnTo");
+        const purpose = readLoginPurpose(loginSearch);
+        const dialogPath = buildLoginDialogPath(
+          loginReturnTo,
+          locationPathRef.current,
+          purpose,
+        );
+        // Over the page already shown: the pop-up goes up first and the
+        // address follows once it has painted (see loginDialogIntent).
+        // A purpose changes the pop-up's words, which it reads from the
+        // address, so that one waits for the address.
+        const overCurrentPage =
+          normalizeNavigationPath(dialogPath.split(/[?#]/, 1)[0] || "/") ===
+          normalizeNavigationPath(window.location.pathname);
+        if (overCurrentPage && !purpose) {
+          showLoginDialogAhead(dialogPath, () => void navigate(dialogPath));
+          return;
+        }
+        void navigate(dialogPath);
         return;
       }
 
@@ -594,6 +783,7 @@ export default function AcademyLayout() {
         const workspaceNavigationItems = getWorkspaceNavigationItems(
           activeUser,
           settingsDocked,
+          navigationPermissionsRef.current,
         );
         const targetNavigationMatch = getNavigationMatch(
           path,
@@ -633,6 +823,17 @@ export default function AcademyLayout() {
               : activeLocationPath;
             navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION] = originSection;
           }
+        }
+        // A profile opened from a lesson remembers the lesson. Any other
+        // move forgets it (a course's page goes back to the menu section).
+        if (
+          isPublicProfilePath(path) &&
+          isLearningRoutePath(activeLocationPath)
+        ) {
+          navigationState[ACADEMY_NAVIGATION_LESSON_RETURN_PATH] =
+            activeLocationPath;
+        } else {
+          delete navigationState[ACADEMY_NAVIGATION_LESSON_RETURN_PATH];
         }
         if (
           !restoringPlayerRef.current &&
@@ -698,7 +899,10 @@ export default function AcademyLayout() {
           const storedDestination = resetDestinationScroll
             ? undefined
             : applicationScrollPositionsRef.current.get(destinationStorageKey);
-          const position = storedDestination?.position ?? { left: 0, top: 0 };
+          const position = resetDestinationScroll
+            ? { left: 0, top: 0 }
+            : (options?.chooseScrollPosition?.(storedDestination?.position) ??
+              storedDestination?.position ?? { left: 0, top: 0 });
           const restorePosition = () => {
             const shouldRestore =
               resetDestinationScroll ||
@@ -724,7 +928,8 @@ export default function AcademyLayout() {
             ? { left: 0, top: 0 }
             : options?.preserveScroll
               ? sourcePosition
-              : (storedDestination?.position ?? { left: 0, top: 0 }));
+              : (options?.chooseScrollPosition?.(storedDestination?.position) ??
+                storedDestination?.position ?? { left: 0, top: 0 }));
         if (
           isLearningRoutePath(path) &&
           isLearningReturnCandidate(sourcePath)
@@ -750,11 +955,14 @@ export default function AcademyLayout() {
         // Update synchronously so a second shortcut pressed before React's
         // route render still compares against the destination just requested.
         locationPathRef.current = path;
-        void navigate(path, {
-          preventScrollReset: true,
-          replace: options?.replace,
-          state: navigationState,
-        });
+        followNavigation(
+          path,
+          navigate(path, {
+            preventScrollReset: true,
+            replace: options?.replace,
+            state: navigationState,
+          }),
+        );
       };
 
       void autosyncManager.flushAll().then(performNavigation);
@@ -763,6 +971,7 @@ export default function AcademyLayout() {
       activeUser,
       authUserError,
       authUserFetched,
+      followNavigation,
       location.state,
       navigate,
       route.section,
@@ -774,15 +983,39 @@ export default function AcademyLayout() {
     navigateToRef.current = navigateTo;
   }, [navigateTo]);
   const navigateBackToOrigin = useCallback(() => {
-    const targetPath = hasValidNavigationOrigin
-      ? (originPathValue as string)
-      : getFallbackNavigationPath(location.pathname, workspaceNavigationItems);
+    // A lesson opened straight from its address is recorded as its own
+    // origin. Going "back" from a course's page to it is what the reader
+    // left, so the origin's menu section is gone to instead.
+    const originSectionPath = workspaceNavigationItems.find(
+      ([label]) => label === originSectionValue,
+    )?.[2]?.routeLink;
+    const originPath =
+      hasValidNavigationOrigin &&
+      route.kind === "course-overview" &&
+      isLearningRoutePath(originPathValue as string)
+        ? (originSectionPath ??
+          getFallbackNavigationPath(
+            location.pathname,
+            workspaceNavigationItems,
+          ))
+        : (originPathValue as string);
+    const targetPath =
+      lessonReturnPath ??
+      (hasValidNavigationOrigin
+        ? originPath
+        : getFallbackNavigationPath(
+            location.pathname,
+            workspaceNavigationItems,
+          ));
     navigateTo(targetPath, { replace: true });
   }, [
     hasValidNavigationOrigin,
+    lessonReturnPath,
     location.pathname,
     navigateTo,
     originPathValue,
+    originSectionValue,
+    route.kind,
     workspaceNavigationItems,
   ]);
   const exitSettings = useCallback(() => {
@@ -802,8 +1035,13 @@ export default function AcademyLayout() {
     locationPathRef.current = destination.path;
     void autosyncManager
       .flushAll()
-      .then(() => navigate(destination.path, { preventScrollReset: true }));
-  }, [navigate]);
+      .then(() =>
+        followNavigation(
+          destination.path,
+          navigate(destination.path, { preventScrollReset: true }),
+        ),
+      );
+  }, [followNavigation, navigate]);
 
   useEffect(() => {
     const navigateByNumber = (event: KeyboardEvent) => {
@@ -840,6 +1078,10 @@ export default function AcademyLayout() {
       const navigationItems = getRoleNavigationItems(
         navigationRole,
         hasAdminRole(userRoles),
+        {
+          roles: userRoles ?? [],
+          permissions: navigationPermissionsRef.current,
+        },
       );
       const orderedNavigation = navigationItems.filter(
         ([label]) =>
@@ -921,7 +1163,9 @@ export default function AcademyLayout() {
   const openCourse = useCallback(
     (course: Course | LearningCourse, options?: CourseOpenOptions) => {
       const courseRouteKey = getCourseRouteKey(course);
-      const playerPath = `/learn/${encodeURIComponent(courseRouteKey)}${options?.preview ? "/1" : ""}`;
+      const playerPath = options?.lessonNumber
+        ? getCoursePlayerPath(courseRouteKey, options.lessonNumber)
+        : `/learn/${encodeURIComponent(courseRouteKey)}${options?.preview ? "/1" : ""}`;
       const activePlayer = persistentPlayerRef.current;
       if (
         shouldRestoreMiniPlayerForMatchingCourse({
@@ -937,6 +1181,7 @@ export default function AcademyLayout() {
         navigateTo(activePlayer.lessonPath, { exact: true });
         return;
       }
+      if (options?.autoplay) requestLessonAutoplay(courseRouteKey);
       navigateTo(playerPath);
     },
     [navigateTo],
@@ -948,6 +1193,7 @@ export default function AcademyLayout() {
       const token = Symbol("persistent-learning-player-registration");
       const restoreVersionAtRegistration = playerRestoreVersionRef.current;
       persistentRegistrationTokenRef.current = token;
+      closePlayerOnLeaveRef.current = false;
       const existing = persistentPlayerRef.current;
       const resolvedRegistration =
         registration.playerProps.playbackBootstrap == null &&
@@ -999,6 +1245,14 @@ export default function AcademyLayout() {
           if (persistentRegistrationTokenRef.current !== token) return;
           const current = persistentPlayerRef.current;
           if (!current) return;
+          if (closePlayerOnLeaveRef.current) {
+            closePlayerOnLeaveRef.current = false;
+            persistentRegistrationTokenRef.current = null;
+            persistentPlayerRef.current = null;
+            setPersistentPlayer(null);
+            closeLearningMiniPlayerSession();
+            return;
+          }
           const detachedPlayer = { ...current, anchor: null };
           persistentPlayerRef.current = detachedPlayer;
           setPersistentPlayer(detachedPlayer);
@@ -1033,6 +1287,25 @@ export default function AcademyLayout() {
     [navigateTo],
   );
 
+  // The in-page mini player changes lessons in place. The stored session is
+  // kept on the lesson now playing, so a reload brings that lesson back
+  // rather than the one that was minimized.
+  useEffect(() => {
+    if (playerPresentation !== "mini" || !persistentPlayer) return;
+    const selectedLesson = persistentPlayer.selectedLesson;
+    if (selectedLesson === undefined) return;
+    syncStoredLearningMiniPlayerLesson({
+      mediaKey: persistentPlayer.mediaKey,
+      selectedLesson,
+      lessonTitle: persistentPlayer.playerProps.lessonTitle,
+      lessonIndex: persistentPlayer.playerProps.lessonIndex,
+      totalLessons: persistentPlayer.playerProps.totalLessons,
+      lessonPath: persistentPlayer.lessonPath,
+      manifestUrl: persistentPlayer.playerProps.playbackBootstrap?.manifestUrl,
+      readingArticle: persistentPlayer.playerProps.playbackAccessError?.article,
+    });
+  }, [persistentPlayer, playerPresentation]);
+
   const closeLearningMiniPlayer = useCallback(() => {
     if (
       playerPresentationRef.current === "mini" &&
@@ -1058,6 +1331,36 @@ export default function AcademyLayout() {
     persistentPlayer?.courseRouteKey,
     persistentPlayer?.courseSlug,
   ]);
+
+  /**
+   * "Unlock the course" on a locked lesson: the course page, where it is
+   * bought, with no player left behind. Leaving a lesson otherwise keeps it
+   * on in the corner, but a locked lesson has nothing to play, and the mini
+   * player would sit over the page's pay button. From the lesson page the
+   * player is closed as that page goes, so its video area is not emptied
+   * before the course page arrives; from the mini player it is closed now.
+   */
+  const openCourseToUnlock = useCallback(
+    (courseSlug: string) => {
+      if (playerPresentationRef.current === "mini") {
+        persistentRegistrationTokenRef.current = null;
+        persistentPlayerRef.current = null;
+        setPersistentPlayer(null);
+        closeLearningMiniPlayerSession();
+      } else if (persistentPlayerRef.current) {
+        closePlayerOnLeaveRef.current = true;
+      }
+      navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
+    },
+    [navigateTo],
+  );
+
+  const unlockPersistentPlayerCourse = useCallback(() => {
+    const slug =
+      persistentPlayerRef.current?.courseSlug ??
+      persistentPlayerRef.current?.courseRouteKey;
+    if (slug) openCourseToUnlock(slug);
+  }, [openCourseToUnlock]);
 
   const openPersistentPlayerLogin = useCallback(() => {
     const returnPath =
@@ -1168,26 +1471,33 @@ export default function AcademyLayout() {
           bootstrapError?.code === "MFA_REQUIRED"
             ? {
                 kind: "login" as const,
-                message: "Log in to access this lesson.",
+                message: "Log in to dive in",
                 actionLabel: "Log in",
                 onAction: openPersistentPlayerLogin,
               }
             : bootstrapError?.status === 403
               ? {
                   kind: "access" as const,
-                  message: "Get access to this course to watch this lesson.",
-                  actionLabel: "Get access",
-                  onAction: openPersistentPlayerCourseOverview,
+                  message:
+                    "Join the course to unlock this lesson and all the rest.",
+                  actionLabel: "Unlock the course",
+                  onAction: unlockPersistentPlayerCourse,
                 }
-              : {
-                  kind: "retry" as const,
-                  message: "We couldn't prepare this video.",
-                  actionLabel: "Retry",
-                  onAction: () =>
-                    selectPersistentMiniPlayerLessonRef.current(lessonNumber, {
-                      retry: true,
-                    }),
-                };
+              : bootstrapError?.code === "MEDIA_NOT_FOUND"
+                ? // The lesson has no video (its quiz was removed, say).
+                  // That is not a failure and there is nothing to retry;
+                  // the lesson page says the same.
+                  NO_VIDEO_NOTICE
+                : {
+                    ...videoPlaybackFailureNotice(error),
+                    onAction: () =>
+                      selectPersistentMiniPlayerLessonRef.current(
+                        lessonNumber,
+                        {
+                          retry: true,
+                        },
+                      ),
+                  };
 
         const withError: PersistentLearningPlayerRegistration = {
           ...active,
@@ -1274,6 +1584,11 @@ export default function AcademyLayout() {
       viewportHeight: number,
       phase: LessonPlayerMinimizeGestureState["phase"] | "restoring",
       forceMount = false,
+      /**
+       * How far a swipe has taken the video towards the mini player, 0 to
+       * 1, while a finger is dragging it on a wide screen.
+       */
+      dragProgress?: number,
     ) => {
       const viewportTop = window.visualViewport?.offsetTop ?? 0;
       const playerBottom =
@@ -1297,7 +1612,33 @@ export default function AcademyLayout() {
       );
       learningMotionOffsetYRef.current = offsetY;
       learningMotionViewportHeightRef.current = viewportHeight;
-      if (forceMount || motion.shouldMount) mountLearningBackground();
+      // On a wide screen the video is short of the full height of the window,
+      // so judging by where its bottom edge is brought the page behind in
+      // at once, at half strength, the moment a swipe began. A swipe there
+      // goes by its own progress instead: the page behind is prepared from
+      // the start, so it is ready, but stays out of sight for the first
+      // tenth of the swipe and then fades in. Swiped back up, it fades out
+      // the same way and is gone before the video is home.
+      const swipedOnWideScreen =
+        dragProgress !== undefined && isDesktopLearningMinimizeViewport();
+      // On a phone too the page behind is prepared from the start of a
+      // swipe, although it is revealed by where the video is. Prepared only
+      // once the video was well down, it was often not ready in time for a
+      // quick flick and came in at once after the mini player had landed.
+      if (forceMount || motion.shouldMount || dragProgress !== undefined) {
+        mountLearningBackground();
+      }
+      const backgroundReveal = swipedOnWideScreen
+        ? Math.min(
+            1,
+            Math.max(
+              0,
+              (dragProgress - SWIPE_BACKGROUND_REVEAL_START_PROGRESS) /
+                (SWIPE_BACKGROUND_REVEAL_END_PROGRESS -
+                  SWIPE_BACKGROUND_REVEAL_START_PROGRESS),
+            ),
+          )
+        : motion.revealProgress;
 
       const motionStage = learningMotionStageRef.current;
       if (!motionStage) return;
@@ -1307,8 +1648,9 @@ export default function AcademyLayout() {
       );
       motionStage.style.setProperty(
         "--learning-background-reveal",
-        String(motion.revealProgress),
+        String(backgroundReveal),
       );
+      setLearningFrameReveal(motionStage, String(backgroundReveal), "0ms");
       motionStage.style.setProperty(
         "--learning-player-content-motion-duration",
         "0ms",
@@ -1370,6 +1712,11 @@ export default function AcademyLayout() {
           motionStage.style.setProperty(
             "--learning-background-reveal",
             toOffsetY > fromOffsetY ? "1" : "0",
+          );
+          setLearningFrameReveal(
+            motionStage,
+            toOffsetY > fromOffsetY ? "1" : "0",
+            `${LEARNING_PLAYER_MOTION_DURATION_MS}ms`,
           );
           motionStage.dataset.learningPlayerMotion = phase;
         }
@@ -1512,7 +1859,13 @@ export default function AcademyLayout() {
           learningMotionFadeStartViewportProgressRef.current = null;
         }
         cancelLearningSurfaceMotion();
-        applyLearningSurfaceMotion(state.offsetY, viewportHeight, state.phase);
+        applyLearningSurfaceMotion(
+          state.offsetY,
+          viewportHeight,
+          state.phase,
+          false,
+          state.progress,
+        );
         return;
       }
       animateLearningSurfaceMotion(
@@ -1581,6 +1934,9 @@ export default function AcademyLayout() {
       lessonPath: activePlayer?.lessonPath ?? learningMiniPlayer?.lessonPath,
     });
     if (!lessonPath) return;
+    // The video opens at its full height, not at one it had been dragged
+    // down to before it was minimized.
+    resetLessonPlayerHeight();
     // A route unmount queues the outgoing registration cleanup. Mark this
     // restore before navigating so that stale cleanup cannot turn the player
     // back into a mini player after the first touch already restored it.
@@ -1652,97 +2008,106 @@ export default function AcademyLayout() {
     )
       ? learningReturnLocation.section
       : null;
-  const learningOriginPage =
-    onLearningRoute && isSettingsPath(learningReturnLocation.path)
-      ? "settings"
-      : null;
 
   return (
     <AcademyRouteGuard>
-      <CoursesPage
-        cataloguePathname={location.pathname}
-        routeCatalogueEnrollmentFilter={getStudentCatalogueEnrollmentFilterFromPath(
-          learningBackground?.pathname ?? location.pathname,
-        )}
-        initialPublishedCoursePage={staticCourseRouteData?.publishedCoursePage}
-        initialPublishedCoursePageNeedsRefresh={
-          staticCourseRouteData?.publishedCoursePageNeedsRefresh
-        }
-        initialCourseOverview={staticCourseRouteData?.courseOverview}
-        initialHomeDiscovery={staticCourseRouteData?.homeDiscovery}
-        initialHomePopularDiscussions={
-          staticCourseRouteData?.homePopularDiscussions
-        }
-        page={route.page}
-        section={activeRouteSection}
-        settingsTab={route.settingsTab}
-        showPageBackButton={showRouteBackButton}
-        discussionTab={route.discussionTab}
-        courseSlug={courseSlug}
-        quizId={quizId}
-        assignmentId={assignmentId}
-        username={username}
-        couponId={couponId}
-        miniPlayerCourseId={resolveMiniPlayerCourseId({
-          presentation: playerPresentation,
-          persistentCourseRouteKey: persistentPlayer?.courseRouteKey,
-          persistentCourseSlug: persistentPlayer?.courseSlug,
-          persistentLessonPath: persistentPlayer?.lessonPath,
-          miniPlayerCourseSlug: learningMiniPlayer?.courseSlug,
-          miniPlayerLessonPath: learningMiniPlayer?.lessonPath,
-        })}
-        learningBackground={learningBackground}
-        learningOriginPage={learningOriginPage}
-        learningOriginSection={learningOriginSection}
-        learningMotionStageRef={learningMotionStageRef}
-        onNavigatePage={navigateTo}
-        onNavigateBack={navigateBackToOrigin}
-        onExitSettings={exitSettings}
-        onOpenCourse={openCourse}
-        renderMain={
-          route.kind === "learning"
-            ? ({ mobileBottomNavigation, mobileBottomNavigationHidden }) => (
-                <Outlet
-                  context={
-                    {
-                      mobileBottomNavigation,
-                      mobileBottomNavigationHidden,
-                      navigateTo,
-                      onLearningPlayerMinimizeGestureChange:
-                        handleLearningPlayerMinimizeGestureChange,
-                      onMiniPlayerRestoreReady: closeLearningMiniPlayer,
-                      openLearningMiniPlayer,
-                      persistentPlayerMounted: Boolean(persistentPlayer),
-                      registerPersistentPlayer,
-                    } satisfies AcademyOutletContext
-                  }
-                />
-              )
-            : null
-        }
-      />
-      {persistentPlayer ? (
-        <Suspense fallback={null}>
-          <PersistentLearningPlayerHost
-            player={persistentPlayer}
-            presentation={playerPresentation}
-            onClose={closeLearningMiniPlayer}
-            onRestore={restoreLearningMiniPlayer}
-            onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
-            onRetryMiniPlayerPlayback={retryPersistentMiniPlayerPlayback}
-            onOpenCourseOverview={openPersistentPlayerCourseOverview}
-          />
-        </Suspense>
-      ) : learningMiniPlayer ? (
-        <Suspense fallback={null}>
-          <LearningMiniPlayer
-            session={learningMiniPlayer}
-            onClose={closeLearningMiniPlayer}
-            onRestore={restoreLearningMiniPlayer}
-            onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
-          />
-        </Suspense>
-      ) : null}
+      <ProfileNavigationProvider value={navigateTo}>
+        <CoursesPage
+          cataloguePathname={location.pathname}
+          routeCatalogueEnrollmentFilter={getStudentCatalogueEnrollmentFilterFromPath(
+            learningBackground?.pathname ?? location.pathname,
+          )}
+          initialPublishedCoursePage={
+            staticCourseRouteData?.publishedCoursePage
+          }
+          initialPublishedCoursePageNeedsRefresh={
+            staticCourseRouteData?.publishedCoursePageNeedsRefresh
+          }
+          initialCourseCurriculum={staticCourseRouteData?.courseCurriculum}
+          initialGuestHomePage={staticCourseRouteData?.guestHomePage}
+          initialGuestHomeCopy={staticCourseRouteData?.guestHomeCopy}
+          page={route.page}
+          section={activeRouteSection}
+          settingsTab={route.settingsTab}
+          platformTab={route.platformTab}
+          analyticsTab={route.analyticsTab}
+          showPageBackButton={showRouteBackButton}
+          discussionTab={route.discussionTab}
+          courseSlug={courseSlug}
+          quizId={quizId}
+          assignmentId={assignmentId}
+          username={username}
+          couponId={couponId}
+          miniPlayerCourseId={resolveMiniPlayerCourseId({
+            presentation: playerPresentation,
+            persistentCourseRouteKey: persistentPlayer?.courseRouteKey,
+            persistentCourseSlug: persistentPlayer?.courseSlug,
+            persistentLessonPath: persistentPlayer?.lessonPath,
+            miniPlayerCourseSlug: learningMiniPlayer?.courseSlug,
+            miniPlayerLessonPath: learningMiniPlayer?.lessonPath,
+          })}
+          learningBackground={learningBackground}
+          learningOriginSection={learningOriginSection}
+          learningMotionStageRef={learningMotionStageRef}
+          onNavigatePage={navigateTo}
+          onNavigateBack={navigateBackToOrigin}
+          navigateBackSection={
+            lessonReturnPath
+              ? LESSON_RETURN_LABEL
+              : hasValidNavigationOrigin
+                ? (originSectionValue as string)
+                : undefined
+          }
+          onExitSettings={exitSettings}
+          onOpenCourse={openCourse}
+          renderMain={
+            route.kind === "learning"
+              ? ({ mobileBottomNavigation, mobileBottomNavigationHidden }) => (
+                  <Outlet
+                    context={
+                      {
+                        mobileBottomNavigation,
+                        mobileBottomNavigationHidden,
+                        navigateTo,
+                        onLearningPlayerMinimizeGestureChange:
+                          handleLearningPlayerMinimizeGestureChange,
+                        onMiniPlayerRestoreReady: closeLearningMiniPlayer,
+                        openLearningMiniPlayer,
+                        openCourseToUnlock,
+                        persistentPlayerMounted: Boolean(persistentPlayer),
+                        registerPersistentPlayer,
+                      } satisfies AcademyOutletContext
+                    }
+                  />
+                )
+              : null
+          }
+        />
+        {persistentPlayer ? (
+          <Suspense fallback={null}>
+            <PersistentLearningPlayerHost
+              player={persistentPlayer}
+              presentation={playerPresentation}
+              onClose={closeLearningMiniPlayer}
+              onRestore={restoreLearningMiniPlayer}
+              onSelectMiniPlayerLesson={selectPersistentMiniPlayerLesson}
+              onRetryMiniPlayerPlayback={retryPersistentMiniPlayerPlayback}
+              onOpenCourseOverview={openPersistentPlayerCourseOverview}
+            />
+          </Suspense>
+        ) : learningMiniPlayer ? (
+          <Suspense fallback={null}>
+            <LearningMiniPlayer
+              session={learningMiniPlayer}
+              onClose={closeLearningMiniPlayer}
+              onRestore={restoreLearningMiniPlayer}
+              onOpenCourseOverview={openStandaloneMiniPlayerCourseOverview}
+            />
+          </Suspense>
+        ) : null}
+        <LoginDialogHost />
+        <ProfilePreviewHost />
+      </ProfileNavigationProvider>
     </AcademyRouteGuard>
   );
 }

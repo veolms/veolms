@@ -5,7 +5,8 @@ import {
   useDebounceValue,
 } from "../hooks/useDebounce";
 import type { OrderHistoryItem } from "./orderHistoryData";
-import { useOrders } from "../services/orders";
+import { buildOrderHistoryListFilter } from "./orderHistoryQuery";
+import { useMyOrders } from "../services/orders";
 import { adaptOrderToOrderHistoryItem } from "../orders/orderAdapter";
 
 export interface UseOrderHistoryFilterReturn {
@@ -42,7 +43,8 @@ function getDateBounds(range: string): { from?: Date; to?: Date } {
   const now = new Date();
   if (range === "all") return {};
 
-  if (range === "2024" || range === "2025") {
+  // Any four-digit year the filter bar offers, not a fixed pair of years.
+  if (/^\d{4}$/.test(range)) {
     return {
       from: new Date(Number(range), 0, 1),
       to: new Date(Number(range), 11, 31, 23, 59, 59, 999),
@@ -79,14 +81,16 @@ export function useOrderHistoryFilter(
     () => getDateBounds(dateRangeFilter),
     [dateRangeFilter],
   );
+  // Status and search are answered by the server, over every purchase and
+  // not only the pages loaded so far.
   const queryParams = useMemo(
     () => ({
-      view: "student" as const,
       limit: 30,
       sortOrder,
       ...dateBounds,
+      ...buildOrderHistoryListFilter(statusFilter, debouncedSearch),
     }),
-    [dateBounds, sortOrder],
+    [dateBounds, debouncedSearch, sortOrder, statusFilter],
   );
   const {
     data,
@@ -96,7 +100,7 @@ export function useOrderHistoryFilter(
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-  } = useOrders(queryParams);
+  } = useMyOrders(queryParams);
 
   const ordersList = useMemo(
     () =>
@@ -106,26 +110,17 @@ export function useOrderHistoryFilter(
     [data?.pages],
   );
 
-  const filteredOrders = useMemo(() => {
-    const search = debouncedSearch.toLocaleLowerCase();
-    return ordersList.filter((order) => {
-      if (statusFilter !== "all" && order.status !== statusFilter) return false;
-      if (
-        paymentMethodFilter !== "all" &&
-        order.payment.type !== paymentMethodFilter
-      ) {
-        return false;
-      }
-      if (!search) return true;
-      return [
-        order.orderNumber,
-        order.invoiceNumber,
-        order.courseTitle,
-        order.payment.brand,
-        order.payment.label,
-      ].some((value) => value.toLocaleLowerCase().includes(search));
-    });
-  }, [debouncedSearch, ordersList, paymentMethodFilter, statusFilter]);
+  // The payment method is the one filter the server does not take: it is
+  // applied here, to the purchases loaded so far.
+  const filteredOrders = useMemo(
+    () =>
+      paymentMethodFilter === "all"
+        ? ordersList
+        : ordersList.filter(
+            (order) => order.payment.type === paymentMethodFilter,
+          ),
+    [ordersList, paymentMethodFilter],
+  );
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);

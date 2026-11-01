@@ -1,27 +1,40 @@
 import type { OrderStatus } from "@veolms/contracts";
+import { formatMoney } from "@veolms/contracts/commerce/money";
 
-export const surfaceClass =
-  "rounded-[14px] sm:rounded-[22px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) text-(--text) shadow-(--card-shadow,var(--surface-depth-shadow))";
+import { elevatedCardClasses } from "../components/ElevatedCard";
+export const surfaceClass = `${elevatedCardClasses} text-(--text)`;
 
-export const insetClass =
-  "rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,color-mix(in_srgb,var(--surface-strong,var(--surface))_85%,var(--surface))) shadow-(--card-shadow,var(--surface-depth-shadow))";
+export const insetClass = elevatedCardClasses;
 
 export const inputClass =
   "h-9 sm:h-10 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 text-xs sm:text-sm text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20";
 
 /**
- * Formats an amount in paise (smallest currency unit) to standard currency string (e.g. ₹1,24,500 or ₹2,999).
+ * Formats an order, payment or refund amount for display. Every amount on an
+ * order response is in minor units (paise); the shared formatter does the
+ * conversion (e.g. 49900 → ₹499, 9950 → ₹99.50).
  */
 export function formatCurrency(
   amountInSmallestUnit: number,
   currency: string = "INR",
 ): string {
-  const value = Math.round(amountInSmallestUnit / 100);
-  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value);
+  return formatMoney(amountInSmallestUnit, { currency });
+}
+
+/**
+ * The symbol formatCurrency shows for a currency (₹ for INR, $ for USD), for
+ * labelling a field where an amount in that currency is typed.
+ */
+export function getCurrencySymbol(currency: string = "INR"): string {
+  const code = currency.toUpperCase();
+  return (
+    new Intl.NumberFormat(code === "INR" ? "en-IN" : "en-US", {
+      style: "currency",
+      currency: code,
+    })
+      .formatToParts(0)
+      .find((part) => part.type === "currency")?.value ?? code
+  );
 }
 
 /**

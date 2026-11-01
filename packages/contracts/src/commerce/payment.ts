@@ -1,10 +1,18 @@
 import { z } from "zod";
-import { orderStatusSchema, purchaseSchema } from "./order.ts";
+import { orderStatusSchema } from "./order.ts";
 import type {
   CreateGatewayRefundInput,
   GatewayRefundOutput,
   GatewayRefundDetails,
 } from "./refund.ts";
+
+/**
+ * How long a payment window stays open before it closes itself, in seconds.
+ * The web app passes it to the gateway's checkout; the API uses it to tell
+ * whether a gateway order it handed out may still be paid, and refuses to
+ * start a second payment for the same thing until it cannot.
+ */
+export const CHECKOUT_WINDOW_SECONDS = 600;
 
 export const paymentStatusSchema = z.enum([
   "initiated",
@@ -42,11 +50,18 @@ export const gatewayOrderDetailsSchema = z.strictObject({
 });
 export type GatewayOrderDetails = z.infer<typeof gatewayOrderDetailsSchema>;
 
+/**
+ * `gateway` is what the payment widget is opened with; it is null when there
+ * is nothing to pay (a free course, a 100% coupon) and the order is already
+ * complete.
+ */
 export const createCheckoutOrderResponseSchema = z.strictObject({
-  order: purchaseSchema,
+  order: z.strictObject({
+    id: z.uuid(),
+    status: orderStatusSchema,
+  }),
   gateway: z
     .strictObject({
-      provider: paymentProviderSchema,
       gatewayOrderId: z.string(),
       keyId: z.string().optional(),
       amount: z.number().int().nonnegative(),
@@ -57,6 +72,20 @@ export const createCheckoutOrderResponseSchema = z.strictObject({
 });
 export type CreateCheckoutOrderResponse = z.infer<
   typeof createCheckoutOrderResponseSchema
+>;
+/**
+ * The answer to the buyer closing the payment window. `released` is true
+ * when the order was cancelled and another checkout may start at once; false
+ * when it was left as it is because a payment for it may still arrive (the
+ * gateway has one in progress or captured, or could not be asked), or it
+ * had already ended.
+ */
+export const releaseCheckoutOrderResponseSchema = z.strictObject({
+  released: z.boolean(),
+  status: orderStatusSchema,
+});
+export type ReleaseCheckoutOrderResponse = z.infer<
+  typeof releaseCheckoutOrderResponseSchema
 >;
 export const createPurchaseResponseSchema = createCheckoutOrderResponseSchema;
 export type CreatePurchaseResponse = CreateCheckoutOrderResponse;
@@ -115,17 +144,14 @@ export type VerifyPurchaseRequest = VerifyPaymentRequest;
 
 export const verifyPaymentResponseSchema = z.strictObject({
   verified: z.boolean(),
-  orderId: z.uuid(),
   orderStatus: orderStatusSchema,
-  paymentStatus: paymentStatusSchema,
-  message: z.string().optional(),
 });
 export type VerifyPaymentResponse = z.infer<typeof verifyPaymentResponseSchema>;
 
 export const creatorPaymentConfigSchema = z.strictObject({
   id: z.uuid(),
-  creatorId: z.uuid(),
   provider: paymentProviderSchema,
+  /** Masked for display (a short prefix and the last 4 characters). */
   keyId: z.string(),
   hasWebhookSecret: z.boolean(),
   isActive: z.boolean(),
@@ -144,10 +170,15 @@ export type SaveCreatorPaymentConfigRequest = z.infer<
   typeof saveCreatorPaymentConfigRequestSchema
 >;
 
+/**
+ * `withdrawn`: the buyer took the report back before staff answered it.
+ * It no longer waits for review and no longer stops another payment.
+ */
 export const manualPaymentStatusSchema = z.enum([
   "pending",
   "verified",
   "rejected",
+  "withdrawn",
 ]);
 export type ManualPaymentStatus = z.infer<typeof manualPaymentStatusSchema>;
 
@@ -166,6 +197,24 @@ export const manualPaymentRequestSchema = z.strictObject({
   updatedAt: z.string().or(z.date()),
 });
 export type ManualPaymentRequest = z.infer<typeof manualPaymentRequestSchema>;
+
+/**
+ * A manual payment as the learner who submitted it sees it: no reviewer
+ * identity and no internal review notes.
+ */
+export const learnerManualPaymentRequestSchema = z.strictObject({
+  id: z.uuid(),
+  orderId: z.uuid(),
+  paymentMethod: z.string(),
+  transactionReference: z.string(),
+  proofMediaId: z.uuid().nullable(),
+  status: manualPaymentStatusSchema,
+  createdAt: z.string().or(z.date()),
+  updatedAt: z.string().or(z.date()),
+});
+export type LearnerManualPaymentRequest = z.infer<
+  typeof learnerManualPaymentRequestSchema
+>;
 
 export const submitManualPaymentRequestSchema = z.strictObject({
   paymentMethod: z.enum(["upi", "bank_transfer"]).default("upi"),

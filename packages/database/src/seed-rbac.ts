@@ -57,6 +57,13 @@ export const SYSTEM_ROLES = {
     description: "Read-only analytics across courses and revenue",
     is_system: true,
   },
+  veolms_team: {
+    id: "00000000-0000-4000-8000-00000000000a",
+    name: "VeoLMS Team",
+    description:
+      "The in-house team: sees everything read-only, except revenue and orders",
+    is_system: true,
+  },
 } as const;
 
 export const ROLES = {
@@ -99,6 +106,11 @@ export const STANDARD_FEATURES = [
   {
     feature_key: "advanced_analytics",
     description: "Advanced reporting and analytics",
+    enabled: true,
+  },
+  {
+    feature_key: "team_custom_roles",
+    description: "Custom team roles built from permissions",
     enabled: true,
   },
 ] as const;
@@ -147,6 +159,7 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "discussion.read",
     "discussion.moderate",
     "analytics.course.read",
+    "analytics.overview.read",
     "certificate.issue",
   ],
   content_editor: [
@@ -162,6 +175,8 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "lesson.video.update",
     "lesson.thumbnail.update",
     "lesson.reorder",
+    // Publishing a lesson used to come with editing its details.
+    "lesson.publish",
     "quiz.read",
     "quiz.create",
     "quiz.settings.update",
@@ -176,9 +191,16 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "lesson.read",
     "lesson.thumbnail.update",
   ],
+  // Course routes check these platform-wide; the course services still
+  // limit an instructor to the courses they own.
   instructor: [
     "course.read",
     "course.preview",
+    "course.create",
+    "course.publish",
+    "course.unpublish",
+    "course.archive",
+    "course.delete",
     "course.details.update",
     "course.thumbnail.update",
     "course.pricing.update",
@@ -190,11 +212,14 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "lesson.video.update",
     "lesson.thumbnail.update",
     "lesson.reorder",
+    "lesson.publish",
+    "lesson.delete",
     "quiz.read",
     "quiz.create",
     "quiz.settings.update",
     "quiz.questions.manage",
     "quiz.publish",
+    "quiz.delete",
     "assignment.read",
     "assignment.create",
     "assignment.update",
@@ -204,7 +229,13 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "discussion.read",
     "discussion.moderate",
     "analytics.course.read",
+    "analytics.overview.read",
     "certificate.issue",
+    // Scoped to their own courses by the services.
+    "student.read",
+    "coupon.read",
+    "coupon.manage",
+    "enrollment.read",
   ],
   teaching_assistant: [
     "course.read",
@@ -225,8 +256,33 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
   ],
   analytics_viewer: [
     "analytics.course.read",
+    "analytics.overview.read",
     "analytics.revenue.read",
+    "analytics.learning.read",
+    "analytics.learners.read",
+    "analytics.conversion.read",
+    "analytics.delivery.read",
+    "analytics.storage.read",
+    "analytics.video_quality.read",
     "course.read",
+  ],
+  // Every read-only key but money: no revenue analytics, no orders. Kept
+  // equal to migration 20261028160000 by hand.
+  veolms_team: [
+    "course.read",
+    "course.preview",
+    "lesson.read",
+    "quiz.read",
+    "submission.read",
+    "student.read",
+    "enrollment.read",
+    "discussion.read",
+    "analytics.course.read",
+    "analytics.overview.read",
+    "coupon.read",
+    "platform.settings.read",
+    "team.read",
+    "role.read",
   ],
   student: [], // Student content access is governed by active course enrollments, not administrative roles
 };
@@ -655,6 +711,8 @@ export const ROLE_MENU_PERMISSIONS: Record<
       canDelete: false,
     },
   ],
+  // The web builds its sidebar from permissions; these menus are legacy.
+  veolms_team: [],
 };
 
 export async function seedRolesAndPermissions(
@@ -666,9 +724,10 @@ export async function seedRolesAndPermissions(
       .insertInto("features")
       .values(feature)
       .onConflict((conflict) =>
+        // `enabled` is the default for a new academy only: re-running the
+        // seed must not undo a feature an admin switched on or off.
         conflict.column("feature_key").doUpdateSet({
           description: feature.description,
-          enabled: feature.enabled,
         }),
       )
       .execute();
@@ -706,6 +765,7 @@ export async function seedRolesAndPermissions(
     .execute();
 
   for (const role of Object.values(SYSTEM_ROLES)) {
+    const ownCoursesOnly = role.id === SYSTEM_ROLES.instructor.id;
     await database
       .insertInto("roles")
       .values({
@@ -713,12 +773,14 @@ export async function seedRolesAndPermissions(
         name: role.name,
         description: role.description,
         is_system: true,
+        own_courses_only: ownCoursesOnly,
       })
       .onConflict((conflict) =>
         conflict.column("id").doUpdateSet({
           name: role.name,
           description: role.description,
           is_system: true,
+          own_courses_only: ownCoursesOnly,
           updated_at: new Date(),
         }),
       )

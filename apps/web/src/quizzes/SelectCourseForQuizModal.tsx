@@ -9,6 +9,7 @@ import { XIcon as X } from "@phosphor-icons/react/X";
 import { useMyCourses } from "../services/courses";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 
 export interface SelectCourseForQuizModalProps {
   isOpen: boolean;
@@ -90,13 +91,15 @@ export function SelectCourseForQuizModal({
     };
   }, [isOpen, dismissModal]);
 
-  const rawCourses = coursesQuery.data?.courses ?? [];
+  const rawCourses = useMemo(
+    () => coursesQuery.data?.courses ?? [],
+    [coursesQuery.data?.courses],
+  );
 
   const filteredCourses = useMemo(() => {
     if (!searchQuery.trim()) return rawCourses;
-    const lower = searchQuery.toLowerCase().trim();
     return rawCourses.filter((course) =>
-      course.title.toLowerCase().includes(lower),
+      fuzzyMatches(searchQuery, course.title),
     );
   }, [rawCourses, searchQuery]);
 
@@ -116,7 +119,7 @@ export function SelectCourseForQuizModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-4 animate-in fade-in duration-150"
       onClick={dismissModal}
       role="dialog"
       aria-modal="true"

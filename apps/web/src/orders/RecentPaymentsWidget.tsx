@@ -1,5 +1,6 @@
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import type { RecentPaymentItem } from "./ordersData";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface RecentPaymentsWidgetProps {
   payments: readonly RecentPaymentItem[];
@@ -13,10 +14,9 @@ export function RecentPaymentsWidget({
   onOpenBillingHistory,
 }: RecentPaymentsWidgetProps) {
   return (
-    <section
+    <ElevatedCard
       aria-labelledby="recent-payments-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="p-5 md:p-6 transition-all"
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -95,6 +95,6 @@ export function RecentPaymentsWidget({
           <CaretRight size={14} weight="bold" />
         </button>
       </div>
-    </section>
+    </ElevatedCard>
   );
 }

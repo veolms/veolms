@@ -12,6 +12,8 @@ import type {
   UserAvatarListResponse,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
+import { withOfflineFallback } from "../../lib/offline-data";
+import { readSessionCache, writeSessionCache } from "../../lib/session-cache";
 import { authStore } from "../../store/auth.store";
 import { authKeys } from "./auth.keys";
 import { authService } from "./auth.service";
@@ -22,7 +24,11 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
     queryKey: authKeys.me(),
     queryFn: async (): Promise<CurrentUserResponse> => {
       const generation = authStore.getWriteGeneration();
-      const profile = await authService.getMe();
+      // Offline, a plugin that keeps downloads may know who was signed in.
+      const profile = await withOfflineFallback(
+        () => authService.getMe(),
+        (offline) => offline.currentUser(),
+      );
 
       if (generation !== authStore.getWriteGeneration()) {
         // A logout/login write happened while this request was in flight.
@@ -34,7 +40,7 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
       }
 
       if (profile) {
-        authStore.setUser(profile);
+        authStore.setUser(profile, { refresh: true });
       } else {
         authStore.clearAuth();
         queryClient.removeQueries({ queryKey: authKeys.avatars() });
@@ -45,6 +51,9 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
     },
     staleTime: 5 * 60 * 1000,
     retry: false,
+    // Run once even when the browser reports no network, so the offline
+    // fallback above can answer instead of the query waiting forever.
+    networkMode: "offlineFirst" as const,
   };
 }
 
@@ -90,10 +99,33 @@ export function updatePublicProfileCacheFromUser(
   }
 }
 
+// The sign-in settings are the deployment's own (today, which Google client
+// to use) and the same for every visitor, so a tab asks for them once.
+const AUTH_CONFIG_SESSION_KEY = "veolms-auth-config:v1";
+const AUTH_CONFIG_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+function isAuthConfig(value: unknown): value is AuthConfigResponse {
+  if (!value || typeof value !== "object") return false;
+  const { googleClientId } = value as Record<string, unknown>;
+  return googleClientId === undefined || typeof googleClientId === "string";
+}
+
+async function loadAuthConfig(): Promise<AuthConfigResponse> {
+  const saved = readSessionCache(
+    AUTH_CONFIG_SESSION_KEY,
+    AUTH_CONFIG_SESSION_MAX_AGE_MS,
+    isAuthConfig,
+  );
+  if (saved) return saved.value;
+  const config = await authService.getAuthConfig();
+  writeSessionCache(AUTH_CONFIG_SESSION_KEY, config);
+  return config;
+}
+
 export function useAuthConfig() {
   return useQuery<AuthConfigResponse, ApiError>({
     queryKey: authKeys.config(),
-    queryFn: () => authService.getAuthConfig(),
+    queryFn: loadAuthConfig,
     staleTime: 5 * 60 * 1000,
     retry: false,
   });

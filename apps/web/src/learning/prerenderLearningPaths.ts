@@ -1,54 +1,48 @@
 import { getLessonSlug } from "./courseContent";
-import { CURRICULUM_LECTURE_COUNT_DEFAULT } from "./curriculumSize";
-
-export const PRERENDERED_LEARNING_COURSE_SLUGS = [
-  "backend-nodejs",
-  "complete-backend-development-with-nodejs",
-  "typescript-course",
-  "ultimate-typescript-course",
-  "ui-ux-design-mastery",
-  "mongodb-database-design",
-] as const;
+import { CURRICULUM_LECTURE_COUNT_MAX } from "./curriculumSize";
 
 export type LearningPrerenderScope = "none" | "first-section" | "all-lectures";
 
-interface CreateLearningPrerenderPathsOptions {
-  courseSlugs?: readonly string[];
-  scope: LearningPrerenderScope;
-}
-
-// Lesson routes are numbered (`lecture-N`) and their content is loaded from
-// the API at runtime, so prerendering only needs the route shells.
+/** The lessons of each course a quick build (`first-section`) is built with. */
 const FIRST_SECTION_LECTURE_COUNT = 5;
 
-const getLectureIds = (scope: Exclude<LearningPrerenderScope, "none">) =>
-  Array.from(
-    {
-      length:
-        scope === "all-lectures"
-          ? CURRICULUM_LECTURE_COUNT_DEFAULT
-          : FIRST_SECTION_LECTURE_COUNT,
-    },
-    (_, index) => index + 1,
-  );
+export interface PrerenderedLearningCourse {
+  slug: string;
+  /** How many lessons its public curriculum numbers. */
+  lessonCount: number;
+}
 
+/**
+ * The lesson pages a build writes: every lesson of every course in the
+ * catalogue (`all-lectures`), each built with its own lesson (see
+ * `LessonPageSeed`), or the first few of each for a quicker local build.
+ * `/learn/<course>` (the lesson last opened) is built too, without a
+ * lesson of its own.
+ */
 export const createLearningPrerenderPaths = ({
-  courseSlugs = PRERENDERED_LEARNING_COURSE_SLUGS,
+  courses,
   scope,
-}: CreateLearningPrerenderPathsOptions) => {
-  // `none` skips every learning route, including the course player shells.
+}: {
+  courses: readonly PrerenderedLearningCourse[];
+  scope: LearningPrerenderScope;
+}) => {
   if (scope === "none") return [];
 
-  const lectureIds = getLectureIds(scope);
-
-  return courseSlugs.flatMap((courseSlug) => {
-    const encodedCourseSlug = encodeURIComponent(courseSlug);
-
+  return courses.flatMap(({ slug, lessonCount }) => {
+    const encodedCourseSlug = encodeURIComponent(slug);
+    // Lesson addresses go no higher than the router reads.
+    const count = Math.min(
+      lessonCount,
+      scope === "all-lectures"
+        ? CURRICULUM_LECTURE_COUNT_MAX
+        : FIRST_SECTION_LECTURE_COUNT,
+    );
     return [
       `/learn/${encodedCourseSlug}`,
-      ...lectureIds.map(
-        (lessonId) =>
-          `/learn/${encodedCourseSlug}/${encodeURIComponent(getLessonSlug(lessonId))}`,
+      ...Array.from(
+        { length: count },
+        (_, index) =>
+          `/learn/${encodedCourseSlug}/${encodeURIComponent(getLessonSlug(index + 1))}`,
       ),
     ];
   });

@@ -1,7 +1,19 @@
-import { useLayoutEffect, type ReactNode } from "react";
-import { Links, Meta, Outlet, Scripts, useLocation } from "react-router";
+import { OctopusIllustration } from "./components/OctopusIllustration";
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
+import {
+  isRouteErrorResponse,
+  Links,
+  Meta,
+  Outlet,
+  PrefetchPageLinks,
+  Scripts,
+  useLocation,
+  useMatches,
+  useRouteError,
+} from "react-router";
 import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
+import { useTruncatedTextTitles } from "./shell/useTruncatedTextTitles";
 import { appBaseStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
@@ -16,9 +28,22 @@ import {
   getEarlyHlsPreloadInlineScript,
 } from "./learning/learningHlsBootstrap";
 import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackBootstrap";
+import {
+  installChunkReloadHandler,
+  isChunkLoadError,
+  reloadOnceForNewBuild,
+} from "./lib/chunk-reload";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getSessionPresenceBootstrapScript } from "./store/sessionPresence";
+import { getProfileHintBootstrapScript } from "./shell/profileHintEarlyState";
+import { getNavigationOriginBootstrapScript } from "./routing/navigationOriginEarlyState";
+import { getCourseCardsEarlyStateBootstrapScript } from "./courses/courseCardEarlyState";
+import { getLearnerStartedBootstrapScript } from "./home/learner/learnerCoursesSubtitle";
+import { getHomeHintBootstrapScript } from "./store/homeHint";
+import { getLearnerHomeSnapshotBootstrapScript } from "./home/learner/learnerHomeSnapshot";
+import { getPlaybackBootstrapHeadStartScript } from "./learning/playbackBootstrapHeadStart";
+import { getApiBaseUrl } from "./lib/api-client";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
   getControlRadiusBootstrapScript,
@@ -33,8 +58,23 @@ import {
   getSidebarPresentationBootstrapScript,
   getSidebarShellBootstrapScript,
 } from "./shell/sidebarPreferences";
-import { getAcademyPaletteStylesheetBootstrapScript } from "./shell/academyPaletteStyles";
+import {
+  defaultAcademyPaletteStyles,
+  getAcademyPaletteStylesheetBootstrapScript,
+} from "./shell/academyPaletteStyles";
+import { AuthPageFrame } from "./auth/AuthPageFrame";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
+import { DeviceLimitHost } from "./auth/DeviceLimitHost";
+import { AnalyticsPageViews } from "./lib/AnalyticsPageViews";
+import { AnalyticsIdentity } from "./lib/AnalyticsIdentity";
+import {
+  OAUTH_REDIRECT_RESULT_STORAGE_KEY,
+  getOauthDialogReturnScript,
+} from "./auth/oauthFlow";
+import { getLoginDialogSnapshotScript } from "./auth/loginDialogSnapshot";
+import { getOauthPopupHandoffScript } from "./auth/oauthPopup";
+import { AppLoadingScreen } from "./bootstrap/AppLoadingScreen";
+import { getAppearanceBootstrapScript } from "./store/appearanceDefaults";
 import {
   ACADEMY_THEME_VERSION,
   DEFAULT_ACADEMY_THEME,
@@ -45,7 +85,6 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-const academyThemeIds = JSON.stringify(academyThemes.map(({ id }) => id));
 const videoPlaybackCdnOrigin = getVideoPlaybackCdnOrigin();
 // The API lives on its own origin in deployed builds. Opening that connection
 // while the document loads keeps the first API request (the session check)
@@ -60,8 +99,13 @@ const apiOrigin = (() => {
     return null;
   }
 })();
-const getAppearanceBootstrapScript = () =>
-  `(()=>{const r=document.documentElement,p=${academyThemeIds};try{const t=localStorage.getItem("veolms-theme")||"dark";r.dataset.theme=t==="device"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t==="light"?"light":"dark"}catch{}try{const e=localStorage.getItem("veolms-randomize-academy-theme")==="true",s=sessionStorage.getItem("veolms-session-academy-theme"),l=localStorage.getItem("veolms-academy-theme"),c=localStorage.getItem("veolms-academy-theme-version")===${JSON.stringify(ACADEMY_THEME_VERSION)},v=e&&p.includes(s||"")?s:c&&p.includes(l||"")?l:${JSON.stringify(DEFAULT_ACADEMY_THEME)};r.dataset.palette=v}catch{}})();`;
+// The visitor's own light/dark mode and colour theme, or the academy's
+// defaults (Platform > Appearance), before the first paint.
+const appearanceBootstrapScript = getAppearanceBootstrapScript({
+  themeIds: academyThemes.map(({ id }) => id),
+  firstThemeId: DEFAULT_ACADEMY_THEME,
+  themeVersion: ACADEMY_THEME_VERSION,
+});
 
 const DEFAULT_ROOT_ATTRIBUTES: Record<string, string> = {
   lang: "en",
@@ -206,6 +250,11 @@ export function Layout({ children }: LayoutProps) {
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
+        {/* Lets the app be installed and opened with no browser bars, with
+            the status bar kept and the back button left to navigate. */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="apple-touch-icon" href="/static/app-icon-192.png" />
         {videoPlaybackCdnOrigin ? (
           <link
             rel="preconnect"
@@ -224,10 +273,15 @@ export function Layout({ children }: LayoutProps) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `${getSessionPresenceBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
+            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
           }}
         />
         <Meta />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: getPlaybackBootstrapHeadStartScript(getApiBaseUrl()),
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: getEarlyHlsPreloadInlineScript(
@@ -236,7 +290,7 @@ export function Layout({ children }: LayoutProps) {
           }}
         />
         <script
-          dangerouslySetInnerHTML={{ __html: getAppearanceBootstrapScript() }}
+          dangerouslySetInnerHTML={{ __html: appearanceBootstrapScript }}
         />
         <script
           dangerouslySetInnerHTML={{ __html: getReadingModeBootstrapScript() }}
@@ -265,12 +319,29 @@ export function Layout({ children }: LayoutProps) {
           </>
         ) : null}
         <link rel="stylesheet" href={appBaseStylesheet} />
+        <link
+          rel="stylesheet"
+          href={defaultAcademyPaletteStyles.dark}
+          data-academy-palette-style={DEFAULT_ACADEMY_THEME}
+          data-academy-palette-mode="dark"
+        />
+        <link
+          rel="stylesheet"
+          href={defaultAcademyPaletteStyles.light}
+          data-academy-palette-style={DEFAULT_ACADEMY_THEME}
+          data-academy-palette-mode="light"
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: getAcademyPaletteStylesheetBootstrapScript(),
           }}
         />
         <Links />
+        {/* The login address only ever leads on to a page with the login
+            pop-up over it, the home page for most visitors. Its code is
+            asked for with this document, so it is loading while the session
+            check is still out, not only after the check has answered. */}
+        {pathname === "/login" ? <PrefetchPageLinks page="/" /> : null}
       </head>
       <body {...initialLayoutDomState.bodyAttributes}>
         <div id="root">{children}</div>
@@ -291,7 +362,12 @@ export const meta = () => [
 ];
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  if (process.env.VEO_REACT_ROUTER_BUILD !== "true") return null;
+  if (process.env.VEO_REACT_ROUTER_BUILD !== "true") {
+    if (!import.meta.env.DEV) return null;
+    const { loadDevelopmentHomePageData } =
+      await import("./routes/academyStaticPageData");
+    return loadDevelopmentHomePageData(request);
+  }
 
   const { loadAcademyStaticPageData } =
     await import("./routes/academyStaticPageData");
@@ -299,6 +375,19 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export function HydrateFallback() {
+  const matches = useMatches();
+  // The auth pages (login, register, two-factor setup, OAuth callback) show
+  // their frame with the loading card while the session check is out, so
+  // they do not paint an empty canvas. The auth layout cannot export this
+  // itself: React Router allows HydrateFallback only on the root route
+  // while the dev server runs without prerendering.
+  if (matches.some(({ id }) => id === "auth-layout")) {
+    return (
+      <AuthPageFrame>
+        <AppLoadingScreen variant="embedded" />
+      </AuthPageFrame>
+    );
+  }
   // Wait for the academy route to mount before rendering its page-level
   // loading state. A root-level skeleton would cover the real sidebar/layout.
   return <div aria-hidden="true" className="min-h-dvh bg-(--canvas)" />;
@@ -320,8 +409,10 @@ function HydrationMarker() {
     }
     root.dataset.appHydrated = "true";
     const removeTabFocusListeners = installTabFocusVisibility(root);
+    const removeChunkReloadHandler = installChunkReloadHandler();
 
     return () => {
+      removeChunkReloadHandler();
       removeTabFocusListeners();
       root.dataset.appHydrated = "false";
       root.dataset.tabNavigation = "false";
@@ -330,12 +421,73 @@ function HydrationMarker() {
   return null;
 }
 
+/**
+ * Shown in place of the app when a screen throws while rendering, instead
+ * of the router's bare default error page. A failure to load a screen's
+ * files — a tab left open across a deploy — reloads once for the new build.
+ */
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const isStaleBuild = isChunkLoadError(error);
+
+  useEffect(() => {
+    if (isStaleBuild) reloadOnceForNewBuild();
+  }, [isStaleBuild]);
+
+  const isNotFound = isRouteErrorResponse(error) && error.status === 404;
+  const title = isNotFound
+    ? "Page not found"
+    : isStaleBuild
+      ? "A new version is available"
+      : "Something went wrong";
+  const message = isNotFound
+    ? "The page you were looking for does not exist or has moved."
+    : isStaleBuild
+      ? "This tab was open during an update. Reload to continue."
+      : "This screen could not be shown. Reloading usually fixes it; your saved work is not affected.";
+
+  return (
+    <main className="grid min-h-dvh place-items-center bg-(--canvas) px-6 text-(--text)">
+      <div className="max-w-md text-center">
+        {isStaleBuild ? null : (
+          <OctopusIllustration
+            kind={isNotFound ? "not-found" : "went-wrong"}
+            className="mx-auto mb-6 h-36 w-auto"
+          />
+        )}
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <p className="mt-2 text-sm text-(--muted)">{message}</p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          >
+            Reload
+          </button>
+          <a
+            href="/"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] px-4 text-sm font-semibold text-(--text) hover:bg-(--hover)"
+          >
+            Go to home
+          </a>
+        </div>
+      </div>
+    </main>
+  );
+}
+
 export default function Root() {
+  // Whatever the app cuts off with an ellipsis shows in full on hover.
+  useTruncatedTextTitles();
   return (
     <QueryProvider>
       <HydrationMarker />
       <SessionInitializer>
         <GlobalGoogleOneTap />
+        <DeviceLimitHost />
+        <AnalyticsPageViews />
+        <AnalyticsIdentity />
         <Outlet />
       </SessionInitializer>
     </QueryProvider>

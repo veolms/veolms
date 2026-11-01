@@ -13,6 +13,7 @@ import {
   setSessionCookie,
 } from "../shared/auth.cookies.ts";
 import { presentLogin } from "../shared/auth.presenters.ts";
+import { requestLocation } from "../shared/request-location.ts";
 
 export function createOauthController(context: AuthContext) {
   const { oauthService } = context;
@@ -24,9 +25,10 @@ export function createOauthController(context: AuthContext) {
     const result = oauthService.createAuthorizationUrl(
       request.body.provider,
       request.body.redirectUri,
+      request.log,
     );
     setOauthStateCookie(reply, result.cookie);
-    return { url: result.url, state: result.state };
+    return { url: result.url };
   }
 
   async function login(
@@ -37,12 +39,14 @@ export function createOauthController(context: AuthContext) {
       request.body,
       request.cookies[oauthService.oauthStateCookieName],
       () => clearOauthStateCookie(reply),
+      request.log,
     );
 
     const existingSessionToken = request.cookies["veolms-session"] ?? null;
     const result = await oauthService.login(request.body.provider, callback, {
       ip: request.ip,
       userAgent: request.headers["user-agent"] ?? null,
+      location: requestLocation(request.headers),
       existingSessionToken,
     });
 
@@ -60,6 +64,7 @@ export function createOauthController(context: AuthContext) {
       {
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
+        location: requestLocation(request.headers),
         existingSessionToken,
       },
     );
@@ -76,12 +81,14 @@ export function createOauthController(context: AuthContext) {
       request.body,
       request.cookies[oauthService.oauthStateCookieName],
       () => clearOauthStateCookie(reply),
+      request.log,
     );
 
     const existingSessionToken = request.cookies["veolms-session"] ?? null;
     const result = await oauthService.register(request.body, callback, {
       ip: request.ip,
       userAgent: request.headers["user-agent"] ?? null,
+      location: requestLocation(request.headers),
       existingSessionToken,
     });
 

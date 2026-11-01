@@ -45,6 +45,13 @@ export function createMfaController(context: AuthContext) {
     });
   }
 
+  async function regenerateBackupCodes(request: FastifyRequest) {
+    return mfaService.regenerateBackupCodes(
+      request.user!.id,
+      request.session!.mfa_verified,
+    );
+  }
+
   async function disableTotp(request: FastifyRequest) {
     return mfaService.disableTotp(request.user!, request.session!.mfa_verified);
   }
@@ -83,6 +90,7 @@ export function createMfaController(context: AuthContext) {
       userId: request.user!.id,
       sessionId: request.session!.id,
       response: request.body.response,
+      logger: request.log,
     });
   }
 
@@ -102,12 +110,14 @@ export function createMfaController(context: AuthContext) {
       userId: request.user!.id,
       sessionId: request.session!.id,
       response: request.body.response,
+      logger: request.log,
     });
   }
 
   return {
     setupTotp,
     enableTotp,
+    regenerateBackupCodes,
     disableTotp,
     deletePasskeys,
     verifyTotp,

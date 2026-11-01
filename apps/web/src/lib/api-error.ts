@@ -54,7 +54,27 @@ function getSafeApiMessage(status: number, code: string, message: string) {
     : message || GENERIC_API_ERROR_MESSAGE;
 }
 
+/**
+ * The API client already rejects with a normalised `ApiError`. A caller that
+ * passes that rejection through `getApiError` again must get it back as is;
+ * treating it as an unknown value replaced its code and message with the
+ * generic ones.
+ */
+function isNormalisedApiError(error: unknown): error is ApiError {
+  if (typeof error !== "object" || error === null || error instanceof Error) {
+    return false;
+  }
+  const candidate = error as Partial<ApiError>;
+  return (
+    typeof candidate.status === "number" &&
+    typeof candidate.code === "string" &&
+    typeof candidate.message === "string"
+  );
+}
+
 export function getApiError(error: unknown): ApiError {
+  if (isNormalisedApiError(error)) return error;
+
   if (isHttpClientError(error)) {
     const data = error.response?.data;
     const status = error.response?.status || 500;

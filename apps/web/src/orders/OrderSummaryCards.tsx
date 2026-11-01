@@ -6,6 +6,7 @@ import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/Shopping
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { formatCurrency, formatNumber } from "./orderHelpers";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface OrderSummaryCardsProps {
   stats: OrderStatsResponse | undefined;
@@ -55,40 +56,49 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
         : "₹0",
       icon: <ArrowCounterClockwise size={16} weight="bold" />,
       iconBg: "bg-rose-500/15 text-rose-400",
+      // Left out until five fit in a row, so the rest stay 2 x 2 or 4
+      // across.
+      wideOnly: true,
     },
   ];
 
   return (
-    <section
-      aria-label="Order Performance Summary"
-      className="grid grid-cols-2 gap-2 sm:gap-3.5 md:grid-cols-3 xl:grid-cols-5"
-    >
-      {cards.map((card) => (
-        <article
-          key={card.id}
-          className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-2.5 sm:p-5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
-          style={{ boxShadow: "var(--card-shadow)" }}
-        >
-          <div className="flex items-center justify-between gap-1 sm:gap-2">
-            <p className="text-[0.68rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
-              {card.title}
-            </p>
-            <span
-              className={`flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg ${card.iconBg}`}
-              aria-hidden="true"
-            >
-              {card.icon}
-            </span>
-          </div>
-          {isLoading ? (
-            <div className="mt-2 h-6 w-16 animate-pulse rounded-md bg-(--border)" />
-          ) : (
-            <p className="mt-1 sm:mt-2.5 text-lg sm:text-[1.75rem] font-bold tracking-tight text-(--text)">
-              {card.value}
-            </p>
-          )}
-        </article>
-      ))}
-    </section>
+    // Sized by the room the list has (the order panel narrows it), not by
+    // the window.
+    <div className="@container">
+      <section
+        aria-label="Order Performance Summary"
+        className="grid grid-cols-2 gap-2 @lg:gap-3 @3xl:grid-cols-4 @6xl:grid-cols-5 @6xl:gap-3.5"
+      >
+        {cards.map((card) => (
+          <ElevatedCard
+            as="article"
+            key={card.id}
+            className={`min-w-0 p-3 transition-all duration-200 @lg:p-4 @6xl:p-5 ${
+              card.wideOnly ? "hidden @6xl:block" : ""
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="truncate text-[0.6875rem] font-semibold tracking-wide text-(--muted) @lg:text-xs">
+                {card.title}
+              </p>
+              <span
+                className={`flex size-6 shrink-0 items-center justify-center rounded-lg @lg:size-7 ${card.iconBg}`}
+                aria-hidden="true"
+              >
+                {card.icon}
+              </span>
+            </div>
+            {isLoading ? (
+              <div className="mt-2 h-6 w-16 animate-pulse rounded-md bg-(--border)" />
+            ) : (
+              <p className="mt-1.5 truncate text-lg font-bold tracking-tight text-(--text) tabular-nums @lg:mt-2 @lg:text-xl @5xl:text-2xl @6xl:text-[1.75rem]">
+                {card.value}
+              </p>
+            )}
+          </ElevatedCard>
+        ))}
+      </section>
+    </div>
   );
 });

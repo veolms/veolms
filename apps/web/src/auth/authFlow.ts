@@ -1,4 +1,4 @@
-import { otpVerifyRequestSchema } from "@veolms/contracts";
+import { otpVerifyRequestSchema } from "@veolms/contracts/auth/user";
 import {
   DEFAULT_COUNTRY_ID,
   findCountry,
@@ -123,7 +123,13 @@ export const OTP_ACTION_LABELS = {
   changeMobile: "Change mobile number",
 } as const;
 
-export const RESEND_COOLDOWN_SECONDS = 60;
+/**
+ * How long the API makes a visitor wait between two codes. Filled in from
+ * OTP_RESEND_COOLDOWN_SECONDS when the app is built or served, so the
+ * countdown and the API never disagree.
+ */
+export const RESEND_COOLDOWN_SECONDS: number =
+  Number(import.meta.env.OTP_RESEND_COOLDOWN_SECONDS) || 60;
 
 export function formatResendCountdown(seconds: number): string {
   return `${Math.max(0, seconds)}s`;
@@ -201,7 +207,12 @@ export type AuthFlowAction =
   | { readonly type: "CHANGE_OTP_CODE"; readonly code: string }
   | { readonly type: "SUBMIT_OTP" }
   | { readonly type: "OTP_REJECTED"; readonly reason: OtpFailureReason }
-  | { readonly type: "OTP_VERIFIED"; readonly next: OtpVerifiedOutcome }
+  | {
+      readonly type: "OTP_VERIFIED";
+      readonly next: OtpVerifiedOutcome;
+      /** A name already typed on the name step, when returning to it. */
+      readonly name?: string;
+    }
   | { readonly type: "RESEND_OTP" }
   | { readonly type: "CHANGE_IDENTIFIER" }
   | { readonly type: "CHANGE_ACCOUNT_NAME"; readonly name: string }
@@ -209,6 +220,7 @@ export type AuthFlowAction =
   | { readonly type: "ACCOUNT_CREATED" }
   | { readonly type: "ACCOUNT_CREATED_REQUIRES_MFA" }
   | { readonly type: "ACCOUNT_CREATION_FAILED"; readonly message: string }
+  | { readonly type: "ACCOUNT_CODE_REJECTED" }
   | {
       readonly type: "CHANGE_TWO_FACTOR_METHOD";
       readonly method: TwoFactorMethod;
@@ -332,7 +344,7 @@ export function authFlowReducer(
       return {
         status: "newUserName",
         identifier: state.identifier,
-        name: "",
+        name: action.name ?? "",
         message: null,
       };
     }
@@ -385,6 +397,22 @@ export function authFlowReducer(
     action.type === "ACCOUNT_CREATION_FAILED"
   ) {
     return { ...state, status: "newUserName", message: action.message };
+  }
+
+  // A new user's code is first checked when the account is created. When it
+  // is the code that was refused, the name step has nothing to correct, so
+  // the flow returns to the code step, as "Re-enter verification code" does.
+  if (
+    state.status === "creatingAccount" &&
+    action.type === "ACCOUNT_CODE_REJECTED"
+  ) {
+    return {
+      status: "otp",
+      identifier: state.identifier,
+      code: "",
+      sendCount: 1,
+      failure: null,
+    };
   }
 
   if (isTwoFactorState(state) && action.type === "CHANGE_TWO_FACTOR_METHOD") {

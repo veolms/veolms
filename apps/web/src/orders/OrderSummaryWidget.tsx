@@ -5,6 +5,7 @@ import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { PlusCircleIcon as PlusCircle } from "@phosphor-icons/react/PlusCircle";
 import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
 import type { OrderSummaryMetrics, OrderTabId } from "./ordersData";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface OrderSummaryWidgetProps {
   summary: OrderSummaryMetrics;
@@ -54,10 +55,9 @@ export function OrderSummaryWidget({
   ];
 
   return (
-    <section
+    <ElevatedCard
       aria-labelledby="order-summary-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="p-5 md:p-6 transition-all"
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -133,6 +133,6 @@ export function OrderSummaryWidget({
           </svg>
         </div>
       </div>
-    </section>
+    </ElevatedCard>
   );
 }

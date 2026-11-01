@@ -7,6 +7,7 @@ import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import type { OrderItem, OrderStatus } from "./ordersData";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface OrderCardProps {
   order: OrderItem;
@@ -46,10 +47,10 @@ export function OrderCard({ order, onViewReceipt, setNotice }: OrderCardProps) {
   };
 
   return (
-    <article
+    <ElevatedCard
+      as="article"
       id={order.id}
-      className="group relative rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) p-4 md:p-5 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover))"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="group relative p-4 md:p-5 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover))"
     >
       <div className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between min-w-0">
         {/* Left: Badge + Course Title & Order ID */}
@@ -163,6 +164,6 @@ export function OrderCard({ order, onViewReceipt, setNotice }: OrderCardProps) {
           </div>
         </div>
       </div>
-    </article>
+    </ElevatedCard>
   );
 }

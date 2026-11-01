@@ -1,18 +1,27 @@
 import { z } from "zod";
 import {
   courseSchema,
+  courseBasicsAcceptedResponseSchema,
+  courseBasicsResponseSchema,
+  courseCreatedResponseSchema,
   courseListResponseSchema,
   courseListQuerySchema,
   courseOptionsResponseSchema,
   courseSlugParamsSchema,
   publicCourseSchema,
   createCourseRequestSchema,
+  creatorCoursesListResponseSchema,
   updateCourseBasicsRequestSchema,
   courseEditorDataResponseSchema,
   myCoursesListResponseSchema,
   courseOverviewSchema,
+  coursePublicCurriculumSchema,
+  lessonDescriptionParamsSchema,
+  lessonDescriptionResponseSchema,
   courseDeleteResponseSchema,
-  courseStaticPageRefreshStatusSchema,
+  courseStaticPageRefreshStatusResponseSchema,
+  heroVideoPlaybackSchema,
+  videoPlaybackTokenSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../../lib/errors.ts";
@@ -45,7 +54,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Current public page refresh status.",
-            courseStaticPageRefreshStatusSchema,
+            courseStaticPageRefreshStatusResponseSchema,
           ),
         },
       },
@@ -65,7 +74,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Queued public page refresh retry.",
-            courseStaticPageRefreshStatusSchema,
+            courseStaticPageRefreshStatusResponseSchema,
           ),
         },
       },
@@ -143,7 +152,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Available courses by this creator.",
-            myCoursesListResponseSchema,
+            creatorCoursesListResponseSchema,
           ),
           403: errorResponse("MFA step-up required."),
         },
@@ -220,6 +229,124 @@ const courseRoutes: RoutePlugin = async (app, options) => {
     controller.getCourseOverview,
   );
 
+  const trailerParams = z.object({
+    idOrSlug: z
+      .string()
+      .min(1)
+      .max(160)
+      .meta({ description: "Course UUID or URL-safe slug." }),
+  });
+  // Who may see the overview may play its trailer: everyone on a published
+  // course, those who manage it on a draft.
+  const trailerPreHandler = [
+    ctx.middleware.authenticate,
+    ctx.middleware.requireMfaVerifiedIfAuthenticated,
+  ];
+
+  app.get(
+    "/courses/:idOrSlug/trailer/playback",
+    {
+      schema: {
+        operationId: "getCourseTrailerPlayback",
+        tags: ["Courses"],
+        summary: "Get what is needed to stream a course's trailer",
+        params: trailerParams,
+        response: {
+          200: jsonResponse(
+            "The trailer's stream and segment token.",
+            heroVideoPlaybackSchema,
+          ),
+          404: errorResponse("No course, or the course has no trailer."),
+          409: errorResponse("The trailer is still being prepared."),
+        },
+      },
+      preHandler: trailerPreHandler,
+    },
+    controller.getCourseTrailerPlayback,
+  );
+
+  app.get(
+    "/courses/:idOrSlug/trailer/playback-token",
+    {
+      schema: {
+        operationId: "getCourseTrailerPlaybackToken",
+        tags: ["Courses"],
+        summary: "Renew the segment token of a course's trailer",
+        params: trailerParams,
+        response: {
+          200: jsonResponse("A fresh segment token.", videoPlaybackTokenSchema),
+          404: errorResponse("No course, or the course has no trailer."),
+          409: errorResponse("The trailer is still being prepared."),
+        },
+      },
+      preHandler: trailerPreHandler,
+    },
+    controller.getCourseTrailerPlaybackToken,
+  );
+
+  app.get(
+    "/courses/:idOrSlug/curriculum",
+    {
+      schema: {
+        operationId: "getCoursePublicCurriculum",
+        tags: ["Courses"],
+        summary: "Get a published course as every visitor sees it",
+        description:
+          "Returns what a published course's pages show everyone: its details, published curriculum, settings and what is included, " +
+          "the same for whoever asks and without the price (read it from `/courses/{idOrSlug}/access`). " +
+          "A lesson's text is included only where every visitor may read it, and attachments are counted but not named. " +
+          "`version` changes whenever any of it does. A course that is not published is not found, whoever asks. " +
+          "The course pages are built from this; a page that was built before the course last changed reads it again.",
+        params: z.object({
+          idOrSlug: z
+            .string()
+            .min(1)
+            .max(160)
+            .meta({ description: "Course UUID or URL-safe slug." }),
+        }),
+        response: {
+          200: jsonResponse(
+            "The course as every visitor sees it.",
+            coursePublicCurriculumSchema,
+          ),
+          404: errorResponse("No published course matches."),
+        },
+      },
+    },
+    controller.getPublicCurriculum,
+  );
+
+  app.get(
+    "/courses/:courseId/lessons/:lessonId/description",
+    {
+      schema: {
+        operationId: "getLessonDescription",
+        tags: ["Courses"],
+        summary: "Get one lesson's description",
+        description:
+          "Returns the description of a lesson the course overview lists for this viewer: a published lesson of a published course for anyone, and any lesson for the course's creator or an admin. Any other lesson is not found. A listed lesson is read by whoever may play it: a visitor who must sign in first gets 401, a learner without the course 403.",
+        params: lessonDescriptionParamsSchema,
+        response: {
+          200: jsonResponse(
+            "The lesson's description.",
+            lessonDescriptionResponseSchema,
+          ),
+          401: errorResponse("Sign in to read this lesson."),
+          404: errorResponse("No such course or lesson for this viewer."),
+          403: errorResponse(
+            "MFA step-up required, or the viewer does not have the course.",
+          ),
+        },
+      },
+      // The same optional session as the overview.
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getLessonDescription,
+  );
+
   // --- Course Authoring Basics ---
 
   app.post(
@@ -231,7 +358,10 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         summary: "Create a lightweight course draft",
         body: createCourseRequestSchema,
         response: {
-          201: jsonResponse("Course draft created", courseSchema),
+          201: jsonResponse(
+            "Course draft created",
+            courseCreatedResponseSchema,
+          ),
         },
       },
       preHandler: ctx.authorize("course.create", "platform"),
@@ -293,19 +423,13 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid() }),
         body: updateCourseBasicsRequestSchema,
         response: {
-          200: jsonResponse("Course basics updated", courseSchema),
+          200: jsonResponse(
+            "Course basics updated",
+            courseBasicsResponseSchema,
+          ),
           202: jsonResponse(
             "Video processing accepted",
-            z.object({
-              videoJobId: z.uuid(),
-              processingStatus: z.enum([
-                "queued",
-                "processing",
-                "completed",
-                "failed",
-              ]),
-              version: z.number().int(),
-            }),
+            courseBasicsAcceptedResponseSchema,
           ),
           409: errorResponse("Optimistic lock conflict"),
         },
@@ -332,11 +456,15 @@ const courseRoutes: RoutePlugin = async (app, options) => {
             .enum(["beginner", "intermediate", "advanced", "all_levels"])
             .optional(),
           categoryId: z.string().uuid().optional().nullable(),
+          // The course version the caller last read. When sent, the update
+          // is refused if the course has changed since.
+          version: z.number().int().positive().optional(),
         }),
         response: {
           200: jsonResponse("Course details updated", courseSchema),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
+          409: errorResponse("Optimistic lock conflict"),
         },
       },
       preHandler: ctx.authorize("course.details.update", "course"),
@@ -356,12 +484,14 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           .object({
             thumbnailUrl: z.string().url().max(2048),
             thumbnailMediaId: z.string().uuid().optional().nullable(),
+            version: z.number().int().positive().optional(),
           })
           .strict(),
         response: {
           200: jsonResponse("Course thumbnail updated", courseSchema),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
+          409: errorResponse("Optimistic lock conflict"),
         },
       },
       preHandler: ctx.authorize("course.thumbnail.update", "course"),

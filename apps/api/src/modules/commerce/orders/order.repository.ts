@@ -6,6 +6,23 @@ import type {
   OrderSortOrder,
 } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
+import { CHECKOUT_HAND_OUT_ATTEMPT_STATUS } from "../shared/open-orders.ts";
+import { escapeLikePattern } from "../../../lib/like-pattern.ts";
+import { SURPLUS_CAPTURE_ERROR_CODE } from "../payments/surplus-payment.ts";
+import { assignInvoiceNumber } from "../invoices/invoice.repository.ts";
+import { fuzzyMatchesAny } from "../../../lib/fuzzy-search.ts";
+
+/**
+ * Leaves out refunds of an extra payment (payments/extra-payment.ts) where
+ * an order's refunds are added up. That money was never part of what the
+ * order earned, so its going back is not a refund of the order. For a query
+ * that names the refunds table `r`.
+ */
+const notOfExtraPayment = sql`not exists (
+            select 1 from payments xp
+            where xp.id = r.payment_id
+              and xp.error_code = ${SURPLUS_CAPTURE_ERROR_CODE}
+          )`;
 
 export interface ListOrdersOptions {
   cursor?: OrderCursorPayload;
@@ -14,6 +31,8 @@ export interface ListOrdersOptions {
   courseId?: string;
   couponId?: string;
   status?: OrderStatus;
+  /** Any of these statuses; combined with `status` when both are given. */
+  statuses?: readonly OrderStatus[];
   from?: Date;
   to?: Date;
   sortOrder?: OrderSortOrder;
@@ -36,6 +55,11 @@ export interface OrderStatsRow {
   uniqueBuyers: number;
   /** Gross of successful orders only (excludes fully refunded / cancelled / failed). */
   grossPaid: number;
+  /**
+   * What the academy has kept from successful orders: an order's stored
+   * after-commission amount where it has one, otherwise its total less the
+   * refunds processed against it. See getOrderStatsByCurrency.
+   */
   totalEarnings: number;
   /** All processed refunds (Refunded Amount card). */
   refundedAmount: number;
@@ -116,6 +140,32 @@ export async function getOrderStatusFunnel(
   };
 }
 
+/**
+ * The order columns the application reads. The GST breakdown columns
+ * (`gstin`, `cgst_amount`, `sgst_amount`, `igst_amount`) are left out: nothing
+ * reads them.
+ */
+const orderColumns = [
+  "o.id",
+  "o.order_number",
+  "o.user_id",
+  "o.status",
+  "o.currency",
+  "o.subtotal_amount",
+  "o.discount_amount",
+  "o.tax_amount",
+  "o.total_amount",
+  "o.after_commission_amount",
+  "o.coupon_id",
+  "o.idempotency_key",
+  "o.expires_at",
+  "o.paid_at",
+  "o.invoice_number",
+  "o.invoice_pdf_key",
+  "o.created_at",
+  "o.updated_at",
+] as const;
+
 export async function findOrderById(
   database: Executor,
   orderId: string,
@@ -123,7 +173,7 @@ export async function findOrderById(
 ) {
   let query = database
     .selectFrom("orders as o")
-    .selectAll("o")
+    .select(orderColumns)
     .where("o.id", "=", orderId);
 
   if (scope && scope.type === "user") {
@@ -145,6 +195,7 @@ export async function listOrders(
     courseId,
     couponId,
     status,
+    statuses,
     from,
     to,
     sortOrder = "desc",
@@ -157,7 +208,22 @@ export async function listOrders(
   // value as text; it is bound back as `::timestamptz` in the seek below.
   let query = database
     .selectFrom("orders as o")
-    .selectAll("o")
+    .select([
+      "o.id",
+      "o.order_number",
+      "o.user_id",
+      "o.status",
+      "o.currency",
+      "o.subtotal_amount",
+      "o.discount_amount",
+      "o.tax_amount",
+      "o.total_amount",
+      "o.after_commission_amount",
+      "o.coupon_id",
+      "o.paid_at",
+      "o.invoice_number",
+      "o.created_at",
+    ])
     .select(
       sql<string>`to_char(o.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as(
         "created_at_cursor",
@@ -172,6 +238,9 @@ export async function listOrders(
   // 2. Status filter
   if (status) {
     query = query.where("o.status", "=", status);
+  }
+  if (statuses && statuses.length > 0) {
+    query = query.where("o.status", "in", [...statuses]);
   }
 
   // 3. Date range filters
@@ -198,15 +267,35 @@ export async function listOrders(
     query = query.where("o.coupon_id", "=", couponId);
   }
 
-  // 6. Search filter (order number for students, plus student details for admin)
+  // 6. Search filter. A learner's own list: order number, the invoice number
+  // a paid order was issued, and what was bought. Staff: order number,
+  // invoice number plus student details.
   if (search && search.trim()) {
-    const term = `%${search.trim()}%`;
+    // "%" and "_" mean "anything" to ILIKE, so a search for "100%" or "a_b"
+    // matched far more than was typed. They are escaped, with the escape
+    // character itself (backslash is ILIKE's default escape), as the other
+    // search screens do.
+    const term = `%${escapeLikePattern(search.trim())}%`;
     if (scope.type === "user") {
-      query = query.where(sql<boolean>`o.order_number ILIKE ${term}`);
+      query = query.where(
+        sql<boolean>`(
+          o.order_number ILIKE ${term}
+          OR o.invoice_number ILIKE ${term}
+          OR EXISTS (
+            SELECT 1 FROM order_items oi
+            WHERE oi.order_id = o.id
+              AND (
+                oi.title_snapshot ILIKE ${term}
+                OR ${fuzzyMatchesAny(search, [sql.ref("oi.title_snapshot")])}
+              )
+          )
+        )`,
+      );
     } else {
       query = query.where(
         sql<boolean>`(
           o.order_number ILIKE ${term}
+          OR o.invoice_number ILIKE ${term}
           OR EXISTS (
             SELECT 1 FROM users u
             WHERE u.id = o.user_id
@@ -214,6 +303,10 @@ export async function listOrders(
                 u.display_name ILIKE ${term}
                 OR u.username ILIKE ${term}
                 OR u.email ILIKE ${term}
+                OR ${fuzzyMatchesAny(search, [
+                  sql.ref("u.display_name"),
+                  sql.ref("u.username"),
+                ])}
               )
           )
         )`,
@@ -279,18 +372,38 @@ export async function getOrderStatsByCurrency(
         "gross_paid",
       ),
       // Creator earnings: successful only (matches TagMango Total Earnings).
-      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then coalesce(o.after_commission_amount, 0) else 0 end), 0)::bigint`.as(
-        "total_earnings",
+      //
+      // after_commission_amount is only present on orders that were
+      // imported with one; nothing in this codebase writes it, and there is
+      // no commission to take off an order placed here. Summing the column
+      // alone therefore showed 0 for every order placed here. An order
+      // without a stored amount now counts for what was received for it:
+      // its total, less the refunds processed against it. The two kinds are
+      // summed apart because the stored amount and refunds are minor units
+      // and the total is major (converted below, like gross_paid).
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then o.after_commission_amount else 0 end), 0)::bigint`.as(
+        "stored_earnings",
       ),
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') and o.after_commission_amount is null then o.total_amount else 0 end), 0)::bigint`.as(
+        "unstored_gross",
+      ),
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') and o.after_commission_amount is null then (
+        select coalesce(sum(r.amount), 0)
+        from refunds r
+        where r.order_id = o.id and r.status = 'processed'
+          and ${notOfExtraPayment}
+      ) else 0 end), 0)::bigint`.as("unstored_refunded"),
       sql<number>`coalesce(sum((
         select coalesce(sum(r.amount), 0)
         from refunds r
         where r.order_id = o.id and r.status = 'processed'
+          and ${notOfExtraPayment}
       )), 0)::bigint`.as("refunded_amount"),
       sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then (
         select coalesce(sum(r.amount), 0)
         from refunds r
         where r.order_id = o.id and r.status = 'processed'
+          and ${notOfExtraPayment}
       ) else 0 end), 0)::bigint`.as("refunded_against_paid"),
     ])
     .groupBy("o.currency")
@@ -333,8 +446,13 @@ export async function getOrderStatsByCurrency(
     currency: row.currency,
     totalOrders: Number(row.total_orders),
     uniqueBuyers: Number(row.unique_buyers),
+    // Every amount in this row is minor units, as stored.
     grossPaid: Number(row.gross_paid),
-    totalEarnings: Number(row.total_earnings),
+    // Never below zero: refunds cannot exceed what an order was paid, and
+    // the response does not allow a negative figure.
+    totalEarnings:
+      Number(row.stored_earnings) +
+      Math.max(0, Number(row.unstored_gross) - Number(row.unstored_refunded)),
     refundedAmount: Number(row.refunded_amount),
     refundedAgainstPaid: Number(row.refunded_against_paid),
   }));
@@ -364,6 +482,7 @@ export async function getRevenueTrend(
         select coalesce(sum(r.amount), 0)
         from refunds r
         where r.order_id = o.id and r.status = 'processed'
+          and ${notOfExtraPayment}
       ) else 0 end), 0)::bigint`.as("refunded_amount"),
     ])
     .where("o.currency", "=", filters.currency)
@@ -399,6 +518,7 @@ export async function getRevenueTrend(
   const rows = await query.execute();
   return rows.map((row) => ({
     date: row.date,
+    // Minor units, like the refunds subtracted from it.
     value: Number(row.gross_paid) - Number(row.refunded_amount),
   }));
 }
@@ -419,17 +539,6 @@ export async function findOrderByIdForUpdate(
     .executeTakeFirst();
 }
 
-export async function findOrderByOrderNumber(
-  database: Executor,
-  orderNumber: string,
-) {
-  return await database
-    .selectFrom("orders")
-    .selectAll()
-    .where("order_number", "=", orderNumber)
-    .executeTakeFirst();
-}
-
 export async function findOrderByIdempotencyKey(
   database: Executor,
   idempotencyKey: string,
@@ -438,6 +547,192 @@ export async function findOrderByIdempotencyKey(
     .selectFrom("orders")
     .selectAll()
     .where("idempotency_key", "=", idempotencyKey)
+    .executeTakeFirst();
+}
+
+/**
+ * Serializes one buyer's checkouts for the rest of the transaction, so two
+ * requests arriving together cannot both find no open order and each create
+ * one.
+ */
+export async function lockBuyerCheckout(
+  transaction: Executor,
+  userId: string,
+): Promise<void> {
+  await sql`select pg_advisory_xact_lock(hashtext(${`veolms:checkout:${userId}`}))`.execute(
+    transaction,
+  );
+}
+
+/**
+ * A buyer's orders that a payment may still arrive for, newest first:
+ *
+ *  - unpaid and not past their deadline;
+ *  - unpaid or expired, with a bank transfer reported since
+ *    `manualPaymentSince` and not yet answered by staff (verifying it pays
+ *    the order even after it expired). An older report still waits for
+ *    staff but no longer counts here: the buyer may pay another way;
+ *  - unpaid or expired, whose gateway order was handed to the buyer since
+ *    `handedOutSince`, so a payment window for it may still be open.
+ *
+ * `checkout_handed_out_at` is the last time the gateway order was returned
+ * to the buyer: every hand-out records a payment attempt. Attempts that
+ * record a failed or captured payment are not hand-outs.
+ */
+export async function listOrdersAwaitingPayment(
+  database: Executor,
+  input: {
+    userId: string;
+    now: Date;
+    handedOutSince: Date;
+    manualPaymentSince: Date;
+  },
+) {
+  return await database
+    .selectFrom("orders as o")
+    .selectAll("o")
+    .select((eb) => [
+      eb
+        .selectFrom("payment_attempts as a")
+        .innerJoin("payments as p", "p.id", "a.payment_id")
+        .select((sub) => sub.fn.max("a.created_at").as("at"))
+        .whereRef("p.order_id", "=", "o.id")
+        .where("p.gateway_provider", "not in", ["free", "manual"])
+        .where("a.status", "=", CHECKOUT_HAND_OUT_ATTEMPT_STATUS)
+        .as("checkout_handed_out_at"),
+      eb
+        .exists(
+          eb
+            .selectFrom("manual_payment_requests as m")
+            .select("m.id")
+            .whereRef("m.order_id", "=", "o.id")
+            .where("m.status", "=", "pending")
+            .where("m.created_at", ">", input.manualPaymentSince),
+        )
+        .as("manual_payment_pending"),
+    ])
+    .where("o.user_id", "=", input.userId)
+    .where("o.status", "in", ["pending", "payment_processing", "expired"])
+    .where((eb) =>
+      eb.or([
+        eb.and([
+          eb("o.status", "=", "pending"),
+          eb("o.expires_at", ">", input.now),
+        ]),
+        eb.exists(
+          eb
+            .selectFrom("manual_payment_requests as m")
+            .select("m.id")
+            .whereRef("m.order_id", "=", "o.id")
+            .where("m.status", "=", "pending")
+            .where("m.created_at", ">", input.manualPaymentSince),
+        ),
+        eb.exists(
+          eb
+            .selectFrom("payment_attempts as a")
+            .innerJoin("payments as p", "p.id", "a.payment_id")
+            .select("a.id")
+            .whereRef("p.order_id", "=", "o.id")
+            .where("p.gateway_provider", "not in", ["free", "manual"])
+            .where("a.status", "=", CHECKOUT_HAND_OUT_ATTEMPT_STATUS)
+            .where("a.created_at", ">", input.handedOutSince),
+        ),
+      ]),
+    )
+    .orderBy("o.created_at", "desc")
+    .execute();
+}
+
+/**
+ * How many unpaid, unexpired orders carry a coupon. A coupon use is only
+ * recorded as a redemption when the order is paid, so until then these
+ * orders are what is holding it: they count against the coupon's limits.
+ * An order stops counting when it is paid (it becomes a redemption),
+ * expires, or is cancelled.
+ */
+export async function countPendingOrdersUsingCoupon(
+  database: Executor,
+  input: { couponId: string; userId?: string; now: Date },
+): Promise<number> {
+  let query = database
+    .selectFrom("orders")
+    .select((eb) => eb.fn.countAll().as("count"))
+    .where("coupon_id", "=", input.couponId)
+    .where("status", "=", "pending")
+    .where("expires_at", ">", input.now);
+
+  if (input.userId) {
+    query = query.where("user_id", "=", input.userId);
+  }
+  const row = await query.executeTakeFirst();
+  return Number(row?.count ?? 0);
+}
+
+/**
+ * Another paid order of the same buyer that still entitles them to a
+ * course — bought directly, or inside a bundle — other than the order being
+ * refunded. Items that have themselves been refunded do not count.
+ *
+ * What an item entitles the buyer to is what it granted when the order was
+ * fulfilled (`order_item_courses`), not what its bundle holds today: a
+ * bundle edited since may have gained courses this buyer never got through
+ * it, and lost ones they did. Only an item with nothing recorded (a bundle
+ * order paid before that record was kept) is read from the item itself and
+ * from the bundle as it is now.
+ *
+ * access_grants and enrollments hold ONE row per (user, course), owned by
+ * the most recent purchase. So when that owning order is refunded and this
+ * returns an order, the row is handed to it instead of being revoked;
+ * otherwise a bundle refund took away a course the buyer had also bought on
+ * its own.
+ */
+export async function findOtherPaidOrderCoveringCourse(
+  database: Executor,
+  input: { userId: string; courseId: string; excludeOrderId: string },
+) {
+  return await database
+    .selectFrom("orders as o")
+    .innerJoin("order_items as oi", "oi.order_id", "o.id")
+    .select(["o.id as order_id", "oi.item_type"])
+    .where("o.user_id", "=", input.userId)
+    .where("o.id", "!=", input.excludeOrderId)
+    .where("o.status", "in", ["paid", "partially_refunded"])
+    .where((eb) => {
+      const recorded = eb
+        .selectFrom("order_item_courses as oic")
+        .select("oic.id")
+        .whereRef("oic.order_item_id", "=", "oi.id");
+      return eb.or([
+        eb.exists(recorded.where("oic.course_id", "=", input.courseId)),
+        eb.and([
+          eb.not(eb.exists(recorded)),
+          eb.or([
+            eb("oi.course_id", "=", input.courseId),
+            eb(
+              "oi.bundle_id",
+              "in",
+              eb
+                .selectFrom("course_bundle_items as cbi")
+                .select("cbi.bundle_id")
+                .where("cbi.course_id", "=", input.courseId),
+            ),
+          ]),
+        ]),
+      ]);
+    })
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom("refunds as r")
+            .select("r.id")
+            .whereRef("r.order_item_id", "=", "oi.id")
+            .where("r.status", "in", ["pending", "processed"]),
+        ),
+      ),
+    )
+    .orderBy("o.paid_at", "desc")
+    .limit(1)
     .executeTakeFirst();
 }
 
@@ -469,6 +764,20 @@ export async function listOrderItemsByOrderIds(
   return await database
     .selectFrom("order_items")
     .selectAll()
+    .where("order_id", "in", orderIds)
+    .orderBy("created_at", "asc")
+    .execute();
+}
+
+/** The item columns an order response carries, for the orders being shown. */
+export async function listOrderItemSummariesByOrderIds(
+  database: Executor,
+  orderIds: string[],
+) {
+  if (orderIds.length === 0) return [];
+  return await database
+    .selectFrom("order_items")
+    .select(["order_id", "title_snapshot", "course_id"])
     .where("order_id", "in", orderIds)
     .orderBy("created_at", "asc")
     .execute();
@@ -543,12 +852,128 @@ export async function updateOrderStatus(
     .executeTakeFirst();
 }
 
+/**
+ * Closes a no-cost order the learner has left. A cancelled order no longer
+ * counts as one that still covers its courses (see
+ * findOtherPaidOrderCoveringCourse), and it gives up its idempotency key so
+ * that enrolling again creates a new order instead of replaying this one.
+ */
+export async function cancelFreeOrder(database: Executor, orderId: string) {
+  return await database
+    .updateTable("orders")
+    .set({
+      status: "cancelled",
+      idempotency_key: null,
+      updated_at: new Date(),
+    })
+    .where("id", "=", orderId)
+    .where("status", "=", "paid")
+    .where("total_amount", "=", 0)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+/**
+ * Takes an order's idempotency key away, so a repeat of the request that
+ * created it starts a new order. For an order nobody can continue: expired,
+ * cancelled or refunded.
+ */
+export async function releaseOrderIdempotencyKey(
+  database: Executor,
+  orderId: string,
+) {
+  await database
+    .updateTable("orders")
+    .set({ idempotency_key: null, updated_at: new Date() })
+    .where("id", "=", orderId)
+    .execute();
+}
+
+/**
+ * Ends unpaid orders early, as the expiry job would at their deadline. An
+ * expired order no longer holds its coupon, and a payment that still arrives
+ * for one is honoured (see markOrderPaidIfPending).
+ */
+export async function expirePendingOrders(
+  database: Executor,
+  orderIds: string[],
+  now: Date,
+) {
+  if (orderIds.length === 0) return;
+  await database
+    .updateTable("orders")
+    .set({ status: "expired", updated_at: now })
+    .where("id", "in", orderIds)
+    .where("status", "=", "pending")
+    .execute();
+}
+
+/**
+ * Cancels unpaid orders that a bank transfer was reported for, when the
+ * buyer has enrolled for free in everything they sell (an order that also
+ * sells something else is left alone). A cancelled order cannot
+ * be paid any more, so the transfer can no longer be verified and is listed
+ * for staff as money to check and return (needs-refund.repository.ts's
+ * listStuckManualTransfers), where they can reject it.
+ */
+export async function cancelUnpaidOrders(
+  database: Executor,
+  orderIds: string[],
+  now: Date,
+) {
+  if (orderIds.length === 0) return;
+  await database
+    .updateTable("orders")
+    .set({ status: "cancelled", idempotency_key: null, updated_at: now })
+    .where("id", "in", orderIds)
+    .where("status", "in", ["pending", "payment_processing", "expired"])
+    .execute();
+}
+
+/**
+ * Cancels an order that was created a moment ago and never got a payment to
+ * go with it, and gives up its idempotency key. Does nothing once a payment
+ * row exists: that order can still be continued.
+ */
+export async function cancelOrderWithoutPayment(
+  database: Executor,
+  orderId: string,
+) {
+  return await database
+    .updateTable("orders")
+    .set({
+      status: "cancelled",
+      idempotency_key: null,
+      updated_at: new Date(),
+    })
+    .where("id", "=", orderId)
+    .where("status", "=", "pending")
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom("payments")
+            .select("payments.id")
+            .whereRef("payments.order_id", "=", "orders.id"),
+        ),
+      ),
+    )
+    .returning("id")
+    .executeTakeFirst();
+}
+
+/**
+ * Marks the order paid and issues its invoice number. Every way an order
+ * gets paid (gateway, verified transfer, free checkout) comes through here
+ * inside its transaction, so the invoice numbers follow the order in which
+ * payments were recorded.
+ */
 export async function markOrderPaidIfPending(
   database: Executor,
   orderId: string,
   paidAt: Date,
 ) {
-  return await database
+  const paid = await database
     .updateTable("orders")
     .set({
       status: "paid",
@@ -559,6 +984,9 @@ export async function markOrderPaidIfPending(
     .where("status", "in", ["pending", "payment_processing", "expired"])
     .returningAll()
     .executeTakeFirst();
+  if (!paid) return paid;
+  const invoiceNumber = await assignInvoiceNumber(database, orderId, paidAt);
+  return { ...paid, invoice_number: invoiceNumber };
 }
 
 // Admin batch loading helpers
@@ -566,22 +994,40 @@ export async function listUsersByIds(database: Executor, userIds: string[]) {
   if (userIds.length === 0) return [];
   return await database
     .selectFrom("users")
-    .select(["id", "display_name", "username", "email"])
+    .select(["id", "display_name", "username", "email", "avatar_data_url"])
     .where("id", "in", userIds)
     .execute();
 }
 
-export async function listPaymentsByOrderIds(
+/** The buyer details an invoice prints; a deleted account has none. */
+export async function findInvoiceBuyer(database: Executor, userId: string) {
+  return await database
+    .selectFrom("users")
+    .select(["display_name", "username", "email", "phone_no"])
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+/**
+ * The one payment that represents each order: the settled one if there is
+ * one, otherwise the latest attempt. One row per order, so list and detail
+ * views agree on which payment they show.
+ */
+export async function listPaymentsForOrders(
   database: Executor,
   orderIds: string[],
 ) {
   if (orderIds.length === 0) return [];
-  // Ranked so the payment that represents the order comes first: the settled
-  // one, then any retry attempts, newest first. Callers take the first row
-  // per order, which keeps list and detail views in agreement.
   return await database
     .selectFrom("payments")
-    .selectAll()
+    .distinctOn("order_id")
+    .select([
+      "order_id",
+      "gateway_provider",
+      "gateway_payment_id",
+      "payment_method",
+    ])
     .where("order_id", "in", orderIds)
     .orderBy("order_id")
     .orderBy(
@@ -592,45 +1038,14 @@ export async function listPaymentsByOrderIds(
     .execute();
 }
 
-export async function listPaymentSummariesByOrderIds(
-  database: Executor,
-  orderIds: string[],
-) {
-  if (orderIds.length === 0) return [];
-  return await database
-    .selectFrom("payments")
-    .select(["order_id", "gateway_provider", "payment_method"])
-    .where("order_id", "in", orderIds)
-    .orderBy("order_id")
-    .orderBy(
-      sql`case status when 'captured' then 0 when 'refunded' then 1 when 'processing' then 2 when 'initiated' then 3 else 4 end`,
-    )
-    .orderBy("created_at", "desc")
-    .orderBy("id", "desc")
-    .execute();
-}
-
-export async function listCouponsByIds(
+export async function listCouponCodesByIds(
   database: Executor,
   couponIds: string[],
 ) {
   if (couponIds.length === 0) return [];
   return await database
     .selectFrom("coupons")
-    .selectAll()
+    .select(["id", "code"])
     .where("id", "in", couponIds)
-    .execute();
-}
-
-export async function listRefundsByOrderIds(
-  database: Executor,
-  orderIds: string[],
-) {
-  if (orderIds.length === 0) return [];
-  return await database
-    .selectFrom("refunds")
-    .selectAll()
-    .where("order_id", "in", orderIds)
-    .orderBy("created_at", "desc")
     .execute();
 }

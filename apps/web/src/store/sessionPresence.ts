@@ -5,6 +5,8 @@
  * user data (the session cookie stays the source of truth); it only decides
  * which placeholder the first paint shows.
  */
+import { forgetHomeHints } from "./homeHint";
+
 export const SESSION_PRESENCE_KEY = "veolms-session-present";
 const AUTH_IDENTITY_HINT_KEY = "veolms-auth-identity";
 
@@ -29,7 +31,11 @@ export function writeSessionPresence(present: boolean) {
     // Storage can be unavailable in privacy-restricted contexts.
   }
   if (present) document.documentElement.dataset.sessionHint = "signed-in";
-  else delete document.documentElement.dataset.sessionHint;
+  else {
+    delete document.documentElement.dataset.sessionHint;
+    // Which home the account had goes with the session.
+    forgetHomeHints();
+  }
 }
 
 // Runs from the document head so the attribute is set before the prerendered

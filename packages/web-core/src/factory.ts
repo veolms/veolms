@@ -25,6 +25,34 @@ function excludeRoutes(
   return result;
 }
 
+const ACADEMY_LAYOUT_ID = "academy-layout";
+
+/**
+ * Puts extension shell pages inside the academy layout, ahead of its
+ * catch-all so they are matched by their own address.
+ */
+function addShellRoutes(
+  routes: RouteConfigEntry[],
+  shellRoutes: RouteConfigEntry[],
+): RouteConfigEntry[] {
+  if (shellRoutes.length === 0) return routes;
+  return routes.map((entry) => {
+    if (entry.id === ACADEMY_LAYOUT_ID) {
+      const children = [...(entry.children ?? [])];
+      const fallbackIndex = children.findIndex((child) => child.path === "*");
+      children.splice(
+        fallbackIndex >= 0 ? fallbackIndex : children.length,
+        0,
+        ...shellRoutes,
+      );
+      return { ...entry, children };
+    }
+    return entry.children
+      ? { ...entry, children: addShellRoutes(entry.children, shellRoutes) }
+      : entry;
+  });
+}
+
 /**
  * Core React Router route configuration factory.
  *
@@ -48,6 +76,10 @@ export function createVeoLMSWeb(
   const extensionRoutes = extensions.flatMap(
     (ext) => ext.routes ?? [],
   ) satisfies RouteConfigEntry[];
+  const shellRoutes = extensions.flatMap((ext) => ext.shellRoutes ?? []);
 
-  return [...coreRoutes, ...extensionRoutes] satisfies RouteConfig;
+  return [
+    ...addShellRoutes(coreRoutes, shellRoutes),
+    ...extensionRoutes,
+  ] satisfies RouteConfig;
 }

@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
+import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
 import type { NavigateTo } from "../routing/navigation";
 import { PageHeading } from "../components/PageHeading";
 import { NotificationCard } from "./NotificationCard";
@@ -15,6 +16,7 @@ import {
   CenteredLoadingSpinner,
   LoadingSpinnerIcon,
 } from "../components/LoadingSpinner";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface NotificationsPageProps {
   onNavigatePage?: NavigateTo;
@@ -68,26 +70,7 @@ export function NotificationsPage({
 
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  // Keyboard shortcut listener (/ or Cmd+K to search)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
-      const isInput =
-        activeTag === "input" ||
-        activeTag === "textarea" ||
-        (document.activeElement as HTMLElement)?.isContentEditable;
-
-      if (!isInput) {
-        if (e.key === "/" || ((e.metaKey || e.ctrlKey) && e.key === "k")) {
-          e.preventDefault();
-          document.getElementById("notifications-search-input")?.focus();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  usePageSearchShortcut("notifications-search-input");
 
   return (
     <div
@@ -187,10 +170,10 @@ export function NotificationsPage({
               className="min-h-52 rounded-[18px] bg-(--card-surface) p-8"
             />
           ) : isError ? (
-            <div
+            <ElevatedCard
+              as="div"
               role="alert"
-              className="flex flex-col items-center justify-center rounded-[18px] bg-(--card-surface) p-8 sm:p-12 text-center"
-              style={{ boxShadow: "var(--card-shadow)" }}
+              className="flex flex-col items-center justify-center p-8 sm:p-12 text-center"
             >
               <div
                 className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-400 mb-3.5"
@@ -213,7 +196,7 @@ export function NotificationsPage({
                 <ArrowClockwise size={15} weight="bold" />
                 <span>Try again</span>
               </button>
-            </div>
+            </ElevatedCard>
           ) : totalFilteredCount > 0 ? (
             <>
               {/* Today Section */}

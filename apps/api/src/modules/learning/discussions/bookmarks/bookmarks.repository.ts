@@ -15,10 +15,12 @@ import type {
 } from "@veolms/contracts";
 import type { Nullable, SelectQueryBuilder } from "kysely";
 import { sql } from "kysely";
+import { containsPattern } from "../shared/discussion.utils.ts";
 import {
   type DiscussionListCursor,
-  authorRoleSql,
+  createdAtIdDescSql,
 } from "../shared/discussion.utils.ts";
+import { fuzzyMatchesAny } from "../../../../lib/fuzzy-search.ts";
 
 export const BOOKMARKS_WORKSPACE_SORT = "bookmarked";
 
@@ -51,9 +53,7 @@ export interface BookmarkWorkspaceRow {
   authorName: string | null;
   authorUsername: string | null;
   authorAvatarUrl: string | null;
-  authorRole: string | null;
   visibility: DiscussionVisibility;
-  status: "active" | "hidden" | "deleted" | null;
   isLocked: boolean | null;
   acceptedAnswerId: string | null;
   repliesCount: number | null;
@@ -76,8 +76,6 @@ export interface BookmarkWorkspaceFilterOptions extends Pick<
 const bookmarkWorkspaceSelect = [
   "b.id as bookmarkId",
   "b.created_at as bookmarkedAt",
-  "b.thread_id as bookmarkThreadId",
-  "b.note_id as bookmarkNoteId",
   sql<"thread" | "note">`case
     when b.thread_id is not null then 'thread'
     else 'note'
@@ -101,9 +99,7 @@ const bookmarkWorkspaceSelect = [
   "u.display_name as authorName",
   "u.username as authorUsername",
   "u.avatar_data_url as authorAvatarUrl",
-  authorRoleSql("coalesce(t.user_id, n.user_id)"),
   sql<string>`coalesce(t.visibility, n.visibility)`.as("visibility"),
-  "t.status as status",
   "t.is_locked as isLocked",
   "t.accepted_answer_id as acceptedAnswerId",
   "t.replies_count as repliesCount",
@@ -113,19 +109,25 @@ const bookmarkWorkspaceSelect = [
 ] as const;
 
 function joinBookmarkSources(db: DatabaseExecutor) {
-  return db
-    .selectFrom("learning_bookmarks as b")
-    .leftJoin("learning_threads as t", "t.id", "b.thread_id")
-    .leftJoin("learning_notes as n", "n.id", "b.note_id")
-    .leftJoin("users as u", (join) =>
-      join.on(sql<boolean>`u.id = coalesce(t.user_id, n.user_id)`),
-    )
-    .leftJoin("courses as c", (join) =>
-      join.on(sql<boolean>`c.id = coalesce(t.course_id, n.course_id)`),
-    )
-    .leftJoin("course_lessons as l", (join) =>
-      join.on(sql<boolean>`l.id = coalesce(t.lesson_id, n.lesson_id)`),
-    );
+  return (
+    db
+      .selectFrom("learning_bookmarks as b")
+      .leftJoin("learning_threads as t", "t.id", "b.thread_id")
+      .leftJoin("learning_notes as n", "n.id", "b.note_id")
+      // Active accounts only: a saved post by a deactivated account stays
+      // saved and is presented without an author.
+      .leftJoin("users as u", (join) =>
+        join.on(
+          sql<boolean>`u.id = coalesce(t.user_id, n.user_id) and u.is_deleted = false`,
+        ),
+      )
+      .leftJoin("courses as c", (join) =>
+        join.on(sql<boolean>`c.id = coalesce(t.course_id, n.course_id)`),
+      )
+      .leftJoin("course_lessons as l", (join) =>
+        join.on(sql<boolean>`l.id = coalesce(t.lesson_id, n.lesson_id)`),
+      )
+  );
 }
 
 function applyBookmarkFilters<O>(
@@ -212,26 +214,21 @@ function applyBookmarkFilters<O>(
   }
 
   if (options.search) {
-    const pattern = `%${options.search.toLowerCase()}%`;
+    const pattern = containsPattern(options.search);
     q = q.where(
       sql<boolean>`(
         lower(coalesce(t.title, '')) like ${pattern}
         or lower(coalesce(t.plain_text, '')) like ${pattern}
         or lower(coalesce(n.title, '')) like ${pattern}
         or lower(coalesce(n.plain_text, '')) like ${pattern}
+        or ${fuzzyMatchesAny(options.search!, [sql.ref("t.title"), sql.ref("n.title")])}
       )`,
     );
   }
 
   if (options.pageCursor) {
     q = q.where(
-      sql<boolean>`(
-        b.created_at < ${options.pageCursor.createdAt}
-        or (
-          b.created_at = ${options.pageCursor.createdAt}
-          and b.id < ${options.pageCursor.id}::uuid
-        )
-      )`,
+      createdAtIdDescSql("b", options.pageCursor, "learning_bookmarks"),
     );
   }
 
@@ -243,10 +240,6 @@ export interface BookmarksRepository {
     db: DatabaseExecutor,
     options: BookmarkWorkspaceFilterOptions,
   ): Promise<BookmarkWorkspaceRow[]>;
-  countWorkspaceBookmarks(
-    db: DatabaseExecutor,
-    options: BookmarkWorkspaceFilterOptions,
-  ): Promise<number>;
 }
 
 export function createBookmarksRepository(): BookmarksRepository {
@@ -259,14 +252,6 @@ export function createBookmarksRepository(): BookmarksRepository {
         .limit((options.limit ?? 20) + 1);
 
       return (await query.execute()) as BookmarkWorkspaceRow[];
-    },
-
-    async countWorkspaceBookmarks(db, options) {
-      const row = await applyBookmarkFilters(joinBookmarkSources(db), options)
-        .select(sql<number>`count(*)::int`.as("count"))
-        .executeTakeFirst();
-
-      return Number(row?.count ?? 0);
     },
   };
 }

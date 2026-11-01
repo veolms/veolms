@@ -3,7 +3,7 @@ import {
   type BuiltInPlayerThemeId,
 } from "@veolms/video-player/theme-ids";
 
-export const SIDEBAR_MAX_WIDTH_MIN = 220;
+export const SIDEBAR_MAX_WIDTH_MIN = 200;
 export const SIDEBAR_MAX_WIDTH_DEFAULT = 300;
 export const SIDEBAR_MAX_WIDTH_LIMIT = 520;
 
@@ -113,6 +113,11 @@ export const ELASTIC_SCROLL_UNLOCK_SIDE_KEY =
   "veolms-elastic-scroll-unlock-side";
 export const ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT: ElasticScrollGestureSide =
   "left";
+/** How long the control stays after scrolling stops, in seconds. */
+export const ELASTIC_SCROLL_HIDE_DELAY_KEY = "veolms-elastic-scroll-hide-delay";
+export const ELASTIC_SCROLL_HIDE_DELAY_MIN = 1;
+export const ELASTIC_SCROLL_HIDE_DELAY_MAX = 10;
+export const ELASTIC_SCROLL_HIDE_DELAY_DEFAULT = 2;
 export const ELASTIC_SCROLL_PREFERENCES_EVENT =
   "veolms:elastic-scroll-preferences";
 
@@ -122,6 +127,7 @@ export interface ElasticScrollPreferences {
   animateIcon: boolean;
   lockSide: ElasticScrollGestureSide;
   unlockSide: ElasticScrollGestureSide;
+  hideDelaySeconds: number;
 }
 
 export const ELASTIC_SCROLL_PREFERENCES_DEFAULT: ElasticScrollPreferences = {
@@ -130,6 +136,7 @@ export const ELASTIC_SCROLL_PREFERENCES_DEFAULT: ElasticScrollPreferences = {
   animateIcon: ELASTIC_SCROLL_ICON_ANIMATION_DEFAULT,
   lockSide: ELASTIC_SCROLL_LOCK_SIDE_DEFAULT,
   unlockSide: ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
+  hideDelaySeconds: ELASTIC_SCROLL_HIDE_DELAY_DEFAULT,
 };
 export const CONTROL_RADIUS_KEY = "veolms-control-radius";
 export const CONTROL_RADIUS_CUSTOM_KEY = "veolms-control-radius-custom";
@@ -342,6 +349,16 @@ export interface LearningPreferences {
   continueWithNextIncomplete: boolean;
   automaticallyMoveNextSection: boolean;
   keepCompletedLecturesVisible: boolean;
+  /**
+   * Lessons are numbered straight through the course instead of from 1
+   * again in every section.
+   */
+  continuousLessonNumbering: boolean;
+  /**
+   * An open section's heading holds to the top of the curriculum panel
+   * while its lessons scroll under it.
+   */
+  stickOpenSection: boolean;
 }
 
 export const LEARNING_PREFERENCES_KEY = "veolms-learning-preferences";
@@ -381,6 +398,8 @@ export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   continueWithNextIncomplete: true,
   automaticallyMoveNextSection: true,
   keepCompletedLecturesVisible: true,
+  continuousLessonNumbering: false,
+  stickOpenSection: true,
 };
 
 export const LEARNING_REMINDER_DAYS: readonly (readonly [
@@ -453,6 +472,18 @@ export const normalizeElasticScrollGestureSide = (
     ? (value as ElasticScrollGestureSide)
     : fallback;
 
+/** Whole seconds from the minimum to the maximum; anything else is the
+ * default. */
+export const normalizeElasticScrollHideDelay = (value: unknown): number => {
+  const seconds = Math.round(Number(value));
+  return Number.isFinite(seconds) && seconds > 0
+    ? Math.min(
+        ELASTIC_SCROLL_HIDE_DELAY_MAX,
+        Math.max(ELASTIC_SCROLL_HIDE_DELAY_MIN, seconds),
+      )
+    : ELASTIC_SCROLL_HIDE_DELAY_DEFAULT;
+};
+
 export const readElasticScrollPreferences = (): ElasticScrollPreferences => ({
   appearance: normalizeElasticScrollAppearance(
     readStored(
@@ -478,6 +509,12 @@ export const readElasticScrollPreferences = (): ElasticScrollPreferences => ({
     ),
     ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
   ),
+  hideDelaySeconds: normalizeElasticScrollHideDelay(
+    readStored(
+      ELASTIC_SCROLL_HIDE_DELAY_KEY,
+      String(ELASTIC_SCROLL_HIDE_DELAY_DEFAULT),
+    ),
+  ),
 });
 
 export const applyElasticScrollPreferences = (
@@ -497,6 +534,9 @@ export const applyElasticScrollPreferences = (
     unlockSide: normalizeElasticScrollGestureSide(
       preferences.unlockSide,
       ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
+    ),
+    hideDelaySeconds: normalizeElasticScrollHideDelay(
+      preferences.hideDelaySeconds,
     ),
   };
   if (typeof document !== "undefined") {
@@ -540,6 +580,10 @@ export const persistElasticScrollPreferences = (
       window.localStorage.setItem(
         ELASTIC_SCROLL_UNLOCK_SIDE_KEY,
         normalizedPreferences.unlockSide,
+      );
+      window.localStorage.setItem(
+        ELASTIC_SCROLL_HIDE_DELAY_KEY,
+        String(normalizedPreferences.hideDelaySeconds),
       );
     } catch {
       // Keep the preference active for this session when storage is blocked.
@@ -715,6 +759,8 @@ export const readLearningPreferences = (): LearningPreferences => {
         typeof storedPreferences.resumeFromLastPosition === "boolean"
           ? storedPreferences.resumeFromLastPosition
           : LEARNING_PREFERENCE_DEFAULTS.resumeFromLastPosition,
+      continuousLessonNumbering:
+        storedPreferences.continuousLessonNumbering === true,
       videoPlayerTheme: normalizeVideoPlayerTheme(
         storedPreferences.videoPlayerTheme,
       ),
@@ -735,4 +781,27 @@ export const readLearningPreferences = (): LearningPreferences => {
   } catch {
     return LEARNING_PREFERENCE_DEFAULTS;
   }
+};
+
+/**
+ * Stores a change to the learning settings and tells the page's listeners
+ * (the curriculum's lesson numbering, the player's seek interval and theme),
+ * as the settings page does when one of its controls is changed.
+ */
+export const updateLearningPreferences = (
+  next: Partial<LearningPreferences>,
+): LearningPreferences => {
+  const preferences = { ...readLearningPreferences(), ...next };
+  try {
+    window.localStorage.setItem(
+      LEARNING_PREFERENCES_KEY,
+      JSON.stringify(preferences),
+    );
+  } catch {
+    // The change still reaches this page's listeners when storage is blocked.
+  }
+  window.dispatchEvent(
+    new CustomEvent(LEARNING_PREFERENCES_EVENT, { detail: preferences }),
+  );
+  return preferences;
 };

@@ -1,9 +1,12 @@
 import { z } from "zod";
 import {
   auditLogsListResponseSchema,
+  courseAuditLogsListResponseSchema,
+  courseReportsListResponseSchema,
   createReportRequestSchema,
   listAuditLogsQuerySchema,
   listReportsQuerySchema,
+  moderateNoteRequestSchema,
   moderateReplyRequestSchema,
   moderateThreadRequestSchema,
   reportsListResponseSchema,
@@ -82,7 +85,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Course moderation reports",
-            reportsListResponseSchema,
+            courseReportsListResponseSchema,
           ),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Course owner or admin required"),
@@ -178,6 +181,34 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
     controller.moderateCourseReply,
   );
 
+  // POST /courses/:courseId/moderation/notes/:noteId
+  app.post(
+    "/courses/:courseId/moderation/notes/:noteId",
+    {
+      preHandler: permissions.requireAuthenticated,
+      schema: {
+        operationId: "moderateCourseNote",
+        tags: ["Course Moderation"],
+        summary: "Take a shared note in a course out of view (make private)",
+        params: z.object({
+          courseId: z.uuid(),
+          noteId: z.uuid(),
+        }),
+        body: moderateNoteRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Action applied",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          404: errorResponse("Note not found"),
+        },
+      },
+    },
+    controller.moderateCourseNote,
+  );
+
   // POST /courses/:courseId/moderation/users/:userId/suspend
   app.post(
     "/courses/:courseId/moderation/users/:userId/suspend",
@@ -243,7 +274,10 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ courseId: z.uuid() }),
         querystring: listAuditLogsQuerySchema,
         response: {
-          200: jsonResponse("Course audit logs", auditLogsListResponseSchema),
+          200: jsonResponse(
+            "Course audit logs",
+            courseAuditLogsListResponseSchema,
+          ),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
         },
@@ -260,7 +294,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/moderation/reports",
     {
-      preHandler: permissions.requireAdmin,
+      preHandler: permissions.requirePlatformModerator,
       schema: {
         operationId: "listPlatformModerationReports",
         tags: ["Platform Moderation"],
@@ -283,7 +317,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/reports/:reportId/status",
     {
-      preHandler: permissions.requireAdmin,
+      preHandler: permissions.requirePlatformModerator,
       schema: {
         operationId: "updatePlatformReportStatus",
         tags: ["Platform Moderation"],
@@ -309,7 +343,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/threads/:threadId",
     {
-      preHandler: permissions.requireAdmin,
+      preHandler: permissions.requirePlatformModerator,
       schema: {
         operationId: "moderatePlatformThread",
         tags: ["Platform Moderation"],
@@ -334,7 +368,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/replies/:replyId",
     {
-      preHandler: permissions.requireAdmin,
+      preHandler: permissions.requirePlatformModerator,
       schema: {
         operationId: "moderatePlatformReply",
         tags: ["Platform Moderation"],
@@ -355,11 +389,36 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
     controller.moderatePlatformReply,
   );
 
+  // POST /moderation/notes/:noteId
+  app.post(
+    "/moderation/notes/:noteId",
+    {
+      preHandler: permissions.requirePlatformModerator,
+      schema: {
+        operationId: "moderatePlatformNote",
+        tags: ["Platform Moderation"],
+        summary: "Take a shared note out of view globally (make private)",
+        params: z.object({ noteId: z.uuid() }),
+        body: moderateNoteRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Moderation action applied",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Admin required"),
+          404: errorResponse("Note not found"),
+        },
+      },
+    },
+    controller.moderatePlatformNote,
+  );
+
   // POST /moderation/users/:userId/suspend
   app.post(
     "/moderation/users/:userId/suspend",
     {
-      preHandler: permissions.requireAdmin,
+      preHandler: permissions.requirePlatformModerator,
       schema: {
         operationId: "suspendPlatformUser",
         tags: ["Platform Moderation"],
@@ -380,7 +439,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/moderation/users/:userId/unsuspend",
     {
-      preHandler: permissions.requireAdmin,
+      preHandler: permissions.requirePlatformModerator,
       schema: {
         operationId: "unsuspendPlatformUser",
         tags: ["Platform Moderation"],
@@ -404,7 +463,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/moderation/audit-logs",
     {
-      preHandler: permissions.requireAdmin,
+      preHandler: permissions.requirePlatformModerator,
       schema: {
         operationId: "listPlatformAuditLogs",
         tags: ["Platform Moderation"],

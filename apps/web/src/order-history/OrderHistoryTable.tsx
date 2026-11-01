@@ -15,11 +15,15 @@ import {
 import type { NavigateTo } from "../routing/navigation";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import type { OrderSortOrder } from "@veolms/contracts";
-import type { OrderHistoryItem } from "./orderHistoryData";
+import {
+  formatOrderHistoryPayment,
+  type OrderHistoryItem,
+} from "./orderHistoryData";
 import {
   getCourseBrandBadge,
   getOrderStatusStyle,
 } from "../orders/orderHelpers";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface OrderHistoryTableProps {
   orders: readonly OrderHistoryItem[];
@@ -57,6 +61,11 @@ function OrderActions({
     }
   };
 
+  // An invoice exists only once an order has been paid (refunded orders were
+  // paid first). For any other order the download opened a raw error page.
+  const hasInvoice =
+    order.status === "completed" || order.status === "refunded";
+
   return (
     <CourseActionMenu
       open={open}
@@ -66,22 +75,26 @@ function OrderActions({
       className="relative z-30 ml-auto shrink-0 inline-block"
       dismissOnScroll
     >
-      <MenuAction
-        Icon={FileText}
-        label="View invoice"
-        onClick={() => {
-          setOpen(false);
-          onViewInvoice(order);
-        }}
-      />
-      <MenuAction
-        Icon={DownloadSimple}
-        label="Download invoice"
-        onClick={() => {
-          setOpen(false);
-          onDownloadReceipt(order);
-        }}
-      />
+      {hasInvoice && (
+        <>
+          <MenuAction
+            Icon={FileText}
+            label="View invoice"
+            onClick={() => {
+              setOpen(false);
+              onViewInvoice(order);
+            }}
+          />
+          <MenuAction
+            Icon={DownloadSimple}
+            label="Download invoice"
+            onClick={() => {
+              setOpen(false);
+              onDownloadReceipt(order);
+            }}
+          />
+        </>
+      )}
       <MenuAction
         Icon={Copy}
         label="Copy order ID"
@@ -90,14 +103,18 @@ function OrderActions({
           void copyText(order.orderNumber, "Order ID copied.");
         }}
       />
-      <MenuAction
-        Icon={LinkSimple}
-        label="Copy invoice ID"
-        onClick={() => {
-          setOpen(false);
-          void copyText(order.invoiceNumber, "Invoice ID copied.");
-        }}
-      />
+      {order.invoiceNumber && (
+        <MenuAction
+          Icon={LinkSimple}
+          label="Copy invoice ID"
+          onClick={() => {
+            setOpen(false);
+            if (order.invoiceNumber) {
+              void copyText(order.invoiceNumber, "Invoice ID copied.");
+            }
+          }}
+        />
+      )}
       {order.courseId && (
         <>
           <MenuDivider />
@@ -158,9 +175,9 @@ export function OrderHistoryTable({
   });
 
   return (
-    <div
-      className="@container/history min-w-0 overflow-hidden rounded-[18px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) shadow-(--card-shadow)"
-      style={{ boxShadow: "var(--card-shadow)" }}
+    <ElevatedCard
+      as="div"
+      className="@container/history min-w-0 overflow-hidden"
       aria-label="Purchase history"
     >
       {/* Desktop / Tablet Table View */}
@@ -253,9 +270,11 @@ export function OrderHistoryTable({
                       <p className="truncate text-xs font-semibold text-(--text)">
                         {order.payment.brand}
                       </p>
-                      <p className="truncate text-[11px] text-(--muted)">
-                        {order.payment.label}
-                      </p>
+                      {order.payment.label ? (
+                        <p className="truncate text-[11px] text-(--muted)">
+                          {order.payment.label}
+                        </p>
+                      ) : null}
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3.5">
@@ -348,7 +367,7 @@ export function OrderHistoryTable({
                 <div className="min-w-0">
                   <p className="text-[11px] text-(--muted)">Payment method</p>
                   <p className="mt-0.5 truncate text-xs text-(--text)">
-                    {order.payment.brand} ({order.payment.label})
+                    {formatOrderHistoryPayment(order.payment)}
                   </p>
                 </div>
                 <div>
@@ -360,12 +379,13 @@ export function OrderHistoryTable({
               </div>
 
               <p className="mt-3 truncate font-mono text-[11px] text-(--muted)">
-                Order {order.orderNumber} · Invoice {order.invoiceNumber}
+                Order {order.orderNumber}
+                {order.invoiceNumber ? ` · Invoice ${order.invoiceNumber}` : ""}
               </p>
             </article>
           );
         })}
       </div>
-    </div>
+    </ElevatedCard>
   );
 }

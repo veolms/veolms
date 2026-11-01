@@ -1,4 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import {
+  isPhoneLayoutHeld,
+  watchLayoutResize,
+} from "./phoneVideoFullscreenHold";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -91,6 +95,10 @@ export function FloatingScrollbar({
 
     const syncScrollbar = () => {
       animationFrame = 0;
+      // Hidden behind a phone's full-screen video, and measuring it laid
+      // the page out anew every frame of the turn; it is synced once the
+      // hold ends (see the resize watcher below).
+      if (isPhoneLayoutHeld()) return;
       const scrollportStyle = window.getComputedStyle(scrollport);
       const canScroll =
         !disabled &&
@@ -212,7 +220,9 @@ export function FloatingScrollbar({
     layoutAncestors.forEach((ancestor) =>
       ancestor.addEventListener("scroll", scheduleSync, { passive: true }),
     );
-    window.addEventListener("resize", scheduleSync);
+    // Also once a phone video's full-screen hold ends, if the window
+    // changed meanwhile.
+    const stopWatchingResize = watchLayoutResize(scheduleSync);
     window.addEventListener("pageshow", scheduleSync);
     document.addEventListener("transitionrun", scheduleSync, true);
     document.addEventListener("transitioncancel", scheduleSync, true);
@@ -245,7 +255,7 @@ export function FloatingScrollbar({
       layoutAncestors.forEach((ancestor) =>
         ancestor.removeEventListener("scroll", scheduleSync),
       );
-      window.removeEventListener("resize", scheduleSync);
+      stopWatchingResize();
       window.removeEventListener("pageshow", scheduleSync);
       document.removeEventListener("transitionrun", scheduleSync, true);
       document.removeEventListener("transitioncancel", scheduleSync, true);

@@ -1,249 +1,40 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
 import "./learning-feature.css";
 import "./learning-split-layout.css";
-import type {
-  CSSProperties,
-  KeyboardEvent as ReactKeyboardEvent,
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-} from "react";
-import type {
-  LessonResource,
-  MyQuizAssignment,
-  VideoPlaybackBootstrap,
-} from "@veolms/contracts";
-import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
-import {
-  DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS,
-  claimPointerGesture,
-  getLearningPlayerSwipeSplitX,
-  isFullLearningPlayerSwipeTarget,
-  subscribeToPointerGestureClaims,
-} from "../gestures/pointerGestureOwnership";
-import { useSecondPressHold } from "../gestures/useSecondPressHold";
-import {
-  FLOATING_SCROLLBAR_HORIZONTAL_DRAG_EVENT,
-  FloatingScrollbar,
-} from "../shell/FloatingScrollbar";
-import type { FloatingScrollbarHorizontalDragDetail } from "../shell/FloatingScrollbar";
-import { scrollApplicationTo } from "../shell/applicationScroll";
-import { isEditingShortcutTarget } from "../keyboardShortcuts";
-import { ALLOW_GUEST_LEARNING } from "../routing/routeAccess";
-import { useShortcutPlatform } from "../useShortcutPlatform";
-import { LessonVideoPlayer } from "./player/LessonVideoPlayer";
-import { LessonPlayerChromePlaceholder } from "./player/LessonPlayerChromePlaceholder";
+import type { MyQuizAssignment } from "@veolms/contracts";
+import { FloatingScrollbar } from "../shell/FloatingScrollbar";
 import type {
   LessonPlayerMinimizeGestureState,
-  LessonVideoPlayerProps,
-  NextLessonInfo,
   RegisterPersistentLearningPlayer,
 } from "./player";
 import type { LearningMiniPlayerRequest } from "./player/learningMiniPlayerTypes";
-import {
-  isDesktopLearningMinimizeViewport,
-  LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY,
-} from "./player/learningPlayerMotion";
-import {
-  DEFAULT_LEARNING_PLAYER_PREFERENCES,
-  getInitialLearningPlayerPreferences,
-  publishLearningPlayerBootstrap,
-} from "./learningPlayerPreferences";
-import { writeAutoplayPreference } from "./player/lessonPlayerPersistence";
-import {
-  type Lesson,
-  createLessonVideo,
-  createLessonsById,
-} from "./courseContent";
-import { mediaService } from "../services/media";
-import { Curriculum } from "./Curriculum";
-import { CurriculumResizeGrip } from "./CurriculumResizeGrip";
-import {
-  FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
-  FullscreenLandscapeCurriculumPanel,
-} from "./FullscreenLandscapeCurriculumPanel";
-import {
-  getCourseThumbnail,
-  getCourseThumbnailSrcSet,
-  getCourseTitle,
-} from "./courseMetadata";
-import {
-  canPlayCourseLesson,
-  getPublicPreviewLessonNumbers,
-} from "./coursePlayerAccess";
-import { useAuthStore } from "../store/auth.store";
-import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
-import { useCourseOverview } from "../services/courses";
-import { useCurrentUser } from "../services/auth";
-import { useEnrolledCourses } from "../services/enrollments";
-import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
-import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
-import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
-import {
-  getCachedVideoPlaybackBootstrap,
-  getVideoPlaybackBootstrap,
-  refreshVideoPlaybackToken,
-  VideoPlaybackBootstrapError,
-} from "./videoPlaybackBootstrap";
-import {
-  Discussion,
-  PrerenderedMobileCommentComposer,
-  type InteractionCapabilities,
-  type LessonContentAccessState,
-  type LessonParticipationState,
-} from "./Discussion";
-import {
-  clampLearningCurriculumWidth,
-  CURRICULUM_COLLAPSED_STORAGE_KEY,
-  CURRICULUM_COLLAPSED_WIDTH,
-  CURRICULUM_MAX_WIDTH,
-  CURRICULUM_MIN_WIDTH,
-  CURRICULUM_WIDTH_STORAGE_KEY,
-  applyLearningShellToDocument,
-  getInitialLearningShellState,
-} from "./learningShellPreferences";
-import { useLearningProgress } from "./useLearningProgress";
-import {
-  getPhoneLessonDrawerCollapsedSnapPoint,
-  getSideLessonDrawerBounds,
-  LESSON_DRAWER_DEFAULT_FLOATING_WIDTH,
-  LESSON_DRAWER_MAX_FLOATING_WIDTH,
-  LESSON_DRAWER_MIN_FLOATING_WIDTH,
-  useLessonDrawerHeroControl,
-} from "./useLessonDrawerHeroControl";
-import type { LessonDrawerViewportBounds } from "./useLessonDrawerHeroControl";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "@/components/ui/drawer";
-
-const CURRICULUM_SNAP_WIDTH = CURRICULUM_MIN_WIDTH / 2;
-const FLOATING_LESSON_DRAWER_SNAP_WIDTH = LESSON_DRAWER_MIN_FLOATING_WIDTH / 2;
-const LESSON_DRAWER_FALLBACK_SNAP_POINT = 0.72;
-const CURRICULUM_SWIPE_ACTIVATION_DISTANCE = 12;
-const CURRICULUM_SWIPE_DIRECTION_RATIO = 1.2;
-const CURRICULUM_SWIPE_COMMIT_DISTANCE = 72;
-const CURRICULUM_SWIPE_FLING_DISTANCE = 24;
-const CURRICULUM_SWIPE_FLING_VELOCITY = 0.3;
-const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
-const COURSE_CONTENT_DRAWER_QUERY = "(max-width: 1080px)";
-const PHONE_LESSON_DRAWER_QUERY = "(max-width: 640px)";
-const FLOATING_LESSON_DRAWER_WIDTH_KEY = "veolms-floating-curriculum-width";
-const IDLE_PLAYER_MINIMIZE_GESTURE: LessonPlayerMinimizeGestureState = {
-  offsetY: 0,
-  phase: "idle",
-  progress: 0,
-};
-
-const subscribeToCourseContentDrawerViewport = (onStoreChange: () => void) => {
-  const media = window.matchMedia(COURSE_CONTENT_DRAWER_QUERY);
-  media.addEventListener("change", onStoreChange);
-  return () => media.removeEventListener("change", onStoreChange);
-};
-
-const getCourseContentDrawerViewportSnapshot = () =>
-  window.matchMedia(COURSE_CONTENT_DRAWER_QUERY).matches;
-
-const getCourseContentDrawerViewportServerSnapshot = () => false;
-
-const subscribeToPhoneLessonDrawerViewport = (onStoreChange: () => void) => {
-  const media = window.matchMedia(PHONE_LESSON_DRAWER_QUERY);
-  media.addEventListener("change", onStoreChange);
-  return () => media.removeEventListener("change", onStoreChange);
-};
-
-const getPhoneLessonDrawerViewportSnapshot = () =>
-  window.matchMedia(PHONE_LESSON_DRAWER_QUERY).matches;
-
-const getPhoneLessonDrawerViewportServerSnapshot = () => false;
-
-const subscribeToDesktopLearningMinimizeViewport = (
-  onStoreChange: () => void,
-) => {
-  const media = window.matchMedia(LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY);
-  media.addEventListener("change", onStoreChange);
-  return () => media.removeEventListener("change", onStoreChange);
-};
-
-const getDesktopLearningMinimizeViewportSnapshot = () =>
-  window.matchMedia(LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY).matches;
-
-const getDesktopLearningMinimizeViewportServerSnapshot = () => false;
-
-const CURRICULUM_SWIPE_EXCLUSION_SELECTOR = [
-  ".learning-curriculum__resize-rail",
-  "input",
-  "textarea",
-  "select",
-  '[contenteditable="true"]',
-  '[role="slider"]',
-  "[data-player-control]",
-  "[data-player-menu]",
-  "[data-sidebar-swipe-ignore]",
-  "[data-learning-swipe-ignore]",
-].join(",");
-
-const LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR = [
-  ".learning-curriculum__resize-rail",
-  ".elastic-scroller",
-  "input",
-  "textarea",
-  "select",
-  '[contenteditable="true"]',
-  '[role="slider"]',
-  "[data-player-control]",
-  "[data-player-menu]",
-].join(",");
-
-const safeResumeVideo = (video: HTMLVideoElement | null) => {
-  if (!video || !video.paused) return;
-  try {
-    const playResult = video.play?.();
-    if (playResult && typeof playResult.catch === "function") {
-      playResult.catch(() => undefined);
-    }
-  } catch {
-    // Ignore environments where play() is unsupported (e.g. JSDOM) or rejected by browser policies
-  }
-};
-
-const isCurriculumSwipeExcludedTarget = (
-  target: EventTarget | null,
-  selector = CURRICULUM_SWIPE_EXCLUSION_SELECTOR,
-) => target instanceof Element && Boolean(target.closest(selector));
-
-const getInitialFloatingLessonDrawerWidth = () => {
-  if (typeof window === "undefined")
-    return LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
-
-  try {
-    const storedWidth = window.localStorage.getItem(
-      FLOATING_LESSON_DRAWER_WIDTH_KEY,
-    );
-    if (storedWidth === null) return LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
-
-    const savedWidth = Number(storedWidth);
-    return Number.isFinite(savedWidth)
-      ? Math.min(
-          LESSON_DRAWER_MAX_FLOATING_WIDTH,
-          Math.max(LESSON_DRAWER_MIN_FLOATING_WIDTH, savedWidth),
-        )
-      : LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
-  } catch {
-    return LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
-  }
-};
+import { PrerenderedMobileCommentComposer } from "./Discussion";
+import { Drawer } from "@/components/ui/drawer";
+import { LessonPlayerSlot } from "./workspace/LessonPlayerSlot";
+import { LessonContentPanel } from "./workspace/LessonContentPanel";
+import { CurriculumColumn } from "./workspace/CurriculumColumn";
+import { CourseLessonsDrawerContent } from "./workspace/CourseLessonsDrawerContent";
+import { useLearningCourseData } from "./workspace/hooks/useLearningCourseData";
+import { useLessonSelectionState } from "./workspace/hooks/useLessonSelectionState";
+import { useLearningShellState } from "./workspace/hooks/useLearningShellState";
+import { useWorkspaceRefs } from "./workspace/hooks/useWorkspaceRefs";
+import { useCurriculumModel } from "./workspace/hooks/useCurriculumModel";
+import { usePlaybackBootstrapState } from "./workspace/hooks/usePlaybackBootstrapState";
+import { useLessonDescriptionState } from "./workspace/hooks/useLessonDescriptionState";
+import { useLessonStagePlan } from "./workspace/hooks/useLessonStagePlan";
+import { useLessonAccess } from "./workspace/hooks/useLessonAccess";
+import { useLessonProgressState } from "./workspace/hooks/useLessonProgressState";
+import { useLessonPlayerSizing } from "./workspace/hooks/useLessonPlayerSizing";
+import { useLearningDeepLinkState } from "./workspace/hooks/useLearningDeepLinkState";
+import { useLessonNavigation } from "./workspace/hooks/useLessonNavigation";
+import { useLessonDrawerControls } from "./workspace/hooks/useLessonDrawerControls";
+import { useCurriculumScreenSwipe } from "./workspace/hooks/useCurriculumScreenSwipe";
+import { useFloatingLessonDrawerResize } from "./workspace/hooks/useFloatingLessonDrawerResize";
+import { useCurriculumResize } from "./workspace/hooks/useCurriculumResize";
+import { usePlayerCourseLessons } from "./workspace/hooks/usePlayerCourseLessons";
+import { useLessonPlayerProps } from "./workspace/hooks/useLessonPlayerProps";
+import { useLessonEditPath } from "./workspace/hooks/useLessonEditPath";
+import { useLessonHeader } from "./workspace/hooks/useLessonHeader";
+import { useShownAfterFirstPaint } from "./workspace/hooks/useShownAfterFirstPaint";
 
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
@@ -259,7 +50,11 @@ interface LearningWorkspaceProps {
   mobileBottomNavigationHidden?: boolean;
   onSelectLesson: (lessonId: number, view?: "video" | "quiz") => void;
   onOpenCourseOverview: () => void;
+  /** "Unlock the course" on a locked lesson. */
+  onUnlockCourse: () => void;
   onOpenLogin: () => void;
+  /** Opens a page of the app (the course editor, for "Edit"). */
+  onOpenEditor?: (path: string) => void;
   onMinimizePlayer?: (request: LearningMiniPlayerRequest) => void;
   onMinimizeGestureChange?: (state: LessonPlayerMinimizeGestureState) => void;
   onMiniPlayerRestoreReady?: () => void;
@@ -271,62 +66,6 @@ interface LearningWorkspaceProps {
   quizAssignment?: MyQuizAssignment | null;
   quizAssignments?: readonly MyQuizAssignment[] | null;
   quizAssignmentLoading?: boolean;
-}
-
-interface CurriculumResize {
-  pointerId: number;
-  startX: number;
-  startWidth: number;
-  expandedWidthAtStart: number;
-  collapsedAtStart: boolean;
-  collapsed: boolean;
-  collapsedAnchorX: number;
-  collapsedAnchorWidth: number;
-  expandedAnchorX: number | null;
-  previewWidth: number;
-  handle: HTMLElement;
-}
-
-interface CurriculumPointerEvent {
-  pointerId: number;
-  clientX: number;
-}
-
-interface FloatingLessonDrawerResize {
-  pointerId: number;
-  startX: number;
-  startWidth: number;
-  originalWidth: number;
-  previewWidth: number;
-  dismissOnEnd: boolean;
-  handle: HTMLElement;
-}
-
-interface CurriculumScreenSwipe {
-  pointerId: number;
-  active: boolean;
-  startedAt: number;
-  startX: number;
-  startY: number;
-  lastX: number;
-  lastTimestamp: number;
-  velocityX: number;
-  closedAtStart: boolean;
-  expandedWidthAtStart: number;
-  target: "curriculum" | "lesson-drawer";
-  handle: HTMLDivElement;
-}
-
-interface CurriculumScreenSwipeStartEvent {
-  pointerId: number;
-  pointerType: string;
-  isPrimary: boolean;
-  clientX: number;
-  clientY: number;
-  timeStamp: number;
-  target: EventTarget | null;
-  handle: HTMLDivElement;
-  splitX?: number;
 }
 
 export function LearningWorkspace({
@@ -343,7 +82,9 @@ export function LearningWorkspace({
   mobileBottomNavigationHidden = false,
   onSelectLesson,
   onOpenCourseOverview,
+  onUnlockCourse,
   onOpenLogin,
+  onOpenEditor,
   onMinimizePlayer,
   onMinimizeGestureChange,
   onMiniPlayerRestoreReady,
@@ -356,2385 +97,624 @@ export function LearningWorkspace({
   quizAssignments = null,
   quizAssignmentLoading = false,
 }: LearningWorkspaceProps) {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const storedAuthUser = useAuthStore((state) => state.user);
-  const { data: currentUser, isFetched: isCurrentUserFetched } =
-    useCurrentUser();
-  const resolvedAuthUser =
-    currentUser === undefined ? storedAuthUser : currentUser;
-  const isAuthResolutionPending = !isCurrentUserFetched && !storedAuthUser;
-  const enrolledCoursesQuery = useEnrolledCourses({
-    enabled: isAuthenticated,
-  });
-  const isApiRoute = Boolean(courseSlug);
   const {
-    data: courseOverview,
-    isLoading: isCourseOverviewLoading,
-    isError: isCourseOverviewError,
-    isFetching: isCourseOverviewFetching,
-    refetch: refetchCourseOverview,
-  } = useCourseOverview(courseSlug, {
-    enabled: isApiRoute,
-  });
-  const isInteractionCapabilitiesLoading =
-    isApiRoute && isCourseOverviewLoading && !courseOverview;
-  const allowComments = courseOverview?.settings?.allowComments ?? true;
-  const allowNotes = courseOverview?.settings?.allowNotes ?? true;
-  const allowQa = courseOverview?.settings?.allowQa ?? true;
-
-  const interactionCapabilities: InteractionCapabilities = useMemo(() => {
-    return {
-      allowComments,
-      allowNotes,
-      allowQa,
-    };
-  }, [allowComments, allowNotes, allowQa]);
-  const publicPreviewLessonNumbers = useMemo(
-    () => getPublicPreviewLessonNumbers(courseOverview),
-    [courseOverview],
-  );
-  const publicPreviewLessonSet = useMemo(
-    () => new Set(publicPreviewLessonNumbers),
-    [publicPreviewLessonNumbers],
-  );
-  const isLessonAvailable = useCallback(
-    (lessonNumber: number) =>
-      canPlayCourseLesson({
-        allowGuestLearning: ALLOW_GUEST_LEARNING,
-        isAuthenticated,
-        lessonNumber,
-        publicPreviewLessonNumbers: publicPreviewLessonSet,
-      }),
-    [isAuthenticated, publicPreviewLessonSet],
-  );
-  const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
-  const shortcutPlatform = useShortcutPlatform();
-  const [selectedLesson, setSelectedLesson] = useState(lessonId);
-  const [deepLinkInitializationPending, setDeepLinkInitializationPending] =
-    useState(Boolean(deepLinkLessonUuid));
-  const pendingLessonSelectionRef = useRef<number | null>(null);
-  const [localLessonProgress, setLocalLessonProgress] = useState<
-    Record<number, number>
-  >({});
-  const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
-  const [autoplayEnabled, setAutoplayEnabled] = useState(
-    DEFAULT_LEARNING_PLAYER_PREFERENCES.autoplay,
-  );
-  const courseTitle = useMemo(() => {
-    if (courseOverview?.course.title) {
-      return courseOverview.course.title;
-    }
-    if (isCourseOverviewError) {
-      return courseSlug || "";
-    }
-    return isApiRoute ? courseSlug || "" : getCourseTitle(courseSlug);
-  }, [
-    courseOverview?.course.title,
-    courseSlug,
+    isAuthenticated,
+    resolvedAuthUser,
+    isAuthResolutionPending,
+    courseAccessQuery,
     isApiRoute,
+    courseOverview,
+    isCourseOverviewLoading,
     isCourseOverviewError,
-  ]);
-  const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
-  const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
-  const [lessonDrawer, setLessonDrawer] = useState(false);
-  const [mobileLandscapeFullscreen, setMobileLandscapeFullscreen] =
-    useState(false);
-  const [fullscreenLessonPanelOpen, setFullscreenLessonPanelOpen] =
-    useState(false);
-  const [fullscreenVideoWidthPercent, setFullscreenVideoWidthPercent] =
-    useState(FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT);
-  const [
+    courseOverviewError,
+    isCourseOverviewFetching,
+    refetchCourseOverview,
+    isInteractionCapabilitiesLoading,
+    interactionCapabilities,
+    isLessonAvailable,
+    lessonStorageKey,
+  } = useLearningCourseData({
+    courseSlug,
+  });
+  const {
+    shortcutPlatform,
+    selectedLesson,
+    setSelectedLesson,
+    deepLinkInitializationPending,
+    setDeepLinkInitializationPending,
+    pendingLessonSelectionRef,
+    localLessonProgress,
+    setLocalLessonProgress,
+    autoPlayOnLessonChange,
+    setAutoPlayOnLessonChange,
+    autoplayEnabled,
+    setAutoplayEnabled,
+    courseTitle,
+    coursePersistenceKey,
+    discussionPersistenceKey,
+  } = useLessonSelectionState({
+    courseSlug,
+    deepLinkLessonUuid,
+    lessonId,
+    isApiRoute,
+    courseOverview,
+    isCourseOverviewError,
+  });
+  const {
+    lessonDrawer,
+    setLessonDrawer,
+    mobileLandscapeFullscreen,
+    setMobileLandscapeFullscreen,
+    fullscreenLessonPanelOpen,
+    setFullscreenLessonPanelOpen,
+    fullscreenVideoWidthPercent,
+    setFullscreenVideoWidthPercent,
     fullscreenVideoWidthPreviewPercent,
     setFullscreenVideoWidthPreviewPercent,
-  ] = useState<number | null>(null);
-  const [
     fullscreenCurriculumFocusRequest,
     setFullscreenCurriculumFocusRequest,
-  ] = useState(0);
-  const [lessonDrawerForcedFloating, setLessonDrawerForcedFloating] =
-    useState(false);
-  const [lessonDrawerSnapPoint, setLessonDrawerSnapPoint] = useState<
-    number | string | null
-  >(LESSON_DRAWER_FALLBACK_SNAP_POINT);
-  const [lessonDrawerCollapsedSnapPoint, setLessonDrawerCollapsedSnapPoint] =
-    useState(LESSON_DRAWER_FALLBACK_SNAP_POINT);
-  const [lessonDrawerViewportBounds, setLessonDrawerViewportBounds] =
-    useState<LessonDrawerViewportBounds | null>(null);
-  const [floatingLessonDrawerWidth, setFloatingLessonDrawerWidth] = useState(
-    getInitialFloatingLessonDrawerWidth,
-  );
-  const [floatingLessonDrawerResizing, setFloatingLessonDrawerResizing] =
-    useState(false);
-  const courseContentDrawerViewport = useSyncExternalStore(
-    subscribeToCourseContentDrawerViewport,
-    getCourseContentDrawerViewportSnapshot,
-    getCourseContentDrawerViewportServerSnapshot,
-  );
-  const phoneLessonDrawerViewport = useSyncExternalStore(
-    subscribeToPhoneLessonDrawerViewport,
-    getPhoneLessonDrawerViewportSnapshot,
-    getPhoneLessonDrawerViewportServerSnapshot,
-  );
-  const desktopLearningMinimizeViewport = useSyncExternalStore(
-    subscribeToDesktopLearningMinimizeViewport,
-    getDesktopLearningMinimizeViewportSnapshot,
-    getDesktopLearningMinimizeViewportServerSnapshot,
-  );
-  const phoneLessonDrawer = mobileBottomNavigation && phoneLessonDrawerViewport;
-  const lessonDrawerSnapPoints = useMemo(
-    () => [lessonDrawerCollapsedSnapPoint, 1],
-    [lessonDrawerCollapsedSnapPoint],
-  );
-  const [curriculumFocusRequest, setCurriculumFocusRequest] = useState(0);
-  const [lessonDrawerFocusRequest, setLessonDrawerFocusRequest] = useState(0);
-  const [lessonDrawerTopRequest, setLessonDrawerTopRequest] = useState(0);
-  const [lessonDrawerScrollTarget, setLessonDrawerScrollTarget] = useState<
-    "current" | "top"
-  >("current");
-  const [curriculumWidth, setCurriculumWidth] = useState(
-    () => getInitialLearningShellState().curriculumWidth,
-  );
-  const [curriculumCollapsed, setCurriculumCollapsed] = useState(
-    () => getInitialLearningShellState().curriculumCollapsed,
-  );
-  const learningShellHydratedRef = useRef(false);
-  const [curriculumResizing, setCurriculumResizing] = useState(false);
-  const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] =
-    useState<number | null>(null);
+    lessonDrawerForcedFloating,
+    setLessonDrawerForcedFloating,
+    lessonDrawerSnapPoint,
+    setLessonDrawerSnapPoint,
+    lessonDrawerCollapsedSnapPoint,
+    setLessonDrawerCollapsedSnapPoint,
+    lessonDrawerViewportBounds,
+    setLessonDrawerViewportBounds,
+    floatingLessonDrawerWidth,
+    setFloatingLessonDrawerWidth,
+    floatingLessonDrawerResizing,
+    setFloatingLessonDrawerResizing,
+    courseContentDrawerViewport,
+    phoneLessonDrawerViewport,
+    desktopLearningMinimizeViewport,
+    phoneLessonDrawer,
+    lessonDrawerSnapPoints,
+    curriculumFocusRequest,
+    setCurriculumFocusRequest,
+    lessonDrawerFocusRequest,
+    setLessonDrawerFocusRequest,
+    lessonDrawerTopRequest,
+    setLessonDrawerTopRequest,
+    lessonDrawerScrollTarget,
+    setLessonDrawerScrollTarget,
+    curriculumWidth,
+    setCurriculumWidth,
+    curriculumCollapsed,
+    setCurriculumCollapsed,
+    curriculumResizing,
+    setCurriculumResizing,
+    curriculumResizePreviewWidth,
+    setCurriculumResizePreviewWidth,
+  } = useLearningShellState({
+    mobileBottomNavigation,
+    setAutoplayEnabled,
+  });
 
-  useLayoutEffect(() => {
-    let shellState = {
-      curriculumCollapsed,
-      curriculumWidth,
-    };
-    const isInitialShellSync = !learningShellHydratedRef.current;
-    if (isInitialShellSync) {
-      learningShellHydratedRef.current = true;
-      shellState = getInitialLearningShellState();
-      if (shellState.curriculumCollapsed !== curriculumCollapsed) {
-        setCurriculumCollapsed(shellState.curriculumCollapsed);
-      }
-      if (shellState.curriculumWidth !== curriculumWidth) {
-        setCurriculumWidth(shellState.curriculumWidth);
-      }
-    }
-
-    const rootWidth = isInitialShellSync
-      ? shellState.curriculumCollapsed
-        ? CURRICULUM_COLLAPSED_WIDTH
-        : shellState.curriculumWidth
-      : (curriculumResizePreviewWidth ??
-        (curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth));
-    applyLearningShellToDocument({
-      curriculumCollapsed: shellState.curriculumCollapsed,
-      curriculumWidth: shellState.curriculumWidth,
-    });
-    if (rootWidth !== shellState.curriculumWidth) {
-      document.documentElement.style.setProperty(
-        "--learning-curriculum-width",
-        `${rootWidth}px`,
-      );
-    }
-  }, [curriculumCollapsed, curriculumResizePreviewWidth, curriculumWidth]);
-
-  useLayoutEffect(() => {
-    const autoplay = getInitialLearningPlayerPreferences().autoplay;
-    setAutoplayEnabled(autoplay);
-    publishLearningPlayerBootstrap({ autoplay });
-  }, []);
-
-  useEffect(() => {
-    if (courseContentDrawerViewport || !learningShellHydratedRef.current) {
-      return;
-    }
-    try {
-      window.localStorage.setItem(
-        CURRICULUM_COLLAPSED_STORAGE_KEY,
-        String(curriculumCollapsed),
-      );
-    } catch {
-      // Course-content toggling remains available without browser storage.
-    }
-  }, [courseContentDrawerViewport, curriculumCollapsed]);
-
-  const [theaterMode, setTheaterMode] = useState(false);
-  const [chaptersPanelHost, setChaptersPanelHost] =
-    useState<HTMLDivElement | null>(null);
-  const mainRef = useRef<HTMLElement>(null);
-  const playerWrapRef = useRef<HTMLDivElement>(null);
-  const workspaceRef = useRef<HTMLDivElement>(null);
-  const lessonContentRef = useRef<HTMLElement>(null);
-  const playerMinimizeActiveRef = useRef(false);
-  const updatePlayerMinimizeGesture = useCallback(
-    (state: LessonPlayerMinimizeGestureState) => {
-      const active = state.phase !== "idle";
-      if (playerMinimizeActiveRef.current !== active) {
-        playerMinimizeActiveRef.current = active;
-        const workspace = workspaceRef.current;
-        const main = mainRef.current;
-        const playerWrap = playerWrapRef.current;
-        const lessonContent = lessonContentRef.current;
-        const desktopUnifiedMotion = isDesktopLearningMinimizeViewport();
-        if (active) {
-          workspace?.style.setProperty("background", "transparent");
-          playerWrap?.style.setProperty("background", "transparent");
-          playerWrap?.style.setProperty("box-shadow", "none");
-          playerWrap?.style.setProperty("z-index", "190");
-          if (desktopUnifiedMotion && main) {
-            main.inert = true;
-            main.style.pointerEvents = "none";
-          } else if (lessonContent) {
-            lessonContent.inert = true;
-            lessonContent.style.pointerEvents = "none";
-            lessonContent.style.willChange = "transform, opacity";
-          }
-        } else {
-          workspace?.style.removeProperty("background");
-          playerWrap?.style.removeProperty("background");
-          playerWrap?.style.removeProperty("box-shadow");
-          playerWrap?.style.removeProperty("z-index");
-          if (main) {
-            main.inert = lessonDrawer ? true : false;
-            main.style.removeProperty("pointer-events");
-            main.style.removeProperty("will-change");
-          }
-          if (lessonContent) {
-            lessonContent.inert = false;
-            lessonContent.style.removeProperty("pointer-events");
-            lessonContent.style.removeProperty("will-change");
-          }
-        }
-      }
-      onMinimizeGestureChange?.(state);
-    },
-    [lessonDrawer, onMinimizeGestureChange],
-  );
-  useEffect(
-    () => () => updatePlayerMinimizeGesture(IDLE_PLAYER_MINIMIZE_GESTURE),
-    [updatePlayerMinimizeGesture],
-  );
-  const lessonTriggerRef = useRef<HTMLButtonElement>(null);
-  const curriculumScrollportRef = useRef<HTMLElement>(null);
-  const fullscreenCurriculumScrollportRef = useRef<HTMLElement>(null);
-  const lessonDrawerSurfaceRef = useRef<HTMLDivElement>(null);
-  const lessonDrawerScrollportRef = useRef<HTMLElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const lessonDrawerSkipFinalFocusRef = useRef(false);
-  const curriculumResizeRef = useRef<CurriculumResize | null>(null);
-  const floatingLessonDrawerResizeRef =
-    useRef<FloatingLessonDrawerResize | null>(null);
-  const curriculumResizeMoveRef = useRef<
-    ((event: PointerEvent) => void) | null
-  >(null);
-  const curriculumResizeFinishRef = useRef<
-    ((event: PointerEvent, cancelled?: boolean) => void) | null
-  >(null);
-  const curriculumScreenSwipeRef = useRef<CurriculumScreenSwipe | null>(null);
-  const curriculumScreenSwipeStartRef = useRef<
-    ((event: CurriculumScreenSwipeStartEvent) => void) | null
-  >(null);
-
-  useEffect(
-    () =>
-      subscribeToPointerGestureClaims(({ owner, pointerId }) => {
-        if (owner !== "curriculum") return;
-        if (curriculumScreenSwipeRef.current?.pointerId === pointerId) {
-          curriculumScreenSwipeRef.current = null;
-        }
-      }),
-    [],
-  );
-  const curriculumScreenSwipeMoveRef = useRef<
-    ((event: PointerEvent) => void) | null
-  >(null);
-  const curriculumScreenSwipeFinishRef = useRef<
-    ((event: PointerEvent, cancelled?: boolean) => void) | null
-  >(null);
-  const curriculumScreenSwipeConsumedUntilRef = useRef(0);
-  const isCourseContentDrawerLayout = useCallback(
-    () => window.matchMedia(COURSE_CONTENT_DRAWER_QUERY).matches,
-    [],
-  );
-
-  const adaptedCurriculum = useMemo(() => {
-    if (!courseOverview) return null;
-    return adaptCourseOverviewToCurriculum(courseOverview);
-  }, [courseOverview]);
-
-  const curriculumSections = useMemo(
-    () => adaptedCurriculum?.sections ?? [],
-    [adaptedCurriculum],
-  );
-  const curriculumLessonsById = useMemo(
-    () => createLessonsById(curriculumSections),
-    [curriculumSections],
-  );
-  const firstCurriculumLessonId = curriculumSections
-    .find(({ lessons }) => lessons.length > 0)
-    ?.lessons.at(0)?.[0];
-  const firstCurriculumLesson = firstCurriculumLessonId
-    ? curriculumLessonsById.get(firstCurriculumLessonId)
-    : undefined;
-  const fallbackEmptyLesson = useMemo<Lesson>(
-    () => [selectedLesson || 1, "", "", "todo"],
-    [selectedLesson],
-  );
-  const currentLesson =
-    curriculumLessonsById.get(selectedLesson) ||
-    firstCurriculumLesson ||
-    fallbackEmptyLesson;
-  const courseQuizAssignments = useCourseQuizAssignments(
-    courseOverview?.course.id,
-    { enabled: isAuthenticated },
-  );
-  const [activeLessonView, setActiveLessonView] = useState<"video" | "quiz">(
-    initialLessonView,
-  );
-
-  useEffect(() => {
-    setActiveLessonView((currentView) =>
-      currentView === initialLessonView ? currentView : initialLessonView,
-    );
-  }, [initialLessonView]);
-
-  const getLessonUuid = useCallback(
-    (lessonNumber: number): string | undefined => {
-      const les = curriculumLessonsById.get(lessonNumber);
-      if (les && les[6]) return les[6];
-      return adaptedCurriculum?.lessonsByNumber.get(lessonNumber)?.id;
-    },
-    [curriculumLessonsById, adaptedCurriculum],
-  );
-
-  const hasLessonQuiz = useCallback(
-    (lessonNumber: number): boolean => {
-      const lesson = curriculumLessonsById.get(lessonNumber);
-      if (lesson?.[5] === "quiz") return true;
-      const uuid = getLessonUuid(lessonNumber);
-      if (!uuid) {
-        return lessonNumber === selectedLesson
-          ? Boolean(quizAssignment)
-          : false;
-      }
-      return Boolean(
-        quizAssignments?.some((a) => a.lessonId === uuid) ||
-        courseQuizAssignments.data?.some((a) => a.lessonId === uuid) ||
-        (lessonNumber === selectedLesson &&
-          quizAssignment &&
-          (!quizAssignment.lessonId || quizAssignment.lessonId === uuid)),
-      );
-    },
-    [
-      curriculumLessonsById,
-      getLessonUuid,
-      selectedLesson,
-      quizAssignment,
-      quizAssignments,
-      courseQuizAssignments.data,
-    ],
-  );
-
-  const curriculumLessonResources = useMemo(() => {
-    const resourcesByLesson = new Map<number, readonly LessonResource[]>();
-    for (const [lessonNumber, lesson] of adaptedCurriculum?.lessonsByNumber ??
-      []) {
-      if (lesson.resources?.length) {
-        resourcesByLesson.set(lessonNumber, lesson.resources);
-      }
-    }
-    return resourcesByLesson;
-  }, [adaptedCurriculum]);
-  const curriculumQuizLessonNumbers = useMemo(
-    () =>
-      new Set(
-        [...curriculumLessonsById.keys()].filter((lessonNumber) =>
-          hasLessonQuiz(lessonNumber),
-        ),
-      ),
-    [curriculumLessonsById, hasLessonQuiz],
-  );
-
-  const currentLessonUuid = getLessonUuid(selectedLesson);
-  const currentQuizAssignment = useMemo(() => {
-    if (currentLessonUuid && quizAssignments) {
-      const found = quizAssignments.find(
-        (a) => a.lessonId === currentLessonUuid,
-      );
-      if (found) return found;
-    }
-    if (currentLessonUuid && courseQuizAssignments.data) {
-      const foundCourse = courseQuizAssignments.data.find(
-        (a) => a.lessonId === currentLessonUuid,
-      );
-      if (foundCourse) {
-        return {
-          id: foundCourse.id,
-          quizId: foundCourse.quizId,
-          quizVersionId: foundCourse.quizVersionId,
-          courseId: foundCourse.courseId,
-          lessonId: foundCourse.lessonId,
-          quizTitle: foundCourse.quizTitle,
-          lessonTitle: currentLesson[1],
-          courseTitle: courseOverview?.course.title ?? "Course",
-          required: foundCourse.required,
-          passPercentage: foundCourse.passPercentage,
-          maxAttempts: foundCourse.maxAttempts,
-          timeLimitSeconds: foundCourse.timeLimitSeconds,
-          shuffleQuestions: foundCourse.shuffleQuestions,
-          shuffleOptions: foundCourse.shuffleOptions,
-          feedbackMode: foundCourse.feedbackMode,
-          availableFrom: foundCourse.availableFrom,
-          availableUntil: foundCourse.availableUntil,
-          activeAttemptId: null,
-          attemptCount: 0,
-          latestAttemptStatus: null,
-          latestScore: null,
-          bestScore: null,
-          latestPassed: null,
-        };
-      }
-    }
-    if (
-      quizAssignment &&
-      (!currentLessonUuid || quizAssignment.lessonId === currentLessonUuid)
-    ) {
-      return quizAssignment;
-    }
-    return null;
-  }, [
-    currentLessonUuid,
-    quizAssignments,
-    courseQuizAssignments.data,
-    quizAssignment,
-    currentLesson,
-    courseOverview?.course.title,
-  ]);
-
-  const isDedicatedQuizLesson = currentLesson[5] === "quiz";
-  const hasQuizContent =
-    Boolean(currentQuizAssignment) ||
-    (isDedicatedQuizLesson && !currentLessonUuid);
-  const showingQuiz = activeLessonView === "quiz";
-  const isQuizLesson = showingQuiz;
-
-  useLayoutEffect(() => {
-    const main = playerWrapRef.current?.closest<HTMLElement>(".courses-main");
-    if (!main) return;
-    if (showingQuiz) {
-      main.setAttribute("data-learning-quiz-active", "true");
-      const video = document.querySelector<HTMLVideoElement>("video");
-      if (video && !video.paused) {
-        video.pause();
-      }
-    } else {
-      main.removeAttribute("data-learning-quiz-active");
-      if (autoPlayOnLessonChange) {
-        const video = document.querySelector<HTMLVideoElement>("video");
-        safeResumeVideo(video);
-      }
-    }
-    return () => {
-      main.removeAttribute("data-learning-quiz-active");
-    };
-  }, [autoPlayOnLessonChange, showingQuiz]);
-
-  useEffect(() => {
-    if (!showingQuiz) return;
-
-    const pauseAllMedia = () => {
-      if (typeof document === "undefined") return;
-      const mediaElements =
-        document.querySelectorAll<HTMLMediaElement>("video, audio");
-      for (const el of mediaElements) {
-        if (!el.paused && typeof el.pause === "function") {
-          try {
-            el.pause();
-          } catch {
-            // ignore error
-          }
-        }
-      }
-    };
-
-    pauseAllMedia();
-
-    const handlePlayCapture = (event: Event) => {
-      const target = event.target;
-      if (
-        target instanceof HTMLMediaElement &&
-        typeof target.pause === "function"
-      ) {
-        try {
-          target.pause();
-        } catch {
-          // ignore error
-        }
-      }
-    };
-
-    window.addEventListener("play", handlePlayCapture, true);
-    window.addEventListener("playing", handlePlayCapture, true);
-
-    return () => {
-      window.removeEventListener("play", handlePlayCapture, true);
-      window.removeEventListener("playing", handlePlayCapture, true);
-    };
-  }, [showingQuiz]);
-  const protectedPlayback = Boolean(courseSlug);
-  const playbackRequestKey = `${courseSlug ?? ""}\u0000${selectedLesson}\u0000${isAuthenticated ? "authenticated" : "guest"}`;
-  const [playbackBootstrap, setPlaybackBootstrap] =
-    useState<VideoPlaybackBootstrap | null>(() => {
-      if (!courseSlug) return null;
-      return getCachedVideoPlaybackBootstrap({
-        courseSlug,
-        lessonNumber: selectedLesson,
-      });
-    });
-  const [playbackBootstrapError, setPlaybackBootstrapError] =
-    useState<VideoPlaybackBootstrapError | null>(null);
-  const [playbackBootstrapAttempt, setPlaybackBootstrapAttempt] = useState(0);
-  const playbackRequestKeyRef = useRef<string | null>(null);
-  const refreshPlaybackToken = useCallback(async () => {
-    if (!courseSlug) {
-      throw new Error("A course is required to refresh playback access.");
-    }
-    return refreshVideoPlaybackToken({
-      courseSlug,
-      lessonNumber: selectedLesson,
-    });
-  }, [courseSlug, selectedLesson]);
-
-  const retryPlaybackBootstrap = useCallback(() => {
-    playbackRequestKeyRef.current = null;
-    setPlaybackBootstrapError(null);
-    setPlaybackBootstrap(null);
-    setPlaybackBootstrapAttempt((attempt) => attempt + 1);
-  }, []);
-
-  useEffect(() => {
-    setPlaybackBootstrapError(null);
-    if (!courseSlug) {
-      setPlaybackBootstrap(null);
-      setPlaybackBootstrapError(null);
-      playbackRequestKeyRef.current = null;
-      return;
-    }
-
-    if (playbackRequestKeyRef.current === playbackRequestKey) return;
-    playbackRequestKeyRef.current = playbackRequestKey;
-
-    const cached = getCachedVideoPlaybackBootstrap({
-      courseSlug,
-      lessonNumber: selectedLesson,
-    });
-    if (cached) {
-      setPlaybackBootstrap(cached);
-      setPlaybackBootstrapError(null);
-      return;
-    }
-
-    setPlaybackBootstrap(null);
-    setPlaybackBootstrapError(null);
-    let active = true;
-    let settled = false;
-    void getVideoPlaybackBootstrap({
-      courseSlug,
-      lessonNumber: selectedLesson,
-    })
-      .then((bootstrap) => {
-        if (active) {
-          settled = true;
-          setPlaybackBootstrap(bootstrap);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        settled = true;
-        setPlaybackBootstrap(null);
-        setPlaybackBootstrapError(
-          error instanceof VideoPlaybackBootstrapError
-            ? error
-            : new VideoPlaybackBootstrapError(
-                0,
-                "PLAYBACK_BOOTSTRAP_FAILED",
-                "Unable to prepare this video.",
-              ),
-        );
-      });
-
-    return () => {
-      active = false;
-      // This effect also re-runs for the same lesson, for example when the
-      // sign-in state resolves while the request is still out. The answer to
-      // this request is now ignored, so forget the key: otherwise the re-run
-      // sees the lesson as already requested and the player waits forever.
-      if (!settled && playbackRequestKeyRef.current === playbackRequestKey) {
-        playbackRequestKeyRef.current = null;
-      }
-    };
-  }, [
-    courseSlug,
-    isAuthenticated,
-    playbackRequestKey,
-    playbackBootstrapAttempt,
-    selectedLesson,
-  ]);
-  const playbackAccessError = useMemo<
-    LessonVideoPlayerProps["playbackAccessError"]
-  >(() => {
-    if (!playbackBootstrapError) return null;
-
-    if (
-      playbackBootstrapError.status === 401 ||
-      playbackBootstrapError.code === "UNAUTHORIZED" ||
-      playbackBootstrapError.code === "MFA_REQUIRED"
-    ) {
-      return {
-        kind: "login",
-        message: "Log in to access this lesson.",
-        actionLabel: "Log in",
-        onAction: onOpenLogin,
-      };
-    }
-
-    if (playbackBootstrapError.status === 403) {
-      return {
-        kind: "access",
-        message: "Get access to this course to watch this lesson.",
-        actionLabel: "Get access",
-        onAction: onOpenCourseOverview,
-      };
-    }
-
-    return {
-      kind: "retry",
-      message: "We couldn't prepare this video.",
-      actionLabel: "Retry",
-      onAction: retryPlaybackBootstrap,
-    };
-  }, [
-    onOpenCourseOverview,
-    onOpenLogin,
-    playbackBootstrapError,
-    retryPlaybackBootstrap,
-  ]);
-  const playbackBootstrapPending = Boolean(
-    protectedPlayback && !playbackBootstrap && !playbackBootstrapError,
-  );
-  const lessonContentAccess = useMemo<LessonContentAccessState>(() => {
-    if (isAuthResolutionPending || !courseOverview || !adaptedCurriculum) {
-      return "pending";
-    }
-
-    const lesson = adaptedCurriculum.lessonsByNumber.get(selectedLesson);
-    if (!lesson) return "pending";
-
-    const isPublicLesson =
-      courseOverview.course.status === "published" &&
-      lesson.isPublished &&
-      (lesson.isPreview || courseOverview.pricing?.pricingType === "free");
-    if (isPublicLesson) return "granted";
-    if (!isAuthenticated) return "denied";
-
-    const isCourseOwner =
-      resolvedAuthUser?.id === courseOverview.course.creatorId;
-    const isAdmin = resolvedAuthUser?.roles?.some(
-      (role) => role.trim().toLowerCase() === "admin",
-    );
-    if (isCourseOwner || isAdmin) return "granted";
-    if (!enrolledCoursesQuery.isFetched) return "pending";
-
-    return enrolledCoursesQuery.data?.courses.some(
-      (course) => course.courseId === courseOverview.course.id,
-    )
-      ? "granted"
-      : "denied";
-  }, [
+  const {
+    theaterMode,
+    setTheaterMode,
+    chaptersPanelHost,
+    setChaptersPanelHost,
+    mainRef,
+    splitPaneRef,
+    playerWrapRef,
+    workspaceRef,
+    lessonContentRef,
+    updatePlayerMinimizeGesture,
+    lessonTriggerRef,
+    curriculumScrollportRef,
+    fullscreenCurriculumScrollportRef,
+    lessonDrawerSurfaceRef,
+    lessonDrawerScrollportRef,
+    previousFocusRef,
+    lessonDrawerSkipFinalFocusRef,
+    curriculumResizeRef,
+    curriculumResizeSyncTimerRef,
+    curriculumDragWidthAppliedRef,
+    floatingLessonDrawerResizeRef,
+    curriculumResizeMoveRef,
+    curriculumResizeFinishRef,
+    curriculumScreenSwipeRef,
+    curriculumScreenSwipeStartRef,
+    claimCurriculumPointerGesture,
+    beginCurriculumResizeRef,
+    curriculumScreenSwipeMoveRef,
+    curriculumScreenSwipeFinishRef,
+    curriculumScreenSwipeConsumedUntilRef,
+  } = useWorkspaceRefs({
+    onMinimizeGestureChange,
+    lessonDrawer,
+  });
+  const {
+    isCourseContentDrawerLayout,
     adaptedCurriculum,
-    courseOverview,
-    enrolledCoursesQuery.data?.courses,
-    enrolledCoursesQuery.isFetched,
-    isAuthResolutionPending,
-    isAuthenticated,
-    resolvedAuthUser?.id,
-    resolvedAuthUser?.roles,
-    selectedLesson,
-  ]);
-  const lessonContentAccessReason =
-    lessonContentAccess === "denied"
-      ? isAuthenticated
-        ? "access"
-        : "login"
-      : null;
-  const lessonParticipationState = useMemo<LessonParticipationState>(() => {
-    if (isAuthResolutionPending || !courseOverview || !adaptedCurriculum) {
-      return "pending";
-    }
-
-    if (!isAuthenticated) return "denied";
-
-    const isCourseOwner =
-      resolvedAuthUser?.id === courseOverview.course.creatorId;
-    const isAdmin = resolvedAuthUser?.roles?.some(
-      (role) => role.trim().toLowerCase() === "admin",
-    );
-    if (isCourseOwner || isAdmin) return "granted";
-    if (!enrolledCoursesQuery.isFetched) return "pending";
-
-    return enrolledCoursesQuery.data?.courses.some(
-      (course) => course.courseId === courseOverview.course.id,
-    )
-      ? "granted"
-      : "denied";
-  }, [
-    adaptedCurriculum,
-    courseOverview,
-    enrolledCoursesQuery.data?.courses,
-    enrolledCoursesQuery.isFetched,
-    isAuthResolutionPending,
-    isAuthenticated,
-    resolvedAuthUser?.id,
-    resolvedAuthUser?.roles,
-  ]);
-  const canParticipateInLessonDiscussion =
-    lessonContentAccess === "granted" && lessonParticipationState === "granted";
-  const lessonSequence = useMemo(
-    () =>
-      curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
-    [curriculumSections],
-  );
-  const lessonIdsByNumber = useMemo<ReadonlyMap<number, string> | undefined>(
-    () =>
-      adaptedCurriculum
-        ? new Map(
-            [...adaptedCurriculum.lessonsByNumber.entries()].map(
-              ([lessonNumber, lesson]) => [lessonNumber, lesson.id] as const,
-            ),
-          )
-        : undefined,
-    [adaptedCurriculum],
-  );
-  const { lessonProgress: persistedLessonProgress, recordProgress } =
-    useLearningProgress({
-      courseKey: courseOverview?.course.slug,
-      userId,
-      lessonIdsByNumber,
-      enabled: Boolean(courseOverview?.course.slug),
-    });
-  const lessonProgress = useMemo(() => {
-    if (Object.keys(localLessonProgress).length === 0) {
-      return persistedLessonProgress;
-    }
-    const merged = { ...persistedLessonProgress };
-    for (const [lessonNumber, progress] of Object.entries(
-      localLessonProgress,
-    )) {
-      const number = Number(lessonNumber);
-      merged[number] = Math.max(merged[number] ?? 0, progress);
-    }
-    return merged;
-  }, [localLessonProgress, persistedLessonProgress]);
-  const currentLessonIndex = lessonSequence.indexOf(selectedLesson);
-  const previousLessonId =
-    currentLessonIndex > 0 ? lessonSequence[currentLessonIndex - 1] : undefined;
-  const nextLessonId =
-    currentLessonIndex >= 0 && currentLessonIndex < lessonSequence.length - 1
-      ? lessonSequence[currentLessonIndex + 1]
-      : undefined;
-  const courseThumbnail = useMemo(() => {
-    if (courseOverview) {
-      return courseOverview.course.thumbnailUrl || undefined;
-    }
-    if (isCourseOverviewError) {
-      return undefined;
-    }
-    return isApiRoute ? undefined : getCourseThumbnail(courseSlug);
-  }, [courseOverview, courseSlug, isApiRoute, isCourseOverviewError]);
-  const courseThumbnailSrcSet =
-    courseOverview?.course.thumbnailSrcSet
-      ?.map(({ url, width }) => `${url} ${width}w`)
-      .join(", ") ||
-    (!isApiRoute && !isCourseOverviewError
-      ? getCourseThumbnailSrcSet(courseSlug)
-      : undefined);
-  const nextLessonInfo = useMemo<NextLessonInfo | undefined>(() => {
-    if (nextLessonId === undefined) return undefined;
-    const lesson = curriculumLessonsById.get(nextLessonId);
-    if (!lesson) return undefined;
-    const section = curriculumSections.find(({ lessons }) =>
-      lessons.some(([id]) => id === nextLessonId),
-    );
-    const nextLessonMediaId =
-      adaptedCurriculum?.lessonsByNumber.get(nextLessonId)?.contentMediaId;
-    const nextIndex = lessonSequence.indexOf(nextLessonId);
-    return {
-      id: nextLessonId,
-      title: lesson[1],
-      duration: lesson[2],
-      sectionTitle: section?.title,
-      thumbnailSrc: nextLessonMediaId
-        ? mediaService.getVideoThumbnailUrl(nextLessonMediaId)
-        : courseThumbnail,
-      lectureNumber: nextIndex >= 0 ? nextIndex + 1 : undefined,
-      totalLessons: lessonSequence.length,
-    };
-  }, [
-    adaptedCurriculum,
-    courseThumbnail,
-    curriculumLessonsById,
     curriculumSections,
-    lessonSequence,
-    nextLessonId,
-  ]);
-
-  const selectedLessonRecord = useMemo(() => {
-    if (!adaptedCurriculum) return null;
-    return adaptedCurriculum.lessonsByNumber.get(selectedLesson) ?? null;
-  }, [adaptedCurriculum, selectedLesson]);
-  const selectedLessonDescription = selectedLessonRecord?.description ?? null;
-  const courseId = courseOverview?.course.id;
-  const backendLessonId = selectedLessonRecord?.id;
-  const isLearningDeepLinkReady =
-    !isDiscussionDeepLink ||
-    Boolean(
-      deepLinkRouteSettled &&
-      !deepLinkInitializationPending &&
-      courseId &&
-      backendLessonId &&
-      selectedLesson === lessonId,
-    );
-  const isLearningDeepLinkError =
-    isDiscussionDeepLink &&
-    isCourseOverviewError &&
-    !isCourseOverviewFetching &&
-    !courseOverview;
-  const isLearningBootstrapLoading =
-    isInteractionCapabilitiesLoading ||
-    (!isLearningDeepLinkReady && !isLearningDeepLinkError);
-  useEffect(() => {
-    if (deepLinkLessonUuid) {
-      setDeepLinkInitializationPending(true);
-    }
-  }, [deepLinkLessonUuid]);
-
-  useEffect(() => {
-    if (
-      !deepLinkInitializationPending ||
-      !deepLinkRouteSettled ||
-      !courseId ||
-      !backendLessonId ||
-      selectedLesson !== lessonId
-    ) {
-      return;
-    }
-    setDeepLinkInitializationPending(false);
-  }, [
-    backendLessonId,
-    courseId,
-    deepLinkRouteSettled,
-    lessonId,
-    selectedLesson,
-    deepLinkInitializationPending,
-  ]);
-  const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
-
-  useLayoutEffect(() => {
-    const main = mainRef.current;
-    const playerWrap = playerWrapRef.current;
-    if (!main || !playerWrap) return undefined;
-
-    const stickyCompactLayout = window.matchMedia(
-      "(max-width: 640px) and (orientation: portrait)",
-    );
-    let frame: number | null = null;
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(() => schedulePlayerHeightSync());
-
-    const syncPlayerHeight = () => {
-      frame = null;
-      if (!stickyCompactLayout.matches) {
-        main.style.removeProperty("--learning-mobile-player-height");
-        return;
-      }
-
-      const nextHeight = playerWrap.getBoundingClientRect().height;
-      if (!Number.isFinite(nextHeight)) return;
-      main.style.setProperty(
-        "--learning-mobile-player-height",
-        `${Math.round(nextHeight * 2) / 2}px`,
-      );
-    };
-
-    function schedulePlayerHeightSync() {
-      if (frame !== null) return;
-      frame = window.requestAnimationFrame(syncPlayerHeight);
-    }
-
-    const syncObservation = () => {
-      observer?.disconnect();
-      if (stickyCompactLayout.matches) {
-        observer?.observe(playerWrap);
-        schedulePlayerHeightSync();
-      } else {
-        if (frame !== null) window.cancelAnimationFrame(frame);
-        frame = null;
-        main.style.removeProperty("--learning-mobile-player-height");
-      }
-    };
-
-    syncObservation();
-    stickyCompactLayout.addEventListener("change", syncObservation);
-    return () => {
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      observer?.disconnect();
-      stickyCompactLayout.removeEventListener("change", syncObservation);
-    };
-  }, [theaterMode]);
-
-  const getLessonDrawerCollapsedSnapPoint = useCallback(() => {
-    return getPhoneLessonDrawerCollapsedSnapPoint(
-      window.innerHeight,
-      playerWrapRef.current?.getBoundingClientRect().bottom,
-      LESSON_DRAWER_FALLBACK_SNAP_POINT,
-    );
-  }, []);
-
-  const getLessonDrawerViewportBounds = useCallback(
-    (preferredWidth: number) => {
-      if (phoneLessonDrawer) return null;
-
-      const playerBounds = playerWrapRef.current?.getBoundingClientRect();
-      if (
-        !playerBounds ||
-        !Number.isFinite(playerBounds.left) ||
-        !Number.isFinite(playerBounds.width) ||
-        playerBounds.width <= 0
-      ) {
-        return null;
-      }
-
-      const mainSurface =
-        playerWrapRef.current?.closest<HTMLElement>(".courses-main");
-      const frameSurface =
-        playerWrapRef.current?.closest<HTMLElement>(".courses-main-frame") ??
-        mainSurface;
-      const mainSurfaceBounds = mainSurface?.getBoundingClientRect();
-      const horizontalSurfaceBounds =
-        mainSurfaceBounds && mainSurfaceBounds.width > 0
-          ? mainSurfaceBounds
-          : playerBounds;
-      const sideBounds = getSideLessonDrawerBounds(
-        horizontalSurfaceBounds,
-        window.innerWidth,
-        preferredWidth,
-      );
-      if (!sideBounds) return null;
-
-      const verticalSurfaceBounds = mainSurfaceBounds ?? playerBounds;
-      const readVisibleRadius = (element: HTMLElement | null | undefined) => {
-        if (!element) return null;
-        const radius = window.getComputedStyle(element).borderTopRightRadius;
-        const pixels = Number.parseFloat(radius);
-        return Number.isFinite(pixels) && pixels > 0 ? radius : null;
-      };
-
-      return {
-        ...sideBounds,
-        top: Math.max(0, verticalSurfaceBounds.top),
-        bottom: Math.max(0, window.innerHeight - verticalSurfaceBounds.bottom),
-        borderRadius:
-          readVisibleRadius(frameSurface) ??
-          readVisibleRadius(mainSurface) ??
-          "18px",
-      };
-    },
-    [phoneLessonDrawer],
-  );
-
-  const resumeLessonVideoPlayback = useCallback(() => {
-    setActiveLessonView("video");
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      if (url.searchParams.has("view")) {
-        url.searchParams.delete("view");
-        window.history.replaceState(
-          null,
-          "",
-          `${url.pathname}${url.search}${url.hash}`,
-        );
-      }
-    }
-    setAutoPlayOnLessonChange(true);
-    requestAnimationFrame(() => {
-      const video = document.querySelector<HTMLVideoElement>("video");
-      safeResumeVideo(video);
-    });
-  }, []);
-
-  const selectLesson = useCallback(
-    (lessonNumber: number, view?: "video" | "quiz") => {
-      const targetLesson = curriculumLessonsById.get(lessonNumber);
-      const isTargetDedicatedQuiz = targetLesson?.[5] === "quiz";
-      const targetHasQuiz = hasLessonQuiz(lessonNumber);
-
-      if (
-        view === "quiz" ||
-        (view === undefined && isTargetDedicatedQuiz && targetHasQuiz)
-      ) {
-        setActiveLessonView("quiz");
-        if (typeof window !== "undefined") {
-          const url = new URL(window.location.href);
-          url.searchParams.set("view", "quiz");
-          window.history.replaceState(
-            null,
-            "",
-            `${url.pathname}${url.search}${url.hash}`,
-          );
-        }
-      } else {
-        resumeLessonVideoPlayback();
-      }
-      if (lessonNumber === selectedLesson) return;
-      pendingLessonSelectionRef.current = lessonNumber;
-      setSelectedLesson(lessonNumber);
-      if (view !== undefined) {
-        onSelectLesson(lessonNumber, view);
-      } else {
-        onSelectLesson(lessonNumber);
-      }
-    },
-    [
-      curriculumLessonsById,
-      hasLessonQuiz,
-      onSelectLesson,
-      resumeLessonVideoPlayback,
-      selectedLesson,
-    ],
-  );
-
-  const handleOpenLessonQuiz = useCallback(
-    (lessonNumber: number) => {
-      setActiveLessonView("quiz");
-      if (typeof window !== "undefined") {
-        const url = new URL(window.location.href);
-        url.searchParams.set("view", "quiz");
-        window.history.replaceState(
-          null,
-          "",
-          `${url.pathname}${url.search}${url.hash}`,
-        );
-      }
-      if (lessonNumber !== selectedLesson) {
-        selectLesson(lessonNumber, "quiz");
-      }
-      if (phoneLessonDrawer && lessonDrawer) {
-        setLessonDrawer(false);
-      }
-    },
-    [lessonDrawer, phoneLessonDrawer, selectLesson, selectedLesson],
-  );
-
-  const updateAutoplayEnabled = useCallback((enabled: boolean) => {
-    setAutoplayEnabled(enabled);
-    writeAutoplayPreference(enabled);
-    publishLearningPlayerBootstrap({ autoplay: enabled });
-  }, []);
-
-  const goToPreviousLesson = useCallback(() => {
-    if (previousLessonId !== undefined) selectLesson(previousLessonId);
-  }, [previousLessonId, selectLesson]);
-
-  const goToNextLesson = useCallback(() => {
-    if (nextLessonId !== undefined) selectLesson(nextLessonId);
-  }, [nextLessonId, selectLesson]);
-
-  const updateSelectedLessonProgress = useCallback(
-    (progress: number) => {
-      const roundedProgress = Math.max(0, Math.min(100, Math.round(progress)));
-      const nextProgress =
-        roundedProgress >= LESSON_PROGRESS_COMPLETE_THRESHOLD
-          ? 100
-          : roundedProgress;
-      setLocalLessonProgress((current) => {
-        if (current[selectedLesson] === nextProgress) return current;
-        const updated = { ...current, [selectedLesson]: nextProgress };
-        try {
-          // Merge with any previously stored map so a single watched lesson
-          // cannot wipe catalogue % derived from this legacy key.
-          const storageKey = `veolms-learning-${coursePersistenceKey}-progress`;
-          let merged: Record<string, number> = { ...updated };
-          try {
-            const raw = localStorage.getItem(storageKey);
-            if (raw) {
-              const existing = JSON.parse(raw) as Record<string, unknown>;
-              if (existing && typeof existing === "object") {
-                merged = {};
-                for (const [key, value] of Object.entries(existing)) {
-                  if (typeof value === "number" && Number.isFinite(value)) {
-                    merged[key] = value;
-                  }
-                }
-                for (const [key, value] of Object.entries(updated)) {
-                  merged[key] = Math.max(merged[key] ?? 0, value);
-                }
-              }
-            }
-          } catch {
-            merged = { ...updated };
-          }
-          localStorage.setItem(storageKey, JSON.stringify(merged));
-        } catch {
-          // Ignore storage write errors
-        }
-        return updated;
-      });
-      recordProgress(selectedLesson, nextProgress);
-    },
-    [coursePersistenceKey, recordProgress, selectedLesson],
-  );
-
-  const handleLessonEnded = useCallback(() => {
-    updateSelectedLessonProgress(100);
-  }, [updateSelectedLessonProgress]);
-
-  useEffect(() => {
-    const pendingLessonSelection = pendingLessonSelectionRef.current;
-    if (pendingLessonSelection !== null) {
-      if (lessonId !== pendingLessonSelection) return;
-      pendingLessonSelectionRef.current = null;
-    }
-
-    const requestedLessonId = lessonId;
-    const nextLessonId = curriculumLessonsById.has(requestedLessonId)
-      ? requestedLessonId
-      : firstCurriculumLessonId;
-    if (nextLessonId === undefined || nextLessonId === selectedLesson) return;
-    setAutoPlayOnLessonChange(true);
-    setSelectedLesson(nextLessonId);
-    if (nextLessonId !== lessonId) onSelectLesson(nextLessonId);
-  }, [
     curriculumLessonsById,
     firstCurriculumLessonId,
+    currentLesson,
+    playbackBootstrapError,
+    setPlaybackBootstrapError,
+    courseAccessRefused,
+    courseQuizAssignments,
+    setActiveLessonView,
+    hasLessonQuiz,
+    curriculumLessonResources,
+    curriculumQuizLessonNumbers,
+    currentLessonUuid,
+    currentQuizAssignment,
+    isDedicatedQuizLesson,
+    showingQuiz,
+  } = useCurriculumModel({
+    initialLessonView,
+    quizAssignment,
+    quizAssignments,
+    isAuthenticated,
+    courseOverview,
+    selectedLesson,
+    autoPlayOnLessonChange,
+    playerWrapRef,
+  });
+  const {
+    protectedPlayback,
+    playbackRequestKey,
+    playbackBootstrap,
+    setPlaybackBootstrap,
+    playbackBootstrapAttempt,
+    playbackRequestKeyRef,
+    refreshPlaybackToken,
+    retryPlaybackBootstrap,
+  } = usePlaybackBootstrapState({
+    courseSlug,
+    isAuthenticated,
+    selectedLesson,
+    setPlaybackBootstrapError,
+  });
+
+  const {
+    courseUnavailable,
+    retryCourseOverview,
+    selectedLessonQuizAttached,
+    stageLesson,
+    isLessonDescriptionPending,
+    lessonDescriptionState,
+    retryLessonDescription,
+  } = useLessonDescriptionState({
+    isApiRoute,
+    courseOverview,
+    courseOverviewError,
+    isCourseOverviewError,
+    isCourseOverviewFetching,
+    refetchCourseOverview,
+    selectedLesson,
+    adaptedCurriculum,
+    firstCurriculumLessonId,
+    courseQuizAssignments,
+    hasLessonQuiz,
+    retryPlaybackBootstrap,
+  });
+  const {
+    lessonStagePlan,
+    playbackAccessError,
+    lessonTextPending,
+    playbackBootstrapPending,
+  } = useLessonStagePlan({
+    courseSlug,
+    onUnlockCourse,
+    onOpenLogin,
+    isAuthenticated,
+    resolvedAuthUser,
+    isAuthResolutionPending,
+    courseAccessQuery,
+    courseOverview,
+    selectedLesson,
+    adaptedCurriculum,
+    playbackBootstrapError,
+    setPlaybackBootstrapError,
+    showingQuiz,
+    protectedPlayback,
+    playbackRequestKey,
+    playbackBootstrap,
+    setPlaybackBootstrap,
+    playbackBootstrapAttempt,
+    playbackRequestKeyRef,
+    retryPlaybackBootstrap,
+    courseUnavailable,
+    retryCourseOverview,
+    selectedLessonQuizAttached,
+    stageLesson,
+    lessonDescriptionState,
+    retryLessonDescription,
+  });
+  const {
+    lessonContentAccess,
+    lockedLessonNumbers,
+    lessonContentAccessReason,
+    lessonParticipationState,
+    canParticipateInLessonDiscussion,
+  } = useLessonAccess({
+    isAuthenticated,
+    isAuthResolutionPending,
+    courseAccessQuery,
+    courseOverview,
+    selectedLesson,
+    adaptedCurriculum,
+  });
+  const {
+    lessonSequence,
+    recordProgress,
+    detachedProgressTarget,
+    lessonProgress,
+    progressKnown,
+    liveLessonProgress,
+    courseComplete,
+    currentLessonIndex,
+    previousLessonId,
+    nextLessonId,
+    courseThumbnail,
+    courseThumbnailSrcSet,
+    nextLessonInfo,
+  } = useLessonProgressState({
+    courseSlug,
+    userId,
+    isApiRoute,
+    courseOverview,
+    isCourseOverviewError,
+    selectedLesson,
+    localLessonProgress,
+    adaptedCurriculum,
+    curriculumSections,
+    curriculumLessonsById,
+    courseAccessRefused,
+  });
+  // The course's progress in the lesson list waits for the learner's own
+  // (a visitor has none to wait for): until then it shimmers, rather than
+  // saying 0% and then changing.
+  const progressPending =
+    isAuthResolutionPending || (isAuthenticated && !progressKnown);
+
+  const {
+    stickyPlayer,
+    playerHeight,
+    setPlayerHeight,
+    appliedPlayerHeight,
+    readingGrowable,
+    appliedReadingGrowth,
+    shortPlayer,
+    seekTimeOnly,
+    onHeaderPointerMove,
+    onHeaderPointerLeave,
+    titleSwipeHandlers,
+  } = useLessonPlayerSizing({
+    theaterMode,
+    playerWrapRef,
+    showingQuiz,
+    stageLesson,
+  });
+  const {
+    selectedLessonRecord,
+    selectedLessonDescription,
+    selectedLessonReading,
+    courseId,
+    backendLessonId,
+    isLearningDeepLinkReady,
+    isLearningDeepLinkError,
+    isLearningBootstrapLoading,
+    curriculumShortcutLabel,
+  } = useLearningDeepLinkState({
+    deepLinkLessonUuid,
+    deepLinkRouteSettled,
+    isDiscussionDeepLink,
     lessonId,
+    courseOverview,
+    isCourseOverviewError,
+    isCourseOverviewFetching,
+    isInteractionCapabilitiesLoading,
+    shortcutPlatform,
+    selectedLesson,
+    deepLinkInitializationPending,
+    setDeepLinkInitializationPending,
+    stageLesson,
+  });
+
+  const {
+    getLessonDrawerCollapsedSnapPoint,
+    getLessonDrawerViewportBounds,
+    resumeLessonVideoPlayback,
+    selectLesson,
+    handleOpenLessonQuiz,
+    updateAutoplayEnabled,
+    goToPreviousLesson,
+    goToNextLesson,
+    updateSelectedLessonProgress,
+    handleLessonEnded,
+  } = useLessonNavigation({
+    lessonId,
+    courseSlug,
     onSelectLesson,
     selectedLesson,
-  ]);
-
-  const toggleTheaterMode = useCallback(() => {
-    setLessonDrawer(false);
-    setLessonDrawerForcedFloating(false);
-    setLessonDrawerViewportBounds(null);
-    const nextMode = !theaterMode;
-    setTheaterMode(nextMode);
-
-    if (nextMode) {
-      window.requestAnimationFrame(() => {
-        scrollApplicationTo({
-          top: 0,
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
-            .matches
-            ? "auto"
-            : "smooth",
-        });
-      });
-    }
-  }, [theaterMode]);
-
-  const showLessonDrawer = useCallback(
-    (scrollTarget: "current" | "top") => {
-      setFullscreenLessonPanelOpen(false);
-      setLessonDrawerForcedFloating(false);
-      if (!isCourseContentDrawerLayout()) {
-        setCurriculumCollapsed(false);
-        if (scrollTarget === "current") {
-          setCurriculumFocusRequest((request) => request + 1);
-        }
-        return;
-      }
-
-      setLessonDrawerScrollTarget(scrollTarget);
-      if (scrollTarget === "current") {
-        setLessonDrawerFocusRequest((request) => request + 1);
-      } else {
-        setLessonDrawerTopRequest((request) => request + 1);
-      }
-      previousFocusRef.current = document.activeElement as HTMLElement | null;
-      if (phoneLessonDrawer) {
-        const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
-        setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
-        setLessonDrawerSnapPoint(collapsedSnapPoint);
-      }
-      setLessonDrawerViewportBounds(
-        getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
-      );
-      setLessonDrawer(true);
-    },
-    [
-      getLessonDrawerCollapsedSnapPoint,
-      getLessonDrawerViewportBounds,
-      floatingLessonDrawerWidth,
-      isCourseContentDrawerLayout,
-      phoneLessonDrawer,
-    ],
-  );
-
-  const openLessonDrawer = useCallback(
-    () => showLessonDrawer("current"),
-    [showLessonDrawer],
-  );
-
-  const openLessonDrawerAtTop = useCallback(
-    () => showLessonDrawer("top"),
-    [showLessonDrawer],
-  );
-
-  const closeLessonDrawer = useCallback(() => {
-    setLessonDrawer(false);
-    setLessonDrawerForcedFloating(false);
-  }, []);
-
-  const toggleLessonDrawerFromPlayer = useCallback(
-    (presentation: "drawer" | "side") => {
-      if (presentation === "side") {
-        setLessonDrawer(false);
-        setLessonDrawerForcedFloating(false);
-
-        if (mobileLandscapeFullscreen) {
-          if (!fullscreenLessonPanelOpen) {
-            setFullscreenCurriculumFocusRequest((request) => request + 1);
-          }
-          setFullscreenLessonPanelOpen(!fullscreenLessonPanelOpen);
-          return;
-        }
-
-        if (isCourseContentDrawerLayout()) {
-          if (lessonDrawer) closeLessonDrawer();
-          else openLessonDrawer();
-          return;
-        }
-
-        setFullscreenLessonPanelOpen(false);
-        setCurriculumCollapsed((collapsed) => !collapsed);
-        return;
-      }
-
-      setFullscreenLessonPanelOpen(false);
-      if (lessonDrawer) closeLessonDrawer();
-      else openLessonDrawerAtTop();
-    },
-    [
-      closeLessonDrawer,
-      fullscreenLessonPanelOpen,
-      isCourseContentDrawerLayout,
-      lessonDrawer,
-      mobileLandscapeFullscreen,
-      openLessonDrawer,
-      openLessonDrawerAtTop,
-    ],
-  );
-
-  const handleMobileLandscapeFullscreenChange = useCallback(
-    (active: boolean) => {
-      setMobileLandscapeFullscreen(active);
-      if (!active) setFullscreenLessonPanelOpen(false);
-    },
-    [],
-  );
-
-  const closeFullscreenLessonPanel = useCallback(() => {
-    setFullscreenVideoWidthPreviewPercent(null);
-    setFullscreenLessonPanelOpen(false);
-  }, []);
-
-  const openFloatingLessonDrawer = useCallback(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    setCurriculumCollapsed(true);
-    setLessonDrawerScrollTarget("current");
-    setLessonDrawerFocusRequest((request) => request + 1);
-    setLessonDrawerForcedFloating(true);
-    if (phoneLessonDrawer) {
-      const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
-      setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
-      setLessonDrawerSnapPoint(collapsedSnapPoint);
-    }
-    setLessonDrawerViewportBounds(
-      getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
-    );
-    setLessonDrawer(true);
-  }, [
-    getLessonDrawerCollapsedSnapPoint,
-    getLessonDrawerViewportBounds,
-    floatingLessonDrawerWidth,
+    setSelectedLesson,
+    pendingLessonSelectionRef,
+    setLocalLessonProgress,
+    setAutoPlayOnLessonChange,
+    setAutoplayEnabled,
+    lessonDrawer,
+    setLessonDrawer,
     phoneLessonDrawer,
-  ]);
-
-  const lessonDrawerHeroControlProps = useLessonDrawerHeroControl({
-    open: lessonDrawer,
-    expanded: lessonDrawerSnapPoint === 1,
-    onExpand: () => setLessonDrawerSnapPoint(1),
-    onCollapse: () => setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint),
-    onClose: closeLessonDrawer,
+    playerWrapRef,
+    curriculumLessonsById,
+    firstCurriculumLessonId,
+    setActiveLessonView,
+    hasLessonQuiz,
+    lessonStagePlan,
+    recordProgress,
+    previousLessonId,
+    nextLessonId,
   });
 
-  useEffect(() => {
-    if (!lessonDrawer) return undefined;
-    const compactWorkspace = window.matchMedia(COURSE_CONTENT_DRAWER_QUERY);
-    const appShell =
-      playerWrapRef.current?.closest(".courses-app") ??
-      document.querySelector(".courses-app");
-    let resizeTimer: number | null = null;
-
-    const syncDrawerGeometry = () => {
-      if (!isCourseContentDrawerLayout() && !lessonDrawerForcedFloating) {
-        setLessonDrawerViewportBounds(null);
-        return;
-      }
-
-      setLessonDrawerViewportBounds(
-        getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
-      );
-      if (!phoneLessonDrawer) return;
-      const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
-      setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
-      setLessonDrawerSnapPoint((currentSnapPoint) =>
-        currentSnapPoint === 1 ? 1 : collapsedSnapPoint,
-      );
-    };
-
-    const scheduleCollapsedSnapPoint = () => {
-      if (resizeTimer !== null) window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => {
-        resizeTimer = null;
-        syncDrawerGeometry();
-      }, 120);
-    };
-
-    const syncWorkspaceLayout = () => {
-      if (!isCourseContentDrawerLayout() && !lessonDrawerForcedFloating) {
-        lessonDrawerSkipFinalFocusRef.current = true;
-        setLessonDrawer(false);
-        setLessonDrawerForcedFloating(false);
-        setLessonDrawerViewportBounds(null);
-        return;
-      }
-      scheduleCollapsedSnapPoint();
-    };
-
-    syncDrawerGeometry();
-    const playerResizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(scheduleCollapsedSnapPoint);
-    if (playerWrapRef.current)
-      playerResizeObserver?.observe(playerWrapRef.current);
-
-    compactWorkspace.addEventListener("change", syncWorkspaceLayout);
-    const appShellObserver =
-      typeof MutationObserver === "undefined" || !appShell
-        ? null
-        : new MutationObserver(syncWorkspaceLayout);
-    if (appShell && appShellObserver) {
-      appShellObserver.observe(appShell, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-    }
-    window.addEventListener("resize", scheduleCollapsedSnapPoint);
-    window.visualViewport?.addEventListener(
-      "resize",
-      scheduleCollapsedSnapPoint,
-    );
-    return () => {
-      if (resizeTimer !== null) window.clearTimeout(resizeTimer);
-      playerResizeObserver?.disconnect();
-      compactWorkspace.removeEventListener("change", syncWorkspaceLayout);
-      appShellObserver?.disconnect();
-      window.removeEventListener("resize", scheduleCollapsedSnapPoint);
-      window.visualViewport?.removeEventListener(
-        "resize",
-        scheduleCollapsedSnapPoint,
-      );
-    };
-  }, [
-    getLessonDrawerCollapsedSnapPoint,
-    getLessonDrawerViewportBounds,
-    floatingLessonDrawerWidth,
-    isCourseContentDrawerLayout,
-    lessonDrawer,
-    lessonDrawerForcedFloating,
-    phoneLessonDrawer,
-  ]);
-
-  const startCurriculumScreenSwipe = (
-    event: CurriculumScreenSwipeStartEvent,
-  ) => {
-    const drawerLayout = isCourseContentDrawerLayout();
-    const revealsTabletDrawer = drawerLayout && !phoneLessonDrawer;
-    const target = revealsTabletDrawer ? "lesson-drawer" : "curriculum";
-    if (
-      (drawerLayout && !revealsTabletDrawer) ||
-      event.pointerType !== "touch" ||
-      !event.isPrimary ||
-      event.clientX < (event.splitX ?? window.innerWidth / 2) ||
-      curriculumResizeRef.current ||
-      curriculumScreenSwipeRef.current ||
-      isCurriculumSwipeExcludedTarget(
-        event.target,
-        revealsTabletDrawer
-          ? LESSON_DRAWER_REVEAL_EXCLUSION_SELECTOR
-          : CURRICULUM_SWIPE_EXCLUSION_SELECTOR,
-      )
-    )
-      return;
-
-    curriculumScreenSwipeRef.current = {
-      pointerId: event.pointerId,
-      active: false,
-      startedAt: event.timeStamp,
-      startX: event.clientX,
-      startY: event.clientY,
-      lastX: event.clientX,
-      lastTimestamp: event.timeStamp,
-      velocityX: 0,
-      closedAtStart:
-        target === "lesson-drawer" ? !lessonDrawer : curriculumCollapsed,
-      expandedWidthAtStart: curriculumWidth,
-      target,
-      handle: event.handle,
-    };
-  };
-
-  const moveCurriculumScreenSwipe = (event: PointerEvent) => {
-    const swipe = curriculumScreenSwipeRef.current;
-    if (!swipe || swipe.pointerId !== event.pointerId) return;
-
-    const deltaX = event.clientX - swipe.startX;
-    const deltaY = event.clientY - swipe.startY;
-    if (!swipe.active) {
-      const horizontalDistance = Math.abs(deltaX);
-      const verticalDistance = Math.abs(deltaY);
-      if (
-        verticalDistance >= CURRICULUM_SWIPE_ACTIVATION_DISTANCE &&
-        verticalDistance > horizontalDistance * CURRICULUM_SWIPE_DIRECTION_RATIO
-      ) {
-        curriculumScreenSwipeRef.current = null;
-        return;
-      }
-      if (horizontalDistance < CURRICULUM_SWIPE_ACTIVATION_DISTANCE) return;
-      if (
-        horizontalDistance <=
-        verticalDistance * CURRICULUM_SWIPE_DIRECTION_RATIO
-      )
-        return;
-
-      const opensClosedCurriculum = swipe.closedAtStart && deltaX < 0;
-      const closesOpenCurriculum = !swipe.closedAtStart && deltaX > 0;
-      if (!opensClosedCurriculum && !closesOpenCurriculum) {
-        curriculumScreenSwipeRef.current = null;
-        return;
-      }
-
-      swipe.active = true;
-      claimPointerGesture({
-        owner: "curriculum",
-        pointerId: swipe.pointerId,
-      });
-      if (swipe.target === "curriculum") {
-        setCurriculumResizePreviewWidth(
-          swipe.closedAtStart ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth,
-        );
-        setCurriculumResizing(true);
-      }
-      try {
-        swipe.handle.setPointerCapture?.(swipe.pointerId);
-      } catch {
-        // Window-level listeners keep the swipe active without pointer capture.
-      }
-    }
-
-    event.preventDefault();
-    if (swipe.target === "lesson-drawer") event.stopPropagation();
-    const eventTimestamp = event.timeStamp || performance.now();
-    const timestamp = Math.max(eventTimestamp, swipe.lastTimestamp + 1);
-    const elapsed = timestamp - swipe.lastTimestamp;
-    const instantaneousVelocity = (event.clientX - swipe.lastX) / elapsed;
-    swipe.velocityX =
-      swipe.velocityX === 0 || elapsed > 80
-        ? instantaneousVelocity
-        : swipe.velocityX * 0.35 + instantaneousVelocity * 0.65;
-    swipe.lastX = event.clientX;
-    swipe.lastTimestamp = timestamp;
-
-    if (swipe.target === "lesson-drawer") return;
-
-    const startWidth = swipe.closedAtStart
-      ? CURRICULUM_COLLAPSED_WIDTH
-      : swipe.expandedWidthAtStart;
-    setCurriculumResizePreviewWidth(
-      Math.min(
-        swipe.expandedWidthAtStart,
-        Math.max(CURRICULUM_COLLAPSED_WIDTH, startWidth - deltaX),
-      ),
-    );
-  };
-
-  const endCurriculumScreenSwipe = (event: PointerEvent, cancelled = false) => {
-    const swipe = curriculumScreenSwipeRef.current;
-    if (!swipe || swipe.pointerId !== event.pointerId) return;
-    curriculumScreenSwipeRef.current = null;
-    try {
-      swipe.handle.releasePointerCapture?.(swipe.pointerId);
-    } catch {
-      // Capture may already have been released when the swipe ends.
-    }
-    if (!swipe.active) return;
-
-    event.preventDefault();
-    curriculumScreenSwipeConsumedUntilRef.current = performance.now() + 450;
-    if (swipe.target === "curriculum") {
-      setCurriculumResizing(false);
-      setCurriculumResizePreviewWidth(null);
-    }
-    if (cancelled && swipe.target !== "lesson-drawer") return;
-
-    const totalDistance = swipe.lastX - swipe.startX;
-    const finishedAt = event.timeStamp || performance.now();
-    const averageVelocity =
-      totalDistance / Math.max(1, finishedAt - swipe.startedAt);
-    const fastFling =
-      Math.abs(totalDistance) >= CURRICULUM_SWIPE_FLING_DISTANCE &&
-      Math.max(Math.abs(swipe.velocityX), Math.abs(averageVelocity)) >=
-        CURRICULUM_SWIPE_FLING_VELOCITY;
-    const shouldCommit =
-      fastFling || Math.abs(totalDistance) >= CURRICULUM_SWIPE_COMMIT_DISTANCE;
-    if (!shouldCommit) return;
-
-    if (swipe.target === "lesson-drawer") {
-      if (swipe.closedAtStart) openLessonDrawer();
-      else closeLessonDrawer();
-      return;
-    }
-
-    setCurriculumCollapsed(!swipe.closedAtStart);
-  };
-
-  curriculumScreenSwipeStartRef.current = startCurriculumScreenSwipe;
-  curriculumScreenSwipeMoveRef.current = moveCurriculumScreenSwipe;
-  curriculumScreenSwipeFinishRef.current = endCurriculumScreenSwipe;
-
-  useEffect(() => {
-    const startSwipeFromHostedPlayer = (event: PointerEvent) => {
-      const workspace = workspaceRef.current;
-      const playerAnchor = playerWrapRef.current;
-      if (
-        !workspace ||
-        !playerAnchor ||
-        !isFullLearningPlayerSwipeTarget(event.target, event, playerAnchor)
-      )
-        return;
-
-      curriculumScreenSwipeStartRef.current?.({
-        pointerId: event.pointerId,
-        pointerType: event.pointerType,
-        isPrimary: event.isPrimary,
-        clientX: event.clientX,
-        clientY: event.clientY,
-        timeStamp: event.timeStamp,
-        target: event.target,
-        handle: workspace,
-        splitX: getLearningPlayerSwipeSplitX(playerAnchor),
-      });
-    };
-    const continueSwipe = (event: PointerEvent) =>
-      curriculumScreenSwipeMoveRef.current?.(event);
-    const finishSwipe = (event: PointerEvent) =>
-      curriculumScreenSwipeFinishRef.current?.(event);
-    const cancelSwipe = (event: PointerEvent) =>
-      curriculumScreenSwipeFinishRef.current?.(event, true);
-    window.addEventListener("pointerdown", startSwipeFromHostedPlayer, true);
-    window.addEventListener("pointermove", continueSwipe, {
-      capture: true,
-      passive: false,
-    });
-    window.addEventListener("pointerup", finishSwipe, true);
-    window.addEventListener("pointercancel", cancelSwipe, true);
-    return () => {
-      window.removeEventListener(
-        "pointerdown",
-        startSwipeFromHostedPlayer,
-        true,
-      );
-      window.removeEventListener("pointermove", continueSwipe, true);
-      window.removeEventListener("pointerup", finishSwipe, true);
-      window.removeEventListener("pointercancel", cancelSwipe, true);
-    };
-  }, []);
-
-  const suppressCurriculumSwipeClick = (
-    event: ReactMouseEvent<HTMLDivElement>,
-  ) => {
-    if (performance.now() > curriculumScreenSwipeConsumedUntilRef.current)
-      return;
-    curriculumScreenSwipeConsumedUntilRef.current = 0;
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  useEffect(() => {
-    const handleCurriculumShortcut = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.isComposing ||
-        !event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.shiftKey ||
-        (event.code !== "KeyC" && event.key.toLowerCase() !== "c") ||
-        isEditingShortcutTarget(event.target)
-      )
-        return;
-
-      event.preventDefault();
-      if (isCourseContentDrawerLayout()) {
-        if (lessonDrawer) closeLessonDrawer();
-        else openLessonDrawer();
-        return;
-      }
-
-      setCurriculumCollapsed((collapsed) => !collapsed);
-    };
-
-    window.addEventListener("keydown", handleCurriculumShortcut, true);
-    return () =>
-      window.removeEventListener("keydown", handleCurriculumShortcut, true);
-  }, [
-    closeLessonDrawer,
-    isCourseContentDrawerLayout,
-    lessonDrawer,
+  const {
+    toggleTheaterMode,
     openLessonDrawer,
-  ]);
-
-  const commitCurriculumWidth = useCallback((value: number) => {
-    const nextWidth = clampLearningCurriculumWidth(value);
-    setCurriculumWidth(nextWidth);
-    try {
-      localStorage.setItem(
-        CURRICULUM_WIDTH_STORAGE_KEY,
-        String(Math.round(nextWidth)),
-      );
-    } catch {
-      // Resizing remains available when browser storage is unavailable.
-    }
-  }, []);
-
-  const previewFloatingLessonDrawerWidth = useCallback(
-    (value: number, allowCollapsePreview = false) => {
-      const bounds = getLessonDrawerViewportBounds(
-        Math.max(LESSON_DRAWER_MIN_FLOATING_WIDTH, value),
-      );
-      if (!bounds) return null;
-      const previewWidth = allowCollapsePreview
-        ? Math.max(0, Math.min(bounds.width, value))
-        : bounds.width;
-      const previewBounds =
-        previewWidth < bounds.width
-          ? {
-              ...bounds,
-              left: bounds.left + bounds.width - previewWidth,
-              width: previewWidth,
-            }
-          : bounds;
-      if (!allowCollapsePreview) {
-        setFloatingLessonDrawerWidth(previewBounds.width);
-      }
-      setLessonDrawerViewportBounds(previewBounds);
-      return previewBounds.width;
-    },
-    [getLessonDrawerViewportBounds],
-  );
-
-  const commitFloatingLessonDrawerWidth = useCallback(
-    (value: number) => {
-      const nextWidth = previewFloatingLessonDrawerWidth(value);
-      if (nextWidth === null) return;
-      try {
-        window.localStorage.setItem(
-          FLOATING_LESSON_DRAWER_WIDTH_KEY,
-          String(Math.round(nextWidth)),
-        );
-      } catch {
-        // Floating resizing remains available without browser storage.
-      }
-    },
-    [previewFloatingLessonDrawerWidth],
-  );
-
-  const startFloatingLessonDrawerResize = (
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
-    if (phoneLessonDrawer) return;
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const startWidth =
-      lessonDrawerViewportBounds?.width ?? floatingLessonDrawerWidth;
-    floatingLessonDrawerResizeRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startWidth,
-      originalWidth: startWidth,
-      previewWidth: startWidth,
-      dismissOnEnd: false,
-      handle: event.currentTarget,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setFloatingLessonDrawerResizing(true);
-  };
-
-  const moveFloatingLessonDrawerResize = useCallback(
-    (event: CurriculumPointerEvent) => {
-      const resize = floatingLessonDrawerResizeRef.current;
-      if (!resize || resize.pointerId !== event.pointerId) return;
-      const requestedWidth = resize.startWidth + resize.startX - event.clientX;
-      const nextWidth = previewFloatingLessonDrawerWidth(requestedWidth, true);
-      if (nextWidth !== null) {
-        resize.previewWidth = nextWidth;
-        resize.dismissOnEnd =
-          requestedWidth <= FLOATING_LESSON_DRAWER_SNAP_WIDTH;
-      }
-    },
-    [previewFloatingLessonDrawerWidth],
-  );
-
-  const endFloatingLessonDrawerResize = useCallback(
-    (event: CurriculumPointerEvent, cancelled = false) => {
-      const resize = floatingLessonDrawerResizeRef.current;
-      if (!resize || resize.pointerId !== event.pointerId) return;
-      floatingLessonDrawerResizeRef.current = null;
-      setFloatingLessonDrawerResizing(false);
-      resize.handle.releasePointerCapture?.(resize.pointerId);
-      if (cancelled) {
-        previewFloatingLessonDrawerWidth(resize.originalWidth);
-        return;
-      }
-      if (resize.dismissOnEnd) {
-        closeLessonDrawer();
-        return;
-      }
-      commitFloatingLessonDrawerWidth(resize.previewWidth);
-    },
-    [
-      closeLessonDrawer,
-      commitFloatingLessonDrawerWidth,
-      previewFloatingLessonDrawerWidth,
-    ],
-  );
-
-  useEffect(() => {
-    if (!floatingLessonDrawerResizing) return undefined;
-    const continueResize = (event: PointerEvent) =>
-      moveFloatingLessonDrawerResize(event);
-    const finishResize = (event: PointerEvent) =>
-      endFloatingLessonDrawerResize(event);
-    const cancelResize = (event: PointerEvent) =>
-      endFloatingLessonDrawerResize(event, true);
-    window.addEventListener("pointermove", continueResize);
-    window.addEventListener("pointerup", finishResize);
-    window.addEventListener("pointercancel", cancelResize);
-    return () => {
-      window.removeEventListener("pointermove", continueResize);
-      window.removeEventListener("pointerup", finishResize);
-      window.removeEventListener("pointercancel", cancelResize);
-    };
-  }, [
-    endFloatingLessonDrawerResize,
-    floatingLessonDrawerResizing,
-    moveFloatingLessonDrawerResize,
-  ]);
-
-  const handleFloatingLessonDrawerResizeKeyDown = (
-    event: ReactKeyboardEvent<HTMLDivElement>,
-  ) => {
-    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      event.preventDefault();
-      const direction = event.key === "ArrowLeft" ? 20 : -20;
-      commitFloatingLessonDrawerWidth(floatingLessonDrawerWidth + direction);
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      closeLessonDrawer();
-    } else if (event.key === "End") {
-      event.preventDefault();
-      commitFloatingLessonDrawerWidth(LESSON_DRAWER_MAX_FLOATING_WIDTH);
-    }
-  };
-
-  const beginCurriculumResize = useCallback(
-    (pointerId: number, clientX: number, handle: HTMLElement) => {
-      if (isCourseContentDrawerLayout()) return;
-      curriculumResizeRef.current = {
-        pointerId,
-        startX: clientX,
-        startWidth: curriculumCollapsed
-          ? CURRICULUM_COLLAPSED_WIDTH
-          : curriculumWidth,
-        expandedWidthAtStart: curriculumWidth,
-        collapsedAtStart: curriculumCollapsed,
-        collapsed: curriculumCollapsed,
-        collapsedAnchorX: clientX,
-        collapsedAnchorWidth: curriculumCollapsed
-          ? CURRICULUM_COLLAPSED_WIDTH
-          : curriculumWidth,
-        expandedAnchorX: null,
-        previewWidth: curriculumCollapsed
-          ? CURRICULUM_COLLAPSED_WIDTH
-          : curriculumWidth,
-        handle,
-      };
-      setCurriculumResizePreviewWidth(
-        curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth,
-      );
-      setCurriculumResizing(true);
-    },
-    [curriculumCollapsed, curriculumWidth, isCourseContentDrawerLayout],
-  );
-
-  const startCurriculumResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (isCourseContentDrawerLayout()) return;
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    beginCurriculumResize(event.pointerId, event.clientX, event.currentTarget);
-  };
-
-  const moveCurriculumResize = useCallback((event: CurriculumPointerEvent) => {
-    const resize = curriculumResizeRef.current;
-    if (!resize || resize.pointerId !== event.pointerId) return;
-
-    let previewWidth: number;
-
-    if (resize.collapsed) {
-      const candidateWidth = Math.min(
-        CURRICULUM_MAX_WIDTH,
-        Math.max(
-          CURRICULUM_COLLAPSED_WIDTH,
-          resize.collapsedAnchorWidth + resize.collapsedAnchorX - event.clientX,
-        ),
-      );
-
-      if (candidateWidth >= CURRICULUM_SNAP_WIDTH) {
-        resize.collapsed = false;
-        resize.expandedAnchorX = event.clientX;
-        previewWidth = CURRICULUM_MIN_WIDTH;
-        setCurriculumCollapsed(false);
-      } else {
-        previewWidth = candidateWidth;
-      }
-    } else {
-      const candidateWidth =
-        resize.expandedAnchorX === null
-          ? resize.startWidth + resize.startX - event.clientX
-          : CURRICULUM_MIN_WIDTH + resize.expandedAnchorX - event.clientX;
-      previewWidth = Math.min(
-        CURRICULUM_MAX_WIDTH,
-        Math.max(CURRICULUM_COLLAPSED_WIDTH, candidateWidth),
-      );
-
-      if (candidateWidth <= CURRICULUM_SNAP_WIDTH) {
-        resize.collapsed = true;
-        resize.collapsedAnchorX = event.clientX;
-        resize.collapsedAnchorWidth = previewWidth;
-        resize.expandedAnchorX = null;
-        setCurriculumCollapsed(true);
-      }
-    }
-
-    resize.previewWidth = previewWidth;
-    setCurriculumResizePreviewWidth(previewWidth);
-
-    if (!resize.collapsed && previewWidth >= CURRICULUM_MIN_WIDTH) {
-      setCurriculumWidth(previewWidth);
-    }
-  }, []);
-
-  const endCurriculumResize = useCallback(
-    (event: CurriculumPointerEvent, cancelled = false) => {
-      const resize = curriculumResizeRef.current;
-      if (!resize || resize.pointerId !== event.pointerId) return;
-      curriculumResizeRef.current = null;
-      setCurriculumResizing(false);
-      setCurriculumResizePreviewWidth(null);
-      resize.handle?.releasePointerCapture?.(resize.pointerId);
-
-      if (cancelled) {
-        setCurriculumCollapsed(resize.collapsedAtStart);
-        setCurriculumWidth(resize.expandedWidthAtStart);
-        return;
-      }
-      if (resize.collapsed) {
-        setCurriculumCollapsed(true);
-        setCurriculumWidth(resize.expandedWidthAtStart);
-        return;
-      }
-      setCurriculumCollapsed(false);
-      commitCurriculumWidth(resize.previewWidth);
-    },
-    [commitCurriculumWidth],
-  );
-
-  useEffect(() => {
-    const handleScrollbarHorizontalDrag = (event: Event) => {
-      const { detail } =
-        event as CustomEvent<FloatingScrollbarHorizontalDragDetail>;
-      if (detail.ariaControls !== "courses-main-scrollport") return;
-
-      if (detail.phase === "start") {
-        beginCurriculumResize(detail.pointerId, detail.clientX, detail.handle);
-      } else if (detail.phase === "move") {
-        moveCurriculumResize(detail);
-      } else {
-        endCurriculumResize(detail, detail.phase === "cancel");
-      }
-    };
-
-    window.addEventListener(
-      FLOATING_SCROLLBAR_HORIZONTAL_DRAG_EVENT,
-      handleScrollbarHorizontalDrag,
-    );
-    return () =>
-      window.removeEventListener(
-        FLOATING_SCROLLBAR_HORIZONTAL_DRAG_EVENT,
-        handleScrollbarHorizontalDrag,
-      );
-  }, [beginCurriculumResize, endCurriculumResize, moveCurriculumResize]);
-
-  useLayoutEffect(() => {
-    curriculumResizeMoveRef.current = moveCurriculumResize;
-    curriculumResizeFinishRef.current = endCurriculumResize;
-
-    return () => {
-      if (curriculumResizeMoveRef.current === moveCurriculumResize) {
-        curriculumResizeMoveRef.current = null;
-      }
-      if (curriculumResizeFinishRef.current === endCurriculumResize) {
-        curriculumResizeFinishRef.current = null;
-      }
-    };
-  }, [moveCurriculumResize, endCurriculumResize]);
-
-  useEffect(() => {
-    if (!curriculumResizing) return undefined;
-    const continueResize = (event: PointerEvent) =>
-      curriculumResizeMoveRef.current?.(event);
-    const finishResize = (event: PointerEvent) =>
-      curriculumResizeFinishRef.current?.(event);
-    const cancelResize = (event: PointerEvent) =>
-      curriculumResizeFinishRef.current?.(event, true);
-    window.addEventListener("pointermove", continueResize);
-    window.addEventListener("pointerup", finishResize);
-    window.addEventListener("pointercancel", cancelResize);
-    return () => {
-      window.removeEventListener("pointermove", continueResize);
-      window.removeEventListener("pointerup", finishResize);
-      window.removeEventListener("pointercancel", cancelResize);
-    };
-  }, [curriculumResizing]);
-
-  const handleCurriculumResizeKeyDown = (
-    event: ReactKeyboardEvent<HTMLDivElement>,
-  ) => {
-    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-      event.preventDefault();
-      if (curriculumCollapsed && event.key === "ArrowLeft") {
-        setCurriculumCollapsed(false);
-        commitCurriculumWidth(CURRICULUM_MIN_WIDTH);
-        return;
-      }
-      if (!curriculumCollapsed) {
-        const direction = event.key === "ArrowRight" ? -16 : 16;
-        commitCurriculumWidth(curriculumWidth + direction);
-      }
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      setCurriculumCollapsed(true);
-    } else if (event.key === "End") {
-      event.preventDefault();
-      setCurriculumCollapsed(false);
-      commitCurriculumWidth(CURRICULUM_MAX_WIDTH);
-    }
-  };
-
-  const toggleCurriculumFromResizeRail = () => {
-    if (isCourseContentDrawerLayout()) return;
-    setCurriculumCollapsed((collapsed) => !collapsed);
-  };
-
-  const toggleCurriculumFromPlayer = () => {
-    if (isCourseContentDrawerLayout()) {
-      if (lessonDrawer) closeLessonDrawer();
-      else openLessonDrawer();
-      return;
-    }
-    setCurriculumCollapsed((collapsed) => !collapsed);
-  };
-
-  const curriculumToggleGesture = useSecondPressHold<HTMLButtonElement>({
-    onPress: toggleCurriculumFromPlayer,
-    onSecondPressHold: openFloatingLessonDrawer,
-    secondPressWindow: courseContentDrawerViewport ? 700 : undefined,
+    openLessonDrawerInPlace,
+    closeLessonDrawer,
+    toggleLessonDrawerFromPlayer,
+    handleMobileLandscapeFullscreenChange,
+    closeFullscreenLessonPanel,
+    openFloatingLessonDrawer,
+    lessonDrawerHeroControlProps,
+    handleLessonDrawerTouchStartCapture,
+  } = useLessonDrawerControls({
+    lessonDrawer,
+    setLessonDrawer,
+    mobileLandscapeFullscreen,
+    setMobileLandscapeFullscreen,
+    fullscreenLessonPanelOpen,
+    setFullscreenLessonPanelOpen,
+    setFullscreenVideoWidthPreviewPercent,
+    setFullscreenCurriculumFocusRequest,
+    lessonDrawerForcedFloating,
+    setLessonDrawerForcedFloating,
+    lessonDrawerSnapPoint,
+    setLessonDrawerSnapPoint,
+    lessonDrawerCollapsedSnapPoint,
+    setLessonDrawerCollapsedSnapPoint,
+    setLessonDrawerViewportBounds,
+    floatingLessonDrawerWidth,
+    phoneLessonDrawer,
+    setCurriculumFocusRequest,
+    setLessonDrawerFocusRequest,
+    setLessonDrawerTopRequest,
+    setLessonDrawerScrollTarget,
+    curriculumCollapsed,
+    setCurriculumCollapsed,
+    setTheaterMode,
+    theaterMode,
+    playerWrapRef,
+    lessonDrawerScrollportRef,
+    previousFocusRef,
+    lessonDrawerSkipFinalFocusRef,
+    isCourseContentDrawerLayout,
+    getLessonDrawerCollapsedSnapPoint,
+    getLessonDrawerViewportBounds,
   });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(lessonStorageKey, String(selectedLesson));
-    } catch {
-      // Lesson selection remains usable when browser storage is unavailable.
-    }
-  }, [lessonStorageKey, selectedLesson]);
+  const { startCurriculumScreenSwipe, suppressCurriculumSwipeClick } =
+    useCurriculumScreenSwipe({
+      lessonDrawer,
+      phoneLessonDrawer,
+      curriculumWidth,
+      curriculumCollapsed,
+      setCurriculumCollapsed,
+      setCurriculumResizing,
+      setCurriculumResizePreviewWidth,
+      playerWrapRef,
+      workspaceRef,
+      curriculumResizeRef,
+      curriculumScreenSwipeRef,
+      curriculumScreenSwipeStartRef,
+      claimCurriculumPointerGesture,
+      beginCurriculumResizeRef,
+      curriculumScreenSwipeMoveRef,
+      curriculumScreenSwipeFinishRef,
+      curriculumScreenSwipeConsumedUntilRef,
+      isCourseContentDrawerLayout,
+      openLessonDrawer,
+      closeLessonDrawer,
+    });
 
-  useEffect(() => {
-    try {
-      sessionStorage.removeItem("veolms-course-autostart");
-    } catch {
-      // Retired preferences are cleaned up on a best-effort basis.
-    }
-  }, []);
+  const {
+    commitCurriculumWidth,
+    startFloatingLessonDrawerResize,
+    handleFloatingLessonDrawerResizeKeyDown,
+  } = useFloatingLessonDrawerResize({
+    lessonDrawerViewportBounds,
+    setLessonDrawerViewportBounds,
+    floatingLessonDrawerWidth,
+    setFloatingLessonDrawerWidth,
+    floatingLessonDrawerResizing,
+    setFloatingLessonDrawerResizing,
+    phoneLessonDrawer,
+    setCurriculumWidth,
+    floatingLessonDrawerResizeRef,
+    getLessonDrawerViewportBounds,
+    closeLessonDrawer,
+  });
 
-  const curriculumAccessibleWidth = Math.max(
-    CURRICULUM_MIN_WIDTH,
-    curriculumResizePreviewWidth ?? curriculumWidth,
-  );
-  const playerCourseLessonsSidePanel = !courseContentDrawerViewport;
-  const playerCourseLessonsSecondPressHold = useMemo(
-    () =>
-      courseContentDrawerViewport
-        ? undefined
-        : {
-            isSecondPressHolding: curriculumToggleGesture.isSecondPressHolding,
-            handlers: curriculumToggleGesture.handlers,
-          },
-    [
-      courseContentDrawerViewport,
-      curriculumToggleGesture.handlers,
-      curriculumToggleGesture.isSecondPressHolding,
-    ],
-  );
-  const floatingLessonDrawerViewportWidth =
-    lessonDrawerViewportBounds?.width ?? floatingLessonDrawerWidth;
-  const floatingLessonDrawerSlidingClosed =
-    floatingLessonDrawerResizing &&
-    floatingLessonDrawerViewportWidth < LESSON_DRAWER_MIN_FLOATING_WIDTH;
-  const playerCourseLessonsOpen = mobileLandscapeFullscreen
-    ? fullscreenLessonPanelOpen
-    : courseContentDrawerViewport
-      ? lessonDrawer
-      : !curriculumCollapsed;
-  const fullscreenVideoLayoutWidthPercent =
-    fullscreenVideoWidthPreviewPercent ?? fullscreenVideoWidthPercent;
-  const fullscreenCoursePanel = useMemo(
-    () => (
-      <FullscreenLandscapeCurriculumPanel
-        onClose={closeFullscreenLessonPanel}
-        videoWidthPercent={fullscreenVideoWidthPercent}
-        onVideoWidthPercentChange={setFullscreenVideoWidthPercent}
-        onVideoWidthPreviewChange={setFullscreenVideoWidthPreviewPercent}
-      >
-        <Curriculum
-          sections={curriculumSections}
-          lessonsById={curriculumLessonsById}
-          scrollportRef={fullscreenCurriculumScrollportRef}
-          scrollportId="learning-fullscreen-course-curriculum-scrollport"
-          scrollControlBottomClearance="calc(100dvh - 228px)"
-          selectedLesson={selectedLesson}
-          lessonProgress={lessonProgress}
-          onSelectLesson={selectLesson}
-          onOpenCourseOverview={onOpenCourseOverview}
-          courseNavigationActionLabel={courseNavigationActionLabel}
-          courseTitle={courseTitle}
-          courseThumbnail={courseThumbnail}
-          courseThumbnailSrcSet={courseThumbnailSrcSet}
-          focusRequest={fullscreenCurriculumFocusRequest}
-          persistenceKey={coursePersistenceKey}
-          lessonResources={curriculumLessonResources}
-          resourceCourseKey={courseSlug}
-          quizLessonNumbers={curriculumQuizLessonNumbers}
-          activeQuizLesson={showingQuiz ? selectedLesson : null}
-          onOpenLessonQuiz={handleOpenLessonQuiz}
-        />
-      </FullscreenLandscapeCurriculumPanel>
-    ),
-    [
-      coursePersistenceKey,
-      closeFullscreenLessonPanel,
-      courseNavigationActionLabel,
-      courseThumbnail,
-      courseThumbnailSrcSet,
-      courseTitle,
+  const {
+    startCurriculumResize,
+    moveCurriculumResize,
+    endCurriculumResize,
+    handleCurriculumResizeKeyDown,
+    toggleCurriculumFromResizeRail,
+    curriculumToggleGesture,
+  } = useCurriculumResize({
+    lessonStorageKey,
+    selectedLesson,
+    lessonDrawer,
+    courseContentDrawerViewport,
+    curriculumWidth,
+    setCurriculumWidth,
+    curriculumCollapsed,
+    setCurriculumCollapsed,
+    curriculumResizing,
+    setCurriculumResizing,
+    setCurriculumResizePreviewWidth,
+    workspaceRef,
+    curriculumResizeRef,
+    curriculumResizeSyncTimerRef,
+    curriculumDragWidthAppliedRef,
+    curriculumResizeMoveRef,
+    curriculumResizeFinishRef,
+    beginCurriculumResizeRef,
+    curriculumScreenSwipeConsumedUntilRef,
+    isCourseContentDrawerLayout,
+    openLessonDrawer,
+    closeLessonDrawer,
+    openFloatingLessonDrawer,
+    commitCurriculumWidth,
+  });
+
+  const {
+    curriculumAccessibleWidth,
+    playerCourseLessonsSidePanel,
+    playerCourseLessonsSecondPressHold,
+    floatingLessonDrawerViewportWidth,
+    floatingLessonDrawerSlidingClosed,
+    playerCourseLessonsOpen,
+    fullscreenVideoLayoutWidthPercent,
+    fullscreenCoursePanel,
+  } = usePlayerCourseLessons({
+    courseNavigationActionLabel,
+    courseSlug,
+    onOpenCourseOverview,
+    selectedLesson,
+    courseTitle,
+    coursePersistenceKey,
+    lessonDrawer,
+    mobileLandscapeFullscreen,
+    fullscreenLessonPanelOpen,
+    fullscreenVideoWidthPercent,
+    setFullscreenVideoWidthPercent,
+    fullscreenVideoWidthPreviewPercent,
+    setFullscreenVideoWidthPreviewPercent,
+    fullscreenCurriculumFocusRequest,
+    lessonDrawerViewportBounds,
+    floatingLessonDrawerWidth,
+    floatingLessonDrawerResizing,
+    courseContentDrawerViewport,
+    curriculumWidth,
+    curriculumCollapsed,
+    curriculumResizePreviewWidth,
+    fullscreenCurriculumScrollportRef,
+    curriculumSections,
+    curriculumLessonsById,
+    curriculumLessonResources,
+    curriculumQuizLessonNumbers,
+    showingQuiz,
+    lockedLessonNumbers,
+    liveLessonProgress,
+    courseThumbnail,
+    courseThumbnailSrcSet,
+    selectLesson,
+    handleOpenLessonQuiz,
+    closeFullscreenLessonPanel,
+    curriculumToggleGesture,
+  });
+  const { seekCurrentLessonToTimestamp, lessonPlayerProps } =
+    useLessonPlayerProps({
       courseSlug,
-      curriculumLessonResources,
-      curriculumLessonsById,
-      curriculumQuizLessonNumbers,
-      curriculumSections,
-      fullscreenCurriculumFocusRequest,
-      fullscreenVideoWidthPercent,
-      handleOpenLessonQuiz,
-      lessonProgress,
-      onOpenCourseOverview,
-      selectLesson,
-      selectedLesson,
-      showingQuiz,
-    ],
-  );
-  const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(null);
-  const registerLessonPlayerSeek = useCallback(
-    (seekToTimestamp: (seconds: number) => void) => {
-      lessonPlayerSeekRef.current = seekToTimestamp;
-      return () => {
-        if (lessonPlayerSeekRef.current === seekToTimestamp) {
-          lessonPlayerSeekRef.current = null;
-        }
-      };
-    },
-    [],
-  );
-  const seekCurrentLessonToTimestamp = useCallback((seconds: number) => {
-    if (!Number.isFinite(seconds) || seconds < 0) return;
-    lessonPlayerSeekRef.current?.(seconds);
-  }, []);
-
-  const currentLessonTitle = currentLesson[1];
-  const selectedLessonDurationSeconds = selectedLessonRecord?.durationSeconds;
-  const selectedLessonMediaId = selectedLessonRecord?.contentMediaId;
-  const currentLessonMedia = useMemo(
-    () =>
-      createLessonVideo(currentLessonTitle, {
-        durationSeconds: selectedLessonDurationSeconds,
-        thumbnailSrc: selectedLessonMediaId
-          ? mediaService.getVideoThumbnailUrl(selectedLessonMediaId)
-          : courseThumbnail,
-      }),
-    [
-      courseThumbnail,
-      currentLessonTitle,
-      selectedLessonDurationSeconds,
-      selectedLessonMediaId,
-    ],
-  );
-
-  const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
-    () => ({
-      media: currentLessonMedia,
-      description: selectedLessonDescription,
-      playbackBootstrap,
-      playbackAccessError,
-      playbackBootstrapPending,
-      playbackUnavailableMessage: playbackBootstrapError?.message ?? null,
-      onRetryPlayback: retryPlaybackBootstrap,
-      refreshPlaybackToken,
-      protectedPlayback,
-      lessonTitle: currentLesson[1],
-      courseTitle,
-      lessonIndex: currentLessonIndex >= 0 ? currentLessonIndex + 1 : 1,
-      totalLessons: lessonSequence.length,
-      theaterMode,
-      onTheaterToggle: toggleTheaterMode,
-      autoPlayOnMediaChange: showingQuiz ? false : autoPlayOnLessonChange,
-      autoplayEnabled,
-      playbackSuspended: showingQuiz,
-      canGoNext: nextLessonId !== undefined,
-      canGoPrevious: previousLessonId !== undefined,
-      nextLessonInfo,
-      courseLessonsOpen: playerCourseLessonsOpen,
-      courseLessonsDrawerOpen: lessonDrawer,
-      courseLessonsPanel: fullscreenCoursePanel,
-      courseLessonsSecondPressHold: playerCourseLessonsSecondPressHold,
-      courseLessonsShortcutLabel: curriculumShortcutLabel,
-      courseLessonsSidePanel: playerCourseLessonsSidePanel,
-      courseLessonsBottomSheet: phoneLessonDrawer,
-      courseLessonsVideoWidthPercent: fullscreenVideoLayoutWidthPercent,
-      // Only a visible content column can host the chapters panel; otherwise
-      // the player slides it over its own right edge.
-      chaptersPanelHost:
-        curriculumCollapsed || theaterMode || courseContentDrawerViewport
-          ? null
-          : chaptersPanelHost,
-      onAutoplayEnabledChange: updateAutoplayEnabled,
-      onCourseLessonsToggle: toggleLessonDrawerFromPlayer,
-      onGoNext: goToNextLesson,
-      onGoPrevious: goToPreviousLesson,
-      onLessonEnded: handleLessonEnded,
-      onMinimize: onMinimizePlayer
-        ? (request) => {
-            onMinimizePlayer({
-              ...request,
-              courseSlug,
-              selectedLesson,
-            });
-          }
-        : undefined,
-      onMinimizeGestureChange: updatePlayerMinimizeGesture,
+      onMinimizePlayer,
       onMiniPlayerRestoreReady,
-      onMobileLandscapeFullscreenChange: handleMobileLandscapeFullscreenChange,
-      onProgressChange: updateSelectedLessonProgress,
-      onSeekToTimestampReady: registerLessonPlayerSeek,
-      resumePersistenceKey: `${coursePersistenceKey}-lesson-${selectedLesson}`,
-    }),
-    [
+      selectedLesson,
       autoPlayOnLessonChange,
       autoplayEnabled,
-      chaptersPanelHost,
-      courseContentDrawerViewport,
-      coursePersistenceKey,
-      courseSlug,
       courseTitle,
-      curriculumCollapsed,
-      currentLesson,
-      currentLessonMedia,
-      currentLessonIndex,
-      curriculumShortcutLabel,
-      fullscreenCoursePanel,
-      fullscreenVideoLayoutWidthPercent,
-      goToNextLesson,
-      goToPreviousLesson,
-      handleLessonEnded,
-      handleMobileLandscapeFullscreenChange,
+      coursePersistenceKey,
       lessonDrawer,
-      lessonSequence.length,
-      nextLessonId,
-      nextLessonInfo,
-      onMiniPlayerRestoreReady,
-      onMinimizePlayer,
-      playbackBootstrap,
-      playbackAccessError,
-      playbackBootstrapPending,
-      playbackBootstrapError,
-      protectedPlayback,
-      registerLessonPlayerSeek,
-      retryPlaybackBootstrap,
-      refreshPlaybackToken,
-      playerCourseLessonsOpen,
-      playerCourseLessonsSecondPressHold,
-      playerCourseLessonsSidePanel,
+      courseContentDrawerViewport,
       phoneLessonDrawer,
-      previousLessonId,
-      selectedLesson,
-      selectedLessonDescription,
-      showingQuiz,
+      curriculumCollapsed,
       theaterMode,
-      toggleLessonDrawerFromPlayer,
-      toggleTheaterMode,
-      updateAutoplayEnabled,
+      chaptersPanelHost,
       updatePlayerMinimizeGesture,
+      currentLesson,
+      playbackBootstrapError,
+      showingQuiz,
+      protectedPlayback,
+      playbackBootstrap,
+      refreshPlaybackToken,
+      retryPlaybackBootstrap,
+      playbackAccessError,
+      lessonTextPending,
+      playbackBootstrapPending,
+      lessonSequence,
+      courseComplete,
+      currentLessonIndex,
+      previousLessonId,
+      nextLessonId,
+      courseThumbnail,
+      nextLessonInfo,
+      shortPlayer,
+      seekTimeOnly,
+      selectedLessonRecord,
+      selectedLessonDescription,
+      curriculumShortcutLabel,
+      updateAutoplayEnabled,
+      goToPreviousLesson,
+      goToNextLesson,
       updateSelectedLessonProgress,
-    ],
-  );
-
-  useLayoutEffect(() => {
-    const anchor = playerWrapRef.current;
-    if (
-      !anchor ||
-      !registerPersistentPlayer ||
-      !persistentPlayerCourseRouteKey ||
-      !persistentPlayerLessonPath ||
-      !persistentPlayerReturnPath
-    ) {
-      return undefined;
-    }
-
-    return registerPersistentPlayer({
-      anchor,
-      courseRouteKey: persistentPlayerCourseRouteKey,
-      lessonPath: persistentPlayerLessonPath,
-      mediaKey:
-        lessonPlayerProps.resumePersistenceKey ??
-        lessonPlayerProps.media.fileName,
-      playerProps: lessonPlayerProps,
-      returnPath: persistentPlayerReturnPath,
-      courseSlug,
-      selectedLesson,
-      onSelectLesson: selectLesson,
-      curriculumSections,
-      curriculumLessonsById,
-      lessonProgress,
-      isLessonAvailable,
+      handleLessonEnded,
+      toggleTheaterMode,
+      toggleLessonDrawerFromPlayer,
+      handleMobileLandscapeFullscreenChange,
+      playerCourseLessonsSidePanel,
+      playerCourseLessonsSecondPressHold,
+      playerCourseLessonsOpen,
+      fullscreenVideoLayoutWidthPercent,
+      fullscreenCoursePanel,
     });
-  }, [
+
+  const lessonEditPath = useLessonEditPath({
+    user: resolvedAuthUser,
+    course: courseOverview?.course,
+    sectionId: curriculumSections.find((section) =>
+      section.lessons.some(([lessonNumber]) => lessonNumber === selectedLesson),
+    )?.sectionId,
+    lessonId: backendLessonId,
+  });
+
+  // Opened inside the app, the page draws the video first and the parts
+  // below and beside it a frame later.
+  const lowerPartsShown = useShownAfterFirstPaint();
+
+  const { lessonHeader } = useLessonHeader({
     courseSlug,
-    curriculumLessonsById,
-    curriculumSections,
-    isLessonAvailable,
-    lessonPlayerProps,
-    lessonProgress,
     persistentPlayerCourseRouteKey,
     persistentPlayerLessonPath,
     persistentPlayerReturnPath,
     registerPersistentPlayer,
-    selectLesson,
+    isLessonAvailable,
     selectedLesson,
-  ]);
-
-  const lessonHeader = (contained = false, titleLoading = false) => (
-    <header className="learning-workspace__lesson-header">
-      <button
-        id="learning-course-content-trigger"
-        ref={lessonTriggerRef}
-        type="button"
-        className="learning-workspace__lesson-heading"
-        style={
-          contained
-            ? {
-                width: "100%",
-                minWidth: 0,
-                marginInline: 0,
-                paddingInline: 0,
-              }
-            : undefined
-        }
-        aria-label={`Open course lessons for ${currentLesson[1]}`}
-        aria-expanded={lessonDrawer}
-        onClick={openLessonDrawer}
-      >
-        <div className="min-w-0">
-          {titleLoading ? (
-            <span
-              className="block h-5 w-40 max-w-full animate-pulse rounded-md bg-[color-mix(in_srgb,var(--text)_12%,transparent)]"
-              data-testid="learning-lesson-title-loading"
-              aria-hidden="true"
-            />
-          ) : (
-            <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
-          )}
-        </div>
-      </button>
-      {hasLessonQuiz(selectedLesson) ? (
-        <button
-          type="button"
-          onClick={() => {
-            if (activeLessonView === "quiz") {
-              resumeLessonVideoPlayback();
-            } else {
-              handleOpenLessonQuiz(selectedLesson);
-            }
-          }}
-          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
-            activeLessonView === "quiz"
-              ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
-              : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
-          }`}
-          aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
-          title={
-            activeLessonView === "quiz"
-              ? "Return to video lesson"
-              : "Open lesson quiz"
-          }
-        >
-          <Exam size={12} weight="bold" className="text-(--accent)" />
-          <span>{activeLessonView === "quiz" ? "Back to video" : "Quiz"}</span>
-        </button>
-      ) : null}
-    </header>
-  );
+    lessonDrawer,
+    playerWrapRef,
+    lessonTriggerRef,
+    curriculumSections,
+    curriculumLessonsById,
+    currentLesson,
+    detachedProgressTarget,
+    liveLessonProgress,
+    stickyPlayer,
+    appliedPlayerHeight,
+    readingGrowable,
+    onHeaderPointerLeave,
+    onHeaderPointerMove,
+    titleSwipeHandlers,
+    selectLesson,
+    openLessonDrawerInPlace,
+    lessonPlayerProps,
+    lessonEditPath: onOpenEditor ? lessonEditPath : null,
+    onOpenLessonEditor: onOpenEditor,
+  });
 
   return (
     <div
@@ -2758,298 +738,122 @@ export function LearningWorkspace({
         ref={mainRef}
         data-learning-motion-surface=""
         data-learning-split-lesson=""
+        data-split-frame-sized=""
         data-learning-quiz-active={showingQuiz ? "true" : undefined}
         className={`learning-workspace__main ${curriculumCollapsed ? "is-curriculum-collapsed" : ""}`}
         inert={lessonDrawer ? true : undefined}
         aria-hidden={lessonDrawer || undefined}
       >
-        <section className="learning-workspace__lesson-column">
-          <div
-            ref={playerWrapRef}
-            className="learning-workspace__player-wrap"
-            data-learning-player-motion-target=""
-          >
-            {showingQuiz ? (
-              <div className="w-full max-w-4xl mx-auto p-3 sm:p-5 md:p-6 lg:p-7">
-                {currentQuizAssignment ? (
-                  <QuizAttemptPanel
-                    key={`${currentQuizAssignment.id}-${currentLessonUuid ?? selectedLesson}`}
-                    assignmentId={currentQuizAssignment.id}
-                    courseId={courseId ?? currentQuizAssignment.courseId}
-                    quizTitle={currentQuizAssignment.quizTitle}
-                    activeAttemptId={currentQuizAssignment.activeAttemptId}
-                    maxAttempts={currentQuizAssignment.maxAttempts}
-                    onBackToVideo={resumeLessonVideoPlayback}
-                    onPassed={() => updateSelectedLessonProgress(100)}
-                    lessonBadge={`Lesson ${selectedLesson} Quiz`}
-                    onContinueCourse={
-                      nextLessonId === undefined
-                        ? undefined
-                        : () => {
-                            resumeLessonVideoPlayback();
-                            onSelectLesson(nextLessonId);
-                          }
-                    }
-                  />
-                ) : (
-                  <section
-                    className="mx-auto w-full max-w-3xl rounded-[16px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-6 text-(--text)"
-                    style={{ boxShadow: "var(--card-shadow)" }}
-                  >
-                    <div className="flex items-center justify-between gap-3 mb-4">
-                      <button
-                        type="button"
-                        onClick={resumeLessonVideoPlayback}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95"
-                      >
-                        <ArrowLeft size={14} weight="bold" />
-                        <span>Back to video</span>
-                      </button>
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                        <Exam
-                          size={14}
-                          className="text-(--accent)"
-                          weight="bold"
-                        />
-                        <span>Lesson {selectedLesson} Quiz</span>
-                      </div>
-                    </div>
-                    <p
-                      role={
-                        quizAssignmentLoading || courseQuizAssignments.isLoading
-                          ? "status"
-                          : "alert"
-                      }
-                      aria-label={
-                        quizAssignmentLoading || courseQuizAssignments.isLoading
-                          ? "Loading quiz assignment"
-                          : undefined
-                      }
-                      className={`text-sm sm:text-base text-(--muted) ${quizAssignmentLoading || courseQuizAssignments.isLoading ? "grid min-h-12 place-items-center" : ""}`}
-                    >
-                      {quizAssignmentLoading ||
-                      courseQuizAssignments.isLoading ? (
-                        <LoadingSpinnerIcon size={20} />
-                      ) : (
-                        "This Quiz is not currently assigned to your course access."
-                      )}
-                    </p>
-                  </section>
-                )}
-              </div>
-            ) : isDedicatedQuizLesson && !hasLessonQuiz(selectedLesson) ? (
-              <div className="w-full max-w-4xl mx-auto p-8 sm:p-12 text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
-                  <Exam size={28} weight="duotone" />
-                </div>
-                <h2 className="text-base font-semibold text-(--text)">
-                  Quiz Assessment Not Available
-                </h2>
-                <p className="mt-1.5 text-xs sm:text-sm text-(--muted) max-w-md mx-auto">
-                  This lesson does not currently have an active quiz assessment
-                  assigned.
-                </p>
-              </div>
-            ) : registerPersistentPlayer ? (
-              <div
-                className="pointer-events-none relative z-10 aspect-video w-full overflow-visible bg-black"
-                aria-hidden="true"
-                data-learning-player-anchor=""
-              >
-                {persistentPlayerMounted ? null : (
-                  <div
-                    className="absolute inset-0 z-10 overflow-visible text-white"
-                    data-learning-player-initial-loader=""
-                  >
-                    <LessonPlayerChromePlaceholder {...lessonPlayerProps} />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <LessonVideoPlayer {...lessonPlayerProps} />
-            )}
-          </div>
+        {/* On a phone the page itself stays put and this column is what
+            scrolls: the video, title, description and comments go up
+            together. (The window does not move, which the minimize and
+            expand motions rely on.) Its content is never squeezed to fit. */}
+        <section className="learning-workspace__lesson-column max-[640px]:overflow-x-hidden max-[640px]:overflow-y-auto max-[640px]:[&>.learning-workspace\_\_lesson-content-clip]:flex-[1_0_auto]!">
+          <LessonPlayerSlot
+            playerWrapRef={playerWrapRef}
+            stickyPlayer={stickyPlayer}
+            showingQuiz={showingQuiz}
+            currentQuizAssignment={currentQuizAssignment}
+            currentLessonUuid={currentLessonUuid}
+            selectedLesson={selectedLesson}
+            courseId={courseId}
+            resumeLessonVideoPlayback={resumeLessonVideoPlayback}
+            updateSelectedLessonProgress={updateSelectedLessonProgress}
+            nextLessonId={nextLessonId}
+            onSelectLesson={onSelectLesson}
+            quizAssignmentLoading={quizAssignmentLoading}
+            courseQuizAssignments={courseQuizAssignments}
+            isDedicatedQuizLesson={isDedicatedQuizLesson}
+            hasLessonQuiz={hasLessonQuiz}
+            registerPersistentPlayer={registerPersistentPlayer}
+            appliedReadingGrowth={appliedReadingGrowth}
+            appliedPlayerHeight={appliedPlayerHeight}
+            shortPlayer={shortPlayer}
+            seekTimeOnly={seekTimeOnly}
+            persistentPlayerMounted={persistentPlayerMounted}
+            lessonPlayerProps={lessonPlayerProps}
+            playerHeight={playerHeight}
+            setPlayerHeight={setPlayerHeight}
+            readingGrowable={readingGrowable}
+          />
 
-          <div className="learning-workspace__lesson-content-clip">
-            <article
-              ref={lessonContentRef}
-              className="learning-workspace__lesson-content"
-              data-discussion-panel-anchor=""
-              data-learning-lesson-content=""
-              aria-labelledby="learning-lesson-title"
-              style={
-                desktopLearningMinimizeViewport
-                  ? undefined
-                  : {
-                      opacity: "var(--learning-player-content-opacity, 1)",
-                      transform:
-                        "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
-                      transition:
-                        "transform var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1)",
-                    }
-              }
-            >
-              {!phoneLessonDrawerViewport &&
-                lessonHeader(false, isLearningBootstrapLoading)}
-              {isLearningDeepLinkReady || isLearningBootstrapLoading ? (
-                <Discussion
-                  key={discussionPersistenceKey}
-                  persistenceKey={discussionPersistenceKey}
-                  courseSlug={courseSlug}
-                  courseId={courseId}
-                  lessonId={backendLessonId}
-                  noteDeepLinkId={noteDeepLinkId}
-                  isThreadDeepLinkReady={isLearningDeepLinkReady}
-                  mobileBottomNavigation={mobileBottomNavigation}
-                  mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-                  mobileLessonHeader={lessonHeader(
-                    true,
-                    isLearningBootstrapLoading,
-                  )}
-                  lessonDescription={selectedLessonDescription}
-                  isLessonDescriptionLoading={
-                    (isApiRoute && isCourseOverviewLoading) ||
-                    isLearningBootstrapLoading
-                  }
-                  interactionCapabilities={interactionCapabilities}
-                  isInteractionCapabilitiesLoading={isLearningBootstrapLoading}
-                  lessonContentAccess={lessonContentAccess}
-                  lessonContentAccessReason={lessonContentAccessReason}
-                  canParticipate={canParticipateInLessonDiscussion}
-                  participationState={lessonParticipationState}
-                  participationActionLabel={
-                    isAuthenticated ? "Get access" : "Log in"
-                  }
-                  onParticipationAction={
-                    isAuthenticated ? onOpenCourseOverview : onOpenLogin
-                  }
-                  onSeekToTimestamp={seekCurrentLessonToTimestamp}
-                />
-              ) : isLearningDeepLinkError ? (
-                <div>
-                  {phoneLessonDrawerViewport &&
-                    lessonHeader(true, isLearningBootstrapLoading)}
-                  <div
-                    className="py-12 text-center"
-                    data-testid="learning-discussion-error"
-                  >
-                    <p className="font-semibold text-(--text)">
-                      Failed to load discussion
-                    </p>
-                    <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-                      There was a problem loading the course for this
-                      discussion.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => void refetchCourseOverview()}
-                      className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  {phoneLessonDrawerViewport &&
-                    lessonHeader(true, isLearningBootstrapLoading)}
-                  <div
-                    className="flex min-h-48 flex-col items-center justify-center py-12 text-sm text-(--text-secondary)"
-                    data-testid="learning-discussion-loading"
-                    role="status"
-                    aria-label="Loading discussion"
-                  >
-                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-(--text-secondary) border-t-transparent" />
-                  </div>
-                </div>
-              )}
-            </article>
-          </div>
+          <LessonContentPanel
+            lessonContentRef={lessonContentRef}
+            desktopLearningMinimizeViewport={desktopLearningMinimizeViewport}
+            courseUnavailable={courseUnavailable}
+            phoneLessonDrawerViewport={phoneLessonDrawerViewport}
+            lessonHeader={lessonHeader}
+            isLearningBootstrapLoading={isLearningBootstrapLoading}
+            isLearningDeepLinkReady={isLearningDeepLinkReady}
+            discussionPersistenceKey={discussionPersistenceKey}
+            courseSlug={courseSlug}
+            courseId={courseId}
+            courseCreatorId={courseOverview?.course?.creatorId}
+            backendLessonId={backendLessonId}
+            noteDeepLinkId={noteDeepLinkId}
+            mobileBottomNavigation={mobileBottomNavigation}
+            mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+            selectedLessonReading={selectedLessonReading}
+            selectedLessonDescription={selectedLessonDescription}
+            isApiRoute={isApiRoute}
+            isCourseOverviewLoading={isCourseOverviewLoading}
+            isLessonDescriptionPending={isLessonDescriptionPending}
+            interactionCapabilities={interactionCapabilities}
+            lessonContentAccess={lessonContentAccess}
+            lessonContentAccessReason={lessonContentAccessReason}
+            canParticipateInLessonDiscussion={canParticipateInLessonDiscussion}
+            lessonParticipationState={lessonParticipationState}
+            isAuthenticated={isAuthenticated}
+            onOpenCourseOverview={onOpenCourseOverview}
+            onOpenLogin={onOpenLogin}
+            seekCurrentLessonToTimestamp={seekCurrentLessonToTimestamp}
+            isLearningDeepLinkError={isLearningDeepLinkError}
+            refetchCourseOverview={refetchCourseOverview}
+          />
         </section>
 
         {/* On desktop this is the second card of the page. Theater mode hides
             the course content, so the lesson card takes the full width. */}
-        <div
-          className="learning-workspace__curriculum-clip"
-          data-learning-split-pane={theaterMode ? undefined : ""}
-        >
-          <div
-            className={`learning-workspace__curriculum-column ${curriculumCollapsed ? "is-collapsed" : ""}`}
-            data-learning-split-card=""
-          >
-            <div
-              className="learning-curriculum__resize-rail group/rail"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize course curriculum"
-              aria-keyshortcuts="Alt+C"
-              title={`Resize course content | ${curriculumShortcutLabel}`}
-              aria-valuemin={CURRICULUM_MIN_WIDTH}
-              aria-valuemax={CURRICULUM_MAX_WIDTH}
-              aria-valuenow={
-                curriculumCollapsed
-                  ? undefined
-                  : Math.round(curriculumAccessibleWidth)
-              }
-              aria-valuetext={
-                curriculumCollapsed
-                  ? "Course curriculum collapsed"
-                  : `${Math.round(curriculumAccessibleWidth)} pixels wide${
-                      curriculumResizing &&
-                      (curriculumResizePreviewWidth ??
-                        (curriculumCollapsed
-                          ? CURRICULUM_COLLAPSED_WIDTH
-                          : curriculumWidth)) < CURRICULUM_MIN_WIDTH
-                        ? ", sliding closed"
-                        : ""
-                    }`
-              }
-              tabIndex={0}
-              onKeyDown={handleCurriculumResizeKeyDown}
-              onDoubleClick={toggleCurriculumFromResizeRail}
-              onPointerDown={startCurriculumResize}
-              onPointerMove={moveCurriculumResize}
-              onPointerUp={endCurriculumResize}
-              onPointerCancel={(event) => endCurriculumResize(event, true)}
-            >
-              <CurriculumResizeGrip />
-            </div>
-            <div
-              id="learning-course-content"
-              className="learning-curriculum__viewport"
-            >
-              <Curriculum
-                sections={curriculumSections}
-                lessonsById={curriculumLessonsById}
-                scrollportRef={curriculumScrollportRef}
-                scrollportId="learning-course-curriculum-scrollport"
-                selectedLesson={selectedLesson}
-                lessonProgress={lessonProgress}
-                onSelectLesson={selectLesson}
-                onOpenCourseOverview={onOpenCourseOverview}
-                courseNavigationActionLabel={courseNavigationActionLabel}
-                courseTitle={courseTitle}
-                courseThumbnail={courseThumbnail}
-                courseThumbnailSrcSet={courseThumbnailSrcSet}
-                focusRequest={curriculumFocusRequest}
-                persistenceKey={coursePersistenceKey}
-                lessonResources={curriculumLessonResources}
-                resourceCourseKey={courseSlug}
-                quizLessonNumbers={curriculumQuizLessonNumbers}
-                activeQuizLesson={showingQuiz ? selectedLesson : null}
-                onOpenLessonQuiz={handleOpenLessonQuiz}
-                isLoading={isApiRoute && isCourseOverviewLoading}
-              />
-            </div>
-            {/* The lesson player portals its chapters panel here so it
-                overlays the course content. It sits below the resize rail. */}
-            <div
-              ref={setChaptersPanelHost}
-              data-learning-chapters-panel-host=""
-              className="pointer-events-none absolute inset-0 z-11 overflow-hidden rounded-[inherit]"
-            />
-          </div>
-        </div>
+        <CurriculumColumn
+          splitPaneRef={splitPaneRef}
+          theaterMode={theaterMode}
+          curriculumCollapsed={curriculumCollapsed}
+          curriculumShortcutLabel={curriculumShortcutLabel}
+          curriculumAccessibleWidth={curriculumAccessibleWidth}
+          curriculumResizing={curriculumResizing}
+          curriculumResizePreviewWidth={curriculumResizePreviewWidth}
+          curriculumWidth={curriculumWidth}
+          handleCurriculumResizeKeyDown={handleCurriculumResizeKeyDown}
+          toggleCurriculumFromResizeRail={toggleCurriculumFromResizeRail}
+          startCurriculumResize={startCurriculumResize}
+          moveCurriculumResize={moveCurriculumResize}
+          endCurriculumResize={endCurriculumResize}
+          curriculumSections={curriculumSections}
+          curriculumLessonsById={curriculumLessonsById}
+          curriculumScrollportRef={curriculumScrollportRef}
+          selectedLesson={selectedLesson}
+          lessonProgress={lessonProgress}
+          progressPending={progressPending}
+          selectLesson={selectLesson}
+          lockedLessonNumbers={lockedLessonNumbers}
+          onOpenCourseOverview={onOpenCourseOverview}
+          courseNavigationActionLabel={courseNavigationActionLabel}
+          courseTitle={courseTitle}
+          courseThumbnail={courseThumbnail}
+          courseThumbnailSrcSet={courseThumbnailSrcSet}
+          curriculumFocusRequest={curriculumFocusRequest}
+          coursePersistenceKey={coursePersistenceKey}
+          curriculumLessonResources={curriculumLessonResources}
+          courseSlug={courseSlug}
+          curriculumQuizLessonNumbers={curriculumQuizLessonNumbers}
+          showingQuiz={showingQuiz}
+          handleOpenLessonQuiz={handleOpenLessonQuiz}
+          isApiRoute={isApiRoute}
+          isCourseOverviewLoading={isCourseOverviewLoading}
+          courseUnavailable={courseUnavailable}
+          setChaptersPanelHost={setChaptersPanelHost}
+          listShown={lowerPartsShown}
+        />
       </main>
 
       <PrerenderedMobileCommentComposer />
@@ -3083,140 +887,57 @@ export function LearningWorkspace({
         snapToSequentialPoints={phoneLessonDrawer}
         showSwipeHandle={phoneLessonDrawer}
         swipeDirection={phoneLessonDrawer ? "down" : "right"}
-        swipeHandleClassName="absolute inset-x-0 top-0 z-30 pt-2 group-data-[swipe-axis=y]/drawer-popup:h-7 group-data-[swipe-direction=down]/drawer-popup:items-start after:bg-white/75 after:shadow-[0_1px_3px_rgba(0,0,0,0.48)]"
+        swipeHandleClassName="pointer-events-none absolute inset-x-0 top-0 z-30 pt-[3px] after:pointer-events-auto group-data-[swipe-axis=y]/drawer-popup:h-7 group-data-[swipe-direction=down]/drawer-popup:items-start after:bg-white/75 [:where([data-slot=drawer-popup]):has([data-curriculum-sticky-bar][data-collision])_&]:after:animate-[curriculum-seam-thumb-shake_480ms_ease-out_both] motion-reduce:after:animate-none!"
         triggerId="learning-course-content-trigger"
       >
-        <DrawerContent
-          ref={lessonDrawerSurfaceRef}
-          viewportClassName={DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS}
-          aria-label="Course lessons"
-          initialFocus
-          finalFocus={() => {
-            if (lessonDrawerSkipFinalFocusRef.current) {
-              lessonDrawerSkipFinalFocusRef.current = false;
-              return false;
-            }
-            return previousFocusRef.current || lessonTriggerRef.current;
-          }}
-          style={
-            {
-              ...(phoneLessonDrawer && lessonDrawerCollapsedSnapPoint > 1
-                ? {
-                    "--learning-drawer-collapsed-height": `${lessonDrawerCollapsedSnapPoint}px`,
-                  }
-                : {}),
-              ...(lessonDrawerViewportBounds
-                ? {
-                    "--learning-floating-curriculum-left-radius": "12px",
-                    "--learning-floating-curriculum-radius":
-                      lessonDrawerViewportBounds.borderRadius ?? "18px",
-                    bottom: `${lessonDrawerViewportBounds.bottom ?? 12}px`,
-                    left: `${lessonDrawerViewportBounds.left}px`,
-                    right: "auto",
-                    top: `${lessonDrawerViewportBounds.top ?? 12}px`,
-                    width: `${lessonDrawerViewportBounds.width}px`,
-                  }
-                : !phoneLessonDrawer
-                  ? {
-                      "--learning-floating-curriculum-left-radius": "12px",
-                      "--learning-floating-curriculum-radius": "18px",
-                      bottom: "max(10px, var(--app-safe-area-bottom))",
-                      left: "auto",
-                      right: "max(10px, env(safe-area-inset-right))",
-                      top: "max(10px, env(safe-area-inset-top))",
-                      width: `min(${floatingLessonDrawerWidth}px, calc(100dvw - 20px))`,
-                    }
-                  : {}),
-            } as CSSProperties
+        <CourseLessonsDrawerContent
+          lessonDrawerSurfaceRef={lessonDrawerSurfaceRef}
+          lessonDrawerSkipFinalFocusRef={lessonDrawerSkipFinalFocusRef}
+          previousFocusRef={previousFocusRef}
+          lessonTriggerRef={lessonTriggerRef}
+          phoneLessonDrawer={phoneLessonDrawer}
+          lessonDrawerCollapsedSnapPoint={lessonDrawerCollapsedSnapPoint}
+          lessonDrawerViewportBounds={lessonDrawerViewportBounds}
+          floatingLessonDrawerWidth={floatingLessonDrawerWidth}
+          floatingLessonDrawerResizing={floatingLessonDrawerResizing}
+          floatingLessonDrawerViewportWidth={floatingLessonDrawerViewportWidth}
+          floatingLessonDrawerSlidingClosed={floatingLessonDrawerSlidingClosed}
+          handleFloatingLessonDrawerResizeKeyDown={
+            handleFloatingLessonDrawerResizeKeyDown
           }
-          className={[
-            "learning-course-content-drawer overflow-hidden",
-            phoneLessonDrawer
-              ? "[--drawer-bleed-background:var(--canvas)] bg-(--canvas) data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] shadow-[0_-18px_48px_rgba(0,0,0,0.32)]"
-              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_74%,transparent)] overflow-hidden rounded-l-[12px]! rounded-r-(--learning-floating-curriculum-radius)! bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)] shadow-(--sidebar-menu-active-shadow) backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] data-[swipe-direction=right]:rounded-l-[12px]! data-[swipe-direction=right]:rounded-r-(--learning-floating-curriculum-radius)! [&_.learning-curriculum]:rounded-none! [&_.learning-curriculum]:bg-transparent!",
-          ].join(" ")}
-        >
-          {!phoneLessonDrawer && (
-            <div
-              data-base-ui-swipe-ignore=""
-              data-floating-curriculum-resize=""
-              data-learning-swipe-ignore=""
-              className="group/resize absolute inset-y-0 left-0 z-40 flex w-5 cursor-ew-resize touch-none items-center justify-start focus-visible:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize floating course curriculum"
-              aria-valuemin={LESSON_DRAWER_MIN_FLOATING_WIDTH}
-              aria-valuemax={LESSON_DRAWER_MAX_FLOATING_WIDTH}
-              aria-valuenow={Math.round(
-                Math.max(
-                  LESSON_DRAWER_MIN_FLOATING_WIDTH,
-                  floatingLessonDrawerViewportWidth,
-                ),
-              )}
-              aria-valuetext={`${Math.round(
-                Math.max(
-                  LESSON_DRAWER_MIN_FLOATING_WIDTH,
-                  floatingLessonDrawerViewportWidth,
-                ),
-              )} pixels wide${
-                floatingLessonDrawerSlidingClosed ? ", sliding closed" : ""
-              }`}
-              title="Resize or close floating course content"
-              tabIndex={0}
-              onKeyDown={handleFloatingLessonDrawerResizeKeyDown}
-              onPointerDown={startFloatingLessonDrawerResize}
-            >
-              <span
-                aria-hidden="true"
-                className="h-[calc(100%-28px)] w-0.5 rounded-full bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--accent)_54%,var(--border))_16%,color-mix(in_srgb,var(--accent)_54%,var(--border))_84%,transparent)] opacity-70 shadow-[0_0_0_transparent] transition-[width,opacity,box-shadow] duration-160 group-hover/resize:w-0.75 group-hover/resize:opacity-100 group-hover/resize:shadow-[0_0_14px_color-mix(in_srgb,var(--accent)_42%,transparent)] group-focus-visible/resize:w-0.75 group-focus-visible/resize:opacity-100"
-              />
-            </div>
-          )}
-          <DrawerTitle className="sr-only">Course lessons</DrawerTitle>
-          <DrawerDescription className="sr-only">
-            Browse sections and choose a lesson.
-          </DrawerDescription>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <Curriculum
-              sections={curriculumSections}
-              lessonsById={curriculumLessonsById}
-              scrollportRef={lessonDrawerScrollportRef}
-              scrollportId="lesson-drawer-curriculum-scrollport"
-              selectedLesson={selectedLesson}
-              lessonProgress={lessonProgress}
-              onSelectLesson={selectLesson}
-              onOpenCourseOverview={onOpenCourseOverview}
-              courseNavigationActionLabel={courseNavigationActionLabel}
-              courseTitle={courseTitle}
-              courseThumbnail={courseThumbnail}
-              courseThumbnailSrcSet={courseThumbnailSrcSet}
-              focusRequest={
-                lessonDrawerScrollTarget === "current"
-                  ? lessonDrawerFocusRequest
-                  : 0
-              }
-              topRequest={
-                lessonDrawerScrollTarget === "top" ? lessonDrawerTopRequest : 0
-              }
-              persistenceKey={coursePersistenceKey}
-              lessonResources={curriculumLessonResources}
-              resourceCourseKey={courseSlug}
-              quizLessonNumbers={curriculumQuizLessonNumbers}
-              activeQuizLesson={showingQuiz ? selectedLesson : null}
-              onOpenLessonQuiz={handleOpenLessonQuiz}
-              isLoading={isApiRoute && isCourseOverviewLoading}
-              onClose={closeLessonDrawer}
-              onLessonSearchOpen={
-                phoneLessonDrawer
-                  ? () => setLessonDrawerSnapPoint(1)
-                  : undefined
-              }
-              drawerHeroControlProps={
-                phoneLessonDrawer ? lessonDrawerHeroControlProps : undefined
-              }
-            />
-          </div>
-        </DrawerContent>
+          startFloatingLessonDrawerResize={startFloatingLessonDrawerResize}
+          handleLessonDrawerTouchStartCapture={
+            handleLessonDrawerTouchStartCapture
+          }
+          curriculumSections={curriculumSections}
+          curriculumLessonsById={curriculumLessonsById}
+          lessonDrawerScrollportRef={lessonDrawerScrollportRef}
+          selectedLesson={selectedLesson}
+          lessonProgress={lessonProgress}
+          progressPending={progressPending}
+          lockedLessonNumbers={lockedLessonNumbers}
+          selectLesson={selectLesson}
+          onOpenCourseOverview={onOpenCourseOverview}
+          courseNavigationActionLabel={courseNavigationActionLabel}
+          courseTitle={courseTitle}
+          courseThumbnail={courseThumbnail}
+          courseThumbnailSrcSet={courseThumbnailSrcSet}
+          lessonDrawerScrollTarget={lessonDrawerScrollTarget}
+          lessonDrawerFocusRequest={lessonDrawerFocusRequest}
+          lessonDrawerTopRequest={lessonDrawerTopRequest}
+          coursePersistenceKey={coursePersistenceKey}
+          curriculumLessonResources={curriculumLessonResources}
+          courseSlug={courseSlug}
+          curriculumQuizLessonNumbers={curriculumQuizLessonNumbers}
+          showingQuiz={showingQuiz}
+          handleOpenLessonQuiz={handleOpenLessonQuiz}
+          isApiRoute={isApiRoute}
+          isCourseOverviewLoading={isCourseOverviewLoading}
+          courseUnavailable={courseUnavailable}
+          closeLessonDrawer={closeLessonDrawer}
+          setLessonDrawerSnapPoint={setLessonDrawerSnapPoint}
+          lessonDrawerHeroControlProps={lessonDrawerHeroControlProps}
+        />
       </Drawer>
       <FloatingScrollbar
         scrollportRef={lessonDrawerScrollportRef}

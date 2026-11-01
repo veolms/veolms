@@ -1,10 +1,11 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ApiError } from "../../lib/api-error";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type {
   AssignQuizRequest,
-  BulkQuizAnswersRequest,
   CreateQuizQuestionRequest,
-  CreateQuizRequest,
   CreateQuizWithQuestionsRequest,
   SetQuizCoursePricingRequest,
   UpdateQuizAssignmentRequest,
@@ -13,16 +14,7 @@ import type {
 } from "@veolms/contracts";
 import { quizKeys } from "./quizzes.keys";
 import { quizzesService } from "./quizzes.service";
-export function useCreateQuiz() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: CreateQuizRequest) => quizzesService.create(payload),
-    onSuccess: (data) => {
-      qc.setQueryData(quizKeys.detail(data.id), data);
-      void qc.invalidateQueries({ queryKey: quizKeys.mine() });
-    },
-  });
-}
+import { trackAnalyticsEvent } from "../../lib/analytics-track";
 export function useCreateQuizWithQuestions() {
   const qc = useQueryClient();
   return useMutation({
@@ -39,9 +31,10 @@ export function useUpdateQuiz() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateQuizRequest }) =>
       quizzesService.update(id, payload),
+    // The response is the saved quiz. It goes straight into the cache;
+    // refetching the same quiz after every autosave only repeated the read.
     onSuccess: (data, vars) => {
       qc.setQueryData(quizKeys.detail(vars.id), data);
-      void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.id) });
     },
   });
 }
@@ -57,7 +50,6 @@ export function useAddQuizQuestion() {
     }) => quizzesService.addQuestion(id, payload),
     onSuccess: (data, vars) => {
       qc.setQueryData(quizKeys.detail(vars.id), data);
-      void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.id) });
     },
   });
 }
@@ -75,7 +67,6 @@ export function useUpdateQuizQuestion() {
     }) => quizzesService.updateQuestion(quizId, questionId, payload),
     onSuccess: (data, vars) => {
       qc.setQueryData(quizKeys.detail(vars.quizId), data);
-      void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.quizId) });
     },
   });
 }
@@ -89,8 +80,10 @@ export function useDeleteQuizQuestion() {
       quizId: string;
       questionId: string;
     }) => quizzesService.deleteQuestion(quizId, questionId),
-    onSuccess: (data, vars) => {
-      qc.setQueryData(quizKeys.detail(vars.quizId), data);
+    // The response is only an acknowledgement. Writing it into the quiz
+    // cache replaced the quiz with `{ success: true }` and the builder
+    // crashed on its next render.
+    onSuccess: (_data, vars) => {
       void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.quizId) });
     },
   });
@@ -105,19 +98,6 @@ export function usePublishQuiz() {
     },
   });
 }
-export function useSaveQuizAnswers() {
-  const qc = useQueryClient();
-  return useMutation<
-    { saved: true; answerCount: number },
-    ApiError,
-    { attemptId: string; payload: BulkQuizAnswersRequest }
-  >({
-    mutationFn: ({ attemptId, payload }) =>
-      quizzesService.saveAnswers(attemptId, payload),
-    onSuccess: (_, vars) =>
-      void qc.invalidateQueries({ queryKey: quizKeys.attempt(vars.attemptId) }),
-  });
-}
 export function useStartQuizAttempt() {
   const qc = useQueryClient();
   return useMutation({
@@ -125,20 +105,45 @@ export function useStartQuizAttempt() {
     onSuccess: (attempt) => {
       qc.setQueryData(quizKeys.attempt(attempt.id), attempt);
       void qc.invalidateQueries({ queryKey: quizKeys.mineAssignments() });
+      trackAnalyticsEvent("quiz_started");
     },
   });
 }
+type SubmittedQuizResult = Awaited<ReturnType<typeof quizzesService.submit>>;
+type CachedQuizAttempt = Awaited<ReturnType<typeof quizzesService.getAttempt>>;
+
+/**
+ * What the cache is told once an attempt has been handed in.
+ *
+ * The attempt is closed from here on, and the server refuses to read a
+ * closed attempt as one in progress. Asking for it again (it is still on
+ * screen when the answer arrives) only produced that refusal, so the cached
+ * attempt is marked with the status the result carries instead. Anything
+ * that opens it later sees at once that it is closed and shows the result,
+ * which is cached here too.
+ */
+export function applySubmittedQuizAttempt(
+  qc: QueryClient,
+  result: SubmittedQuizResult,
+): void {
+  qc.setQueryData(quizKeys.result(result.attemptId), result);
+  qc.setQueryData<CachedQuizAttempt>(
+    quizKeys.attempt(result.attemptId),
+    (attempt) => (attempt ? { ...attempt, status: result.status } : attempt),
+  );
+  void qc.invalidateQueries({ queryKey: quizKeys.mineAssignments() });
+  void qc.invalidateQueries({ queryKey: quizKeys.history() });
+}
+
 export function useSubmitQuizAttempt() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: quizzesService.submit,
     onSuccess: (result) => {
-      qc.setQueryData(quizKeys.result(result.attemptId), result);
-      void qc.invalidateQueries({
-        queryKey: quizKeys.attempt(result.attemptId),
+      applySubmittedQuizAttempt(qc, result);
+      trackAnalyticsEvent("quiz_submitted", {
+        props: { passed: Boolean(result.passed) },
       });
-      void qc.invalidateQueries({ queryKey: quizKeys.mineAssignments() });
-      void qc.invalidateQueries({ queryKey: quizKeys.history() });
     },
   });
 }

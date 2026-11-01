@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Coupon } from "@veolms/contracts";
+import type { CouponListItem } from "@veolms/contracts";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
@@ -19,14 +19,22 @@ import {
 } from "./couponHelpers";
 
 export interface CouponsTableProps {
-  coupons: Coupon[];
+  coupons: CouponListItem[];
   isLoading: boolean;
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   fetchNextPage?: () => void;
-  onEditCoupon: (coupon: Coupon) => void;
-  onToggleStatus: (coupon: Coupon) => void;
-  onCreateNew: () => void;
+  /**
+   * Whether reaching the end of the list loads the next page by itself.
+   * Off while a search, tab or filter narrows the list: a short list leaves
+   * the end on screen, and each page that added no match loaded another, so
+   * a narrow search downloaded the whole library. "Load more" stays.
+   */
+  autoLoadMore?: boolean;
+  /** Left out for someone who may read coupons but not change them. */
+  onEditCoupon?: (coupon: CouponListItem) => void;
+  onToggleStatus?: (coupon: CouponListItem) => void;
+  onCreateNew?: () => void;
   setNotice?: (message: string) => void;
 }
 
@@ -36,6 +44,7 @@ export function CouponsTable({
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,
+  autoLoadMore = true,
   onEditCoupon,
   onToggleStatus,
   onCreateNew,
@@ -45,7 +54,9 @@ export function CouponsTable({
   const observerTarget = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!hasNextPage || isFetchingNextPage || !fetchNextPage) return;
+    if (!autoLoadMore || !hasNextPage || isFetchingNextPage || !fetchNextPage) {
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -66,9 +77,9 @@ export function CouponsTable({
         observer.unobserve(current);
       }
     };
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [autoLoadMore, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const handleCopyCode = async (coupon: Coupon) => {
+  const handleCopyCode = async (coupon: CouponListItem) => {
     await navigator.clipboard.writeText(coupon.code);
     setCopiedId(coupon.id);
     setNotice?.(`Copied ${coupon.code}.`);
@@ -101,23 +112,25 @@ export function CouponsTable({
               </h3>
               <p className="mt-1 max-w-sm text-xs leading-5 text-(--muted)">
                 {hasNextPage
-                  ? "More matching coupons may be available."
+                  ? "Nothing matches among the coupons loaded so far. Load more to keep looking."
                   : "Create a coupon to start offering discounts, or adjust the filters to see more of your library."}
               </p>
             </>
           )}
           {!hasNextPage && !isFetchingNextPage ? (
             <div className="mt-3.5 sm:mt-4">
-              <Button onClick={onCreateNew}>Create coupon</Button>
+              {onCreateNew ? (
+                <Button onClick={onCreateNew}>Create coupon</Button>
+              ) : null}
             </div>
           ) : null}
         </div>
 
+        {/* A button only. With the scroll sentinel attached here it was on
+            screen the moment the list came up empty, so it loaded page after
+            page by itself. */}
         {hasNextPage ? (
-          <div
-            ref={observerTarget}
-            className="flex flex-col items-center justify-center p-4 sm:p-6 border-t border-(--border)"
-          >
+          <div className="flex flex-col items-center justify-center p-4 sm:p-6 border-t border-(--border)">
             {!isFetchingNextPage ? (
               <button
                 type="button"
@@ -208,34 +221,38 @@ export function CouponsTable({
                   <Copy size={15} weight="bold" />
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => onToggleStatus(coupon)}
-                title={coupon.isActive ? "Deactivate" : "Activate"}
-                className="inline-flex size-8 sm:size-9 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] text-(--text) shadow-[var(--card-compact-shadow)] hover:bg-(--hover) cursor-pointer"
-              >
-                {coupon.isActive ? (
-                  <ToggleRight
-                    size={16}
-                    weight="bold"
-                    className="text-emerald-500"
-                  />
-                ) : (
-                  <ToggleLeft
-                    size={16}
-                    weight="bold"
-                    className="text-(--muted)"
-                  />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => onEditCoupon(coupon)}
-                className="inline-flex h-8 sm:h-9 items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] px-2.5 sm:px-3.5 text-xs font-semibold text-(--text) shadow-[var(--card-compact-shadow)] hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:bg-(--hover) transition-all cursor-pointer"
-              >
-                <span>Open</span>
-                <ArrowRight size={14} weight="bold" />
-              </button>
+              {onToggleStatus ? (
+                <button
+                  type="button"
+                  onClick={() => onToggleStatus(coupon)}
+                  title={coupon.isActive ? "Deactivate" : "Activate"}
+                  className="inline-flex size-8 sm:size-9 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] text-(--text) shadow-[var(--card-compact-shadow)] hover:bg-(--hover) cursor-pointer"
+                >
+                  {coupon.isActive ? (
+                    <ToggleRight
+                      size={16}
+                      weight="bold"
+                      className="text-emerald-500"
+                    />
+                  ) : (
+                    <ToggleLeft
+                      size={16}
+                      weight="bold"
+                      className="text-(--muted)"
+                    />
+                  )}
+                </button>
+              ) : null}
+              {onEditCoupon ? (
+                <button
+                  type="button"
+                  onClick={() => onEditCoupon(coupon)}
+                  className="inline-flex h-8 sm:h-9 items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] px-2.5 sm:px-3.5 text-xs font-semibold text-(--text) shadow-[var(--card-compact-shadow)] hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:bg-(--hover) transition-all cursor-pointer"
+                >
+                  <span>Open</span>
+                  <ArrowRight size={14} weight="bold" />
+                </button>
+              ) : null}
             </div>
           </div>
         );

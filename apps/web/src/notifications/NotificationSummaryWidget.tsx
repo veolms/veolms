@@ -3,6 +3,7 @@ import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { MegaphoneIcon as Megaphone } from "@phosphor-icons/react/Megaphone";
 import type { NotificationTabId } from "./notificationsData";
+import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface NotificationSummaryWidgetProps {
   counts: Record<NotificationTabId, number>;
@@ -49,10 +50,9 @@ export function NotificationSummaryWidget({
   ];
 
   return (
-    <section
+    <ElevatedCard
       aria-labelledby="notification-summary-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 transition-all md:p-6"
-      style={{ boxShadow: "var(--card-shadow)" }}
+      className="p-5 transition-all md:p-6"
     >
       <h3
         id="notification-summary-heading"
@@ -85,6 +85,6 @@ export function NotificationSummaryWidget({
           );
         })}
       </div>
-    </section>
+    </ElevatedCard>
   );
 }

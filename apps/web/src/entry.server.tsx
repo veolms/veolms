@@ -3,7 +3,6 @@ import { StringDecoder } from "node:string_decoder";
 import type { RenderToPipeableStreamOptions } from "react-dom/server";
 import { renderToPipeableStream } from "react-dom/server";
 import { createReadableStreamFromReadable } from "@react-router/node";
-import { isbot } from "isbot";
 import type { EntryContext, RouterContextProvider } from "react-router";
 import { ServerRouter } from "react-router";
 
@@ -32,8 +31,17 @@ function createLowPriorityModulePreloadTransform() {
         LOW_PRIORITY_MODULE_PRELOAD_LINK,
       );
       const keep = Math.min(MODULE_PRELOAD_LINK.length - 1, text.length);
-      carry = text.slice(text.length - keep);
-      callback(null, text.slice(0, text.length - keep));
+      let cut = text.length - keep;
+      // Never between the two halves of a character outside the basic plane
+      // (an emoji is two code units). Each half was then written out on its
+      // own, which cannot be encoded, and the built page had two U+FFFD in place
+      // of the emoji: wrong on screen until the app took over, and a text
+      // React could not match when it did. The first half is held back with
+      // the second.
+      const second = text.charCodeAt(cut);
+      if (cut > 0 && second >= 0xdc00 && second <= 0xdfff) cut -= 1;
+      carry = text.slice(cut);
+      callback(null, text.slice(0, cut));
     },
     flush(callback) {
       callback(null, carry + decoder.end());
@@ -57,11 +65,15 @@ export default function handleRequest(
 
   return new Promise<Response>((resolve, reject) => {
     let shellRendered = false;
-    const userAgent = request.headers.get("user-agent");
-    const readyOption: keyof RenderToPipeableStreamOptions =
-      (userAgent && isbot(userAgent)) || routerContext.isSpaMode
-        ? "onAllReady"
-        : "onShellReady";
+    // This entry only ever runs at build time (the app is prerendered, never
+    // server-rendered per request), so there is nobody to stream to. Waiting
+    // for every Suspense boundary makes React write the finished markup in
+    // place. Streaming the shell first instead leaves the page content in
+    // hidden blocks that an inline script reveals on an animation frame and
+    // then at most once every 300ms, which only delays a static file's first
+    // paint, and puts the links those boundaries emit at the end of the
+    // document instead of in the head.
+    const readyOption: keyof RenderToPipeableStreamOptions = "onAllReady";
     let timeoutId: ReturnType<typeof setTimeout> | undefined = setTimeout(
       () => abort(),
       streamTimeout + 1_000,
@@ -70,6 +82,10 @@ export default function handleRequest(
     const { pipe, abort } = renderToPipeableStream(
       <ServerRouter context={routerContext} url={request.url} />,
       {
+        // React also moves any completed boundary larger than this many
+        // bytes out of line (fallback first, content revealed by script).
+        // The page body is one such boundary; keep it in place.
+        progressiveChunkSize: Number.MAX_SAFE_INTEGER,
         [readyOption]() {
           shellRendered = true;
           const body = new PassThrough({

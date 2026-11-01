@@ -19,7 +19,6 @@ export function isCommentOrQaThread(thread: LearningThread): boolean {
 
 export function adaptLearningThreadToComment(
   thread: ThreadEntityLike,
-  currentUserId?: string,
 ): Comment {
   const contentDraft = createDiscussionDraft(thread.content);
   if (thread.plainText) {
@@ -45,6 +44,7 @@ export function adaptLearningThreadToComment(
     serverId: getServerEntityId(thread),
     creationStatus: isPendingClientEntity(thread) ? "pending" : "confirmed",
     name: thread.author.displayName || thread.author.username || "Learner",
+    authorUsername: thread.author.username ?? undefined,
     time: formatRelativeTime(thread.createdAt),
     avatar: thread.author.avatarUrl || "",
     text: thread.plainText || thread.content,
@@ -59,8 +59,7 @@ export function adaptLearningThreadToComment(
     role: thread.author.role,
     attachment,
     attachments: thread.attachments || [],
-    isOwn:
-      thread.isOwn ?? (currentUserId ? thread.userId === currentUserId : false),
+    isOwn: Boolean(thread.isOwn),
     createdAt: thread.createdAt,
     timestampSeconds: thread.timestampSeconds ?? null,
     acceptedAnswerId: thread.acceptedAnswerId ?? null,
