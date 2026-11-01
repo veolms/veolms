@@ -4,6 +4,8 @@ import type {
   AvatarUploadPresignRequest,
   AvatarUploadPresignResponse,
   AuthMessageResponse,
+  ActiveSessionsVerificationRequest,
+  ActiveSessionsVerificationResponse,
   BackupCodesResponse,
   CurrentUserResponse,
   EmailVerificationSendRequest,
@@ -146,6 +148,25 @@ export const authService = {
     payload: EmailVerificationSendRequest,
   ): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/me/email/otp/send", payload);
+  },
+
+  sendActiveSessionsVerificationCode: async (): Promise<OtpSendResponse> => {
+    const [response, { otpSendResponseSchema }] = await Promise.all([
+      api.post<unknown>("/auth/sessions/verification/send"),
+      import("@veolms/contracts/auth/session"),
+    ]);
+    return otpSendResponseSchema.parse(response);
+  },
+
+  verifyActiveSessionsCode: async (
+    payload: ActiveSessionsVerificationRequest,
+  ): Promise<ActiveSessionsVerificationResponse> => {
+    const [response, { activeSessionsVerificationResponseSchema }] =
+      await Promise.all([
+        api.post<unknown>("/auth/sessions/verification/verify", payload),
+        import("@veolms/contracts/auth/session"),
+      ]);
+    return activeSessionsVerificationResponseSchema.parse(response);
   },
 
   verifyPhoneNumber: (

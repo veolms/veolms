@@ -149,9 +149,9 @@ export function usePublicProfile(username?: string) {
   });
 }
 
-export function useSessions(options?: { enabled?: boolean }) {
+export function useSessions(options?: { enabled?: boolean; userId?: string }) {
   return useQuery<SessionResponse[], ApiError>({
-    queryKey: authKeys.sessions(),
+    queryKey: authKeys.sessions(options?.userId),
     queryFn: () => authService.getSessions(),
     enabled: options?.enabled ?? true,
     staleTime: 30 * 1000,

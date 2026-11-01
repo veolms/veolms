@@ -40,6 +40,7 @@ import type { Executor } from "../shared/repository.types.ts";
 import { runSignInClaim } from "../shared/sign-in-claim.ts";
 import { type SessionLocation } from "../shared/request-location.ts";
 import { createPlatformSettingsService } from "../../platform/platform-settings.service.ts";
+import type { OtpService } from "../otp/otp.service.ts";
 
 /** How long a sign-in may wait for its student to sign another device out. */
 export const PENDING_DEVICE_SIGN_IN_TTL_MS = 10 * 60_000;
@@ -66,6 +67,7 @@ export class DeviceLimitReachedError extends AppError {
 
 export interface SessionServiceOptions {
   database: Kysely<Database>;
+  otpService?: OtpService;
 }
 
 /**
@@ -81,7 +83,12 @@ export interface SessionPrerequisites {
   existingSession: ActiveSession | null;
 }
 
-export function createSessionService({ database }: SessionServiceOptions) {
+const ACTIVE_SESSIONS_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function createSessionService({
+  database,
+  otpService,
+}: SessionServiceOptions) {
   const outbox = createOutboxService();
   const platformSettings = createPlatformSettingsService({ database });
 
@@ -416,14 +423,113 @@ export function createSessionService({ database }: SessionServiceOptions) {
     await sessionRepository.revokeSession(database, sessionId);
   }
 
-  async function listSessions(userId: string) {
+  async function sendActiveSessionsVerificationCode(
+    user: Pick<
+      AuthenticatedRequestContext["user"],
+      "id" | "email" | "emailVerified"
+    >,
+    ip: string,
+  ): Promise<void> {
+    if (!otpService) {
+      throw new AppError(
+        500,
+        "OTP_SERVICE_UNAVAILABLE",
+        "Active-session verification is unavailable.",
+      );
+    }
+    if (!user.email || !user.emailVerified) {
+      throw new AppError(
+        409,
+        "VERIFIED_EMAIL_REQUIRED",
+        "Verify your email address before continuing.",
+      );
+    }
+
+    await otpService.sendActiveSessionsVerificationOtp(user.email, {
+      ip,
+      userId: user.id,
+    });
+  }
+
+  async function verifyActiveSessionsCode(
+    user: Pick<
+      AuthenticatedRequestContext["user"],
+      "id" | "email" | "emailVerified"
+    >,
+    sessionId: string,
+    code: string,
+  ): Promise<{ verifiedUntil: string }> {
+    if (!otpService) {
+      throw new AppError(
+        500,
+        "OTP_SERVICE_UNAVAILABLE",
+        "Active-session verification is unavailable.",
+      );
+    }
+    if (!user.email || !user.emailVerified) {
+      throw new AppError(
+        409,
+        "VERIFIED_EMAIL_REQUIRED",
+        "Verify your email address before continuing.",
+      );
+    }
+
+    await otpService.verifyActiveSessionsVerificationOtp(user.email, code);
+
+    const verifiedAt = new Date();
+    const marked = await sessionRepository.markActiveSessionsVerified(
+      database,
+      user.id,
+      sessionId,
+      verifiedAt,
+    );
+    if (!marked) {
+      throw new AppError(
+        401,
+        "SESSION_EXPIRED",
+        "Your sign-in session has ended. Please sign in again.",
+      );
+    }
+
+    return {
+      verifiedUntil: new Date(
+        verifiedAt.getTime() + ACTIVE_SESSIONS_VERIFICATION_TTL_MS,
+      ).toISOString(),
+    };
+  }
+
+  async function assertActiveSessionsVerified(
+    userId: string,
+    sessionId: string,
+  ): Promise<void> {
+    const now = new Date();
+    const isVerified = await sessionRepository.hasActiveSessionsVerification(
+      database,
+      userId,
+      sessionId,
+      new Date(now.getTime() - ACTIVE_SESSIONS_VERIFICATION_TTL_MS),
+      now,
+    );
+    if (!isVerified) {
+      throw new AppError(
+        403,
+        "ACTIVE_SESSIONS_VERIFICATION_REQUIRED",
+        "Verify your identity before viewing or managing active sessions.",
+      );
+    }
+  }
+
+  async function listSessions(userId: string, currentSessionId: string) {
+    await assertActiveSessionsVerified(userId, currentSessionId);
     return sessionRepository.listUserSessions(database, userId);
   }
 
   async function revokeSession(
     userId: string,
     sessionId: string,
+    currentSessionId: string,
   ): Promise<void> {
+    await assertActiveSessionsVerified(userId, currentSessionId);
     await database.transaction().execute(async (trx) => {
       const revoked = await sessionRepository.revokeUserSession(
         trx,
@@ -445,6 +551,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     userId: string,
     currentSessionId: string,
   ): Promise<void> {
+    await assertActiveSessionsVerified(userId, currentSessionId);
     await sessionRepository.revokeOtherUserSessions(
       database,
       userId,
@@ -547,6 +654,8 @@ export function createSessionService({ database }: SessionServiceOptions) {
     resolveDeviceLimit,
     completeMfaEnrolment,
     logout,
+    sendActiveSessionsVerificationCode,
+    verifyActiveSessionsCode,
     listSessions,
     revokeSession,
     revokeOtherSessions,

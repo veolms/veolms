@@ -92,6 +92,7 @@ export interface SessionTable {
   location_region: string | null;
   location_country: string | null;
   mfa_verified: Generated<boolean>;
+  active_sessions_verified_at: Date | null;
   revoked_at: Date | null;
   expires_at: Date;
   last_used_at: Generated<Date>;

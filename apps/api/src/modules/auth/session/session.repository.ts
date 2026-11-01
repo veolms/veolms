@@ -38,6 +38,7 @@ export async function insertSession(
       location_region: input.location?.region ?? null,
       location_country: input.location?.country ?? null,
       mfa_verified: input.mfaVerified,
+      active_sessions_verified_at: null,
       expires_at: input.expiresAt,
     })
     .execute();
@@ -49,7 +50,9 @@ export async function markSessionMfaVerified(
 ): Promise<void> {
   await database
     .updateTable("sessions")
-    .set({ mfa_verified: true })
+    .set({
+      mfa_verified: true,
+    })
     .where("id", "=", sessionId)
     .execute();
   evictCachedSession(sessionId);
@@ -185,6 +188,7 @@ export async function rotateSession(
       location_region: input.location?.region ?? null,
       location_country: input.location?.country ?? null,
       mfa_verified: input.mfaVerified,
+      active_sessions_verified_at: null,
       expires_at: input.expiresAt,
       last_used_at: now,
     })
@@ -196,6 +200,45 @@ export async function rotateSession(
 
   evictCachedSession(sessionId);
   return Number(result.numUpdatedRows) > 0;
+}
+
+export async function markActiveSessionsVerified(
+  database: Executor,
+  userId: string,
+  sessionId: string,
+  verifiedAt: Date,
+): Promise<boolean> {
+  const result = await database
+    .updateTable("sessions")
+    .set({
+      active_sessions_verified_at: verifiedAt,
+    })
+    .where("id", "=", sessionId)
+    .where("user_id", "=", userId)
+    .where("revoked_at", "is", null)
+    .where("expires_at", ">", verifiedAt)
+    .executeTakeFirst();
+  evictCachedSession(sessionId);
+  return Number(result.numUpdatedRows) > 0;
+}
+
+export async function hasActiveSessionsVerification(
+  database: Executor,
+  userId: string,
+  sessionId: string,
+  verifiedAfter: Date,
+  now: Date,
+): Promise<boolean> {
+  const session = await database
+    .selectFrom("sessions")
+    .select("id")
+    .where("id", "=", sessionId)
+    .where("user_id", "=", userId)
+    .where("active_sessions_verified_at", ">", verifiedAfter)
+    .where("expires_at", ">", now)
+    .where("revoked_at", "is", null)
+    .executeTakeFirst();
+  return session !== undefined;
 }
 
 export async function purgeOldSessions(
