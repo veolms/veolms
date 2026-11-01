@@ -107,6 +107,8 @@ const FINISH_FALLBACK_BUFFER_MS = 250;
 const MIN_PLACEHOLDER_PART_WIDTH_PX = 120;
 
 const VIDEO_BOX_SELECTOR = ".youtube-player";
+/** The video box's shell, which the mini window clips to its corners. */
+const VIDEO_SHELL_SELECTOR = ".video-shell";
 /** Parts of the mini window that sit under the video and must not zoom. */
 const BELOW_VIDEO_SELECTOR =
   "[data-learning-mini-player-info-bar], [data-learning-mini-player-playlist-shell]";
@@ -137,6 +139,7 @@ const MINI_HOST_INLINE_PROPERTIES = [
   "border-radius",
 ] as const;
 const VIDEO_BOX_INLINE_PROPERTIES = ["transition", "border-radius"] as const;
+const VIDEO_SHELL_INLINE_PROPERTIES = ["transition", "clip-path"] as const;
 const FULL_HOST_INLINE_PROPERTIES = [
   "transform-origin",
   "overflow",
@@ -673,6 +676,7 @@ export function startLearningPlayerExpand(
     `${(restRadius / targetScale).toFixed(2)}px`,
   );
   const cornerTransition = `border-radius ${durationMs}ms ${easing}`;
+  const clipTransition = `clip-path ${durationMs}ms ${easing}`;
   const videoBox = miniHost.querySelector<HTMLElement>(VIDEO_BOX_SELECTOR);
   const belowVideo = Array.from(
     miniHost.querySelectorAll<HTMLElement>(BELOW_VIDEO_SELECTOR),
@@ -710,19 +714,37 @@ export function startLearningPlayerExpand(
   // Legacy CSS forces the mini window's radius (and squares the video box
   // inside it). A transition is the one thing that outranks those rules, so
   // the corners are moved through transitions on inline important values.
+  //
+  // The video element inside the box, and the clip on the shell around it,
+  // carry the mini window's 12px corners as well (for iPhone Safari, see
+  // MiniPlayerInfoBar). Left alone they grew with the window to about three
+  // times the corner it lands with, cutting the picture well inside the
+  // window's corner: the page showed through there, and the corner looked
+  // pointed. They follow the window's corners too.
+  const videoCornerBoxes = [
+    videoBox,
+    videoBox?.querySelector<HTMLElement>("video") ?? null,
+  ].filter((element): element is HTMLElement => element !== null);
+  const videoShell =
+    videoBox?.closest<HTMLElement>(VIDEO_SHELL_SELECTOR) ?? null;
+  const setVideoCorners = (radius: string) => {
+    for (const element of videoCornerBoxes) {
+      element.style.setProperty("border-radius", radius, "important");
+    }
+    videoShell?.style.setProperty("clip-path", `inset(0 round ${radius})`);
+  };
   if (videoBox) {
     // The video loses the bar under it, so in flight its own bottom corners
     // are the window's. They start from the window's radius and square off
     // as it lands, where the lesson continues straight under the video.
-    videoBox.style.transition = "none";
-    videoBox.style.setProperty(
-      "border-radius",
-      `${LEARNING_MINI_PLAYER_CORNER_RADIUS_PX}px`,
-      "important",
-    );
+    for (const element of videoCornerBoxes) element.style.transition = "none";
+    setVideoCorners(`${LEARNING_MINI_PLAYER_CORNER_RADIUS_PX}px`);
     void window.getComputedStyle(videoBox).borderTopLeftRadius;
-    videoBox.style.transition = cornerTransition;
-    videoBox.style.setProperty("border-radius", radiusAtRest, "important");
+    for (const element of videoCornerBoxes) {
+      element.style.transition = cornerTransition;
+    }
+    if (videoShell) videoShell.style.transition = clipTransition;
+    setVideoCorners(radiusAtRest);
   }
   miniHost.style.transformOrigin = "top left";
   miniHost.style.pointerEvents = "none";
@@ -838,9 +860,13 @@ export function startLearningPlayerExpand(
     for (const element of belowVideo) {
       element.style.removeProperty("transform-origin");
     }
-    if (videoBox) {
-      clearInlineProperties(videoBox, VIDEO_BOX_INLINE_PROPERTIES);
-      cancelTransitions(videoBox);
+    for (const element of videoCornerBoxes) {
+      clearInlineProperties(element, VIDEO_BOX_INLINE_PROPERTIES);
+      cancelTransitions(element);
+    }
+    if (videoShell) {
+      clearInlineProperties(videoShell, VIDEO_SHELL_INLINE_PROPERTIES);
+      cancelTransitions(videoShell);
     }
     // A corner transition still in flight would outrank whatever radius the
     // next phase animates.
@@ -884,7 +910,7 @@ export function startLearningPlayerExpand(
         ? radiusAtRest
         : `${LEARNING_MINI_PLAYER_CORNER_RADIUS_PX}px`;
       miniHost.style.setProperty("border-radius", radius, "important");
-      videoBox?.style.setProperty("border-radius", radius, "important");
+      setVideoCorners(radius);
     },
     handOff: (fullHost, handOffOptions) => {
       const startTime =
