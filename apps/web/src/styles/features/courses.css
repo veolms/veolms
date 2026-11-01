@@ -504,7 +504,12 @@
   display: none;
 }
 
-.courses-profile:has(> .settings-quick-menu:not([aria-hidden="true"])) {
+/* Keyed on `data-open`, the same state as `aria-hidden` (SettingsQuickMenu
+   writes both). With `aria-hidden` inside a `:has()`, Chrome restyled the
+   whole page whenever any element anywhere changed its `aria-hidden` (40 to
+   70 ms on a lesson page): the scroll control and the page scrollbar do as
+   a scroll starts. */
+.courses-profile:has(> .settings-quick-menu[data-open="true"]) {
   z-index: 2;
 }
 
