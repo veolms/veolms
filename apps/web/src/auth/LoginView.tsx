@@ -1,6 +1,11 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { rememberCodeSignIn, useLastGoogleAccount } from "./lastGoogleAccount";
-import { LoginDivider, LoginHeading } from "./LoginCardParts";
+import {
+  LoginDivider,
+  LoginHeading,
+  loginQuietLinkClasses,
+} from "./LoginCardParts";
+import { PhoneSignInForm } from "./PhoneSignInForm";
 import {
   codeSentAt,
   forgetCodeSent,
@@ -24,7 +29,10 @@ import {
 } from "./authFlow";
 import type { AuthFlowState, AuthIdentifier } from "./authFlow";
 import { generateUniqueUsername } from "./username";
-import { getSecondaryVerificationMethodRequired } from "./authConfig";
+import {
+  getSecondaryVerificationMethodRequired,
+  isMobileLoginEnabled,
+} from "./authConfig";
 import {
   LOGIN_PURPOSE_PARAM,
   resolveAuthenticatedDestination,
@@ -43,6 +51,8 @@ function resolvePayload(identifier: AuthIdentifier) {
 
 const ALREADY_SENT_NOTICE = "We sent you a code a moment ago — enter it below.";
 
+const NO_ACCOUNT_FOR_NUMBER =
+  "No account uses this number. Try another number, or sign up with email or Google.";
 // True when the server refuses a send because it is too soon after one this
 // tab made to the same destination. The server answers its other request
 // limits with the same code, so the earlier send has to be known here.
@@ -103,6 +113,9 @@ export function LoginView({
     allowAuthenticator: true,
   });
   const [oneTapPending, setOneTapPending] = useState(false);
+  // The visitor chose "Sign in with phone number": the identifier step asks
+  // for a number, and a number with no account is not offered sign-up.
+  const [phoneSignIn, setPhoneSignIn] = useState(false);
 
   const registrationOtpCodesRef = useRef<
     Partial<Record<"email" | "mobile", string>>
@@ -275,6 +288,16 @@ export function LoginView({
         errorObj.code === "USER_NOT_FOUND" ||
         errorObj.code === "NO_USER"
       ) {
+        // Phone sign-in is for getting back into an account, so it never
+        // creates one. The server says so only once the code proved the
+        // number is the visitor's.
+        if (phoneSignIn && identifier.method === "mobile") {
+          forgetCodeSent();
+          setIdentifierError(NO_ACCOUNT_FOR_NUMBER);
+          dispatch({ type: "CHANGE_IDENTIFIER" });
+          return;
+        }
+
         const requiredSecondary =
           primaryVerifiedIdentifier === null
             ? getSecondaryVerificationMethodRequired(identifier.method)
@@ -546,6 +569,21 @@ export function LoginView({
       );
     }
 
+    if (phoneSignIn) {
+      return (
+        <PhoneSignInForm
+          errorMessage={identifierError ?? undefined}
+          onBack={() => {
+            setIdentifierError(null);
+            setPhoneSignIn(false);
+          }}
+          onEdit={() => setIdentifierError(null)}
+          onSubmit={(identifier) => handleSendCode(identifier)}
+          sending={flow.status === "sendingOtp" || sendOtpMutation.isPending}
+        />
+      );
+    }
+
     const welcomeSubtitle = isJoiningDiscussion
       ? isReturningVisitor
         ? "Log in to join the discussion"
@@ -575,6 +613,29 @@ export function LoginView({
         <IdentifierForm
           disabled={oneTapPending}
           errorMessage={identifierError ?? undefined}
+          footnote={
+            // Where the number is already a choice beside email, the form's
+            // own switch offers it.
+            isMobileLoginEnabled() ? undefined : (
+              <>
+                We&rsquo;ll email you a one-time code.
+                <span className="mt-1.5 block">
+                  Can&rsquo;t use your email?{" "}
+                  <button
+                    className={loginQuietLinkClasses}
+                    disabled={oneTapPending}
+                    onClick={() => {
+                      setIdentifierError(null);
+                      setPhoneSignIn(true);
+                    }}
+                    type="button"
+                  >
+                    Sign in with phone number
+                  </button>
+                </span>
+              </>
+            )
+          }
           onEdit={() => setIdentifierError(null)}
           onSubmit={(identifier) => handleSendCode(identifier)}
           status={
@@ -590,6 +651,7 @@ export function LoginView({
 
   const welcomeStep =
     !pendingSecondaryMethod &&
+    !phoneSignIn &&
     (flow.status === "identifier" ||
       flow.status === "error" ||
       (flow.status === "sendingOtp" && flow.sendCount === 0));
