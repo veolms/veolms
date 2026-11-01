@@ -8,6 +8,7 @@ import { formatMoney } from "@veolms/contracts/commerce/money";
 import { formatPriceWithCurrency } from "./coursePriceFormat";
 import { CoursePriceSwitch } from "../CoursePriceSwitch";
 import { courseCardShimmerClass } from "../courseCardShimmer";
+import { useAuthStore } from "../../store/auth.store";
 import { coursePriceState, useCoursePrices } from "../liveCoursePrices";
 
 export type IncludedCourse = NonNullable<
@@ -26,7 +27,9 @@ export type IncludedCourse = NonNullable<
  *
  * What a course sells for is its price in force (`liveCoursePrices`), not
  * the one in the course's curriculum, which a page is built with: that
- * only says whether the course is sold on its own (`worth`).
+ * says whether the course is sold on its own (`worth`), and is shown only
+ * to a visitor who is not signed in when the price in force could not be
+ * loaded.
  */
 export function IncludedCoursesList({
   courses,
@@ -36,6 +39,7 @@ export function IncludedCoursesList({
   onOpenCourse?: (path: string) => void;
 }) {
   const coursePrices = useCoursePrices();
+  const signedIn = useAuthStore((state) => Boolean(state.user));
   return (
     <div className="flex flex-col gap-2.5">
       <h4 className="m-0 text-[0.95rem] leading-snug font-semibold text-(--text)">
@@ -101,6 +105,12 @@ export function IncludedCoursesList({
                       <span className="truncate">
                         Worth <IncludedCourseWorth pricing={price.pricing} />
                       </span>
+                    ) : price?.status === "failed" &&
+                      course.worth &&
+                      !signedIn ? (
+                      <span className="truncate">
+                        Worth <ListedWorth worth={course.worth} />
+                      </span>
                     ) : null}
                   </span>
                 </span>
@@ -145,6 +155,26 @@ function IncludedCourseWorth({ pricing }: { pricing: CoursePricingSummary }) {
       domestic={domestic}
       international={formatMoney(pricing.international.salePriceMinor, {
         currency: pricing.international.currency,
+      })}
+      pending={<WorthShimmer />}
+    />
+  );
+}
+
+/** The worth the course's curriculum carries (see `IncludedCoursesList`). */
+function ListedWorth({
+  worth,
+}: {
+  worth: NonNullable<IncludedCourse["worth"]>;
+}) {
+  const domestic = formatPriceWithCurrency(worth.amount, worth.currency);
+  if (!worth.international) return domestic;
+  return (
+    <CoursePriceSwitch
+      display="inline"
+      domestic={domestic}
+      international={formatMoney(worth.international.amountMinor, {
+        currency: worth.international.currency,
       })}
       pending={<WorthShimmer />}
     />

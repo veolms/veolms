@@ -34,8 +34,9 @@ export interface CoursePageData {
   accessFailed: boolean;
   /**
    * The price in force: from the access answer, or the one this tab has
-   * (`liveCoursePrices`) until it comes; "failed" when the answer failed
-   * and the tab has none. A built page has none at all.
+   * (`liveCoursePrices`) until it comes. When the answer failed and the tab
+   * has none, a guest gets the list's or the built page's price and a
+   * signed-in viewer "failed". A built page draws none at all.
    */
   priceStatus: "known" | "pending" | "failed";
   /** Whether the course is paid, also while its price is not known. */
@@ -114,6 +115,9 @@ export function useCoursePageData({
       ? {
           id: seeded.curriculum.course.id,
           slug: seeded.curriculum.course.slug,
+          pricing: seeded.pricing
+            ? { ...seeded.pricing, salePrice: seeded.pricing.salePrice ?? null }
+            : undefined,
           canSelfEnroll: seeded.curriculum.canSelfEnroll,
         }
       : null,
@@ -178,7 +182,16 @@ export function useCoursePageData({
   const curriculum =
     fullCurriculum ?? (builtBeforeChange ? undefined : seeded?.curriculum);
   const sectionsComplete = Boolean(fullCurriculum) || Boolean(seeded?.complete);
-  const pricing = access?.pricing ?? null;
+  // The price in force could not be loaded: a visitor who is not signed in
+  // holds no course, so the list's (or the built page's) price is shown to
+  // them; a signed-in learner is told it could not be loaded.
+  const priceFailed =
+    !access?.pricing && accessQuery.isError && !accessQuery.isFetching;
+  const pricing =
+    access?.pricing ??
+    (priceFailed && viewerKind === "guest"
+      ? (provisionalAccess?.listedPricing ?? null)
+      : null);
 
   let overview: CourseOverviewResponse | undefined;
   if ((isManager || publicCurriculumMissing) && personal.data) {
@@ -238,12 +251,8 @@ export function useCoursePageData({
       accessQuery.isError &&
       !accessQuery.isFetching &&
       !provisionalAccess,
-    priceStatus: pricing
-      ? "known"
-      : accessQuery.isError && !accessQuery.isFetching
-        ? "failed"
-        : "pending",
-    pricingType: pricing?.pricingType ?? seeded?.pricingType ?? null,
+    priceStatus: pricing ? "known" : priceFailed ? "failed" : "pending",
+    pricingType: pricing?.pricingType ?? seeded?.pricing?.pricingType ?? null,
     totalSections,
     sectionsComplete: overviewIsWhole,
     requestAllSections,

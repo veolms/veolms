@@ -84,6 +84,8 @@ export interface ViewerCourseState {
   pending: boolean;
   /** The viewer's courses could not be loaded (`isViewerCourseStateFailed`). */
   failed: boolean;
+  /** Someone is signed in, as the shell decides it. */
+  signedIn: boolean;
   /** Ids and slugs of the courses the viewer is enrolled in. */
   enrolled: ReadonlySet<string>;
   /** Progress by course id and slug. */
@@ -142,8 +144,8 @@ export function useViewerCourseState(): ViewerCourseState {
         progress.set(key, course.progress);
       }
     }
-    return { pending, failed, enrolled, progress };
-  }, [enrolledCourses, failed, pending]);
+    return { pending, failed, signedIn, enrolled, progress };
+  }, [enrolledCourses, failed, pending, signedIn]);
 }
 
 /**

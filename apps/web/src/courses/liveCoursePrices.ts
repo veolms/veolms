@@ -217,6 +217,22 @@ export function useCoursePrices({ ask = true }: { ask?: boolean } = {}) {
   );
 }
 
+/**
+ * What a course list's card shows for a course's price (`Course.priceStatus`):
+ * nothing to add when the price in force is known, or when it could not be
+ * loaded for a visitor who is not signed in, who then sees the list's own
+ * price (they hold no course, so a price is never wrong for them). A
+ * signed-in learner's card says it could not be loaded instead.
+ */
+export function cardPriceStatus(
+  price: CoursePriceState,
+  signedIn: boolean,
+): "pending" | "failed" | undefined {
+  if (price.status === "known") return undefined;
+  if (price.status === "failed" && !signedIn) return undefined;
+  return price.status;
+}
+
 /** One course's price, or why it cannot be shown yet. */
 export function coursePriceState(
   prices: CoursePrices,

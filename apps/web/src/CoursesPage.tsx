@@ -667,6 +667,7 @@ export function CoursesPage({
     enrolledCoursesData,
     learnerStateKnown,
     learnerStateFailed,
+    signedIn: isAuthenticated,
     myCoursesData,
     deletedCoursesData,
     deleteCourseMutation,

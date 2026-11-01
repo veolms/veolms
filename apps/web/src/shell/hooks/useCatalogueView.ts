@@ -39,6 +39,7 @@ import { getCatalogueCardProgressPercent } from "../../learning/catalogueCardPro
 import { hasStartedCourse } from "@veolms/contracts/learner-home-plan";
 import { readLearningProgress } from "../../learning/learningProgressStorage";
 import {
+  cardPriceStatus,
   coursePriceState,
   useCoursePrices,
 } from "../../courses/liveCoursePrices";
@@ -81,6 +82,8 @@ export interface UseCatalogueViewArgs {
   enrolledCoursesData: ReturnType<typeof useEnrolledCourses>["data"];
   learnerStateKnown: boolean;
   learnerStateFailed: boolean;
+  /** The shell's own word on whether someone is signed in. */
+  signedIn: boolean;
   myCoursesData: ReturnType<typeof useMyCourses>["data"];
   deletedCoursesData:
     | {
@@ -149,6 +152,7 @@ export function useCatalogueView({
   enrolledCoursesData,
   learnerStateKnown,
   learnerStateFailed,
+  signedIn,
   myCoursesData,
   deletedCoursesData,
   deleteCourseMutation,
@@ -277,6 +281,7 @@ export function useCatalogueView({
       }
       return publishedCourses.map((summary) => {
         const price = coursePriceState(coursePrices, summary.id);
+        const priceStatus = cardPriceStatus(price, signedIn);
         const course = adaptCourseSummaryToCatalogueCourse(
           price.status === "known"
             ? { ...summary, pricing: price.pricing }
@@ -291,7 +296,7 @@ export function useCatalogueView({
             (course.slug ? startedSet.has(course.slug) : false),
           viewerStatePending: !learnerStateKnown,
           viewerStateFailed: learnerStateFailed,
-          ...(price.status === "known" ? {} : { priceStatus: price.status }),
+          ...(priceStatus ? { priceStatus } : {}),
         };
       });
     }
@@ -310,6 +315,7 @@ export function useCatalogueView({
     coursePrices,
     learnerStateFailed,
     learnerStateKnown,
+    signedIn,
     myCoursesData?.courses,
     publishedCourses,
   ]);

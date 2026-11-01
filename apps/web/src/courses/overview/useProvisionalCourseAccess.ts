@@ -33,6 +33,12 @@ function findListedCourse(
 export type ProvisionalCourseAccess = Omit<CourseAccessResponse, "pricing"> & {
   /** The price this tab has for the course, if any (`liveCoursePrices`). */
   pricing: CourseAccessResponse["pricing"] | null;
+  /**
+   * The price from the course list this tab has, or the built page's: shown
+   * only to a visitor who is not signed in, when the price in force could
+   * not be loaded (they hold no course, so no price is wrong for them).
+   */
+  listedPricing?: CourseAccessResponse["pricing"] | null;
 };
 
 /**
@@ -44,8 +50,9 @@ export type ProvisionalCourseAccess = Omit<CourseAccessResponse, "pricing"> & {
  * only that answer carries where to resume and the curriculum's version.
  *
  * A page loaded with its course built in (a reload) has no list to read;
- * the course as the site was built (`builtCourse`) stands in for it. A
- * price never comes from a list or a built page (see `liveCoursePrices`).
+ * the course as the site was built (`builtCourse`) stands in for it. Their
+ * price is never the one drawn, but for a guest whose price could not be
+ * loaded (`listedPricing`).
  *
  * Undefined when it cannot be told: the course is in no list this tab has
  * and was not built in, or a signed-in learner's enrolments are not known
@@ -54,7 +61,11 @@ export type ProvisionalCourseAccess = Omit<CourseAccessResponse, "pricing"> & {
 export function useProvisionalCourseAccess(
   idOrSlug: string | undefined,
   viewer: "guest" | "learner" | null,
-  builtCourse?: Pick<CourseSummary, "id" | "slug" | "canSelfEnroll"> | null,
+  builtCourse?:
+    | (Pick<CourseSummary, "id" | "slug" | "canSelfEnroll"> & {
+        pricing?: CourseSummary["pricing"];
+      })
+    | null,
 ): ProvisionalCourseAccess | undefined {
   const queryClient = useQueryClient();
   // A signed-in learner's list is asked for here too (one small answer,
@@ -101,6 +112,13 @@ export function useProvisionalCourseAccess(
           ...pricing,
           showDiscountBadge: pricing.showDiscountBadge ?? false,
           international: pricing.international ?? null,
+        }
+      : null,
+    listedPricing: listed.pricing
+      ? {
+          ...listed.pricing,
+          showDiscountBadge: listed.pricing.showDiscountBadge ?? false,
+          international: listed.pricing.international ?? null,
         }
       : null,
     progress:

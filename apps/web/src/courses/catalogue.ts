@@ -79,9 +79,13 @@ export interface Course {
   viewerStateFailed?: boolean;
   /**
    * The price in force is not known yet ("pending": the card shimmers) or
-   * could not be loaded ("failed"): `pricing` is then the course list's,
-   * which says whether the course is free but is never shown as its price
-   * (see `liveCoursePrices.ts`). Absent when `pricing` is the price in force.
+   * could not be loaded for a signed-in learner ("failed": the card says
+   * so). `pricing` is then the course list's, which says whether the
+   * course is free but is not shown as its price (see
+   * `liveCoursePrices.ts`). Absent when `pricing` is shown: the price in
+   * force, or for a visitor who is not signed in and whose prices could not
+   * be loaded, the list's (they hold no course, so no price can be wrong
+   * for them).
    */
   priceStatus?: "pending" | "failed";
   duration: string;
