@@ -445,7 +445,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   gap: 16px;
   margin-top: 8px;
   margin-inline: calc(-1 * var(--learning-lesson-content-inset));
-  padding: 10px var(--learning-lesson-content-inset);
+  padding: 0;
   border: 0;
   border-radius: var(--control-radius-learning-panel, 8px)
     var(--control-radius-learning-panel, 8px) 0 0;
@@ -454,10 +454,19 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  /* The title is selected and copied like any text; a click that only
+     selected some of it does not open the lessons (useLessonHeader). */
+  -webkit-user-select: text;
+  user-select: text;
   transition:
     background-color 150ms ease,
     color 150ms ease,
     box-shadow 150ms ease;
+}
+
+/* The button's padding, on the title inside it (useLessonHeader). */
+.learning-workspace__lesson-title {
+  padding: 10px var(--learning-lesson-content-inset);
 }
 
 .learning-workspace__lesson-heading p {
@@ -485,6 +494,10 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 .learning-workspace__lesson-header[data-lesson-edit]
   .learning-workspace__lesson-heading {
   margin-inline-end: 0;
+}
+
+.learning-workspace__lesson-header[data-lesson-edit]
+  .learning-workspace__lesson-title {
   padding-inline-end: 0;
 }
 
@@ -1228,7 +1241,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     display: none;
   }
 
-  .learning-workspace__lesson-heading {
+  .learning-workspace__lesson-title {
     padding-block: 10px;
     padding-top: 6px;
   }
@@ -1304,9 +1317,18 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     border-radius: 0;
   }
 
+  /* The title is pressed anywhere between the description and a little
+     below the video (the 10px its header stands below it, the discussion
+     area's top padding or the header's own until the page knows it is on
+     a phone, keep it clear of the timeline), out to the screen's edges,
+     and lights up all of that, with as much room above the title as
+     below it. */
   .learning-workspace__lesson-heading {
+    margin-top: 0;
+  }
+
+  .learning-workspace__lesson-title {
     padding-block: 16px;
-    padding-top: 4px;
   }
 
   .learning-workspace__lesson-heading h1 {

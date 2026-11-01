@@ -158,7 +158,11 @@ export interface EnrolmentWords {
   enrolledOn: string;
   /** "(1 week ago)". */
   enrolledAgo: string;
-  /** "Order #ORD-1 · ₹8,999 via UPI", or "Given free of charge". */
+  /**
+   * "Order #ORD-1 · ₹8,999 via UPI", or "Given free of charge"; for a
+   * course that came with another, "… · with <that course>" or "Included
+   * with <that course>".
+   */
   order: string;
   /** Whether "Invoice" follows the order. */
   hasInvoice: boolean;
@@ -178,18 +182,24 @@ export function describeEnrolmentWords(
   const access = describeEnrolmentAccess(accessExpiresAt, now);
   const order = enrollment.order;
   const method = paymentMethodLabel(order?.paymentMethod ?? null);
+  const orderText = order
+    ? `Order #${order.orderNumber.replace(/^#/u, "")}${
+        order.totalAmount > 0
+          ? ` · ${formatMoney(order.totalAmount, { currency: order.currency })}${
+              method ? ` via ${method}` : ""
+            }`
+          : ""
+      }`
+    : null;
+  const includedWith = enrollment.includedWith;
   return {
     enrolledOn: formatEnrolmentDate(enrollment.enrolledAt),
     enrolledAgo: `(${formatTimeAgo(enrollment.enrolledAt, now.getTime())})`,
-    order: order
-      ? `Order #${order.orderNumber.replace(/^#/u, "")}${
-          order.totalAmount > 0
-            ? ` · ${formatMoney(order.totalAmount, { currency: order.currency })}${
-                method ? ` via ${method}` : ""
-              }`
-            : ""
-        }`
-      : "Given free of charge",
+    order: includedWith
+      ? orderText
+        ? `${orderText} · with ${includedWith}`
+        : `Included with ${includedWith}`
+      : (orderText ?? "Given free of charge"),
     hasInvoice: Boolean(order?.hasInvoice),
     access,
     accessLabel:

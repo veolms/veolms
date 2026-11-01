@@ -23,9 +23,15 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   ref?: Ref<HTMLButtonElement>;
 }
 
+/**
+ * A button never moves under the pointer: hovering only shades its
+ * background (each variant's `hover:bg-…`). `lift` raised it by 2px and
+ * is kept as a name so callers need not change; it now means the same as
+ * `static`.
+ */
 const motionClasses: Record<ButtonMotion, string> = {
-  lift: "transition-[background-color,transform,box-shadow] hover:-translate-y-0.5 active:translate-y-0",
-  static: "transition-[background-color,box-shadow]",
+  lift: "transition-[background-color,color,box-shadow]",
+  static: "transition-[background-color,color,box-shadow]",
 };
 
 const variantClasses: Record<ButtonVariant, string> = {

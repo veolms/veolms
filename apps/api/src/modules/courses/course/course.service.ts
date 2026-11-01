@@ -68,6 +68,8 @@ import {
   createAccessService,
   isOpenFreeCourse,
   isRestrictedFreeCourse,
+  scopeOpensSection,
+  type CourseAccessScope,
 } from "../../access/index.ts";
 import { resolveCoursePricing } from "../../commerce/index.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
@@ -1279,20 +1281,22 @@ export function createCourseService({
   }
 
   /**
-   * Whether a signed-in viewer who does not manage the course has it: the
-   * course is free and unrestricted, or the viewer holds access.
+   * What a signed-in viewer who does not manage the course has of it: all of
+   * it when the course is free and unrestricted, otherwise what their grant
+   * opens (`getAccessScope`), null for nothing.
    */
-  async function viewerHasCourse(
+  async function viewerCourseScope(
     userId: string,
     courseId: string,
     pricingType: string | null | undefined,
     accessType: string | null | undefined,
-  ): Promise<boolean> {
+  ): Promise<CourseAccessScope | null> {
     const isOpen = isOpenFreeCourse({
       pricing_type: pricingType,
       access_type: accessType,
     });
-    return isOpen || accessService.hasActiveAccess(database, userId, courseId);
+    if (isOpen) return { sectionIds: null };
+    return accessService.getAccessScope(database, userId, courseId);
   }
 
   /**
@@ -1467,25 +1471,45 @@ export function createCourseService({
     // What a lesson's files are called and how large they are is shown to
     // viewers who may download them, by the same rule the download applies:
     // whoever manages the course, a signed-in learner on a free unrestricted
-    // course, or a learner who holds access. Everyone else sees that a
-    // lesson has resources and how many, nothing about the files.
+    // course, or a learner who holds access (to the lesson's section, when
+    // they hold only part of the course). Everyone else sees that a lesson
+    // has resources and how many, nothing about the files.
     // Asked once, by whichever of the two rules below needs it first.
-    let viewerHoldsCourse: Promise<boolean> | undefined;
-    const holdsCourse = () =>
-      (viewerHoldsCourse ??= user
-        ? viewerHasCourse(
+    let viewerScope: Promise<CourseAccessScope | null> | undefined;
+    const accessScope = () =>
+      (viewerScope ??= user
+        ? viewerCourseScope(
             user.id,
             courseId,
             pricing?.pricing_type,
             accessRule?.access_type,
           )
-        : Promise.resolve(false));
-    const viewerMayDownloadResources =
-      viewerManagesCourse ||
-      (user !== undefined && resources.length > 0 && (await holdsCourse()));
-    const visibleResources = viewerMayDownloadResources
-      ? resources
-      : redactLockedResources(resources);
+        : Promise.resolve(null));
+    const sectionByLessonId = new Map(
+      lessons.map((lesson) => [lesson.id, lesson.section_id]),
+    );
+    const scope =
+      viewerManagesCourse || user === undefined || resources.length === 0
+        ? null
+        : await accessScope();
+    const lockedResources = viewerManagesCourse
+      ? []
+      : resources.filter(
+          (resource) =>
+            !scopeOpensSection(
+              scope,
+              sectionByLessonId.get(resource.lesson_id),
+            ),
+        );
+    const lockedResourceIds = new Set(
+      lockedResources.map((resource) => resource.id),
+    );
+    // A lesson's resources all share its section, so each lesson's are
+    // either all shown or all redacted, and their order is kept.
+    const visibleResources = [
+      ...resources.filter((resource) => !lockedResourceIds.has(resource.id)),
+      ...redactLockedResources(lockedResources),
+    ];
 
     // A reading lesson's description is the lesson, so one the viewer may
     // not open goes out without it, by the rule a video is played by. The
@@ -1497,7 +1521,7 @@ export function createCourseService({
       course,
       pricingType: pricing?.pricing_type,
       accessType: accessRule?.access_type,
-      holdsCourse,
+      accessScope,
     });
     const firstLessonId = findFirstPublishedLessonId(sections, lessons);
     const withheldDescriptionLessonIds = new Set<string>();
@@ -1506,6 +1530,7 @@ export function createCourseService({
       const access = await lessonContentAccess({
         is_preview: lesson.is_preview,
         isFirstLesson: lesson.id === firstLessonId,
+        section_id: lesson.section_id,
       });
       if (access !== "open") withheldDescriptionLessonIds.add(lesson.id);
     }
@@ -1557,7 +1582,7 @@ export function createCourseService({
         mediaById,
         // The map also holds every lesson's own media, and a resource can
         // point at one of those.
-        omitResourceMedia: !viewerMayDownloadResources,
+        withheldResourceIds: lockedResourceIds,
         // The public curriculum (a visitor's overview) always carries them:
         // lesson pages are built from it.
         omitLessonDescriptions: !overviewLessonDescriptions && Boolean(user),
@@ -1753,18 +1778,19 @@ export function createCourseService({
       course,
       pricingType: pricing?.pricing_type,
       accessType: accessRule?.access_type,
-      holdsCourse: () =>
+      accessScope: () =>
         user
-          ? viewerHasCourse(
+          ? viewerCourseScope(
               user.id,
               course.id,
               pricing?.pricing_type,
               accessRule?.access_type,
             )
-          : Promise.resolve(false),
+          : Promise.resolve(null),
     });
     const access = await lessonContentAccess({
       is_preview: lesson.is_preview,
+      section_id: lesson.section_id,
       // Only a visitor on an open free course is let in by this, so the
       // course's lessons are read for nobody else.
       isFirstLesson:

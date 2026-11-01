@@ -32,6 +32,11 @@ export interface CourseTable {
   updated_at: Generated<Date>;
   published_at: Date | null;
   deleted_at: Date | null;
+  /**
+   * Kept off every list and bought from its own link; it unlocks the
+   * courses (or the parts of courses) it links. See "Partial access".
+   */
+  unlisted: Generated<boolean>;
 }
 
 export interface CategoryTable {
@@ -146,6 +151,8 @@ export interface CourseLinkTable {
   course_id: string;
   linked_course_id: string;
   position: Generated<number>;
+  /** The linked course's sections the link opens; null for all of them. */
+  section_ids: string[] | null;
   created_at: Generated<Date>;
 }
 

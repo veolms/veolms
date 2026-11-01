@@ -26,6 +26,7 @@ import {
   type CourseAccessResume,
   type CourseEditorDataResponse,
   type CourseOverviewResponse,
+  type PartialAccessOffer,
 } from "@veolms/contracts";
 import {
   getCourseRouteKey,
@@ -104,6 +105,8 @@ import { CourseOverviewSkeleton } from "./overview/CourseOverviewSkeleton";
 import { CourseLoadError } from "./overview/CourseLoadError";
 import { CourseManagerBar } from "./overview/CourseManagerBar";
 import { CourseViewerBandPlaceholder } from "./overview/CourseViewerBandPlaceholder";
+import { PartialAccessNotice } from "./overview/PartialAccessNotice";
+import { usePartialAccessOffer } from "../services/courses";
 import {
   coursePurchaseCheckoutNote,
   coursePurchaseGuarantee,
@@ -231,6 +234,8 @@ export interface CourseOverviewPricingProps {
   /** The marked price in major units, when `originalPrice` is shown. */
   originalAmount?: number;
   currency?: string;
+  /** What the price box calls the discount, when it is not a sale. */
+  discountName?: string;
 }
 
 export function isFreeCoursePricing(
@@ -348,6 +353,13 @@ interface CoursePurchaseSectionProps {
    * purchase started before signing in waits for it.
    */
   viewerKnown?: boolean;
+  /**
+   * What is bought, when it is not the course itself: the part of it a
+   * partial access link sells (an unlisted course). `pricing` is its price.
+   */
+  purchaseCourseId?: string;
+  /** What the payment window names, with `purchaseCourseId`. */
+  purchaseTitle?: string;
 }
 
 function CoursePurchaseSection({
@@ -361,8 +373,12 @@ function CoursePurchaseSection({
   includedWith,
   includedCourses,
   viewerKnown = true,
+  purchaseCourseId,
+  purchaseTitle,
 }: CoursePurchaseSectionProps) {
   const user = useAuthStore((state) => state.user);
+  // What checkout sells: the course, or the part of it this page offers.
+  const buyCourseId = purchaseCourseId ?? course.id;
   const preview = useCheckoutPreview();
   const createOrder = useCreateCheckoutOrder();
   // The course page being opened, for the conversion funnel.
@@ -437,12 +453,12 @@ function CoursePurchaseSection({
 
   const checkoutItem = useMemo(
     () =>
-      checkoutCourseItem(course.id, {
+      checkoutCourseItem(buyCourseId, {
         isFree,
         amount: voluntaryAmount,
         catalogPrice: baseNumericPrice,
       }),
-    [course.id, isFree, voluntaryAmount, baseNumericPrice],
+    [buyCourseId, isFree, voluntaryAmount, baseNumericPrice],
   );
 
   // What a payment would charge before the coupon, and whether the coupon
@@ -592,6 +608,7 @@ function CoursePurchaseSection({
                 currency,
               ),
               label: discount.replace(/\s*off$/i, "").trim() + " off",
+              name: pricing?.discountName,
             }
           : undefined,
       beforeCoupon: formatPriceWithCurrency(before, currency),
@@ -785,7 +802,7 @@ function CoursePurchaseSection({
       // pendingPurchase.ts).
       if (onNavigatePage) {
         rememberPendingPurchase({
-          courseId: course.id,
+          courseId: buyCourseId,
           ...(voluntaryContributionAmount !== undefined
             ? { amount: voluntaryContributionAmount }
             : {}),
@@ -801,7 +818,7 @@ function CoursePurchaseSection({
     setPaymentError(null);
 
     try {
-      const item = checkoutCourseItem(course.id, {
+      const item = checkoutCourseItem(buyCourseId, {
         isFree,
         amount: voluntaryContributionAmount ?? 0,
         catalogPrice: baseNumericPrice,
@@ -876,7 +893,7 @@ function CoursePurchaseSection({
             (voluntaryContributionAmount ?? 0) > baseNumericPrice ||
             (isFree && (voluntaryContributionAmount ?? 0) > 0)
               ? `Support Creator - ${course.title}`
-              : course.title,
+              : (purchaseTitle ?? course.title),
           prefill: {
             name: user.displayName || user.username,
             email: user.email,
@@ -984,7 +1001,7 @@ function CoursePurchaseSection({
     !isEnrolled &&
     !isInvitationOnly;
   const resumePendingPurchase = useEffectEvent(() => {
-    const pending = takePendingPurchase(course.id);
+    const pending = takePendingPurchase(buyCourseId);
     if (!pending) return;
     trackAnalyticsEvent("checkout_step", {
       courseId: course.id,
@@ -1021,10 +1038,10 @@ function CoursePurchaseSection({
     if (!loginWasOpenRef.current) return undefined;
     loginWasOpenRef.current = false;
     const timer = window.setTimeout(() => {
-      if (!authStore.getState().user) forgetPendingPurchase(course.id);
+      if (!authStore.getState().user) forgetPendingPurchase(buyCourseId);
     }, 2000);
     return () => window.clearTimeout(timer);
-  }, [loginOpen, course.id]);
+  }, [loginOpen, buyCourseId]);
 
   // "Pay Now", with a card for its icon: the amount stands on the bar
   // beside the button. A buyer's own, higher amount is still named, and a
@@ -1702,6 +1719,7 @@ export function adaptCourseOverviewResponse(
     .sort((a, b) => a.position - b.position)
     .map((sec, secIdx) => ({
       id: secIdx + 1,
+      sectionId: sec.id,
       title: sec.title || `Section ${secIdx + 1}`,
       progress: `0/${sec.lessons?.length ?? 0}`,
       lessons: (sec.lessons || [])
@@ -1807,6 +1825,7 @@ export function adaptPreviewDataToOverview(
     .sort((a, b) => a.position - b.position)
     .map((sec, secIdx) => ({
       id: secIdx + 1,
+      sectionId: sec.id,
       title: sec.title || `Section ${secIdx + 1}`,
       progress: `0/${sec.lessons?.length ?? 0}`,
       lessons: (sec.lessons || [])
@@ -1850,6 +1869,21 @@ export function adaptPreviewDataToOverview(
 export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const { courseSlug: routeCourseSlug } = useParams();
   const courseSlug = props.courseSlug ?? routeCourseSlug;
+  // A partial access link: `?access=<its slug>` sells part of the course.
+  const pageLocation = useLocation();
+  const offerSlug = new URLSearchParams(pageLocation.search).get("access");
+  const offerQuery = usePartialAccessOffer(courseSlug, offerSlug);
+  const partialOffer: PartialOfferState = !offerSlug
+    ? null
+    : offerQuery.data
+      ? { status: "ready", offer: offerQuery.data }
+      : offerQuery.isError
+        ? // Only a link the server does not know is dead; any other failure
+          // is asked again, and the whole course is not offered meanwhile.
+          offerQuery.error.status === 404
+          ? { status: "missing" }
+          : { status: "failed", retry: () => void offerQuery.refetch() }
+        : { status: "loading" };
   const serverCategories = props.categories ?? [];
   const authUser = useAuthStore((s) => s.user);
   const defaultInstructorName =
@@ -2014,6 +2048,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         sectionsComplete={sectionsComplete}
         onRequestAllSections={requestAllSections}
         resume={access?.resume}
+        partialOffer={partialOffer}
         enrolmentAccess={
           access?.enrolled
             ? {
@@ -2027,7 +2062,17 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   );
 }
 
+/** What a partial access link (`?access=`) offers, as it is loaded. */
+type PartialOfferState =
+  | null
+  | { status: "loading" }
+  | { status: "missing" }
+  | { status: "failed"; retry: () => void }
+  | { status: "ready"; offer: PartialAccessOffer };
+
 type CourseOverviewContentProps = CourseOverviewPageProps & {
+  /** Set when the page was opened from a partial access link. */
+  partialOffer?: PartialOfferState;
   course: Course;
   courseSlug: string | undefined;
   adaptedFromPreview: AdaptedOverviewData | null;
@@ -2075,7 +2120,26 @@ function CourseOverviewContent({
   onRequestAllSections,
   resume,
   enrolmentAccess,
+  partialOffer = null,
 }: CourseOverviewContentProps) {
+  const offer = partialOffer?.status === "ready" ? partialOffer.offer : null;
+  // The part is shown against the whole course's price; what it saves is
+  // its partial access discount.
+  const offerPricing = offer
+    ? {
+        ...toOverviewPricingProps({
+          pricingType: offer.salePrice > 0 ? "paid" : "free",
+          price: Math.max(offer.price, offer.salePrice),
+          salePrice: offer.salePrice,
+          currency: offer.currency,
+        }),
+        discountName: "Partial access discount",
+      }
+    : undefined;
+  const includedSectionIds = useMemo(
+    () => (offer ? new Set(offer.sectionIds) : undefined),
+    [offer],
+  );
   const user = useAuthStore((state) => state.user);
   // A lesson in the curriculum is readied while the pointer rests on it,
   // and opens playing.
@@ -2485,6 +2549,18 @@ function CourseOverviewContent({
               band when this tab's copies say the course is theirs, or the
               placeholder when it has none. The band itself stays the first
               element throughout. */}
+          {partialOffer && partialOffer.status !== "loading" ? (
+            <PartialAccessNotice
+              offer={offer}
+              courseTitle={title}
+              totalSections={totalSections ?? courseSections.length}
+              onRetry={
+                partialOffer.status === "failed"
+                  ? partialOffer.retry
+                  : undefined
+              }
+            />
+          ) : null}
           <div
             className={
               viewer === "known" ? undefined : presumedGuestOnlyClasses
@@ -2509,18 +2585,31 @@ function CourseOverviewContent({
                 onNavigatePage={onNavigatePage}
                 openIntent={learnerPlays ? learnerIntent : undefined}
               />
+            ) : partialOffer?.status === "loading" ||
+              partialOffer?.status === "failed" ||
+              (offer && !offer.onSale) ? (
+              // The part's price is not known yet, or it is not sold: the
+              // course's own price must not stand in for it.
+              offer || partialOffer?.status === "failed" ? null : (
+                <CourseViewerBandPlaceholder />
+              )
             ) : (
               <CoursePurchaseSection
                 course={course}
-                pricing={activePricing}
+                pricing={offerPricing ?? activePricing}
                 inclusions={inclusions}
                 onNavigatePage={onNavigatePage}
                 isReadOnlyPreview={isReadOnlyPreview}
                 isCreator={isCreator}
-                canSelfEnroll={adaptedFromPreview?.canSelfEnroll}
+                // A part on sale is bought on its own terms; the course's
+                // restriction (a free course entered by invitation) is not
+                // its own.
+                canSelfEnroll={offer ? true : adaptedFromPreview?.canSelfEnroll}
                 includedWith={adaptedFromPreview?.includedWith}
                 includedCourses={adaptedFromPreview?.includedCourses}
                 viewerKnown={viewer === "known"}
+                purchaseCourseId={offer?.courseId}
+                purchaseTitle={offer?.title}
               />
             )}
           </div>
@@ -2555,6 +2644,7 @@ function CourseOverviewContent({
           totalSections={totalSections}
           sectionsComplete={sectionsComplete}
           onRequestAllSections={onRequestAllSections}
+          includedSectionIds={includedSectionIds}
         />
 
         {/* 4. About this course, under the curriculum */}

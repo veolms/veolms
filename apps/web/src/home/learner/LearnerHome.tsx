@@ -5,6 +5,7 @@ import type { NavigateTo } from "../../routing/navigation";
 import type { CourseOpenOptions } from "../../courses/catalogue";
 import { getCoursePlayerPath } from "../../learning/coursePlayerNavigation";
 import { requestLessonAutoplay } from "../../learning/lessonAutoplayRequest";
+import { beginLessonOpening } from "../../learning/lessonOpeningState";
 import { primeRouteStylesheets } from "../../routing/routeStylesheetPrimer";
 import { useCurrentUser } from "../../services/auth";
 import { useCourses } from "../../services/courses";
@@ -300,6 +301,9 @@ export function LearnerHome({
             onNavigatePage={onNavigatePage}
             href={heroLessonPath ?? getCoursePlayerHref(heroCourse)}
             onOpen={() => {
+              // The tap is answered now, not once the stylesheets below and
+              // the lesson page's code are in.
+              beginLessonOpening();
               if (!heroLessonPath || !resumeContext) {
                 openCourse(heroCourse);
                 return;

@@ -291,6 +291,10 @@ export function useOrdersFilter(options?: {
       const studentUser = (order.admin?.student?.username || "").toLowerCase();
       const studentEmail = (order.admin?.student?.email || "").toLowerCase();
       const courseTitle = (order.items?.[0]?.titleSnapshot || "").toLowerCase();
+      // Part of a course is shown by the course's title: found by either.
+      const shownTitle = (
+        order.items?.[0]?.display?.courseTitle || ""
+      ).toLowerCase();
       const couponCode = (order.admin?.coupon?.code || "").toLowerCase();
       return (
         orderNum.includes(term) ||
@@ -298,6 +302,7 @@ export function useOrdersFilter(options?: {
         studentUser.includes(term) ||
         studentEmail.includes(term) ||
         courseTitle.includes(term) ||
+        shownTitle.includes(term) ||
         couponCode.includes(term)
       );
     });

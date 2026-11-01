@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { courseThumbnailVariantSchema } from "../course/course.ts";
 import { outsideRefundSchema, refundSchema } from "./refund.ts";
 
 export const bundleStatusSchema = z.enum(["draft", "published", "archived"]);
@@ -290,6 +291,17 @@ export type PricingItemCalculation = z.infer<
   typeof pricingItemCalculationSchema
 >;
 
+/**
+ * What comes off a course's price because the buyer already paid for part
+ * of it (an unlisted course that opens some of its sections): `amount` in
+ * major units, `from` the titles of those parts.
+ */
+export const upgradeCreditSchema = z.strictObject({
+  amount: z.number().int().nonnegative(),
+  from: z.array(z.string()),
+});
+export type UpgradeCredit = z.infer<typeof upgradeCreditSchema>;
+
 export const pricingCalculationSchema = z.strictObject({
   subtotalAmount: z.number().int().nonnegative(),
   discountAmount: z.number().int().nonnegative().default(0),
@@ -299,6 +311,8 @@ export const pricingCalculationSchema = z.strictObject({
   couponCode: z.string().optional(),
   couponId: z.uuid().optional(),
   items: z.array(pricingItemCalculationSchema),
+  /** Part of `discountAmount`: see `upgradeCreditSchema`. */
+  upgradeCredit: upgradeCreditSchema.optional(),
 });
 export type PricingCalculation = z.infer<typeof pricingCalculationSchema>;
 
@@ -520,6 +534,44 @@ export type Order = Purchase;
 export const orderItemSummarySchema = z.strictObject({
   titleSnapshot: z.string(),
   courseId: z.uuid().nullable(),
+  /**
+   * The course a learner opens for this item, when it is not `courseId`:
+   * an unlisted course (one that unlocks part of another) opens the course
+   * it unlocks. Absent otherwise.
+   */
+  opensCourseId: z.uuid().optional(),
+  /**
+   * How the item is named to people when not by `titleSnapshot`, which
+   * stays the record of the sale. Part of a course sold on its own (a
+   * partial access) is named by the course it opens and how much of it;
+   * that course bought whole afterwards, by the course as an upgrade.
+   * Absent for every other item.
+   */
+  display: z
+    .discriminatedUnion("kind", [
+      z.strictObject({
+        kind: z.literal("partial_access"),
+        courseTitle: z.string(),
+        openSections: z.number().int().nonnegative(),
+        totalSections: z.number().int().nonnegative(),
+      }),
+      z.strictObject({
+        kind: z.literal("upgrade"),
+        courseTitle: z.string(),
+      }),
+    ])
+    .optional(),
+  /**
+   * The course's picture, with smaller copies for small places: of the
+   * course it opens, for part of a course. Sent with a learner's own
+   * orders (purchase history); absent where the course has no picture.
+   */
+  thumbnail: z
+    .strictObject({
+      url: z.string(),
+      srcSet: z.array(courseThumbnailVariantSchema),
+    })
+    .optional(),
 });
 export type OrderItemSummary = z.infer<typeof orderItemSummarySchema>;
 
@@ -610,9 +662,16 @@ export type CheckoutPreviewRequest = z.infer<
  */
 export const checkoutPreviewResponseSchema = z.strictObject({
   pricing: z.strictObject({
+    /** The items' prices before anything comes off. */
+    subtotalAmount: z.number().int().nonnegative().optional(),
     discountAmount: z.number().int().nonnegative(),
     totalAmount: z.number().int().nonnegative(),
     currency: z.string().length(3),
+    /**
+     * What already paid parts of a course take off its price (included in
+     * `discountAmount`), when the buyer is upgrading to the whole course.
+     */
+    upgradeCredit: upgradeCreditSchema.optional(),
   }),
   couponValidation: z
     .strictObject({

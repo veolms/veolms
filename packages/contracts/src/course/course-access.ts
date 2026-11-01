@@ -17,8 +17,9 @@ export const courseViewerRoleSchema = z.enum(["guest", "learner", "manager"]);
  * `full` when every published lesson opens for the viewer: they manage or
  * review the course, hold a grant for it, or are signed in on a free course
  * that is not restricted. `limited` when only some lessons do: the ones
- * marked as previews, and the course's first lesson when
- * `firstLessonOpen` says so.
+ * marked as previews, the course's first lesson when `firstLessonOpen`
+ * says so, and the lessons of `openSectionIds` when the learner holds part
+ * of the course.
  *
  * The same rule the server applies to playback and to lesson text, so a
  * lesson shown unlocked plays and one shown locked is refused.
@@ -56,6 +57,14 @@ export const courseAccessSummarySchema = z.strictObject({
    */
   firstLessonOpen: z.boolean(),
   lockedLessonsNeed: courseLockedLessonsNeedSchema.nullable(),
+  /**
+   * Only with `limited` access: the sections whose lessons open too,
+   * because the learner holds part of the course (bought through a course
+   * that unlocks only some of its sections). They are enrolled, and their
+   * progress, resume and discussions work as for the whole course. Absent
+   * when they hold none of it that way.
+   */
+  openSectionIds: z.array(z.uuid()).optional(),
   /** An active enrolment: the course is in the learner's My Courses. */
   enrolled: z.boolean(),
   /** See `courseOverviewSchema.canSelfEnroll`. */
@@ -107,8 +116,16 @@ export const courseAccessPaceSchema = z.strictObject({
 export const courseAccessEnrollmentSchema = z.strictObject({
   /** When the order was paid; when access began for a grant without one. */
   enrolledAt: z.string(),
-  /** Null for a free or staff grant, which has no order to show. */
+  /**
+   * Null for a free or staff grant, which has no order to show. For a
+   * course that came with another (a link), the order of that course.
+   */
   order: courseAccessEnrollmentOrderSchema.nullable(),
+  /**
+   * The course this one came with, when a link gave it: "Core Concepts
+   * Edition". Absent otherwise.
+   */
+  includedWith: z.string().optional(),
   pace: courseAccessPaceSchema.nullable(),
 });
 
@@ -123,8 +140,8 @@ export const courseAccessResponseSchema = courseAccessSummarySchema.extend({
    */
   mayJoinDiscussions: z.boolean(),
   /**
-   * Where a signed-in viewer with `full` access carries on; null for
-   * anyone else.
+   * Where a signed-in viewer with `full` access, or with `openSectionIds`,
+   * carries on; null for anyone else.
    */
   resume: courseAccessResumeSchema.nullable(),
   /**
