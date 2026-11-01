@@ -128,19 +128,6 @@ export const sessionResponseSchema = z.object({
   lastUsedAt: z.string().max(40),
 });
 
-/**
- * A student at the academy's device limit, signing in on one more: the
- * devices they are signed in on, one of which they sign out to continue.
- */
-export const deviceLimitResponseSchema = z.object({
-  limit: z.number().int().positive().nullable(),
-  sessions: sessionResponseSchema.array(),
-});
-
-export const resolveDeviceLimitRequestSchema = z.object({
-  sessionId: z.uuid().describe("The session to sign out to make room."),
-});
-
 export const sessionParamsSchema = z.object({
   id: z.uuid().describe("The UUID of the session to revoke."),
 });
@@ -344,10 +331,6 @@ export type AuthMessageResponse = z.output<typeof authMessageResponseSchema>;
 export type OtpSendResponse = z.output<typeof otpSendResponseSchema>;
 export type SessionParams = z.input<typeof sessionParamsSchema>;
 export type SessionResponse = z.output<typeof sessionResponseSchema>;
-export type DeviceLimitResponse = z.output<typeof deviceLimitResponseSchema>;
-export type ResolveDeviceLimitRequest = z.input<
-  typeof resolveDeviceLimitRequestSchema
->;
 export type PasskeyRegisterVerifyRequest = z.input<
   typeof passkeyRegisterVerifyRequestSchema
 >;
