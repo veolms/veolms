@@ -69,7 +69,6 @@ import {
 } from "./shell/academyPaletteStyles";
 import { AuthPageFrame } from "./auth/AuthPageFrame";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
-import { DeviceLimitHost } from "./auth/DeviceLimitHost";
 import { AnalyticsPageViews } from "./lib/AnalyticsPageViews";
 import { AnalyticsIdentity } from "./lib/AnalyticsIdentity";
 import {
@@ -492,7 +491,6 @@ export default function Root() {
       <HydrationMarker />
       <SessionInitializer>
         <GlobalGoogleOneTap />
-        <DeviceLimitHost />
         <AnalyticsPageViews />
         <AnalyticsIdentity />
         <Outlet />

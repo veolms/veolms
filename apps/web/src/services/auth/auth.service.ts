@@ -26,7 +26,6 @@ import type {
   PublicProfileResponse,
   RegisterRequest,
   SessionResponse,
-  DeviceLimitResponse,
   UserAvatarListResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
@@ -265,20 +264,6 @@ export const authService = {
 
   revokeAllOtherSessions: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/sessions/revoke-all");
-  },
-
-  /** The devices a sign-in held back by the device limit can make room on. */
-  getDeviceLimit: async (): Promise<DeviceLimitResponse> => {
-    const [response, { deviceLimitResponseSchema }] = await Promise.all([
-      api.get<unknown>("/auth/device-limit"),
-      import("@veolms/contracts/auth/session"),
-    ]);
-    return deviceLimitResponseSchema.parse(response);
-  },
-
-  /** Signs that device out and finishes the sign-in that was held back. */
-  resolveDeviceLimit: (sessionId: string): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/device-limit/resolve", { sessionId });
   },
 
   getMe: async (): Promise<CurrentUserResponse> => {

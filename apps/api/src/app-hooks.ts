@@ -1,9 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-import {
-  checkSessionBeforeValidation,
-  rememberDeviceLimitedSignIns,
-} from "./middlewares/auth.middleware.ts";
+import { checkSessionBeforeValidation } from "./middlewares/auth.middleware.ts";
 
 /**
  * The hooks every app built on core's routes needs, added before any route
@@ -14,5 +11,4 @@ import {
  */
 export function registerAppHooks(app: FastifyInstance): void {
   checkSessionBeforeValidation(app);
-  rememberDeviceLimitedSignIns(app);
 }
