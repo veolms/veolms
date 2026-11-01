@@ -9,6 +9,10 @@ import {
   type CourseOpenOptions,
 } from "../../courses/catalogue";
 import { adaptCourseSummaryToCatalogueCourse } from "../../courses/courseAdapter";
+import {
+  useLiveCoursePrices,
+  withLivePricing,
+} from "../../courses/liveCoursePrices";
 import type { ViewerCourseState } from "../../courses/viewerCourseState";
 import type { NavigateTo } from "../../routing/navigation";
 import { GUEST_HOME_COURSES_PER_SECTION } from "../guestHomeLimits";
@@ -83,6 +87,9 @@ export function GuestHomeCourseSection({
   viewerState?: ViewerCourseState;
 }) {
   const headingId = `${id}-title`;
+  // Prices in force, which can be newer than the list the page was built
+  // with (see liveCoursePrices.ts).
+  const livePrices = useLiveCoursePrices();
 
   return (
     <section
@@ -131,7 +138,7 @@ export function GuestHomeCourseSection({
             : courses.map((summary) => {
                 const course = {
                   ...adaptCourseSummaryToCatalogueCourse(
-                    summary,
+                    withLivePricing(summary, livePrices),
                     viewerState?.enrolled,
                     viewerState?.progress,
                   ),

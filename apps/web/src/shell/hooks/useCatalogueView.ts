@@ -38,6 +38,10 @@ import type { NavigateTo } from "../../routing/navigation";
 import { getCatalogueCardProgressPercent } from "../../learning/catalogueCardProgress";
 import { hasStartedCourse } from "@veolms/contracts/learner-home-plan";
 import { readLearningProgress } from "../../learning/learningProgressStorage";
+import {
+  useLiveCoursePrices,
+  withLivePricing,
+} from "../../courses/liveCoursePrices";
 import type { useCurrentUser } from "../../services/auth";
 import type { useEnrolledCourses } from "../../services/enrollments";
 import type { useMyCourses } from "../../services/courses";
@@ -218,6 +222,10 @@ export function useCatalogueView({
     forgetLegacyLearningProgress();
   }, []);
 
+  // Prices in force, which can be newer than the list the page was built
+  // with (see liveCoursePrices.ts).
+  const livePrices = useLiveCoursePrices();
+
   const allCourses = useMemo(() => {
     if (effectiveRole !== "creator") {
       const enrolledSet = new Set<string>();
@@ -267,7 +275,7 @@ export function useCatalogueView({
       }
       return publishedCourses.map((summary) => {
         const course = adaptCourseSummaryToCatalogueCourse(
-          summary,
+          withLivePricing(summary, livePrices),
           enrolledSet,
           progressMap,
         );
@@ -293,6 +301,7 @@ export function useCatalogueView({
     enrollmentFilter,
     enrolledCoursesData,
     learnerStateKnown,
+    livePrices,
     myCoursesData?.courses,
     publishedCourses,
   ]);
