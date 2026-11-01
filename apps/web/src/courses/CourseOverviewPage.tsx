@@ -108,6 +108,7 @@ import {
 import { CourseOverviewSkeleton } from "./overview/CourseOverviewSkeleton";
 import { CourseLoadError } from "./overview/CourseLoadError";
 import { CourseManagerBar } from "./overview/CourseManagerBar";
+import { CourseBandLoadError } from "./overview/CourseBandLoadError";
 import { CourseViewerBandPlaceholder } from "./overview/CourseViewerBandPlaceholder";
 import { PartialAccessNotice } from "./overview/PartialAccessNotice";
 import { usePartialAccessOffer } from "../services/courses";
@@ -2038,6 +2039,9 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     refetch: refetchOverview,
     access,
     accessPending,
+    accessFailed,
+    priceStatus,
+    pricingType,
     totalSections,
     sectionsComplete,
     requestAllSections,
@@ -2088,6 +2092,10 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         : accessPending
           ? "pending"
           : "known";
+
+  // The price and the viewer come from the API for a course page; the
+  // editor's preview and a course handed in whole bring their own.
+  const pricedByPage = !props.previewData && !props.customCourse;
 
   // The viewer's enrolment, from the same answer that decides which lessons
   // open to them.
@@ -2190,6 +2198,17 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         onRequestAllSections={requestAllSections}
         resume={access?.resume}
         partialOffer={partialOffer}
+        // A page built (or opened) before the price has come: whether the
+        // course is paid still marks its free lessons from the first paint.
+        isPaidCourse={
+          props.isPaidCourse ??
+          (pricedByPage && priceStatus !== "known" && pricingType
+            ? pricingType === "paid"
+            : undefined)
+        }
+        priceStatus={pricedByPage ? priceStatus : "known"}
+        accessFailed={pricedByPage && accessFailed}
+        onRetryAccess={refetchOverview}
         enrolmentAccess={
           access?.enrolled
             ? {
@@ -2234,6 +2253,19 @@ type CourseOverviewContentProps = CourseOverviewPageProps & {
     accessExpiresAt: string | null;
     enrollment?: CourseAccessEnrollment | null;
   } | null;
+  /**
+   * Whether the course's price in force is known (see `useCoursePageData`).
+   * Until it is, the band shows a placeholder where the price and the
+   * button go; if it failed to load, it says so.
+   */
+  priceStatus?: "known" | "pending" | "failed";
+  /**
+   * A signed-in learner's access answer failed and nothing says whether
+   * the course is theirs: neither a price nor their progress is shown.
+   */
+  accessFailed?: boolean;
+  /** Asks again for the access answer (the band's "Try again"). */
+  onRetryAccess?: () => void;
 };
 
 function CourseOverviewContent({
@@ -2262,6 +2294,9 @@ function CourseOverviewContent({
   resume,
   enrolmentAccess,
   partialOffer = null,
+  priceStatus = "known",
+  accessFailed = false,
+  onRetryAccess,
 }: CourseOverviewContentProps) {
   const offer = partialOffer?.status === "ready" ? partialOffer.offer : null;
   // The part is shown against the whole course's price; what it saves is
@@ -2734,6 +2769,13 @@ function CourseOverviewContent({
               offer || partialOffer?.status === "failed" ? null : (
                 <CourseViewerBandPlaceholder />
               )
+            ) : accessFailed || (!offer && priceStatus === "failed") ? (
+              // Whether the course is theirs, or what it costs, could not be
+              // loaded: a price would be wrong for a learner who holds it.
+              <CourseBandLoadError onRetry={onRetryAccess} />
+            ) : !offer && priceStatus === "pending" ? (
+              // A page is built with no price; it comes from the API.
+              <CourseViewerBandPlaceholder />
             ) : (
               <CoursePurchaseSection
                 course={course}

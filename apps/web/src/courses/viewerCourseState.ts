@@ -1,11 +1,13 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useCurrentUser } from "../services/auth";
-import { useEnrolledCourses } from "../services/enrollments";
+import { enrollmentKeys, useEnrolledCourses } from "../services/enrollments";
 import {
   useAuthIdentityHint,
   useAuthStore,
   useSessionPresentAtBoot,
 } from "../store/auth.store";
+import { retryCoursePrices } from "./liveCoursePrices";
 
 const subscribeToNothing = () => () => {};
 
@@ -23,7 +25,9 @@ export function useHydrated() {
  * guest, progress to a learner holding the course. Nothing is known in the
  * prerendered page (the same for everyone) and while hydrating; right
  * after, a browser with no session is a guest at once, and a signed-in one
- * waits for its enrolments. A failed enrolment request shows the prices.
+ * waits for its enrolments. A failed enrolment request makes it known too,
+ * as not knowable (`isViewerCourseStateFailed`): the cards then offer
+ * nothing, as a price would be wrong for a course the learner holds.
  */
 export function isViewerCourseStateKnown({
   hydrated,
@@ -53,10 +57,33 @@ export function isViewerCourseStateKnown({
   );
 }
 
+/**
+ * A signed-in viewer's enrolments could not be loaded and this tab has no
+ * copy of them: whether a course is theirs cannot be told. Not while the
+ * request is being made again (the cards shimmer meanwhile).
+ */
+export function isViewerCourseStateFailed({
+  signedIn,
+  enrolmentsLoaded,
+  enrolmentsFailed,
+  enrolmentsFetching,
+}: {
+  signedIn: boolean;
+  enrolmentsLoaded: boolean;
+  enrolmentsFailed: boolean;
+  enrolmentsFetching: boolean;
+}) {
+  return (
+    signedIn && !enrolmentsLoaded && enrolmentsFailed && !enrolmentsFetching
+  );
+}
+
 /** What the home page's course cards know about the viewer's courses. */
 export interface ViewerCourseState {
   /** Neither a price nor progress may be shown yet. */
   pending: boolean;
+  /** The viewer's courses could not be loaded (`isViewerCourseStateFailed`). */
+  failed: boolean;
   /** Ids and slugs of the courses the viewer is enrolled in. */
   enrolled: ReadonlySet<string>;
   /** Progress by course id and slug. */
@@ -89,13 +116,20 @@ export function useViewerCourseState(): ViewerCourseState {
       ? enrolments.data?.courses
       : undefined;
 
+  const enrolmentsFailed = signedIn && enrolments.isError;
+  const failed = isViewerCourseStateFailed({
+    signedIn,
+    enrolmentsLoaded: enrolledCourses !== undefined,
+    enrolmentsFailed,
+    enrolmentsFetching: enrolments.isFetching,
+  });
   const pending = !isViewerCourseStateKnown({
     hydrated,
     signedIn,
     sessionChecked: currentUser.isFetched,
     sessionRemembered,
     enrolmentsLoaded: enrolledCourses !== undefined,
-    enrolmentsFailed: signedIn && enrolments.isError,
+    enrolmentsFailed: failed,
   });
 
   return useMemo(() => {
@@ -108,6 +142,21 @@ export function useViewerCourseState(): ViewerCourseState {
         progress.set(key, course.progress);
       }
     }
-    return { pending, enrolled, progress };
-  }, [enrolledCourses, pending]);
+    return { pending, failed, enrolled, progress };
+  }, [enrolledCourses, failed, pending]);
+}
+
+/**
+ * A card's "Try again" (see `CourseCardLoadError`): asks again for what
+ * did not load, the viewer's own courses and the prices.
+ */
+export function useRetryCourseCardState() {
+  const queryClient = useQueryClient();
+  return useCallback(() => {
+    retryCoursePrices();
+    void queryClient.refetchQueries({
+      queryKey: enrollmentKeys.courses(),
+      type: "active",
+    });
+  }, [queryClient]);
 }

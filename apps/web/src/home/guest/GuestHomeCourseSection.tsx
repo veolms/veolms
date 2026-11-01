@@ -10,8 +10,8 @@ import {
 } from "../../courses/catalogue";
 import { adaptCourseSummaryToCatalogueCourse } from "../../courses/courseAdapter";
 import {
-  useLiveCoursePrices,
-  withLivePricing,
+  coursePriceState,
+  useCoursePrices,
 } from "../../courses/liveCoursePrices";
 import type { ViewerCourseState } from "../../courses/viewerCourseState";
 import type { NavigateTo } from "../../routing/navigation";
@@ -87,9 +87,9 @@ export function GuestHomeCourseSection({
   viewerState?: ViewerCourseState;
 }) {
   const headingId = `${id}-title`;
-  // Prices in force, which can be newer than the list the page was built
-  // with (see liveCoursePrices.ts).
-  const livePrices = useLiveCoursePrices();
+  // The prices in force: never the ones the list was built with (see
+  // liveCoursePrices.ts).
+  const coursePrices = useCoursePrices();
 
   return (
     <section
@@ -136,13 +136,20 @@ export function GuestHomeCourseSection({
                 (_, index) => <CourseCardSkeleton key={index} />,
               )
             : courses.map((summary) => {
+                const price = coursePriceState(coursePrices, summary.id);
                 const course = {
                   ...adaptCourseSummaryToCatalogueCourse(
-                    withLivePricing(summary, livePrices),
+                    price.status === "known"
+                      ? { ...summary, pricing: price.pricing }
+                      : summary,
                     viewerState?.enrolled,
                     viewerState?.progress,
                   ),
                   viewerStatePending: viewerState?.pending ?? false,
+                  viewerStateFailed: viewerState?.failed ?? false,
+                  ...(price.status === "known"
+                    ? {}
+                    : { priceStatus: price.status }),
                 };
                 // The same card, wired the same way, as the Courses page
                 // shows a visitor: the thumbnail plays the free preview.

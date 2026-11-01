@@ -26,21 +26,27 @@ export interface CourseCurriculumPreview {
   totalSections: number;
   complete: boolean;
   /**
-   * The price when the page was built. The same for every viewer, so the
-   * page shows it at once; the viewer's access answer then brings the price
-   * in force now, which is the one acted on.
+   * Whether the course is paid, as it was when the page was built: the
+   * curriculum marks a paid course's free lessons, and the hero offers the
+   * first of them, from the first paint. Never its price: a page is built
+   * with a shimmer where the price goes, and the price comes from the API
+   * (see `liveCoursePrices.ts`).
    */
-  pricing: CourseOverviewResponse["pricing"];
+  pricingType: CoursePricingType | null;
 }
+
+type CoursePricingType = NonNullable<
+  CourseOverviewResponse["pricing"]
+>["pricingType"];
 
 export function toCurriculumPreview(
   curriculum: CoursePublicCurriculum,
-  pricing: CourseOverviewResponse["pricing"],
+  pricingType: CoursePricingType | null,
 ): CourseCurriculumPreview {
   const totalSections = curriculum.sections.length;
   const complete = totalSections <= SECTIONS_SHOWN_IN_FULL;
   return {
-    pricing,
+    pricingType,
     curriculum: complete
       ? curriculum
       : {

@@ -388,8 +388,8 @@ async function loadLessonPageSeed(
 
 /**
  * A course page's course: its public curriculum, the same for everyone,
- * and the price a visitor is offered (asked without a session, so it is
- * the price, not anyone's access).
+ * and whether it is paid (asked without a session, so it is the course's,
+ * not anyone's access). Not its price, which the page asks for itself.
  */
 async function loadCourseCurriculumPreview(
   courseSlug: string,
@@ -406,7 +406,7 @@ async function loadCourseCurriculumPreview(
       retryBudgetMs,
     ),
   ]);
-  return toCurriculumPreview(curriculum, access.pricing);
+  return toCurriculumPreview(curriculum, access.pricing.pricingType);
 }
 
 /** The last course read for each course page the dev server has served. */

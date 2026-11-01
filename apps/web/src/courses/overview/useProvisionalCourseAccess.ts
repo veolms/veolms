@@ -6,6 +6,7 @@ import type {
 } from "@veolms/contracts";
 import { courseKeys } from "../../services/courses/courses.keys";
 import { useEnrolledCourses } from "../../services/enrollments";
+import { useCoursePrices } from "../liveCoursePrices";
 
 /** A course from any course list this tab has loaded (the Courses page's). */
 function findListedCourse(
@@ -28,17 +29,23 @@ function findListedCourse(
   return undefined;
 }
 
+/** An access answer as the page can tell it before the real one is in. */
+export type ProvisionalCourseAccess = Omit<CourseAccessResponse, "pricing"> & {
+  /** The price this tab has for the course, if any (`liveCoursePrices`). */
+  pricing: CourseAccessResponse["pricing"] | null;
+};
+
 /**
  * What the course page can say about the viewer before its own access
  * answer is in, from what the Courses page (or this tab's copy of the
- * enrolled courses) already loaded: the price, whether the course is
- * theirs and their progress. The page draws its band from this at once and
- * the access answer, asked for as before, replaces it: only that answer
- * carries where to resume and the curriculum's version.
+ * enrolled courses) already loaded: whether the course is theirs and their
+ * progress, and the price this tab has for it. The page draws its band from
+ * this at once and the access answer, asked for as before, replaces it:
+ * only that answer carries where to resume and the curriculum's version.
  *
  * A page loaded with its course built in (a reload) has no list to read;
- * the course and its price as the site was built (`builtCourse`) stand in
- * for it.
+ * the course as the site was built (`builtCourse`) stands in for it. A
+ * price never comes from a list or a built page (see `liveCoursePrices`).
  *
  * Undefined when it cannot be told: the course is in no list this tab has
  * and was not built in, or a signed-in learner's enrolments are not known
@@ -47,11 +54,8 @@ function findListedCourse(
 export function useProvisionalCourseAccess(
   idOrSlug: string | undefined,
   viewer: "guest" | "learner" | null,
-  builtCourse?: Pick<
-    CourseSummary,
-    "id" | "slug" | "pricing" | "canSelfEnroll"
-  > | null,
-): CourseAccessResponse | undefined {
+  builtCourse?: Pick<CourseSummary, "id" | "slug" | "canSelfEnroll"> | null,
+): ProvisionalCourseAccess | undefined {
   const queryClient = useQueryClient();
   // A signed-in learner's list is asked for here too (one small answer,
   // usually the tab's copy, see `accountSessionCopies`): a page opened
@@ -59,6 +63,8 @@ export function useProvisionalCourseAccess(
   // without it neither this stand-in nor the next reload's first paint
   // knows whether the course is theirs.
   const enrolments = useEnrolledCourses({ enabled: viewer === "learner" }).data;
+  // Read only: the page's own access answer brings this course's price.
+  const prices = useCoursePrices({ ask: false });
   if (!idOrSlug || !viewer) return undefined;
   const listed =
     findListedCourse(
@@ -67,8 +73,9 @@ export function useProvisionalCourseAccess(
     ) ??
     builtCourse ??
     undefined;
-  if (!listed?.pricing) return undefined;
+  if (!listed) return undefined;
   if (viewer === "learner" && !enrolments) return undefined;
+  const pricing = prices.prices?.[listed.id];
 
   const held = enrolments?.courses.find(
     (course) =>
@@ -89,11 +96,13 @@ export function useProvisionalCourseAccess(
         : "purchase",
     enrolled,
     canSelfEnroll: listed.canSelfEnroll ?? true,
-    pricing: {
-      ...listed.pricing,
-      showDiscountBadge: listed.pricing.showDiscountBadge ?? false,
-      international: listed.pricing.international ?? null,
-    },
+    pricing: pricing
+      ? {
+          ...pricing,
+          showDiscountBadge: pricing.showDiscountBadge ?? false,
+          international: pricing.international ?? null,
+        }
+      : null,
     progress:
       enrolled && held
         ? {
