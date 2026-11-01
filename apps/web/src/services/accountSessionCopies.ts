@@ -451,6 +451,18 @@ export function startAccountSessionCopies(queryClient: QueryClient) {
       return;
     }
 
+    // Before anything else: every card mounting in the discussions adds and
+    // removes query observers, and working out the storage key for each of
+    // those events showed up in the profile of a scroll.
+    if (
+      event.type !== "removed" &&
+      !(
+        event.type === "updated" &&
+        (event.action.type === "invalidate" || event.action.type === "success")
+      )
+    ) {
+      return;
+    }
     const owner = currentUserId();
     if (!owner) return;
     const found = copyOf(query.queryKey, owner);
