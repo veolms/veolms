@@ -41,6 +41,7 @@ import { getProfileHintBootstrapScript } from "./shell/profileHintEarlyState";
 import { getNavigationOriginBootstrapScript } from "./routing/navigationOriginEarlyState";
 import { getLessonMenuSectionBootstrapScript } from "./shell/lessonMenuEarlyState";
 import { getCourseCardsEarlyStateBootstrapScript } from "./courses/courseCardEarlyState";
+import { getCoursePricesEarlyBootstrapScript } from "./courses/coursePricesEarlyState";
 import { getLearnerStartedBootstrapScript } from "./home/learner/learnerCoursesSubtitle";
 import { getHomeHintBootstrapScript } from "./store/homeHint";
 import { getLearnerHomeSnapshotBootstrapScript } from "./home/learner/learnerHomeSnapshot";
@@ -278,7 +279,7 @@ export function Layout({ children }: LayoutProps) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getLessonMenuSectionBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}${getLessonPageEarlyStateScript()}${getCurriculumEarlyScrollScript()}`,
+            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getLessonMenuSectionBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getCoursePricesEarlyBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}${getLessonPageEarlyStateScript()}${getCurriculumEarlyScrollScript()}`,
           }}
         />
         <Meta />
