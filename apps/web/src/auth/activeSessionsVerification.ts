@@ -5,9 +5,26 @@ export interface ActiveSessionsVerificationState {
   verifiedUntil: string;
 }
 
+/**
+ * Returns the current tab's sessionStorage, or null when sessionStorage is
+ * unavailable (SSR, storage blocked by the browser, or private-mode quota).
+ * Accessing window.sessionStorage itself can throw, so this is guarded.
+ */
+function getStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage;
+  } catch (error) {
+    console.warn("sessionStorage is unavailable.", error);
+    return null;
+  }
+}
+
 export function clearActiveSessionsVerification(): void {
-  if (typeof window !== "undefined") {
-    window.sessionStorage.removeItem(ACTIVE_SESSIONS_VERIFICATION_KEY);
+  try {
+    getStorage()?.removeItem(ACTIVE_SESSIONS_VERIFICATION_KEY);
+  } catch (error) {
+    console.warn("Could not clear active-sessions verification.", error);
   }
 }
 
@@ -15,9 +32,14 @@ export function readActiveSessionsVerification(
   userId: string,
   now = Date.now(),
 ): ActiveSessionsVerificationState | null {
-  if (typeof window === "undefined") return null;
+  let saved: string | null;
+  try {
+    saved = getStorage()?.getItem(ACTIVE_SESSIONS_VERIFICATION_KEY) ?? null;
+  } catch (error) {
+    console.warn("Could not read active-sessions verification.", error);
+    return null;
+  }
 
-  const saved = window.sessionStorage.getItem(ACTIVE_SESSIONS_VERIFICATION_KEY);
   if (!saved) return null;
 
   let state: unknown;
@@ -52,10 +74,12 @@ export function readActiveSessionsVerification(
 export function saveActiveSessionsVerification(
   state: ActiveSessionsVerificationState,
 ): void {
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem(
+  try {
+    getStorage()?.setItem(
       ACTIVE_SESSIONS_VERIFICATION_KEY,
       JSON.stringify(state),
     );
+  } catch (error) {
+    console.warn("Could not save active-sessions verification.", error);
   }
 }
