@@ -9,7 +9,11 @@ import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { OAUTH_STATE_COOKIE } from "../shared/auth.constants.ts";
 import type { AuthLogger, SessionUser } from "../shared/auth.types.ts";
-import { generatePkce, generateRandomToken } from "../shared/auth.utils.ts";
+import {
+  generatePkce,
+  generateRandomToken,
+  hashToken,
+} from "../shared/auth.utils.ts";
 import {
   fetchOauthProfile,
   normalizeOauthProfile,
@@ -18,9 +22,11 @@ import {
   type OauthProfile,
   type OauthProviderName,
 } from "./oauth.provider.ts";
+import { consumeOauthNonce, insertOauthNonce } from "./oauth.repository.ts";
 import type { AuthService } from "../authentication/authentication.service.ts";
 import type { SessionService } from "../session/session.service.ts";
 import { type SessionLocation } from "../shared/request-location.ts";
+import type { Executor } from "../shared/repository.types.ts";
 
 const ALLOW_MOCK_OAUTH =
   config.NODE_ENV === "development" && config.OAUTH_ALLOW_MOCK_CODES;
@@ -74,11 +80,13 @@ function assertAccountActive(user: SessionUser | undefined): void {
 }
 
 export interface OauthServiceOptions {
+  database: Executor;
   authService: AuthService;
   sessionService: SessionService;
 }
 
 export function createOauthService({
+  database,
   authService,
   sessionService,
 }: OauthServiceOptions) {
@@ -183,6 +191,17 @@ export function createOauthService({
     return profile;
   }
 
+  /** One-hour window - users may leave the One Tap prompt on screen a while. */
+  const ONE_TAP_NONCE_TTL_MS = 60 * 60 * 1_000;
+
+  async function createGoogleOneTapNonce() {
+    const nonce = generateRandomToken();
+    const tokenHash = hashToken(nonce);
+    const expiresAt = new Date(Date.now() + ONE_TAP_NONCE_TTL_MS);
+    await insertOauthNonce(database, tokenHash, expiresAt);
+    return { nonce, expiresAt };
+  }
+
   async function loginWithGoogleCredential(
     credential: string,
     request: {
@@ -195,6 +214,25 @@ export function createOauthService({
       verifyGoogleIdToken(value, config.GOOGLE_CLIENT_ID || ""),
   ) {
     const profile = await verify(credential);
+
+    // Reject tokens that were not initialised with a server-issued nonce.
+    if (!profile.nonce) {
+      throw new AppError(
+        401,
+        "ONE_TAP_NONCE_INVALID",
+        "This sign-in prompt has expired. Please try again.",
+      );
+    }
+    const tokenHash = hashToken(profile.nonce);
+    const consumed = await consumeOauthNonce(database, tokenHash, new Date());
+    if (!consumed) {
+      throw new AppError(
+        401,
+        "ONE_TAP_NONCE_INVALID",
+        "This sign-in prompt has expired. Please try again.",
+      );
+    }
+
     return login("google", profile, request);
   }
 
@@ -348,6 +386,7 @@ export function createOauthService({
     getPublicConfig,
     createAuthorizationUrl,
     resolveCallbackProfile,
+    createGoogleOneTapNonce,
     loginWithGoogleCredential,
     login,
     register,

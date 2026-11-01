@@ -35,6 +35,7 @@ import type {
   MfaBackupCodeTable,
   WebauthnChallengeTable,
   UserAvatarTable,
+  OauthNonceTable,
 } from "./auth.schema.ts";
 
 import type {
@@ -164,6 +165,7 @@ export interface Database {
   mfa_backup_codes: MfaBackupCodeTable;
   webauthn_challenges: WebauthnChallengeTable;
   user_avatars: UserAvatarTable;
+  oauth_nonces: OauthNonceTable;
 
   // Courses & Curriculum
   courses: CourseTable;

@@ -59,6 +59,15 @@ export const googleOneTapLoginRequestSchema = z.object({
   }),
 });
 
+export const googleOneTapNonceResponseSchema = z.object({
+  nonce: z.string().min(16).meta({
+    description:
+      "Single-use cryptographic nonce to embed in google.accounts.id.initialize().",
+  }),
+  expiresAt: z.string().datetime().meta({
+    description: "ISO-8601 UTC timestamp after which the nonce is invalid.",
+  }),
+});
 export const oauthRegisterRequestSchema = oauthCallbackRequestSchema.extend({
   username: z
     .string()
@@ -360,3 +369,6 @@ export type PasskeyRegisterVerifyResponse = z.output<
 export type BackupCodesResponse = z.output<typeof backupCodesResponseSchema>;
 export type TotpVerifyRequest = z.input<typeof totpVerifyRequestSchema>;
 export type TotpEnableRequest = z.input<typeof totpEnableRequestSchema>;
+export type GoogleOneTapNonceResponse = z.output<
+  typeof googleOneTapNonceResponseSchema
+>;

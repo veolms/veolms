@@ -181,3 +181,9 @@ export interface WebauthnChallengeTable {
   consumed_at: Date | null;
   created_at: Generated<Date>;
 }
+
+export interface OauthNonceTable {
+  token_hash: string;
+  expires_at: Date;
+  used_at: Date | null;
+}

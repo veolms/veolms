@@ -69,7 +69,11 @@ export function createAuthContext({
     sessionService,
     storage: services.storage,
   });
-  const oauthService = createOauthService({ authService, sessionService });
+  const oauthService = createOauthService({
+    database,
+    authService,
+    sessionService,
+  });
   const mfaService = createMfaService({ database, sessionService });
   const setupService = createSetupService({
     database,
