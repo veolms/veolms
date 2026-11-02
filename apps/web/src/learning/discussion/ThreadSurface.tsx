@@ -559,9 +559,13 @@ export function ThreadSurface({
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
+      // The emoji picker opens in a layer outside the composer; a press on
+      // an emoji closed the composer before the emoji could be inserted.
       if (
         target instanceof Element &&
-        target.closest("[data-comment-composer-container]")
+        target.closest(
+          "[data-comment-composer-container], [data-comment-emoji-picker]",
+        )
       ) {
         return;
       }
