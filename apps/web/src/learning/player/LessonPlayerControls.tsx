@@ -847,11 +847,19 @@ function ThemedAutoplayToggle({
 }
 
 /**
- * The lesson's name in the top left, beside the minimize button, for the
- * themes whose `chrome.topTitle` asks for it: the title, a file name
- * (`setting-up-node.mp4`) or a session tag (`setting_up_node`).
+ * The lesson's name in the top left of a full-screen player, for the themes
+ * whose `chrome.topTitle` asks for it: the title as it is, a file name for
+ * the terminal look (`setting-up-node.mp4`) or a session tag
+ * (`setting_up_node`). Pressed, it opens the course lessons, as the title
+ * under the video does.
  */
-function LessonTopTitle({ title }: { title: string }) {
+function LessonTopTitle({
+  title,
+  onOpenLessons,
+}: {
+  title: string;
+  onOpenLessons: () => void;
+}) {
   const variant = usePlayerTheme().chrome?.topTitle;
   if (!variant) return null;
   const words = title
@@ -868,10 +876,13 @@ function LessonTopTitle({ title }: { title: string }) {
         ? words.join("_")
         : title;
   return (
-    <div
+    <button
+      type="button"
       data-player-top-title={variant}
       title={title}
-      className="pointer-events-none absolute top-2 left-13 hidden h-9.5 max-w-[min(28rem,calc(100%-22rem))] items-center gap-2 truncate rounded-(--video-player-control-radius) bg-(--video-player-control-surface) px-3 text-sm font-bold text-(--video-player-control-text) sm:inline-flex"
+      aria-label={`Open course lessons for ${title}`}
+      className="pointer-events-auto absolute top-2 left-13 hidden h-9.5 max-w-[min(28rem,calc(100%-22rem))] cursor-pointer items-center gap-2 truncate rounded-(--video-player-control-radius) bg-(--video-player-control-surface) px-3 text-sm font-bold text-(--video-player-control-text) transition-colors duration-150 hover:bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) sm:inline-flex"
+      onClick={onOpenLessons}
     >
       {variant === "title" ? null : (
         <span
@@ -881,7 +892,7 @@ function LessonTopTitle({ title }: { title: string }) {
         />
       )}
       <span className="truncate">{text}</span>
-    </div>
+    </button>
   );
 }
 
@@ -1816,8 +1827,18 @@ export function LessonPlayerControls({
           }
         >
           {!mobileFullscreen ? mobileVignettes : null}
-          {lessonTitle && !mobileInteraction ? (
-            <LessonTopTitle title={lessonTitle} />
+          {lessonTitle &&
+          fullscreen &&
+          !mobileInteraction &&
+          onCourseLessonsToggle ? (
+            <LessonTopTitle
+              title={lessonTitle}
+              onOpenLessons={() =>
+                onCourseLessonsToggle(
+                  courseLessonsSidePanel ? "side" : "drawer",
+                )
+              }
+            />
           ) : null}
 
           <div
