@@ -1,6 +1,7 @@
 import { memo, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { DashboardRange } from "@veolms/contracts";
+import type { DashboardRange, Permission } from "@veolms/contracts";
+import { NAVIGATION_PERMISSIONS } from "./shell/navigationPermissions";
 import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
@@ -38,7 +39,19 @@ export const CreatorDashboard = memo(function CreatorDashboard({
   academyTheme = "default",
   resolvedTheme = "dark",
 }: CreatorDashboardProps) {
-  const canCreateCourse = useCapabilities().can("course.create");
+  const capabilities = useCapabilities();
+  const canCreateCourse = capabilities.can("course.create");
+  // Home is every team member's; each part shows with the permission behind
+  // its numbers (held for every course: the numbers are academy-wide).
+  const seesAcademy = (key: Permission) => capabilities.canOnCourse(key, null);
+  const showRevenue = seesAcademy("analytics.revenue.read");
+  const showAcademyStats =
+    showRevenue || seesAcademy("analytics.overview.read");
+  // Any analytics tab opens the page (kept free of the contracts barrel,
+  // which would bring zod into the dashboard's first load).
+  const showAnalyticsLink = (NAVIGATION_PERMISSIONS["/analytics"] ?? []).some(
+    (key) => capabilities.can(key as Permission),
+  );
   const [range, setRange] = useState<DashboardRange>("30d");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const refreshInFlightRef = useRef(false);
@@ -56,7 +69,7 @@ export const CreatorDashboard = memo(function CreatorDashboard({
     isDashboardLoading ||
     isDashboardError ||
     !dashboardResponse;
-  const dashboardCurrency = dashboardResponse?.revenue.currency ?? "INR";
+  const dashboardCurrency = dashboardResponse?.revenue?.currency ?? "INR";
   const dashboardDisplayName =
     currentUser?.displayName?.trim() ||
     currentUser?.username?.trim() ||
@@ -106,53 +119,63 @@ export const CreatorDashboard = memo(function CreatorDashboard({
       setIsRefreshing(false);
     }
   };
+  const revenue = dashboardResponse?.revenue;
+  const students = dashboardResponse?.students;
+  const activeLearners = dashboardResponse?.activeLearners;
+  const watchHours = dashboardResponse?.watchHours;
   const metricCards = [
     {
       label: "Revenue This Month",
-      value: dashboardUnavailable
-        ? "—"
-        : formatDashboardCurrency(
-            dashboardResponse.revenue.value,
-            dashboardCurrency,
-          ),
-      changePercent: dashboardResponse?.revenue.changePercent,
+      shown: showRevenue,
+      value:
+        dashboardUnavailable || !revenue
+          ? "—"
+          : formatDashboardCurrency(revenue.value, dashboardCurrency),
+      changePercent: revenue?.changePercent,
       context: "vs last month",
       icon: CurrencyInr,
       tone: "violet",
     },
     {
       label: "Total Students",
-      value: dashboardUnavailable
-        ? "—"
-        : formatDashboardNumber(dashboardResponse.students.total),
-      changeValue: dashboardUnavailable
-        ? undefined
-        : `+${formatDashboardNumber(dashboardResponse.students.newThisMonth)}`,
+      shown: showAcademyStats,
+      value:
+        dashboardUnavailable || !students
+          ? "—"
+          : formatDashboardNumber(students.total),
+      changeValue:
+        dashboardUnavailable || !students
+          ? undefined
+          : `+${formatDashboardNumber(students.newThisMonth)}`,
       context: "this month",
       icon: Users,
       tone: "blue",
     },
     {
       label: "Active Learners (7d)",
-      value: dashboardUnavailable
-        ? "—"
-        : formatDashboardNumber(dashboardResponse.activeLearners.value),
-      changePercent: dashboardResponse?.activeLearners.changePercent,
+      shown: showAcademyStats,
+      value:
+        dashboardUnavailable || !activeLearners
+          ? "—"
+          : formatDashboardNumber(activeLearners.value),
+      changePercent: activeLearners?.changePercent,
       context: "vs last 7 days",
       icon: Pulse,
       tone: "green",
     },
     {
       label: "Watch Time This Month",
-      value: dashboardUnavailable
-        ? "—"
-        : `${formatDashboardNumber(dashboardResponse.watchHours.value)} hrs`,
-      changePercent: dashboardResponse?.watchHours.changePercent,
+      shown: showAcademyStats,
+      value:
+        dashboardUnavailable || !watchHours
+          ? "—"
+          : `${formatDashboardNumber(watchHours.value)} hrs`,
+      changePercent: watchHours?.changePercent,
       context: "vs last month",
       icon: Clock,
       tone: "gold",
     },
-  ];
+  ].filter((card) => card.shown);
 
   return (
     <div className="creator-dashboard">
@@ -209,71 +232,79 @@ export const CreatorDashboard = memo(function CreatorDashboard({
               </span>
             </button>
           )}
-          <button
-            type="button"
-            className="creator-outline-action"
-            onClick={() => onNavigatePage?.("Analytics")}
-          >
-            <ChartBar size={17} />
-            <span className="creator-action-label creator-action-label--full">
-              View Analytics
-            </span>
-            <span className="creator-action-label creator-action-label--compact">
-              Analytics
-            </span>
-          </button>
+          {showAnalyticsLink ? (
+            <button
+              type="button"
+              className="creator-outline-action"
+              onClick={() => onNavigatePage?.("Analytics")}
+            >
+              <ChartBar size={17} />
+              <span className="creator-action-label creator-action-label--full">
+                View Analytics
+              </span>
+              <span className="creator-action-label creator-action-label--compact">
+                Analytics
+              </span>
+            </button>
+          ) : null}
         </div>
       </header>
 
-      <section className="creator-kpi-grid" aria-label="Academy overview">
-        {metricCards.map(
-          ({
-            label,
-            value,
-            changePercent,
-            changeValue,
-            context,
-            icon: Icon,
-            tone,
-          }) => (
-            <article className="creator-kpi-card" key={label}>
-              <span className={`creator-icon-circle tone-${tone}`}>
-                <Icon size={22} weight="duotone" />
-              </span>
-              <div>
-                <small>{label}</small>
-                <strong>{value}</strong>
-                <span className="creator-kpi-footer">
-                  <DashboardMetricComparison
-                    changePercent={changePercent}
-                    changeValue={changeValue}
-                    context={context}
-                    unavailable={dashboardUnavailable}
-                  />
+      {metricCards.length > 0 ? (
+        <section className="creator-kpi-grid" aria-label="Academy overview">
+          {metricCards.map(
+            ({
+              label,
+              value,
+              changePercent,
+              changeValue,
+              context,
+              icon: Icon,
+              tone,
+            }) => (
+              <article className="creator-kpi-card" key={label}>
+                <span className={`creator-icon-circle tone-${tone}`}>
+                  <Icon size={22} weight="duotone" />
                 </span>
-              </div>
-            </article>
-          ),
-        )}
-      </section>
+                <div>
+                  <small>{label}</small>
+                  <strong>{value}</strong>
+                  <span className="creator-kpi-footer">
+                    <DashboardMetricComparison
+                      changePercent={changePercent}
+                      changeValue={changeValue}
+                      context={context}
+                      unavailable={dashboardUnavailable}
+                    />
+                  </span>
+                </div>
+              </article>
+            ),
+          )}
+        </section>
+      ) : null}
 
       <div className="creator-dashboard-grid">
-        <RevenuePanel
-          range={range}
-          setRange={setRange}
-          themeKey={chartThemeKey}
-          revenueOverview={dashboardResponse?.revenueOverview}
-          isLoading={isDashboardLoading}
-          isError={isDashboardError}
-          isManualRefresh={isRefreshing}
-        />
-        <LearningActivityPanel
-          themeKey={chartThemeKey}
-          learningActivity={dashboardResponse?.learningActivity}
-          isLoading={isDashboardLoading}
-          isError={isDashboardError}
-          isManualRefresh={isRefreshing}
-        />
+        {showRevenue ? (
+          <RevenuePanel
+            range={range}
+            setRange={setRange}
+            themeKey={chartThemeKey}
+            revenueOverview={dashboardResponse?.revenueOverview ?? undefined}
+            isLoading={isDashboardLoading}
+            isError={isDashboardError}
+            isManualRefresh={isRefreshing}
+          />
+        ) : null}
+        {showAcademyStats ? (
+          <LearningActivityPanel
+            themeKey={chartThemeKey}
+            learningActivity={dashboardResponse?.learningActivity ?? undefined}
+            isLoading={isDashboardLoading}
+            isError={isDashboardError}
+            isManualRefresh={isRefreshing}
+          />
+        ) : null}
         <CoursesPanel
           onNavigatePage={onNavigatePage}
           courses={dashboardResponse?.yourCourses}

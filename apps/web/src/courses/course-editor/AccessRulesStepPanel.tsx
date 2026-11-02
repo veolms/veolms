@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ChatCircleTextIcon as ChatCircleText } from "@phosphor-icons/react/ChatCircleText";
 import { NotePencilIcon as NotePencil } from "@phosphor-icons/react/NotePencil";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
@@ -29,6 +30,8 @@ export interface AccessRulesStepPanelProps {
   handleToggleQA: () => Promise<void>;
   handleToggleComments: () => Promise<void>;
   handleToggleNotes: () => Promise<void>;
+  /** Sections plugins added to this step (PluginCourseEditorSections). */
+  children?: ReactNode;
 }
 
 export function AccessRulesStepPanel({
@@ -44,6 +47,7 @@ export function AccessRulesStepPanel({
   handleToggleQA,
   handleToggleComments,
   handleToggleNotes,
+  children,
 }: AccessRulesStepPanelProps) {
   // prettier-ignore
   return (
@@ -401,6 +405,7 @@ export function AccessRulesStepPanel({
           </div>
         </div>
       </div>
+      {children}
     </div>
   );
 }

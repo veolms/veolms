@@ -48,6 +48,11 @@ export interface ProfileMenuLinkContribution {
   icon?: ComponentType<ProfileMenuIconProps>;
   /** Workspace roles the link is shown for; all roles when omitted. */
   roles?: readonly string[];
+  /**
+   * Shown to admins only when true. A workspace role cannot say this: the
+   * "creator" workspace is an instructor's too.
+   */
+  adminOnly?: boolean;
 }
 
 /**
@@ -85,7 +90,8 @@ export interface AnalyticsTabFilters {
   /** One course, or every course the viewer may see when absent. */
   courseId?: string;
   /** The range's preset, for a tab that wants to label it. */
-  rangeKey: "7d" | "30d" | "3m" | "1y";
+  /** A preset, or "custom" for dates the person picked (see from/to). */
+  rangeKey: "1d" | "7d" | "30d" | "3m" | "1y" | "custom";
 }
 
 /** One table of a tab, as a CSV export wants it. */
@@ -162,14 +168,67 @@ export interface AnalyticsTabContribution {
   component: ComponentType<AnalyticsTabProps>;
   /** Shown to admins only when true (an instructor never sees it). */
   adminOnly?: boolean;
+  /**
+   * The permission key that opens the tab (a role editor tick), in place
+   * of `adminOnly`: whoever holds it sees the tab.
+   */
+  permission?: string;
   /** Drawn while the section's code and data load; grey blocks without it. */
   placeholder?: AnalyticsTabPlaceholderSpec;
+}
+
+/** What the course editor hands a section a plugin added to it. */
+export interface CourseEditorSectionProps {
+  courseId: string;
+  courseSlug: string;
+  /** Shows a short message as the editor's own notices. */
+  notify(message: string): void;
+}
+
+/**
+ * A section a plugin adds to a step of the course editor, drawn after the
+ * step's own cards. It saves its own settings, as the editor's cards do
+ * (each change at once, with its own saving / saved state).
+ */
+export interface CourseEditorSectionContribution {
+  id: string;
+  order?: number;
+  /** The editor step whose panel the section is drawn in. */
+  step: "access-rules" | "extras";
+  component: ComponentType<CourseEditorSectionProps>;
+  /** Drawn for admins only when true (an instructor never sees it). */
+  adminOnly?: boolean;
+}
+
+/**
+ * A row a plugin adds to a section of the Settings page, drawn after the
+ * section's own rows. For "storage": what the plugin keeps on this device
+ * (its size, and how to clear it or where that is done).
+ */
+export interface SettingsRowContribution {
+  id: string;
+  order?: number;
+  section: "storage";
+  component: ComponentType;
+}
+
+/**
+ * Something on this device that can give back disk space on request, such
+ * as core's cache of lesson video segments. A plugin that needs room (a
+ * download) asks through `reclaimStorage` before refusing.
+ */
+export interface StorageReclaimer {
+  id: string;
+  /** Frees up to `bytesNeeded`; resolves once done. */
+  reclaim(bytesNeeded: number): Promise<void>;
 }
 
 export interface WebContributions {
   lessonCardActions: readonly LessonCardActionContribution[];
   profileMenuLinks: readonly ProfileMenuLinkContribution[];
   analyticsTabs: readonly AnalyticsTabContribution[];
+  courseEditorSections: readonly CourseEditorSectionContribution[];
+  settingsRows: readonly SettingsRowContribution[];
 }
 
 /**
@@ -187,6 +246,21 @@ export interface AnalyticsEvent {
     | "checkout_start"
     | "checkout_step"
     | "payment_result"
+    /** The server verified a payment; `props.item` is "course" or "quiz". */
+    | "payment_confirmed"
+    /** Access granted; `props.kind` is "free" or "paid". */
+    | "enrollment_completed"
+    | "coupon_applied"
+    | "coupon_rejected"
+    | "signup_completed"
+    /** `props.method`: "otp", "password", "google", "oauth" or "passkey". */
+    | "login_completed"
+    | "quiz_started"
+    /** `props.passed`. */
+    | "quiz_submitted"
+    | "lesson_video_completed"
+    /** `props.has_results`; the search text itself is never reported. */
+    | "catalog_search"
     | (string & {});
   /** ISO instant. */
   at: string;
@@ -229,12 +303,40 @@ export interface PlaybackSummary {
   watchedSeconds: number;
   /** Seconds played at each rendition height. */
   qualities: Array<{ height: number; seconds: number }>;
+  /**
+   * What the on-device segment cache did during this playback (absent where
+   * the browser keeps none).
+   */
+  segmentCache?: {
+    hits: number;
+    misses: number;
+    bytesFromCache: number;
+    bytesFromNetwork: number;
+    /** Segments not kept, to leave room free on the disk. */
+    skippedForReserve: number;
+    lessonsEvicted: number;
+  };
+}
+
+/**
+ * Who is signed in, as far as analytics needs to know: the account id and
+ * its roles. `null` means a guest. The sink decides what, if anything, of
+ * this leaves the browser.
+ */
+export interface AnalyticsVisitor {
+  id: string;
+  roles: string[];
 }
 
 /** Where core hands its events; one sink at a time. */
 export interface AnalyticsSink {
   track(event: AnalyticsEvent): void;
   playback(summary: PlaybackSummary): void;
+  /**
+   * Called once the session is known and again on every sign-in or
+   * sign-out. A sink registered later gets the current visitor at once.
+   */
+  identify?(visitor: AnalyticsVisitor | null): void;
 }
 
 type Listener = () => void;
@@ -245,6 +347,9 @@ interface ContributionStore {
   shellPages?: Map<string, ShellPageContribution>;
   offlineData?: OfflineDataProvider | null;
   analyticsSink?: AnalyticsSink | null;
+  /** Unset until the session is known; `null` is a guest. */
+  analyticsVisitor?: AnalyticsVisitor | null;
+  storageReclaimers?: Map<string, StorageReclaimer>;
 }
 
 // One store per page, shared even when the module is bundled twice (core
@@ -260,6 +365,8 @@ function getStore(): ContributionStore {
       lessonCardActions: [],
       profileMenuLinks: [],
       analyticsTabs: [],
+      courseEditorSections: [],
+      settingsRows: [],
     },
     listeners: new Set(),
   };
@@ -333,6 +440,73 @@ export function registerAnalyticsTab(
     });
 }
 
+/**
+ * Adds (or replaces, by id) a section to a step of the course editor.
+ * Returns a function that removes it again.
+ */
+export function registerCourseEditorSection(
+  contribution: CourseEditorSectionContribution,
+): () => void {
+  const others = getStore().snapshot.courseEditorSections.filter(
+    (entry) => entry.id !== contribution.id,
+  );
+  update({ courseEditorSections: [...others, contribution].sort(byOrder) });
+  return () =>
+    update({
+      courseEditorSections: getStore().snapshot.courseEditorSections.filter(
+        (entry) => entry !== contribution,
+      ),
+    });
+}
+
+/**
+ * Adds (or replaces, by id) a row to a section of the Settings page.
+ * Returns a function that removes it again.
+ */
+export function registerSettingsRow(
+  contribution: SettingsRowContribution,
+): () => void {
+  const others = (getStore().snapshot.settingsRows ?? []).filter(
+    (entry) => entry.id !== contribution.id,
+  );
+  update({ settingsRows: [...others, contribution].sort(byOrder) });
+  return () =>
+    update({
+      settingsRows: getStore().snapshot.settingsRows.filter(
+        (entry) => entry !== contribution,
+      ),
+    });
+}
+
+/** Adds (or replaces, by id) something that can give back disk space. */
+export function registerStorageReclaimer(
+  reclaimer: StorageReclaimer,
+): () => void {
+  const store = getStore();
+  store.storageReclaimers ??= new Map();
+  store.storageReclaimers.set(reclaimer.id, reclaimer);
+  return () => {
+    if (store.storageReclaimers?.get(reclaimer.id) === reclaimer) {
+      store.storageReclaimers.delete(reclaimer.id);
+    }
+  };
+}
+
+/**
+ * Asks every registered reclaimer to free up to `bytesNeeded` (they run
+ * together; one that fails is skipped). Read the storage estimate again
+ * afterwards to see what was freed.
+ */
+export async function reclaimStorage(bytesNeeded: number): Promise<void> {
+  if (!(bytesNeeded > 0)) return;
+  const reclaimers = [...(getStore().storageReclaimers?.values() ?? [])];
+  await Promise.all(
+    reclaimers.map((reclaimer) =>
+      reclaimer.reclaim(bytesNeeded).catch(() => undefined),
+    ),
+  );
+}
+
 /** Current contributions; the same object until something changes. */
 export function getWebContributions(): WebContributions {
   return getStore().snapshot;
@@ -382,6 +556,9 @@ export function getOfflineDataProvider(): OfflineDataProvider | null {
 export function registerAnalyticsSink(sink: AnalyticsSink): () => void {
   const store = getStore();
   store.analyticsSink = sink;
+  if (store.analyticsVisitor !== undefined) {
+    sink.identify?.(store.analyticsVisitor);
+  }
   return () => {
     if (store.analyticsSink === sink) store.analyticsSink = null;
   };
@@ -389,4 +566,11 @@ export function registerAnalyticsSink(sink: AnalyticsSink): () => void {
 
 export function getAnalyticsSink(): AnalyticsSink | null {
   return getStore().analyticsSink ?? null;
+}
+
+/** Core reports the signed-in visitor here; see `AnalyticsSink.identify`. */
+export function reportAnalyticsVisitor(visitor: AnalyticsVisitor | null): void {
+  const store = getStore();
+  store.analyticsVisitor = visitor;
+  store.analyticsSink?.identify?.(visitor);
 }

@@ -7,6 +7,7 @@ import type {
   UpdateQuizQuestionRequest,
   UpdateQuizRequest,
 } from "@veolms/contracts";
+import { cacheTags, invalidateCache } from "@veolms/api-core";
 import { AppError } from "../../../lib/errors.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import { presentAssignment } from "../shared/quiz.presenters.ts";
@@ -591,6 +592,9 @@ export function createAuthoringService(options: QuizServiceOptions) {
 
   async function deleteQuiz(actor: QuizActor, quizId: string) {
     await requireQuiz(quizId, actor, "quiz.delete");
+    // Courses whose lesson turns back into a video lesson: their cached
+    // content is cleared once this has committed.
+    const changedCourseIds = new Set<string>();
     await database.transaction().execute(async (trx) => {
       const assignments = await repo.listAssignmentRefsForQuizzes(trx, [
         quizId,
@@ -612,10 +616,14 @@ export function createAuthoringService(options: QuizServiceOptions) {
         // lesson has no video, asks for no playback, and counts the lesson
         // finished when it is opened, so the course can still reach 100%.
         await repo.revertQuizLessonsToVideo(trx, lessonIds);
+        for (const assignment of assignments) {
+          if (assignment.lesson_id) changedCourseIds.add(assignment.course_id);
+        }
       }
       await repo.deleteAssignmentsByQuizId(trx, quizId);
       await repo.softDeleteQuiz(trx, quizId);
     });
+    invalidateCache([...changedCourseIds].map((id) => cacheTags.course(id)));
     return { success: true as const };
   }
 

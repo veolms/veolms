@@ -3,6 +3,7 @@ import { usePlayerController } from "../react/context";
 import { useAwaitingFirstFrame } from "../react/useAwaitingFirstFrame";
 import { usePlayerState } from "../react/usePlayerState";
 import { classNames } from "../utils/classNames";
+import { isCurrentPositionBuffered } from "../core/playbackStall";
 
 export interface BufferingIndicatorProps {
   delay?: number;
@@ -37,8 +38,6 @@ export const VideoLoadingSpinner = memo(function VideoLoadingSpinner({
   );
 });
 
-const BUFFERED_PLAYBACK_GRACE_SECONDS = 0.25;
-
 function isInitialLoadingLifecycle(lifecycle: string): boolean {
   return (
     lifecycle === "idle" ||
@@ -64,11 +63,10 @@ export function BufferingIndicator({
     (snapshot) => {
       const { buffered, buffering, currentTime, lifecycle } = snapshot.media;
       const initialLoading = isInitialLoadingLifecycle(lifecycle);
-      const currentPositionBuffered = buffered.some(
-        (range) =>
-          currentTime >= range.start &&
-          range.end - currentTime >= BUFFERED_PLAYBACK_GRACE_SECONDS,
-      );
+      const currentPositionBuffered = isCurrentPositionBuffered({
+        buffered,
+        currentTime,
+      });
       const playbackHasBegun = snapshot.media.playing || snapshot.media.ended;
       const playInFlight = !playbackHasBegun && !snapshot.media.paused;
       // Play has been asked for and nothing is buffered to play from.

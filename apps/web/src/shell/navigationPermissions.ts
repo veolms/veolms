@@ -9,13 +9,23 @@
 export const NAVIGATION_PERMISSIONS: Readonly<
   Record<string, readonly string[]>
 > = {
-  // The dashboard home shows revenue; without it a team member lands on
-  // their courses instead.
-  "/": ["analytics.revenue.read"],
+  // Home is every team member's: the dashboard shows each person what
+  // their permissions allow (see CreatorDashboard).
   "/orders": ["billing.read"],
   "/coupons": ["coupon.read"],
   "/students": ["student.read"],
-  "/analytics": ["analytics.course.read", "analytics.revenue.read"],
+  // Any one tab opens the page (the list is contracts' analyticsPermissions).
+  "/analytics": [
+    "analytics.overview.read",
+    "analytics.revenue.read",
+    "analytics.course.read",
+    "analytics.learning.read",
+    "analytics.learners.read",
+    "analytics.conversion.read",
+    "analytics.delivery.read",
+    "analytics.storage.read",
+    "analytics.video_quality.read",
+  ],
   "/platform": [
     "platform.settings.read",
     "platform.settings.update",

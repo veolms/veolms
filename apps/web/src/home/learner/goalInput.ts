@@ -125,6 +125,30 @@ export function parseGoalMinutes(value: string): number | null {
   return first.amount * 60 + second.amount;
 }
 
+/** How far one press of the up or down arrow moves the goal. */
+export const GOAL_STEP_MINUTES = 15;
+
+/**
+ * The field's text one step up or down from what it says: to the next
+ * quarter hour, so "40 min" goes up to "45 min" and down to "30 min". Text
+ * that cannot be read starts from the shortest goal; the result stays
+ * within the goal's bounds.
+ */
+export function stepGoalText(value: string, direction: 1 | -1): string {
+  const minutes = parseGoalMinutes(value);
+  const current =
+    minutes === null || !Number.isFinite(minutes)
+      ? GOAL_MINUTES_MIN - direction * GOAL_STEP_MINUTES
+      : Math.round(minutes);
+  const stepped =
+    direction > 0
+      ? (Math.floor(current / GOAL_STEP_MINUTES) + 1) * GOAL_STEP_MINUTES
+      : (Math.ceil(current / GOAL_STEP_MINUTES) - 1) * GOAL_STEP_MINUTES;
+  return goalTextFromMinutes(
+    Math.min(GOAL_MINUTES_MAX, Math.max(GOAL_MINUTES_MIN, stepped)),
+  );
+}
+
 export type GoalInputCheck =
   { ok: true; minutes: number } | { ok: false; message: string };
 

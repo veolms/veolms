@@ -126,7 +126,6 @@ interface CoursesPageProps {
    * While a lesson fills the screen: the page and navigation section the
    * player was opened from, which the shell keeps highlighted.
    */
-  learningOriginPage?: string | null;
   learningOriginSection?: string | null;
   learningMotionStageRef?: Ref<HTMLDivElement>;
   renderMain?: ((context: CoursesPageRenderContext) => ReactNode) | null;
@@ -159,7 +158,6 @@ export function CoursesPage({
   couponId,
   miniPlayerCourseId = null,
   learningBackground = null,
-  learningOriginPage = null,
   learningOriginSection = null,
   learningMotionStageRef,
   renderMain = null,
@@ -338,6 +336,8 @@ export function CoursesPage({
     completeCourseQuery,
     publishedCourses,
     enrolledCoursesData,
+    learnerStateKnown,
+    learnerStateFailed,
     myCoursesQuery,
     myCoursesData,
     deletedCoursesQuery,
@@ -665,6 +665,9 @@ export function CoursesPage({
     pagedCourseQuery,
     publishedCourses,
     enrolledCoursesData,
+    learnerStateKnown,
+    learnerStateFailed,
+    signedIn: isAuthenticated,
     myCoursesData,
     deletedCoursesData,
     deleteCourseMutation,
@@ -928,6 +931,11 @@ export function CoursesPage({
     mobileMoreNavigation,
     mobileMoreActive,
   } = useSidebarControls({
+    onLogoPress: () =>
+      selectNavigation(
+        "Home",
+        navigation.find(([label]) => label === "Home"),
+      ),
     setSidebarMode,
     sidebarWidth,
     compactNavigation,
@@ -1094,7 +1102,15 @@ export function CoursesPage({
             />
           )}
           <aside
-            className="courses-sidebar touch-pan-y"
+            // The sidebar toggle's picture and the logo's opacity follow the
+            // width a drag is giving the sidebar. Both are written on the
+            // shell and are not handed down by themselves (see its registration in
+            // foundation.css), so each box on the way to the picture
+            // asks for it. The sidebar reads the width itself while floating
+            // (foundation.css), so it is also written on it (Safari, see
+            // writeSidebarResizeWidth).
+            className="courses-sidebar touch-pan-y [--sidebar-resize-preview-width:inherit] [--sidebar-resize-logo-opacity:inherit]"
+            data-sidebar-resize-reader=""
             data-header-layout={sidebarHeaderLayout}
             aria-label={`${effectiveRole === "creator" ? "Creator" : "Student"} navigation`}
             aria-hidden={
@@ -1274,7 +1290,6 @@ export function CoursesPage({
                 showReadingModeMenu={showReadingModeMenu}
                 openReadingModeMenu={openReadingModeMenu}
                 page={page}
-                learningOriginPage={learningOriginPage}
                 settingsControlTitle={settingsControlTitle}
                 primaryShortcutModifier={primaryShortcutModifier}
                 settingsQuickMenu={settingsQuickMenu}
@@ -1550,11 +1565,11 @@ export function CoursesPage({
                   cancelAppearanceSwipe={cancelAppearanceSwipe}
                   displayedAcademyTheme={displayedAcademyTheme}
                   readingModeEnabled={readingModeEnabled}
+                  updateReadingMode={updateReadingMode}
                   readingModeMenu={readingModeMenu}
                   showReadingModeMenu={showReadingModeMenu}
                   openReadingModeMenu={openReadingModeMenu}
                   page={page}
-                  learningOriginPage={learningOriginPage}
                   sidebarPreferences={sidebarPreferences}
                   settingsControlTitle={settingsControlTitle}
                   primaryShortcutModifier={primaryShortcutModifier}

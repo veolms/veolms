@@ -1,4 +1,5 @@
 import type { Permission } from "@veolms/contracts";
+import type { FastifyRequest } from "fastify";
 import type { RoutePluginOptions } from "../../../lib/route-plugin.ts";
 import {
   createAuthMiddleware,
@@ -28,6 +29,11 @@ export interface CoursesContext {
     permissions: readonly Permission[],
     resourceType?: ResourceType,
     featureKey?: string,
+  ) => PreHandler[];
+  /** As `authorize`, needing every permission `pick` reads off the request. */
+  authorizeEach: (
+    pick: (request: FastifyRequest) => readonly Permission[],
+    resourceType?: ResourceType,
   ) => PreHandler[];
 }
 
@@ -59,10 +65,16 @@ export function createCoursesContext({
     featureKey?: string,
   ) => authorizeAny([permission], resourceType, featureKey);
 
+  const authorizeEach = (
+    pick: (request: FastifyRequest) => readonly Permission[],
+    resourceType: ResourceType = "course",
+  ) => [...signedIn, authGuard.authorizeEach(pick, resourceType)];
+
   return {
     middleware,
     authGuard,
     authorize,
     authorizeAny,
+    authorizeEach,
   };
 }

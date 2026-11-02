@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
@@ -8,6 +8,7 @@ import { hasAdminRole, getShellProfileSubtitle } from "../workspaceRole";
 import { useNotificationSummary } from "../../services/notifications";
 import type { AuthUser } from "../../store/auth.store";
 import type { Icon } from "@phosphor-icons/react";
+import { rememberProfileChip } from "../profileHintEarlyState";
 
 export interface UseShellProfileSummaryArgs {
   authUserFetched: boolean;
@@ -68,6 +69,31 @@ export function useShellProfileSummary({
     enabled: isAuthenticated,
   });
   const unreadNotificationCount = notificationSummary?.unreadCount ?? 0;
+  // What the button shows under the name, kept for the next load's first
+  // paint (see profileHintEarlyState.ts).
+  const activeUserId = activeUser?.id;
+  const adminRole = hasAdminRole(userRoles);
+  useEffect(() => {
+    if (!isAuthenticated || !activeUserId) return;
+    rememberProfileChip({
+      userId: activeUserId,
+      subtitle: shellProfileSubtitle,
+      icon: canSwitchWorkspace
+        ? effectiveRole === "student"
+          ? "student"
+          : adminRole
+            ? "admin"
+            : "creator"
+        : null,
+    });
+  }, [
+    activeUserId,
+    adminRole,
+    canSwitchWorkspace,
+    effectiveRole,
+    isAuthenticated,
+    shellProfileSubtitle,
+  ]);
   return {
     shellProfileKnownName,
     shellProfileDisplayName,

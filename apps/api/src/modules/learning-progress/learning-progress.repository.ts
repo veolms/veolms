@@ -10,37 +10,38 @@ export function listUserCourseProgress(
 ) {
   return database
     .selectFrom("learning_progress")
-    .select(["lesson_id", "progress_percent", "updated_at"])
+    .select([
+      "lesson_id",
+      "progress_percent",
+      "updated_at",
+      "position_seconds",
+      "position_updated_at",
+    ])
     .where("user_id", "=", userId)
     .where("course_id", "=", courseId)
     .execute();
 }
 
+/** Where the learner last was in one lesson's video, and when. */
+export function findLessonPosition(
+  database: LearningProgressExecutor,
+  userId: string,
+  courseId: string,
+  lessonId: string,
+) {
+  return database
+    .selectFrom("learning_progress")
+    .select(["position_seconds", "position_updated_at"])
+    .where("user_id", "=", userId)
+    .where("course_id", "=", courseId)
+    .where("lesson_id", "=", lessonId)
+    .where("position_seconds", "is not", null)
+    .executeTakeFirst();
+}
+
 export type LearningProgressRow = Awaited<
   ReturnType<typeof listUserCourseProgress>
 >[number];
-
-export function findCourseAccessType(
-  database: LearningProgressExecutor,
-  courseId: string,
-) {
-  return database
-    .selectFrom("course_access_rules")
-    .select("access_type")
-    .where("course_id", "=", courseId)
-    .executeTakeFirst();
-}
-
-export function findCoursePricingType(
-  database: LearningProgressExecutor,
-  courseId: string,
-) {
-  return database
-    .selectFrom("course_pricing")
-    .select("pricing_type")
-    .where("course_id", "=", courseId)
-    .executeTakeFirst();
-}
 
 /**
  * Removes learners' progress on one lesson and returns how many rows went:
@@ -360,6 +361,9 @@ export async function upsertProgressAndAccrueActivity(
     course_id: string;
     lesson_id: string;
     progress_percent: number;
+    /** Null leaves the stored position as it is. */
+    position_seconds: number | null;
+    position_updated_at: Date | null;
     created_at: Date;
     updated_at: Date;
   }>,
@@ -384,15 +388,19 @@ export async function upsertProgressAndAccrueActivity(
     values.length > 0
       ? sql`
       insert into learning_progress
-        (id, user_id, course_id, lesson_id, progress_percent, created_at, updated_at)
+        (id, user_id, course_id, lesson_id, progress_percent, position_seconds, position_updated_at, created_at, updated_at)
       values ${sql.join(
         values.map(
           (v) =>
-            sql`(${v.id}::uuid, ${v.user_id}::uuid, ${v.course_id}::uuid, ${v.lesson_id}::uuid, ${v.progress_percent}::int, ${v.created_at}::timestamptz, ${v.updated_at}::timestamptz)`,
+            sql`(${v.id}::uuid, ${v.user_id}::uuid, ${v.course_id}::uuid, ${v.lesson_id}::uuid, ${v.progress_percent}::int, ${v.position_seconds}::int, ${v.position_updated_at}::timestamptz, ${v.created_at}::timestamptz, ${v.updated_at}::timestamptz)`,
         ),
       )}
       on conflict (user_id, course_id, lesson_id) do update set
         progress_percent = GREATEST(learning_progress.progress_percent, EXCLUDED.progress_percent),
+        -- The last point watched, not the furthest: a part watched again
+        -- moves it back. A row sent without one keeps the stored position.
+        position_seconds = COALESCE(EXCLUDED.position_seconds, learning_progress.position_seconds),
+        position_updated_at = COALESCE(EXCLUDED.position_updated_at, learning_progress.position_updated_at),
         updated_at = EXCLUDED.updated_at
       returning
         new.lesson_id as lesson_id,

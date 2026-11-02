@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "../services/auth";
+import { useCapabilities } from "../services/authorization";
+import { useThreadStaffActions } from "../learning/useThreadStaffActions";
 import {
   desiredStateCoordinator,
   learningInteractionKeys,
@@ -12,6 +14,7 @@ import {
   updateDiscussionsWorkspaceItem,
 } from "../services/learning-interactions";
 import { copyTextToClipboard } from "../lib/clipboard";
+import { markdownToPlainText } from "../learning/discussion-editor/types";
 import {
   markDiscussionPostHidden,
   useDiscussionPostHidden,
@@ -39,15 +42,31 @@ export function useDiscussionWorkspaceCardActions({
   const bookmarkLabel = card.isBookmarked ? "Remove bookmark" : "Bookmark";
   const followLabel = card.isFollowing ? "Unfollow" : "Follow";
   const copyTextValue = card.content || card.plainText;
-  // Authors may delete their own posts; admins may delete anyone's.
+  // Authors may delete their own posts; moderators of every course
+  // (discussion.moderate through an academy-wide role) anyone's.
   const { data: currentUser } = useCurrentUser();
-  const isAdmin = Boolean(
-    currentUser?.roles?.some((role) => role.toLowerCase() === "admin"),
-  );
+  const moderatesEveryCourse = useCapabilities({
+    enabled: Boolean(currentUser),
+  }).canOnCourse("discussion.moderate", null);
+  const staff = useThreadStaffActions({
+    thread: {
+      id:
+        isNote || isReply || card.id.startsWith("client-")
+          ? undefined
+          : card.id,
+      courseId: card.courseId,
+      lessonId: card.lessonId,
+      isPublic: card.visibility === "public",
+      pinnedAt: card.workspaceItem.pinnedAt,
+      creatorHeart: card.workspaceItem.creatorHeart,
+    },
+    canModerate: moderatesEveryCourse,
+    onNotice: setNotice,
+  });
   const canDelete =
     Boolean(card.id) &&
     !card.id.startsWith("client-") &&
-    (Boolean(card.isOwn) || isAdmin);
+    (Boolean(card.isOwn) || moderatesEveryCourse);
   const deleteNoun = isNote
     ? "note"
     : isReply
@@ -175,7 +194,12 @@ export function useDiscussionWorkspaceCardActions({
     }
   };
 
+  // "Copy text" is readable text (no Markdown signs, a table as tab-separated
+  // rows); "Copy Markdown" is the post as written.
   const copyText = async () => {
+    await copyTextToClipboard(markdownToPlainText(copyTextValue), setNotice);
+  };
+  const copyMarkdown = async () => {
     await copyTextToClipboard(copyTextValue, setNotice);
   };
 
@@ -219,9 +243,9 @@ export function useDiscussionWorkspaceCardActions({
   const canEdit = isSaved && Boolean(card.isOwn);
   const canReport = isSaved && !card.isOwn && !isNote;
 
-  // Admins can take a comment, Q&A or reply out of view (it can be shown
-  // again from moderation, so this asks for no confirmation).
-  const canHide = isAdmin && !isNote && canDelete;
+  // Moderators of every course can take a comment, Q&A or reply out of view
+  // (it can be shown again from moderation, so this asks for no confirmation).
+  const canHide = moderatesEveryCourse && !isNote && canDelete;
   const isHidden = useDiscussionPostHidden(card.id);
   const capitalNoun =
     deleteNoun === "Q&A"
@@ -312,6 +336,7 @@ export function useDiscussionWorkspaceCardActions({
   };
 
   return {
+    staff,
     bookmark,
     bookmarkLabel,
     canBookmark: canUseSourceActions,
@@ -332,6 +357,7 @@ export function useDiscussionWorkspaceCardActions({
     like,
     confirmingDelete,
     copyLink,
+    copyMarkdown,
     deleteItem,
     deleteLabel: confirmingDelete ? "Confirm delete" : `Delete ${deleteNoun}`,
     resetDelete: () => setConfirmingDelete(false),

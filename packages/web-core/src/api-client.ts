@@ -95,8 +95,26 @@ interface HttpErrorLike {
   message?: string;
   response?: {
     status?: number;
-    data?: { message?: string; code?: string; details?: unknown };
+    data?: {
+      message?: string;
+      code?: string;
+      details?: unknown;
+      /** The API's error envelope: { success: false, error: { code, message } }. */
+      error?: { code?: string; message?: string };
+    };
   };
+}
+
+function isApiError(error: unknown): error is ApiError {
+  if (typeof error !== "object" || error === null || error instanceof Error) {
+    return false;
+  }
+  const candidate = error as Partial<Record<keyof ApiError, unknown>>;
+  return (
+    typeof candidate.status === "number" &&
+    typeof candidate.code === "string" &&
+    typeof candidate.message === "string"
+  );
 }
 
 export function getApiError(error: unknown): ApiError {
@@ -111,9 +129,14 @@ export function getApiError(error: unknown): ApiError {
     const status = httpError.response?.status ?? 500;
     const data = httpError.response?.data;
     const code =
-      data?.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "API_ERROR");
+      data?.error?.code ||
+      data?.code ||
+      (status >= 500 ? "INTERNAL_SERVER_ERROR" : "API_ERROR");
     const rawMessage =
-      data?.message || httpError.message || GENERIC_API_ERROR_MESSAGE;
+      data?.error?.message ||
+      data?.message ||
+      httpError.message ||
+      GENERIC_API_ERROR_MESSAGE;
     const message = getSafeApiMessage(status, code, rawMessage);
     return {
       status,
@@ -122,6 +145,11 @@ export function getApiError(error: unknown): ApiError {
       details: data?.details,
     };
   }
+
+  // Already one: the app's client throws ApiErrors it has normalized, and
+  // callers pass them back in. Reading them again as unknown turned every
+  // status into 500 and every code into UNKNOWN_ERROR.
+  if (isApiError(error)) return error;
 
   if (error instanceof Error) {
     return {

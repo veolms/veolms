@@ -17,6 +17,7 @@ import {
 import { createPortal } from "react-dom";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
 import { useBackDismiss } from "./navigation/useBackDismiss";
+import { fuzzyMatches } from "./lib/fuzzySearch";
 
 const THEMED_SELECT_MENU_MAX_WIDTH = 300;
 /**
@@ -180,22 +181,19 @@ export function ThemedSelect<Value extends string>({
       return options;
     }
     const query = effectiveSearchQuery.trim().toLowerCase();
-    return options.filter(([val, label, extra]) => {
-      const matchLabel = label.toLowerCase().includes(query);
-      const matchVal = val.toLowerCase().includes(query);
-      const matchExtraLabel = extra?.label?.toLowerCase().includes(query);
-      const matchSubtitle = extra?.subtitle?.toLowerCase().includes(query);
-      const matchKeywords = extra?.searchKeywords
-        ?.toLowerCase()
-        .includes(query);
-      return Boolean(
-        matchLabel ||
-        matchVal ||
-        matchExtraLabel ||
-        matchSubtitle ||
-        matchKeywords,
-      );
-    });
+    return options.filter(
+      ([val, label, extra]) =>
+        // A value (an id, a code) is matched as typed; the words shown,
+        // loosely.
+        val.toLowerCase().includes(query) ||
+        fuzzyMatches(
+          query,
+          label,
+          extra?.label,
+          extra?.subtitle,
+          extra?.searchKeywords,
+        ),
+    );
   }, [options, searchable, effectiveSearchQuery, defaultLimit, value]);
 
   const measureNaturalMenuWidth = useCallback(

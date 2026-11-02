@@ -12,6 +12,7 @@
  */
 
 import { ACADEMY_LOGO_MAX_BYTES } from "@veolms/contracts";
+import { createCache } from "@veolms/api-core";
 import type { S3StorageService } from "@veolms/storage";
 import {
   academyLogoKeyFromUrl,
@@ -21,10 +22,20 @@ import {
 
 export { isDrawablePng } from "../../academy/academy-logo.ts";
 
-const LOGO_CACHE_MS = 5 * 60_000;
 const LOGO_TIMEOUT_MS = 3_000;
 
-const cache = new Map<string, { image: Buffer | null; at: number }>();
+/**
+ * Logo bytes by URL (null for one that cannot be drawn), for every invoice
+ * PDF. A new logo has a new URL, so entries are never stale; the bounds keep
+ * old ones from piling up.
+ */
+const logos = createCache<Buffer | null>({
+  name: "commerce.invoice-logos",
+  ttlMs: 5 * 60_000,
+  maxEntries: 50,
+  maxBytes: 16 * 1024 * 1024,
+  sizeOf: (image) => image?.length ?? 16,
+});
 
 /** A logo that could not be read this time; trying again may work. */
 export class LogoUnavailableError extends Error {}
@@ -102,12 +113,14 @@ export async function loadInvoiceLogo(
   storage?: S3StorageService,
 ): Promise<Buffer | null> {
   if (!url) return null;
-  const cached = cache.get(url);
-  if (cached && Date.now() - cached.at < LOGO_CACHE_MS) return cached.image;
-  const key = academyLogoKeyFromUrl(url);
-  const bytes =
-    key && storage ? await readStoredLogo(storage, key) : await fetchLogo(url);
-  const image = bytes && isDrawableLogo(bytes) ? bytes : null;
-  cache.set(url, { image, at: Date.now() });
-  return image;
+  // A read that throws (LogoUnavailableError) is not kept: the next invoice
+  // tries again.
+  return await logos.fetch(url, async () => {
+    const key = academyLogoKeyFromUrl(url);
+    const bytes =
+      key && storage
+        ? await readStoredLogo(storage, key)
+        : await fetchLogo(url);
+    return bytes && isDrawableLogo(bytes) ? bytes : null;
+  });
 }

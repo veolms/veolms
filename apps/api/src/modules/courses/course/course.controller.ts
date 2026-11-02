@@ -113,6 +113,30 @@ export function createCourseController({
     return result.course;
   }
 
+  async function getCourseTrailerPlayback(
+    request: FastifyRequest<{ Params: { idOrSlug: string } }>,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    return await service.getCourseTrailerPlayback(
+      request.params.idOrSlug,
+      user,
+    );
+  }
+
+  async function getCourseTrailerPlaybackToken(
+    request: FastifyRequest<{ Params: { idOrSlug: string } }>,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    return await service.getCourseTrailerPlaybackToken(
+      request.params.idOrSlug,
+      user,
+    );
+  }
+
   async function getCourseOverview(
     request: FastifyRequest<{
       Params: { idOrSlug: string };
@@ -259,6 +283,8 @@ export function createCourseController({
     updateCourseDetails,
     archiveCourse,
     getCourseOverview,
+    getCourseTrailerPlayback,
+    getCourseTrailerPlaybackToken,
     getPublicCurriculum,
     getLessonDescription,
     deleteCourse,

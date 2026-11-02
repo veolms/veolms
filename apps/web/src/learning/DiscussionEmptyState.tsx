@@ -1,6 +1,7 @@
 import type { Icon } from "@phosphor-icons/react";
 import { ChatCenteredDotsIcon as ChatCenteredDots } from "@phosphor-icons/react/ChatCenteredDots";
 import { ChatsCircle } from "@phosphor-icons/react/ChatsCircle";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { PencilSimpleLine } from "@phosphor-icons/react/PencilSimpleLine";
@@ -67,6 +68,12 @@ const mineCopyByFilter: Record<DiscussionEntryFilter, EmptyStateCopy> = {
   },
 };
 
+const searchCopy: EmptyStateCopy = {
+  title: "No matching discussions",
+  invitation: "Try other words, or clear the search to see every discussion.",
+  action: "",
+};
+
 /**
  * The picture over each kind's empty list: the same one each post of that
  * kind carries (`CommentCard`) and the kind picker shows.
@@ -90,24 +97,34 @@ const pencilFade =
 export function DiscussionEmptyState({
   filter,
   mine = false,
+  searching = false,
   canReturnToAll,
   onStart,
 }: {
   filter: DiscussionEntryFilter;
   /** The list is narrowed to what the learner wrote themselves. */
   mine?: boolean;
+  /**
+   * The list is a search's results: nothing matched, which says nothing
+   * about whether the lesson has discussions, so nobody is asked to be first.
+   */
+  searching?: boolean;
   /** A filter is on, and the full list can be chosen instead. */
   canReturnToAll: boolean;
   /** Opens the composer. Left out for someone who cannot post here. */
   onStart?: () => void;
 }) {
-  const copy = (mine ? mineCopyByFilter : copyByFilter)[filter];
-  const EmptyIcon = iconByFilter[filter];
-  const hint = onStart
-    ? copy.invitation
-    : canReturnToAll
-      ? "Choose All to return to the full lesson discussion."
-      : null;
+  const copy = searching
+    ? searchCopy
+    : (mine ? mineCopyByFilter : copyByFilter)[filter];
+  const EmptyIcon = searching ? MagnifyingGlass : iconByFilter[filter];
+  const start = searching ? undefined : onStart;
+  const hint =
+    searching || start
+      ? copy.invitation
+      : canReturnToAll
+        ? "Choose All to return to the full lesson discussion."
+        : null;
 
   return (
     <div className="flex flex-col items-center px-4 py-12 text-center">
@@ -123,11 +140,11 @@ export function DiscussionEmptyState({
           {hint}
         </p>
       ) : null}
-      {onStart ? (
+      {start ? (
         // Under the pointer the button stays where it is: it darkens, and
         // its pencil fills in. The filled pencil lies over the outlined one
         // and the two trade places, so the change is a fade, not a jump.
-        <Button motion="static" className="group/start mt-4" onClick={onStart}>
+        <Button motion="static" className="group/start mt-4" onClick={start}>
           <span className="relative inline-flex" aria-hidden="true">
             <PencilSimpleLine
               size={17}

@@ -41,14 +41,51 @@ export function usePlaybackBootstrapState({
 }: UsePlaybackBootstrapStateArgs): UsePlaybackBootstrapStateResult {
   const protectedPlayback = Boolean(courseSlug);
   const playbackRequestKey = `${courseSlug ?? ""}\u0000${selectedLesson}\u0000${isAuthenticated ? "authenticated" : "guest"}`;
-  const [playbackBootstrap, setPlaybackBootstrap] =
-    useState<VideoPlaybackBootstrap | null>(() => {
-      if (!courseSlug) return null;
-      return getCachedVideoPlaybackBootstrap({
-        courseSlug,
-        lessonNumber: selectedLesson,
-      });
-    });
+  // Each bootstrap is kept with the lesson it was set for. It is replaced by
+  // an effect, a render after another lesson is selected; for that render
+  // the last lesson's used to be handed on, and the player, already given
+  // the new lesson's key, loaded the lesson being left again under it and
+  // played it on while the new one's bootstrap was on its way. Now a
+  // lesson only ever gets its own (or, until it has it, the one cached for
+  // it, or none).
+  const lessonKey = `${courseSlug ?? ""}\u0000${selectedLesson}`;
+  const [storedBootstrap, setStoredBootstrap] = useState<{
+    lessonKey: string;
+    bootstrap: VideoPlaybackBootstrap | null;
+  }>(() => ({
+    lessonKey,
+    bootstrap: courseSlug
+      ? getCachedVideoPlaybackBootstrap({
+          courseSlug,
+          lessonNumber: selectedLesson,
+        })
+      : null,
+  }));
+  const setPlaybackBootstrap = useCallback<
+    Dispatch<SetStateAction<VideoPlaybackBootstrap | null>>
+  >(
+    (next) =>
+      setStoredBootstrap((current) => {
+        const bootstrap =
+          typeof next === "function"
+            ? next(current.lessonKey === lessonKey ? current.bootstrap : null)
+            : next;
+        return current.lessonKey === lessonKey &&
+          current.bootstrap === bootstrap
+          ? current
+          : { lessonKey, bootstrap };
+      }),
+    [lessonKey],
+  );
+  const playbackBootstrap =
+    storedBootstrap.lessonKey === lessonKey
+      ? storedBootstrap.bootstrap
+      : courseSlug
+        ? getCachedVideoPlaybackBootstrap({
+            courseSlug,
+            lessonNumber: selectedLesson,
+          })
+        : null;
   const [playbackBootstrapAttempt, setPlaybackBootstrapAttempt] = useState(0);
   const playbackRequestKeyRef = useRef<string | null>(null);
   const refreshPlaybackToken = useCallback(async () => {
@@ -66,7 +103,7 @@ export function usePlaybackBootstrapState({
     setPlaybackBootstrapError(null);
     setPlaybackBootstrap(null);
     setPlaybackBootstrapAttempt((attempt) => attempt + 1);
-  }, [setPlaybackBootstrapError]);
+  }, [setPlaybackBootstrap, setPlaybackBootstrapError]);
   return {
     protectedPlayback,
     playbackRequestKey,

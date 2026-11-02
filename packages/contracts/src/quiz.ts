@@ -271,7 +271,11 @@ export const quizResultSchema = z.strictObject({
   attemptNumber: z.number().int().positive(),
   score: nonNegativeNumber,
   maxScore: nonNegativeNumber,
-  percentage: z.number().min(0).max(100),
+  /**
+   * Not capped at 100: attempts imported from another platform keep the
+   * score it recorded, which can be above the quiz's current total.
+   */
+  percentage: nonNegativeNumber,
   passed: z.boolean(),
   status: quizAttemptStatusSchema,
   feedbackMode: quizFeedbackModeSchema,
@@ -325,6 +329,10 @@ export const myQuizAssignmentSchema = z.strictObject({
 export const myQuizAssignmentsResponseSchema = z.strictObject({
   assignments: z.array(myQuizAssignmentSchema),
 });
+/**
+ * One assignment's outcomes. `students` lists those who attempted first, the
+ * latest activity first, then those who have not attempted, by name.
+ */
 export const quizAnalyticsSchema = z.strictObject({
   assignedStudents: z.number().int().nonnegative(),
   attempted: z.number().int().nonnegative(),
@@ -338,12 +346,108 @@ export const quizAnalyticsSchema = z.strictObject({
     z.strictObject({
       studentId: uuid,
       studentName: z.string(),
+      /**
+       * Present only for someone who may read the course's students, to
+       * find a student by email.
+       */
+      studentEmail: z.string().nullable(),
       attemptCount: z.number().int().nonnegative(),
       latestScore: z.number().nullable(),
+      /**
+       * The latest closed attempt's marks out of the quiz total ("6 / 21").
+       * Null when the student has not attempted or the attempt is open.
+       */
+      latestMarks: z
+        .strictObject({ obtained: nonNegativeNumber, max: nonNegativeNumber })
+        .nullable(),
       status: z.enum(["passed", "failed", "in_progress", "not_attempted"]),
       lastAttempt: z.string().nullable(),
     }),
   ),
+});
+
+/** One of a student's attempts on an assignment, as a manager lists them. */
+export const quizSubmissionAttemptSummarySchema = z.strictObject({
+  id: uuid,
+  attemptNumber: z.number().int().positive(),
+  status: quizAttemptStatusSchema,
+  /** Marks obtained; null while the attempt is still open. */
+  score: nonNegativeNumber.nullable(),
+  /** The total the attempt is marked out of. */
+  maxScore: nonNegativeNumber,
+  /**
+   * Null while the attempt is still open. Not capped at 100: attempts
+   * imported from another platform can carry a recorded score above the
+   * quiz's current total.
+   */
+  percentage: nonNegativeNumber.nullable(),
+  passed: z.boolean().nullable(),
+  submittedAt: z.string().nullable(),
+});
+
+/**
+ * A question of a submission with the student's answer and the answer key.
+ * Grading fields are null while the attempt is still open, and when the
+ * attempt's answers were not recorded.
+ */
+export const quizSubmissionQuestionSchema = z.strictObject({
+  id: uuid,
+  questionType: quizQuestionTypeSchema,
+  prompt: z.string(),
+  points: nonNegativeNumber,
+  explanation: z.string().nullable(),
+  answered: z.boolean(),
+  textResponse: z.string().nullable(),
+  isCorrect: z.boolean().nullable(),
+  pointsAwarded: nonNegativeNumber.nullable(),
+  options: z.array(
+    z.strictObject({
+      id: uuid,
+      text: z.string(),
+      isCorrect: z.boolean(),
+      selected: z.boolean(),
+    }),
+  ),
+});
+
+/**
+ * One student's attempt on a quiz assignment, read by someone who manages
+ * the course: every question with what the student answered, whether it was
+ * right, the marks, and the totals. `attempts` lists all of the student's
+ * attempts on the assignment, newest first, to switch between them.
+ */
+export const quizSubmissionSchema = z.strictObject({
+  assignmentId: uuid,
+  quizTitle: z.string(),
+  lessonTitle: z.string().nullable(),
+  passPercentage: z.number().min(0).max(100),
+  student: z.strictObject({ id: uuid, name: z.string() }),
+  attempts: z.array(quizSubmissionAttemptSummarySchema).min(1),
+  attempt: z.strictObject({
+    id: uuid,
+    attemptNumber: z.number().int().positive(),
+    status: quizAttemptStatusSchema,
+    startedAt: z.string(),
+    submittedAt: z.string().nullable(),
+    score: nonNegativeNumber.nullable(),
+    maxScore: nonNegativeNumber,
+    percentage: nonNegativeNumber.nullable(),
+    passed: z.boolean().nullable(),
+    /**
+     * False for a submitted attempt with no saved answers: one imported with
+     * only its score and dates. Its questions then carry no answer or marks.
+     */
+    answersRecorded: z.boolean(),
+    questionCount: z.number().int().nonnegative(),
+    answeredCount: z.number().int().nonnegative(),
+    /** Null while the attempt is still open or its answers were not recorded. */
+    correctCount: z.number().int().nonnegative().nullable(),
+    questions: z.array(quizSubmissionQuestionSchema),
+  }),
+});
+export const quizSubmissionQuerySchema = z.strictObject({
+  /** Which attempt to show; the newest when left out. */
+  attemptId: uuid.optional(),
 });
 
 export const courseQuizAnalyticsSchema = z.strictObject({
@@ -411,3 +515,7 @@ export type QuizAssignment = z.infer<typeof quizAssignmentSchema>;
 export type MyQuizAssignment = z.infer<typeof myQuizAssignmentSchema>;
 export type QuizSummary = z.infer<typeof quizSummarySchema>;
 export type Quiz = z.infer<typeof quizSchema>;
+export type QuizSubmission = z.infer<typeof quizSubmissionSchema>;
+export type QuizSubmissionQuestion = z.infer<
+  typeof quizSubmissionQuestionSchema
+>;

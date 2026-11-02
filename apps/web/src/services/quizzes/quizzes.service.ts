@@ -14,6 +14,7 @@ import {
   quizPricingPreviewResponseSchema,
   quizResultSchema,
   quizSchema,
+  quizSubmissionSchema,
   quizSummarySchema,
   studentQuizReportSchema,
   type AssignQuizRequest,
@@ -162,6 +163,18 @@ export const quizzesService = {
     quizAnalyticsSchema.parse(
       await api.get<unknown>(
         `/quiz-assignments/${encodeURIComponent(assignmentId)}/analytics`,
+      ),
+    ),
+  /** One student's attempt, answer by answer; the newest unless `attemptId` is given. */
+  submission: async (
+    assignmentId: string,
+    studentId: string,
+    attemptId?: string,
+  ) =>
+    quizSubmissionSchema.parse(
+      await api.get<unknown>(
+        `/quiz-assignments/${encodeURIComponent(assignmentId)}/students/${encodeURIComponent(studentId)}/submission`,
+        attemptId ? { params: { attemptId } } : undefined,
       ),
     ),
   courseAnalytics: async (courseId: string) =>

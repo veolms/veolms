@@ -1,8 +1,30 @@
-import type { OrderStatus } from "@veolms/contracts";
+import type { OrderItemSummary, OrderStatus } from "@veolms/contracts";
 import { formatMoney } from "@veolms/contracts/commerce/money";
 
 import { elevatedCardClasses } from "../components/ElevatedCard";
 export const surfaceClass = `${elevatedCardClasses} text-(--text)`;
+
+/**
+ * How a purchased item is named on screen: part of a course (a partial
+ * access) and the rest of it bought later are named by the course, with a
+ * note saying which; anything else by its stored title.
+ */
+export function orderItemLabel(item: OrderItemSummary): {
+  title: string;
+  note: string | null;
+} {
+  const display = item.display;
+  if (display?.kind === "partial_access") {
+    return {
+      title: display.courseTitle,
+      note: `Partial access · ${display.openSections} of ${display.totalSections} sections`,
+    };
+  }
+  if (display?.kind === "upgrade") {
+    return { title: display.courseTitle, note: "Upgrade to full access" };
+  }
+  return { title: item.titleSnapshot, note: null };
+}
 
 export const insetClass = elevatedCardClasses;
 

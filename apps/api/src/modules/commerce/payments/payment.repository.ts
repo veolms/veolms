@@ -216,6 +216,7 @@ export async function reinitializePaymentIfNotFinal(
   database: Executor,
   paymentId: string,
   updates: {
+    gateway_provider: string;
     gateway_order_id: string;
     gateway_key_id: string | null;
     amount: number;

@@ -1,11 +1,9 @@
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
-import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   permissionCatalogue,
-  permissions as allPermissions,
   TEAM_ROLE_DESCRIPTION_MAX_LENGTH,
   TEAM_ROLE_NAME_MAX_LENGTH,
   type Permission,
@@ -23,17 +21,23 @@ import {
 } from "../../services/team";
 import { ConfirmActionModal } from "../../shell/ConfirmActionModal";
 import type { ToastMessage } from "../../ToastNotification";
-import { initials, roleLabel } from "../teamFormat";
-import { inputClassName, secondaryButtonClassName } from "../TeamBits";
+import {
+  countOfferedPermissions,
+  initials,
+  OFFERED_PERMISSION_COUNT,
+  roleLabel,
+} from "../teamFormat";
+import { chipClassName, inputClassName, SearchField } from "../TeamBits";
 import { useTeamAccess } from "../useTeamAccess";
 import { PermissionGroup } from "./PermissionGroup";
 import { isRequiredByOther, tick, untick } from "./permissionSelection";
+import { fuzzyMatches } from "../../lib/fuzzySearch";
 
 export type RoleEditorTarget =
   { mode: "create"; from?: TeamRole } | { mode: "edit"; role: TeamRole };
 
-const TOTAL = allPermissions.length;
-const line = "border-[color-mix(in_srgb,var(--text)_10%,transparent)]";
+const TOTAL = OFFERED_PERMISSION_COUNT;
+const line = "border-(--border)";
 
 /** Roles a new one can start from: the built-in team roles but admin. */
 function templateRoles(roles: readonly TeamRole[]): TeamRole[] {
@@ -43,7 +47,8 @@ function templateRoles(roles: readonly TeamRole[]): TeamRole[] {
 }
 
 function MemberAvatars({ role }: { role: TeamRole }) {
-  const members = useTeamMembers("");
+  const { canReadTeam } = useTeamAccess();
+  const members = useTeamMembers("", { enabled: canReadTeam });
   const holders = (members.data?.pages ?? [])
     .flatMap((page) => page.members)
     .filter(
@@ -61,6 +66,7 @@ function MemberAvatars({ role }: { role: TeamRole }) {
               key={member.userId}
               title={member.name ?? member.email}
               className="flex size-6 items-center justify-center rounded-full border-2 border-(--card-surface,var(--surface)) bg-(--accent)/20 text-[0.6rem] font-bold text-(--accent)"
+              aria-hidden="true"
             >
               {initials(member.name, member.email)}
             </span>
@@ -88,7 +94,7 @@ export function RoleEditorPanel({
   onDuplicate: (role: TeamRole) => void;
   setNotice?: (message: ToastMessage) => void;
 }) {
-  const { can, isAdmin } = useTeamAccess();
+  const { can, canEditRole, holdsEverywhere } = useTeamAccess();
   const rolesQuery = useTeamRoles();
   const existing = target.mode === "edit" ? target.role : undefined;
   const source =
@@ -117,14 +123,16 @@ export function RoleEditorPanel({
   const pending = createRole.isPending || updateRole.isPending;
 
   const readOnly = existing
-    ? existing.isSystem || !can("role.update")
+    ? !canEditRole(existing)
     : !can("role.create") || !customRolesEnabled;
+  // A built-in role keeps its name: code and the other roles refer to it.
+  const nameLocked = Boolean(existing?.isSystem);
   const canDuplicate =
     Boolean(existing) && customRolesEnabled && can("role.create");
   const canDelete = Boolean(
     existing && !existing.isSystem && can("role.delete"),
   );
-  const locked = (key: Permission) => !isAdmin && !can(key);
+  const locked = (key: Permission) => !holdsEverywhere(key);
   const grantable = (keys: readonly Permission[]) =>
     keys.filter((key) => !locked(key));
 
@@ -136,7 +144,7 @@ export function RoleEditorPanel({
           group,
           entries: term
             ? group.entries.filter((entry) =>
-                `${entry.label} ${entry.help}`.toLowerCase().includes(term),
+                fuzzyMatches(term, entry.label, entry.help),
               )
             : group.entries,
         }))
@@ -203,10 +211,10 @@ export function RoleEditorPanel({
       <div className={`shrink-0 border-b px-6 pt-6 pb-5 ${line}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold text-(--text)">
+            <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-(--text)">
               {title}
               {existing?.isSystem ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-1.5 py-0.5 text-[0.7rem] font-semibold text-(--muted)">
+                <span className={`${chipClassName} text-(--muted)!`}>
                   <LockSimple size={11} weight="bold" />
                   Built-in
                 </span>
@@ -220,7 +228,7 @@ export function RoleEditorPanel({
                 <div className="mt-3 flex flex-wrap items-center gap-5">
                   <span className="text-xs text-(--muted)">
                     <strong className="text-sm text-(--text)">
-                      {selected.size}
+                      {countOfferedPermissions(selected)}
                     </strong>{" "}
                     / {TOTAL} permissions
                   </span>
@@ -254,13 +262,24 @@ export function RoleEditorPanel({
                 </label>
                 <input
                   id="role-name"
-                  className={`${inputClassName} rounded-xl`}
-                  value={name}
+                  className={inputClassName}
+                  value={nameLocked ? roleLabel(name) : name}
                   maxLength={TEAM_ROLE_NAME_MAX_LENGTH}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="For example, Support"
                   autoFocus={!existing}
+                  readOnly={nameLocked}
+                  disabled={nameLocked}
+                  aria-describedby={nameLocked ? "role-name-hint" : undefined}
                 />
+                {nameLocked ? (
+                  <p
+                    id="role-name-hint"
+                    className="mt-1 text-xs text-(--muted)"
+                  >
+                    Built-in roles keep their name.
+                  </p>
+                ) : null}
               </div>
               <div>
                 <label
@@ -271,7 +290,7 @@ export function RoleEditorPanel({
                 </label>
                 <input
                   id="role-description"
-                  className={`${inputClassName} rounded-xl`}
+                  className={inputClassName}
                   value={description}
                   maxLength={TEAM_ROLE_DESCRIPTION_MAX_LENGTH}
                   onChange={(event) => setDescription(event.target.value)}
@@ -315,20 +334,14 @@ export function RoleEditorPanel({
           </>
         ) : null}
 
-        <label className="relative mb-3 flex items-center">
-          <span className="sr-only">Find a permission</span>
-          <MagnifyingGlass
-            size={15}
-            className="pointer-events-none absolute left-3 text-(--muted)"
-          />
-          <input
-            type="search"
+        <div className="mb-3 flex">
+          <SearchField
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={setSearch}
             placeholder="Find a permission"
-            className={`${inputClassName} h-9 rounded-xl pl-9`}
+            label="Find a permission"
           />
-        </label>
+        </div>
 
         <div className="flex flex-col gap-2.5">
           {groups.map(({ group, entries }) => (
@@ -377,37 +390,48 @@ export function RoleEditorPanel({
         {readOnly ? (
           <span className="flex items-center gap-1.5 text-xs text-(--muted)">
             <LockSimple size={13} />
-            {existing?.isSystem
-              ? "Built-in roles can't be edited"
-              : "You can't edit this role"}
+            {existing?.name.toLowerCase() === "admin"
+              ? "Admin always holds every permission"
+              : existing?.isSystem
+                ? "Only an admin can change a built-in role"
+                : "You can't edit this role"}
           </span>
         ) : canDelete ? (
-          <button
-            type="button"
-            className={`${secondaryButtonClassName} text-rose-400`}
+          <Button
+            elevation="flat"
+            motion="static"
+            variant="danger"
+
             onClick={() => setConfirmingDelete(true)}
           >
             <Trash size={15} weight="bold" />
             Delete
-          </button>
+          </Button>
         ) : (
           <span className="text-xs text-(--muted)">
-            <strong className="text-(--text)">{selected.size}</strong> of{" "}
-            {TOTAL} permissions
+            <strong className="text-(--text)">
+              {countOfferedPermissions(selected)}
+            </strong>{" "}
+            of {TOTAL} permissions
           </span>
         )}
         <div className="flex shrink-0 gap-2">
           {readOnly ? (
             <>
-              <button
-                type="button"
-                className={secondaryButtonClassName}
+              <Button
+                elevation="flat"
+                motion="static"
+                variant="quiet"
                 onClick={onClose}
               >
                 Close
-              </button>
+              </Button>
               {canDuplicate && existing ? (
-                <Button onClick={() => onDuplicate(existing)}>
+                <Button
+                  elevation="flat"
+                  motion="static"
+                  onClick={() => onDuplicate(existing)}
+                >
                   <Copy size={15} weight="bold" />
                   Duplicate &amp; edit
                 </Button>
@@ -415,14 +439,17 @@ export function RoleEditorPanel({
             </>
           ) : (
             <>
-              <button
-                type="button"
-                className={secondaryButtonClassName}
+              <Button
+                elevation="flat"
+                motion="static"
+                variant="quiet"
                 onClick={onClose}
               >
                 Cancel
-              </button>
+              </Button>
               <Button
+                elevation="flat"
+                motion="static"
                 disabled={
                   pending || name.trim().length === 0 || selected.size === 0
                 }

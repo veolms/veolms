@@ -24,7 +24,19 @@ export interface PlatformAppearanceSettings {
 export interface PlatformSecuritySettings {
   /** Enrolling in a course, free or paid, needs a verified mobile number. */
   requireVerifiedPhoneForEnrollment: boolean;
+  /**
+   * How many devices a student may be signed in on at once; null for no
+   * limit. Signing in on one more asks them to sign one of the others out
+   * first. Staff are not limited.
+   */
+  maxDevicesPerStudent: number | null;
 }
+
+/** What a student's device limit is until an admin changes it. */
+export const DEFAULT_MAX_DEVICES_PER_STUDENT = 3;
+/** The device limits an admin may set. */
+export const MIN_MAX_DEVICES_PER_STUDENT = 1;
+export const MAX_MAX_DEVICES_PER_STUDENT = 20;
 
 /**
  * What the academy prints on the invoices its students download. Empty text

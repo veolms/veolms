@@ -17,6 +17,13 @@ import {
   LEARNER_VIEW_HEADER_VALUE,
 } from "@veolms/contracts/learner-view";
 import { authStore } from "../store/auth.store";
+import {
+  keepPlaybackBootstrap,
+  readKeptPlaybackBootstrap,
+  takeHeadStartedPlaybackBootstrap,
+} from "./playbackBootstrapHeadStart";
+import { adoptAccountResumePosition } from "./player/lessonPlayerPersistence";
+import { prepareCachedStartHeight } from "./player/segmentCacheStart";
 
 const API_BASE_URL = getApiBaseUrl();
 const CDN_URL = import.meta.env.VITE_CDN_URL || "/cdn";
@@ -213,12 +220,94 @@ function playbackRequestHeaders(): Record<string, string> {
     : { Accept: "application/json" };
 }
 
+/**
+ * Whose answers this page keeps: the signed-in account, the one this tab
+ * remembers while the session check runs, or a visitor. Matches what the
+ * document's head reads (see playbackBootstrapHeadStart.ts).
+ */
+const keptViewer = () =>
+  authStore.getState().user?.id ??
+  (authStore.hasSessionHint()
+    ? (authStore.getIdentityHint()?.userId ?? null)
+    : "guest");
+
+/** A lesson's answer as the head or this tab's copy already has it. */
+async function takeEarlyAnswer(
+  options: VideoPlaybackBootstrapRequest,
+): Promise<VideoPlaybackBootstrap | null> {
+  if (options.mediaId) return null;
+  const request = {
+    courseSlug: options.courseSlug,
+    lessonNumber: options.lessonNumber,
+    learnerView: isLearnerView(),
+  };
+  const headStarted = takeHeadStartedPlaybackBootstrap(request);
+  const answer = headStarted ? await headStarted.catch(() => null) : null;
+  if (answer) {
+    const data = unwrapResponseData(answer.payload);
+    if (answer.status >= 200 && answer.status < 300) {
+      const bootstrap = await parseBootstrap(data);
+      if (!answer.kept) keepAnswer(options, data);
+      return bootstrap;
+    }
+    // A refusal is the server's answer as it would be to the page.
+    if (answer.status === 401 || answer.status === 403) {
+      throw createPlaybackResponseError(
+        new Response(null, { status: answer.status }),
+        answer.payload,
+        "PLAYBACK_BOOTSTRAP_FAILED",
+        "Unable to prepare this video.",
+      );
+    }
+    return null;
+  }
+  const viewer = keptViewer();
+  const kept = viewer ? readKeptPlaybackBootstrap(viewer, request) : null;
+  return kept ? await parseBootstrap(kept).catch(() => null) : null;
+}
+
+function keepAnswer(options: VideoPlaybackBootstrapRequest, data: unknown) {
+  const viewer = keptViewer();
+  if (!viewer || options.mediaId) return;
+  keepPlaybackBootstrap(
+    viewer,
+    {
+      courseSlug: options.courseSlug,
+      lessonNumber: options.lessonNumber,
+      learnerView: isLearnerView(),
+    },
+    data,
+  );
+}
+
 async function requestBootstrap(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackBootstrap> {
+  const bootstrap = await answerBootstrap(options);
+  // The quality kept on this device, for the player to start at (a few ms).
+  await prepareCachedStartHeight(bootstrap.manifestUrl);
+  // Where the learner left this lesson on any device, taken when it is
+  // newer than what this browser has: the players start from what this
+  // browser has (see `readStartPosition`), and this comes before them.
+  if (bootstrap.resumePosition && !options.mediaId) {
+    adoptAccountResumePosition(
+      `${encodeURIComponent(options.courseSlug)}-lesson-${options.lessonNumber}`,
+      bootstrap.resumePosition.seconds,
+      bootstrap.resumePosition.savedAt,
+    );
+  }
+  return bootstrap;
+}
+
+async function answerBootstrap(
+  options: VideoPlaybackBootstrapRequest,
+): Promise<VideoPlaybackBootstrap> {
+  const early = await takeEarlyAnswer(options);
+  if (early) return early;
   // Asks for the master playlist inline, saving the player that request,
-  // and for the seek-preview storyboard when the video has one.
-  const path = `${playbackPath(options, "playback-bootstrap")}?inlineManifest=1&storyboard=1`;
+  // for the seek-preview storyboard when the video has one, for where the
+  // learner left the lesson, and for the video's subtitle tracks.
+  const path = `${playbackPath(options, "playback-bootstrap")}?inlineManifest=1&storyboard=1&resume=1&subtitles=1`;
   let response: Response;
   try {
     response = await fetch(resolveVideoPlaybackApiUrl(path), {
@@ -248,7 +337,9 @@ async function requestBootstrap(
     );
   }
 
-  return await parseBootstrap(data);
+  const bootstrap = await parseBootstrap(data);
+  keepAnswer(options, data);
+  return bootstrap;
 }
 
 async function parseBootstrap(data: unknown): Promise<VideoPlaybackBootstrap> {

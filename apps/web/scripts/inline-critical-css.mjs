@@ -227,6 +227,18 @@ const collectPageTokens = (elements) => {
 // ---------------------------------------------------------------------------
 // Selector judging
 
+/**
+ * The index after the escape that starts at `start` (a backslash). A hex
+ * escape takes one whitespace character after it: `.\32 xl\:grid-cols-4` is
+ * the single class `2xl:grid-cols-4`, not a descendant combinator.
+ */
+const escapeEnd = (selector, start) => {
+  const hex = /^[\da-fA-F]{1,6}/u.exec(selector.slice(start + 1, start + 7));
+  if (!hex) return start + 2;
+  const end = start + 1 + hex[0].length;
+  return /\s/u.test(selector[end] ?? "") ? end + 1 : end;
+};
+
 const readIdentifier = (selector, start) => {
   let value = "";
   let index = start;
@@ -262,7 +274,7 @@ const skipGroup = (selector, start) => {
   while (index < selector.length) {
     const character = selector[index];
     if (character === "\\") {
-      index += 2;
+      index = escapeEnd(selector, index);
       continue;
     }
     if (character === '"' || character === "'") {
@@ -287,7 +299,7 @@ const rightmostCompound = (selector) => {
   while (index < selector.length) {
     const character = selector[index];
     if (character === "\\") {
-      index += 2;
+      index = escapeEnd(selector, index);
       continue;
     }
     if ("([\"'".includes(character)) {
@@ -693,7 +705,14 @@ const collectSharedTokens = async (root, pages) => {
   return shared;
 };
 
-export async function inlineCriticalCss(clientDirectory) {
+/**
+ * `quiet`: no line for a page processed before (a refresh of some pages in
+ * a finished build, see refresh-course-static-pages.mjs).
+ */
+export async function inlineCriticalCss(
+  clientDirectory,
+  { quiet = false } = {},
+) {
   const root = path.resolve(clientDirectory);
   const pages = await collectPages(root);
   if (pages.length === 0) {
@@ -734,6 +753,7 @@ export async function inlineCriticalCss(clientDirectory) {
       throw error;
     }
     if (result.alreadyDone) {
+      if (quiet) continue;
       console.log(`Critical CSS: ${page} already processed, left as it is`);
       continue;
     }

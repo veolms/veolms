@@ -10,6 +10,11 @@ import { CourseWishlistHeartButton } from "../CourseWishlistHeartButton";
 import { CourseHeroArtwork } from "./CourseHeroArtwork";
 import { presumedGuestOnlyClasses } from "./courseViewerState";
 import { useCurriculumIntent } from "./curriculumIntent";
+import { useHydrated } from "../viewerCourseState";
+import {
+  mergeIntentHandlers,
+  type LessonOpenIntent,
+} from "../../learning/lessonOpenIntent";
 
 export interface CourseOverviewHeroProps {
   title: string;
@@ -20,6 +25,9 @@ export interface CourseOverviewHeroProps {
   duration: string;
   thumbnail: string;
   thumbnailSrcSet?: Course["thumbnailSrcSet"];
+  /** Fills the hero behind the text once it is wide (desktop); see the artwork. */
+  banner?: string;
+  bannerSrcSet?: Course["bannerSrcSet"];
   onBack?: () => void;
   /** Where the back link leads, as the link reads: "All courses", "Home". */
   backLabel?: string;
@@ -31,14 +39,19 @@ export interface CourseOverviewHeroProps {
   };
   /**
    * Left out when the course has nothing a visitor can watch yet. For
-   * someone who manages the course it is `kind: "open"`, into the course
-   * itself: a round play button in the corner (an "Open course" pill under
-   * the text when there is no picture).
+   * someone who manages the course, or a learner enrolled in it, it is
+   * `kind: "open"`, into the course itself: a round play button in the
+   * corner beside the text, and in the middle of the picture while stacked
+   * (an "Open course" pill under the text when there is no picture).
    */
   preview?: {
     onOpen: () => void;
     disabled: boolean;
     kind?: "preview" | "open";
+    /** What an `open` button is called; "Open course" by default. */
+    label?: string;
+    /** Readies the lesson the buttons open, ahead of the press. */
+    intent?: LessonOpenIntent["handlers"];
   };
   /**
    * Which of the corner's two controls depend on who is looking, while that
@@ -50,11 +63,16 @@ export interface CourseOverviewHeroProps {
    *   guest's controls are passed in and shown. On a browser that remembers
    *   a session they are hidden from the first paint and the placeholders
    *   shown in their place.
+   *
+   * `heldPlay` draws the enrolled learner's play button, on a course the
+   * document's head finds the learner holds (the guest's preview is then
+   * marked for the head to hide, the trailer's included).
    */
   viewerPlaceholders?: {
     for: "everyone" | "expected-session";
     preview: boolean;
     wishlist: boolean;
+    heldPlay?: boolean;
   };
   placement?: HeroPlacement;
 }
@@ -193,6 +211,8 @@ export function CourseOverviewHero({
   duration,
   thumbnail,
   thumbnailSrcSet,
+  banner,
+  bannerSrcSet,
   onBack,
   backLabel = "Back",
   wishlist,
@@ -202,6 +222,7 @@ export function CourseOverviewHero({
 }: CourseOverviewHeroProps) {
   // The way into the lessons, whose pages use the whole curriculum.
   const curriculumIntent = useCurriculumIntent();
+  const hydrated = useHydrated();
   const placed = heroPlacementClasses[placement];
   // The guest's own controls step aside for their placeholders on a browser
   // that remembers a session.
@@ -211,6 +232,10 @@ export function CourseOverviewHero({
       : "";
   const previewGuestOnly = viewerPlaceholders?.preview ? guestOnly : "";
   const forEveryone = viewerPlaceholders?.for === "everyone";
+  const heldPlay = Boolean(viewerPlaceholders?.heldPlay && thumbnail);
+  // A preview the head puts away on a course the learner holds.
+  const previewOffered = Boolean(viewerPlaceholders?.preview) || heldPlay;
+  const openLabel = preview?.label ?? "Open course";
   // The short description is one paragraph here, whatever line breaks it
   // was written with, cut to two or three lines.
   const summary = shortDescription?.replace(/\s+/g, " ").trim();
@@ -254,10 +279,15 @@ export function CourseOverviewHero({
         title={title}
         thumbnail={thumbnail}
         thumbnailSrcSet={thumbnailSrcSet}
+        banner={banner}
+        bannerSrcSet={bannerSrcSet}
         onPreview={preview?.onOpen}
         previewDisabled={preview?.disabled}
-        previewLabel={preview?.kind === "open" ? "Open course" : undefined}
+        previewLabel={preview?.kind === "open" ? openLabel : undefined}
         previewClassName={previewGuestOnly}
+        previewDependsOnViewer={previewOffered}
+        previewIntent={preview?.intent}
+        heldPlaceholder={heldPlay}
       />
 
       {placement === "edge" ? (
@@ -291,7 +321,19 @@ export function CourseOverviewHero({
               onClick={onBack}
             >
               <ArrowLeft size={17} weight="bold" aria-hidden="true" />
-              <span>{backLabel}</span>
+              {hydrated ? (
+                <span>{backLabel}</span>
+              ) : (
+                // The built page names the Courses page; a page opened from
+                // another section is named by the document's head before
+                // the first paint (see navigationOriginEarlyState.ts).
+                <>
+                  <span className="[:root[data-navigation-origin]_&]:hidden">
+                    {backLabel}
+                  </span>
+                  <span className="hidden after:content-(--navigation-origin-label) [:root[data-navigation-origin]_&]:inline" />
+                </>
+              )}
             </button>
           </>
         ) : (
@@ -368,17 +410,25 @@ export function CourseOverviewHero({
           <button
             type="button"
             className={`${previewPillClasses} mt-1 inline-flex self-start ${previewGuestOnly}`}
-            {...curriculumIntent}
+            {...mergeIntentHandlers(curriculumIntent, preview.intent)}
             onClick={preview.onOpen}
             disabled={preview.disabled}
           >
-            {previewPillContent[preview.kind ?? "preview"]}
+            {preview.label ? (
+              <>
+                <Play size={17} weight="bold" aria-hidden="true" />
+                <span>{preview.label}</span>
+              </>
+            ) : (
+              previewPillContent[preview.kind ?? "preview"]
+            )}
           </button>
         ) : null}
       </div>
 
-      {/* The hero's bottom right corner: for someone who manages the course
-          a round play button into it, beside the text only; for anyone else
+      {/* The hero's bottom right corner: for someone who manages the course,
+          or a learner enrolled in it, a round play button into it, beside
+          the text only; for anyone else
           the preview button, beside the text only (stacked, the
           play button on the picture is the way in), and the heart. Stacked,
           the text runs the hero's full width, so the corner used is the
@@ -391,25 +441,37 @@ export function CourseOverviewHero({
             <button
               type="button"
               className={`${heroControlClasses} hidden size-12 rounded-full @3xl/hero:inline-flex`}
-              {...curriculumIntent}
+              {...mergeIntentHandlers(curriculumIntent, preview.intent)}
               onClick={preview.onOpen}
               disabled={preview.disabled}
-              aria-label="Open course"
-              title="Open course"
+              aria-label={openLabel}
+              title={openLabel}
             >
               <Play size={19} weight="fill" aria-hidden="true" />
             </button>
           ) : (
             <button
               type="button"
+              data-course-card-early={previewOffered ? "offer" : undefined}
               className={`${previewPillClasses} hidden @3xl/hero:inline-flex ${previewGuestOnly}`}
-              {...curriculumIntent}
+              {...mergeIntentHandlers(curriculumIntent, preview.intent)}
               onClick={preview.onOpen}
               disabled={preview.disabled}
             >
               {previewPillContent[preview.kind ?? "preview"]}
             </button>
           )
+        ) : null}
+        {heldPlay ? (
+          // The enrolled learner's button, before the page knows them.
+          <div className="hidden" data-course-card-early="held">
+            <span
+              aria-hidden="true"
+              className={`${heroControlClasses} pointer-events-none! hidden size-12 rounded-full @3xl/hero:inline-flex`}
+            >
+              <Play size={19} weight="fill" aria-hidden="true" />
+            </span>
+          </div>
         ) : null}
         {/* The places of the two controls while the viewer is not known:
             the preview button's beside the text only, as the button's own
@@ -420,7 +482,7 @@ export function CourseOverviewHero({
             className={`${controlPlaceholderClasses} h-12 w-44 ${
               forEveryone
                 ? "hidden @3xl/hero:block"
-                : "hidden [:root[data-session-hint=signed-in]_&]:@3xl/hero:block"
+                : "hidden [:root[data-session-hint=signed-in]:not([data-course-cards-early])_&]:@3xl/hero:block"
             }`}
           />
         ) : null}
@@ -430,24 +492,62 @@ export function CourseOverviewHero({
             className={`${controlPlaceholderClasses} size-11 ${
               forEveryone
                 ? "block"
-                : "hidden [:root[data-session-hint=signed-in]_&]:block"
+                : "hidden [:root[data-session-hint=signed-in]:not([data-course-cards-early])_&]:block"
             }`}
           />
         ) : null}
         {wishlist ? (
-          <div className={viewerPlaceholders?.wishlist ? guestOnly : ""}>
-            <CourseWishlistHeartButton
-              variant="overview-hero"
-              wishlisted={wishlist.wishlisted}
-              disabled={wishlist.disabled}
-              aria-label={
-                wishlist.wishlisted ? "Remove from wishlist" : "Add to wishlist"
+          // While the viewer is not known the heart is marked for the
+          // head's style (`courseCardEarlyState`): hidden on a course the
+          // learner holds, and filled, by the inert one beside it, on a
+          // course in their wishlist, until the page knows.
+          <div
+            className={viewerPlaceholders?.wishlist ? guestOnly : ""}
+            data-course-card-early={
+              viewerPlaceholders?.wishlist ? "offer" : undefined
+            }
+          >
+            <div
+              className="flex"
+              data-course-early-heart={
+                viewerPlaceholders?.wishlist && !wishlist.wishlisted
+                  ? "empty"
+                  : undefined
               }
-              title={
-                wishlist.wishlisted ? "Remove from wishlist" : "Add to wishlist"
-              }
-              onClick={wishlist.onToggle}
-            />
+            >
+              <CourseWishlistHeartButton
+                variant="overview-hero"
+                wishlisted={wishlist.wishlisted}
+                disabled={wishlist.disabled}
+                aria-label={
+                  wishlist.wishlisted
+                    ? "Remove from wishlist"
+                    : "Add to wishlist"
+                }
+                title={
+                  wishlist.wishlisted
+                    ? "Remove from wishlist"
+                    : "Add to wishlist"
+                }
+                onClick={wishlist.onToggle}
+              />
+            </div>
+            {viewerPlaceholders?.wishlist && !wishlist.wishlisted ? (
+              <div
+                className="pointer-events-none hidden"
+                aria-hidden="true"
+                data-course-early-heart="filled"
+              >
+                <CourseWishlistHeartButton
+                  variant="overview-hero"
+                  wishlisted
+                  disabled
+                  aria-label="Remove from wishlist"
+                  title="Remove from wishlist"
+                  onClick={() => undefined}
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

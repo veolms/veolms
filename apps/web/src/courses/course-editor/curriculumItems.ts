@@ -90,7 +90,9 @@ export interface LessonDropTarget {
   position: "before" | "after";
 }
 
-const getLessonInitialState = (les: CurriculumLessonItem): LessonSnapshot => {
+export const getLessonInitialState = (
+  les: CurriculumLessonItem,
+): LessonSnapshot => {
   return (
     les.initialState || {
       title: les.title,

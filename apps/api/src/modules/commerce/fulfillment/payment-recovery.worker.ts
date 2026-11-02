@@ -1,7 +1,7 @@
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type { FastifyBaseLogger } from "fastify";
-import type { PaymentGateway } from "@veolms/contracts";
+import type { PaymentGateways } from "@veolms/contracts";
 import type { AccessService } from "../../access/access.service.ts";
 import { createAccessService } from "../../access/access.service.ts";
 import { createPaymentReconciliationService } from "../payments/payment-reconciliation.service.ts";
@@ -14,7 +14,7 @@ import { config } from "../../../config.ts";
 
 export interface PaymentRecoveryWorkerOptions {
   database: Kysely<Database>;
-  paymentGateway: PaymentGateway;
+  paymentGateways: PaymentGateways;
   accessService?: AccessService;
   logger?: FastifyBaseLogger;
   /** Minimum age in minutes before a stale payment is queried against the gateway. Default: 5 */
@@ -50,7 +50,7 @@ export interface PaymentRecoveryWorkerOptions {
  */
 export function createPaymentRecoveryWorker({
   database,
-  paymentGateway,
+  paymentGateways,
   accessService = createAccessService(),
   logger,
   staleAfterMinutes = 5,
@@ -66,9 +66,11 @@ export function createPaymentRecoveryWorker({
   });
   const extraPaymentRefunds = createExtraPaymentRefundService({
     database,
-    paymentGateway,
+    paymentGateways,
     logger,
   });
+  /** The gateways asked about: every one that is set up. */
+  const providers = paymentGateways.all.map((gateway) => gateway.providerName);
 
   async function recoverStalePayments(): Promise<{
     recovered: number;
@@ -97,6 +99,8 @@ export function createPaymentRecoveryWorker({
     async function reconcile(
       payment: StalePayment,
     ): Promise<"recovered" | "already-final" | "open"> {
+      // Listed by provider below, so its gateway is set up.
+      const paymentGateway = paymentGateways.get(payment.gateway_provider)!;
       const capture = await findGatewayCapture(paymentGateway, payment);
       if (capture.state === "unpaid") return "open";
 
@@ -179,9 +183,9 @@ export function createPaymentRecoveryWorker({
     // leaves one for 24 hours) each tick re-read the same 50 and a genuinely
     // captured payment further back was never looked at.
     //
-    // Only this gateway's payments: a no-cost or manually verified payment
-    // has no gateway order, and asking the gateway about one failed on every
-    // tick for as long as the row stayed open.
+    // Only gateway payments, of the gateways that are set up: a no-cost or
+    // manually verified payment has no gateway order, and asking the gateway
+    // about one failed on every tick for as long as the row stayed open.
     //
     // A FAILED payment is looked at too, while its order is still unpaid. A
     // gateway order stays payable after a declined attempt, and the buyer
@@ -192,7 +196,7 @@ export function createPaymentRecoveryWorker({
       return database
         .selectFrom("payments")
         .selectAll()
-        .where("gateway_provider", "=", paymentGateway.providerName)
+        .where("gateway_provider", "in", providers)
         .where((eb) =>
           eb.or([
             eb("status", "in", ["initiated", "processing"]),
@@ -266,7 +270,7 @@ export function createPaymentRecoveryWorker({
     const agedOut = await database
       .selectFrom("payments")
       .selectAll()
-      .where("gateway_provider", "=", paymentGateway.providerName)
+      .where("gateway_provider", "in", providers)
       .where("status", "in", ["initiated", "processing"])
       .where("created_at", "<=", maxAgeCutoff)
       .orderBy("created_at", "asc")

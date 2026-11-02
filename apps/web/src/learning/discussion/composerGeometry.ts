@@ -4,6 +4,8 @@ import { watchLayoutQuery } from "../../shell/phoneVideoFullscreenHold";
 export type ComposerMode = "collapsed" | "desktop" | "mobile";
 
 export const DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT = 0.62;
+/** The tallest the phone composer opens, in pixels (see below). */
+const DISCUSSION_COMPOSER_MAX_COLLAPSED_HEIGHT = 300;
 
 export const getDiscussionComposerCollapsedSnapPoint = (
   viewportHeight: number,
@@ -18,9 +20,16 @@ export const getDiscussionComposerCollapsedSnapPoint = (
     return DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT;
   }
 
-  // On a phone the video scrolls away with the page; once it has gone off
-  // the top, the composer has the whole screen under it.
-  return Math.max(2, Math.round(viewportHeight - Math.max(0, playerBottom)));
+  // On a phone the composer opens under the video, no taller than a few
+  // lines and its toolbar need: given the whole screen under the video, it
+  // stood mostly empty. It is pulled up to the full screen for a long post.
+  return Math.max(
+    2,
+    Math.min(
+      DISCUSSION_COMPOSER_MAX_COLLAPSED_HEIGHT,
+      Math.round(viewportHeight - Math.max(0, playerBottom)),
+    ),
+  );
 };
 
 export const getDiscussionComposerViewportGeometry = (

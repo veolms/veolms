@@ -1,3 +1,4 @@
+import { cacheTags, createCache } from "@veolms/api-core";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 import type {
@@ -20,6 +21,7 @@ import type { CourseService } from "../courses/course/course.service.ts";
 import type { LearningProgressService } from "../learning-progress/learning-progress.service.ts";
 import type { AnalyticsActor } from "./analytics.types.ts";
 import { hasAcademyPermission } from "../authorization/index.ts";
+import { AppError } from "../../lib/errors.ts";
 import * as analyticsRepo from "./analytics.repository.ts";
 
 export interface AnalyticsServiceOptions {
@@ -183,6 +185,19 @@ function normalizeRevenueTrend(
   return trend;
 }
 
+/**
+ * Analytics answers: aggregate snapshots, served up to 30 s old. Without
+ * this every dashboard poll re-ran ~15 full-table aggregates, and one admin
+ * tab was measured slowing all other traffic ~10x. Concurrent identical
+ * requests share one computation; failures are not kept.
+ */
+const analyticsResponses = createCache<unknown>({
+  name: "analytics.responses",
+  ttlMs: 30_000,
+  maxEntries: 100,
+  maxBytes: 8 * 1024 * 1024,
+});
+
 export function createAnalyticsService(options: AnalyticsServiceOptions) {
   const {
     database,
@@ -203,12 +218,52 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
    * Analytics held through a role that reaches every course (admin, or a
    * team role) covers the whole academy; an instructor's covers their own.
    */
-  async function seesEveryCourse(actor: AnalyticsActor): Promise<boolean> {
-    const [course, revenue] = await Promise.all([
+  /** Which analytics keys the actor holds for every course. */
+  async function academyAnalytics(actor: AnalyticsActor) {
+    const [overview, course, revenue] = await Promise.all([
+      hasAcademyPermission(database, actor.id, "analytics.overview.read"),
       hasAcademyPermission(database, actor.id, "analytics.course.read"),
       hasAcademyPermission(database, actor.id, "analytics.revenue.read"),
     ]);
-    return course || revenue;
+    return { overview, course, revenue };
+  }
+
+  async function seesEveryCourse(actor: AnalyticsActor): Promise<boolean> {
+    const held = await academyAnalytics(actor);
+    return held.overview || held.course || held.revenue;
+  }
+
+  /**
+   * Money reaches the holders of the revenue permission, and an instructor
+   * looking at their own courses. Analytics held for every course without
+   * the revenue key (a team role) stop short of it.
+   */
+  async function seesRevenue(actor: AnalyticsActor): Promise<boolean> {
+    const held = await academyAnalytics(actor);
+    return held.revenue || !(held.overview || held.course);
+  }
+
+  /** The overview with every money figure taken out. */
+  function withoutRevenue(
+    response: AnalyticsOverviewResponse,
+  ): AnalyticsOverviewResponse {
+    const emptyKpi = kpi(0, 0);
+    return {
+      ...response,
+      includesRevenue: false,
+      overview: {
+        ...response.overview,
+        netRevenue: emptyKpi,
+        orders: emptyKpi,
+        refundRate: emptyKpi,
+        dailyOrders: [],
+        coursePerformance: response.overview.coursePerformance.map((row) => ({
+          ...row,
+          orders: 0,
+          netRevenue: 0,
+        })),
+      },
+    };
   }
 
   async function resolveCoursesInScope(
@@ -562,6 +617,13 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     actor: AnalyticsActor,
     query: AnalyticsFilterQuery,
   ): Promise<AnalyticsRevenueResponse> {
+    if (!(await seesRevenue(actor))) {
+      throw new AppError(
+        403,
+        "FORBIDDEN",
+        "Revenue analytics need the analytics.revenue.read permission.",
+      );
+    }
     const context = await resolveTabContext(actor, query);
     if (context.isEmpty) return buildEmptyRevenue();
     const { courseIdFilter, from, to, prevFrom, prevTo, scope } = context;
@@ -896,13 +958,38 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
   }
 
   /**
-   * The dashboard is academy-wide: its route requires the platform-scoped
-   * analytics.revenue.read permission. Only "Your Courses" follows the
-   * caller's own course-management visibility.
+   * Every team member has a Home. Its academy-wide numbers need analytics
+   * for every course (the Overview or Revenue key), its money the revenue
+   * key; "Your Courses" follows the caller's own course visibility. What
+   * the caller may not see is null and never computed.
    */
   async function buildDashboard(
     actor: AnalyticsActor,
     range: DashboardRange = "30d",
+  ): Promise<DashboardSummaryResponse> {
+    const held = await academyAnalytics(actor);
+    if (!held.overview && !held.revenue) {
+      return {
+        revenue: null,
+        students: null,
+        activeLearners: null,
+        watchHours: null,
+        revenueOverview: null,
+        learningActivity: null,
+        yourCourses: await buildYourCourses(
+          await resolveDashboardCourses(actor),
+        ),
+      };
+    }
+    const full = await buildAcademyDashboard(actor, range);
+    return held.revenue
+      ? full
+      : { ...full, revenue: null, revenueOverview: null };
+  }
+
+  async function buildAcademyDashboard(
+    actor: AnalyticsActor,
+    range: DashboardRange,
   ): Promise<DashboardSummaryResponse> {
     const dashboardNow = new Date();
     const enrollmentActivityWindow =
@@ -1055,45 +1142,17 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
   }
 
   /**
-   * Short-TTL response cache (same pattern as order.service's stats cache,
-   * including in-flight promise dedupe so concurrent identical requests
-   * share one computation). Analytics responses are aggregate snapshots;
-   * serving one up to 30s old is an accepted tradeoff — without it, every
-   * dashboard poll re-runs ~15 full-table aggregates, and a single admin
-   * tab was measured degrading all other traffic ~10x. Keys include the
-   * actor's id and sorted roles, so a permission change can widen/narrow
-   * the scope at most one TTL late.
+   * Answers are aggregate snapshots (see `analyticsResponses`), each for one
+   * actor: a change to the actor's roles clears theirs (`user:<id>`).
    */
-  const RESPONSE_CACHE_TTL_MS = 30_000;
-  const RESPONSE_CACHE_MAX_ENTRIES = 100;
-  const responseCache = new Map<
-    string,
-    { expiresAt: number; promise: Promise<unknown> }
-  >();
-
-  function cachedResponse<T>(key: string, build: () => Promise<T>): Promise<T> {
-    const now = Date.now();
-    const hit = responseCache.get(key);
-    if (hit && hit.expiresAt > now) {
-      return hit.promise as Promise<T>;
-    }
-    if (
-      responseCache.size >= RESPONSE_CACHE_MAX_ENTRIES &&
-      !responseCache.has(key)
-    ) {
-      const oldest = responseCache.keys().next().value;
-      if (oldest !== undefined) responseCache.delete(oldest);
-    }
-    const promise = build().catch((error: unknown) => {
-      // Never cache a failure.
-      responseCache.delete(key);
-      throw error;
-    });
-    responseCache.set(key, {
-      expiresAt: now + RESPONSE_CACHE_TTL_MS,
-      promise,
-    });
-    return promise;
+  async function cachedResponse<T>(
+    actor: AnalyticsActor,
+    key: string,
+    build: () => Promise<T>,
+  ): Promise<T> {
+    return (await analyticsResponses.fetch(key, build, {
+      tags: [cacheTags.user(actor.id), cacheTags.rbac],
+    })) as T;
   }
 
   function actorKey(actor: AnalyticsActor): string {
@@ -1116,20 +1175,26 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
 
   return {
     overview: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
-      cachedResponse(tabKey("overview", actor, query), () =>
-        buildOverview(actor, query),
-      ),
+      cachedResponse(actor, tabKey("overview", actor, query), async () => {
+        const [response, revenue] = await Promise.all([
+          buildOverview(actor, query),
+          seesRevenue(actor),
+        ]);
+        return revenue ? response : withoutRevenue(response);
+      }),
     revenue: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
-      cachedResponse(tabKey("revenue", actor, query), () =>
+      cachedResponse(actor, tabKey("revenue", actor, query), () =>
         buildRevenue(actor, query),
       ),
     courses: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
-      cachedResponse(tabKey("courses", actor, query), () =>
+      cachedResponse(actor, tabKey("courses", actor, query), () =>
         buildCourses(actor, query),
       ),
     dashboard: (actor: AnalyticsActor, range: DashboardRange = "30d") =>
-      cachedResponse(["dashboard", actorKey(actor), range].join("|"), () =>
-        buildDashboard(actor, range),
+      cachedResponse(
+        actor,
+        ["dashboard", actorKey(actor), range].join("|"),
+        () => buildDashboard(actor, range),
       ),
   };
 }

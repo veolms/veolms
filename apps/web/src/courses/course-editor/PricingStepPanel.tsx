@@ -1,12 +1,16 @@
 import { Checkbox } from "../../components/Checkbox";
 import { CourseQuizPricingCard } from "../CourseQuizPricingCard";
 import { CourseLinkedCoursesCard } from "../CourseLinkedCoursesCard";
+import { CoursePartialAccessCard } from "../CoursePartialAccessCard";
 import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
+import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { ThemedSelect } from "../../ThemedSelect";
+import { Switch } from "../../home-page-settings/homePageSettingsControls";
 import type { NavigateTo } from "../../routing/navigation";
+import { useCapabilities } from "../../services/authorization";
 import { type CourseWizardStepId, parseWizardTab } from "./wizardSteps";
 import {
   type PricingControlKey,
@@ -31,7 +35,13 @@ export interface PricingStepPanelProps {
   handleSellingPriceChange: (val: string) => void;
   flushPricingPersistence: () => Promise<void>;
   handleOriginalPriceChange: (val: string) => void;
+  handleInternationalPriceChange: (
+    field: "internationalSellingPrice" | "internationalOriginalPrice",
+    val: string,
+  ) => void;
+  handleInternationalAutoChange: (checked: boolean) => void;
   handleShowDiscountBadgeChange: (checked: boolean) => void;
+  handleLinkedOnlyChange: (checked: boolean) => void;
   currentCourseId: string | null;
   navigateToStep: (destination: CourseWizardStepId) => Promise<void>;
   onNavigatePage: NavigateTo | undefined;
@@ -48,11 +58,16 @@ export function PricingStepPanel({
   handleSellingPriceChange,
   flushPricingPersistence,
   handleOriginalPriceChange,
+  handleInternationalPriceChange,
+  handleInternationalAutoChange,
   handleShowDiscountBadgeChange,
+  handleLinkedOnlyChange,
   currentCourseId,
   navigateToStep,
   onNavigatePage,
 }: PricingStepPanelProps) {
+  // Quiz pricing is read and saved with quiz.settings.update.
+  const setsQuizPricing = useCapabilities().can("quiz.settings.update");
   // prettier-ignore
   return (
     <div className="flex w-full flex-col gap-5">
@@ -84,6 +99,43 @@ export function PricingStepPanel({
             </div>
           </div>
 
+          {/* Linked course only */}
+          <div className="flex items-start justify-between gap-4 mb-5 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_55%,var(--surface))] px-4 py-3.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-(--text) text-[0.88rem] font-semibold">
+                  Linked course only
+                </span>
+                <PricingControlStatusIndicator
+                  status={getPricingControlDisplayStatus(
+                    "pricingDetails",
+                  )}
+                  testId="pricing-field-status-linkedOnly"
+                />
+              </div>
+              <p className="m-0 mt-1 text-(--muted) text-[0.8rem]">
+                No price and not for sale. Hidden from the course list;
+                learners get it only through a course that links it.
+              </p>
+            </div>
+            <Switch
+              checked={pricing.linkedOnly}
+              onChange={handleLinkedOnlyChange}
+              label="Linked course only"
+            />
+          </div>
+
+          {pricing.linkedOnly ? (
+            <div className="flex items-start gap-2.5 text-(--muted) text-[0.82rem]">
+              <LinkSimple size={16} weight="bold" className="shrink-0 mt-0.5" />
+              <span>
+                To give this course to learners, open the course that
+                includes it and add it under Linked courses on its
+                Pricing tab. Turn this off and enter a price to sell it
+                on its own.
+              </span>
+            </div>
+          ) : (
           <div className="flex flex-col gap-1.75">
             {/* Currency Combobox Field */}
             <div className="flex flex-col gap-2 mb-5">
@@ -273,22 +325,102 @@ export function PricingStepPanel({
                 </div>
               );
             })()}
+
+            {/* Price for buyers outside India */}
+            <div className="mt-5 flex flex-col gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_55%,var(--surface))] px-4 py-3.5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <span className="text-(--text) text-[0.88rem] font-semibold">
+                    International price (USD)
+                  </span>
+                  <p className="m-0 mt-1 text-(--muted) text-[0.8rem]">
+                    {pricing.internationalAuto
+                      ? "Buyers outside India pay this in US dollars. It is worked out from today's exchange rate, rounded up to .99, and again whenever the price above changes. Type a price to set your own."
+                      : `Buyers outside India pay this in US dollars. Leave both empty to sell the course in ${pricing.currency || "INR"} everywhere, or turn Automatic on.`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-(--text-secondary) text-[0.8rem] font-semibold">
+                    Automatic
+                  </span>
+                  <Switch
+                    checked={pricing.internationalAuto}
+                    onChange={handleInternationalAutoChange}
+                    label="Work out the international price automatically"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-[560px]:grid-cols-1">
+                <DollarPriceField
+                  id="international-selling-price"
+                  label="Selling price"
+                  placeholder="43.99"
+                  value={pricing.internationalSellingPrice}
+                  status={getPricingControlDisplayStatus(
+                    "internationalSellingPrice",
+                  )}
+                  disabled={
+                    isSavingPricing || isPricingControlSaving("pricingType")
+                  }
+                  onChange={(value) =>
+                    handleInternationalPriceChange(
+                      "internationalSellingPrice",
+                      value,
+                    )
+                  }
+                  onBlur={() => {
+                    void flushPricingPersistence();
+                  }}
+                />
+                <DollarPriceField
+                  id="international-original-price"
+                  label="Original price"
+                  placeholder="64.99"
+                  value={pricing.internationalOriginalPrice}
+                  status={getPricingControlDisplayStatus(
+                    "internationalOriginalPrice",
+                  )}
+                  disabled={
+                    isSavingPricing || isPricingControlSaving("pricingType")
+                  }
+                  onChange={(value) =>
+                    handleInternationalPriceChange(
+                      "internationalOriginalPrice",
+                      value,
+                    )
+                  }
+                  onBlur={() => {
+                    void flushPricingPersistence();
+                  }}
+                />
+              </div>
+              <p className="m-0 text-(--muted) text-[0.78rem]">
+                Coupons with a fixed amount off are in rupees; for these
+                buyers they take off the same share of the price.
+              </p>
+            </div>
           </div>
+          )}
         </div>
       </div>
 
       {/* Courses that come free with this one */}
       <CourseLinkedCoursesCard courseId={currentCourseId} />
 
+      {/* Parts of this course sold on their own */}
+      <CoursePartialAccessCard courseId={currentCourseId} />
+
       {/* Card 3: Quiz Pricing */}
-      <CourseQuizPricingCard
-        courseId={currentCourseId}
-        courseCurrency={pricing.currency || "INR"}
-        onNavigateTab={(tab) => {
-          const stepId = parseWizardTab(tab);
-          if (stepId) void navigateToStep(stepId);
-        }}
-      />
+      {setsQuizPricing && (
+        <CourseQuizPricingCard
+          courseId={currentCourseId}
+          courseCurrency={pricing.currency || "INR"}
+          onNavigateTab={(tab) => {
+            const stepId = parseWizardTab(tab);
+            if (stepId) void navigateToStep(stepId);
+          }}
+        />
+      )}
 
       {/* Bottom Card: Coupons Banner */}
       <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-(--surface) shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
@@ -337,6 +469,60 @@ export function PricingStepPanel({
         >
           Go to Coupons <ArrowUpRight size={15} weight="bold" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** A price in dollars and cents, as the international price asks for it. */
+function DollarPriceField({
+  id,
+  label,
+  placeholder,
+  value,
+  status,
+  disabled,
+  onChange,
+  onBlur,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  status: "saving" | "saved" | "failed" | null;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <label
+          htmlFor={id}
+          className="text-(--text-secondary) text-[0.84rem] font-semibold"
+        >
+          {label}
+        </label>
+        <PricingControlStatusIndicator
+          status={status}
+          testId={`pricing-field-status-${id}`}
+        />
+      </div>
+      <div className="relative flex w-full items-center">
+        <span className="pointer-events-none absolute left-3.5 text-[0.9rem] font-semibold text-(--muted)">
+          $
+        </span>
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          disabled={disabled}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          className="w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] py-2.5 pr-3.5 pl-8 text-[0.9rem] font-semibold text-(--text) outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
+        />
       </div>
     </div>
   );

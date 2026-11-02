@@ -1,6 +1,7 @@
 /**
  * Turns a picture the learner picked into the laptop's wallpaper: cut to
- * the screen's shape from its middle, no larger than the screen is drawn on
+ * the screen's shape (where the learner placed it, or from its middle), no
+ * larger than the screen is drawn on
  * a dense display, and small enough to keep in the browser (see
  * `laptopWallpaper.ts`). The picture never leaves the browser.
  */
@@ -8,6 +9,16 @@
 /** Twice the laptop screen's layout size (see `HeroLaptopScreen`). */
 const WALLPAPER_WIDTH = 1600;
 const WALLPAPER_HEIGHT = 1060;
+/** The laptop screen's shape, width over height. */
+export const LAPTOP_WALLPAPER_ASPECT = WALLPAPER_WIDTH / WALLPAPER_HEIGHT;
+
+/** A part of the picture, in its own pixels. */
+export interface LaptopWallpaperCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /** What is read at all; a phone's photograph is well under this. */
 const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
@@ -39,8 +50,8 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
-/** The picture as a data URL, ready for `saveOwnLaptopWallpaper`. */
-export async function prepareLaptopWallpaper(file: File): Promise<string> {
+/** Refuses a file that is not a picture, or one too large to read. */
+export function checkLaptopWallpaperFile(file: File): void {
   if (!file.type.startsWith("image/")) {
     throw new LaptopWallpaperImageError("Choose a picture (JPG, PNG or WebP).");
   }
@@ -49,17 +60,40 @@ export async function prepareLaptopWallpaper(file: File): Promise<string> {
       "That picture is too large. Choose one under 25 MB.",
     );
   }
+}
+
+/**
+ * The picture as a data URL, ready for `saveOwnLaptopWallpaper`: the part
+ * `crop` names, or the middle of the picture in the screen's shape.
+ */
+export async function prepareLaptopWallpaper(
+  file: File,
+  crop?: LaptopWallpaperCrop,
+): Promise<string> {
+  checkLaptopWallpaperFile(file);
 
   const image = await loadImage(file);
   if (!image.naturalWidth || !image.naturalHeight) {
     throw new LaptopWallpaperImageError("That picture could not be read.");
   }
 
-  // Fill the screen's shape from the middle of the picture; a picture
-  // smaller than the screen is not enlarged past its own pixels.
-  const shape = WALLPAPER_WIDTH / WALLPAPER_HEIGHT;
-  const cropWidth = Math.min(image.naturalWidth, image.naturalHeight * shape);
+  // Fill the screen's shape from the chosen part, or from the middle of the
+  // picture; a picture smaller than the screen is not enlarged past its own
+  // pixels.
+  const shape = LAPTOP_WALLPAPER_ASPECT;
+  const cropWidth = crop
+    ? Math.min(crop.width, image.naturalWidth)
+    : Math.min(image.naturalWidth, image.naturalHeight * shape);
   const cropHeight = cropWidth / shape;
+  const cropX = crop
+    ? Math.min(Math.max(0, crop.x), image.naturalWidth - cropWidth)
+    : (image.naturalWidth - cropWidth) / 2;
+  const cropY = crop
+    ? Math.min(
+        Math.max(0, crop.y),
+        Math.max(0, image.naturalHeight - cropHeight),
+      )
+    : (image.naturalHeight - cropHeight) / 2;
   const width = Math.round(Math.min(WALLPAPER_WIDTH, cropWidth));
   const height = Math.round(width / shape);
 
@@ -75,8 +109,8 @@ export async function prepareLaptopWallpaper(file: File): Promise<string> {
   context.imageSmoothingQuality = "high";
   context.drawImage(
     image,
-    (image.naturalWidth - cropWidth) / 2,
-    (image.naturalHeight - cropHeight) / 2,
+    cropX,
+    cropY,
     cropWidth,
     cropHeight,
     0,

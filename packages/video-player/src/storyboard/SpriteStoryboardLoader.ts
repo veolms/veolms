@@ -11,6 +11,7 @@ import {
   registerSpriteSheet,
   releaseSpriteSheet,
 } from "./spriteSheetStore.ts";
+import { PreviewChunkCache } from "./previewChunkCache.ts";
 import { PreviewVideoFrames } from "./PreviewVideoFrames.ts";
 import type { StoryboardFrame } from "./storyboardTypes.ts";
 
@@ -101,15 +102,6 @@ export class SpriteStoryboardLoader {
     this.#unregisterVideo?.();
     this.#video?.destroy();
     this.#video = null;
-  }
-
-  /**
-   * Fetches the rest of the preview video at low priority, from `time` on
-   * (once the lesson is playing, so it never competes with its start).
-   * Sheets are not filled in this way: they cost several times more.
-   */
-  fillInBackground(time: number): void {
-    void this.#ensureIndex().then(() => this.#video?.fillInBackground(time));
   }
 
   /** Loads the index only (a few kilobytes), so a first hover is quick. */
@@ -225,6 +217,7 @@ export class SpriteStoryboardLoader {
         // A server that ignores the range sends the whole stream.
         return response.status === 200 ? data.subarray(start, end) : data;
       },
+      PreviewChunkCache.open(url, info.gopOffsets.length),
     );
     this.#video = video;
     this.#options.onPreviewVideo?.();

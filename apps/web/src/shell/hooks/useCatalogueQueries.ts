@@ -24,7 +24,11 @@ import type {
   CourseSort,
   CourseStatusFilter,
 } from "../../courses/catalogue";
-import { authStore } from "../../store/auth.store";
+import {
+  authStore,
+  useAuthIdentityHint,
+  useSessionPresentAtBoot,
+} from "../../store/auth.store";
 import {
   useCourses,
   useInfiniteCourses,
@@ -34,6 +38,12 @@ import {
   useRestoreCourse,
 } from "../../services/courses";
 import { useEnrolledCourses } from "../../services/enrollments";
+import { useCapabilities } from "../../services/authorization";
+import {
+  isViewerCourseStateFailed,
+  isViewerCourseStateKnown,
+  useHydrated,
+} from "../../courses/viewerCourseState";
 import type { NavigateTo } from "../../routing/navigation";
 import type { CoursesPageRenderContext } from "../academyShellTypes";
 import type { ApiError } from "../../lib/api-error";
@@ -88,6 +98,10 @@ export interface UseCatalogueQueriesResult {
   completeCourseQuery: UseQueryResult<{ courses: CourseSummary[] }, ApiError>;
   publishedCourses: CourseSummary[];
   enrolledCoursesData: ReturnType<typeof useEnrolledCourses>["data"];
+  /** Whether the cards may show a price or progress yet (see below). */
+  learnerStateKnown: boolean;
+  /** See `isViewerCourseStateFailed`. */
+  learnerStateFailed: boolean;
   myCoursesQuery: ReturnType<typeof useMyCourses>;
   myCoursesData: ReturnType<typeof useMyCourses>["data"];
   deletedCoursesQuery: UseQueryResult<
@@ -214,12 +228,31 @@ export function useCatalogueQueries({
   const isPublishedFetching = needsCompleteCourseList
     ? completeCourseQuery.isFetching
     : pagedCourseQuery.isFetching;
-  const { data: enrolledCoursesData } = useEnrolledCourses({
+  const enrolledCoursesQuery = useEnrolledCourses({
     enabled:
       isCourseCataloguePage &&
       shouldLoadCourseSurface &&
       effectiveRole === "student" &&
       (isAuthenticated || (!authUserFetched && authStore.hasSessionHint())),
+  });
+  const enrolledCoursesData = enrolledCoursesQuery.data;
+  // What each card may say about this viewer (see the helper).
+  const hydrated = useHydrated();
+  const identityHint = useAuthIdentityHint();
+  const sessionPresentAtBoot = useSessionPresentAtBoot();
+  const learnerStateFailed = isViewerCourseStateFailed({
+    signedIn: isAuthenticated,
+    enrolmentsLoaded: enrolledCoursesData !== undefined,
+    enrolmentsFailed: enrolledCoursesQuery.isError,
+    enrolmentsFetching: enrolledCoursesQuery.isFetching,
+  });
+  const learnerStateKnown = isViewerCourseStateKnown({
+    hydrated,
+    signedIn: isAuthenticated,
+    sessionChecked: authUserFetched,
+    sessionRemembered: sessionPresentAtBoot || identityHint !== null,
+    enrolmentsLoaded: enrolledCoursesData !== undefined,
+    enrolmentsFailed: learnerStateFailed,
   });
   const myCoursesQuery = useMyCourses({
     enabled:
@@ -228,10 +261,16 @@ export function useCatalogueQueries({
         shouldQueryCreatorCourses),
   });
   const myCoursesData = myCoursesQuery.data;
+  // The bin lists every deleted course, so it takes the academy-wide key.
+  const binCapabilities = useCapabilities({
+    enabled: isAuthenticated && effectiveRole === "creator",
+  });
+  const canOpenBin =
+    isAdmin || binCapabilities.canOnCourse("course.restore", null);
   // Asked for on every tab, not only on Bin: the tab's badge is this list's
   // length, so asked for only once the tab was open it read 0 until clicked.
   const deletedCoursesQuery = useDeletedCourses(undefined, {
-    enabled: shouldQueryCourses && isAdmin && effectiveRole === "creator",
+    enabled: shouldQueryCourses && canOpenBin && effectiveRole === "creator",
   });
   const deletedCoursesData = deletedCoursesQuery.data;
   const isCourseCatalogueLoadError =
@@ -269,7 +308,7 @@ export function useCatalogueQueries({
       ? shouldQueryCourses && isPublishedFetching && !hasPublishedCourseData
       : enrollmentFilter === "bin"
         ? shouldQueryCourses &&
-          isAdmin &&
+          canOpenBin &&
           deletedCoursesQuery.isFetching &&
           !deletedCoursesData
         : shouldQueryCreatorCourses &&
@@ -279,13 +318,16 @@ export function useCatalogueQueries({
   useEffect(() => {
     if (
       creatorEnrollmentFilter === "bin" &&
-      (!isAdmin || effectiveRole !== "creator")
+      // Not before the permissions have answered.
+      ((!canOpenBin && binCapabilities.data !== undefined) ||
+        effectiveRole !== "creator")
     ) {
       setCreatorEnrollmentFilter("all");
     }
   }, [
     creatorEnrollmentFilter,
-    isAdmin,
+    canOpenBin,
+    binCapabilities.data,
     effectiveRole,
     setCreatorEnrollmentFilter,
   ]);
@@ -330,6 +372,8 @@ export function useCatalogueQueries({
     completeCourseQuery,
     publishedCourses,
     enrolledCoursesData,
+    learnerStateKnown,
+    learnerStateFailed,
     myCoursesQuery,
     myCoursesData,
     deletedCoursesQuery,

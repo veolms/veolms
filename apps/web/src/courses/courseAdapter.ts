@@ -4,6 +4,7 @@ import type {
   DeletedCourse,
   ManagedCourseSummary,
 } from "@veolms/contracts";
+import { formatMoney } from "@veolms/contracts/commerce/money";
 import type { Course, CourseLifecycleStatus, CoursePricing } from "./catalogue";
 import {
   getCourseThumbnailCdnSrcSet,
@@ -17,6 +18,18 @@ export function formatDuration(seconds: number): string {
   if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
   if (hours > 0) return `${hours}h`;
   return `${minutes}m`;
+}
+
+/** A course's length where it has no video yet. */
+export const COURSE_NOT_RECORDED = "Not recorded yet";
+
+/**
+ * A course's length, as cards and its page show it: "Not recorded yet"
+ * for a course with no video length yet ("0h 0m" read as broken). Lengths
+ * of anything else (time watched, a lesson) keep `formatDuration`.
+ */
+export function formatCourseDuration(seconds: number): string {
+  return seconds > 0 ? formatDuration(seconds) : COURSE_NOT_RECORDED;
 }
 
 export function resolveCourseDurationSeconds(
@@ -64,6 +77,7 @@ export function formatCoursePricing(
   }
 
   const formattedPrice = formatAmount(Number(pricing.price));
+  const international = formatInternationalCoursePricing(pricing.international);
 
   if (
     pricing.salePrice !== null &&
@@ -79,6 +93,7 @@ export function formatCoursePricing(
       originalPrice: formattedPrice,
       discount: `${discountPercent}% off`,
       showDiscountBadge: pricing.showDiscountBadge === true,
+      ...(international ? { international } : {}),
     };
   }
 
@@ -86,6 +101,26 @@ export function formatCoursePricing(
     price: formattedPrice,
     originalPrice: "",
     discount: "",
+    ...(international ? { international } : {}),
+  };
+}
+
+/**
+ * A course's price line for buyers outside India: its amounts are minor
+ * units (cents), and a discount is worked out on them.
+ */
+export function formatInternationalCoursePricing(
+  international: CoursePricingSummary["international"],
+): CoursePricing["international"] | undefined {
+  if (!international) return undefined;
+  const { currency, priceMinor, salePriceMinor } = international;
+  const discounted = priceMinor > salePriceMinor;
+  return {
+    price: formatMoney(salePriceMinor, { currency }),
+    originalPrice: discounted ? formatMoney(priceMinor, { currency }) : "",
+    discount: discounted
+      ? `${Math.round(((priceMinor - salePriceMinor) / priceMinor) * 100)}% off`
+      : "",
   };
 }
 
@@ -131,7 +166,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     lectures: summary.totalLessons,
     progress: courseProgress,
     enrolled: isEnrolled,
-    duration: formatDuration(summary.totalDurationSeconds),
+    duration: formatCourseDuration(summary.totalDurationSeconds),
     students: 0,
     thumbnail: summary.thumbnailUrl || "",
     thumbnailSrcSet: summary.thumbnailSrcSet,
@@ -140,6 +175,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     certificateAvailable: summary.certificateEnabled,
     isApi: true,
     canSelfEnroll: summary.canSelfEnroll,
+    includedWith: summary.includedWith,
   };
 }
 
@@ -202,7 +238,7 @@ export function adaptApiCourseToCatalogueCourse(
     lectures: apiCourse.totalLessons,
     progress: courseProgress,
     enrolled: isEnrolled,
-    duration: formatDuration(apiCourse.totalDurationSeconds),
+    duration: formatCourseDuration(apiCourse.totalDurationSeconds),
     students: 0,
     thumbnail,
     thumbnailSrcSet:

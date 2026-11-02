@@ -33,6 +33,7 @@ import { PlayerBehaviorBridge } from "./PlayerBehaviorBridge";
 import type { PlayerMediaProps } from "./PlayerMedia";
 import { PlayerMetadataBridge } from "./PlayerMetadataBridge";
 import { PlayerRoot, type VideoPlayerHandle } from "./PlayerRoot";
+import { SubtitleLayer } from "./SubtitleLayer";
 import {
   PlayerZoomMedia,
   type PlayerZoomOverflowBoundary,
@@ -48,6 +49,7 @@ import {
   resolvePlayerTheme,
   type PlayerTheme,
 } from "../themes/playerThemes";
+import { getPageFullscreenElement } from "./pageFullscreen";
 import type { PlayerInteractionMode } from "./PlayerInteractionMode";
 
 export interface VideoPlayerProgress {
@@ -99,6 +101,8 @@ export interface VideoPlayerProps extends Omit<
   /** Action performed by a single pointer tap on empty video space. */
   emptyTapBehavior?: VideoPlayerEmptyTapBehavior;
   controlsIdleDelay?: number;
+  /** How long the controls stay after a touch (defaults to the idle delay). */
+  controlsTouchIdleDelay?: number;
   /** Keeps controls pinned until the current source begins playback once. */
   keepControlsVisibleUntilFirstPlay?: boolean;
   /** Keeps a player-owned poster visible until the current source plays once. */
@@ -129,6 +133,8 @@ export interface VideoPlayerProps extends Omit<
   lockLandscapeOnFullscreen?: boolean;
   /** Enables pinch-to-zoom and panning of the video content. */
   zoomEnabled?: boolean;
+  /** See `PlayerRootProps.fullscreenSwipe`. */
+  fullscreenSwipe?: boolean;
   /** Chooses whether zoom remains clipped to the player or may fill its shell. */
   zoomOverflowBoundary?: PlayerZoomOverflowBoundary;
   /** Overrides the width-based responsive interaction model when needed. */
@@ -149,7 +155,7 @@ function currentFullscreenElement(): Element | null {
   return (
     document.fullscreenElement ??
     (document as WebkitFullscreenDocument).webkitFullscreenElement ??
-    null
+    getPageFullscreenElement()
   );
 }
 
@@ -171,6 +177,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       className,
       controls,
       controlsIdleDelay,
+      controlsTouchIdleDelay,
       description,
       engine = "shaka",
       engineFactory,
@@ -208,6 +215,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       theaterMode = false,
       theme = "youtube",
       zoomEnabled = true,
+      fullscreenSwipe = true,
       zoomOverflowBoundary = "player",
       ...outerProps
     },
@@ -377,6 +385,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           theme={theme}
           interactionMode={interactionMode}
           zoomEnabled={zoomEnabled}
+          fullscreenSwipe={fullscreenSwipe}
           data-player-zoom-overflow-boundary={zoomOverflowBoundary}
           style={playerThemeStyle}
           role="region"
@@ -386,6 +395,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             "youtube-player group relative z-10 aspect-video w-full overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--video-player-accent,#ff7a1a)]",
             theaterMode &&
               "lg:h-[calc(100vh-94px)] lg:min-h-105 lg:aspect-auto",
+            // A page full screen (pageFullscreen.ts) sizes the shell, which
+            // may be turned: the player fills it, edge to edge. The size is
+            // not important, as a browser full screen's is not (player.css),
+            // so a layout of its own (the lessons beside the video) still
+            // sets it.
+            "[[data-player-page-fullscreen]>&]:size-full [[data-player-page-fullscreen]>&]:max-h-none [[data-player-page-fullscreen]>&]:rounded-none! [[data-player-page-fullscreen]>&]:border-0! [[data-player-page-fullscreen]>&]:shadow-none! [[data-player-page-fullscreen]>&]:transition-none!",
             playerClassName,
           )}
         >
@@ -394,6 +409,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             shortcuts={shortcuts}
             keyboardEnabled={keyboardEnabled}
             controlsIdleDelay={controlsIdleDelay}
+            controlsTouchIdleDelay={controlsTouchIdleDelay}
             keepControlsVisibleUntilFirstPlay={
               keepControlsVisibleUntilFirstPlay
             }
@@ -432,6 +448,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             emptyTapBehavior={emptyTapBehavior}
             seekIntervalSeconds={seekIntervalSeconds}
           />
+          <SubtitleLayer />
           {zoomEnabled ? <ZoomLevelIndicator variant="feedback" /> : null}
           {overlays}
           {centralControl === false

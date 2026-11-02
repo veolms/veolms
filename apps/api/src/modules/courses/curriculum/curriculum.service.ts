@@ -1,3 +1,4 @@
+import { cacheTags, invalidateCache } from "@veolms/api-core";
 import type { Permission } from "@veolms/contracts";
 import crypto from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
@@ -12,7 +13,10 @@ import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
 import * as curriculumRepo from "./curriculum.repository.ts";
 import * as courseRepo from "../course/course.repository.ts";
-import { createMediaService } from "../../media/index.ts";
+import {
+  cancelLessonYoutubeImports,
+  createMediaService,
+} from "../../media/index.ts";
 import { createLessonProgressResetService } from "../../learning-progress/index.ts";
 import { createChapterSyncService } from "../chapters/chapters.service.ts";
 import {
@@ -462,6 +466,11 @@ export function createCurriculumService({
       await curriculumRepo.softDeleteLesson(trx, lessonId, courseId, now);
       await curriculumRepo.softDeleteResourcesByLessonId(trx, lessonId, now);
     });
+    // An unfinished YouTube import into the lesson has nowhere to go now.
+    // The lesson is already deleted, so a failure here does not undo that.
+    await cancelLessonYoutubeImports(database, services, lessonId).catch(
+      () => undefined,
+    );
 
     return { success: true };
   }
@@ -680,6 +689,54 @@ export function createCurriculumService({
   }
 
   /**
+   * Attaches a video that finished processing in the background (a YouTube
+   * import) to the lesson it was made for. The author was authorized when
+   * the import started; this only checks the lesson still holds the video it
+   * had then, so an edit made meanwhile wins. Learners' progress is cleared
+   * when this gives the lesson its first video, as `updateCourseLesson` does.
+   * Chapters are left to the caller, which syncs them for the media.
+   */
+  async function attachProcessedLessonVideo(input: {
+    courseId: string;
+    lessonId: string;
+    expectedMediaId: string | null;
+    mediaId: string;
+  }): Promise<boolean> {
+    const attached = await database.transaction().execute(async (trx) => {
+      // The editor may have attached it already (it attaches a lesson's
+      // first video when it is closed during processing).
+      const current = await curriculumRepo.findLessonById(
+        trx,
+        input.lessonId,
+        input.courseId,
+      );
+      if (current?.content_media_id === input.mediaId) return true;
+      const attached = await curriculumRepo.swapLessonMediaIfUnchanged(
+        trx,
+        input.lessonId,
+        input.courseId,
+        input.expectedMediaId,
+        input.mediaId,
+        new Date(),
+      );
+      if (
+        attached &&
+        givesLessonItsFirstMedia(input.expectedMediaId, input.mediaId)
+      ) {
+        await lessonProgressResetService.clearLessonProgress(
+          trx,
+          input.lessonId,
+        );
+      }
+      return attached;
+    });
+    // The lesson's video changed outside a request to the course: its
+    // cached content is cleared in every process.
+    if (attached) invalidateCache([cacheTags.course(input.courseId)]);
+    return attached;
+  }
+
+  /**
    * A live lesson of a live section: its description, publish state and
    * whether it is a preview.
    */
@@ -709,6 +766,7 @@ export function createCurriculumService({
     listOrderedLessonsByCourseId,
     findLessonById,
     findLiveLessonDescription,
+    attachProcessedLessonVideo,
   };
 }
 

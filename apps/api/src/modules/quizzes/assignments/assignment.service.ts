@@ -4,6 +4,7 @@ import type {
   SetQuizCoursePricingRequest,
   UpdateQuizAssignmentRequest,
 } from "@veolms/contracts";
+import { cacheTags, invalidateCache } from "@veolms/api-core";
 import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
@@ -17,6 +18,7 @@ import {
   type QuizServiceOptions,
 } from "../shared/quiz.types.ts";
 import { mayManageCourse } from "../../courses/shared/courses.utils.ts";
+import { scopeOpensSection } from "../../access/index.ts";
 
 type PricingRow = Awaited<ReturnType<typeof pricingRepo.findPricing>>;
 
@@ -289,15 +291,18 @@ export function createAssignmentService(options: QuizServiceOptions) {
       actor.roles,
       "quiz.read",
     );
-    if (
-      !canManageCourse &&
-      !(await repo.isPublishedFreeCourse(database, courseId)) &&
-      !(await options.accessService.hasActiveAccess(
-        database,
-        actor.id,
-        courseId,
-      ))
-    )
+    // Everyone may see a free course's quizzes; a learner who holds part
+    // of a course sees only those of its sections.
+    const opensEverySection =
+      canManageCourse || (await repo.isPublishedFreeCourse(database, courseId));
+    const scope = opensEverySection
+      ? null
+      : await options.accessService.getAccessScope(
+          database,
+          actor.id,
+          courseId,
+        );
+    if (!opensEverySection && !scope)
       throw new AppError(
         403,
         "COURSE_ACCESS_REQUIRED",
@@ -321,7 +326,11 @@ export function createAssignmentService(options: QuizServiceOptions) {
           ])
         )
           .filter(
-            (lesson) => lesson.course_id === courseId && lesson.is_published,
+            (lesson) =>
+              lesson.course_id === courseId &&
+              lesson.is_published &&
+              (opensEverySection ||
+                scopeOpensSection(scope, lesson.section_id)),
           )
           .map((lesson) => lesson.id),
       );
@@ -416,6 +425,10 @@ export function createAssignmentService(options: QuizServiceOptions) {
       }
       await repo.deleteAssignment(trx, assignmentId);
     });
+    // The lesson's type changed: the course's cached content is cleared.
+    if (assignment.lesson_id) {
+      invalidateCache([cacheTags.course(assignment.course_id)]);
+    }
     return { success: true as const };
   }
 

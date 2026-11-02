@@ -7,8 +7,12 @@ import { Button } from "../components/Button";
 import { useHomePageLessonVideoOptions } from "../services/home";
 import { fieldClass, insetRowClass } from "./homePageSettingsControls";
 import { formatVideoLength } from "./heroVideoFormat";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 
-const listClass = "grid max-h-96 gap-2 overflow-y-auto overscroll-contain p-px";
+// One column the list's own width (`grid-cols-1`), so a long title truncates
+// in its row instead of widening every row past the list.
+const listClass =
+  "grid max-h-96 grid-cols-1 gap-2 overflow-y-auto overscroll-contain p-px";
 const rowButtonClass = `flex w-full min-w-0 cursor-pointer items-center gap-3 p-2 pl-2.5 text-left transition-colors hover:border-(--accent) focus-visible:outline-2 focus-visible:outline-(--accent) disabled:cursor-default disabled:opacity-55 disabled:hover:border-[color-mix(in_srgb,var(--text)_10%,transparent)] ${insetRowClass}`;
 const badgeClass =
   "rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-1.5 py-0.5 text-[11px] font-semibold text-(--muted)";
@@ -41,7 +45,7 @@ function CourseList({
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
   const shown = query
-    ? courses.filter((course) => course.title.toLowerCase().includes(query))
+    ? courses.filter((course) => fuzzyMatches(query, course.title))
     : courses;
 
   return (

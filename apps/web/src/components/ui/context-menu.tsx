@@ -87,9 +87,12 @@ function ContextMenuContent({
     portalContainer?: ContextMenuPrimitive.Portal.Props["container"];
   }) {
   return (
+    // Base UI's backdrop (see dropdown-menu.tsx) raised over raised content,
+    // so a press outside the menu only closes it.
     <ContextMenuPrimitive.Portal
       container={portalContainer}
       data-slot="context-menu-portal"
+      className="[&>[data-base-ui-inert]]:z-219"
     >
       <ContextMenuPrimitive.Positioner
         className="isolate z-220 outline-none"
@@ -133,6 +136,9 @@ function ContextMenuGroup({ ...props }: ContextMenuPrimitive.Group.Props) {
   );
 }
 
+const itemClasses =
+  "relative flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-(--text-secondary) outline-none select-none data-highlighted:bg-(--hover) data-highlighted:text-(--text) data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0";
+
 function ContextMenuItem({
   className,
   ...props
@@ -140,14 +146,44 @@ function ContextMenuItem({
   return (
     <ContextMenuPrimitive.Item
       data-slot="context-menu-item"
-      className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-(--text-secondary) outline-none select-none data-highlighted:bg-(--hover) data-highlighted:text-(--text) data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-        className,
-      )}
+      className={cn(itemClasses, className)}
       {...props}
     />
   );
 }
+
+/**
+ * An item that is a setting: its words (with an icon, like the items
+ * around it) and, at the row's right edge, a small switch that is on or
+ * off. The menu stays open as it is switched. (The dropdown menu has the
+ * same; the two primitives are different, so each draws its own.)
+ */
+function ContextMenuSwitchItem({
+  className,
+  children,
+  closeOnClick = false,
+  ...props
+}: ContextMenuPrimitive.CheckboxItem.Props) {
+  return (
+    <ContextMenuPrimitive.CheckboxItem
+      data-slot="context-menu-switch-item"
+      className={cn(itemClasses, "gap-2.5", className)}
+      closeOnClick={closeOnClick}
+      {...props}
+    >
+      {children}
+      <span aria-hidden="true" className={switchClasses}>
+        <span className={switchKnobClasses} />
+      </span>
+    </ContextMenuPrimitive.CheckboxItem>
+  );
+}
+
+/** See `DropdownMenuSwitchItem` in dropdown-menu.tsx. */
+const switchClasses =
+  "ml-auto flex h-5 w-8.5 shrink-0 items-center rounded-full bg-[color-mix(in_srgb,var(--text)_22%,transparent)] p-0.5 transition-colors duration-150 [[data-checked]>&]:bg-(--accent)";
+const switchKnobClasses =
+  "block size-4 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.28)] transition-transform duration-150 [[data-checked]_&]:translate-x-3.5 [[data-checked]_&]:bg-(--on-accent,#fff) motion-reduce:transition-none";
 
 function ContextMenuSeparator({
   className,
@@ -169,5 +205,6 @@ export {
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
+  ContextMenuSwitchItem,
   ContextMenuTrigger,
 };

@@ -2,23 +2,29 @@ import {
   DEFAULT_HOME_PAGE_SETTINGS,
   HOME_PAGE_COURSES_PER_SECTION,
   HOME_PAGE_DISCUSSION_COUNT,
+  HOME_PAGE_MAX_HIDDEN_DISCUSSIONS,
+  HOME_PAGE_MAX_PINNED_DISCUSSIONS,
   homePageSettingsSchema,
   type CourseSummary,
   type GuestHomePageResponse,
   type HeroVideoPlayback,
   type HomePageCourseSection,
+  type HomePageDiscussionListResponse,
   type HomePageLessonVideoOptionsResponse,
   type HomePageOptionsResponse,
   type HomePageSettings,
   type HomePageSettingsResponse,
   type PublicPopularDiscussion,
+  type UpdateHomePageDiscussionRequest,
   type VideoPlaybackToken,
 } from "@veolms/contracts";
+import { cacheTags, createCache } from "@veolms/api-core";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { httpError } from "../../lib/errors.ts";
 import type { CourseService } from "../courses/course/course.service.ts";
 import type { ThreadsService } from "../learning/discussions/index.ts";
+import type { HeroVideoReadyWatch } from "./home-hero-video-ready.ts";
 import type { HomeHeroVideoService } from "./home-hero-video.service.ts";
 import {
   findHomePageSettings,
@@ -34,11 +40,17 @@ const HOME_DISCUSSION_QUERY = { limit: 40, onePerAuthor: true } as const;
 /** How many courses the settings editor offers to choose from. */
 const COURSE_OPTION_LIMIT = 200;
 /**
- * Every signed-out visit asks for the resolved page, so it is kept briefly
+ * Every signed-out visit asks for the resolved page, so one build is shared
  * instead of being rebuilt from several queries each time. Saving the
- * settings clears it, so an admin sees their own change at once.
+ * settings, or a course or site change, clears it in every process; the TTL
+ * covers what is not tracked (popular discussions, enrolment counts).
  */
-const GUEST_PAGE_CACHE_MS = 30_000;
+const guestPages = createCache<GuestHomePageResponse>({
+  name: "home.guest-page",
+  ttlMs: 30_000,
+  maxBytes: 4 * 1024 * 1024,
+});
+const GUEST_PAGE_KEY = "guest";
 /**
  * The hero's laptop screen is a small part of the picture: about 460 device
  * pixels of thumbnail on a phone, 910 on a high-density laptop, 790 on a
@@ -67,6 +79,13 @@ export interface HomePageService {
     updatedBy: string | null,
   ): Promise<HomePageSettingsResponse>;
   getOptions(): Promise<HomePageOptionsResponse>;
+  getDiscussionList(): Promise<HomePageDiscussionListResponse>;
+  /** One change to the home page's comments, saved straight away. */
+  updateDiscussion(
+    threadId: string,
+    action: UpdateHomePageDiscussionRequest["action"],
+    updatedBy: string | null,
+  ): Promise<HomePageDiscussionListResponse>;
   getGuestPage(): Promise<GuestHomePageResponse>;
   /** The lessons of a course an admin can pick as the hero video. */
   getLessonVideoOptions(
@@ -81,14 +100,53 @@ export function createHomePageService({
   courseService,
   threadsService,
   heroVideoService,
+  staticPages,
+  heroVideoReadyWatch,
 }: {
   database: Kysely<Database>;
   courseService: Pick<CourseService, "listPublicCourseSummaries">;
   threadsService: Pick<ThreadsService, "listPublicPopularDiscussions">;
   heroVideoService: HomeHeroVideoService;
+  /** Builds the public home page again; absent where there is none. */
+  staticPages?: { requestHomePageRefresh(): void };
+  heroVideoReadyWatch?: Pick<HeroVideoReadyWatch, "watch">;
 }): HomePageService {
-  let cachedGuestPage:
-    { expiresAt: number; page: Promise<GuestHomePageResponse> } | undefined;
+  function toDiscussionList(
+    settings: HomePageSettings,
+  ): HomePageDiscussionListResponse {
+    return {
+      pinnedThreadIds: settings.discussions.pinnedThreadIds,
+      hiddenThreadIds: settings.discussions.hiddenThreadIds,
+    };
+  }
+
+  async function writeSettings(
+    settings: HomePageSettings,
+    updatedBy: string | null,
+  ) {
+    let row: Awaited<ReturnType<typeof saveHomePageSettings>>;
+    try {
+      row = await saveHomePageSettings(database, { settings, updatedBy });
+    } catch (error) {
+      if (!isMissingHomePageSettingsTable(error)) throw error;
+      throw httpError(
+        503,
+        "HOME_PAGE_SETTINGS_UNAVAILABLE",
+        "Home page settings cannot be saved until the database migration that creates them has been run.",
+      );
+    }
+    // Other processes are cleared by the site change this save is.
+    guestPages.delete(GUEST_PAGE_KEY);
+    // The public home page is a static page: it is built again with these
+    // settings, and once more when the video chosen for the hero is ready.
+    staticPages?.requestHomePageRefresh();
+    heroVideoReadyWatch?.watch(
+      settings.heroVideo.source === "upload"
+        ? settings.heroVideo.mediaId
+        : null,
+    );
+    return row;
+  }
 
   async function readSettings(): Promise<StoredSettings> {
     let row: Awaited<ReturnType<typeof findHomePageSettings>>;
@@ -189,33 +247,58 @@ export function createHomePageService({
     return summary ? heroPosterUrl(summary) : null;
   }
 
+  /**
+   * The discussions an admin pinned, read by id: they may be on any
+   * published lesson, not only among the most active public ones.
+   */
+  async function readPinnedDiscussions(
+    section: HomePageSettings["discussions"],
+  ) {
+    if (section.pinnedThreadIds.length === 0) return [];
+    const { discussions } = await threadsService.listPublicPopularDiscussions(
+      database,
+      { threadIds: section.pinnedThreadIds },
+    );
+    return discussions;
+  }
+
   function resolveDiscussions(
     section: HomePageSettings["discussions"],
+    pinnedDiscussions: readonly PublicPopularDiscussion[],
     popular: readonly PublicPopularDiscussion[],
   ) {
     if (!section.visible) return [];
     const hidden = new Set(section.hiddenThreadIds);
-    const visible = popular.filter((discussion) => !hidden.has(discussion.id));
-    const byId = new Map(visible.map((item) => [item.id, item]));
-    const pinned = section.pinnedThreadIds.flatMap((id) => byId.get(id) ?? []);
+    const byId = new Map(pinnedDiscussions.map((item) => [item.id, item]));
+    const pinned = section.pinnedThreadIds.flatMap((id) =>
+      hidden.has(id) ? [] : (byId.get(id) ?? []),
+    );
     const pinnedIds = new Set(pinned.map((item) => item.id));
+    // Every pinned discussion shows; the most active ones fill the page up
+    // to its usual count when fewer are pinned.
     return [
       ...pinned,
-      ...visible.filter((item) => !pinnedIds.has(item.id)),
-    ].slice(0, HOME_PAGE_DISCUSSION_COUNT);
+      ...popular.filter(
+        (item) => !hidden.has(item.id) && !pinnedIds.has(item.id),
+      ),
+    ].slice(0, Math.max(HOME_PAGE_DISCUSSION_COUNT, pinned.length));
   }
 
   async function buildGuestPage(): Promise<GuestHomePageResponse> {
     const { settings, updatedAt } = await readSettings();
-    const [popularCourses, popularDiscussions] = await Promise.all([
-      resolvePopularCourses(settings.popularCourses),
-      settings.discussions.visible
-        ? threadsService.listPublicPopularDiscussions(
-            database,
-            HOME_DISCUSSION_QUERY,
-          )
-        : { discussions: [] },
-    ]);
+    const [popularCourses, pinnedDiscussions, popularDiscussions] =
+      await Promise.all([
+        resolvePopularCourses(settings.popularCourses),
+        settings.discussions.visible
+          ? readPinnedDiscussions(settings.discussions)
+          : [],
+        settings.discussions.visible
+          ? threadsService.listPublicPopularDiscussions(
+              database,
+              HOME_DISCUSSION_QUERY,
+            )
+          : { discussions: [] },
+      ]);
     const freeCourses = await resolveFreeCourses(
       settings.freeCourses,
       popularCourses,
@@ -247,6 +330,7 @@ export function createHomePageService({
         title: settings.discussions.title,
         items: resolveDiscussions(
           settings.discussions,
+          pinnedDiscussions,
           popularDiscussions.discussions,
         ),
       },
@@ -260,32 +344,105 @@ export function createHomePageService({
 
     async updateSettings(settings, updatedBy) {
       await heroVideoService.assertSelectable(settings.heroVideo);
-      let row: Awaited<ReturnType<typeof saveHomePageSettings>>;
-      try {
-        row = await saveHomePageSettings(database, { settings, updatedBy });
-      } catch (error) {
-        if (!isMissingHomePageSettingsTable(error)) throw error;
-        throw httpError(
-          503,
-          "HOME_PAGE_SETTINGS_UNAVAILABLE",
-          "Home page settings cannot be saved until the database migration that creates them has been run.",
-        );
-      }
-      cachedGuestPage = undefined;
+      const row = await writeSettings(settings, updatedBy);
       return toResponse({ settings, updatedAt: row.updatedAt });
     },
 
+    async getDiscussionList() {
+      return toDiscussionList((await readSettings()).settings);
+    },
+
+    async updateDiscussion(threadId, action, updatedBy) {
+      const { settings } = await readSettings();
+      const section = settings.discussions;
+      const without = (ids: readonly string[]) =>
+        ids.filter((id) => id !== threadId);
+      let pinnedThreadIds = section.pinnedThreadIds;
+      let hiddenThreadIds = section.hiddenThreadIds;
+
+      if (action === "add") {
+        if (!pinnedThreadIds.includes(threadId)) {
+          if (pinnedThreadIds.length >= HOME_PAGE_MAX_PINNED_DISCUSSIONS) {
+            throw httpError(
+              409,
+              "HOME_PAGE_DISCUSSIONS_FULL",
+              `The home page lists at most ${HOME_PAGE_MAX_PINNED_DISCUSSIONS} comments. Remove one first.`,
+            );
+          }
+          // The home page reads only public comments on published lessons.
+          const { discussions } =
+            await threadsService.listPublicPopularDiscussions(database, {
+              threadIds: [threadId],
+            });
+          if (discussions.length === 0) {
+            throw httpError(
+              409,
+              "DISCUSSION_NOT_PUBLIC",
+              "Only a public comment or question on a published lesson can be shown on the home page.",
+            );
+          }
+          // Newly added comments come first, where visitors see them.
+          pinnedThreadIds = [threadId, ...pinnedThreadIds];
+        }
+        hiddenThreadIds = without(hiddenThreadIds);
+      } else if (action === "remove") {
+        pinnedThreadIds = without(pinnedThreadIds);
+        hiddenThreadIds = without(hiddenThreadIds);
+      } else if (action === "hide") {
+        if (
+          !hiddenThreadIds.includes(threadId) &&
+          hiddenThreadIds.length >= HOME_PAGE_MAX_HIDDEN_DISCUSSIONS
+        ) {
+          throw httpError(
+            409,
+            "HOME_PAGE_HIDDEN_DISCUSSIONS_FULL",
+            `At most ${HOME_PAGE_MAX_HIDDEN_DISCUSSIONS} comments can be hidden.`,
+          );
+        }
+        hiddenThreadIds = [...without(hiddenThreadIds), threadId];
+      } else {
+        hiddenThreadIds = without(hiddenThreadIds);
+      }
+
+      const next: HomePageSettings = {
+        ...settings,
+        discussions: { ...section, pinnedThreadIds, hiddenThreadIds },
+      };
+      await writeSettings(next, updatedBy);
+      return toDiscussionList(next);
+    },
+
     async getOptions() {
-      const [courses, popular] = await Promise.all([
+      const { settings } = await readSettings();
+      const [courses, pinned, popular] = await Promise.all([
         courseService.listPublicCourseSummaries({
           limit: COURSE_OPTION_LIMIT,
           order: "popular",
+        }),
+        // The hidden ones are read too, so the editor can show them again.
+        readPinnedDiscussions({
+          ...settings.discussions,
+          pinnedThreadIds: [
+            ...new Set([
+              ...settings.discussions.pinnedThreadIds,
+              ...settings.discussions.hiddenThreadIds,
+            ]),
+          ],
         }),
         threadsService.listPublicPopularDiscussions(
           database,
           HOME_DISCUSSION_QUERY,
         ),
       ]);
+      // The editor lists the listed and hidden discussions too, the listed
+      // ones in their order, whether or not they are among the most active.
+      const pinnedById = new Map(pinned.map((item) => [item.id, item]));
+      const pinnedInOrder = [
+        ...new Set([
+          ...settings.discussions.pinnedThreadIds,
+          ...settings.discussions.hiddenThreadIds,
+        ]),
+      ].flatMap((id) => pinnedById.get(id) ?? []);
       return {
         courses: courses.map((course) => ({
           id: course.id,
@@ -293,7 +450,10 @@ export function createHomePageService({
           thumbnailUrl: course.thumbnailUrl ?? null,
           isFree: course.pricing?.pricingType === "free",
         })),
-        discussions: popular.discussions,
+        discussions: [
+          ...pinnedInOrder,
+          ...popular.discussions.filter((item) => !pinnedById.has(item.id)),
+        ],
       };
     },
 
@@ -312,22 +472,10 @@ export function createHomePageService({
     },
 
     async getGuestPage() {
-      const now = Date.now();
-      if (cachedGuestPage && cachedGuestPage.expiresAt > now) {
-        return await cachedGuestPage.page;
-      }
-      const entry = {
-        expiresAt: now + GUEST_PAGE_CACHE_MS,
-        page: buildGuestPage(),
-      };
-      cachedGuestPage = entry;
-      try {
-        return await entry.page;
-      } catch (error) {
-        // A failed build must not be served again from the cache.
-        if (cachedGuestPage === entry) cachedGuestPage = undefined;
-        throw error;
-      }
+      // A failed build is not kept.
+      return await guestPages.fetch(GUEST_PAGE_KEY, buildGuestPage, {
+        tags: [cacheTags.catalog, cacheTags.site],
+      });
     },
   };
 }

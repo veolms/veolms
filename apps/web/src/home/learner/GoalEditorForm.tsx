@@ -1,6 +1,7 @@
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { useEffect, useId, type CSSProperties } from "react";
+import { stepGoalText } from "./goalInput";
 import type { GoalEditor } from "./useGoalEditor";
 
 /**
@@ -115,6 +116,14 @@ export function GoalEditorForm({
         aria-describedby={lineId}
         value={editor.value}
         onChange={(event) => editor.setValue(event.target.value)}
+        // The arrows move the goal a quarter hour at a time.
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+          event.preventDefault();
+          editor.setValue(
+            stepGoalText(editor.value, event.key === "ArrowUp" ? 1 : -1),
+          );
+        }}
         maxLength={32}
         style={{ "--goal-chars": editor.value.length } as CSSProperties}
         // Its own corners, not the app's control radius.

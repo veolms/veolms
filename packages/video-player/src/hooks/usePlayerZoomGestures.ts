@@ -5,6 +5,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type TouchEvent as ReactTouchEvent,
 } from "react";
+import { playerRectOf, toPlayerPoint } from "../react/pageFullscreen";
 import type { PlayerController } from "../react/PlayerController";
 import {
   clampPlayerPan,
@@ -15,8 +16,13 @@ import {
 } from "./playerZoomMath";
 
 const PAN_START_DISTANCE_PX = 6;
-const QUICK_FILL_DURATION_MS = 400;
-const QUICK_FILL_SCALE_DELTA = 0.08;
+/** A pinch let go this close to the fill zoom snaps to it. */
+const FILL_SNAP_DISTANCE = 0.06;
+/** A pinch counts as one once the fingers have changed the zoom this much. */
+const PINCH_SCALE_DELTA = 0.02;
+/** A tick as the pinch passes the fill zoom, and a firmer one as it snaps. */
+const FILL_PASS_VIBRATION_MS = 25;
+const SNAP_VIBRATION_MS = 45;
 const ZOOM_FEEDBACK_DURATION_MS = 1_800;
 const ZOOM_TRANSITION_DURATION_MS = 220;
 const POINTER_TOUCH_DEDUPE_MS = 90;
@@ -49,6 +55,8 @@ interface PinchGesture {
   contentX: number;
   contentY: number;
   fillScale: number;
+  /** The pinch has passed the fill zoom (its tick was given). */
+  passedFill: boolean;
   geometry: PlayerZoomGeometry;
   maxScale: number;
   startedAt: number;
@@ -113,7 +121,7 @@ function getPlayerRoot(element: HTMLElement): HTMLElement {
 
 function getGeometry(element: HTMLElement): PlayerZoomGeometry {
   const root = getPlayerRoot(element);
-  const bounds = root.getBoundingClientRect();
+  const bounds = playerRectOf(root);
   // The element on screen, not a hidden standby (see PlayerMedia).
   const media = root.querySelector<HTMLVideoElement>(
     "video:not([data-player-standby])",
@@ -131,8 +139,21 @@ function getLocalPoint(
   point: GesturePoint,
 ): GesturePoint {
   const root = getPlayerRoot(element);
-  const bounds = root.getBoundingClientRect();
+  const bounds = playerRectOf(root);
   return { x: point.x - bounds.left, y: point.y - bounds.top };
+}
+
+/**
+ * A finger's position in the player's own axes, so a pinch and a pan follow
+ * the finger even while a page full screen turns the player a quarter
+ * (pageFullscreen.ts). The mouse paths keep client positions: a page full
+ * screen only turns a phone's player.
+ */
+function touchPoint(
+  element: HTMLElement,
+  point: { clientX: number; clientY: number },
+): GesturePoint {
+  return toPlayerPoint(point.clientX, point.clientY, element);
 }
 
 function getFirstTwoPoints(
@@ -202,6 +223,7 @@ export function usePlayerZoomGestures(
     controller.setZoomState({
       feedbackVisible: true,
       gestureActive: true,
+      snap: null,
       transitioning: false,
     });
   }, [clearFeedbackTimer, clearTransitionTimer, controller]);
@@ -258,6 +280,7 @@ export function usePlayerZoomGestures(
           (localCenter.y - geometry.containerHeight / 2 - zoom.panY) /
           zoom.scale,
         fillScale: getPlayerFillZoom(geometry),
+        passedFill: false,
         geometry,
         maxScale: zoom.scale,
         startedAt: Date.now(),
@@ -294,6 +317,15 @@ export function usePlayerZoomGestures(
         pinch.geometry,
       );
       pinch.maxScale = Math.max(pinch.maxScale, scale);
+      if (
+        !pinch.passedFill &&
+        pinch.fillScale > 1.01 &&
+        pinch.startScale < pinch.fillScale - 0.01 &&
+        scale >= pinch.fillScale
+      ) {
+        pinch.passedFill = true;
+        navigator.vibrate?.(FILL_PASS_VIBRATION_MS);
+      }
       controller.setZoomState({
         feedbackVisible: true,
         gestureActive: true,
@@ -314,24 +346,42 @@ export function usePlayerZoomGestures(
     let panX = zoom.panX;
     let panY = zoom.panY;
     let transitioning = false;
+    let snap: "fill" | "original" | null = null;
 
-    if (
+    // As YouTube's app does: a pinch out from below the fill zoom snaps the
+    // picture to fill the player, centred, however far or fast it went; a
+    // pinch from there zooms on freely. A pinch in below the fill zoom
+    // snaps back to the original size. One let go close to the fill zoom
+    // snaps to it.
+    const fill = pinch && pinch.fillScale > 1.01 ? pinch.fillScale : null;
+    const pinchedOut =
+      pinch !== null && scale >= pinch.startScale + PINCH_SCALE_DELTA;
+    const pinchedIn =
+      pinch !== null && scale <= pinch.startScale - PINCH_SCALE_DELTA;
+    if (pinch && fill && pinchedOut && pinch.startScale < fill - 0.01) {
+      snap = "fill";
+    } else if (
       pinch &&
-      Date.now() - pinch.startedAt <= QUICK_FILL_DURATION_MS &&
-      pinch.maxScale - pinch.startScale >= QUICK_FILL_SCALE_DELTA &&
-      pinch.startScale < pinch.fillScale - 0.01 &&
-      scale < pinch.fillScale
+      fill &&
+      (pinchedOut || pinchedIn) &&
+      Math.abs(scale - fill) <= FILL_SNAP_DISTANCE
     ) {
-      scale = pinch.fillScale;
-      const pan = clampPlayerPan({ x: panX, y: panY }, scale, pinch.geometry);
-      panX = pan.x;
-      panY = pan.y;
-      transitioning = true;
+      snap = "fill";
+    } else if (pinch && fill && pinchedIn && scale < fill) {
+      snap = "original";
     } else if (scale <= 1.01) {
+      if (pinch && pinch.startScale > 1.01) snap = "original";
       scale = 1;
       panX = 0;
       panY = 0;
       transitioning = zoom.scale !== 1 || zoom.panX !== 0 || zoom.panY !== 0;
+    }
+    if (snap) {
+      scale = snap === "fill" && fill ? fill : 1;
+      panX = 0;
+      panY = 0;
+      transitioning = true;
+      navigator.vibrate?.(SNAP_VIBRATION_MS);
     }
 
     pinchRef.current = null;
@@ -339,6 +389,7 @@ export function usePlayerZoomGestures(
     controller.setZoomState({
       feedbackVisible: true,
       gestureActive: false,
+      snap,
       panX,
       panY,
       scale,
@@ -683,12 +734,14 @@ export function usePlayerZoomGestures(
         panRef.current !== null)
     ) {
       recoverAbandonedPointerSession();
+    } else if (event.isPrimary) {
+      clearStaleLegacyTouchSuppression();
     }
     lastPointerEventAtRef.current = Date.now();
-    pointerPointsRef.current.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-    });
+    pointerPointsRef.current.set(
+      event.pointerId,
+      touchPoint(event.currentTarget, event),
+    );
     const points = getFirstTwoPoints(pointerPointsRef.current);
     if (points) {
       for (const pointerId of pointerPointsRef.current.keys()) {
@@ -700,10 +753,11 @@ export function usePlayerZoomGestures(
 
     const zoom = controller.getSnapshot().ui.zoom;
     if (zoom.scale > 1) {
-      preparePan(event.currentTarget, event.pointerId, {
-        x: event.clientX,
-        y: event.clientY,
-      });
+      preparePan(
+        event.currentTarget,
+        event.pointerId,
+        touchPoint(event.currentTarget, event),
+      );
     }
     return false;
   };
@@ -713,10 +767,8 @@ export function usePlayerZoomGestures(
     if (event.pointerType !== "touch") return false;
     lastPointerEventAtRef.current = Date.now();
     if (!pointerPointsRef.current.has(event.pointerId)) return false;
-    pointerPointsRef.current.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-    });
+    const point = touchPoint(event.currentTarget, event);
+    pointerPointsRef.current.set(event.pointerId, point);
     const points = getFirstTwoPoints(pointerPointsRef.current);
     if (pinchRef.current && points) {
       event.preventDefault();
@@ -725,8 +777,8 @@ export function usePlayerZoomGestures(
 
     const pan = panRef.current;
     if (!pan || pan.pointerId !== event.pointerId) return false;
-    const deltaX = event.clientX - pan.startX;
-    const deltaY = event.clientY - pan.startY;
+    const deltaX = point.x - pan.startX;
+    const deltaY = point.y - pan.startY;
     if (!pan.active && Math.hypot(deltaX, deltaY) < PAN_START_DISTANCE_PX) {
       return false;
     }
@@ -783,7 +835,22 @@ export function usePlayerZoomGestures(
   const legacyTouchIsPointerBacked = () =>
     Date.now() - lastPointerEventAtRef.current < POINTER_TOUCH_DEDUPE_MS;
 
+  // A pinch or pan holds the legacy touch events back until it ends. One
+  // whose end never came (the system took the touch over) must not keep
+  // every later tap and click on the player swallowed: a new first finger
+  // with no gesture under way lets them through again.
+  function clearStaleLegacyTouchSuppression() {
+    if (
+      pinchRef.current === null &&
+      !panRef.current?.active &&
+      suppressLegacyTouchUntilRef.current === Number.POSITIVE_INFINITY
+    ) {
+      suppressLegacyTouchUntilRef.current = Number.NEGATIVE_INFINITY;
+    }
+  }
+
   const onTouchStart = (event: ReactTouchEvent<HTMLElement>) => {
+    if (event.touches.length === 1) clearStaleLegacyTouchSuppression();
     if (legacyTouchIsPointerBacked()) return false;
     if (event.touches.length >= 2) {
       const first = event.touches[0];
@@ -793,17 +860,18 @@ export function usePlayerZoomGestures(
       suppressLegacyTouchUntilRef.current = Number.POSITIVE_INFINITY;
       return beginPinch(
         event.currentTarget,
-        { x: first.clientX, y: first.clientY },
-        { x: second.clientX, y: second.clientY },
+        touchPoint(event.currentTarget, first),
+        touchPoint(event.currentTarget, second),
       );
     }
     const zoom = controller.getSnapshot().ui.zoom;
     const touch = event.touches[0];
     if (zoom.scale > 1 && touch) {
-      preparePan(event.currentTarget, touch.identifier, {
-        x: touch.clientX,
-        y: touch.clientY,
-      });
+      preparePan(
+        event.currentTarget,
+        touch.identifier,
+        touchPoint(event.currentTarget, touch),
+      );
     }
     return false;
   };
@@ -817,8 +885,8 @@ export function usePlayerZoomGestures(
       event.preventDefault();
       return updatePinch(
         event.currentTarget,
-        { x: first.clientX, y: first.clientY },
-        { x: second.clientX, y: second.clientY },
+        touchPoint(event.currentTarget, first),
+        touchPoint(event.currentTarget, second),
       );
     }
     const pan = panRef.current;
@@ -826,8 +894,9 @@ export function usePlayerZoomGestures(
       (candidate) => candidate.identifier === pan?.pointerId,
     );
     if (!pan || !touch) return false;
-    const deltaX = touch.clientX - pan.startX;
-    const deltaY = touch.clientY - pan.startY;
+    const point = touchPoint(event.currentTarget, touch);
+    const deltaX = point.x - pan.startX;
+    const deltaY = point.y - pan.startY;
     if (!pan.active && Math.hypot(deltaX, deltaY) < PAN_START_DISTANCE_PX) {
       return false;
     }
@@ -859,10 +928,11 @@ export function usePlayerZoomGestures(
       finishGesture();
       const remainingTouch = event.touches[0];
       if (remainingTouch) {
-        preparePan(event.currentTarget, remainingTouch.identifier, {
-          x: remainingTouch.clientX,
-          y: remainingTouch.clientY,
-        });
+        preparePan(
+          event.currentTarget,
+          remainingTouch.identifier,
+          touchPoint(event.currentTarget, remainingTouch),
+        );
       }
       return true;
     }

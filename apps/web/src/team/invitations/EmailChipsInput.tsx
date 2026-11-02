@@ -47,7 +47,7 @@ export function EmailChipsInput({
   return (
     <div
       onClick={() => inputRef.current?.focus()}
-      className="flex min-h-24 cursor-text flex-wrap content-start gap-1.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_3%,transparent)] p-2.5 transition-colors focus-within:border-(--accent)"
+      className="flex min-h-24 cursor-text flex-wrap content-start gap-1.5 rounded-xl bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] p-2.5 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] transition-shadow focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]"
     >
       {emails.map((email) => {
         const valid = looksLikeEmail(email);

@@ -19,14 +19,15 @@ import {
 import type { ToastMessage } from "../../ToastNotification";
 import { RolePicker } from "../RolePicker";
 import { looksLikeEmail, roleLabel } from "../teamFormat";
+import { useTeamAccess } from "../useTeamAccess";
 import { PersonAvatar, RoleChips, secondaryButtonClassName } from "../TeamBits";
 
 type Target =
   | { kind: "user"; user: TeamUserSearchResult }
   | { kind: "email"; email: string; mode: "preapproved" | "invite" };
 
-const line = "border-[color-mix(in_srgb,var(--text)_10%,transparent)]";
-const softSurface = "bg-[color-mix(in_srgb,var(--text)_3%,transparent)]";
+const line = "border-(--border)";
+const softSurface = "bg-(--card-surface)";
 
 /** The three ways in, shown before anything is typed. */
 const WAYS_IN: readonly { icon: Icon; title: string; text: string }[] = [
@@ -100,6 +101,7 @@ export function AddMemberPanel({
       setRoleIds(initialMatch.roles.map((role) => role.id));
     }
   }
+  const { can } = useTeamAccess();
   const setRoles = useSetTeamMemberRoles();
   const invite = useCreateTeamInvitations();
   const roles = useTeamRoles();
@@ -110,7 +112,9 @@ export function AddMemberPanel({
   const typed = query.trim();
   const typedEmail = typed.toLowerCase();
   const exactMatch = users.some((user) => user.email === typedEmail);
-  const offerEmail = looksLikeEmail(typedEmail) && !exactMatch;
+  // Adding by email or inviting is the team.invite permission's.
+  const canInvite = can("team.invite");
+  const offerEmail = canInvite && looksLikeEmail(typedEmail) && !exactMatch;
   const searched = deferredQuery.trim().length >= 2 && search.isSuccess;
   const chosenRoles = (roles.data?.roles ?? []).filter((role) =>
     roleIds.includes(role.id),
@@ -310,8 +314,10 @@ export function AddMemberPanel({
 
             {searched && users.length === 0 && !offerEmail ? (
               <p className="mt-4 text-sm text-(--muted)">
-                Nobody matches “{typed}”. Type their full email to add them by
-                email or send an invite.
+                Nobody matches “{typed}”.{" "}
+                {canInvite
+                  ? "Type their full email to add them by email or send an invite."
+                  : "Only people who already have an account can be added."}
               </p>
             ) : null}
 
@@ -410,6 +416,8 @@ export function AddMemberPanel({
             Cancel
           </button>
           <Button
+            elevation="flat"
+            motion="static"
             disabled={!target || roleIds.length === 0 || pending}
             onClick={() => void save()}
           >

@@ -16,6 +16,9 @@ import type {
   DeletedCoursesQuery,
   LessonDescriptionResponse,
   LinkedCoursesListResponse,
+  PartialAccessListResponse,
+  PartialAccessOffer,
+  PartialAccessOptionsResponse,
   MyCoursesListResponse,
   PublicCourse,
 } from "@veolms/contracts";
@@ -23,16 +26,51 @@ import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 import { withOfflineFallback } from "../../lib/offline-data";
+import { readSessionCache, writeSessionCache } from "../../lib/session-cache";
+import { readAccountCopy } from "../accountSessionCopies";
+
+/**
+ * The published courses as last fetched in this tab, for a page that is
+ * only ever drawn in the browser (never hydrated over a built one): a
+ * reload shows them at once and asks again in the background once they are
+ * older than the query's `staleTime`. They are the same for everyone.
+ */
+const PUBLISHED_COURSES_SESSION_KEY = "veolms-published-courses";
+const PUBLISHED_COURSES_KEPT_MS = 24 * 60 * 60 * 1000;
+const isCourseList = (value: unknown): value is { courses: CourseSummary[] } =>
+  Boolean(value) &&
+  typeof value === "object" &&
+  Array.isArray((value as { courses?: unknown }).courses);
+const readKeptCourses = () =>
+  readSessionCache(
+    PUBLISHED_COURSES_SESSION_KEY,
+    PUBLISHED_COURSES_KEPT_MS,
+    isCourseList,
+  );
 
 export function useCourses(options?: {
   enabled?: boolean;
   initialData?: { courses: CourseSummary[] };
+  /** Keep the answer for this tab's next load (see above). */
+  keptInTab?: boolean;
 }) {
+  const keptInTab = Boolean(options?.keptInTab && !options.initialData);
   return useQuery<{ courses: CourseSummary[] }, ApiError>({
     queryKey: courseKeys.lists(),
-    queryFn: () => coursesService.listAll(),
+    queryFn: keptInTab
+      ? async () => {
+          const answer = await coursesService.listAll();
+          writeSessionCache(PUBLISHED_COURSES_SESSION_KEY, answer);
+          return answer;
+        }
+      : () => coursesService.listAll(),
     enabled: options?.enabled ?? true,
-    initialData: options?.initialData,
+    initialData: keptInTab
+      ? () => readKeptCourses()?.value
+      : options?.initialData,
+    initialDataUpdatedAt: keptInTab
+      ? () => readKeptCourses()?.savedAt
+      : undefined,
     staleTime: options?.initialData ? Infinity : 5 * 60 * 1000,
     retry: false,
   });
@@ -84,14 +122,29 @@ export function useCourseOverview(
  */
 export function useCourseAccess(
   idOrSlug: string | null | undefined,
-  options?: { enabled?: boolean },
+  options?: {
+    enabled?: boolean;
+    /**
+     * Start from this tab's copy of the answer for the remembered account
+     * (see `readAccountCopy`), for a page whose document was drawn from
+     * that copy before its scripts ran: the lesson page. A copy older than
+     * the query's `staleTime` is asked again in the background.
+     */
+    fromTabCopy?: boolean;
+  },
 ) {
+  const queryKey = idOrSlug
+    ? courseKeys.access(idOrSlug)
+    : (["courses", "overview", null, "access"] as const);
+  const copy = options?.fromTabCopy
+    ? () => readAccountCopy<CourseAccessResponse>(queryKey)
+    : undefined;
   return useQuery<CourseAccessResponse, ApiError>({
-    queryKey: idOrSlug
-      ? courseKeys.access(idOrSlug)
-      : ["courses", "overview", null, "access"],
+    queryKey,
     queryFn: () => coursesService.getAccess(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
+    initialData: copy ? () => copy()?.value : undefined,
+    initialDataUpdatedAt: copy ? () => copy()?.savedAt : undefined,
     staleTime: 60 * 1000,
     retry: false,
   });
@@ -182,6 +235,41 @@ export function useLinkedCourses(courseId: string | null) {
   return useQuery<LinkedCoursesListResponse, ApiError>({
     queryKey: courseKeys.linkedCourses(courseId ?? ""),
     queryFn: () => coursesService.listLinkedCourses(courseId!),
+    enabled: Boolean(courseId),
+  });
+}
+
+/**
+ * The part of a course a partial access link sells (`?access=` on the
+ * course page): its price and sections. Read live, never from a copy.
+ */
+export function usePartialAccessOffer(
+  idOrSlug: string | null | undefined,
+  offerSlug: string | null | undefined,
+) {
+  return useQuery<PartialAccessOffer, ApiError>({
+    queryKey: courseKeys.offer(idOrSlug ?? "", offerSlug ?? ""),
+    queryFn: () => coursesService.getPartialAccessOffer(idOrSlug!, offerSlug!),
+    enabled: Boolean(idOrSlug && offerSlug),
+    retry: (failureCount, error) =>
+      failureCount < 2 && !(error.status >= 400 && error.status < 500),
+  });
+}
+
+/** Every partial access, for limiting a coupon to one (coupon builder). */
+export function usePartialAccessOptions() {
+  return useQuery<PartialAccessOptionsResponse, ApiError>({
+    queryKey: courseKeys.partialAccessOptions(),
+    queryFn: () => coursesService.listPartialAccessOptions(),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** The parts of a course sold on their own (editor only). */
+export function usePartialAccess(courseId: string | null) {
+  return useQuery<PartialAccessListResponse, ApiError>({
+    queryKey: courseKeys.partialAccess(courseId ?? ""),
+    queryFn: () => coursesService.listPartialAccess(courseId!),
     enabled: Boolean(courseId),
   });
 }
@@ -291,6 +379,30 @@ export function useInfiniteCourses(options: {
   });
 }
 
+/**
+ * What a course's page asks for when it is opened from another page (see
+ * `useCoursePageData`), asked for ahead of the click: the curriculum file
+ * the site was built with and the viewer's access answer. Each is kept as
+ * long as the page's own query keeps it, so the page finds them waiting.
+ */
+export function prefetchCoursePage(
+  queryClient: QueryClient,
+  courseKey: string,
+): Promise<unknown> {
+  return Promise.all([
+    queryClient.prefetchQuery<CoursePublicCurriculum | null, ApiError>({
+      queryKey: courseKeys.staticCurriculum(courseKey, null),
+      queryFn: () => coursesService.getStaticCurriculum(courseKey, null),
+      staleTime: Infinity,
+    }),
+    queryClient.prefetchQuery<CourseAccessResponse, ApiError>({
+      queryKey: courseKeys.access(courseKey),
+      queryFn: () => coursesService.getAccess(courseKey),
+      staleTime: 60 * 1000,
+    }),
+  ]);
+}
+
 export function prefetchCourseEditor(
   queryClient: QueryClient,
   courseId: string,
@@ -339,5 +451,22 @@ export function useCategories(options?: { enabled?: boolean }) {
     // its category list stayed empty.
     enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * The viewer's access answer for a course, from the cache while it is
+ * fresh (the course and lesson pages read the same entry). It says, for a
+ * learner who holds the course, which lesson they carry on with.
+ */
+export function fetchCourseAccess(
+  queryClient: QueryClient,
+  courseKey: string,
+): Promise<CourseAccessResponse> {
+  return queryClient.fetchQuery<CourseAccessResponse, ApiError>({
+    queryKey: courseKeys.access(courseKey),
+    queryFn: () => coursesService.getAccess(courseKey),
+    staleTime: 60 * 1000,
+    retry: false,
   });
 }

@@ -168,6 +168,35 @@ export async function updateLesson(
     .execute();
 }
 
+/**
+ * Points a video lesson at `mediaId`, but only while it still holds
+ * `expectedMediaId` (null: no video): a change the author made meanwhile is
+ * never overwritten. Returns whether the lesson was updated.
+ */
+export async function swapLessonMediaIfUnchanged(
+  database: Kysely<Database>,
+  lessonId: string,
+  courseId: string,
+  expectedMediaId: string | null,
+  mediaId: string,
+  now: Date,
+): Promise<boolean> {
+  const result = await database
+    .updateTable("course_lessons")
+    .set({ content_media_id: mediaId, updated_at: now })
+    .where("id", "=", lessonId)
+    .where("course_id", "=", courseId)
+    .where("content_type", "=", "video")
+    .where("deleted_at", "is", null)
+    .where((eb) =>
+      expectedMediaId === null
+        ? eb("content_media_id", "is", null)
+        : eb("content_media_id", "=", expectedMediaId),
+    )
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows) > 0;
+}
+
 export async function softDeleteLesson(
   database: Kysely<Database>,
   lessonId: string,
@@ -270,6 +299,7 @@ export async function findLiveLessonDescription(
     )
     .select([
       "course_lessons.id",
+      "course_lessons.section_id",
       "course_lessons.description",
       "course_lessons.is_published",
       "course_lessons.is_preview",

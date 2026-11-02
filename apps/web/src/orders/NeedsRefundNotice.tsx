@@ -20,7 +20,7 @@ export interface NeedsRefundNoticeProps {
   /** Opens an order in the details drawer. */
   onOpenOrder: (orderId: string) => void;
   /**
-   * Whether the viewer may reject a reported transfer (admins only). Other
+   * Whether the viewer may reject a reported transfer (`payment.manual.verify`). Other
    * staff see a line telling them to ask an admin instead of the button.
    */
   canRejectTransfers: boolean;

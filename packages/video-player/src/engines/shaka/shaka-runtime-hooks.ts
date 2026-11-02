@@ -11,6 +11,10 @@ export type ShakaRuntimeHook = (runtimeModule: unknown) => void;
 
 interface ShakaRuntimeHookState {
   hooks: Set<ShakaRuntimeHook>;
+  /** Run before the others (see `onShakaRuntimeLoaded`). */
+  firstHooks?: Set<ShakaRuntimeHook>;
+  /** Told of a hook added after the runtime was loaded (see `onShakaRuntimeHookAdded`). */
+  lateHookListeners?: Set<() => void>;
   loaded: boolean;
   runtimeModule: unknown;
 }
@@ -41,13 +45,46 @@ function runHook(hook: ShakaRuntimeHook, runtimeModule: unknown): void {
 /**
  * Runs `hook` with the Shaka module every time the default loader loads it,
  * and at once if it has already been loaded. Returns an unsubscribe function.
+ *
+ * `first`: run before the other hooks, whenever it was added. For a hook that
+ * changes something the others take a copy of (Shaka's fetch plugin, which
+ * an extension wraps in a scheme plugin of its own).
  */
-export function onShakaRuntimeLoaded(hook: ShakaRuntimeHook): () => void {
+export function onShakaRuntimeLoaded(
+  hook: ShakaRuntimeHook,
+  options: { first?: boolean } = {},
+): () => void {
   const state = hookState();
-  state.hooks.add(hook);
-  if (state.loaded) runHook(hook, state.runtimeModule);
+  const hooks = options.first ? (state.firstHooks ??= new Set()) : state.hooks;
+  hooks.add(hook);
+  if (state.loaded) {
+    runHook(hook, state.runtimeModule);
+    for (const listener of state.lateHookListeners ?? []) {
+      try {
+        listener();
+      } catch {
+        // A listener's failure is its own.
+      }
+    }
+  }
   return () => {
-    state.hooks.delete(hook);
+    hooks.delete(hook);
+  };
+}
+
+/**
+ * Calls `listener` each time a hook is added after the runtime has loaded:
+ * an extension that arrived late (the app's extensions load after the
+ * document head has started the first lesson's preload) has just changed the
+ * runtime, and a player made before that may need configuring again.
+ * Returns an unsubscribe function.
+ */
+export function onShakaRuntimeHookAdded(listener: () => void): () => void {
+  const state = hookState();
+  const listeners = (state.lateHookListeners ??= new Set());
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
   };
 }
 
@@ -57,5 +94,6 @@ export function notifyShakaRuntimeLoaded(runtimeModule: unknown): void {
   if (state.loaded && state.runtimeModule === runtimeModule) return;
   state.loaded = true;
   state.runtimeModule = runtimeModule;
+  for (const hook of state.firstHooks ?? []) runHook(hook, runtimeModule);
   for (const hook of state.hooks) runHook(hook, runtimeModule);
 }

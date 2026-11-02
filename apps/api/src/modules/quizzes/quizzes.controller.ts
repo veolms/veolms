@@ -158,6 +158,18 @@ export function createQuizController({
         actor(request),
         (request.params as { assignmentId: string }).assignmentId,
       ),
+    submission: async (request: FastifyRequest) => {
+      const params = request.params as {
+        assignmentId: string;
+        studentId: string;
+      };
+      return analytics.submission(
+        actor(request),
+        params.assignmentId,
+        params.studentId,
+        (request.query as { attemptId?: string }).attemptId,
+      );
+    },
     courseAnalytics: async (request: FastifyRequest) =>
       analytics.course(
         actor(request),

@@ -9,6 +9,7 @@ export interface PlayerBehaviorBridgeProps {
   shortcuts?: PlayerShortcutOverrides;
   keyboardEnabled?: boolean;
   controlsIdleDelay?: number;
+  controlsTouchIdleDelay?: number;
   keepControlsVisibleUntilFirstPlay?: boolean;
   onToggleTheater?: () => void;
   seekIntervalSeconds?: number;
@@ -16,6 +17,7 @@ export interface PlayerBehaviorBridgeProps {
 
 export function PlayerBehaviorBridge({
   controlsIdleDelay,
+  controlsTouchIdleDelay,
   keyboardEnabled,
   keepControlsVisibleUntilFirstPlay,
   onToggleTheater,
@@ -41,6 +43,7 @@ export function PlayerBehaviorBridge({
   });
   useControlsVisibility({
     idleDelay: controlsIdleDelay,
+    touchIdleDelay: controlsTouchIdleDelay,
     keepVisibleUntilFirstPlay: keepControlsVisibleUntilFirstPlay,
     rootRef,
   });

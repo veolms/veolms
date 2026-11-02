@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useLayoutEffect,
   type RefObject,
   type Dispatch,
   type SetStateAction,
@@ -16,6 +17,7 @@ import type { SidebarPreferences } from "../settings/settingsPreferences";
 import { SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS } from "./academyShellClasses";
 import type { SidebarTooltip } from "./academyShellTypes";
 import { ShortcutKeys } from "./ShortcutKeys";
+import { useHydrated } from "../courses/viewerCourseState";
 
 export interface SidebarNavigationProps {
   navigationScrollFade: { top: boolean; bottom: boolean; overflow: boolean };
@@ -66,6 +68,29 @@ export function SidebarNavigation({
   sidebarResizePreviewWidth,
   renderedSidebarWidth,
 }: SidebarNavigationProps) {
+  // The menu item a page was opened from is lit by the document's head
+  // before the page runs (see routing/navigationOriginEarlyState.ts), by
+  // changing the built page's classes. React leaves a class it did not put
+  // there, so where the app then decided on another item (a lesson page
+  // whose origin it does not take), both stayed lit. Once the page runs,
+  // every item is set to what the app decided.
+  const hydrated = useHydrated();
+  const activeLabels = navigation
+    .filter((item) => isNavigationItemActive(item))
+    .map(([label]) => label)
+    .join("|");
+  useLayoutEffect(() => {
+    const menu = navigationRef.current;
+    if (!hydrated || !menu) return;
+    const active = new Set(activeLabels.split("|"));
+    for (const item of menu.querySelectorAll(":scope > button")) {
+      item.classList.toggle(
+        "is-active",
+        active.has(item.getAttribute("aria-label") ?? ""),
+      );
+    }
+  }, [activeLabels, hydrated, navigationRef]);
+
   // prettier-ignore
   return (
     <nav
@@ -74,12 +99,17 @@ export function SidebarNavigation({
         // A size container, so menu items can tell when the rail
         // has finished narrowing. The side padding lines the menu
         // items up with the profile button's left and right edges.
-        // The top padding is 6px more than the stylesheet's in both
-        // states, which keeps the first item on the same row in each.
-        // It is padding rather than margin because the list clips at
-        // its own edge: the room has to be inside it, or the first
-        // item's shadow is cut off at the top.
-        "courses-nav @container gap-2! px-[9.5px]! pt-[11px]! [.courses-app--collapsed_&]:pt-[22px]!",
+        // The top padding keeps the first item on the same row in every
+        // state: collapsed, the list starts 16px higher (a 2px shorter
+        // brand above it and the stylesheet's -4px margin instead of
+        // 10px), so it has 16px more room inside. While a drag out of
+        // the rail shows the labels (`resize-content-visible`), the brand
+        // is back to its full height and the margin is -1px, so the list
+        // starts 11px higher and has 11px more. It is padding rather
+        // than margin because the list clips at its own edge: the room
+        // has to be inside it, or the first item's shadow is cut off at
+        // the top.
+        "courses-nav @container gap-2! px-[9.5px]! pt-[11px]! [.courses-app--collapsed_&]:pt-[22px]! [.courses-app--collapsed:not(.courses-app--resize-content-visible)_&]:pt-[27px]!",
         // The list scrolls, and a browser decides how a finger may pan
         // from the scroll area itself, not from the sidebar around
         // it. Without this it claims sideways swipes on the menu
@@ -138,7 +168,21 @@ export function SidebarNavigation({
               }
               onBlur={hideCollapsedNavigationTooltip}
             >
-              <Icon size={26} weight={active ? "fill" : "regular"} />
+              {/* Both drawings, the item's active class choosing: the
+                  document's head can then move the highlight to the
+                  section the reader came from before the first paint
+                  (see navigationOriginEarlyState.ts), which a weight
+                  chosen here could not follow. */}
+              <Icon
+                size={26}
+                weight="regular"
+                className="[.is-active>&]:hidden!"
+              />
+              <Icon
+                size={26}
+                weight="fill"
+                className="hidden! [.is-active>&]:block!"
+              />
               <span className="courses-nav__text">{displayLabel}</span>
               {showKeyboardShortcuts && (
                 <ShortcutKeys

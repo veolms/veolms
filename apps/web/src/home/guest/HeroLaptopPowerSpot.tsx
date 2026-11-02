@@ -48,6 +48,7 @@ export function HeroLaptopPowerSpot({
       type="button"
       aria-label={action}
       title={`${action} (press and hold)`}
+      data-hero-measured=""
       style={{
         left: spot.left,
         top: spot.top,

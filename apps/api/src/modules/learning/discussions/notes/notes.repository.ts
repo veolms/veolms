@@ -18,6 +18,7 @@ import {
   createdAtIdDescSql,
   type DiscussionListCursor,
 } from "../shared/discussion.utils.ts";
+import { fuzzyMatchesAny } from "../../../../lib/fuzzy-search.ts";
 
 export interface NoteRow {
   id: string;
@@ -306,6 +307,7 @@ function applyNoteFilters<O>(
       eb.or([
         eb(sql`lower(n.title)`, "like", searchPattern),
         eb(sql`lower(n.plain_text)`, "like", searchPattern),
+        fuzzyMatchesAny(options.query!, [sql.ref("n.title")]),
       ]),
     );
   }

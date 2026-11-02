@@ -9,12 +9,18 @@ import { courseKeys } from "../courses/courses.keys";
 import { enrollmentKeys } from "./enrollments.keys";
 import { enrollmentsService } from "./enrollments.service";
 
-/** Shared so the list can be prefetched under the key the hook reads. */
+/**
+ * Shared so the list can be prefetched under the key the hook reads. The
+ * tab keeps a copy of it for reloads (`services/accountSessionCopies.ts`).
+ */
 export const enrolledCoursesQueryOptions = () => ({
   queryKey: enrollmentKeys.courses(),
   queryFn: (): Promise<EnrolledCoursesResponse> =>
     enrollmentsService.listEnrolledCourses(),
   staleTime: 60 * 1000,
+  // Asked again whenever the learner comes back to the tab, however fresh:
+  // a course bought on another device then shows without a reload.
+  refetchOnWindowFocus: "always" as const,
 });
 
 export function useEnrolledCourses(options?: { enabled?: boolean }) {

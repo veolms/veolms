@@ -7,7 +7,7 @@ import {
 } from "react";
 import { subscribeToPointerGestureClaims } from "../../gestures/pointerGestureOwnership";
 import type { CourseRole } from "../../courses/catalogue";
-import { hasAdminRole, getWorkspaceRoleStorageKey } from "../workspaceRole";
+import { readSavedWorkspaceView } from "../workspaceRole";
 import {
   applySidebarShellToDocument,
   getInitialSidebarPreferences,
@@ -198,16 +198,7 @@ export function useShellLayoutEffects({
 
   useEffect(() => {
     if (!authUserFetched) return;
-    const storedRole = localStorage.getItem(
-      getWorkspaceRoleStorageKey(activeUser?.id),
-    );
-    setRole(
-      storedRole === "student"
-        ? "student"
-        : storedRole === "creator" || hasAdminRole(userRoles)
-          ? "creator"
-          : "student",
-    );
+    setRole(readSavedWorkspaceView(activeUser?.id, userRoles));
     setHydratedWorkspaceRoleKey(activeUser?.id ?? "guest");
   }, [
     activeUser,

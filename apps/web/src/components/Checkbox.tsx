@@ -11,6 +11,28 @@ export interface CheckboxProps {
   className?: string;
 }
 
+/**
+ * The checkbox's box on its own, for a row that lays out its own label (a
+ * title and a line of help): the real input sits beside it, visually
+ * hidden. Looks the same as the box `Checkbox` draws.
+ */
+export function CheckboxIndicator({
+  checked,
+  className = "",
+}: {
+  checked: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex size-4.5 shrink-0 items-center justify-center rounded-[4px] border transition-[background-color,border-color,color] ${checked ? "border-(--accent) bg-(--accent) text-(--on-accent)" : "[border-color:color-mix(in_srgb,var(--text)_30%,transparent)] bg-(--canvas) text-transparent"} ${className}`}
+    >
+      <Check size={11} weight="bold" />
+    </span>
+  );
+}
+
 export function Checkbox({
   id,
   checked,
@@ -20,11 +42,14 @@ export function Checkbox({
   disabled = false,
   className = "",
 }: CheckboxProps) {
+  // `relative` keeps the visually hidden input inside its label: placed
+  // against a far ancestor instead, focusing it scrolled that ancestor
+  // (once the whole app shell) to reach it.
   return (
     <label
       htmlFor={id}
       data-checkbox
-      className={`group inline-flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-(--text-secondary) transition-colors sm:text-sm ${disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer hover:bg-(--hover)"} ${className}`}
+      className={`group relative inline-flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-(--text-secondary) transition-colors sm:text-sm ${disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer hover:bg-(--hover)"} ${className}`}
     >
       <input
         id={id}

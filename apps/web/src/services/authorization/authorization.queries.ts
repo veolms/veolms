@@ -13,6 +13,9 @@ const capabilitiesQueryOptions = (params: {
   queryFn: () =>
     authorizationService.getCapabilities({ courseId: params.courseId }),
   staleTime: 2 * 60 * 1000,
+  // An admin may change this person's roles at any time; coming back to the
+  // tab picks the change up once the answer is stale.
+  refetchOnWindowFocus: true,
 });
 
 export function useCapabilities(options?: {

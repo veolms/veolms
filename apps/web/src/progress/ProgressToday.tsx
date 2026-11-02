@@ -54,7 +54,7 @@ export function ProgressToday({
     <div className="flex items-center gap-5 sm:gap-6">
       <GoalRing
         share={share}
-        stroke={2.4}
+        stroke={4.4}
         tone={standing === "beyond" ? "beyond" : "accent"}
         className="size-32 shrink-0 sm:size-36"
       >

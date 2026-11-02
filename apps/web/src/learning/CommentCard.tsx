@@ -8,10 +8,14 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { HouseIcon as House } from "@phosphor-icons/react/House";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
+import { MarkdownLogoIcon as MarkdownLogo } from "@phosphor-icons/react/MarkdownLogo";
 import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
+import { PushPinSlashIcon as PushPinSlash } from "@phosphor-icons/react/PushPinSlash";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
@@ -29,6 +33,7 @@ import {
   createDiscussionDraft,
   createEmptyDiscussionDraft,
   hasDiscussionDraftContent,
+  markdownToPlainText,
 } from "./discussion-editor/types";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
@@ -64,6 +69,9 @@ import {
   getReplyTotalCount,
 } from "../services/learning-interactions/reply-pagination";
 import { TimeAgo } from "../components/TimeAgo";
+import type { CreatorHeart } from "@veolms/contracts";
+import { CreatorHeartButton, PinnedLabel } from "./CreatorHeartButton";
+import { useThreadStaffActions } from "./useThreadStaffActions";
 import { cheerLike } from "../components/likeFeedback";
 
 export interface CommentReply {
@@ -122,6 +130,11 @@ export interface Comment {
   isLocked?: boolean;
   isBookmarked?: boolean;
   isFollowing?: boolean;
+  courseId?: string;
+  lessonId?: string | null;
+  /** Set while staff keep it at the top of its lesson's discussion. */
+  pinnedAt?: string | null;
+  creatorHeart?: CreatorHeart | null;
 }
 
 interface CommentCardProps {
@@ -164,7 +177,11 @@ interface CommentCardProps {
   onCopyTextNotice?: (message: string) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
-  userRole?: string;
+  /**
+   * May lock any thread and accept any answer: the course's creator, or a
+   * role that moderates every course (decided in Discussion, as the API does).
+   */
+  canModerate?: boolean;
   courseId?: string;
   canParticipate?: boolean;
   canEdit?: boolean;
@@ -203,7 +220,7 @@ export const CommentCard = React.memo(function CommentCard({
   onCopyTextNotice,
   isBackendMode = false,
   currentUserId,
-  userRole,
+  canModerate = false,
   courseId,
   canParticipate = true,
   canEdit = true,
@@ -305,26 +322,24 @@ export const CommentCard = React.memo(function CommentCard({
   const isBackendEntity = Boolean(isBackendMode && serverId);
   const threadId = serverId;
   const { data: authUser } = useCurrentUser();
-  const { canOnCourse } = useCapabilities({ enabled: Boolean(authUser) });
   const effectiveUserId = currentUserId ?? authUser?.id;
   const isQuestion = entryKind === "question" || Boolean(comment.isQuestion);
-  // A team role that moderates every course (a teaching assistant), or a
-  // course's instructor; the API limits instructors to their own courses.
-  const isModerator = Boolean(
-    canOnCourse("discussion.moderate", null) ||
-    userRole === "Instructor" ||
-    userRole === "Admin" ||
-    authUser?.roles?.some(
-      (r) =>
-        r.toLowerCase() === "admin" ||
-        r.toLowerCase() === "instructor" ||
-        r.toLowerCase() === "creator",
-    ),
-  );
   const canLock =
-    canParticipate && !isNote && (Boolean(comment.isOwn) || isModerator);
+    canParticipate && !isNote && (Boolean(comment.isOwn) || canModerate);
   const canAcceptAnswer =
-    canParticipate && isQuestion && (Boolean(comment.isOwn) || isModerator);
+    canParticipate && isQuestion && (Boolean(comment.isOwn) || canModerate);
+  const staff = useThreadStaffActions({
+    thread: {
+      id: isNote ? undefined : serverId,
+      courseId: comment.courseId ?? courseId,
+      lessonId: comment.lessonId,
+      isPublic: (comment.visibility ?? "public") === "public",
+      pinnedAt: comment.pinnedAt,
+      creatorHeart: comment.creatorHeart,
+    },
+    canModerate,
+    onNotice: onCopyTextNotice,
+  });
 
   const {
     data: repliesData,
@@ -590,6 +605,9 @@ export const CommentCard = React.memo(function CommentCard({
             </ProfileLink>
 
             <div className="min-w-0 flex-1">
+              {!isNote && comment.pinnedAt ? (
+                <PinnedLabel className="mb-1" />
+              ) : null}
               <div
                 data-comment-meta
                 className="relative flex items-start gap-2 pr-9"
@@ -653,15 +671,6 @@ export const CommentCard = React.memo(function CommentCard({
                       />
                     )}
                   </span>
-                  {isQuestion && Boolean(comment.isSolved) && (
-                    <span
-                      data-testid="qa-solved-badge"
-                      className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400"
-                    >
-                      <CheckCircle size={13} weight="bold" aria-hidden="true" />
-                      <span>Solved</span>
-                    </span>
-                  )}
                   {Boolean(comment.isLocked) && (
                     <span
                       data-testid="thread-locked-badge"
@@ -726,6 +735,9 @@ export const CommentCard = React.memo(function CommentCard({
                     (!isBackendMode || (Boolean(serverId) && !isEditing))
                   }
                   onEdit={() => onEdit(comment)}
+                  staffActions={
+                    <ThreadStaffMenuItems staff={staff} kind={entryKind} />
+                  }
                   onShare={() =>
                     serverId
                       ? shareDiscussionEntry(
@@ -899,6 +911,14 @@ export const CommentCard = React.memo(function CommentCard({
                         />
                       </button>
                     )}
+
+                  {!isNote && (
+                    <CreatorHeartButton
+                      heart={comment.creatorHeart}
+                      canGive={staff.canMark}
+                      onToggle={staff.setHeart}
+                    />
+                  )}
                 </div>
               )}
 
@@ -1111,8 +1131,6 @@ function ReplyCard({
   const replyLikesCount = isBackendMode
     ? reply.likes
     : reply.likes + (localLiked ? 1 : 0);
-  const canAcceptReply =
-    Boolean(getServerEntityId(reply)) && reply.creationStatus !== "pending";
   const replyClientId = getClientEntityId(reply);
   const replyServerId = getServerEntityId(reply);
   const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
@@ -1208,26 +1226,6 @@ function ReplyCard({
                     canParticipate &&
                     (!isBackendMode || Boolean(getServerEntityId(reply)))
                   }
-                  canAcceptAnswer={
-                    canParticipate &&
-                    isQuestion &&
-                    canAcceptAnswer &&
-                    canAcceptReply
-                  }
-                  isAccepted={Boolean(reply.isAccepted)}
-                  onToggleAccept={
-                    canParticipate &&
-                    isQuestion &&
-                    canAcceptAnswer &&
-                    onToggleAccept
-                      ? () =>
-                          onToggleAccept(
-                            reply.id,
-                            !reply.isAccepted,
-                            getServerEntityId(reply),
-                          )
-                      : undefined
-                  }
                   onEdit={() => {
                     setEditDraft(
                       reply.content ?? createDiscussionDraft(reply.text),
@@ -1321,49 +1319,6 @@ function ReplyCard({
                     <span>{replyLikesCount}</span>
                   </button>
                 )}
-                {canParticipate &&
-                  isQuestion &&
-                  canAcceptAnswer &&
-                  onToggleAccept && (
-                    <button
-                      type="button"
-                      data-testid={`accept-reply-btn-${reply.id}`}
-                      disabled={
-                        reply.creationStatus === "pending" ||
-                        !getServerEntityId(reply)
-                      }
-                      aria-label={
-                        reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                      }
-                      title={
-                        reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                      }
-                      onClick={() => {
-                        if (
-                          reply.creationStatus === "pending" ||
-                          !getServerEntityId(reply)
-                        ) {
-                          return;
-                        }
-                        onToggleAccept(
-                          reply.id,
-                          !reply.isAccepted,
-                          getServerEntityId(reply),
-                        );
-                      }}
-                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
-                        reply.isAccepted
-                          ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
-                          : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
-                      }`}
-                    >
-                      <CheckCircle
-                        size={16}
-                        weight={reply.isAccepted ? "fill" : "bold"}
-                      />
-                      <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
-                    </button>
-                  )}
                 {canParticipate && (
                   <button
                     type="button"
@@ -1467,6 +1422,8 @@ export function InlineEditForm({
 
 interface CommentActionMenuProps {
   name: string;
+  /** Pin, home page: staff items shown after the copy items. */
+  staffActions?: React.ReactNode;
   kind: DiscussionEntryKind | "reply";
   isOwn: boolean;
   canEdit?: boolean;
@@ -1481,6 +1438,11 @@ interface CommentActionMenuProps {
   onToggleBookmark?: () => void;
   isFollowing?: boolean;
   onToggleFollow?: () => void;
+  /**
+   * The post as written, in Markdown. "Copy text" copies it as readable
+   * text (no Markdown signs, a table as tab-separated rows); "Copy
+   * Markdown" copies it as it is.
+   */
   textToCopy?: string;
   onCopyTextNotice?: (message: string) => void;
   onEdit: () => void;
@@ -1496,6 +1458,8 @@ interface CommentActionMenuProps {
 
 /** How long a "Copied" label stays up before its menu closes. */
 const COPIED_LABEL_MS = 1300;
+
+type CopyItem = "share" | "text" | "markdown";
 
 export function CommentActionMenu({
   name,
@@ -1519,14 +1483,16 @@ export function CommentActionMenu({
   onShare,
   onDelete,
   onReport,
+  staffActions,
   className,
 }: CommentActionMenuProps) {
   const [open, setOpen] = useState(false);
-  // Admins may delete anyone's comment, Q&A, reply or note.
+  // Moderators of every course may delete anyone's comment, Q&A, reply or
+  // note (the API takes discussion.moderate through an academy-wide role).
   const { data: currentUser } = useCurrentUser();
-  const isAdmin = Boolean(
-    currentUser?.roles?.some((role) => role.toLowerCase() === "admin"),
-  );
+  const moderatesEveryCourse = useCapabilities({
+    enabled: Boolean(currentUser),
+  }).canOnCourse("discussion.moderate", null);
   const isNote = kind === "note";
   const actionLabel = kind === "question" ? "Q&A" : isNote ? "note" : kind;
   const menuLabel =
@@ -1539,24 +1505,24 @@ export function CommentActionMenu({
   // Copying answers inside the menu: the item that was chosen turns into
   // "Copied" for a moment, then the menu closes.
   const [copyResult, setCopyResult] = useState<{
-    item: "share" | "text";
+    item: CopyItem;
     copied: boolean;
   } | null>(null);
-  const showCopyResult = (item: "share" | "text", copied: boolean) => {
+  const showCopyResult = (item: CopyItem, copied: boolean) => {
     setCopyResult({ item, copied });
     window.setTimeout(() => setCopyResult(null), COPIED_LABEL_MS + 200);
   };
-  const copyLabel = (item: "share" | "text", label: string, done: string) =>
+  const copyLabel = (item: CopyItem, label: string, done: string) =>
     copyResult?.item === item
       ? copyResult.copied
         ? done
         : "Couldn't copy"
       : label;
-  const copyIcon = (item: "share" | "text", icon: typeof CopySimple) =>
+  const copyIcon = (item: CopyItem, icon: typeof CopySimple) =>
     copyResult?.item === item && copyResult.copied ? CheckCircle : icon;
 
   const deleteOthersAction =
-    isAdmin && canDelete ? (
+    moderatesEveryCourse && canDelete ? (
       <>
         <MenuDivider />
         <MenuAction
@@ -1580,16 +1546,28 @@ export function CommentActionMenu({
     />
   );
   const copyTextAction = textToCopy?.trim() ? (
-    <MenuAction
-      Icon={copyIcon("text", CopySimple)}
-      label={copyLabel("text", "Copy text", "Copied")}
-      stayOpenMs={COPIED_LABEL_MS}
-      onClick={() => {
-        void copyTextToClipboard(textToCopy).then((copied) =>
-          showCopyResult("text", copied),
-        );
-      }}
-    />
+    <>
+      <MenuAction
+        Icon={copyIcon("text", CopySimple)}
+        label={copyLabel("text", "Copy text", "Copied")}
+        stayOpenMs={COPIED_LABEL_MS}
+        onClick={() => {
+          void copyTextToClipboard(markdownToPlainText(textToCopy)).then(
+            (copied) => showCopyResult("text", copied),
+          );
+        }}
+      />
+      <MenuAction
+        Icon={copyIcon("markdown", MarkdownLogo)}
+        label={copyLabel("markdown", "Copy Markdown", "Copied")}
+        stayOpenMs={COPIED_LABEL_MS}
+        onClick={() => {
+          void copyTextToClipboard(textToCopy).then((copied) =>
+            showCopyResult("markdown", copied),
+          );
+        }}
+      />
+    </>
   ) : null;
 
   return (
@@ -1675,6 +1653,7 @@ export function CommentActionMenu({
           )}
           {shareAction}
           {copyTextAction}
+          {staffActions}
           {canLock && onToggleLock && (
             <MenuAction
               Icon={isLocked ? LockOpen : Lock}
@@ -1717,6 +1696,7 @@ export function CommentActionMenu({
           )}
           {shareAction}
           {copyTextAction}
+          {staffActions}
           {canLock && onToggleLock && (
             <MenuAction
               Icon={isLocked ? LockOpen : Lock}
@@ -1740,6 +1720,37 @@ export function CommentActionMenu({
         </>
       )}
     </CourseActionMenu>
+  );
+}
+
+/** "Pin to lesson" and "Add to home page", for staff, in a post's menu. */
+function ThreadStaffMenuItems({
+  staff,
+  kind,
+}: {
+  staff: ReturnType<typeof useThreadStaffActions>;
+  kind: DiscussionEntryKind;
+}) {
+  const noun = kind === "question" ? "Q&A" : "comment";
+  return (
+    <>
+      {staff.canPin && (
+        <MenuAction
+          Icon={staff.isPinned ? PushPinSlash : PushPin}
+          label={staff.isPinned ? "Unpin from lesson" : `Pin ${noun} to lesson`}
+          onClick={staff.togglePin}
+        />
+      )}
+      {staff.canFeature && (
+        <MenuAction
+          Icon={House}
+          label={
+            staff.onHomePage ? "Remove from home page" : "Add to home page"
+          }
+          onClick={staff.toggleHomePage}
+        />
+      )}
+    </>
   );
 }
 

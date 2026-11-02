@@ -14,6 +14,7 @@ import type {
 } from "@veolms/contracts";
 import { quizKeys } from "./quizzes.keys";
 import { quizzesService } from "./quizzes.service";
+import { trackAnalyticsEvent } from "../../lib/analytics-track";
 export function useCreateQuizWithQuestions() {
   const qc = useQueryClient();
   return useMutation({
@@ -104,6 +105,7 @@ export function useStartQuizAttempt() {
     onSuccess: (attempt) => {
       qc.setQueryData(quizKeys.attempt(attempt.id), attempt);
       void qc.invalidateQueries({ queryKey: quizKeys.mineAssignments() });
+      trackAnalyticsEvent("quiz_started");
     },
   });
 }
@@ -137,7 +139,12 @@ export function useSubmitQuizAttempt() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: quizzesService.submit,
-    onSuccess: (result) => applySubmittedQuizAttempt(qc, result),
+    onSuccess: (result) => {
+      applySubmittedQuizAttempt(qc, result);
+      trackAnalyticsEvent("quiz_submitted", {
+        props: { passed: Boolean(result.passed) },
+      });
+    },
   });
 }
 export function useAssignQuiz() {

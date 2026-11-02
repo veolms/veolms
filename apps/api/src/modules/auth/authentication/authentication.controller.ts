@@ -25,6 +25,7 @@ import type {
   SelectAvatarRequest,
 } from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { requestLocation } from "../shared/request-location.ts";
 
 export function createAuthController(context: AuthContext) {
   const { authService, oauthService, sessionService, platformSettings } =
@@ -43,6 +44,7 @@ export function createAuthController(context: AuthContext) {
       request: {
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
+        location: requestLocation(request.headers),
         existingSessionToken,
       },
     });
@@ -79,6 +81,7 @@ export function createAuthController(context: AuthContext) {
       request: {
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
+        location: requestLocation(request.headers),
         existingSessionToken,
       },
     });

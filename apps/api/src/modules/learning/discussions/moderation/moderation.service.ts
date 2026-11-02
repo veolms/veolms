@@ -513,6 +513,52 @@ export function createModerationService({
           );
         }
 
+        if (
+          input.action === "pin" ||
+          input.action === "unpin" ||
+          input.action === "heart" ||
+          input.action === "unheart"
+        ) {
+          const marking = input.action === "pin" || input.action === "heart";
+          // Pins and hearts are shown to everyone, so they go on public
+          // posts only, and a pin needs the lesson it opens.
+          if (
+            marking &&
+            (thread.status !== "active" || thread.visibility !== "public")
+          ) {
+            throw httpError(
+              409,
+              "THREAD_NOT_PUBLIC",
+              "Only a public comment or question can be pinned or hearted.",
+            );
+          }
+          if (input.action === "pin" && !thread.lessonId) {
+            throw httpError(
+              409,
+              "THREAD_HAS_NO_LESSON",
+              "Only a comment or question on a lesson can be pinned.",
+            );
+          }
+          const byUserId = marking ? actor.userId : null;
+          if (input.action === "pin" || input.action === "unpin") {
+            await threadsRepo.setPinned(trx, threadId, byUserId);
+          } else {
+            await threadsRepo.setHearted(trx, threadId, byUserId);
+          }
+          await moderationRepo.createAuditLog(trx, {
+            id: crypto.randomUUID(),
+            academyId: await resolveAcademyId(trx),
+            courseId: thread.courseId,
+            actorUserId: actor.userId,
+            action: `${input.action}_thread`,
+            targetType: "thread",
+            targetId: threadId,
+            details: { reason: input.reason || null },
+            ipAddress,
+          });
+          return;
+        }
+
         if (input.action === "hide") {
           await threadsRepo.setStatus(trx, threadId, "hidden");
         } else if (input.action === "unhide") {

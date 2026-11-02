@@ -5,6 +5,7 @@ import type {
   CreateBundleRequest,
   UpdateBundleRequest,
 } from "@veolms/contracts";
+import { cacheTags, createCache, invalidateCache } from "@veolms/api-core";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { AppError } from "../../../lib/errors.ts";
@@ -12,6 +13,26 @@ import { CommerceErrors } from "../shared/commerce.errors.ts";
 import { isUniqueViolation } from "../shared/db-errors.ts";
 import * as bundleRepo from "./bundle.repository.ts";
 import * as courseRepo from "../../courses/course/course.repository.ts";
+
+/**
+ * Published bundles as every visitor sees them (the list, and each by its
+ * slug). A bundle write clears them (`bundles`); a course change clears
+ * them too (`catalog`), since a bundle shows its courses.
+ */
+const BUNDLES_TAG = "bundles";
+const PUBLISHED_BUNDLES_TTL_MS = 5 * 60_000;
+const publishedBundleList = createCache<CourseBundle[]>({
+  name: "commerce.published-bundle-list",
+  ttlMs: PUBLISHED_BUNDLES_TTL_MS,
+  maxBytes: 4 * 1024 * 1024,
+});
+const publishedBundlesBySlug = createCache<CourseBundle>({
+  name: "commerce.published-bundles-by-slug",
+  ttlMs: PUBLISHED_BUNDLES_TTL_MS,
+  maxEntries: 1_000,
+  maxBytes: 4 * 1024 * 1024,
+});
+const PUBLISHED_BUNDLE_TAGS = [BUNDLES_TAG, cacheTags.catalog, cacheTags.site];
 
 export interface BundleService {
   listPublishedBundles(): Promise<CourseBundle[]>;
@@ -88,16 +109,29 @@ export function createBundleService({
   }
 
   async function listPublishedBundles(): Promise<CourseBundle[]> {
-    const bundles = await bundleRepo.listPublishedBundles(database);
-    return await hydrateBundles(bundles, { publishedCoursesOnly: true });
+    return await publishedBundleList.fetch(
+      "list",
+      async () => {
+        const bundles = await bundleRepo.listPublishedBundles(database);
+        return await hydrateBundles(bundles, { publishedCoursesOnly: true });
+      },
+      { tags: PUBLISHED_BUNDLE_TAGS },
+    );
   }
 
   async function getBundleBySlug(slug: string): Promise<CourseBundle> {
-    const bundle = await bundleRepo.findBundleBySlug(database, slug);
-    if (!bundle || bundle.status !== "published") {
-      throw CommerceErrors.BUNDLE_NOT_FOUND(slug);
-    }
-    return await hydrateBundle(bundle, { publishedCoursesOnly: true });
+    // An unknown or unpublished slug throws, and is not kept.
+    return await publishedBundlesBySlug.fetch(
+      slug,
+      async () => {
+        const bundle = await bundleRepo.findBundleBySlug(database, slug);
+        if (!bundle || bundle.status !== "published") {
+          throw CommerceErrors.BUNDLE_NOT_FOUND(slug);
+        }
+        return await hydrateBundle(bundle, { publishedCoursesOnly: true });
+      },
+      { tags: PUBLISHED_BUNDLE_TAGS },
+    );
   }
 
   async function listAllBundles(): Promise<CourseBundle[]> {
@@ -189,6 +223,7 @@ export function createBundleService({
         throw slugTakenOr(error, request.slug);
       });
 
+    invalidateCache([BUNDLES_TAG]);
     return await hydrateBundle(created);
   }
 
@@ -268,6 +303,7 @@ export function createBundleService({
       throw CommerceErrors.BUNDLE_NOT_FOUND(id);
     }
 
+    invalidateCache([BUNDLES_TAG]);
     return await hydrateBundle(updated);
   }
 
@@ -278,6 +314,7 @@ export function createBundleService({
     }
 
     await bundleRepo.softDeleteBundle(database, id);
+    invalidateCache([BUNDLES_TAG]);
   }
 
   return {

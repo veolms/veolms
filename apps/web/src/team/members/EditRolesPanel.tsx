@@ -8,30 +8,41 @@ import {
 } from "../../services/team";
 import type { ToastMessage } from "../../ToastNotification";
 import { RolePicker } from "../RolePicker";
-import {
-  FieldLabel,
-  PanelBody,
-  PanelFooter,
-  PersonAvatar,
-  secondaryButtonClassName,
-} from "../TeamBits";
+import { FieldLabel, PanelBody, PanelFooter, PersonAvatar } from "../TeamBits";
+import { useTeamAccess } from "../useTeamAccess";
 
-/** Change a member's roles, or those waiting for someone's first sign-in. */
+/** Whose roles change: a member, or an invitation not yet taken up. */
+export type RolesHolder = Pick<
+  TeamMember,
+  | "userId"
+  | "invitationId"
+  | "name"
+  | "email"
+  | "avatarUrl"
+  | "status"
+  | "roles"
+>;
+
+/** Change a member's roles, or those an invitation will grant. */
 export function EditRolesPanel({
   member,
   onClose,
   setNotice,
 }: {
-  member: TeamMember;
+  member: RolesHolder;
   onClose: () => void;
   setNotice?: (message: ToastMessage) => void;
 }) {
   const [roleIds, setRoleIds] = useState(member.roles.map((role) => role.id));
   const [error, setError] = useState<string | null>(null);
+  const { can } = useTeamAccess();
   const setMemberRoles = useSetTeamMemberRoles();
   const updateInvitation = useUpdateTeamInvitationRoles();
   const pending = setMemberRoles.isPending || updateInvitation.isPending;
   const name = member.name || member.email;
+  const removes = roleIds.length === 0;
+  // Every role taken away is taking them off the team: team.remove's.
+  const blocked = removes && (!member.userId || !can("team.remove"));
 
   const save = async () => {
     setError(null);
@@ -68,17 +79,23 @@ export function EditRolesPanel({
             avatarUrl={member.avatarUrl}
           />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-(--text)">
+            <span className="block truncate text-sm font-bold text-(--text)">
               {name}
             </span>
-            <span className="block truncate text-xs text-(--muted)">
+            <span className="block truncate font-mono text-xs text-(--muted)">
               {member.status === "awaiting_sign_in"
                 ? "Waiting for first sign-in"
                 : member.email}
             </span>
           </span>
         </div>
-        <FieldLabel hint="Taking every role away takes them off the team.">
+        <FieldLabel
+          hint={
+            member.userId
+              ? "Taking every role away takes them off the team."
+              : "Pick at least one role."
+          }
+        >
           Roles
         </FieldLabel>
         <RolePicker
@@ -93,22 +110,22 @@ export function EditRolesPanel({
         ) : null}
       </PanelBody>
       <PanelFooter>
-        <button
-          type="button"
-          className={secondaryButtonClassName}
+        <Button
+          elevation="flat"
+          motion="static"
+          variant="quiet"
           onClick={onClose}
         >
           Cancel
-        </button>
+        </Button>
         <Button
-          disabled={pending || (roleIds.length === 0 && !member.userId)}
+          elevation="flat"
+          motion="static"
+          variant={removes ? "danger" : "primary"}
+          disabled={pending || blocked}
           onClick={() => void save()}
         >
-          {pending
-            ? "Saving…"
-            : roleIds.length === 0
-              ? "Remove from team"
-              : "Save roles"}
+          {pending ? "Saving…" : removes ? "Remove from team" : "Save roles"}
         </Button>
       </PanelFooter>
     </SlideOverPanel>

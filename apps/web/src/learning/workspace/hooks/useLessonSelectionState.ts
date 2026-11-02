@@ -10,6 +10,7 @@ import type { ShortcutPlatform } from "../../../keyboardShortcuts";
 import { useShortcutPlatform } from "../../../useShortcutPlatform";
 import { DEFAULT_LEARNING_PLAYER_PREFERENCES } from "../../learningPlayerPreferences";
 import { getCourseTitle } from "../../courseMetadata";
+import { consumeLessonAutoplayRequest } from "../../lessonAutoplayRequest";
 import type { useCourseOverview } from "../../../services/courses";
 
 export interface UseLessonSelectionStateArgs {
@@ -55,7 +56,10 @@ export function useLessonSelectionState({
   const [localLessonProgress, setLocalLessonProgress] = useState<
     Record<number, number>
   >({});
-  const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
+  // Opened from the home's Enter, the lesson starts playing at once.
+  const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(() =>
+    consumeLessonAutoplayRequest(courseSlug),
+  );
   const [autoplayEnabled, setAutoplayEnabled] = useState(
     DEFAULT_LEARNING_PLAYER_PREFERENCES.autoplay,
   );

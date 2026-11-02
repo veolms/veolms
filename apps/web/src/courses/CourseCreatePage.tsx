@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import "../styles/features/course-wizard.css";
 import { createPortal } from "react-dom";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
@@ -33,6 +33,7 @@ import {
   useUpdateCourseBasics,
 } from "../services/courses";
 import { waitForCourseThumbnailCdnUrl } from "./courseMedia";
+import { CourseBannerUpload } from "./course-editor/CourseBannerUpload";
 import { MEDIA_MAX_SIZES } from "@veolms/contracts";
 import { mediaService } from "../services/media";
 import {
@@ -53,6 +54,7 @@ import { type BasicsFieldKey } from "./course-editor/statusIndicators";
 import { CourseWizardSkeleton } from "./course-editor/CourseWizardSkeleton";
 import { PricingStepPanel } from "./course-editor/PricingStepPanel";
 import { AccessRulesStepPanel } from "./course-editor/AccessRulesStepPanel";
+import { PluginCourseEditorSections } from "./course-editor/PluginCourseEditorSections";
 import { PublishStepPanel } from "./course-editor/PublishStepPanel";
 import { ExtrasStepPanel } from "./course-editor/ExtrasStepPanel";
 import { BasicsStepPanel } from "./course-editor/BasicsStepPanel";
@@ -173,7 +175,6 @@ export function CourseCreatePage({
     thumbnailRequestIdRef,
     thumbnailMountedRef,
     isThumbnailBusy,
-    videoTrailer,
     setVideoTrailer,
     videoTrailerInputRef,
   } = useBasicsDraftState({
@@ -185,7 +186,12 @@ export function CourseCreatePage({
   ): Promise<void> {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || isThumbnailBusy) return;
+    if (file) await uploadThumbnailFile(file);
+  }
+
+  /** A picked or dropped image, uploaded and saved as the thumbnail. */
+  async function uploadThumbnailFile(file: File): Promise<void> {
+    if (isThumbnailBusy) return;
 
     const contentType = file.type.toLowerCase();
     if (!contentType.startsWith("image/")) {
@@ -321,101 +327,24 @@ export function CourseCreatePage({
     }
   }
 
-  const triggerThumbnailUpload = () => {
-    thumbnailInputRef.current?.click();
-  };
-
-  async function handleRemoveThumbnail(e: React.MouseEvent): Promise<void> {
-    e.stopPropagation();
-    if (thumbnailInputRef.current) {
-      thumbnailInputRef.current.value = "";
-    }
-
-    if (isThumbnailBusy) return;
-
-    const previousThumbnail = thumbnail;
-    const previousMediaId = thumbnailMediaIdRef.current;
-    const previousObjectUrl = thumbnailObjectUrlRef.current;
+  async function saveBannerMediaId(
+    bannerMediaId: string | null,
+  ): Promise<number> {
     const targetCourseId = currentCourseIdRef.current || currentCourseId;
-
-    if (!targetCourseId || !previousMediaId) {
-      if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
-      thumbnailObjectUrlRef.current = null;
-      thumbnailDirtyRef.current = false;
-      thumbnailMediaIdRef.current = null;
-      setThumbnailMediaId(null);
-      setThumbnail(null);
-      setThumbnailUploadError(null);
-      setThumbnailUploadStatus("idle");
-      return;
+    if (!targetCourseId) {
+      throw new Error("Save the course title before adding a banner.");
     }
-
-    const requestId = ++thumbnailRequestIdRef.current;
-    thumbnailDirtyRef.current = true;
-    setThumbnail(null);
-    setThumbnailMediaId(null);
-    setThumbnailUploadError(null);
-    setThumbnailUploadStatus("saving");
-
-    try {
-      if (!(await flushBasicsPersistence())) {
-        throw new Error(
-          "Save the course details before removing the thumbnail.",
-        );
-      }
-
-      const updated = await updateBasicsMutation.mutateAsync({
-        id: targetCourseId,
-        payload: {
-          thumbnailMediaId: null,
-          version: courseVersionRef.current,
-        },
-      });
-
-      if (
-        !thumbnailMountedRef.current ||
-        thumbnailRequestIdRef.current !== requestId
-      ) {
-        return;
-      }
-
-      setCourseVersion(updated.version);
-      courseVersionRef.current = updated.version;
-      thumbnailMediaIdRef.current = null;
-      thumbnailDirtyRef.current = false;
-      setThumbnailUploadStatus("idle");
-      setThumbnailUploadError(null);
-      if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
-      thumbnailObjectUrlRef.current = null;
-    } catch (error: unknown) {
-      if (
-        !thumbnailMountedRef.current ||
-        thumbnailRequestIdRef.current !== requestId
-      ) {
-        return;
-      }
-
-      thumbnailDirtyRef.current = false;
-      thumbnailMediaIdRef.current = previousMediaId;
-      setThumbnailMediaId(previousMediaId);
-      setThumbnail(previousThumbnail);
-      setThumbnailUploadStatus("error");
-      setThumbnailUploadError(
-        error instanceof Error
-          ? error.message
-          : "Thumbnail removal failed. Please try again.",
-      );
-    }
+    const updated = await updateBasicsMutation.mutateAsync({
+      id: targetCourseId,
+      payload: { bannerMediaId, version: courseVersionRef.current },
+    });
+    setCourseVersion(updated.version);
+    courseVersionRef.current = updated.version;
+    return updated.version;
   }
 
-  const handleVideoTrailerFileSelect = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const videoUrl = URL.createObjectURL(file);
-      setVideoTrailer(videoUrl);
-    }
+  const triggerThumbnailUpload = () => {
+    thumbnailInputRef.current?.click();
   };
 
   const handleTrailerMediaAttached = async (
@@ -424,13 +353,17 @@ export function CourseCreatePage({
     if (!currentCourseId || !editorData?.course) return false;
 
     try {
-      await updateBasicsMutation.mutateAsync({
+      // The version this page last saved: the thumbnail and banner move it
+      // ahead of the editor data until that is read again.
+      const updated = await updateBasicsMutation.mutateAsync({
         id: currentCourseId,
         payload: {
           trailerMediaId: mediaAssetId,
-          version: editorData.course.version,
+          version: courseVersionRef.current,
         },
       });
+      setCourseVersion(updated.version);
+      courseVersionRef.current = updated.version;
       await refetchEditor();
       return true;
     } catch {
@@ -438,9 +371,22 @@ export function CourseCreatePage({
     }
   };
 
+  const handleRemoveTrailer = async (): Promise<void> => {
+    const targetCourseId = currentCourseIdRef.current || currentCourseId;
+    if (!targetCourseId) return;
+    if (!(await flushBasicsPersistence())) {
+      throw new Error("Save the course details before removing the trailer.");
+    }
+    const updated = await updateBasicsMutation.mutateAsync({
+      id: targetCourseId,
+      payload: { trailerMediaId: null, version: courseVersionRef.current },
+    });
+    setCourseVersion(updated.version);
+    courseVersionRef.current = updated.version;
+    await refetchEditor();
+  };
+
   const {
-    triggerVideoTrailerUpload,
-    handleRemoveVideoTrailer,
     savingBasicsControls,
     savingBasicsControlsRef,
     basicsVersionRef,
@@ -896,10 +842,10 @@ export function CourseCreatePage({
   const {
     dragEnabledInclusionId,
     setDragEnabledInclusionId,
-    focusedInclusionId,
-    setFocusedInclusionId,
     handleAddManualInclusion,
     handleUpdateManualInclusionText,
+    handleUpdateManualInclusionDetail,
+    handleSetInclusionStyle,
     handleManualInclusionBlur,
     handleDeleteManualInclusion,
     handleInclusionDragStart,
@@ -1111,7 +1057,10 @@ export function CourseCreatePage({
     flushPricingPersistence,
     handleSellingPriceChange,
     handleShowDiscountBadgeChange,
+    handleLinkedOnlyChange,
     handleOriginalPriceChange,
+    handleInternationalPriceChange,
+    handleInternationalAutoChange,
     handleCurrencyChange,
   } = usePricingHandlers({
     currentCourseId,
@@ -1426,6 +1375,20 @@ export function CourseCreatePage({
     flushBasicsPersistence,
   });
 
+  // A step this person cannot change (Basics, where the editor opens, for a
+  // role that only edits lessons) gives way to the first one they can.
+  const permissionsKnown = capabilities.isFetched && Boolean(editedCourse);
+  const firstAllowedStep = permissionsKnown
+    ? WIZARD_STEP_IDS.find(isStepAllowed)
+    : undefined;
+  const activeStepAllowed = !permissionsKnown || isStepAllowed(activeStep);
+  useEffect(() => {
+    if (activeStepAllowed || !firstAllowedStep) return;
+    void navigateToStep(firstAllowedStep);
+    // navigateToStep is rebuilt each render; the step decides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStepAllowed, firstAllowedStep]);
+
   if (isEditorError && !editorData && isEditing) {
     return (
       <div className="relative flex w-full flex-1 flex-col min-h-[calc(100dvh-130px)] p-0 text-[--text] box-border max-[768px]:pb-0">
@@ -1584,15 +1547,29 @@ export function CourseCreatePage({
                   isBasicsSaving={isBasicsSaving}
                   isThumbnailBusy={isThumbnailBusy}
                   handleThumbnailFileSelect={handleThumbnailFileSelect}
-                  videoTrailerInputRef={videoTrailerInputRef}
-                  handleVideoTrailerFileSelect={handleVideoTrailerFileSelect}
                   thumbnail={thumbnail}
                   triggerThumbnailUpload={triggerThumbnailUpload}
-                  handleRemoveThumbnail={handleRemoveThumbnail}
+                  uploadThumbnailFile={uploadThumbnailFile}
                   thumbnailUploadError={thumbnailUploadError}
-                  videoTrailer={videoTrailer}
-                  triggerVideoTrailerUpload={triggerVideoTrailerUpload}
-                  handleRemoveVideoTrailer={handleRemoveVideoTrailer}
+                  handleRemoveTrailer={handleRemoveTrailer}
+                  bannerUpload={
+                    <CourseBannerUpload
+                      courseId={currentCourseId}
+                      disabled={!isDownstreamUnlocked || isBasicsSaving}
+                      serverBannerMediaId={editorData?.course.bannerMediaId}
+                      serverBannerUrl={editorData?.course.bannerUrl}
+                      flushBasicsPersistence={flushBasicsPersistence}
+                      saveBannerMediaId={saveBannerMediaId}
+                      hero={{
+                        title: courseTitle,
+                        shortDescription,
+                        sections: totalSections,
+                        lessons: totalLessons,
+                        duration: computedDuration,
+                        thumbnail,
+                      }}
+                    />
+                  }
                   LessonVideoUpload={LessonVideoUpload}
                   editorData={editorData}
                   handleTrailerMediaAttached={handleTrailerMediaAttached}
@@ -1696,7 +1673,14 @@ export function CourseCreatePage({
                   handleToggleQA={handleToggleQA}
                   handleToggleComments={handleToggleComments}
                   handleToggleNotes={handleToggleNotes}
-                />
+                >
+                  <PluginCourseEditorSections
+                    step="access-rules"
+                    courseId={currentCourseId}
+                    courseSlug={editorData?.course.slug}
+                    notify={setToastMessage}
+                  />
+                </AccessRulesStepPanel>
               ) : panelStep === "pricing" ? (
                 <PricingStepPanel
                   pricingValidationError={pricingValidationError}
@@ -1711,7 +1695,12 @@ export function CourseCreatePage({
                   handleSellingPriceChange={handleSellingPriceChange}
                   flushPricingPersistence={flushPricingPersistence}
                   handleOriginalPriceChange={handleOriginalPriceChange}
+                  handleInternationalPriceChange={
+                    handleInternationalPriceChange
+                  }
+                  handleInternationalAutoChange={handleInternationalAutoChange}
                   handleShowDiscountBadgeChange={handleShowDiscountBadgeChange}
+                  handleLinkedOnlyChange={handleLinkedOnlyChange}
                   currentCourseId={currentCourseId}
                   navigateToStep={navigateToStep}
                   onNavigatePage={onNavigatePage}
@@ -1743,16 +1732,24 @@ export function CourseCreatePage({
                   handleInclusionDragOver={handleInclusionDragOver}
                   handleInclusionDragEnd={handleInclusionDragEnd}
                   setDragEnabledInclusionId={setDragEnabledInclusionId}
-                  setFocusedInclusionId={setFocusedInclusionId}
                   handleManualInclusionBlur={handleManualInclusionBlur}
                   handleUpdateManualInclusionText={
                     handleUpdateManualInclusionText
                   }
-                  focusedInclusionId={focusedInclusionId}
+                  handleUpdateManualInclusionDetail={
+                    handleUpdateManualInclusionDetail
+                  }
+                  handleSetInclusionStyle={handleSetInclusionStyle}
                   handleDeleteManualInclusion={handleDeleteManualInclusion}
-                  suggestedInclusions={suggestedInclusions}
                   handleAddManualInclusion={handleAddManualInclusion}
-                />
+                >
+                  <PluginCourseEditorSections
+                    step="extras"
+                    courseId={currentCourseId}
+                    courseSlug={editorData?.course.slug}
+                    notify={setToastMessage}
+                  />
+                </ExtrasStepPanel>
               ) : panelStep === "publish" ? (
                 <PublishStepPanel
                   isPublished={isPublished}

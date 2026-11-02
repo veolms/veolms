@@ -17,5 +17,11 @@ export {
   evictCachedUserSessions,
 } from "./shared/session-auth-cache.ts";
 export { setSignInClaim, type SignInClaim } from "./shared/sign-in-claim.ts";
+export { isTestLoginAccount } from "./shared/auth.utils.ts";
+export {
+  forgetAcademy,
+  getAcademyId,
+  getAcademyRow,
+} from "./setup/academy-cache.ts";
 export * from "./shared/auth.constants.ts";
 export * from "./shared/auth.types.ts";

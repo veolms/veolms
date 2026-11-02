@@ -131,6 +131,12 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         ["lesson.read"],
       ),
       entry(
+        "lesson.video.import_youtube",
+        "Import lesson videos from YouTube",
+        "Download a YouTube video the academy owns into a lesson.",
+        ["lesson.video.update"],
+      ),
+      entry(
         "lesson.thumbnail.update",
         "Change lesson thumbnails",
         "Upload or replace a lesson's image.",
@@ -160,7 +166,11 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
     area: "quizzes",
     label: "Quizzes",
     entries: [
-      entry("quiz.read", "View quizzes", "See quizzes and their questions."),
+      // The quiz screens list quizzes by course, so viewing them needs the
+      // courses too.
+      entry("quiz.read", "View quizzes", "See quizzes and their questions.", [
+        "course.read",
+      ]),
       entry("quiz.create", "Create quizzes", "Add new quizzes.", ["quiz.read"]),
       entry(
         "quiz.settings.update",
@@ -181,51 +191,11 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         ["quiz.read"],
       ),
       entry("quiz.delete", "Delete quizzes", "Remove quizzes.", ["quiz.read"]),
-    ],
-  },
-  {
-    area: "assignments",
-    label: "Assignments and grading",
-    entries: [
-      entry(
-        "assignment.read",
-        "View assignments",
-        "See assignments and their instructions.",
-      ),
-      entry("assignment.create", "Create assignments", "Add new assignments.", [
-        "assignment.read",
-      ]),
-      entry(
-        "assignment.update",
-        "Edit assignments",
-        "Change an assignment's instructions and settings.",
-        ["assignment.read"],
-      ),
-      entry(
-        "assignment.publish",
-        "Publish assignments",
-        "Make an assignment available to learners.",
-        ["assignment.read"],
-      ),
-      entry("assignment.delete", "Delete assignments", "Remove assignments.", [
-        "assignment.read",
-      ]),
       entry(
         "submission.read",
-        "View submissions",
-        "See learners' quiz attempts and assignment work.",
-      ),
-      entry(
-        "submission.grade",
-        "Grade submissions",
-        "Score and give feedback on submissions.",
-        ["submission.read"],
-      ),
-      entry(
-        "submission.grade.override",
-        "Override grades",
-        "Change a grade someone else gave.",
-        ["submission.grade"],
+        "View quiz results",
+        "See learners' quiz attempts, answers and quiz analytics.",
+        ["quiz.read"],
       ),
     ],
   },
@@ -237,6 +207,12 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "student.read",
         "View students",
         "Open the Students list and each student's details.",
+      ),
+      entry(
+        "student.create",
+        "Add students",
+        "Create a student account by name and email; they sign in with a code.",
+        ["student.read"],
       ),
       entry(
         "student.contact.update",
@@ -255,18 +231,6 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "View enrollments",
         "See who is enrolled in which course.",
       ),
-      entry(
-        "enrollment.create",
-        "Enroll students",
-        "Add a student to a course.",
-        ["enrollment.read"],
-      ),
-      entry(
-        "enrollment.cancel",
-        "Cancel enrollments",
-        "Remove a student from a course.",
-        ["enrollment.read"],
-      ),
     ],
   },
   {
@@ -276,29 +240,13 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
       entry(
         "discussion.read",
         "View discussions",
-        "Read every discussion, hidden posts included.",
+        "Read every course's discussions, everyone's threads included.",
       ),
       entry(
         "discussion.moderate",
         "Moderate discussions",
-        "Hide, restore and delete posts, and handle reports.",
+        "See hidden posts; hide, restore and delete posts; handle reports.",
         ["discussion.read"],
-      ),
-    ],
-  },
-  {
-    area: "certificates",
-    label: "Certificates",
-    entries: [
-      entry(
-        "certificate.issue",
-        "Issue certificates",
-        "Award a certificate to a learner.",
-      ),
-      entry(
-        "certificate.revoke",
-        "Revoke certificates",
-        "Withdraw a certificate already issued.",
       ),
     ],
   },
@@ -358,16 +306,54 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
   {
     area: "analytics",
     label: "Analytics",
+    // One tick per tab of the Analytics page, so a role opens exactly the
+    // tabs it is given.
     entries: [
       entry(
-        "analytics.course.read",
-        "View course analytics",
-        "See learner progress and engagement.",
+        "analytics.overview.read",
+        "Overview tab",
+        "The Overview tab, and the learner numbers on the Home dashboard.",
       ),
       entry(
         "analytics.revenue.read",
-        "View revenue analytics",
-        "See sales and revenue reports.",
+        "Revenue tab",
+        "The Revenue tab, and money wherever analytics show it.",
+      ),
+      entry(
+        "analytics.course.read",
+        "Courses & Content tab",
+        "How courses, lessons and quizzes perform.",
+      ),
+      // The tabs the advanced analytics plugin adds, where it is installed.
+      entry(
+        "analytics.learning.read",
+        "Learning tab",
+        "How learners progress through lessons and courses.",
+      ),
+      entry(
+        "analytics.learners.read",
+        "Learners tab",
+        "Who is learning, how active they are, and who has drifted.",
+      ),
+      entry(
+        "analytics.conversion.read",
+        "Conversion tab",
+        "How visitors become enrolled and paying learners.",
+      ),
+      entry(
+        "analytics.delivery.read",
+        "Data Delivery tab",
+        "How much video and data the academy serves.",
+      ),
+      entry(
+        "analytics.storage.read",
+        "Storage tab",
+        "How much storage the academy's media uses.",
+      ),
+      entry(
+        "analytics.video_quality.read",
+        "Video Quality tab",
+        "Playback quality, buffering and errors learners see.",
       ),
     ],
   },
@@ -416,9 +402,6 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "Invite or add people to the team by email.",
         ["team.read", "role.read"],
       ),
-      entry("team.update", "Edit team members", "Change a member's details.", [
-        "team.read",
-      ]),
       entry(
         "team.remove",
         "Remove team members",
@@ -453,6 +436,31 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
     ],
   },
 ];
+
+/**
+ * Keys kept for features not built yet (assignments, grading, certificates,
+ * enrolling by hand, editing a member's details). Nothing checks them, so
+ * the role editor leaves them out rather than offer a tick that does
+ * nothing. They stay in `permissions`: the seed derives ids from position.
+ */
+export const reservedPermissions: readonly Permission[] = [
+  "assignment.read",
+  "assignment.create",
+  "assignment.update",
+  "assignment.publish",
+  "assignment.delete",
+  "submission.grade",
+  "submission.grade.override",
+  "enrollment.create",
+  "enrollment.cancel",
+  "certificate.issue",
+  "certificate.revoke",
+  "team.update",
+];
+
+/** Every key the role editor offers, in catalogue order. */
+export const cataloguePermissions: readonly Permission[] =
+  permissionCatalogue.flatMap((group) => group.entries.map((item) => item.key));
 
 const entriesByKey = new Map<Permission, PermissionCatalogueEntry>(
   permissionCatalogue.flatMap((group) =>

@@ -1,4 +1,10 @@
-import { useEffect } from "react";
+import {
+  getPageFullscreenElement,
+  PAGE_FULLSCREEN_CHANGE_EVENT,
+} from "@veolms/video-player";
+import { useEffect, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { getDocumentFullscreenElement } from "../fullscreen";
 import {
   applyReadingModePreferences,
   READING_MODE_CHANGE_EVENT,
@@ -6,7 +12,51 @@ import {
   readReadingModePreferences,
 } from "./readingModePreferences";
 
+const FULLSCREEN_EVENTS = [
+  "fullscreenchange",
+  "webkitfullscreenchange",
+  PAGE_FULLSCREEN_CHANGE_EVENT,
+];
+
+const subscribeToFullscreen = (onChange: () => void) => {
+  for (const type of FULLSCREEN_EVENTS) {
+    document.addEventListener(type, onChange);
+  }
+  return () => {
+    for (const type of FULLSCREEN_EVENTS) {
+      document.removeEventListener(type, onChange);
+    }
+  };
+};
+
+/**
+ * The element on screen in place of the page, if any. A full screen (and the
+ * page full screen the player draws itself, a top-layer popover) paints only
+ * that element, so layers left over the page never reach it. A video or
+ * other replaced element cannot hold the layers; the page's own layers are
+ * kept then.
+ */
+const getFullscreenHost = (): HTMLElement | null => {
+  const element = getDocumentFullscreenElement() ?? getPageFullscreenElement();
+  if (!(element instanceof HTMLElement)) return null;
+  if (
+    element instanceof HTMLVideoElement ||
+    element instanceof HTMLIFrameElement ||
+    element instanceof HTMLImageElement
+  ) {
+    return null;
+  }
+  return element;
+};
+const getServerFullscreenHost = () => null;
+
 export function ReadingModeEffects() {
+  const fullscreenHost = useSyncExternalStore(
+    subscribeToFullscreen,
+    getFullscreenHost,
+    getServerFullscreenHost,
+  );
+
   useEffect(() => {
     const refresh = () =>
       applyReadingModePreferences(readReadingModePreferences());
@@ -36,7 +86,7 @@ export function ReadingModeEffects() {
     };
   }, []);
 
-  return (
+  const layers = (
     <>
       <div
         className="reading-mode-effects reading-mode-effects__texture"
@@ -53,4 +103,8 @@ export function ReadingModeEffects() {
       />
     </>
   );
+
+  // Inside the full-screen element the layers share its stacking context, so
+  // they blend with the video exactly as they blend with the page.
+  return fullscreenHost ? createPortal(layers, fullscreenHost) : layers;
 }

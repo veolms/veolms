@@ -5,6 +5,7 @@ import { DEFAULT_HOME_PAGE_SETTINGS } from "@veolms/contracts/home-page-defaults
 import { useState, type FormEvent } from "react";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import { useBeforeUnloadWarning } from "../hooks/useBeforeUnloadWarning";
 import { getApiError } from "../lib/api-error";
 import {
   useHomePageSettings,
@@ -67,30 +68,72 @@ function HomePageSettingsForm({
   setNotice?: (message: string) => void;
 }) {
   const [draft, setDraft] = useState(saved);
+  // A newer saved copy (saved in another tab, say) replaces a draft with no
+  // edits of its own; a draft with edits is kept, and shows as unsaved.
+  const [draftBase, setDraftBase] = useState(saved);
+  if (draftBase !== saved) {
+    setDraftBase(saved);
+    if (JSON.stringify(draft) === JSON.stringify(draftBase)) setDraft(saved);
+  }
   const optionsQuery = useHomePageSettingsOptions();
   const updateSettings = useUpdateHomePageSettings();
+  const saveHeroVideo = useUpdateHomePageSettings();
 
   const courses = optionsQuery.data?.courses ?? [];
   const isDirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const problem = getBlockingProblem(draft);
+  const saving = updateSettings.isPending || saveHeroVideo.isPending;
   const saveError = updateSettings.isError
     ? getApiError(updateSettings.error).message
-    : null;
+    : saveHeroVideo.isError
+      ? `The laptop video could not be saved: ${getApiError(saveHeroVideo.error).message} Save changes to try again.`
+      : null;
+
+  useBeforeUnloadWarning(isDirty || saving);
 
   const update = <Key extends keyof HomePageSettings>(
     key: Key,
     value: HomePageSettings[Key],
   ) => {
     updateSettings.reset();
+    saveHeroVideo.reset();
     setDraft((current) => ({ ...current, [key]: value }));
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (problem || updateSettings.isPending) return;
+    if (problem || saving) return;
     updateSettings.mutate(draft, {
-      onSuccess: () => setNotice?.("Home page saved."),
+      onSuccess: (result) => {
+        setDraft(result.settings);
+        setNotice?.("Home page saved.");
+      },
     });
+  };
+
+  // A video uploaded or imported for the laptop is saved as soon as it has
+  // been sent (or its import queued), on its own: it is already being
+  // processed, and leaving before "Save changes" would lose it. The other
+  // edits stay in the draft, unsaved. Until it is ready, visitors see the
+  // default lesson.
+  const chooseUploadedHeroVideo = (
+    heroVideo: HomePageSettings["heroVideo"],
+  ) => {
+    update("heroVideo", heroVideo);
+    saveHeroVideo.mutate(
+      { ...saved, heroVideo },
+      {
+        onSuccess: (result) => {
+          setDraft((current) => ({
+            ...current,
+            heroVideo: result.settings.heroVideo,
+          }));
+          setNotice?.(
+            "Laptop video saved. Visitors see it once it has been processed.",
+          );
+        },
+      },
+    );
   };
 
   return (
@@ -100,6 +143,14 @@ function HomePageSettingsForm({
         title="Hero"
         description="The banner at the top of the page, over the hero picture."
       >
+        <TextField
+          id="home-page-hero-eyebrow"
+          label="Line above the headline"
+          value={draft.hero.eyebrow}
+          onChange={(eyebrow) => update("hero", { ...draft.hero, eyebrow })}
+          maxLength={40}
+          hint="Shown small and in capitals. Leave empty to hide it."
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
             id="home-page-hero-headline"
@@ -160,6 +211,8 @@ function HomePageSettingsForm({
         key={draft.heroVideo.source}
         heroVideo={draft.heroVideo}
         onChange={(heroVideo) => update("heroVideo", heroVideo)}
+        onUploadChosen={chooseUploadedHeroVideo}
+        uploadSaving={saveHeroVideo.isPending}
         courses={courses}
         optionsLoading={optionsQuery.isLoading}
       />
@@ -298,7 +351,7 @@ function HomePageSettingsForm({
           <Button
             type="submit"
             motion="static"
-            disabled={!isDirty || Boolean(problem) || updateSettings.isPending}
+            disabled={!isDirty || Boolean(problem) || saving}
           >
             {updateSettings.isPending ? (
               <CircleNotch size={16} className="animate-spin" />
@@ -340,8 +393,6 @@ export function HomePageSettingsEditor({
     </div>
   ) : (
     <HomePageSettingsForm
-      // A save replaces the saved copy; start the draft from it again.
-      key={settingsQuery.data.updatedAt ?? "default"}
       saved={settingsQuery.data.settings}
       savedAt={settingsQuery.data.updatedAt}
       setNotice={setNotice}

@@ -1,6 +1,6 @@
 import type {
   DashboardRevenueOverview,
-  DashboardSummaryResponse,
+  DashboardLearningActivity,
 } from "@veolms/contracts";
 
 export interface RevenuePlotBounds {
@@ -23,7 +23,7 @@ export interface ActiveRevenuePoint extends RevenuePointPosition {
 }
 
 export type ActivityBuckets =
-  DashboardSummaryResponse["learningActivity"]["enrollmentActivity"]["buckets"];
+  DashboardLearningActivity["enrollmentActivity"]["buckets"];
 
 export interface ActiveActivityPoint extends RevenuePointPosition {
   index: number;

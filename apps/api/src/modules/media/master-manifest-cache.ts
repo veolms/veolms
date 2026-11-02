@@ -3,16 +3,22 @@
  * MPD), kept in memory so the playback bootstrap can carry it and the player
  * skips one round trip on the first frame. A VOD manifest does not change
  * once the video is ready, and callers key it by output (a re-transcode is
- * a new key), so it is kept for a day. With 5 minutes most lesson starts
+ * a new key), so an entry never goes stale: it is kept until the least
+ * recently used entry has to make room. With 5 minutes most lesson starts
  * found it gone and waited on a storage read (250-450ms) that often missed
- * the timeout, so the manifest was not inlined at all.
+ * the timeout, so the manifest was not inlined at all; with a day, a lesson
+ * nobody opened that day paid that read again.
  *
  * Inlining is an enhancement: every failure here ends in `undefined`, and
  * the bootstrap goes out without it.
  */
 
 export const MASTER_MANIFEST_CACHE_MAX_ENTRIES = 500;
-export const MASTER_MANIFEST_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * No expiry. Memory stays bounded by the entry limit: real manifests are a
+ * few KB, and even 500 at the 64KB cap below is 32MB.
+ */
+export const MASTER_MANIFEST_CACHE_TTL_MS = Number.POSITIVE_INFINITY;
 /** Longer than this and the player is quicker fetching it from the CDN. */
 export const MASTER_MANIFEST_READ_TIMEOUT_MS = 350;
 /** Master playlists are a few hundred bytes; anything far larger is not one. */
@@ -59,10 +65,10 @@ export function createMasterManifestCache(
   function get(key: string): string | undefined {
     const entry = entries.get(key);
     if (!entry) return undefined;
-    if (entry.expiresAt <= now()) {
-      entries.delete(key);
-      return undefined;
-    }
+    entries.delete(key);
+    if (entry.expiresAt <= now()) return undefined;
+    // Back to the newest end, so a lesson in use is never the one evicted.
+    entries.set(key, entry);
     return entry.text;
   }
 

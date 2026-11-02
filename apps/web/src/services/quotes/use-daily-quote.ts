@@ -16,6 +16,13 @@ const SAVED_QUOTE_KEY = "veolms-daily-quote";
 /** The quote changes with the UTC day, so that is the day it is kept for. */
 const utcDay = (time: number) => new Date(time).toISOString().slice(0, 10);
 
+/** How long until the UTC day of `time` ends, when the next quote is out. */
+const untilNextUtcDay = (time: number) => {
+  const next = new Date(time);
+  next.setUTCHours(24, 0, 0, 0);
+  return Math.max(0, next.getTime() - Date.now());
+};
+
 interface SavedQuote {
   quote: DailyQuoteResponse;
   savedAt: number;
@@ -57,8 +64,9 @@ function saveQuote(quote: DailyQuoteResponse) {
 /**
  * The quote of the day. It is asked for in the browser, never while a page
  * is prerendered, so a built page does not carry the quote of its build day.
- * It changes once a day, so it is not asked for again within the hour, and
- * the one given today is kept for the next time the page is opened.
+ * It changes once a day, so it is not asked for again until the day is
+ * over, and the one given today is kept for the next time the page is
+ * opened.
  */
 export function useDailyQuote() {
   return useQuery<DailyQuoteResponse, ApiError>({
@@ -72,7 +80,7 @@ export function useDailyQuote() {
     initialDataUpdatedAt: () => readSavedQuote()?.savedAt,
     enabled: typeof window !== "undefined",
     retry: false,
-    staleTime: 60 * 60 * 1000,
+    staleTime: (query) => untilNextUtcDay(query.state.dataUpdatedAt),
     refetchOnWindowFocus: false,
   });
 }

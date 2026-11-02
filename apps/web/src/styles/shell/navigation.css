@@ -5,7 +5,10 @@
 
 .courses-nav {
   gap: 4px;
-  margin: 5px -14px -5px;
+  /* 10px above the menu (5px more than it had, in every desktop state: see
+     the collapsed rail in courses.css and the drag in cards-responsive.css),
+     so its first item stands clear of the logo. */
+  margin: 10px -14px -5px;
   padding: 5px 14px;
   overflow-x: visible;
   scrollbar-width: none;
@@ -601,7 +604,10 @@
   aspect-ratio: 1;
   place-items: center;
   border: 2px solid transparent;
-  border-radius: 15px;
+  /* The swatches grow and shrink with the sidebar's width. A fixed radius
+     turned the small ones into circles, so the corner keeps the proportion
+     it has at the default width (15px on 47px), never more than 15px. */
+  border-radius: min(15px, 32%);
   padding: 3px;
   color: white;
   background:
@@ -676,7 +682,7 @@
   width: 100%;
   height: 100%;
   border: 1px solid color-mix(in srgb, var(--theme-swatch) 76%, white 24%);
-  border-radius: 12px;
+  border-radius: min(12px, 32%);
   background: var(--theme-swatch);
   filter: saturate(1.05);
   box-shadow:

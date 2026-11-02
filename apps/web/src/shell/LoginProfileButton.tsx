@@ -66,12 +66,7 @@ export function LoginProfileButton({
           <ShellProfileAvatar avatarUrl={remembered.avatarUrl} />
         </span>
       ) : (
-        <i
-          aria-hidden="true"
-          className="courses-profile__login-icon flex size-13.5 shrink-0 items-center justify-center text-(--accent) [.mobile-menu-sheet\_\_profile_&]:size-13 [&>svg]:size-[52px] [&>svg]:shrink-0"
-        >
-          <GuestProfileIcon size={45.36} />
-        </i>
+        <LoginProfileIcon />
       )}
       <span className="courses-profile__login-copy">
         <strong
@@ -102,5 +97,20 @@ export function LoginProfileButton({
         </i>
       )}
     </button>
+  );
+}
+
+/**
+ * The signed-out profile mark in the button's picture frame; also stands
+ * for a remembered account that has no picture.
+ */
+export function LoginProfileIcon() {
+  return (
+    <i
+      aria-hidden="true"
+      className="courses-profile__login-icon flex size-13.5 shrink-0 items-center justify-center text-(--accent) [.mobile-menu-sheet\_\_profile_&]:size-13 [&>svg]:size-[52px] [&>svg]:shrink-0"
+    >
+      <GuestProfileIcon size={45.36} />
+    </i>
   );
 }

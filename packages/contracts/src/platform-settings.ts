@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
+  MAX_MAX_DEVICES_PER_STUDENT,
+  MIN_MAX_DEVICES_PER_STUDENT,
   PLATFORM_DISPLAY_MODES,
   type PlatformAppearanceSettings,
   type PlatformInvoiceSettings,
@@ -25,6 +27,12 @@ export const platformAppearanceSettingsSchema = z.strictObject({
 
 export const platformSecuritySettingsSchema = z.strictObject({
   requireVerifiedPhoneForEnrollment: z.boolean(),
+  maxDevicesPerStudent: z
+    .number()
+    .int()
+    .min(MIN_MAX_DEVICES_PER_STUDENT)
+    .max(MAX_MAX_DEVICES_PER_STUDENT)
+    .nullable(),
 }) satisfies z.ZodType<PlatformSecuritySettings>;
 
 /** A GSTIN: state code, PAN, entity number, "Z", check character. */
@@ -114,3 +122,20 @@ export const publicPlatformSettingsResponseSchema = platformSettingsSchema.omit(
   { invoice: true },
 ) satisfies z.ZodType<PublicPlatformSettings>;
 export type PublicPlatformSettingsResponse = PublicPlatformSettings;
+
+/**
+ * The last "Rebuild all public pages" of the API process that answers: every
+ * course page, lesson page and the home page built again and deployed.
+ */
+export const staticSiteRebuildStatusSchema = z.strictObject({
+  status: z.enum(["idle", "queued", "running", "succeeded", "failed"]),
+  message: z.string().nullable(),
+  updatedAt: z.string(),
+  runUrl: z.string().url().nullable(),
+});
+export type StaticSiteRebuildStatus = z.infer<
+  typeof staticSiteRebuildStatusSchema
+>;
+z.globalRegistry.add(staticSiteRebuildStatusSchema, {
+  id: "StaticSiteRebuildStatus",
+});

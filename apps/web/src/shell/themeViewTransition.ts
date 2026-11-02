@@ -115,15 +115,41 @@ export function applyRootPalette(palette: string): void {
   document.documentElement.dataset.palette = palette;
 }
 
+// Called when a reveal starts drawing the new page (its `ready`, or its end
+// when it is skipped before that).
+const revealStartListeners = new Set<(kind: ThemeViewTransitionKind) => void>();
+
+/**
+ * Calls `listener` each time a reveal starts drawing. The page is not drawn
+ * at all between a change and this moment (the browser holds it while it
+ * captures the old and the new page), so motion meant to be seen with the
+ * change starts here: started at the press, its first part played unseen
+ * and it jumped (on a phone, most of the light/dark switch's slide).
+ */
+export function onThemeRevealStart(
+  listener: (kind: ThemeViewTransitionKind) => void,
+): () => void {
+  revealStartListeners.add(listener);
+  return () => {
+    revealStartListeners.delete(listener);
+  };
+}
+
+/** Whether a change of theme is revealed (and so waits for its start). */
+export function themeRevealAvailable(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    typeof document.startViewTransition === "function" &&
+    !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 export function applyWithThemeViewTransition(
   commit: () => void,
   kind: ThemeViewTransitionKind = "mode",
   origin?: ThemeRevealOrigin,
 ): ViewTransition | null {
-  if (
-    typeof document.startViewTransition !== "function" ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  ) {
+  if (!themeRevealAvailable()) {
     commit();
     return null;
   }
@@ -159,5 +185,9 @@ export function applyWithThemeViewTransition(
     activeThemeViewTransitions.delete(transition);
   };
   transition.finished.then(clear, clear);
+  const started = () => {
+    for (const listener of [...revealStartListeners]) listener(kind);
+  };
+  transition.ready.then(started, started);
   return transition;
 }

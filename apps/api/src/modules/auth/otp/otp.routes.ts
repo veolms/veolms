@@ -92,7 +92,7 @@ const otpRoutes: RoutePlugin = async (app, options) => {
     "/auth/me/phone/otp/verify",
     {
       // Six-digit code space, and each wrong guess here costs the caller
-      // nothing but one of three attempts on a code they can request again.
+      // nothing but one of five attempts on a code they can request again.
       config: {
         rateLimit: {
           max: 10,
@@ -161,7 +161,7 @@ const otpRoutes: RoutePlugin = async (app, options) => {
     "/auth/me/email/otp/verify",
     {
       // As for the mobile code: a six-digit code space, and a wrong guess
-      // costs only one of three attempts on a code that can be requested
+      // costs only one of five attempts on a code that can be requested
       // again.
       config: {
         rateLimit: {

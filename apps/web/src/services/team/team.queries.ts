@@ -24,8 +24,12 @@ export function useTeamRoles(options?: { enabled?: boolean }) {
   });
 }
 
-export function useTeamMembers(search: string) {
+export function useTeamMembers(
+  search: string,
+  options?: { enabled?: boolean },
+) {
   return useInfiniteQuery<TeamMemberListResponse, ApiError>({
+    enabled: options?.enabled ?? true,
     queryKey: teamKeys.memberList(search),
     queryFn: ({ pageParam }) =>
       teamService.listMembers({
@@ -50,8 +54,12 @@ export function useTeamUserSearch(q: string) {
   });
 }
 
-export function useTeamInvitations(status: string) {
+export function useTeamInvitations(
+  status: string,
+  options?: { enabled?: boolean },
+) {
   return useInfiniteQuery<TeamInvitationListResponse, ApiError>({
+    enabled: options?.enabled ?? true,
     queryKey: teamKeys.invitationList(status),
     queryFn: ({ pageParam }) =>
       teamService.listInvitations({

@@ -54,14 +54,22 @@ export async function listPlatformRoleNames(
   return rows.map((row) => row.name);
 }
 
-/** The actor as the rules see them, read fresh (not from the session cache). */
+/**
+ * The actor as the rules see them, read fresh (not from the session cache).
+ * Only permissions that reach every course count: an instructor's stop at
+ * their own courses, so they are not theirs to hand out academy-wide.
+ */
 export async function loadActor(
   database: Executor,
   userId: string,
 ): Promise<Actor> {
   const [roleNames, permissions] = await Promise.all([
     listPlatformRoleNames(database, userId),
-    getUserEffectivePermissions(database, { userId, courseId: null }),
+    getUserEffectivePermissions(database, {
+      userId,
+      courseId: null,
+      excludeOwnCoursesOnlyRoles: true,
+    }),
   ]);
   return { userId, roleNames, permissions: new Set(permissions) };
 }
@@ -123,5 +131,6 @@ export async function isFeatureEnabled(
     .select("enabled")
     .where("feature_key", "=", featureKey)
     .executeTakeFirst();
-  return row?.enabled ?? false;
+  // A missing row counts as on, as the permission guard reads it.
+  return row?.enabled ?? true;
 }

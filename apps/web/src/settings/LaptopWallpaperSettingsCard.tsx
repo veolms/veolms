@@ -2,7 +2,15 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { LaptopIcon as Laptop } from "@phosphor-icons/react/Laptop";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
-import { useRef, useState, type ChangeEvent } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
+import type { LaptopWallpaperCrop } from "../home/learner/laptopWallpaperImage";
 import {
   chooseLaptopWallpaper,
   LAPTOP_WALLPAPERS,
@@ -11,6 +19,14 @@ import {
   useLaptopWallpaper,
   type LaptopWallpaperId,
 } from "../home/learner/laptopWallpaper";
+
+// Only needed once a picture is picked, so it is not part of the page.
+const loadWallpaperImage = () => import("../home/learner/laptopWallpaperImage");
+const WallpaperCropDialog = lazy(() =>
+  import("./WallpaperCropDialog").then((module) => ({
+    default: module.WallpaperCropDialog,
+  })),
+);
 
 /** One wallpaper to pick, drawn in the laptop screen's own shape. */
 function WallpaperChoice({
@@ -72,6 +88,17 @@ export function LaptopWallpaperSettingsCard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPreparing, setIsPreparing] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // The picture picked, while the learner places it on the screen.
+  const [placing, setPlacing] = useState<{ file: File; url: string } | null>(
+    null,
+  );
+  const [placingProblem, setPlacingProblem] = useState<string | null>(null);
+  useEffect(
+    () => () => {
+      if (placing) URL.revokeObjectURL(placing.url);
+    },
+    [placing],
+  );
 
   const choose = (id: LaptopWallpaperId) => {
     setProblem(null);
@@ -84,19 +111,37 @@ export function LaptopWallpaperSettingsCard() {
     event.target.value = "";
     if (!file) return;
     setProblem(null);
-    setIsPreparing(true);
     try {
-      // Only needed once a picture is picked, so it is not part of the page.
-      const { prepareLaptopWallpaper } =
-        await import("../home/learner/laptopWallpaperImage");
-      const picture = await prepareLaptopWallpaper(file);
-      if (!saveOwnLaptopWallpaper(picture)) {
-        setProblem(
-          "This browser has no room left to keep the picture. Try a smaller one.",
-        );
-      }
+      const { checkLaptopWallpaperFile } = await loadWallpaperImage();
+      checkLaptopWallpaperFile(file);
     } catch (error) {
       setProblem(
+        error instanceof Error && error.message
+          ? error.message
+          : "That picture could not be used.",
+      );
+      return;
+    }
+    setPlacingProblem(null);
+    setPlacing({ file, url: URL.createObjectURL(file) });
+  };
+
+  const applyPlacedPicture = async (crop: LaptopWallpaperCrop) => {
+    if (!placing) return;
+    setPlacingProblem(null);
+    setIsPreparing(true);
+    try {
+      const { prepareLaptopWallpaper } = await loadWallpaperImage();
+      const picture = await prepareLaptopWallpaper(placing.file, crop);
+      if (!saveOwnLaptopWallpaper(picture)) {
+        setPlacingProblem(
+          "This browser has no room left to keep the picture. Try a smaller one.",
+        );
+        return;
+      }
+      setPlacing(null);
+    } catch (error) {
+      setPlacingProblem(
         error instanceof Error && error.message
           ? error.message
           : "That picture could not be used.",
@@ -182,9 +227,20 @@ export function LaptopWallpaperSettingsCard() {
         ) : null}
       </div>
       <p className="mt-2 text-xs leading-5 text-(--text-secondary)">
-        Your picture is cut to the screen&apos;s shape and kept in this browser
-        only. It is not uploaded.
+        You place your picture on the screen before it is used. It is kept in
+        this browser only and is not uploaded.
       </p>
+      {placing ? (
+        <Suspense fallback={null}>
+          <WallpaperCropDialog
+            imageUrl={placing.url}
+            isSaving={isPreparing}
+            error={placingProblem}
+            onClose={() => setPlacing(null)}
+            onConfirm={(crop) => void applyPlacedPicture(crop)}
+          />
+        </Suspense>
+      ) : null}
       {problem ? (
         <p
           role="alert"

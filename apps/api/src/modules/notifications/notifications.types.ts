@@ -68,6 +68,8 @@ export interface NotificationAttachmentResolver {
 
 export interface NotificationHandlerDependencies {
   listActiveCourseRecipientUserIds(courseId: string): Promise<string[]>;
+  /** False keeps course-wide notifications in-app only (no email). */
+  courseWideEmail?: boolean;
 }
 
 export interface NotificationRecipient {

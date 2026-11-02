@@ -57,11 +57,20 @@ export function CourseDescriptionEditor({
 
   // External synchronization:
   // When parent `value` changes from outside (e.g. server hydration, course/lesson
-  // switch, or rollback on failed save), synchronize CodeMirror in place.
+  // switch, or rollback on failed save), it becomes the draft during render,
+  // not in an effect: the editor reads its text only when it mounts, and it
+  // can mount in the same commit as that value (the editor loads lazily) and
+  // then, in development, be rebuilt by StrictMode from what that render
+  // gave it. An editor that is already open is updated in place below.
+  const [renderedValue, setRenderedValue] = useState(value);
+  if (value !== renderedValue) {
+    setRenderedValue(value);
+    if (value !== draft.markdown) setDraft(createDiscussionDraft(value));
+  }
+
   useEffect(() => {
     if (value === lastReportedValueRef.current) return;
     lastReportedValueRef.current = value;
-    setDraft(createDiscussionDraft(value));
 
     const contentEl =
       containerRef.current?.querySelector<HTMLElement>(".cm-content");

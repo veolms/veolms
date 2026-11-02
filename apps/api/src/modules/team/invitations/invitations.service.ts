@@ -14,7 +14,11 @@ import { evictCachedUserSessions, STUDENT_ROLE } from "../../auth/index.ts";
 import { publishTeamEvent } from "../shared/team.events.ts";
 import type { TeamMailer } from "../shared/team.mailer.ts";
 import * as teamRepository from "../shared/team.repository.ts";
-import { assertCanHandleRoles, type RoleFacts } from "../shared/team.rules.ts";
+import {
+  assertCanHandleRoles,
+  isAdmin,
+  type RoleFacts,
+} from "../shared/team.rules.ts";
 import * as repository from "./invitations.repository.ts";
 import {
   grantTeamRoles,
@@ -113,6 +117,8 @@ export function createTeamInvitationsService({
     email: string,
     roles: RoleFacts[],
     input: CreateTeamInvitationsRequest,
+    /** Holds role.assign: an existing account is promoted at once. */
+    assignsDirectly: boolean,
   ): Promise<{
     outcome: TeamInvitationOutcome;
     invitationId: string | null;
@@ -124,8 +130,11 @@ export function createTeamInvitationsService({
 
     return await database.transaction().execute(async (trx) => {
       // An address that already belongs to a verified account is a plain
-      // promote: nothing to wait for.
-      const user = await repository.findVerifiedUserByEmail(trx, email);
+      // promote: nothing to wait for. Without role.assign it stays an
+      // invitation the person accepts (or claims at their next sign-in).
+      const user = assignsDirectly
+        ? await repository.findVerifiedUserByEmail(trx, email)
+        : undefined;
       if (user) {
         const held = new Set(
           await teamRepository.listTeamRoleIds(trx, user.id),
@@ -233,11 +242,19 @@ export function createTeamInvitationsService({
     const actor = await teamRepository.loadActor(database, actorUserId);
     assertCanHandleRoles(actor, roles);
     const roleNames = roles.map((role) => role.name);
+    const assignsDirectly =
+      isAdmin(actor) || actor.permissions.has("role.assign");
 
     const results: CreateTeamInvitationsResponse["results"] = [];
     for (const email of [...new Set(input.emails)]) {
       try {
-        const result = await inviteOne(actorUserId, email, roles, input);
+        const result = await inviteOne(
+          actorUserId,
+          email,
+          roles,
+          input,
+          assignsDirectly,
+        );
         if (result.userId && result.outcome === "promoted") {
           evictCachedUserSessions(result.userId);
         }
@@ -470,6 +487,13 @@ export function createTeamInvitationsService({
   ): Promise<void> {
     await database.transaction().execute(async (trx) => {
       const row = await lockOpenInvitation(trx, invitationId);
+      // Cancelling is taking back what the invitation would grant.
+      const roles = await teamRepository.findRolesByIds(
+        trx,
+        await repository.listInvitationRoleIds(trx, row.id),
+      );
+      const actor = await teamRepository.loadActor(trx, actorUserId);
+      assertCanHandleRoles(actor, roles);
       await repository.markRevoked(trx, row.id);
       await publishTeamEvent(trx, "team.invitation.revoked", {
         actorUserId,

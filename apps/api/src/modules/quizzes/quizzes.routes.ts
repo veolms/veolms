@@ -18,6 +18,8 @@ import {
   quizResultSchema,
   quizAssignmentSchema,
   quizSchema,
+  quizSubmissionQuerySchema,
+  quizSubmissionSchema,
   quizSummarySchema,
   setQuizCoursePricingRequestSchema,
   studentQuizReportSchema,
@@ -489,6 +491,23 @@ const quizRoutes: RoutePlugin = async (app, options) => {
       preHandler: can("submission.read"),
     },
     controller.assignmentAnalytics,
+  );
+  app.get(
+    "/quiz-assignments/:assignmentId/students/:studentId/submission",
+    {
+      schema: {
+        operationId: "getQuizSubmission",
+        tags: ["Quizzes"],
+        params: z.object({ assignmentId: z.uuid(), studentId: z.uuid() }),
+        querystring: quizSubmissionQuerySchema,
+        response: {
+          200: jsonResponse("Quiz submission", quizSubmissionSchema),
+          ...errors,
+        },
+      },
+      preHandler: can("submission.read"),
+    },
+    controller.submission,
   );
   app.get(
     "/courses/:courseId/quiz-analytics",

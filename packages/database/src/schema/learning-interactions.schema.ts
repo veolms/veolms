@@ -37,6 +37,12 @@ export interface LearningThreadTable {
   accepted_answer_id: string | null;
   likes_count: Generated<number>;
   replies_count: Generated<number>;
+  /** Pinned to the top of its lesson's discussion by staff. */
+  pinned_at: Date | null;
+  pinned_by_user_id: string | null;
+  /** The creator's heart: when and by whom it was given. */
+  hearted_at: Date | null;
+  hearted_by_user_id: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

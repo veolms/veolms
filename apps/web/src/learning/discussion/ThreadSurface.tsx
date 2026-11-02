@@ -13,6 +13,7 @@ import {
   DrawerDescription,
   DrawerTitle,
 } from "../../components/ui/drawer";
+import { ExpandableSearch } from "../../ExpandableSearch";
 import { ThemedSelect } from "../../ThemedSelect";
 import { CommentCard } from "../CommentCard";
 import type { Comment } from "../CommentCard";
@@ -46,6 +47,7 @@ import {
   MobileCompactComposerPortal,
   CompactComposer,
 } from "./CompactComposer";
+import { useStableHandlers } from "./useStableHandlers";
 import {
   type ComposerMode,
   DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT,
@@ -76,6 +78,13 @@ interface ThreadSurfaceProps {
   feedView: DiscussionFeedView;
   /** The learner is signed in, so the feed can be narrowed to their own. */
   canFilterMine: boolean;
+  /** What is typed into the discussion search, as typed. */
+  search: string;
+  /** The list being shown is the search's results. */
+  isSearchActive: boolean;
+  /** The list is still the last one, kept while the search's loads. */
+  isSearchPending?: boolean;
+  onSearchChange: (value: string) => void;
   entries: Comment[];
   noteDeepLinkTargetId?: string | null;
   onNoteDeepLinkHandled?: (noteId: string) => void;
@@ -85,6 +94,12 @@ interface ThreadSurfaceProps {
   highlightedThreadId?: string | null;
   onThreadHighlightShown?: () => void;
   discussionCount?: number;
+  /**
+   * Where the count comes from, "<course id>:<lesson id>:<field>", for the
+   * script that fills the number in from the browser's copy before the
+   * page is drawn (lessonPageEarlyState.ts).
+   */
+  discussionCountSource?: string;
   draftIsTooLong: boolean;
   draftAttachmentCount: number;
   canSubmitDraft: boolean;
@@ -113,6 +128,12 @@ interface ThreadSurfaceProps {
   participationActionLabel?: string;
   onParticipationAction?: () => void;
   loginToParticipate?: boolean;
+  /**
+   * The session has said who the viewer is (their picture is known). Until
+   * then a browser that remembers a session shows the picture this tab
+   * remembers.
+   */
+  viewerKnown?: boolean;
   isAllDisabled: boolean;
   availableFilters: readonly (readonly [DiscussionEntryFilter, string])[];
   enabledKinds: DiscussionEntryKind[];
@@ -143,7 +164,8 @@ interface ThreadSurfaceProps {
   onOpenThread: (id: string | number, focusComposer?: boolean) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
-  userRole?: string;
+  /** May lock any thread and accept any answer (see Discussion). */
+  canModerate?: boolean;
   onToggleAcceptReply?: (
     threadId: string | number,
     replyId: string | number,
@@ -225,6 +247,22 @@ function DiscussionLoadingRow({
   );
 }
 
+/**
+ * What only the desktop arrangement has (the composer above the list). The
+ * page knows it is on a phone only once it runs (see
+ * `usePhoneComposerLayout`, the same 640px); a page built ahead of time is
+ * drawn in the desktop arrangement, so at phone width these are hidden
+ * until the phone's takes its place, and nothing moves when it does.
+ */
+const DESKTOP_ONLY = "max-[640px]:hidden";
+
+/** What pressing the composer does, for someone who may not post yet. */
+function getParticipationLabel(actionLabel?: string) {
+  return actionLabel === "Get access"
+    ? "Get access to join the discussion"
+    : "Log in to join the discussion";
+}
+
 export function ThreadSurface({
   scrollMemoryKey,
   lessonDescription,
@@ -239,6 +277,10 @@ export function ThreadSurface({
   entryFilter,
   feedView,
   canFilterMine,
+  search,
+  isSearchActive,
+  isSearchPending = false,
+  onSearchChange,
   entries,
   noteDeepLinkTargetId = null,
   onNoteDeepLinkHandled,
@@ -246,6 +288,7 @@ export function ThreadSurface({
   highlightedThreadId = null,
   onThreadHighlightShown,
   discussionCount,
+  discussionCountSource,
   draftIsTooLong,
   draftAttachmentCount,
   canSubmitDraft,
@@ -274,6 +317,7 @@ export function ThreadSurface({
   participationActionLabel,
   onParticipationAction,
   loginToParticipate = false,
+  viewerKnown = false,
   isAllDisabled,
   availableFilters,
   enabledKinds,
@@ -295,7 +339,7 @@ export function ThreadSurface({
   onOpenThread,
   isBackendMode = false,
   currentUserId,
-  userRole,
+  canModerate,
   onToggleAcceptReply,
   onToggleLockThread,
   onToggleBookmark,
@@ -307,6 +351,8 @@ export function ThreadSurface({
   courseId,
 }: ThreadSurfaceProps) {
   const isPhone = usePhoneComposerLayout();
+  // On a phone the search is a button until it is pressed.
+  const [searchOpen, setSearchOpen] = useState(false);
   const deletionRevision = useOptimisticDeletionRevision();
   const composerHostRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
@@ -338,15 +384,47 @@ export function ThreadSurface({
   const compactComposerScrollHidden =
     mobileBottomNavigation && mobileBottomNavigationHidden;
   const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
-  // A signed-out visitor sees the same composer, so they can tell they could
-  // join in; pressing it asks them to log in. It is in the prerendered page,
-  // hidden from the first paint in a browser that remembers a session.
+  // Everyone sees the composer, from the first paint on, whether or not
+  // they may post here: pressing it opens it for someone who may, asks a
+  // visitor to log in and someone without access to get it (the course's
+  // page). Pressed before the server has said which, it waits for the
+  // answer. A visitor's has the guest's mark; it is in the prerendered page
+  // and hidden from the first paint in a browser that remembers a session,
+  // where one with the remembered picture is shown instead.
   const guestComposerShown =
     loginToParticipate &&
     !canParticipate &&
     enabledKinds.length > 0 &&
     Boolean(onParticipationAction);
+  const viewerComposerShown =
+    !canParticipate &&
+    enabledKinds.length > 0 &&
+    Boolean(onParticipationAction);
   const openLoginToParticipate = () => onParticipationAction?.();
+  const [openWhenKnown, setOpenWhenKnown] = useState(false);
+  // Assigned below, once the phone's composer can be opened.
+  const openMobileComposerRef = useRef<() => void>(() => undefined);
+  const askToParticipate = () => {
+    if (participationState === "pending") setOpenWhenKnown(true);
+    else onParticipationAction?.();
+  };
+  useEffect(() => {
+    if (!openWhenKnown || participationState === "pending") return;
+    setOpenWhenKnown(false);
+    if (!canParticipate) {
+      onParticipationAction?.();
+    } else if (isPhone) {
+      openMobileComposerRef.current();
+    } else {
+      setComposerMode("desktop");
+    }
+  }, [
+    canParticipate,
+    isPhone,
+    onParticipationAction,
+    openWhenKnown,
+    participationState,
+  ]);
   // The empty list offers to start what its filter shows: a question under
   // Q&As, a note under Notes. It offers nothing to someone who cannot post
   // here, or cannot post that kind.
@@ -406,6 +484,7 @@ export function ThreadSurface({
     setMobileComposerViewportHeight(geometry.visualViewportHeight);
     setComposerMode("mobile");
   }, [getMobileComposerViewportGeometry]);
+  openMobileComposerRef.current = openMobileComposer;
 
   const startFromEmptyState = () => {
     if (emptyStateKind) onEntryKindChange(emptyStateKind);
@@ -488,9 +567,13 @@ export function ThreadSurface({
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
+      // The emoji picker opens in a layer outside the composer; a press on
+      // an emoji closed the composer before the emoji could be inserted.
       if (
         target instanceof Element &&
-        target.closest("[data-comment-composer-container]")
+        target.closest(
+          "[data-comment-composer-container], [data-comment-emoji-picker]",
+        )
       ) {
         return;
       }
@@ -608,26 +691,45 @@ export function ThreadSurface({
     onNoteDeepLinkHandled?.(noteDeepLinkTargetId);
   }, [entryFilter, noteDeepLinkTargetId, onNoteDeepLinkHandled]);
 
+  // The cards are memoized; handlers that kept changing identity rendered
+  // every card again on every render of the discussion.
+  const cardHandlers = useStableHandlers({
+    onLike,
+    onEdit,
+    onDelete,
+    onReplyEditFailure,
+    onDeleteFailure,
+    onReport,
+    onOpenThread,
+    onToggleAcceptReply,
+    onToggleLockThread,
+    onToggleBookmark,
+    onToggleFollow,
+    onSeekToTimestamp,
+    onCopyTextNotice,
+    onThreadHighlightShown,
+  });
+
   const renderEntry = useCallback(
     (entry: Comment) => (
       <CommentCard
         comment={entry}
-        onLike={onLike}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onEditFailure={onReplyEditFailure}
-        onDeleteFailure={onDeleteFailure}
-        onReport={onReport}
-        onOpenThread={onOpenThread}
+        onLike={cardHandlers.onLike}
+        onEdit={cardHandlers.onEdit}
+        onDelete={cardHandlers.onDelete}
+        onEditFailure={cardHandlers.onReplyEditFailure}
+        onDeleteFailure={cardHandlers.onDeleteFailure}
+        onReport={cardHandlers.onReport}
+        onOpenThread={cardHandlers.onOpenThread}
         isBackendMode={isBackendMode}
         currentUserId={currentUserId}
-        userRole={userRole}
-        onToggleAcceptReply={onToggleAcceptReply}
-        onToggleLockThread={onToggleLockThread}
-        onToggleBookmark={onToggleBookmark}
-        onToggleFollow={onToggleFollow}
-        onSeekToTimestamp={onSeekToTimestamp}
-        onCopyTextNotice={onCopyTextNotice}
+        canModerate={canModerate}
+        onToggleAcceptReply={cardHandlers.onToggleAcceptReply}
+        onToggleLockThread={cardHandlers.onToggleLockThread}
+        onToggleBookmark={cardHandlers.onToggleBookmark}
+        onToggleFollow={cardHandlers.onToggleFollow}
+        onSeekToTimestamp={cardHandlers.onSeekToTimestamp}
+        onCopyTextNotice={cardHandlers.onCopyTextNotice}
         courseId={courseId}
         canParticipate={canParticipate}
         constrainToContainer
@@ -654,33 +756,20 @@ export function ThreadSurface({
           entry.entryKind !== "note" &&
           getServerEntityId(entry) === highlightedThreadId,
         )}
-        onHighlightShown={onThreadHighlightShown}
+        onHighlightShown={cardHandlers.onThreadHighlightShown}
       />
     ),
     [
+      cardHandlers,
       courseId,
       currentUserId,
       isBackendMode,
-      onDelete,
-      onDeleteFailure,
-      onEdit,
-      onLike,
-      onOpenThread,
-      onReplyEditFailure,
-      onReport,
-      onToggleAcceptReply,
-      onToggleBookmark,
-      onToggleFollow,
-      onSeekToTimestamp,
-      onCopyTextNotice,
-      onToggleLockThread,
       capabilities.allowNotes,
       canParticipate,
       noteDeepLinkTargetId,
       linkedThreadId,
       highlightedThreadId,
-      onThreadHighlightShown,
-      userRole,
+      canModerate,
     ],
   );
 
@@ -808,24 +897,49 @@ export function ThreadSurface({
     );
   }
 
+  // The kinds to show, and beside them the search: a field at the row's end
+  // on a wider screen, a button on a phone that opens the field over the
+  // kinds. A page built ahead of time is drawn in the wider arrangement, so
+  // at phone width its field is hidden until the phone's button takes over.
   const discussionFilters =
     availableFilters.length > 0 ? (
-      <div
-        role="group"
-        aria-label="Filter discussion entries"
-        className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
-      >
-        {availableFilters.map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={entryFilter === value}
-            onClick={() => onEntryFilterChange(value)}
-            className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
+      <div className="mt-3 flex w-full min-w-0 items-start gap-2 sm:mt-5">
+        <ExpandableSearch
+          inputId="discussion-search-input"
+          label="Search discussions"
+          placeholder="Search discussions..."
+          value={search}
+          onValueChange={onSearchChange}
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          persistentDesktop={!isPhone}
+          forcePersistentDesktop
+          size="compact"
+          shortcut={false}
+          clearOnBack
+          closeOnEmptyBlur
+          backLabel="Back from discussion search"
+          shellClassName={isPhone ? "" : "max-[640px]:hidden"}
+          triggerIconSize={19}
+        >
+          <div
+            role="group"
+            aria-label="Filter discussion entries"
+            className="learning-discussion__filter-group flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            {label}
-          </button>
-        ))}
+            {availableFilters.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={entryFilter === value}
+                onClick={() => onEntryFilterChange(value)}
+                className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </ExpandableSearch>
       </div>
     ) : null;
   const discussionToolbar = (
@@ -836,10 +950,46 @@ export function ThreadSurface({
       <p className="min-w-0 truncate text-lg leading-none font-semibold tracking-[-0.02em] text-(--text)">
         {/* The count is of everyone's; it is not said beside only the
             learner's own (the menu beside it then says "My Comments" and
-            so on). */}
-        {feedView === "mine" || discussionCount === undefined
-          ? "Discussions"
-          : `${discussionCount} Discussions`}
+            so on). Nor is it said over a search's results, which it does
+            not count. */}
+        {isSearchActive ? (
+          "Results"
+        ) : feedView === "mine" ? (
+          "Discussions"
+        ) : (
+          <>
+            {/* The number has a slot two figures wide from the start, a
+                shimmer until it is known, so neither it nor the words after
+                it move when it arrives. A single figure stands in its
+                middle, and the words follow closer than a space would put
+                them, so a short number does not stand apart from them. */}
+            {/* The number and its shimmer are both in the markup, the
+                slot's attribute choosing: a page drawn before its scripts
+                run fills the number in from the browser's copy and takes
+                the attribute off (lessonPageEarlyState.ts), and the first
+                render then agrees with it. */}
+            <span
+              className="mr-[0.22em] inline-block min-w-[2ch] text-center tabular-nums"
+              data-discussion-count={discussionCountSource ?? ""}
+              data-count-pending={discussionCount === undefined || undefined}
+            >
+              <span className="[[data-count-pending]_&]:hidden">
+                {discussionCount === undefined ? "" : discussionCount}
+              </span>
+              {/* Two unseen figures hold the line at the height the number
+                  will give it; the shimmer is laid over them, a little
+                  taller, without taking any room of its own. */}
+              <span
+                aria-hidden="true"
+                className="relative hidden [[data-count-pending]_&]:inline"
+              >
+                <span className="invisible">00</span>
+                <span className="absolute -inset-x-[0.06em] -inset-y-[0.1em] animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_14%,transparent)] motion-reduce:animate-none" />
+              </span>
+            </span>
+            Discussions
+          </>
+        )}
       </p>
       <span
         className="shrink-0 text-lg leading-none text-(--text-secondary)"
@@ -929,6 +1079,7 @@ export function ThreadSurface({
         layoutKey={`${composerMode}:${entryFilter}:${isLessonDescriptionLoading}:${descriptionLayoutRevision}`}
         viewportRef={discussionViewportRef}
         isPhone={isPhone}
+        stale={isSearchPending}
       />
       {isBackendMode && hasNextPage && (
         <div ref={feedSentinelRef} className="h-1" aria-hidden="true" />
@@ -983,6 +1134,7 @@ export function ThreadSurface({
         <DiscussionEmptyState
           filter={entryFilter}
           mine={feedView === "mine"}
+          searching={isSearchActive}
           canReturnToAll={
             entryFilter !== "all" &&
             availableFilters.some(([val]) => val === "all")
@@ -1006,16 +1158,14 @@ export function ThreadSurface({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {!isPhone && discussionDescription}
-      {/* Someone signed in without access gets no composer and no prompt in
-          its place: just the discussion. Someone signed out gets one that
-          asks them to log in. */}
+      {/* The composer is always there (see `viewerComposerShown`). */}
       {!isPhone && enabledKinds.length > 0 && canParticipate && (
         <div
           ref={composerHostRef}
           data-comment-composer-container
-          className={
+          className={`${
             hasDescriptionSurface ? "mt-3 scroll-mt-4 sm:mt-4" : "scroll-mt-4"
-          }
+          } ${DESKTOP_ONLY}`}
         >
           {canParticipate && composerMode === "desktop" ? (
             <CommentComposer
@@ -1054,12 +1204,34 @@ export function ThreadSurface({
           )}
         </div>
       )}
+      {!isPhone && viewerComposerShown && (
+        <div
+          data-comment-composer-container
+          className={`${
+            hasDescriptionSurface ? "mt-3 scroll-mt-4 sm:mt-4" : "scroll-mt-4"
+          } ${DESKTOP_ONLY} ${loginToParticipate ? "hidden [:root[data-session-hint=signed-in]_&]:block" : ""}`}
+        >
+          <CompactComposer
+            draft={draft}
+            attachmentCount={0}
+            promptText={promptText}
+            avatar={authorAvatar}
+            rememberedViewer={!viewerKnown}
+            label={
+              participationState === "pending"
+                ? "Open discussion composer"
+                : getParticipationLabel(participationActionLabel)
+            }
+            onOpen={askToParticipate}
+          />
+        </div>
+      )}
       {!isPhone && guestComposerShown && (
         <div
           data-comment-composer-container
           className={`${
             hasDescriptionSurface ? "mt-3 scroll-mt-4 sm:mt-4" : "scroll-mt-4"
-          } [:root[data-session-hint=signed-in]_&]:hidden!`}
+          } ${DESKTOP_ONLY} [:root[data-session-hint=signed-in]_&]:hidden!`}
         >
           <CompactComposer
             draft={draft}
@@ -1068,6 +1240,7 @@ export function ThreadSurface({
             avatar={null}
             label="Log in to join the discussion"
             opensOnTyping
+            guest
             onOpen={openLoginToParticipate}
           />
         </div>
@@ -1086,7 +1259,7 @@ export function ThreadSurface({
             ? // No gap above the list on a phone: it carries the space
               // as its own padding.
               "flex min-h-0 min-w-0 flex-1 flex-col"
-            : "mt-2.5 min-w-0 max-w-full"
+            : "mt-2.5 min-w-0 max-w-full max-[640px]:mt-0"
         }
         data-discussion-feed-list
       >
@@ -1116,7 +1289,7 @@ export function ThreadSurface({
                 place. The list still ends clear of the bottom navigation. */}
             {isPhone &&
             !canParticipate &&
-            !guestComposerShown &&
+            !viewerComposerShown &&
             mobileBottomNavigation ? (
               <div
                 aria-hidden="true"
@@ -1143,6 +1316,22 @@ export function ThreadSurface({
             onOpen={openMobileComposer}
           />
         )}
+      {isPhone && viewerComposerShown && !loginToParticipate && (
+        <MobileCompactComposerPortal
+          draft={draft}
+          attachmentCount={0}
+          promptText={promptText}
+          avatar={authorAvatar}
+          label={
+            participationState === "pending"
+              ? "Open discussion composer"
+              : getParticipationLabel(participationActionLabel)
+          }
+          mobileBottomNavigation={mobileBottomNavigation}
+          scrollHidden={compactComposerScrollHidden}
+          onOpen={askToParticipate}
+        />
+      )}
       {isPhone && guestComposerShown && (
         <MobileCompactComposerPortal
           draft={draft}
@@ -1151,6 +1340,7 @@ export function ThreadSurface({
           avatar={null}
           label="Log in to join the discussion"
           opensOnTyping
+          guest
           mobileBottomNavigation={mobileBottomNavigation}
           scrollHidden={compactComposerScrollHidden}
           onOpen={openLoginToParticipate}

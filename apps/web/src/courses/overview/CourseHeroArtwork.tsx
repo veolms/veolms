@@ -1,4 +1,5 @@
 import { Play } from "@phosphor-icons/react/Play";
+import type { LessonOpenIntent } from "../../learning/lessonOpenIntent";
 import type { Course } from "../catalogue";
 import { getCourseThumbnailSrcSet } from "../courseThumbnail";
 
@@ -6,6 +7,12 @@ interface CourseHeroArtworkProps {
   title: string;
   thumbnail: string;
   thumbnailSrcSet?: Course["thumbnailSrcSet"];
+  /**
+   * A wide picture that, once the hero is wide, fills all of it in place of
+   * the thumbnail and its blurred wash. Stacked, the thumbnail stays.
+   */
+  banner?: string;
+  bannerSrcSet?: Course["bannerSrcSet"];
   /** Opens the course's preview. Without it there is no play button. */
   onPreview?: () => void;
   previewDisabled?: boolean;
@@ -14,11 +21,29 @@ interface CourseHeroArtworkProps {
   /** More classes for the play button (the hero hides it for some viewers). */
   previewClassName?: string;
   /**
+   * The play button is shown only to someone who neither holds nor
+   * manages the course: marked for the head's style (`courseCardEarlyState`),
+   * which hides it on a course the learner holds.
+   */
+  previewDependsOnViewer?: boolean;
+  /**
    * The hero keeps 1rem at its foot for the box that overlaps it there: the
    * picture, beside the text, stops above that strip so none of it is hidden.
    */
   footRoom?: boolean;
+  /**
+   * While the viewer is not known: the enrolled learner's play button as it
+   * will be, drawn only on a course the head finds the learner holds
+   * (`courseCardEarlyState`), and not pressable until the real one comes.
+   */
+  heldPlaceholder?: boolean;
+  /** Readies the lesson the play button opens, ahead of the press. */
+  previewIntent?: LessonOpenIntent["handlers"];
 }
+
+/** The round play button in the middle of the picture, while stacked. */
+const centerPlayClasses =
+  "absolute top-[44%] left-1/2 z-20 inline-flex size-15 -translate-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-black/40 text-white shadow-[0_8px_30px_rgb(0_0_0/0.3)] backdrop-blur-md transition-colors duration-160 ease-out hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:hover:bg-black/40 motion-reduce:transition-none @3xl/hero:hidden";
 
 /**
  * The widest the picture is drawn: the hero's full width while it is stacked,
@@ -27,6 +52,13 @@ interface CourseHeroArtworkProps {
  */
 const heroPictureSizes =
   "(min-width: 2200px) 600px, (min-width: 900px) 480px, 100vw";
+
+/**
+ * The banner is drawn at the hero's height in its own proportions: about
+ * three times that height wide for the recommended 3:1 (the hero is at most
+ * about 22rem tall).
+ */
+const heroBannerSizes = "(min-width: 2200px) 1100px, 900px";
 
 /**
  * The hero's picture layers, all made from the course thumbnail:
@@ -50,17 +82,27 @@ const heroPictureSizes =
  *    layer of its own, over the shade, which is solid there and hides the
  *    first grid; the first one is what shows faintly on the picture.
  *
+ * With a banner, once wide, 1. and 3. give way to the banner: as tall as the
+ * hero, whole from top to bottom, against its right edge and fading to the
+ * left; the shade (4.) and the dot grids lie over it as they do over the
+ * thumbnail, so the text still reads.
+ *
  * The parent is the `@container/hero` these layers size themselves against.
  */
 export function CourseHeroArtwork({
   title,
   thumbnail,
   thumbnailSrcSet,
+  banner,
+  bannerSrcSet,
   onPreview,
   previewDisabled = false,
   previewLabel = "Preview course",
   previewClassName = "",
+  previewDependsOnViewer = false,
   footRoom = false,
+  heldPlaceholder = false,
+  previewIntent,
 }: CourseHeroArtworkProps) {
   // A thumbnail from before sizes were kept has an empty list.
   const smallestVariant = thumbnailSrcSet?.length
@@ -68,6 +110,8 @@ export function CourseHeroArtwork({
         variant.width < smallest.width ? variant : smallest,
       )
     : undefined;
+  // Classes for the thumbnail's layers that the banner replaces once wide.
+  const bannerHides = banner ? "@3xl/hero:hidden" : "";
 
   return (
     <>
@@ -76,7 +120,7 @@ export function CourseHeroArtwork({
           src={smallestVariant?.url ?? thumbnail}
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 size-full scale-125 object-cover object-right opacity-55 blur-3xl saturate-150 @3xl/hero:left-auto @3xl/hero:aspect-video @3xl/hero:w-auto @3xl/hero:max-w-[62%] @3xl/hero:origin-right @3xl/hero:scale-[1.7]"
+          className={`pointer-events-none absolute inset-0 size-full scale-125 object-cover object-right opacity-55 blur-3xl saturate-150 @3xl/hero:left-auto @3xl/hero:aspect-video @3xl/hero:w-auto @3xl/hero:max-w-[62%] @3xl/hero:origin-right @3xl/hero:scale-[1.7] ${bannerHides}`}
           decoding="async"
           fetchPriority="low"
         />
@@ -96,9 +140,30 @@ export function CourseHeroArtwork({
         className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle,color-mix(in_srgb,var(--hero-ink)_20%,transparent)_1px,transparent_1.5px)] bg-size-[24px_24px] [mask-image:radial-gradient(110%_95%_at_58%_0%,black,transparent_74%)] @3xl/hero:block"
       />
 
+      {banner ? (
+        // Loaded lazily: stacked (a phone) it is display:none and never
+        // fetched; wide it is the hero's picture. It is always as tall as
+        // the hero and keeps its own proportions, against the right edge:
+        // never cut at the top or bottom. A hero narrower than it cuts its
+        // left side, which dissolves into the ground under the text; on a
+        // wider one that ground carries on to its left.
+        <img
+          src={banner}
+          srcSet={getCourseThumbnailSrcSet({ thumbnailSrcSet: bannerSrcSet })}
+          sizes={heroBannerSizes}
+          alt=""
+          aria-hidden="true"
+          className={`pointer-events-none absolute top-0 right-0 hidden h-full w-auto max-w-none [mask-image:linear-gradient(to_right,transparent,rgb(0_0_0/0.35)_14%,black_32%)] @3xl/hero:block ${
+            footRoom ? "@3xl/hero:h-[calc(100%_-_1rem)]" : ""
+          }`}
+          loading="lazy"
+          decoding="async"
+        />
+      ) : null}
+
       {thumbnail ? (
         <div
-          className={`relative aspect-video w-full @3xl/hero:absolute @3xl/hero:inset-y-0 @3xl/hero:right-0 @3xl/hero:h-full @3xl/hero:w-auto @3xl/hero:max-w-[62%] ${
+          className={`relative aspect-video w-full ${bannerHides} @3xl/hero:absolute @3xl/hero:inset-y-0 @3xl/hero:right-0 @3xl/hero:h-full @3xl/hero:w-auto @3xl/hero:max-w-[62%] ${
             footRoom
               ? "@3xl/hero:bottom-4! @3xl/hero:h-[calc(100%_-_1rem)]!"
               : ""
@@ -119,7 +184,11 @@ export function CourseHeroArtwork({
           {onPreview ? (
             <button
               type="button"
-              className={`absolute top-[44%] left-1/2 z-20 inline-flex size-15 -translate-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-black/40 text-white shadow-[0_8px_30px_rgb(0_0_0/0.3)] backdrop-blur-md transition-colors duration-160 ease-out hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:hover:bg-black/40 motion-reduce:transition-none @3xl/hero:hidden ${previewClassName}`}
+              data-course-card-early={
+                previewDependsOnViewer ? "offer" : undefined
+              }
+              className={`${centerPlayClasses} ${previewClassName}`}
+              {...previewIntent}
               onClick={onPreview}
               disabled={previewDisabled}
               aria-label={previewLabel}
@@ -127,6 +196,18 @@ export function CourseHeroArtwork({
             >
               <Play size={24} weight="fill" aria-hidden="true" />
             </button>
+          ) : null}
+          {heldPlaceholder ? (
+            // Shown as a block by the head; the button inside is placed on
+            // the picture as the real one is.
+            <div className="hidden" data-course-card-early="held">
+              <span
+                aria-hidden="true"
+                className={`${centerPlayClasses} pointer-events-none`}
+              >
+                <Play size={24} weight="fill" aria-hidden="true" />
+              </span>
+            </div>
           ) : null}
         </div>
       ) : null}

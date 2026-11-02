@@ -90,6 +90,11 @@ export type CommerceFunnel = z.infer<typeof commerceFunnelSchema>;
 
 export const analyticsOverviewResponseSchema = z.strictObject({
   currency: z.string().length(3),
+  /**
+   * False when the caller may not see money: the revenue, orders and refund
+   * figures are then zero and the daily orders empty. Missing means true.
+   */
+  includesRevenue: z.boolean().optional(),
   overview: z.strictObject({
     netRevenue: analyticsKpiSchema,
     orders: analyticsKpiSchema,

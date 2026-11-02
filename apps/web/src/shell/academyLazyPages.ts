@@ -4,6 +4,7 @@ import {
   courseCatalogueBody,
   courseOverviewBody,
   creatorDashboardBody,
+  authenticatedHomeBody,
   guestHomeBody,
   settingsPageBody,
   workspacePageBody,
@@ -123,11 +124,7 @@ export const CourseCreatePage = lazy(() =>
 // was instant. So it is fetched ahead of time (see the warm-up effect).
 export const SettingsPage = settingsPageBody.Body;
 
-export const AuthenticatedHomeBoundary = lazy(() =>
-  import("../home/AuthenticatedHomeBoundary").then((module) => ({
-    default: module.AuthenticatedHomeBoundary,
-  })),
-);
+export const AuthenticatedHomeBoundary = authenticatedHomeBody.Body;
 export const GuestHome = guestHomeBody.Body;
 export const PlaceholderPage = lazy(() =>
   import("../courses/PlaceholderPage").then((module) => ({

@@ -1,4 +1,7 @@
-import type { UpdateHomePageSettingsRequest } from "@veolms/contracts";
+import type {
+  UpdateHomePageDiscussionRequest,
+  UpdateHomePageSettingsRequest,
+} from "@veolms/contracts";
 import type { FastifyRequest } from "fastify";
 import type { HomePageService } from "./home-page.service.ts";
 
@@ -25,6 +28,23 @@ export function createHomePageController({
     return await service.updateSettings(request.body, request.user?.id ?? null);
   }
 
+  async function getDiscussionList() {
+    return await service.getDiscussionList();
+  }
+
+  async function updateDiscussion(
+    request: FastifyRequest<{
+      Params: { threadId: string };
+      Body: UpdateHomePageDiscussionRequest;
+    }>,
+  ) {
+    return await service.updateDiscussion(
+      request.params.threadId,
+      request.body.action,
+      request.user?.id ?? null,
+    );
+  }
+
   async function getLessonVideoOptions(
     request: FastifyRequest<{ Params: { courseId: string } }>,
   ) {
@@ -44,6 +64,8 @@ export function createHomePageController({
     getSettings,
     getOptions,
     updateSettings,
+    getDiscussionList,
+    updateDiscussion,
     getLessonVideoOptions,
     getHeroVideoPlayback,
     getHeroVideoPlaybackToken,

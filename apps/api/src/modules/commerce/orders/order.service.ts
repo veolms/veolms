@@ -1,4 +1,6 @@
 import type {
+  LearnerOrder,
+  OrderItemSummary,
   OrderResponse,
   OrdersListResponse,
   OrdersListQuery,
@@ -14,6 +16,8 @@ import {
   createStudentsService,
   type StudentsService,
 } from "../../students/index.ts";
+import { createCache } from "@veolms/api-core";
+import { getAcademyId } from "../../auth/index.ts";
 import * as orderRepo from "./order.repository.ts";
 import { toAdminOrder, toLearnerOrder } from "./order.mapper.ts";
 
@@ -63,20 +67,81 @@ export interface OrderService {
   getAcademyScope(): Promise<OrderScope>;
 }
 
-const STATS_CACHE_TTL_MS = 30_000;
-const STATS_CACHE_MAX_ENTRIES = 200;
+/**
+ * Order figures for the dashboards, which poll them: each is an aggregate
+ * over every matching order. Shared by every order service in the process;
+ * figures can trail a new order or refund by up to the TTL.
+ */
+const orderStats = createCache<OrderStatsResponse>({
+  name: "commerce.order-stats",
+  ttlMs: 30_000,
+  maxEntries: 200,
+  maxBytes: 512 * 1024,
+});
 
 export function createOrderService({
   database,
   studentsService = createStudentsService({ database }),
+  courseCards,
 }: {
   database: Executor;
   studentsService?: Pick<StudentsService, "resolveStudentAvatars">;
+  /**
+   * The courses' pictures (the course module's `listCourseCardsByIds`),
+   * for purchase history. Passed in by the routes: the course module
+   * itself depends on commerce. Without it, orders carry no pictures.
+   */
+  courseCards?: (courseIds: readonly string[]) => Promise<
+    ReadonlyArray<{
+      id: string;
+      thumbnailUrl: string | null;
+      thumbnailSrcSet: ReadonlyArray<{ url: string; width: number }>;
+    }>
+  >;
 }): OrderService {
-  const statsCache = new Map<
-    string,
-    { expiresAt: number; value: Promise<OrderStatsResponse> }
-  >();
+  /**
+   * A learner's orders with each item's course picture: the course it
+   * opens, for part of a course. One lookup for the whole page.
+   */
+  async function withThumbnails(
+    orders: LearnerOrder[],
+  ): Promise<LearnerOrder[]> {
+    const courseOf = (item: OrderItemSummary) =>
+      item.opensCourseId ?? item.courseId;
+    const courseIds = [
+      ...new Set(
+        orders.flatMap((order) =>
+          order.items.flatMap((item) => courseOf(item) ?? []),
+        ),
+      ),
+    ];
+    if (!courseCards || courseIds.length === 0) return orders;
+    let found: Awaited<ReturnType<typeof courseCards>>;
+    try {
+      found = await courseCards(courseIds);
+    } catch {
+      // Pictures only dress the list: without them it is still the list.
+      return orders;
+    }
+    const cards = new Map(found.map((card) => [card.id, card]));
+    return orders.map((order) => ({
+      ...order,
+      items: order.items.map((item) => {
+        const card = cards.get(courseOf(item) ?? "");
+        if (!card?.thumbnailUrl) return item;
+        return {
+          ...item,
+          thumbnail: {
+            url: card.thumbnailUrl,
+            srcSet: card.thumbnailSrcSet.map(({ url, width }) => ({
+              url,
+              width,
+            })),
+          },
+        };
+      }),
+    }));
+  }
 
   async function getOrderById(
     scope: OrderScope,
@@ -104,7 +169,10 @@ export function createOrderService({
     ]);
 
     if (scope.type === "user") {
-      return toLearnerOrder(order, items, payments[0]);
+      const [learnerOrder] = await withThumbnails([
+        toLearnerOrder(order, items, payments[0]),
+      ]);
+      return learnerOrder!;
     }
 
     const avatarUrls = await resolveAvatarUrls(users);
@@ -215,11 +283,13 @@ export function createOrderService({
 
     if (scope.type === "user") {
       return {
-        orders: pageRows.map((order) =>
-          toLearnerOrder(
-            order,
-            itemsByOrderId.get(order.id) ?? [],
-            paymentsByOrderId.get(order.id),
+        orders: await withThumbnails(
+          pageRows.map((order) =>
+            toLearnerOrder(
+              order,
+              itemsByOrderId.get(order.id) ?? [],
+              paymentsByOrderId.get(order.id),
+            ),
           ),
         ),
         nextCursor,
@@ -258,10 +328,7 @@ export function createOrderService({
       to: filters.to,
     };
 
-    // Dashboards poll this and each call is an aggregate over every matching
-    // order, so results are shared briefly and concurrent identical calls
-    // share one query. Figures can trail a new order or refund by up to the
-    // TTL; failures are never cached.
+    // Concurrent identical calls share one query; failures are not kept.
     const cacheKey = JSON.stringify([
       scope.type,
       scope.id,
@@ -272,21 +339,9 @@ export function createOrderService({
       normalized.from?.toISOString(),
       normalized.to?.toISOString(),
     ]);
-    const now = Date.now();
-    const cached = statsCache.get(cacheKey);
-    if (cached && cached.expiresAt > now) {
-      return await cached.value;
-    }
-
-    const value = computeOrderStats(scope, normalized, requestedCurrency);
-    statsCache.set(cacheKey, { expiresAt: now + STATS_CACHE_TTL_MS, value });
-    void value.catch(() => {
-      if (statsCache.get(cacheKey)?.value === value) {
-        statsCache.delete(cacheKey);
-      }
-    });
-    pruneStatsCache(now);
-    return await value;
+    return await orderStats.fetch(cacheKey, () =>
+      computeOrderStats(scope, normalized, requestedCurrency),
+    );
   }
 
   async function computeOrderStats(
@@ -318,18 +373,6 @@ export function createOrderService({
       refundedAmount: selected?.refundedAmount ?? 0,
       currency: selected?.currency ?? requestedCurrency ?? "INR",
     };
-  }
-
-  function pruneStatsCache(now: number) {
-    if (statsCache.size <= STATS_CACHE_MAX_ENTRIES) return;
-    for (const [key, entry] of statsCache) {
-      if (entry.expiresAt <= now) statsCache.delete(key);
-    }
-    // Still over the cap: drop oldest-inserted first.
-    for (const key of statsCache.keys()) {
-      if (statsCache.size <= STATS_CACHE_MAX_ENTRIES) break;
-      statsCache.delete(key);
-    }
   }
 
   async function getRawStatsForCourses(
@@ -389,7 +432,7 @@ export function createOrderService({
   }
 
   async function getAcademyScope(): Promise<OrderScope> {
-    const academyId = await orderRepo.findAcademyId(database);
+    const academyId = await getAcademyId(database);
     if (!academyId) {
       throw new AppError(
         500,

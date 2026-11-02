@@ -42,18 +42,32 @@ export function isDiscussionContent(
 export const isStoredDiscussionDraft = isDiscussionContent;
 
 export function markdownToPlainText(markdown: string): string {
-  return markdown
-    .replace(/```[^\n]*\n([\s\S]*?)```/g, "$1")
-    .replace(/!\[video:\s*([^\]]*)\]\([^)]+\)/gi, "$1")
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-+*]\s+|\d+[.)]\s+)/gm, "")
-    .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/__(.*?)__/g, "$1")
-    .replace(/~~(.*?)~~/g, "$1")
-    .replace(/==(.*?)==/g, "$1")
-    .replace(/[*_`~]/g, "")
-    .replace(/\\([\\`*{}\[\]()#+\-.!_>])/g, "$1")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return (
+    markdown
+      .replace(/```[^\n]*\n([\s\S]*?)```/g, "$1")
+      // A table's rows become tab-separated lines, which paste as a table
+      // into a spreadsheet or a document; its "| --- |" line goes.
+      .replace(
+        /^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*(?:\n|$)/gm,
+        "",
+      )
+      .replace(/^[ \t]*\|(.*)\|[ \t]*$/gm, (_row, cells: string) =>
+        cells
+          .split(/(?<!\\)\|/)
+          .map((cell) => cell.trim().replace(/\\\|/g, "|"))
+          .join("\t"),
+      )
+      .replace(/!\[video:\s*([^\]]*)\]\([^)]+\)/gi, "$1")
+      .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-+*]\s+|\d+[.)]\s+)/gm, "")
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/__(.*?)__/g, "$1")
+      .replace(/~~(.*?)~~/g, "$1")
+      .replace(/==(.*?)==/g, "$1")
+      .replace(/[*_`~]/g, "")
+      .replace(/\\([\\`*{}\[\]()#+\-.!_>])/g, "$1")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
 }

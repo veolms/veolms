@@ -540,6 +540,21 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     this.#events.emit("unloaded", undefined);
   }
 
+  /**
+   * The error state is left behind once the loaded source plays again. A
+   * media error is not always the end: Safari on iPhone reports a decode
+   * error mid-stream, Shaka Player resets its media source and playback
+   * carries on from the same position, with metadata loaded and `playing`
+   * fired again. Staying in "error" then kept the controls that wait for a
+   * ready player hidden for the rest of the lesson.
+   */
+  private recoverFromMediaError(): void {
+    if (this.#snapshot.lifecycle !== "error" || !this.#snapshot.source) {
+      return;
+    }
+    this.updateSnapshot({ lifecycle: "ready", error: null });
+  }
+
   protected setBuffering(buffering: boolean): void {
     if (this.#snapshot.buffering === buffering) {
       return;
@@ -620,10 +635,19 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     });
     listen("pause", () => {
       this.updateSnapshot({ paused: true, playing: false });
+      // A video paused with data at the playhead is not buffering, whatever
+      // was reported before: Safari on iPhone says `waiting` or `stalled`
+      // when playback is held (a video closed in its system player, a
+      // paused one left idle) and never a `canplay` after, which left the
+      // controls that hide while buffering hidden for good.
+      if (media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        this.setBuffering(false);
+      }
       this.#events.emit("pause", undefined);
     });
     listen("playing", () => {
       this.setBuffering(false);
+      this.recoverFromMediaError();
       this.updateSnapshot({
         paused: false,
         playing: true,
@@ -664,7 +688,11 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       });
     });
     listen("waiting", () => this.setBuffering(true));
-    listen("stalled", () => this.setBuffering(true));
+    // `stalled` is the network going quiet; while the video is paused that is
+    // not a buffer running dry (see `pause`).
+    listen("stalled", () => {
+      if (!media.paused) this.setBuffering(true);
+    });
     listen("canplay", () => this.setBuffering(false));
     listen("canplaythrough", () => this.setBuffering(false));
     listen("progress", () => this.syncRanges());
@@ -672,6 +700,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     listen("ratechange", () => this.syncPlaybackRate());
     listen("loadedmetadata", () => {
       this.syncMediaState();
+      this.recoverFromMediaError();
       this.refreshNativeTextTracks();
     });
     listen("error", () =>

@@ -2,6 +2,7 @@
 import crypto from "node:crypto";
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
+import { cacheTags, publishCacheInvalidation } from "@veolms/api-core";
 import { createDatabase, grantPlatformRole } from "@veolms/database";
 import { config } from "../config.ts";
 import {
@@ -305,6 +306,8 @@ async function main() {
         userId,
         roleId: targetRoleRecord.id,
       });
+      // A running API drops what it cached about this user's roles.
+      await publishCacheInvalidation(database, [cacheTags.user(userId)]);
 
       console.log(`\n${green("✓ OTP verified successfully!")}`);
       console.log(`${green(`✓ User upgraded to ${roleDisplayName}:`)}`);

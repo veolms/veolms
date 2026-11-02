@@ -15,6 +15,7 @@ import type { Lesson } from "../../courseContent";
 import type { AdaptedCurriculumSection } from "../../courseCurriculumAdapter";
 import type { useLessonTitleHeightSwipe } from "../../player/LessonPlayerHeightHandle";
 import type { LiveLessonProgress } from "../../player/liveLessonProgress";
+import { endsTextSelection, notePress } from "../../textSelectionClick";
 
 export interface UseLessonHeaderArgs {
   courseSlug: string | undefined;
@@ -145,7 +146,13 @@ export function useLessonHeader({
 
   const lessonHeader = (contained = false, titleLoading = false) => (
     <header
-      className="learning-workspace__lesson-header"
+      // At phone width the header goes into the discussion's scroll area,
+      // which is padded 10px at its top; this one stands there until the
+      // page knows it is on a phone (a page built ahead of time does not),
+      // and is set the same so that nothing moves when it is swapped.
+      className={`learning-workspace__lesson-header ${
+        contained ? "" : "max-[640px]:pt-2.5"
+      }`}
       data-lesson-edit={lessonEditPath ? "" : undefined}
       // Tells the video's resize grip when a mouse is over its strip (at
       // phone width the strip lies over the top of this header).
@@ -158,29 +165,36 @@ export function useLessonHeader({
         type="button"
         className={`learning-workspace__lesson-heading ${appliedPlayerHeight === null && !readingGrowable ? "touch-pan-up" : "touch-none"}`}
         {...(stickyPlayer ? titleSwipeHandlers : undefined)}
-        style={
-          contained
-            ? {
-                width: "100%",
-                minWidth: 0,
-                marginInline: 0,
-                paddingInline: 0,
-              }
-            : undefined
-        }
         aria-label={`Open course lessons for ${currentLesson[1]}`}
         aria-expanded={lessonDrawer}
-        onClick={openLessonDrawerInPlace}
+        // The title can be selected like any text (learning.css); a drag,
+        // or a click that only lets go of a selection, does not open the
+        // lessons.
+        onPointerDownCapture={notePress}
+        onClick={(event) => {
+          if (endsTextSelection(event)) return;
+          openLessonDrawerInPlace();
+        }}
       >
-        <div className="min-w-0">
+        {/* The title, not the button, carries the padding, so it fills the
+            button and a drag begun anywhere on it selects the title (one
+            begun on the button's own box would not). */}
+        <div className="min-w-0 flex-1">
           {titleLoading ? (
-            <span
-              className="block h-5 w-40 max-w-full animate-pulse rounded-md bg-[color-mix(in_srgb,var(--text)_12%,transparent)]"
-              data-testid="learning-lesson-title-loading"
-              aria-hidden="true"
-            />
+            <div className="learning-workspace__lesson-title">
+              <span
+                className="block h-5 w-40 max-w-full animate-pulse rounded-md bg-[color-mix(in_srgb,var(--text)_12%,transparent)]"
+                data-testid="learning-lesson-title-loading"
+                aria-hidden="true"
+              />
+            </div>
           ) : (
-            <h1 id="learning-lesson-title">{currentLesson[1]}</h1>
+            <h1
+              id="learning-lesson-title"
+              className="learning-workspace__lesson-title"
+            >
+              {currentLesson[1]}
+            </h1>
           )}
         </div>
       </button>

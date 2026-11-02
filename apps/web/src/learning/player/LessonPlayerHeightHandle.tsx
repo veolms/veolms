@@ -580,11 +580,41 @@ export function useLessonTitleHeightSwipe(
 ) {
   const swipeRef = useRef<TitleSwipe | null>(null);
   const swallowClickRef = useRef(false);
+  // Safari has no `pan-up`: it drops the title's touch-action and scrolls
+  // the page on an upward swipe, cancelling the pointer before the swipe can
+  // start, so on an iPhone the title never resized the video. While a finger
+  // is down on the title, upward moves (and every move once the swipe has
+  // started) are kept from the page here instead.
+  const stopHoldingTouchesRef = useRef<(() => void) | null>(null);
+  const stopHoldingTouches = () => {
+    stopHoldingTouchesRef.current?.();
+    stopHoldingTouchesRef.current = null;
+  };
+  const holdTouches = (target: HTMLElement, startX: number, startY: number) => {
+    stopHoldingTouches();
+    const hold = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch || !event.cancelable) return;
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      if (
+        swipeRef.current?.active ||
+        (deltaY < 0 && Math.abs(deltaY) >= Math.abs(deltaX))
+      ) {
+        event.preventDefault();
+      }
+    };
+    target.addEventListener("touchmove", hold, { passive: false });
+    stopHoldingTouchesRef.current = () =>
+      target.removeEventListener("touchmove", hold);
+  };
+  useEffect(() => stopHoldingTouches, []);
 
   const end = (event: ReactPointerEvent<HTMLElement>) => {
     const swipe = swipeRef.current;
     if (!swipe || swipe.pointerId !== event.pointerId) return;
     swipeRef.current = null;
+    stopHoldingTouches();
     if (!swipe.active) return;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -633,6 +663,7 @@ export function useLessonTitleHeightSwipe(
       );
       if (!slot) return;
       const bounds = slot.getBoundingClientRect();
+      holdTouches(event.currentTarget, event.clientX, event.clientY);
       swipeRef.current = {
         active: false,
         fullHeight: (bounds.width * 9) / 16,
@@ -663,6 +694,7 @@ export function useLessonTitleHeightSwipe(
           event.clientY > swipe.startY;
         if (deltaX > deltaY || pullsDownAtFullHeight) {
           swipeRef.current = null;
+          stopHoldingTouches();
           return;
         }
         swipe.active = true;

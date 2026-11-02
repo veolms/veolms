@@ -9,13 +9,15 @@ import type {
   TeamRoleUpsertRequest,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
+import { authKeys } from "../auth/auth.keys";
 import { authorizationKeys } from "../authorization/authorization.keys";
 import { teamKeys } from "./team.keys";
 import { teamService } from "./team.service";
 
 /**
  * Any team change can change what someone (the signed-in person included)
- * may do, so every mutation refreshes the team lists and the capabilities.
+ * may do, so every mutation refreshes the team lists, the capabilities, and
+ * the signed-in account, whose role names pick the menu and the admin view.
  */
 function useTeamInvalidation() {
   const queryClient = useQueryClient();
@@ -23,6 +25,7 @@ function useTeamInvalidation() {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: teamKeys.all }),
       queryClient.invalidateQueries({ queryKey: authorizationKeys.all }),
+      queryClient.invalidateQueries({ queryKey: authKeys.me() }),
     ]);
 }
 

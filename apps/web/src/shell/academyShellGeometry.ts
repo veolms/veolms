@@ -5,6 +5,7 @@ import {
   SIDEBAR_SWIPE_EXCLUSION_SELECTOR,
   SIDEBAR_DOCK_VERTICAL_MAX_WIDTH,
 } from "./academyShellConstants";
+import { SIDEBAR_MIN_WIDTH } from "./sidebarPreferences";
 
 export const getLearningMobileMenuSnapPoint = () => {
   const player = document.querySelector<HTMLElement>(
@@ -54,6 +55,46 @@ export const getSidebarResizeRenderKey = (width: number) =>
   (width > SIDEBAR_DOCK_VERTICAL_MAX_WIDTH ? 4 : 0) +
   (width >= SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE ? 2 : 0) +
   (width <= SIDEBAR_COLLAPSED_WIDTH ? 1 : 0);
+
+/**
+ * Puts a dragged sidebar's width on the shell, with the opacity of the logo
+ * at that width: whole from the narrowest expanded sidebar up, nothing on
+ * the collapsed rail, and in proportion between, so a drag fades the logo
+ * out and in under the pointer. Both are registered as not inherited
+ * (foundation.css), so a write restyles the shell alone.
+ *
+ * The elements inside that read them (marked `data-sidebar-resize-reader`)
+ * get the same values written on themselves: Safari does not restyle an
+ * element that takes a not-inherited property with `inherit` when its
+ * parent's value changes, so they kept the value from before the drag (the
+ * logo stayed invisible while the sidebar was dragged).
+ */
+export const writeSidebarResizeWidth = (
+  shell: HTMLElement | null | undefined,
+  width: number,
+) => {
+  if (!shell) return;
+  const logoOpacity = Math.min(
+    1,
+    Math.max(
+      0,
+      (width - SIDEBAR_COLLAPSED_WIDTH) /
+        (SIDEBAR_MIN_WIDTH - SIDEBAR_COLLAPSED_WIDTH),
+    ),
+  );
+  const previewWidth = `${width}px`;
+  const opacity = String(+logoOpacity.toFixed(3));
+  const targets: (HTMLElement | SVGElement)[] = [
+    shell,
+    ...shell.querySelectorAll<HTMLElement | SVGElement>(
+      "[data-sidebar-resize-reader]",
+    ),
+  ];
+  for (const target of targets) {
+    target.style.setProperty("--sidebar-resize-preview-width", previewWidth);
+    target.style.setProperty("--sidebar-resize-logo-opacity", opacity);
+  }
+};
 
 export const subscribeToNothing = () => () => {};
 

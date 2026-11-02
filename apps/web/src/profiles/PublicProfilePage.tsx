@@ -11,7 +11,13 @@ import { PageHeading } from "../components/PageHeading";
 import { safeExternalUrl } from "../lib/external-url";
 import { PublicProfileCard } from "../components/PublicProfileCard";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
-import { NOT_FOUND_SECTION } from "../routing/routeDescriptors";
+import {
+  NOT_FOUND_SECTION,
+  notFoundDocumentTitle,
+  productName,
+  routeDescriptors,
+} from "../routing/routeDescriptors";
+import { useDocumentTitle } from "../routing/useDocumentTitle";
 import { usePublicProfile } from "../services/auth";
 import { resolvePublicProfileView } from "./publicProfileView";
 import "../styles/features/profile.css";
@@ -129,6 +135,14 @@ export function PublicProfilePage({
     errorStatus: error?.status,
     hasProfile: Boolean(profile),
   });
+  // Any one-word address can be a username, so the route is titled as a
+  // profile until the profile turns out not to exist. Both titles are set
+  // here, so going on to a member who does exist titles the tab again.
+  useDocumentTitle(
+    view === "not-found"
+      ? notFoundDocumentTitle
+      : `${routeDescriptors["public-profile"].title} · ${productName}`,
+  );
 
   if (view === "not-found") {
     return (

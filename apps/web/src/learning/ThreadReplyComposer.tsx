@@ -286,7 +286,11 @@ export function ThreadReplyComposer({
         </p>
       )}
       <div className="flex min-h-14 min-w-0 items-center gap-1.5 overflow-hidden bg-[color-mix(in_srgb,var(--surface)_66%,transparent)] px-2.5 py-2 sm:gap-2 sm:px-3">
-        <DiscussionAvatar src={composerAvatar} className="size-9 sm:size-10" />
+        <DiscussionAvatar
+          src={composerAvatar}
+          viewer
+          className="size-9 sm:size-10"
+        />
         <CommentFormattingToolbar
           editor={editorController}
           formattingState={formattingState}

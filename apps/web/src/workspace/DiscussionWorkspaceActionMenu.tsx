@@ -2,9 +2,13 @@ import { useState } from "react";
 import { BellSimpleIcon as BellSimple } from "@phosphor-icons/react/BellSimple";
 import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
+import { MarkdownLogoIcon as MarkdownLogo } from "@phosphor-icons/react/MarkdownLogo";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { HouseIcon as House } from "@phosphor-icons/react/House";
+import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
+import { PushPinSlashIcon as PushPinSlash } from "@phosphor-icons/react/PushPinSlash";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
@@ -100,12 +104,39 @@ export function DiscussionWorkspaceActionMenu({
         />
       )}
       {actions.canCopyText && (
+        <>
+          <MenuAction
+            Icon={CopySimple}
+            label="Copy text"
+            onClick={() => {
+              void actions.copyText();
+            }}
+          />
+          <MenuAction
+            Icon={MarkdownLogo}
+            label="Copy Markdown"
+            onClick={() => {
+              void actions.copyMarkdown();
+            }}
+          />
+        </>
+      )}
+      {actions.staff.canPin && (
         <MenuAction
-          Icon={CopySimple}
-          label="Copy text"
-          onClick={() => {
-            void actions.copyText();
-          }}
+          Icon={actions.staff.isPinned ? PushPinSlash : PushPin}
+          label={actions.staff.isPinned ? "Unpin from lesson" : "Pin to lesson"}
+          onClick={actions.staff.togglePin}
+        />
+      )}
+      {actions.staff.canFeature && (
+        <MenuAction
+          Icon={House}
+          label={
+            actions.staff.onHomePage
+              ? "Remove from home page"
+              : "Add to home page"
+          }
+          onClick={actions.staff.toggleHomePage}
         />
       )}
       {textSize && <DiscussionTextSizeMenuItem />}

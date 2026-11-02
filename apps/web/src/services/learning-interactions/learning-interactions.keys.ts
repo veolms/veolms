@@ -25,7 +25,12 @@ export const learningInteractionKeys = {
   lessonDiscussions: (
     courseId: string,
     lessonId: string,
-    filters?: { kind?: string; sort?: string; mine?: boolean },
+    filters?: {
+      kind?: string;
+      sort?: string;
+      mine?: boolean;
+      search?: string;
+    },
   ) =>
     [
       ...learningInteractionKeys.lessonDiscussionsRoot(courseId, lessonId),
@@ -33,6 +38,7 @@ export const learningInteractionKeys = {
       filters?.kind ?? "all",
       filters?.sort ?? "newest",
       Boolean(filters?.mine),
+      filters?.search ?? "",
     ] as const,
   lessonInteractionCountsRoot: (courseId?: string, lessonId?: string) =>
     courseId && lessonId

@@ -1,8 +1,9 @@
 import type { TeamRole } from "@veolms/contracts";
 import { useState } from "react";
+import { CheckboxIndicator } from "../components/Checkbox";
 import { useTeamRoles } from "../services/team";
-import { roleLabel } from "./teamFormat";
-import { SquareCheck } from "./TeamBits";
+import { countOfferedPermissions, roleLabel } from "./teamFormat";
+import { chipClassName, rowDividerClassName } from "./TeamBits";
 import { useTeamAccess } from "./useTeamAccess";
 
 const FIRST_SHOWN = 4;
@@ -73,7 +74,7 @@ export function RolePicker({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
+    <div className="overflow-hidden rounded-xl border border-(--border) bg-(--card-surface)">
       <ul className="m-0 list-none p-0">
         {visible.map((role) => {
           const checked = selectedSet.has(role.id);
@@ -82,10 +83,7 @@ export function RolePicker({
           const locked = !canGrantRole(role);
           const inputId = `${idPrefix}-${role.id}`;
           return (
-            <li
-              key={role.id}
-              className="border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] last:border-b-0"
-            >
+            <li key={role.id} className={rowDividerClassName}>
               <label
                 htmlFor={inputId}
                 className={`flex items-center gap-3 px-3.5 py-3 transition-colors ${checked ? "bg-(--accent)/8" : ""} ${locked ? "cursor-not-allowed opacity-55" : "cursor-pointer hover:bg-(--hover)"}`}
@@ -93,12 +91,15 @@ export function RolePicker({
                 <input
                   id={inputId}
                   type="checkbox"
-                  className="sr-only"
+                  className="peer sr-only"
                   checked={checked}
                   disabled={locked}
                   onChange={() => toggle(role)}
                 />
-                <SquareCheck checked={checked} />
+                <CheckboxIndicator
+                  checked={checked}
+                  className="peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-(--accent)"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold text-(--text)">
                     {roleLabel(role.name)}
@@ -109,8 +110,8 @@ export function RolePicker({
                       : role.description || "No description."}
                   </span>
                 </span>
-                <span className="shrink-0 font-mono text-[0.7rem] text-(--muted)">
-                  {role.permissions.length} perms
+                <span className={`${chipClassName} shrink-0 tabular-nums`}>
+                  {countOfferedPermissions(role.permissions)}
                 </span>
               </label>
             </li>
@@ -121,7 +122,7 @@ export function RolePicker({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="w-full cursor-pointer border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3.5 py-2.5 text-left text-xs font-semibold text-(--accent) hover:bg-(--hover)"
+          className="w-full cursor-pointer border-t border-(--border) px-3.5 py-2.5 text-left text-xs font-semibold text-(--accent) hover:bg-(--hover)"
         >
           Show {hiddenCount} more role{hiddenCount === 1 ? "" : "s"}
         </button>

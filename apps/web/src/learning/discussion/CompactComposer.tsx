@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { GuestProfileIcon } from "../../icons/GuestProfileIcon";
 import { DiscussionAvatar } from "../DiscussionAvatar";
 import { DESCRIPTION_SURFACE_BASE } from "../LessonDescription";
 import {
@@ -21,14 +22,32 @@ interface CompactComposerProps {
    * somewhere else (logging in), where nothing typed could be kept.
    */
   opensOnTyping?: boolean;
+  /**
+   * Nobody is signed in: the avatar is the sidebar's signed-out profile
+   * mark, in the theme's accent.
+   */
+  guest?: boolean;
   onOpen: () => void;
+  /**
+   * The signed-in viewer before the session check has said who they are:
+   * the picture this tab remembers (the profile hint the document's head
+   * hands to the style, see shell/profileHintEarlyState.ts), drawn before
+   * any script has run.
+   */
+  rememberedViewer?: boolean;
+  /**
+   * The phone's slimmer box, under the bottom navigation: a 36px avatar
+   * with 4px around it, about seven tenths of the regular height.
+   */
+  slim?: boolean;
 }
 
 // Rounded like the description card it sits under.
 const COMPACT_COMPOSER_SURFACE = `${DESCRIPTION_SURFACE_BASE} rounded-xl transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_96%,var(--hover))]`;
 
+// Slim: 4px above and below the box (the box itself is slim too).
 const MOBILE_COMPOSER_SURFACE_BASE =
-  "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-transparent backdrop-blur-xl px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))]";
+  "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-transparent backdrop-blur-xl px-3 pt-1 pb-[max(4px,var(--app-safe-area-bottom))]";
 const MOBILE_BOTTOM_ACTION_OFFSET_CLASS =
   "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]";
 
@@ -39,6 +58,7 @@ interface MobileCompactComposerPortalProps {
   avatar?: string | null;
   label?: string;
   opensOnTyping?: boolean;
+  guest?: boolean;
   mobileBottomNavigation: boolean;
   scrollHidden: boolean;
   onOpen: () => void;
@@ -51,6 +71,7 @@ export function MobileCompactComposerPortal({
   avatar,
   label,
   opensOnTyping,
+  guest,
   mobileBottomNavigation,
   scrollHidden,
   onOpen,
@@ -87,6 +108,8 @@ export function MobileCompactComposerPortal({
           avatar={avatar}
           label={label}
           opensOnTyping={opensOnTyping}
+          guest={guest}
+          slim
           onOpen={onOpen}
         />
       </div>
@@ -110,10 +133,29 @@ export function PrerenderedMobileCommentComposer() {
           attachmentCount={0}
           avatar={null}
           disabled
+          slim
           onOpen={() => undefined}
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * The viewer's picture as this tab remembers it, or the viewer's mark
+ * without one, the same box as `DiscussionAvatar` draws for the viewer.
+ */
+function RememberedViewerAvatar({ sizeClass }: { sizeClass: string }) {
+  return (
+    <span className={`pointer-events-none relative shrink-0 ${sizeClass}`}>
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 hidden rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-(image:--profile-hint-avatar) bg-cover bg-center [:root[data-profile-hint-avatar]_&]:block"
+      />
+      <span className="[:root[data-profile-hint-avatar]_&]:hidden">
+        <DiscussionAvatar src={null} viewer className={sizeClass} />
+      </span>
+    </span>
   );
 }
 
@@ -125,8 +167,12 @@ export function CompactComposer({
   disabled = false,
   label = "Open discussion composer",
   opensOnTyping = false,
+  guest = false,
+  rememberedViewer = false,
+  slim = false,
   onOpen,
 }: CompactComposerProps) {
+  const avatarSize = slim ? "size-9" : "size-10";
   const preview =
     draft.plainText
       .split(/\r?\n/)
@@ -158,9 +204,32 @@ export function CompactComposer({
           onOpen();
         }
       }}
-      className={`flex w-full cursor-pointer items-center gap-2 p-2 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
+      className={`flex w-full cursor-pointer items-center gap-2 text-left ${slim ? "p-1" : "p-2"} ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
     >
-      <DiscussionAvatar src={avatar} className="pointer-events-none size-10" />
+      {guest ? (
+        // Drawn at the sidebar's size (its ring is three quarters of the
+        // mark, 39px), overflowing the 40px avatar box evenly; in the slim
+        // box the mark is scaled with it (47px, a 35px ring in a 36px box).
+        // It is pinned to the box's centre: left to the grid, the oversized
+        // mark was laid at the box's top-left corner, 6px off each way.
+        <span
+          className={`pointer-events-none relative shrink-0 text-(--accent) ${avatarSize}`}
+          aria-hidden="true"
+        >
+          <GuestProfileIcon
+            size={slim ? 47 : 52}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+          />
+        </span>
+      ) : rememberedViewer ? (
+        <RememberedViewerAvatar sizeClass={avatarSize} />
+      ) : (
+        <DiscussionAvatar
+          src={avatar}
+          viewer
+          className={`pointer-events-none ${avatarSize}`}
+        />
+      )}
       <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
         {preview || (attachmentCount > 0 ? attachmentPreview : promptText)}
       </span>

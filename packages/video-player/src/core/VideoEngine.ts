@@ -32,6 +32,13 @@ export interface VideoEngine {
   setBufferAheadLimit?(seconds: number | null): void;
   load(source: VideoSource, options?: VideoLoadOptions): Promise<void>;
   unload(): Promise<void>;
+  /**
+   * Stops what is loaded outright, for good: paused, its source taken off
+   * the element and the streaming player behind it destroyed, so nothing of
+   * it can play on. The engine stays usable for the next load. Engines
+   * without a player of their own leave it out (`unload` is used instead).
+   */
+  stop?(): Promise<void>;
   destroy(): Promise<void>;
 
   play(): Promise<void>;

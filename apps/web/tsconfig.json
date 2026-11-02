@@ -17,6 +17,8 @@
     "src/**/*.tsx",
     ".react-router/types/**/*.ts",
     "react-router.config.ts",
-    "vite.config.ts"
+    "vite.config.ts",
+    "playwright.config.ts",
+    "tests/**/*.ts"
   ]
 }

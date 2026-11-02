@@ -174,7 +174,7 @@ export async function listCourseMediaAssetIds(
 ) {
   const course = await database
     .selectFrom("courses")
-    .select(["thumbnail_media_id", "trailer_media_id"])
+    .select(["thumbnail_media_id", "trailer_media_id", "banner_media_id"])
     .where("id", "=", courseId)
     .executeTakeFirst();
   const lessons = await database
@@ -196,6 +196,7 @@ export async function listCourseMediaAssetIds(
   return [
     course?.thumbnail_media_id,
     course?.trailer_media_id,
+    course?.banner_media_id,
     ...lessons.map((lesson) => lesson.content_media_id),
     ...resources.map((resource) => resource.media_asset_id),
   ]
@@ -219,12 +220,13 @@ export async function findMediaAssetIdsReferencedByOtherCourses(
   const referenced = new Set<string>();
   const courseReferences = await database
     .selectFrom("courses")
-    .select(["thumbnail_media_id", "trailer_media_id"])
+    .select(["thumbnail_media_id", "trailer_media_id", "banner_media_id"])
     .where("id", "!=", excludedCourseId)
     .where((eb) =>
       eb.or([
         eb("thumbnail_media_id", "in", mediaIds),
         eb("trailer_media_id", "in", mediaIds),
+        eb("banner_media_id", "in", mediaIds),
       ]),
     )
     .execute();
@@ -249,6 +251,7 @@ export async function findMediaAssetIdsReferencedByOtherCourses(
   for (const row of courseReferences) {
     if (row.thumbnail_media_id) referenced.add(row.thumbnail_media_id);
     if (row.trailer_media_id) referenced.add(row.trailer_media_id);
+    if (row.banner_media_id) referenced.add(row.banner_media_id);
   }
   for (const row of lessonReferences) {
     if (row.content_media_id) referenced.add(row.content_media_id);

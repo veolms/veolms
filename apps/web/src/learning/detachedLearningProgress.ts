@@ -14,6 +14,16 @@ import {
   restoreWatchedSeconds,
   takeWatchedSeconds,
 } from "./learningWatchTime";
+import {
+  hasLessonPositions,
+  refuseLessonPositions,
+  restoreLessonPositions,
+  takeLessonPositions,
+  withLessonPositions,
+} from "./lessonPositionOutbox";
+import { getApiError } from "../lib/api-client";
+import { queryClient } from "../lib/query-client";
+import { markCourseResumeStale } from "./courseResumeCache";
 
 /**
  * Progress recording for a lesson that is playing with no lesson page mounted
@@ -54,7 +64,7 @@ const getServerProgressRevision = () => 0;
 const syncingCourses = new Set<string>();
 
 async function syncDetachedLearningProgress(
-  { userId, courseKey }: DetachedProgressTarget,
+  { userId, courseKey, lessonIdsByNumber }: DetachedProgressTarget,
   force: boolean,
 ): Promise<void> {
   const identity = `${userId}\u0000${courseKey}`;
@@ -62,22 +72,37 @@ async function syncDetachedLearningProgress(
   const lastSyncAt = lastSyncAtByCourse.get(identity) ?? 0;
   if (!force && Date.now() - lastSyncAt < SYNC_INTERVAL_MS) return;
 
-  const pendingItems = getPendingLearningProgress(
+  const pending = getPendingLearningProgress(
     readLearningProgress(userId, courseKey),
-  ).slice(0, MAX_BATCH_ITEMS);
-  if (pendingItems.length === 0 && peekWatchedSeconds(courseKey) < 1) return;
+  );
+  if (
+    pending.length === 0 &&
+    peekWatchedSeconds(courseKey) < 1 &&
+    !hasLessonPositions(courseKey)
+  ) {
+    return;
+  }
 
   syncingCourses.add(identity);
   lastSyncAtByCourse.set(identity, Date.now());
-  // The seconds of video played since the last report: what the learner's
-  // daily goal is credited from. Handed back if the request fails.
+  // The seconds of video played since the last report (what the learner's
+  // daily goal is credited from), and where the learner is in each video
+  // played since (where the course resumes on any device). Handed back if
+  // the request fails.
   const watchedSeconds = takeWatchedSeconds(courseKey);
+  const positions = takeLessonPositions(courseKey);
+  const pendingItems = pending.slice(0, MAX_BATCH_ITEMS - positions.length);
+  const items = withLessonPositions(
+    pendingItems.map(({ lessonId, progressPercent }) => ({
+      lessonId,
+      progressPercent,
+    })),
+    positions,
+    lessonIdsByNumber,
+  );
   try {
     const response = await learningProgressService.sync(courseKey, {
-      items: pendingItems.map(({ lessonId, progressPercent }) => ({
-        lessonId,
-        progressPercent,
-      })),
+      items,
       watchedSeconds,
       timeZone: getDeviceTimeZone(),
     });
@@ -90,11 +115,23 @@ async function syncDetachedLearningProgress(
           pendingItems,
         ),
       );
+      if (items.some((item) => item.positionSeconds !== undefined)) {
+        markCourseResumeStale(queryClient, courseKey);
+      }
     }
-  } catch {
+  } catch (error) {
     // The items stay pending in storage; the next update or the lesson page
     // sends the same batch again.
     restoreWatchedSeconds(courseKey, watchedSeconds);
+    // An API from before positions were kept turns the whole batch down.
+    if (
+      getApiError(error).status === 400 &&
+      items.some((item) => item.positionSeconds !== undefined)
+    ) {
+      refuseLessonPositions();
+    } else {
+      restoreLessonPositions(courseKey, positions);
+    }
   } finally {
     syncingCourses.delete(identity);
   }
@@ -105,7 +142,12 @@ async function syncDetachedLearningProgress(
  * carry it (the usual interval between requests still applies).
  */
 export function syncDetachedWatchTime(target: DetachedProgressTarget): void {
-  if (peekWatchedSeconds(target.courseKey) < 1) return;
+  if (
+    peekWatchedSeconds(target.courseKey) < 1 &&
+    !hasLessonPositions(target.courseKey)
+  ) {
+    return;
+  }
   void syncDetachedLearningProgress(target, false);
 }
 

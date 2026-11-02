@@ -1,10 +1,13 @@
 /**
- * Answers the API gives every visitor alike and that rarely change, kept for
- * the life of the tab so a reload or a return to the page does not ask again.
+ * Answers the API kept for the life of the tab, so a reload or a return to
+ * the page does not ask again.
  *
- * Only for public data: nothing here is cleared at login or logout. It is
- * read after the first render (inside a query function), never during it, so
- * a prerendered page hydrates against the markup it was built with.
+ * Nothing here is cleared at login or logout by itself: a copy of one
+ * account's data must carry the account in its key and be listed in
+ * `isAccountSessionStorageKey` (as the enrolled courses are). It is read
+ * after the first render (inside a query function or an effect), never
+ * during it, so a prerendered page hydrates against the markup it was built
+ * with.
  */
 
 interface SessionCacheEntry<T> {
@@ -43,13 +46,18 @@ export function readSessionCache<T>(
   }
 }
 
-export function writeSessionCache<T>(key: string, value: T): void {
+/** `savedAt`: when the value was fetched, if not just now. */
+export function writeSessionCache<T>(
+  key: string,
+  value: T,
+  savedAt = Date.now(),
+): void {
   try {
     getSessionStorage()?.setItem(
       key,
       JSON.stringify({
         value,
-        savedAt: Date.now(),
+        savedAt,
       } satisfies SessionCacheEntry<T>),
     );
   } catch {

@@ -25,12 +25,18 @@ export interface CourseTable {
   thumbnail_media_id: string | null;
   thumbnail_url: string | null;
   trailer_media_id: string | null;
+  banner_media_id: string | null;
   instructor_alias: string | null;
   version: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   published_at: Date | null;
   deleted_at: Date | null;
+  /**
+   * Kept off every list and bought from its own link; it unlocks the
+   * courses (or the parts of courses) it links. See "Partial access".
+   */
+  unlisted: Generated<boolean>;
 }
 
 export interface CategoryTable {
@@ -99,6 +105,24 @@ export interface CoursePricingTable {
   sale_price: number;
   /** Show the discount as a badge on the course's cards. */
   show_discount_badge: Generated<boolean>;
+  /**
+   * Had only through another course's link: free, restricted, and left out
+   * of the catalogue (see 20261029120000).
+   */
+  linked_only: Generated<boolean>;
+  /**
+   * The price for buyers outside India, in this currency's minor units
+   * (cents): set together or not at all (see 20261101120000). A course
+   * without it is sold in rupees everywhere.
+   */
+  international_currency: string | null;
+  international_price_minor: number | null;
+  international_sale_price_minor: number | null;
+  /**
+   * The international price is the automatic one (the rupee prices at the
+   * day's rate, rounded up to .99), worked out again when they change.
+   */
+  international_price_auto: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -122,7 +146,13 @@ export interface CourseIncludeTable {
   id: string;
   course_id: string;
   text: string;
+  /** A quieter line under `text` (see 20261029130000). */
+  detail: string | null;
   icon: string | null;
+  /** The icon's colour, `#rrggbb`; its square is a tint of the same. */
+  color: string | null;
+  /** 'video': the words are written from the curriculum when shown. */
+  kind: Generated<"custom" | "video">;
   position: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
@@ -134,6 +164,8 @@ export interface CourseLinkTable {
   course_id: string;
   linked_course_id: string;
   position: Generated<number>;
+  /** The linked course's sections the link opens; null for all of them. */
+  section_ids: string[] | null;
   created_at: Generated<Date>;
 }
 

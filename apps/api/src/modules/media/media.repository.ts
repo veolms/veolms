@@ -4,6 +4,8 @@ import type {
   DatabaseExecutor,
   Json,
   MediaAssetStatus,
+  MediaSourceProvider,
+  MediaSourceRecordedVia,
 } from "@veolms/database";
 import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
@@ -48,6 +50,8 @@ export async function findMediaAssetSummaryById(
       "width",
       "height",
       "duration_seconds",
+      "upload_id",
+      "upload_part_size",
     ])
     .where("id", "=", mediaId);
 
@@ -70,7 +74,7 @@ export async function findMediaAssetSummaryById(
  * which makes it publicly deliverable.
  *
  * The asset's own type has to match the slot: only an image counts as a
- * thumbnail and only a video as a trailer. Matching on the id alone meant
+ * thumbnail or banner and only a video as a trailer. Matching on the id alone meant
  * any asset that ended up in `thumbnail_media_id` — a paid lesson's source
  * file, a private document — was served to anonymous callers.
  */
@@ -119,6 +123,7 @@ async function listCourseIdsShowingMedia(
           assetOfType("image"),
         ]),
         eb.and([eb("c.trailer_media_id", "=", mediaId), assetOfType("video")]),
+        eb.and([eb("c.banner_media_id", "=", mediaId), assetOfType("image")]),
       ]);
     })
     .execute();
@@ -176,9 +181,78 @@ export async function insertMediaAsset(
     size_bytes: number;
     status: MediaAssetStatus;
     metadata?: Json;
+    upload_id?: string | null;
+    upload_part_size?: number | null;
   },
 ) {
   await database.insertInto("media_assets").values(values).execute();
+}
+
+/** Records where a video came from (one source per video; a second is ignored). */
+export async function insertMediaSource(
+  database: DatabaseExecutor,
+  source: {
+    media_id: string;
+    provider: MediaSourceProvider;
+    external_id: string;
+    source_url: string;
+    title: string | null;
+    channel: string | null;
+    recorded_via: MediaSourceRecordedVia;
+  },
+): Promise<void> {
+  await database
+    .insertInto("media_sources")
+    .values(source)
+    .onConflict((conflict) => conflict.column("media_id").doNothing())
+    .execute();
+}
+
+export async function findMediaSource(
+  database: DatabaseExecutor,
+  mediaId: string,
+) {
+  return await database
+    .selectFrom("media_sources")
+    .select(["provider", "external_id", "source_url", "title", "channel"])
+    .where("media_id", "=", mediaId)
+    .executeTakeFirst();
+}
+
+/**
+ * Fills in the title and channel once they are known (an import learns
+ * them only when its worker reads the video), keeping any already set.
+ */
+export async function fillMediaSourceDetails(
+  database: DatabaseExecutor,
+  mediaId: string,
+  details: { title: string | null; channel: string | null },
+): Promise<void> {
+  await database
+    .updateTable("media_sources")
+    .set((eb) => ({
+      title: eb.fn.coalesce("title", eb.val(details.title)),
+      channel: eb.fn.coalesce("channel", eb.val(details.channel)),
+    }))
+    .where("media_id", "=", mediaId)
+    .execute();
+}
+
+/** Records (or clears) the resumable upload handle for a media asset. */
+export async function updateMediaAssetUploadSession(
+  database: Kysely<Database>,
+  mediaId: string,
+  session: { uploadId: string | null; partSize: number | null },
+) {
+  await database
+    .updateTable("media_assets")
+    .set({
+      upload_id: session.uploadId,
+      upload_part_size: session.partSize,
+      updated_at: new Date(),
+    })
+    .where("id", "=", mediaId)
+    .execute();
 }
 
 export async function updateMediaAssetStatus(
@@ -473,6 +547,7 @@ export async function findPlaybackLessonContext(
       "course_access_rules.access_type as access_type",
       "course_lessons.id as lesson_id",
       "course_lessons.title as lesson_title",
+      "course_lessons.section_id as section_id",
       "course_lessons.content_media_id as content_media_id",
       "course_lessons.is_preview as is_preview",
       "course_lessons.is_published as is_published",
@@ -533,6 +608,7 @@ export async function findPlaybackMediaContext(
       "courses.creator_id as course_creator_id",
       "course_pricing.pricing_type as pricing_type",
       "course_access_rules.access_type as access_type",
+      "course_lessons.section_id as section_id",
       "course_lessons.is_preview as is_preview",
       "course_lessons.is_published as is_published",
       // Whether this is the course's first published lesson, in the same

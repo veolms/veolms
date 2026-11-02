@@ -6,6 +6,7 @@ import {
   MOBILE_SEEK_IDLE_DELAY_MS,
   PLAYER_FEEDBACK_DURATION_MS,
 } from "./feedbackTiming";
+import { VolumeLevelIcon, getVolumeLevel } from "./VolumeLevelIcon";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 export function PlayerHud() {
@@ -25,9 +26,13 @@ export function PlayerHud() {
   }, [controller, hud]);
 
   if (!hud) return null;
-  // Shown wherever a double tap seeks: the phone layout, a finger on a
-  // tablet, and the mini player.
-  if (hud.variant === "mobile-seek" && hud.direction) {
+  // Shown wherever a double tap seeks (the phone layout, a finger on a
+  // tablet, the mini player), and for the arrow keys everywhere: the same
+  // side, the same running total.
+  if (
+    (hud.variant === "mobile-seek" || hud.variant === "keyboard-seek") &&
+    hud.direction
+  ) {
     const Icon = icons.disclosure;
     const backward = hud.direction < 0;
 
@@ -39,7 +44,7 @@ export function PlayerHud() {
         aria-live="polite"
         className="pointer-events-none absolute inset-0 z-30"
         data-player-hud-direction={backward ? "backward" : "forward"}
-        data-player-hud-variant="mobile-seek"
+        data-player-hud-variant={hud.variant}
         role="status"
       >
         <div
@@ -121,6 +126,42 @@ export function PlayerHud() {
               }
               size={44}
             />
+          </span>
+        </div>
+      </div>
+    );
+  }
+  if (hud.variant === "volume") {
+    const level = getVolumeLevel(hud.level ?? 0);
+
+    return (
+      <div
+        key={hud.id}
+        aria-atomic="true"
+        aria-label={`Volume ${hud.text}`}
+        aria-live="polite"
+        className="pointer-events-none absolute inset-0 z-30"
+        data-player-hud-variant="volume"
+        data-player-volume-level={level}
+        role="status"
+      >
+        {/* The level, on a see-through dark pill at the top. */}
+        <div
+          className="absolute top-[12%] left-1/2 -translate-x-1/2"
+          aria-hidden="true"
+        >
+          <span
+            className="flex items-center gap-2 rounded-full bg-black/45 py-1.5 pr-3.5 pl-3 text-base leading-none font-semibold whitespace-nowrap tabular-nums text-white lg:text-lg"
+            data-player-volume-text={hud.text}
+          >
+            <VolumeLevelIcon
+              active
+              aria-hidden="true"
+              className="size-5"
+              level={level}
+              size={20}
+            />
+            {hud.text}
           </span>
         </div>
       </div>

@@ -6,14 +6,13 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { spawn } from "node:child_process";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import {
   createDatabase,
   enqueueImageJob,
   grantPlatformRole,
 } from "@veolms/database";
+import { cacheTags, publishCacheInvalidation } from "@veolms/api-core";
+import { canonicalYoutubeWatchUrl } from "@veolms/contracts";
 import { config } from "../config.ts";
 import { createServices } from "../services/index.ts";
 import { createMediaService } from "../modules/media/index.ts";
@@ -23,8 +22,30 @@ import {
 } from "../modules/auth/shared/auth.constants.ts";
 import { slugify } from "../modules/courses/shared/courses.utils.ts";
 import * as courseRepo from "../modules/courses/course/course.repository.ts";
+import { seedDefaultIncludes } from "../modules/courses/includes/includes.service.ts";
 import * as configRepo from "../modules/courses/configuration/configuration.repository.ts";
 import * as mediaRepo from "../modules/media/media.repository.ts";
+import {
+  DOWNLOAD_PROCESS_TIMEOUT_MS,
+  METADATA_PROCESS_TIMEOUT_MS,
+  QUICK_PROCESS_TIMEOUT_MS,
+  killAllActiveChildren,
+  runProcess,
+} from "../lib/media-tools/process.ts";
+import {
+  buildYtDlpArgs,
+  ensureFfmpegBinary,
+  ensureYtDlpBinary,
+  resolveCookiesPath,
+  veolmsHomeDir,
+  type YtDlpContext,
+} from "../lib/media-tools/binaries.ts";
+import {
+  GIB,
+  assertEnoughDiskSpace,
+  resolveImportScratchRoot,
+} from "../lib/media-tools/disk.ts";
+import { readAvc1CodecString, toFfmpegPath } from "../lib/media-tools/fmp4.ts";
 
 // ANSI colors
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
@@ -283,229 +304,7 @@ function parseCliArgs() {
   };
 }
 
-function resolveCookiesPath(customPath?: string): string | undefined {
-  if (customPath && fs.existsSync(customPath)) {
-    return customPath;
-  }
-  const cwdCookies = path.join(process.cwd(), "cookies.txt");
-  if (fs.existsSync(cwdCookies)) {
-    return cwdCookies;
-  }
-  const homeCookies = path.join(os.homedir(), ".veolms", "cookies.txt");
-  if (fs.existsSync(homeCookies)) {
-    return homeCookies;
-  }
-  return undefined;
-}
-
-const GIB = 1024 ** 3;
 const MIN_IMPORT_SCRATCH_BYTES = 2 * GIB;
-const YTDLP_RELEASE_BASE =
-  "https://github.com/yt-dlp/yt-dlp/releases/latest/download";
-const FFMPEG_RELEASE_BASE =
-  "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest";
-
-interface YtDlpContext {
-  cookies?: string;
-  cookiesFromBrowser?: string;
-  supportsJsRuntimes?: boolean;
-}
-
-interface ResolvedYtDlpBinary {
-  path: string;
-  supportsJsRuntimes: boolean;
-}
-
-// yt-dlp's own resilience: retry the whole download and individual
-// fragments, and back off exponentially (1s up to 20s) between retries —
-// covers transient network errors and, since yt-dlp treats HTTP 429 as a
-// retryable error, throttling/rate-limit responses too.
-const YTDLP_RESILIENCE_ARGS = [
-  "--retries",
-  "5",
-  "--fragment-retries",
-  "5",
-  "--retry-sleep",
-  "exp=1:20",
-];
-
-function buildYtDlpArgs(baseArgs: string[], ctx?: YtDlpContext): string[] {
-  const args = ctx?.supportsJsRuntimes
-    ? ["--js-runtimes", "node", ...YTDLP_RESILIENCE_ARGS, ...baseArgs]
-    : [...YTDLP_RESILIENCE_ARGS, ...baseArgs];
-  if (ctx?.cookies && fs.existsSync(ctx.cookies)) {
-    args.push("--cookies", ctx.cookies);
-  } else if (ctx?.cookiesFromBrowser) {
-    args.push("--cookies-from-browser", ctx.cookiesFromBrowser);
-  }
-  return args;
-}
-
-function veolmsHomeDir(): string {
-  return path.join(os.homedir(), ".veolms");
-}
-
-function veolmsBinDir(): string {
-  return path.join(veolmsHomeDir(), "bin");
-}
-
-function veolmsStagingDir(): string {
-  return path.join(veolmsHomeDir(), "tmp");
-}
-
-function resolveYtDlpDownloadUrl(): { url: string; fileName: string } {
-  if (process.platform === "win32") {
-    return { url: `${YTDLP_RELEASE_BASE}/yt-dlp.exe`, fileName: "yt-dlp.exe" };
-  }
-  if (process.platform === "darwin") {
-    return { url: `${YTDLP_RELEASE_BASE}/yt-dlp_macos`, fileName: "yt-dlp" };
-  }
-  if (process.arch === "arm64") {
-    return {
-      url: `${YTDLP_RELEASE_BASE}/yt-dlp_linux_aarch64`,
-      fileName: "yt-dlp",
-    };
-  }
-  if (process.arch === "arm") {
-    return {
-      url: `${YTDLP_RELEASE_BASE}/yt-dlp_linux_armv7l`,
-      fileName: "yt-dlp",
-    };
-  }
-  return { url: `${YTDLP_RELEASE_BASE}/yt-dlp_linux`, fileName: "yt-dlp" };
-}
-
-function resolveFfmpegRelease(): {
-  url: string;
-  fileName: string;
-  kind: "zip" | "tar.xz";
-} | null {
-  if (process.platform === "win32") {
-    if (process.arch === "arm64") {
-      return {
-        url: `${FFMPEG_RELEASE_BASE}/ffmpeg-master-latest-winarm64-gpl.zip`,
-        fileName: "ffmpeg-winarm64.zip",
-        kind: "zip",
-      };
-    }
-    return {
-      url: `${FFMPEG_RELEASE_BASE}/ffmpeg-master-latest-win64-gpl.zip`,
-      fileName: "ffmpeg-win64.zip",
-      kind: "zip",
-    };
-  }
-  if (process.platform === "linux") {
-    if (process.arch === "arm64") {
-      return {
-        url: `${FFMPEG_RELEASE_BASE}/ffmpeg-master-latest-linuxarm64-gpl.tar.xz`,
-        fileName: "ffmpeg-linuxarm64.tar.xz",
-        kind: "tar.xz",
-      };
-    }
-    if (process.arch === "x64") {
-      return {
-        url: `${FFMPEG_RELEASE_BASE}/ffmpeg-master-latest-linux64-gpl.tar.xz`,
-        fileName: "ffmpeg-linux64.tar.xz",
-        kind: "tar.xz",
-      };
-    }
-  }
-  return null;
-}
-
-async function downloadHttpFile(url: string, destPath: string): Promise<void> {
-  const response = await fetch(url, { redirect: "follow" });
-  if (!response.ok || !response.body) {
-    throw new Error(
-      `Failed to download ${url}: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  await fsp.mkdir(path.dirname(destPath), { recursive: true });
-  await pipeline(
-    Readable.fromWeb(response.body as import("node:stream/web").ReadableStream),
-    fs.createWriteStream(destPath),
-  );
-
-  const downloaded = await fsp.stat(destPath);
-  if (downloaded.size < 1_000_000) {
-    await fsp.unlink(destPath).catch(() => {});
-    throw new Error(
-      `Downloaded file from ${url} is unexpectedly small (${downloaded.size} bytes). GitHub may have returned an error page.`,
-    );
-  }
-}
-
-async function findNamedFile(
-  rootDir: string,
-  fileName: string,
-): Promise<string | null> {
-  const stack = [rootDir];
-  while (stack.length > 0) {
-    const current = stack.pop()!;
-    let entries: fs.Dirent[];
-    try {
-      entries = await fsp.readdir(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const fullPath = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(fullPath);
-      } else if (entry.isFile() && entry.name === fileName) {
-        return fullPath;
-      }
-    }
-  }
-  return null;
-}
-
-async function canUseDirectory(dir: string): Promise<boolean> {
-  try {
-    await fsp.mkdir(dir, { recursive: true });
-    await fsp.access(dir, fs.constants.W_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function resolveImportScratchRoot(): Promise<string> {
-  const override = process.env.VEOLMS_IMPORT_TMP?.trim();
-  if (override) {
-    if (!(await canUseDirectory(override))) {
-      throw new Error(`VEOLMS_IMPORT_TMP is not writable: ${override}`);
-    }
-    return path.resolve(override);
-  }
-
-  if (process.platform === "win32") {
-    return os.tmpdir();
-  }
-
-  const candidates = [
-    "/var/lib/veolms/import",
-    path.join(veolmsHomeDir(), "tmp"),
-    "/var/tmp",
-  ];
-  for (const dir of candidates) {
-    if (await canUseDirectory(dir)) {
-      return dir;
-    }
-  }
-
-  return os.tmpdir();
-}
-
-async function getAvailableBytes(dir: string): Promise<number | null> {
-  try {
-    const stats = await fsp.statfs(dir);
-    return Number(stats.bavail) * Number(stats.bsize);
-  } catch {
-    return null;
-  }
-}
 
 function estimateScratchBytesForVideo(
   durationSec: number | undefined,
@@ -520,36 +319,6 @@ function estimateScratchBytesForVideo(
   const estimated = (2_000_000 / 8) * seconds * 2 * qualities;
   return Math.max(MIN_IMPORT_SCRATCH_BYTES, Math.ceil(estimated));
 }
-
-async function assertEnoughDiskSpace(
-  dir: string,
-  neededBytes: number,
-  label: string,
-): Promise<void> {
-  const available = await getAvailableBytes(dir);
-  if (available === null) {
-    return;
-  }
-  if (available >= neededBytes) {
-    return;
-  }
-  const neededGiB = (neededBytes / GIB).toFixed(1);
-  const availableGiB = (available / GIB).toFixed(1);
-  throw new Error(
-    `Not enough disk space ${label}: need ${neededGiB} GiB, have ${availableGiB} GiB in ${dir}. Free disk or set VEOLMS_IMPORT_TMP to a disk-backed directory (avoid /tmp on Ubuntu; it is often tmpfs).`,
-  );
-}
-
-// Tracks every live yt-dlp/ffmpeg/helper child so a SIGINT/SIGTERM (or a
-// per-call timeout) can terminate the whole tree instead of orphaning it.
-const activeChildren = new Set<ReturnType<typeof spawn>>();
-
-const QUICK_PROCESS_TIMEOUT_MS = 30_000; // --version/--help/which/-U pings
-const METADATA_PROCESS_TIMEOUT_MS = 5 * 60_000; // --dump-single-json probes, archive extraction
-const DOWNLOAD_PROCESS_TIMEOUT_MS =
-  Number(process.env.VEOLMS_IMPORT_PROCESS_TIMEOUT_MS) || 60 * 60_000; // actual video/subtitle download & ffmpeg encode
-
-const MAX_BUFFERED_OUTPUT_BYTES = 2 * 1024 * 1024; // cap retained stdout/stderr per process
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -575,392 +344,8 @@ const INTER_VIDEO_DELAY_MS =
 const RATE_LIMIT_BACKOFF_MS =
   Number(process.env.VEOLMS_IMPORT_RATE_LIMIT_BACKOFF_MS) || 45_000;
 
-function capAppend(
-  existing: string,
-  addition: string,
-  maxBytes: number,
-): string {
-  const combined = existing + addition;
-  return combined.length <= maxBytes
-    ? combined
-    : combined.slice(combined.length - maxBytes);
-}
-
-/** Best-effort kill of a child and, on Windows, its full descendant tree. */
-function killProcessTree(child: ReturnType<typeof spawn>): void {
-  if (!child.pid || child.exitCode !== null || child.killed) return;
-  if (process.platform === "win32") {
-    spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
-      shell: false,
-      windowsHide: true,
-    }).on("error", () => {});
-    return;
-  }
-  try {
-    child.kill("SIGTERM");
-  } catch {
-    // already gone
-  }
-  setTimeout(() => {
-    try {
-      if (child.exitCode === null && !child.killed) child.kill("SIGKILL");
-    } catch {
-      // already gone
-    }
-  }, 5000);
-}
-
-/** Terminates every currently tracked child process (used on shutdown). */
-function killAllActiveChildren(): void {
-  for (const child of [...activeChildren]) {
-    killProcessTree(child);
-  }
-}
-
-interface RunProcessOptions {
-  onProgress?: (data: string) => void;
-  /** Kill the process (and reject success on close) once exceeded. */
-  timeoutMs?: number;
-}
-
-async function runProcess(
-  cmd: string,
-  args: string[],
-  options?: RunProcessOptions,
-): Promise<{
-  stdout: string;
-  stderr: string;
-  code: number;
-  timedOut: boolean;
-}> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(cmd, args, { shell: false, windowsHide: true });
-    activeChildren.add(proc);
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let timer: NodeJS.Timeout | undefined;
-
-    if (options?.timeoutMs && options.timeoutMs > 0) {
-      timer = setTimeout(() => {
-        timedOut = true;
-        killProcessTree(proc);
-      }, options.timeoutMs);
-    }
-
-    proc.stdout.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      stdout = capAppend(stdout, text, MAX_BUFFERED_OUTPUT_BYTES);
-      if (options?.onProgress) options.onProgress(text);
-    });
-
-    proc.stderr.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      stderr = capAppend(stderr, text, MAX_BUFFERED_OUTPUT_BYTES);
-      if (options?.onProgress) options.onProgress(text);
-    });
-
-    proc.on("error", (err) => {
-      if (timer) clearTimeout(timer);
-      activeChildren.delete(proc);
-      reject(err);
-    });
-    proc.on("close", (code) => {
-      if (timer) clearTimeout(timer);
-      activeChildren.delete(proc);
-      // A null code means the process died to a signal (our timeout kill,
-      // an external kill, or shutdown) — never treat that as success (0).
-      resolve({ stdout, stderr, code: code ?? -1, timedOut });
-    });
-  });
-}
-
-async function findBinaryOnPath(name: string): Promise<string | null> {
-  const checkCmd = process.platform === "win32" ? "where.exe" : "which";
-  try {
-    const res = await runProcess(checkCmd, [name], {
-      timeoutMs: QUICK_PROCESS_TIMEOUT_MS,
-    });
-    if (res.code === 0 && res.stdout.trim()) {
-      const binaryPath = res.stdout.trim().split(/\r?\n/)[0]!.trim();
-      if (binaryPath && fs.existsSync(binaryPath)) {
-        return binaryPath;
-      }
-    }
-  } catch {
-    // Not on PATH
-  }
-  return null;
-}
-
-async function probeYtDlpBinary(
-  binaryPath: string,
-): Promise<{ ok: boolean; supportsJsRuntimes: boolean }> {
-  try {
-    const version = await runProcess(binaryPath, ["--version"], {
-      timeoutMs: QUICK_PROCESS_TIMEOUT_MS,
-    });
-    if (version.code !== 0) {
-      return { ok: false, supportsJsRuntimes: false };
-    }
-    const help = await runProcess(binaryPath, ["--help"], {
-      timeoutMs: QUICK_PROCESS_TIMEOUT_MS,
-    });
-    const text = `${help.stdout}\n${help.stderr}`;
-    return { ok: true, supportsJsRuntimes: text.includes("--js-runtimes") };
-  } catch {
-    return { ok: false, supportsJsRuntimes: false };
-  }
-}
-
-async function detectFfmpegBinary(customPath?: string): Promise<string | null> {
-  if (customPath && fs.existsSync(customPath)) {
-    return customPath;
-  }
-
-  const ext = process.platform === "win32" ? ".exe" : "";
-  const homeBin = path.join(veolmsBinDir(), `ffmpeg${ext}`);
-  if (fs.existsSync(homeBin)) {
-    return homeBin;
-  }
-
-  return findBinaryOnPath("ffmpeg");
-}
-
-async function extractFfmpegArchive(
-  archivePath: string,
-  extractDir: string,
-  kind: "zip" | "tar.xz",
-): Promise<void> {
-  if (kind === "zip") {
-    const extractRes = await runProcess(
-      "powershell.exe",
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        "Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
-        archivePath,
-        extractDir,
-      ],
-      { timeoutMs: METADATA_PROCESS_TIMEOUT_MS },
-    );
-    if (extractRes.code !== 0) {
-      throw new Error(extractRes.stderr || "Failed to extract FFmpeg zip");
-    }
-    return;
-  }
-
-  const xzRes = await runProcess(
-    "tar",
-    ["-xJf", archivePath, "-C", extractDir],
-    { timeoutMs: METADATA_PROCESS_TIMEOUT_MS },
-  );
-  if (xzRes.code === 0) {
-    return;
-  }
-  const fallback = await runProcess(
-    "tar",
-    ["-xf", archivePath, "-C", extractDir],
-    { timeoutMs: METADATA_PROCESS_TIMEOUT_MS },
-  );
-  if (fallback.code !== 0) {
-    throw new Error(
-      fallback.stderr || xzRes.stderr || "Failed to extract FFmpeg tar.xz",
-    );
-  }
-}
-
-async function ensureFfmpegBinary(
-  customPath?: string,
-  _rl?: readline.Interface,
-): Promise<string | null> {
-  const existing = await detectFfmpegBinary(customPath);
-  if (existing) return existing;
-
-  const isWindows = process.platform === "win32";
-  const homeBin = veolmsBinDir();
-  const ffmpegName = isWindows ? "ffmpeg.exe" : "ffmpeg";
-  const ffprobeName = isWindows ? "ffprobe.exe" : "ffprobe";
-  const targetFfmpeg = path.join(homeBin, ffmpegName);
-  const targetFfprobe = path.join(homeBin, ffprobeName);
-
-  if (fs.existsSync(targetFfmpeg)) return targetFfmpeg;
-
-  const release = resolveFfmpegRelease();
-  if (!release) {
-    console.log(
-      yellow(
-        "Could not auto-download FFmpeg for this platform. Install ffmpeg (e.g. apt install ffmpeg) and retry.",
-      ),
-    );
-    return null;
-  }
-
-  console.log(
-    `\n${cyan("➜")} Downloading FFmpeg for audio/video format merging (${release.fileName})...`,
-  );
-  const stagingRoot = veolmsStagingDir();
-  const archivePath = path.join(stagingRoot, release.fileName);
-  const extractDir = path.join(stagingRoot, "ffmpeg-extract");
-
-  try {
-    await fsp.mkdir(homeBin, { recursive: true });
-    await fsp.mkdir(stagingRoot, { recursive: true });
-    await fsp.rm(extractDir, { recursive: true, force: true });
-    await fsp.mkdir(extractDir, { recursive: true });
-
-    await downloadHttpFile(release.url, archivePath);
-    await extractFfmpegArchive(archivePath, extractDir, release.kind);
-
-    const ffmpegFound = await findNamedFile(extractDir, ffmpegName);
-    if (!ffmpegFound) {
-      throw new Error(`Could not find ${ffmpegName} in the downloaded archive`);
-    }
-    await fsp.copyFile(ffmpegFound, targetFfmpeg);
-    if (!isWindows) {
-      await fsp.chmod(targetFfmpeg, 0o755);
-    }
-
-    const ffprobeFound = await findNamedFile(extractDir, ffprobeName);
-    if (ffprobeFound) {
-      await fsp.copyFile(ffprobeFound, targetFfprobe);
-      if (!isWindows) {
-        await fsp.chmod(targetFfprobe, 0o755);
-      }
-    }
-
-    if (fs.existsSync(targetFfmpeg)) {
-      console.log(`${green("✓")} FFmpeg installed to: ${dim(targetFfmpeg)}`);
-      return targetFfmpeg;
-    }
-  } catch (e) {
-    console.log(
-      yellow(
-        `Could not auto-download FFmpeg: ${e instanceof Error ? e.message : e}`,
-      ),
-    );
-  } finally {
-    await fsp.unlink(archivePath).catch(() => {});
-    await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
-  }
-
-  return null;
-}
-
-async function installStandaloneYtDlp(homeBin: string): Promise<void> {
-  const release = resolveYtDlpDownloadUrl();
-  console.log(
-    `${cyan("➜")} Downloading standalone yt-dlp (${release.fileName} for ${process.platform}/${process.arch})...`,
-  );
-
-  await fsp.mkdir(path.dirname(homeBin), { recursive: true });
-  await downloadHttpFile(release.url, homeBin);
-  if (process.platform !== "win32") {
-    await fsp.chmod(homeBin, 0o755);
-  }
-
-  const probe = await probeYtDlpBinary(homeBin);
-  if (!probe.ok) {
-    await fsp.unlink(homeBin).catch(() => {});
-    throw new Error(
-      `Downloaded yt-dlp at ${homeBin} could not be executed. On Linux this must be the arch-matching standalone (yt-dlp_linux / yt-dlp_linux_aarch64), not the Python zipapp.`,
-    );
-  }
-
-  console.log(
-    `${green("✓")} yt-dlp downloaded successfully to: ${dim(homeBin)}`,
-  );
-}
-
-async function ensureYtDlpBinary(
-  customPath?: string,
-  rl?: readline.Interface,
-): Promise<ResolvedYtDlpBinary> {
-  const ext = process.platform === "win32" ? ".exe" : "";
-  const homeBin = path.join(veolmsBinDir(), `yt-dlp${ext}`);
-
-  if (customPath) {
-    if (!fs.existsSync(customPath)) {
-      throw new Error(`yt-dlp path does not exist: ${customPath}`);
-    }
-    const probe = await probeYtDlpBinary(customPath);
-    if (!probe.ok) {
-      throw new Error(`yt-dlp at ${customPath} could not be executed.`);
-    }
-    if (!probe.supportsJsRuntimes) {
-      console.log(
-        yellow(
-          `yt-dlp at ${customPath} is too old for --js-runtimes; YouTube extraction may fail. Upgrade yt-dlp or omit --ytdlp-path to auto-download a current standalone.`,
-        ),
-      );
-    }
-    return { path: customPath, supportsJsRuntimes: probe.supportsJsRuntimes };
-  }
-
-  if (fs.existsSync(homeBin)) {
-    const probe = await probeYtDlpBinary(homeBin);
-    if (probe.ok && probe.supportsJsRuntimes) {
-      try {
-        console.log(`${cyan("➜")} Checking for yt-dlp updates...`);
-        const updateRes = await runProcess(homeBin, ["-U"], {
-          timeoutMs: METADATA_PROCESS_TIMEOUT_MS,
-        });
-        const output = (updateRes.stdout || updateRes.stderr).trim();
-        if (output) {
-          console.log(`  ${dim(output.split("\n")[0] || "")}`);
-        }
-      } catch {
-        // Managed-binary updates are best-effort.
-      }
-      return { path: homeBin, supportsJsRuntimes: true };
-    }
-    console.log(
-      yellow(
-        probe.ok
-          ? `Existing yt-dlp at ${homeBin} is too old (no --js-runtimes); re-downloading a standalone build.`
-          : `Existing yt-dlp at ${homeBin} is not executable; re-downloading a standalone build.`,
-      ),
-    );
-    await fsp.unlink(homeBin).catch(() => {});
-  }
-
-  const pathBinary = await findBinaryOnPath("yt-dlp");
-  if (pathBinary) {
-    const probe = await probeYtDlpBinary(pathBinary);
-    if (probe.ok && probe.supportsJsRuntimes) {
-      return { path: pathBinary, supportsJsRuntimes: true };
-    }
-    if (probe.ok) {
-      console.log(
-        yellow(
-          `System yt-dlp at ${pathBinary} is too old (no --js-runtimes). Downloading a current standalone to ${homeBin}.`,
-        ),
-      );
-    }
-  } else {
-    console.log(
-      `\n${yellow("!")} ${bold("yt-dlp")} was not found in PATH or at ${dim(homeBin)}.`,
-    );
-  }
-
-  let shouldDownload = true;
-  if (rl && !pathBinary) {
-    const answer = await rl.question(
-      `${cyan("? ")}${bold("Would you like to auto-download yt-dlp standalone binary now? (Y/n): ")}`,
-    );
-    shouldDownload = answer.trim().toLowerCase() !== "n";
-  }
-
-  if (!shouldDownload) {
-    throw new Error(
-      "yt-dlp is required to download playlist videos. Please install yt-dlp or specify path via --ytdlp-path.",
-    );
-  }
-
-  await installStandaloneYtDlp(homeBin);
-  const installed = await probeYtDlpBinary(homeBin);
-  return { path: homeBin, supportsJsRuntimes: installed.supportsJsRuntimes };
+function printToolLog(level: "info" | "warn", message: string): void {
+  console.log(level === "warn" ? yellow(message) : `${cyan("➜")} ${message}`);
 }
 
 async function resolveInstructor(
@@ -1228,6 +613,8 @@ function resolveVideoMimeType(filename: string): string {
 interface MediaStreamInfo {
   videoCodec: string | null;
   audioCodec: string | null;
+  /** ffmpeg's AAC profile name ("LC", "HE-AAC", "HE-AACv2"), when audio is AAC. */
+  audioProfile: string | null;
   width: number | null;
   height: number | null;
   fps: number | null;
@@ -1250,7 +637,10 @@ async function probeMediaStreamInfo(
     /Stream #\d+:\d+.*?: Video:\s*([a-zA-Z0-9_]+).*?(\d{2,5})x(\d{2,5})(?:.*?(\d+(?:\.\d+)?)\s*fps)?/.exec(
       text,
     );
-  const audioLine = /Stream #\d+:\d+.*?: Audio:\s*([a-zA-Z0-9_]+)/.exec(text);
+  const audioLine =
+    /Stream #\d+:\d+.*?: Audio:\s*([a-zA-Z0-9_]+)(?:\s*\(([A-Za-z0-9-]+)\))?/.exec(
+      text,
+    );
 
   return {
     videoCodec: videoLine?.[1]?.toLowerCase() ?? null,
@@ -1258,11 +648,28 @@ async function probeMediaStreamInfo(
     height: videoLine?.[3] ? Number(videoLine[3]) : null,
     fps: videoLine?.[4] ? Number(videoLine[4]) : null,
     audioCodec: audioLine?.[1]?.toLowerCase() ?? null,
+    audioProfile: audioLine?.[2] ?? null,
   };
 }
 
+// The master playlist's AAC codec: "mp4a.40." + the audio object type (the
+// H.264 one is read from the init segment, see `readAvc1CodecString`).
+const AAC_AUDIO_OBJECT_TYPES: Record<string, number> = {
+  Main: 1,
+  LC: 2,
+  SSR: 3,
+  LTP: 4,
+  "HE-AAC": 5,
+  "HE-AACv2": 29,
+};
+
+function aacCodecString(profile: string | null): string {
+  const objectType = (profile && AAC_AUDIO_OBJECT_TYPES[profile]) || 2;
+  return `mp4a.40.${objectType}`;
+}
+
 // ffmpeg names these differently from yt-dlp/common usage; normalize to
-// what actually matters for MPEG-TS + Safari/iOS HLS compatibility.
+// what actually matters for Safari/iOS HLS compatibility.
 function isTsSafeVideoCodec(codec: string | null): boolean {
   return codec === "h264";
 }
@@ -1391,6 +798,7 @@ interface HlsVariant {
   bandwidth: number;
   videoCodec: string | null;
   audioCodec: string | null;
+  audioProfile: string | null;
   fps: number | null;
 }
 
@@ -1632,11 +1040,10 @@ async function packageDirectHls(
 ): Promise<{ success: boolean; transcoded: boolean }> {
   await fsp.mkdir(outputHlsDir, { recursive: true });
 
-  const successfulVariants: HlsVariant[] = [];
+  const successfulVariants: Array<{ variant: HlsVariant; codecs: string }> = [];
 
-  // MPEG-TS (what these HLS segments use) only reliably carries H.264/AAC —
-  // Safari/iOS will not decode VP9/AV1/Opus in .ts regardless of container
-  // support elsewhere. yt-dlp's format selector prefers avc1 but can fall
+  // Safari/iOS HLS only reliably plays H.264/AAC — not VP9/AV1/Opus,
+  // whatever the container. yt-dlp's format selector prefers avc1 but can fall
   // back to "any codec" per-height, so renditions of the *same* video can
   // come back on different codecs. If even one does, re-encode every
   // rendition (not just the offending one) to a uniform H.264/AAC with a
@@ -1661,7 +1068,12 @@ async function packageDirectHls(
     const qualityDir = path.join(outputHlsDir, variant.quality);
     await fsp.mkdir(qualityDir, { recursive: true });
     const variantPlaylist = path.join(qualityDir, `${variant.quality}.m3u8`);
-    const segmentPattern = path.join(qualityDir, "segment_%03d.ts");
+    // Fragmented MP4 (CMAF) segments with one init segment per rendition,
+    // not MPEG-TS: Safari on iOS plays fMP4 straight from media source,
+    // whereas TS has to be transmuxed in JavaScript by the player, and its
+    // decoder then failed on every quality switch of the transmuxed stream.
+    const initSegmentName = "init.mp4";
+    const segmentPattern = path.join(qualityDir, "segment_%03d.m4s");
 
     const fps = variant.fps && variant.fps > 0 ? variant.fps : 30;
     const gopSize = Math.max(1, Math.round(fps * HLS_SEGMENT_SECONDS));
@@ -1706,21 +1118,53 @@ async function packageDirectHls(
         "-i",
         variant.filePath,
         ...codecArgs,
+        "-f",
+        "hls",
+        "-hls_segment_type",
+        "fmp4",
         "-hls_time",
         String(HLS_SEGMENT_SECONDS),
         "-hls_playlist_type",
         "vod",
         "-hls_flags",
         "independent_segments",
+        "-hls_fmp4_init_filename",
+        initSegmentName,
+        // ffmpeg writes the init segment next to the playlist only when it
+        // can split the playlist path on "/": with Windows backslashes it
+        // lands in the working directory instead.
         "-hls_segment_filename",
-        segmentPattern,
-        variantPlaylist,
+        toFfmpegPath(segmentPattern),
+        toFfmpegPath(variantPlaylist),
       ],
       { timeoutMs: DOWNLOAD_PROCESS_TIMEOUT_MS },
     );
 
-    if (res.code === 0 && fs.existsSync(variantPlaylist)) {
-      successfulVariants.push(variant);
+    const initSegmentPath = path.join(qualityDir, initSegmentName);
+    if (
+      res.code === 0 &&
+      fs.existsSync(variantPlaylist) &&
+      fs.existsSync(initSegmentPath)
+    ) {
+      const videoCodec = await readAvc1CodecString(initSegmentPath);
+      if (!videoCodec) {
+        console.log(
+          yellow(
+            `  [warn] ${variant.quality}: no H.264 avcC in its init segment; the master playlist will not carry CODECS for it.`,
+          ),
+        );
+      }
+      // Re-encodes use ffmpeg's AAC encoder (always AAC-LC); copies keep
+      // the source's profile. A rendition without audio has no audio codec.
+      const audioCodec = needsTranscode
+        ? aacCodecString("LC")
+        : variant.audioCodec === null
+          ? null
+          : aacCodecString(variant.audioProfile);
+      successfulVariants.push({
+        variant,
+        codecs: [videoCodec, audioCodec].filter(Boolean).join(","),
+      });
     } else {
       console.log(
         yellow(
@@ -1814,8 +1258,14 @@ async function packageDirectHls(
     });
   }
 
-  // Generate master.m3u8
-  const masterPlaylistLines = ["#EXTM3U", "#EXT-X-VERSION:3"];
+  // Generate master.m3u8. INDEPENDENT-SEGMENTS here says it for every
+  // rendition at once (each media playlist repeats it); CODECS lets Safari
+  // choose renditions without probing them.
+  const masterPlaylistLines = [
+    "#EXTM3U",
+    "#EXT-X-VERSION:3",
+    "#EXT-X-INDEPENDENT-SEGMENTS",
+  ];
 
   const hasSubtitles = processedSubtitles.length > 0;
   if (hasSubtitles) {
@@ -1826,10 +1276,11 @@ async function packageDirectHls(
     });
   }
 
-  for (const v of successfulVariants) {
+  for (const { variant: v, codecs } of successfulVariants) {
     const subsAttr = hasSubtitles ? `,SUBTITLES="subs"` : "";
+    const codecsAttr = codecs ? `,CODECS="${codecs}"` : "";
     masterPlaylistLines.push(
-      `#EXT-X-STREAM-INF:BANDWIDTH=${v.bandwidth},RESOLUTION=${v.width}x${v.height}${subsAttr}`,
+      `#EXT-X-STREAM-INF:BANDWIDTH=${v.bandwidth},RESOLUTION=${v.width}x${v.height}${subsAttr}${codecsAttr}`,
       `${v.quality}/${v.quality}.m3u8`,
     );
   }
@@ -2090,10 +1541,19 @@ ${bold("Examples:")}
 
   try {
     // 1. Locate / Auto-update yt-dlp & Auto-install FFmpeg
-    const ytdlp = await ensureYtDlpBinary(
-      cliArgs.ytdlpPath,
-      cliArgs.yes ? undefined : rl,
-    );
+    const ytdlp = await ensureYtDlpBinary(cliArgs.ytdlpPath, {
+      log: printToolLog,
+      confirmDownload: cliArgs.yes
+        ? undefined
+        : async () =>
+            (
+              await rl.question(
+                `${cyan("? ")}${bold("Would you like to auto-download yt-dlp standalone binary now? (Y/n): ")}`,
+              )
+            )
+              .trim()
+              .toLowerCase() !== "n",
+    });
     const ytdlpBinary = ytdlp.path;
     ytCtx.supportsJsRuntimes = ytdlp.supportsJsRuntimes;
     console.log(
@@ -2101,7 +1561,7 @@ ${bold("Examples:")}
     );
     const ffmpegBinary = await ensureFfmpegBinary(
       cliArgs.ffmpegPath,
-      cliArgs.yes ? undefined : rl,
+      printToolLog,
     );
 
     if (ffmpegBinary) {
@@ -2419,6 +1879,7 @@ ${bold("Examples:")}
         created_at: now,
         updated_at: now,
       });
+      await seedDefaultIncludes(database, courseId);
 
       // If requested published, update status and published_at
       if (cliArgs.status === "published") {
@@ -2687,6 +2148,7 @@ ${bold("Examples:")}
               bandwidth: Math.max(100000, bandwidth),
               videoCodec: streamInfo.videoCodec,
               audioCodec: streamInfo.audioCodec,
+              audioProfile: streamInfo.audioProfile,
               fps: streamInfo.fps,
             });
 
@@ -2929,6 +2391,15 @@ ${bold("Examples:")}
       // media that was never actually persisted.
       await database.transaction().execute(async (trx) => {
         await pendingMediaWrite!(trx);
+        await mediaRepo.insertMediaSource(trx, {
+          media_id: videoMediaId,
+          provider: "youtube",
+          external_id: video.id,
+          source_url: canonicalYoutubeWatchUrl(video.id),
+          title: video.title,
+          channel: null,
+          recorded_via: "cli",
+        });
         await trx
           .insertInto("course_lessons")
           .values({
@@ -3002,6 +2473,12 @@ ${bold("Examples:")}
         await sleep(INTER_VIDEO_DELAY_MS);
       }
     }
+
+    // A running API drops what it cached about this course and the lists.
+    await publishCacheInvalidation(database, [
+      cacheTags.course(courseId),
+      cacheTags.catalog,
+    ]);
 
     // 8. Summary Output
     const courseUrl = `${config.WEB_URL}/courses/${slug}`;

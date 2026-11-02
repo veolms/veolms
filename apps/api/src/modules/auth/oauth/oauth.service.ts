@@ -20,6 +20,7 @@ import {
 } from "./oauth.provider.ts";
 import type { AuthService } from "../authentication/authentication.service.ts";
 import type { SessionService } from "../session/session.service.ts";
+import { type SessionLocation } from "../shared/request-location.ts";
 
 const ALLOW_MOCK_OAUTH =
   config.NODE_ENV === "development" && config.OAUTH_ALLOW_MOCK_CODES;
@@ -188,6 +189,7 @@ export function createOauthService({
       ip: string;
       userAgent: string | null;
       existingSessionToken?: string | null;
+      location?: SessionLocation | null;
     },
     verify: (credential: string) => Promise<OauthProfile> = (value) =>
       verifyGoogleIdToken(value, config.GOOGLE_CLIENT_ID || ""),
@@ -203,6 +205,7 @@ export function createOauthService({
       ip: string;
       userAgent: string | null;
       existingSessionToken?: string | null;
+      location?: SessionLocation | null;
     },
   ) {
     // Every lookup and the account created below use the stored form of the
@@ -274,6 +277,7 @@ export function createOauthService({
       ip: string;
       userAgent: string | null;
       existingSessionToken?: string | null;
+      location?: SessionLocation | null;
     },
   ) {
     // As in `login`: the stored form of the address, for the lookups and

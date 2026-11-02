@@ -6,6 +6,7 @@ import {
   CATALOGUE_CHUNK_URL_PLACEHOLDER,
   COURSE_OVERVIEW_CHUNK_URL_PLACEHOLDER,
   GUEST_HOME_CHUNK_URL_PLACEHOLDER,
+  LEARNING_PLAYER_HOST_CHUNK_URL_PLACEHOLDER,
 } from "./routeChunkPreloads";
 
 /**
@@ -56,6 +57,21 @@ export function definePrerenderedBody<Module, Props extends object>(
 export const guestHomeBody = definePrerenderedBody(
   () => import("../GuestHome"),
   (module) => module.GuestHome,
+);
+
+// The signed-in learner's home. A reload of it puts the home up as it was
+// last drawn before any of this runs (see home/learner/learnerHomeSnapshot.ts),
+// and the page's own takes its place as soon as it has hydrated: both
+// modules are loaded first, so that it does so at once, already filled in
+// from the tab's copies, and not by way of its placeholders.
+export const authenticatedHomeBody = definePrerenderedBody(
+  () => import("../home/AuthenticatedHomeBoundary"),
+  (module) => module.AuthenticatedHomeBoundary,
+);
+
+export const learnerHomeBody = definePrerenderedBody(
+  () => import("../home/learner/LearnerHome"),
+  (module) => module.LearnerHome,
 );
 
 export const courseCatalogueBody = definePrerenderedBody(
@@ -115,6 +131,16 @@ export const loginDialogBody = definePrerenderedBody(
   (module) => module.default,
 );
 
+// The lesson's video player, kept by the shell across pages. A bare `lazy()`
+// held it back even when its code had been fetched ahead (the learner home
+// does so for its hero lesson): it showed its empty fallback first, and React
+// then waits about 300 ms before replacing a fallback, so the lesson page
+// stood with a black box where the video goes.
+export const persistentLearningPlayerHostBody = definePrerenderedBody(
+  () => import("../learning/player/PersistentLearningPlayerHost"),
+  (module) => module.PersistentLearningPlayerHost,
+);
+
 function documentPreloads(chunkUrl: string) {
   // Anywhere in the document, not only <head>: the link may still be on its
   // way there when this runs.
@@ -147,6 +173,16 @@ export function preloadPrerenderedBodies(): Promise<unknown> | null {
   ) {
     pending.push(guestHomeBody.preload());
   }
+  // A learner who was signed in last time, whose home lists their courses:
+  // the page takes over from what the first paint showed right after
+  // hydrating (see authenticatedHomeBody).
+  if (
+    (isDevelopmentHome || documentPreloads(GUEST_HOME_CHUNK_URL_PLACEHOLDER)) &&
+    document.documentElement.dataset.sessionHint &&
+    readHomeHint() === null
+  ) {
+    pending.push(authenticatedHomeBody.preload(), learnerHomeBody.preload());
+  }
   if (documentPreloads(CATALOGUE_CHUNK_URL_PLACEHOLDER)) {
     pending.push(courseCatalogueBody.preload());
   }
@@ -161,6 +197,18 @@ export function preloadPrerenderedBodies(): Promise<unknown> | null {
     documentPreloads(COURSE_OVERVIEW_CHUNK_URL_PLACEHOLDER)
   ) {
     pending.push(courseOverviewBody.preload());
+  }
+  // A lesson page's video player host: mounted by the academy layout the
+  // moment the hydrated page registers its player, so its module must be
+  // in by then, or the player's body suspends on it and React holds the
+  // player back for its fallback throttle (see routeChunkPreloads.ts).
+  const isDevelopmentLessonPage =
+    import.meta.env.DEV && window.location.pathname.startsWith("/learn/");
+  if (
+    isDevelopmentLessonPage ||
+    documentPreloads(LEARNING_PLAYER_HOST_CHUNK_URL_PLACEHOLDER)
+  ) {
+    pending.push(persistentLearningPlayerHostBody.preload());
   }
   return pending.length ? Promise.all(pending) : null;
 }

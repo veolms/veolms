@@ -1,5 +1,6 @@
 import "./learning-feature.css";
 import "./learning-split-layout.css";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import type { MyQuizAssignment } from "@veolms/contracts";
 import { FloatingScrollbar } from "../shell/FloatingScrollbar";
 import type {
@@ -12,6 +13,9 @@ import { Drawer } from "@/components/ui/drawer";
 import { LessonPlayerSlot } from "./workspace/LessonPlayerSlot";
 import { LessonContentPanel } from "./workspace/LessonContentPanel";
 import { CurriculumColumn } from "./workspace/CurriculumColumn";
+
+// Fetched, with the payment code it brings, only when it is opened.
+const UpgradeCourseDialog = lazy(() => import("./upgrade/UpgradeCourseDialog"));
 import { CourseLessonsDrawerContent } from "./workspace/CourseLessonsDrawerContent";
 import { useLearningCourseData } from "./workspace/hooks/useLearningCourseData";
 import { useLessonSelectionState } from "./workspace/hooks/useLessonSelectionState";
@@ -34,6 +38,7 @@ import { usePlayerCourseLessons } from "./workspace/hooks/usePlayerCourseLessons
 import { useLessonPlayerProps } from "./workspace/hooks/useLessonPlayerProps";
 import { useLessonEditPath } from "./workspace/hooks/useLessonEditPath";
 import { useLessonHeader } from "./workspace/hooks/useLessonHeader";
+import { useShownAfterFirstPaint } from "./workspace/hooks/useShownAfterFirstPaint";
 
 interface LearningWorkspaceProps {
   courseSlug: string | undefined;
@@ -100,6 +105,7 @@ export function LearningWorkspace({
     isAuthenticated,
     resolvedAuthUser,
     isAuthResolutionPending,
+    rememberedAccount,
     courseAccessQuery,
     isApiRoute,
     courseOverview,
@@ -115,6 +121,17 @@ export function LearningWorkspace({
   } = useLearningCourseData({
     courseSlug,
   });
+  // A learner holding part of the course (some of its sections) unlocks
+  // the rest here, from the upgrade pop-up, instead of on the course page,
+  // which they are already enrolled on.
+  const holdsPartOfCourse = Boolean(
+    courseAccessQuery.data?.openSectionIds?.length,
+  );
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  // Stable: the locked lesson's prompt is built from it and handed up to
+  // the page header, which a new function every render kept updating.
+  const openUpgrade = useCallback(() => setUpgradeOpen(true), []);
+  const unlockCourse = holdsPartOfCourse ? openUpgrade : onUnlockCourse;
   const {
     shortcutPlatform,
     selectedLesson,
@@ -299,7 +316,7 @@ export function LearningWorkspace({
     playbackBootstrapPending,
   } = useLessonStagePlan({
     courseSlug,
-    onUnlockCourse,
+    onUnlockCourse: unlockCourse,
     onOpenLogin,
     isAuthenticated,
     resolvedAuthUser,
@@ -344,6 +361,7 @@ export function LearningWorkspace({
     recordProgress,
     detachedProgressTarget,
     lessonProgress,
+    progressKnown,
     liveLessonProgress,
     courseComplete,
     currentLessonIndex,
@@ -365,6 +383,13 @@ export function LearningWorkspace({
     curriculumLessonsById,
     courseAccessRefused,
   });
+  // The course's progress in the lesson list waits for the learner's own
+  // (a visitor has none to wait for): until then it shimmers, rather than
+  // saying 0% and then changing. A learner this tab remembers has theirs
+  // from the browser's copy at once, when it holds one.
+  const progressPending =
+    (isAuthResolutionPending && !rememberedAccount) ||
+    ((isAuthenticated || rememberedAccount !== null) && !progressKnown);
 
   const {
     stickyPlayer,
@@ -513,6 +538,8 @@ export function LearningWorkspace({
       isCourseContentDrawerLayout,
       openLessonDrawer,
       closeLessonDrawer,
+      fullscreenLessonsBeside: mobileLandscapeFullscreen,
+      toggleLessonDrawerFromPlayer,
     });
 
   const {
@@ -549,6 +576,7 @@ export function LearningWorkspace({
     setCurriculumWidth,
     curriculumCollapsed,
     setCurriculumCollapsed,
+    setCurriculumFocusRequest,
     curriculumResizing,
     setCurriculumResizing,
     setCurriculumResizePreviewWidth,
@@ -613,6 +641,15 @@ export function LearningWorkspace({
     closeFullscreenLessonPanel,
     curriculumToggleGesture,
   });
+  // The end of a lesson with a quiz offers it (see `onAttemptQuiz`).
+  const selectedLessonHasQuiz = hasLessonQuiz(selectedLesson);
+  const openSelectedLessonQuiz = useMemo(
+    () =>
+      selectedLessonHasQuiz
+        ? () => handleOpenLessonQuiz(selectedLesson)
+        : undefined,
+    [handleOpenLessonQuiz, selectedLesson, selectedLessonHasQuiz],
+  );
   const { seekCurrentLessonToTimestamp, lessonPlayerProps } =
     useLessonPlayerProps({
       courseSlug,
@@ -657,6 +694,7 @@ export function LearningWorkspace({
       goToNextLesson,
       updateSelectedLessonProgress,
       handleLessonEnded,
+      openSelectedLessonQuiz,
       toggleTheaterMode,
       toggleLessonDrawerFromPlayer,
       handleMobileLandscapeFullscreenChange,
@@ -675,6 +713,10 @@ export function LearningWorkspace({
     )?.sectionId,
     lessonId: backendLessonId,
   });
+
+  // Opened inside the app, the page draws the video first and the parts
+  // below and beside it a frame later.
+  const lowerPartsShown = useShownAfterFirstPaint();
 
   const { lessonHeader } = useLessonHeader({
     courseSlug,
@@ -777,6 +819,7 @@ export function LearningWorkspace({
             discussionPersistenceKey={discussionPersistenceKey}
             courseSlug={courseSlug}
             courseId={courseId}
+            courseCreatorId={courseOverview?.course?.creatorId}
             backendLessonId={backendLessonId}
             noteDeepLinkId={noteDeepLinkId}
             mobileBottomNavigation={mobileBottomNavigation}
@@ -821,6 +864,7 @@ export function LearningWorkspace({
           curriculumScrollportRef={curriculumScrollportRef}
           selectedLesson={selectedLesson}
           lessonProgress={lessonProgress}
+          progressPending={progressPending}
           selectLesson={selectLesson}
           lockedLessonNumbers={lockedLessonNumbers}
           onOpenCourseOverview={onOpenCourseOverview}
@@ -839,6 +883,7 @@ export function LearningWorkspace({
           isCourseOverviewLoading={isCourseOverviewLoading}
           courseUnavailable={courseUnavailable}
           setChaptersPanelHost={setChaptersPanelHost}
+          listShown={lowerPartsShown}
         />
       </main>
 
@@ -873,7 +918,7 @@ export function LearningWorkspace({
         snapToSequentialPoints={phoneLessonDrawer}
         showSwipeHandle={phoneLessonDrawer}
         swipeDirection={phoneLessonDrawer ? "down" : "right"}
-        swipeHandleClassName="absolute inset-x-0 top-0 z-30 pt-2 group-data-[swipe-axis=y]/drawer-popup:h-7 group-data-[swipe-direction=down]/drawer-popup:items-start after:bg-white/75 after:shadow-[0_1px_3px_rgba(0,0,0,0.48)]"
+        swipeHandleClassName="pointer-events-none absolute inset-x-0 top-0 z-30 pt-[3px] after:pointer-events-auto group-data-[swipe-axis=y]/drawer-popup:h-7 group-data-[swipe-direction=down]/drawer-popup:items-start after:bg-white/75"
         triggerId="learning-course-content-trigger"
       >
         <CourseLessonsDrawerContent
@@ -900,6 +945,7 @@ export function LearningWorkspace({
           lessonDrawerScrollportRef={lessonDrawerScrollportRef}
           selectedLesson={selectedLesson}
           lessonProgress={lessonProgress}
+          progressPending={progressPending}
           lockedLessonNumbers={lockedLessonNumbers}
           selectLesson={selectLesson}
           onOpenCourseOverview={onOpenCourseOverview}
@@ -932,6 +978,19 @@ export function LearningWorkspace({
         className="floating-scrollbar--curriculum floating-scrollbar--drawer"
         disabled={!lessonDrawer}
       />
+      {upgradeOpen && courseOverview ? (
+        <Suspense fallback={null}>
+          <UpgradeCourseDialog
+            courseId={courseOverview.course.id}
+            courseTitle={courseOverview.course.title}
+            onClose={() => setUpgradeOpen(false)}
+            onUnlocked={() => {
+              setUpgradeOpen(false);
+              retryPlaybackBootstrap();
+            }}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

@@ -4,10 +4,10 @@ import { getClientEntityId } from "../services/learning-interactions/interaction
 import type { LessonInteractionCounts } from "../services/learning-interactions";
 
 export type DiscussionEntryFilter = "all" | DiscussionEntryKind;
-export type DiscussionFeedSort = "newest" | "top";
+export type DiscussionFeedSort = "newest" | "oldest" | "top";
 
 /**
- * What the feed's menu offers: the two orders, and "mine", which is the
+ * What the feed's menu offers: the orders, and "mine", which is the
  * newest first of only what the learner posted themselves (named after the
  * tab: "My Comments", "My Notes" and so on).
  */
@@ -22,6 +22,7 @@ export type DiscussionFeedView = DiscussionFeedSort | "mine";
 export const DISCUSSION_FEED_SORT_OPTIONS = [
   ["top", "Top"],
   ["newest", "Newest"],
+  ["oldest", "Oldest"],
 ] as const satisfies readonly (readonly [DiscussionFeedView, string])[];
 
 const MINE_LABELS: Record<DiscussionEntryFilter, string> = {
@@ -44,7 +45,8 @@ export const getDiscussionFeedViewOptions = (
 
 export const getDiscussionFeedSort = (
   view: DiscussionFeedView,
-): DiscussionFeedSort => (view === "top" ? "top" : "newest");
+): DiscussionFeedSort =>
+  view === "top" ? "top" : view === "oldest" ? "oldest" : "newest";
 
 export function getDiscussionEntryKind(entry: Comment): DiscussionEntryKind {
   return entry.entryKind ?? (entry.isQuestion ? "question" : "comment");
@@ -92,6 +94,7 @@ export function compareEntriesForSort(
   if (sort === "top") {
     return right.likes - left.likes || compareEntriesNewest(left, right);
   }
+  if (sort === "oldest") return compareEntriesNewest(right, left);
   return compareEntriesNewest(left, right);
 }
 

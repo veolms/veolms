@@ -1,9 +1,12 @@
-import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import type { Icon } from "@phosphor-icons/react";
 import type { TeamMemberRole } from "@veolms/contracts";
 import { useState, type ReactNode } from "react";
+import { Button } from "../components/Button";
+import { ElevatedCard } from "../components/ElevatedCard";
+import { filterControlClasses } from "../components/FilterBar";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import {
   Popover,
@@ -12,25 +15,19 @@ import {
 } from "../components/ui/popover";
 import { initials, roleLabel } from "./teamFormat";
 
-/** Small shared pieces of the Team page. */
+/** Small shared pieces of the Team page, drawn from the shared components. */
 
-/** The square tick the role lists use; the real input sits beside it. */
-export function SquareCheck({
-  checked,
-  className = "",
-}: {
-  checked: boolean;
-  className?: string;
-}) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border-[1.5px] transition-colors ${checked ? "border-(--accent) bg-(--accent) text-(--on-accent)" : "border-[color-mix(in_srgb,var(--text)_32%,transparent)]"} ${className}`}
-    >
-      {checked ? <Check size={11} weight="bold" /> : null}
-    </span>
-  );
-}
+/** A list's header row, as the Students table draws it. */
+export const tableHeaderClassName =
+  "border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold tracking-wider text-(--muted) uppercase select-none";
+
+/** The line between two rows of a list. */
+export const rowDividerClassName =
+  "border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] last:border-b-0";
+
+/** A small chip: a role, a count, a "Built-in" tag. */
+export const chipClassName =
+  "inline-flex items-center gap-1 rounded-md border border-(--border) bg-(--card-surface) px-2 py-0.5 text-xs font-semibold text-(--text)";
 
 export function RoleChips({
   roles,
@@ -45,10 +42,7 @@ export function RoleChips({
   return (
     <span className="flex flex-wrap gap-1">
       {roles.map((role) => (
-        <span
-          key={role.id}
-          className="inline-flex items-center rounded-md border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] px-1.5 py-0.5 text-xs font-medium text-(--text)"
-        >
+        <span key={role.id} className={chipClassName}>
           {roleLabel(role.name)}
         </span>
       ))}
@@ -64,15 +58,15 @@ export function StatusChip({
   children: ReactNode;
 }) {
   const tones = {
-    neutral: "text-(--muted) bg-(--hover)",
-    accent: "text-(--accent) bg-(--accent)/10",
-    success: "text-emerald-500 bg-emerald-500/10",
-    warning: "text-amber-500 bg-amber-500/12",
-    danger: "text-rose-500 bg-rose-500/10",
+    neutral: "border-(--border) bg-(--hover) text-(--muted)",
+    accent: "border-(--accent)/20 bg-(--accent)/10 text-(--accent)",
+    success: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
+    warning: "border-amber-500/20 bg-amber-500/10 text-amber-500",
+    danger: "border-rose-500/20 bg-rose-500/10 text-rose-500",
   } as const;
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[0.7rem] font-semibold whitespace-nowrap ${tones[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.75 text-[11px] font-semibold whitespace-nowrap ${tones[tone]}`}
     >
       {children}
     </span>
@@ -107,15 +101,15 @@ export function PersonAvatar({
     <ResponsiveAvatar
       src={avatarUrl}
       alt=""
-      sizes="36px"
-      width={36}
-      height={36}
-      className="size-9 shrink-0 rounded-full object-cover"
+      sizes="40px"
+      width={40}
+      height={40}
+      className="size-10 shrink-0 rounded-full border border-(--border) object-cover shadow-xs"
     />
   ) : (
     <span
       aria-hidden="true"
-      className={`flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarTone(email)}`}
+      className={`flex size-10 shrink-0 items-center justify-center rounded-full border border-(--border) text-xs font-bold shadow-xs ${avatarTone(email)}`}
     >
       {initials(name, email)}
     </span>
@@ -150,13 +144,13 @@ export function RowMenu({
       <PopoverTrigger
         aria-label={label}
         title="Actions"
-        className="flex size-8 cursor-pointer items-center justify-center rounded-lg border border-transparent text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) data-popup-open:border-[color-mix(in_srgb,var(--text)_14%,transparent)] data-popup-open:bg-(--hover) data-popup-open:text-(--text)"
+        className="flex size-8 cursor-pointer items-center justify-center rounded-lg border border-transparent text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) data-popup-open:border-(--border) data-popup-open:bg-(--hover) data-popup-open:text-(--text)"
       >
         <DotsThreeVertical size={18} weight="bold" />
       </PopoverTrigger>
       <PopoverContent side="bottom" align="end" className="w-60 p-1.5">
         {title ? (
-          <p className="truncate px-2.5 pt-1.5 pb-1 text-[0.68rem] font-semibold tracking-wider text-(--muted) uppercase">
+          <p className="truncate px-2.5 pt-1.5 pb-1 text-[11px] font-bold tracking-wider text-(--muted) uppercase">
             {title}
           </p>
         ) : null}
@@ -167,7 +161,7 @@ export function RowMenu({
               role="none"
               className={
                 item.separated
-                  ? "mt-1 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] pt-1"
+                  ? "mt-1 border-t border-(--border) pt-1"
                   : undefined
               }
             >
@@ -192,26 +186,31 @@ export function RowMenu({
   );
 }
 
+/** The search control of a filter row (see `FilterBar`). */
 export function SearchField({
   value,
   onChange,
   placeholder,
   label,
   autoFocus,
+  className = "",
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   label: string;
   autoFocus?: boolean;
+  className?: string;
 }) {
   return (
-    <label className="relative flex min-w-0 flex-1 items-center">
+    <label
+      className={`${filterControlClasses} min-w-0 flex-1 cursor-text gap-2.5 ${className}`}
+    >
       <span className="sr-only">{label}</span>
       <MagnifyingGlass
-        size={16}
+        size={17}
         aria-hidden="true"
-        className="pointer-events-none absolute left-3 text-(--muted)"
+        className="shrink-0 text-(--muted)"
       />
       <input
         type="search"
@@ -219,18 +218,31 @@ export function SearchField({
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className={`${inputClassName} pl-9`}
+        className="w-full border-0 bg-transparent p-0 text-xs text-(--text-secondary) placeholder-(--muted) outline-none md:text-sm [&::-webkit-search-cancel-button]:hidden"
       />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          aria-label="Clear search"
+          className="cursor-pointer text-(--muted) hover:text-(--text)"
+        >
+          <X size={14} />
+        </button>
+      ) : null}
     </label>
   );
 }
 
+/** A text field in a form, as the Students contact dialog draws one. */
 export const inputClassName =
-  "h-10 w-full min-w-0 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--surface) px-3 text-sm text-(--text) placeholder:text-(--muted) focus:border-(--accent) focus:outline-none";
+  "min-h-11 w-full min-w-0 rounded-xl border-0 bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 text-sm text-(--text) placeholder-(--muted) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] outline-none transition-shadow focus:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] disabled:opacity-60";
 
+/** A quiet button for a class list (a "Show more" under a list). */
 export const secondaryButtonClassName =
-  "inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--surface) px-4 text-sm font-semibold text-(--text) transition-colors hover:bg-(--hover) disabled:pointer-events-none disabled:opacity-55";
+  "inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-(--surface-strong) px-4 text-sm font-semibold text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) disabled:pointer-events-none disabled:opacity-55";
 
+/** Empty, as the Students page shows it: a card with an icon and a line. */
 export function EmptyState({
   icon: IconComponent,
   title,
@@ -241,15 +253,68 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
-      <span className="flex size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
-        <IconComponent size={22} weight="duotone" />
+    <ElevatedCard
+      as="div"
+      className="flex flex-col items-center justify-center p-12 text-center"
+    >
+      <span className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-(--hover) text-(--muted)">
+        <IconComponent size={28} weight="duotone" />
       </span>
-      <p className="text-sm font-semibold text-(--text)">{title}</p>
+      <h3 className="text-base font-semibold text-(--text)">{title}</h3>
       {children ? (
-        <div className="max-w-sm text-sm text-(--muted)">{children}</div>
+        <div className="mt-1 max-w-sm text-xs leading-relaxed text-(--muted) md:text-sm">
+          {children}
+        </div>
       ) : null}
-    </div>
+    </ElevatedCard>
+  );
+}
+
+/** Could not load: the same card, with Retry. */
+export function LoadError({
+  icon,
+  title,
+  message,
+  onRetry,
+}: {
+  icon: Icon;
+  title: string;
+  message?: string;
+  onRetry: () => void;
+}) {
+  return (
+    <EmptyState icon={icon} title={title}>
+      <p>{message || "Try again in a moment."}</p>
+      <Button
+        elevation="flat"
+        motion="static"
+        className="mt-4"
+        onClick={onRetry}
+      >
+        Retry
+      </Button>
+    </EmptyState>
+  );
+}
+
+/** Rows that stand in for a list while it loads. */
+export function ListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <ElevatedCard as="div" className="overflow-hidden" aria-busy="true">
+      <div className={`h-10 ${tableHeaderClassName}`} />
+      {Array.from({ length: rows }, (_, index) => (
+        <div
+          key={index}
+          className={`flex items-center gap-3 px-5 py-3.5 ${rowDividerClassName}`}
+        >
+          <span className="size-10 shrink-0 animate-pulse rounded-full bg-(--hover)" />
+          <span className="flex flex-1 flex-col gap-1.5">
+            <span className="h-3 w-40 animate-pulse rounded bg-(--hover)" />
+            <span className="h-2.5 w-56 animate-pulse rounded bg-(--hover)" />
+          </span>
+        </div>
+      ))}
+    </ElevatedCard>
   );
 }
 
@@ -262,7 +327,7 @@ export function PanelBody({ children }: { children: ReactNode }) {
 
 export function PanelFooter({ children }: { children: ReactNode }) {
   return (
-    <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[color-mix(in_srgb,var(--text)_12%,transparent)] p-4 sm:px-6">
+    <div className="flex shrink-0 items-center justify-end gap-2 border-t border-(--border) p-4 sm:px-6">
       {children}
     </div>
   );

@@ -8,7 +8,10 @@ import {
   reorderLessonsRequestSchema,
   createLessonResourceRequestSchema,
   lessonResourceSchema,
+  type Permission,
+  type UpdateCourseLessonRequest,
 } from "@veolms/contracts";
+import type { FastifyRequest } from "fastify";
 
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
@@ -17,6 +20,27 @@ import type { RoutePlugin } from "../../../lib/route-plugin.ts";
 import { createCoursesContext } from "../shared/courses.context.ts";
 import { createCurriculumController } from "./curriculum.controller.ts";
 import { createCurriculumService } from "./curriculum.service.ts";
+
+/**
+ * A lesson's PATCH changes up to three things, each its own permission:
+ * its details, its content, and whether learners see it.
+ */
+function lessonUpdatePermissions(request: FastifyRequest): Permission[] {
+  const body = (request.body ?? {}) as UpdateCourseLessonRequest;
+  const keys: Permission[] = [];
+  if (
+    body.title !== undefined ||
+    body.description !== undefined ||
+    body.isPreview !== undefined
+  ) {
+    keys.push("lesson.details.update");
+  }
+  if (body.contentType !== undefined || body.contentMediaId !== undefined) {
+    keys.push("lesson.content.update");
+  }
+  if (body.isPublished !== undefined) keys.push("lesson.publish");
+  return keys.length > 0 ? keys : ["lesson.details.update"];
+}
 
 const curriculumRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCoursesContext(options);
@@ -161,7 +185,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Lesson not found"),
         },
       },
-      preHandler: ctx.authorize("lesson.details.update", "lesson"),
+      preHandler: ctx.authorizeEach(lessonUpdatePermissions, "lesson"),
     },
     controller.updateCourseLesson,
   );

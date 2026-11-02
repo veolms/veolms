@@ -26,6 +26,7 @@ export const CORE_ANALYTICS_TABS: readonly AnalyticsTabContribution[] = [
   {
     id: "overview",
     label: "Overview",
+    permission: "analytics.overview.read",
     order: 0,
     Icon: ChartPieSlice,
     tone: "blue",
@@ -35,6 +36,7 @@ export const CORE_ANALYTICS_TABS: readonly AnalyticsTabContribution[] = [
   {
     id: "revenue",
     label: "Revenue",
+    permission: "analytics.revenue.read",
     order: 10,
     Icon: CurrencyInr,
     tone: "green",
@@ -44,6 +46,7 @@ export const CORE_ANALYTICS_TABS: readonly AnalyticsTabContribution[] = [
   {
     id: "courses",
     label: "Courses & Content",
+    permission: "analytics.course.read",
     order: 20,
     Icon: Books,
     tone: "violet",

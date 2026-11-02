@@ -1,17 +1,15 @@
 import type {
   LazyExoticComponent,
+  ReactNode,
   RefObject,
   Dispatch,
   SetStateAction,
 } from "react";
 import { createDiscussionDraft } from "../../learning/discussion-editor/types";
 import { CourseDescriptionEditor } from "../CourseDescriptionEditor";
+import { CoursePreviewMedia } from "./CoursePreviewMedia";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { ImageIcon } from "@phosphor-icons/react/Image";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
-import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
-import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { SettingsToggle } from "../../settings/SettingsControls";
@@ -93,17 +91,15 @@ export interface BasicsStepPanelProps {
   handleThumbnailFileSelect: (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => Promise<void>;
-  videoTrailerInputRef: RefObject<HTMLInputElement | null>;
-  handleVideoTrailerFileSelect: (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => void;
   thumbnail: string | null;
   triggerThumbnailUpload: () => void;
-  handleRemoveThumbnail: (e: React.MouseEvent) => Promise<void>;
+  /** Uploads and saves an image as the thumbnail (a dropped file). */
+  uploadThumbnailFile: (file: File) => Promise<void>;
   thumbnailUploadError: string | null;
-  videoTrailer: string | null;
-  triggerVideoTrailerUpload: () => void;
-  handleRemoveVideoTrailer: (e: React.MouseEvent) => void;
+  /** Clears the course's trailer. */
+  handleRemoveTrailer: () => Promise<void>;
+  /** The desktop overview banner's card, under the thumbnail and trailer. */
+  bannerUpload?: ReactNode;
   LessonVideoUpload: LazyExoticComponent<
     typeof import("../lesson-video-upload/LessonVideoUpload").LessonVideoUpload
   >;
@@ -206,7 +202,17 @@ export interface BasicsStepPanelProps {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       }
     | undefined;
   handleTrailerMediaAttached: (mediaAssetId: string) => Promise<boolean>;
@@ -310,7 +316,17 @@ export interface BasicsStepPanelProps {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       },
       ApiError
     >
@@ -353,15 +369,12 @@ export function BasicsStepPanel({
   isBasicsSaving,
   isThumbnailBusy,
   handleThumbnailFileSelect,
-  videoTrailerInputRef,
-  handleVideoTrailerFileSelect,
   thumbnail,
   triggerThumbnailUpload,
-  handleRemoveThumbnail,
+  uploadThumbnailFile,
   thumbnailUploadError,
-  videoTrailer,
-  triggerVideoTrailerUpload,
-  handleRemoveVideoTrailer,
+  handleRemoveTrailer,
+  bannerUpload,
   LessonVideoUpload,
   editorData,
   handleTrailerMediaAttached,
@@ -692,7 +705,8 @@ export function BasicsStepPanel({
               Course Media
             </h2>
             <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
-              Add media that best represents your course.
+              Set the thumbnail and trailer on the course preview. The banner
+              shows behind the course title on desktop.
             </p>
           </div>
 
@@ -713,209 +727,7 @@ export function BasicsStepPanel({
               style={{ display: "none" }}
             />
 
-            {/* Hidden Video Trailer File Input */}
-            <input
-              type="file"
-              ref={videoTrailerInputRef}
-              disabled={!isDownstreamUnlocked || isBasicsSaving}
-              onChange={handleVideoTrailerFileSelect}
-              accept="video/*"
-              style={{ display: "none" }}
-            />
-
-            {/* Thumbnail Upload */}
-            <div className="flex flex-col min-w-0">
-              <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
-                Thumbnail{" "}
-                <span className="text-[#ff5252] ml-0.5">*</span>
-              </h3>
-              <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
-                Upload a thumbnail for your course.
-              </p>
-              {thumbnail ? (
-                <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
-                  <img
-                    src={thumbnail}
-                    alt="Course thumbnail preview"
-                    className="w-full h-full object-cover block"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
-                    <button
-                      type="button"
-                      disabled={
-                        !isDownstreamUnlocked ||
-                        isBasicsSaving ||
-                        isThumbnailBusy
-                      }
-                      style={{
-                        fontSize: "0.80rem",
-                        fontWeight: 700,
-                        height: "34px",
-                        borderRadius: "8px",
-                        gap: "6px",
-                        paddingLeft: "16px",
-                        paddingRight: "16px",
-                      }}
-                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={triggerThumbnailUpload}
-                    >
-                      <ImageIcon size={15} /> Change Image
-                    </button>
-                    <button
-                      type="button"
-                      disabled={
-                        !isDownstreamUnlocked ||
-                        isBasicsSaving ||
-                        isThumbnailBusy
-                      }
-                      style={{
-                        fontSize: "0.80rem",
-                        fontWeight: 500,
-                        height: "34px",
-                        borderRadius: "8px",
-                        gap: "6px",
-                        paddingLeft: "14px",
-                        paddingRight: "14px",
-                      }}
-                      className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={handleRemoveThumbnail}
-                      title="Remove Thumbnail"
-                    >
-                      <Trash size={15} /> Remove
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
-                  <div className="mb-2 text-(--muted)">
-                    <ImageIcon size={30} weight="light" />
-                  </div>
-                  <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                    <button
-                      type="button"
-                      disabled={
-                        !isDownstreamUnlocked ||
-                        isBasicsSaving ||
-                        isThumbnailBusy
-                      }
-                      style={{
-                        fontSize: "0.80rem",
-                        fontWeight: 700,
-                        height: "34px",
-                        borderRadius: "8px",
-                        gap: "6px",
-                        paddingLeft: "16px",
-                        paddingRight: "16px",
-                      }}
-                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={triggerThumbnailUpload}
-                    >
-                      <UploadSimple size={15} /> Upload
-                    </button>
-                  </div>
-                  <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
-                    Recommended: 1280x720px (16:9)
-                  </p>
-                </div>
-              )}
-              {thumbnailUploadError ? (
-                <p
-                  className="m-0 mt-2 text-red-400 text-[0.75rem]"
-                  role="alert"
-                >
-                  {thumbnailUploadError}
-                </p>
-              ) : null}
-            </div>
-
-            {/* Video Trailer Upload */}
-            <div className="flex flex-col min-w-0">
-              <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
-                Video Trailer (Optional)
-              </h3>
-              <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
-                Add a trailer video to your course.
-              </p>
-              {videoTrailer ? (
-                <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
-                  <video
-                    src={videoTrailer}
-                    className="w-full h-full object-cover block"
-                    controls
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
-                    <button
-                      type="button"
-                      disabled={
-                        !isDownstreamUnlocked || isBasicsSaving
-                      }
-                      style={{
-                        fontSize: "0.80rem",
-                        fontWeight: 700,
-                        height: "34px",
-                        borderRadius: "8px",
-                        gap: "6px",
-                        paddingLeft: "16px",
-                        paddingRight: "16px",
-                      }}
-                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={triggerVideoTrailerUpload}
-                    >
-                      <PlayCircle size={15} /> Change Video
-                    </button>
-                    <button
-                      type="button"
-                      disabled={
-                        !isDownstreamUnlocked || isBasicsSaving
-                      }
-                      style={{
-                        fontSize: "0.80rem",
-                        fontWeight: 500,
-                        height: "34px",
-                        borderRadius: "8px",
-                        gap: "6px",
-                        paddingLeft: "14px",
-                        paddingRight: "14px",
-                      }}
-                      className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={handleRemoveVideoTrailer}
-                      title="Remove Video Trailer"
-                    >
-                      <Trash size={15} /> Remove
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
-                  <div className="mb-2 text-(--muted)">
-                    <PlayCircle size={30} weight="light" />
-                  </div>
-                  <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                    <LessonVideoUpload
-                      disabled={
-                        !isDownstreamUnlocked || isBasicsSaving
-                      }
-                      mediaAssetId={
-                        editorData?.course?.trailerMediaId
-                      }
-                      visibility="public"
-                      hideUploadWhenAttached={Boolean(
-                        editorData?.course?.trailerMediaId,
-                      )}
-                      attachedActionLabel="Replace trailer"
-                      stackStatusBelow
-                      onMediaAttached={handleTrailerMediaAttached}
-                      onProcessingComplete={() => {
-                        void refetchEditor();
-                      }}
-                    />
-                  </div>
-                  <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
-                    Recommended: 16:9 video
-                  </p>
-                </div>
-              )}
-            </div>
+            {bannerUpload}
           </div>
         </section>
       </div>
@@ -930,52 +742,22 @@ export function BasicsStepPanel({
             This is how your course will appear to students.
           </p>
 
-          <div
-            className={`relative aspect-video border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[10px] overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-180 ease-out ${
-              !thumbnail
-                ? "is-clickable cursor-pointer hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
-                : ""
-            }`}
-            onClick={
-              !thumbnail ? triggerThumbnailUpload : undefined
-            }
-            title={
-              !thumbnail ? "Click to upload thumbnail" : undefined
-            }
-            role={!thumbnail ? "button" : undefined}
-            tabIndex={!thumbnail ? 0 : undefined}
-            onKeyDown={
-              !thumbnail
-                ? (e) => {
-                    if (e.key === "Enter" || e.key === "") {
-                      triggerThumbnailUpload();
-                    }
-                  }
-                : undefined
-            }
-          >
-            {thumbnail ? (
-              <div className="relative w-full h-full">
-                <img
-                  src={thumbnail}
-                  alt="Course Thumbnail"
-                  className="w-full h-full object-cover block"
-                />
-              </div>
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-(--muted) text-[0.8rem]">
-                <div className="flex items-center justify-center text-(--muted) opacity-60">
-                  <ImageIcon size={32} weight="light" />
-                </div>
-                <span className="text-(--muted) opacity-70">
-                  Course thumbnail will appear here
-                </span>
-                <span className="inline-block mt-0.5 rounded-md px-2 py-0.5 text-[0.72rem] font-semibold text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors duration-150">
-                  Click to upload
-                </span>
-              </div>
-            )}
-          </div>
+          <CoursePreviewMedia
+            courseId={currentCourseId}
+            disabled={!isDownstreamUnlocked || isBasicsSaving}
+            thumbnail={thumbnail}
+            isThumbnailBusy={isThumbnailBusy}
+            thumbnailUploadError={thumbnailUploadError}
+            triggerThumbnailUpload={triggerThumbnailUpload}
+            uploadThumbnailFile={uploadThumbnailFile}
+            trailerMediaId={editorData?.course?.trailerMediaId}
+            LessonVideoUpload={LessonVideoUpload}
+            handleTrailerMediaAttached={handleTrailerMediaAttached}
+            onTrailerProcessed={() => {
+              void refetchEditor();
+            }}
+            handleRemoveTrailer={handleRemoveTrailer}
+          />
 
           <div className="mt-4">
             <h3 className="m-0 mb-3 text-(--text) text-[1.15rem] font-bold leading-[1.3]">

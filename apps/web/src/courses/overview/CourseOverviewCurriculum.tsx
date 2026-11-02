@@ -1,7 +1,9 @@
 import { ArrowsInLineVertical } from "@phosphor-icons/react/ArrowsInLineVertical";
 import { ArrowsOutLineVertical } from "@phosphor-icons/react/ArrowsOutLineVertical";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CalendarCheck } from "@phosphor-icons/react/CalendarCheck";
 import { Check } from "@phosphor-icons/react/Check";
+import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { Eye } from "@phosphor-icons/react/Eye";
 import { FileText } from "@phosphor-icons/react/FileText";
@@ -28,6 +30,7 @@ import {
   scrollApplicationTo,
 } from "../../shell/applicationScroll";
 import { useContinuousLessonNumbering } from "../../learning/useContinuousLessonNumbering";
+import type { LessonOpenIntent } from "../../learning/lessonOpenIntent";
 import {
   bandHeaderClasses,
   bandLinkClasses,
@@ -69,9 +72,24 @@ interface CurriculumSectionRowProps {
   animate: boolean;
   onToggle: () => void;
   onSelectLesson?: (lessonNumber: number) => void;
+  lessonIntentFor?: LessonIntentFor;
   isReadOnlyPreview?: boolean;
   isPaidCourse?: boolean;
+  /**
+   * On a page selling part of the course: whether this section is in it.
+   * Undefined on any other page.
+   */
+  included?: boolean;
 }
+
+/**
+ * A lesson row's handlers that ready its lesson ahead of the press (see
+ * lessonOpenIntent), or none for a lesson the viewer cannot play.
+ */
+export type LessonIntentFor = (
+  lessonNumber: number,
+  isPreview: boolean,
+) => LessonOpenIntent["handlers"] | undefined;
 
 /**
  * One section of the outline, a block of its own: a numbered badge, the
@@ -87,8 +105,10 @@ function CurriculumSectionRow({
   animate,
   onToggle,
   onSelectLesson,
+  lessonIntentFor,
   isReadOnlyPreview = false,
   isPaidCourse = false,
+  included,
 }: CurriculumSectionRowProps) {
   const curriculumIntent = useCurriculumIntent();
   const panelId = `cov-section-panel-${section.id}`;
@@ -171,6 +191,22 @@ function CurriculumSectionRow({
             {section.title}
           </span>
           <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.82rem] text-(--muted) tabular-nums">
+            {included !== undefined ? (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.72rem] font-semibold ${
+                  included
+                    ? "bg-emerald-500/14 text-emerald-500"
+                    : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"
+                }`}
+              >
+                {included ? (
+                  <Check size={11} weight="bold" aria-hidden="true" />
+                ) : (
+                  <Lock size={11} weight="bold" aria-hidden="true" />
+                )}
+                {included ? "Included" : "Not included"}
+              </span>
+            ) : null}
             <span>
               {lessonCount} lesson{lessonCount === 1 ? "" : "s"}
             </span>
@@ -287,6 +323,10 @@ function CurriculumSectionRow({
                           }`}
                           key={number}
                           disabled={isReadOnlyPreview}
+                          // Only a video has anything to ready.
+                          {...(isDoc || isQuiz
+                            ? undefined
+                            : lessonIntentFor?.(number, Boolean(isPreview)))}
                           onClick={() => {
                             if (isReadOnlyPreview) return;
                             onSelectLesson?.(number);
@@ -385,10 +425,14 @@ interface CourseOverviewCurriculumProps {
   onExpandAll: (count: number) => void;
   onCollapseAll: () => void;
   onSelectLesson?: (lessonNumber: number) => void;
+  /** Readies a lesson while the pointer rests on its row. */
+  lessonIntentFor?: LessonIntentFor;
   isReadOnlyPreview?: boolean;
   isPaidCourse?: boolean;
   /** For someone who manages the course: opens the curriculum editor. */
   onEdit?: () => void;
+  /** How long the course stays with a learner (see `courseValidityLabel`). */
+  validityLabel?: string | null;
   /**
    * How many sections the whole curriculum has, when `courseSections` holds
    * only the first ones (the page was built with those, see
@@ -399,6 +443,11 @@ interface CourseOverviewCurriculumProps {
   sectionsComplete?: boolean;
   /** Asks for the sections not yet here. */
   onRequestAllSections?: () => void;
+  /**
+   * On a page selling part of the course (a partial access link): the
+   * sections it opens. Each section is marked included or not.
+   */
+  includedSectionIds?: ReadonlySet<string>;
 }
 
 export function CourseOverviewCurriculum({
@@ -408,12 +457,15 @@ export function CourseOverviewCurriculum({
   onExpandAll,
   onCollapseAll,
   onSelectLesson,
+  lessonIntentFor,
   isReadOnlyPreview = false,
   isPaidCourse = false,
   onEdit,
+  validityLabel = null,
   totalSections,
   sectionsComplete = true,
   onRequestAllSections,
+  includedSectionIds,
 }: CourseOverviewCurriculumProps) {
   const sectionCount = Math.max(courseSections.length, totalSections ?? 0);
   const curriculumIntent = useCurriculumIntent();
@@ -464,6 +516,15 @@ export function CourseOverviewCurriculum({
           <h2 id="cov-curriculum-heading" className={bandTitleClasses}>
             Curriculum
           </h2>
+          {validityLabel ? (
+            <p
+              data-course-validity=""
+              className="mt-1 inline-flex items-center gap-1.5 text-[0.82rem] text-(--muted)"
+            >
+              <CalendarCheck size={15} weight="bold" aria-hidden="true" />
+              {validityLabel}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-5">
           {onEdit ? (
@@ -542,8 +603,14 @@ export function CourseOverviewCurriculum({
                 onToggleSection(index);
               }}
               onSelectLesson={onSelectLesson}
+              lessonIntentFor={lessonIntentFor}
               isReadOnlyPreview={isReadOnlyPreview}
               isPaidCourse={isPaidCourse}
+              included={
+                includedSectionIds && section.sectionId
+                  ? includedSectionIds.has(section.sectionId)
+                  : undefined
+              }
             />
           ))}
         </div>

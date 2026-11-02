@@ -1,33 +1,74 @@
 import type { ServerConfig } from "@veolms/config";
-import type { PaymentGateway } from "@veolms/contracts";
-import { RazorpayPaymentGateway } from "./razorpay.gateway.ts";
+import type { PaymentGateway, PaymentGateways } from "@veolms/contracts";
+import type { PaymentGatewayPlugin } from "./gateway-plugin.ts";
+import { razorpayGatewayPlugin } from "./razorpay/index.ts";
+import { dodoGatewayPlugin } from "./dodo/index.ts";
+import { cashfreeGatewayPlugin } from "./cashfree/index.ts";
+
+/** Every gateway this server knows how to use, set up or not. */
+export const paymentGatewayPlugins: readonly PaymentGatewayPlugin[] = [
+  razorpayGatewayPlugin,
+  dodoGatewayPlugin,
+  cashfreeGatewayPlugin,
+];
 
 /**
- * Creates the active payment gateway based on configuration.
+ * Countries a request can name without naming one: Cloudflare sends XX when
+ * it does not know, T1 for Tor.
  */
-export function createPaymentGateway(config: ServerConfig): PaymentGateway {
-  if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET) {
-    if (config.NODE_ENV === "production") {
-      throw new Error(
-        "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required in production.",
+const UNKNOWN_COUNTRIES = new Set(["XX", "T1"]);
+
+/**
+ * Sets up every gateway the config turns on, and the rule a new checkout
+ * picks one by (PAYMENT_GATEWAY_DEFAULT, PAYMENT_GATEWAY_BY_COUNTRY).
+ */
+export function createPaymentGateways(
+  config: ServerConfig,
+  plugins: readonly PaymentGatewayPlugin[] = paymentGatewayPlugins,
+): PaymentGateways {
+  const byProvider = new Map<string, PaymentGateway>();
+  for (const plugin of plugins) {
+    const gateway = plugin.create(config);
+    if (gateway) byProvider.set(plugin.provider, gateway);
+  }
+
+  const primary = byProvider.get(config.PAYMENT_GATEWAY_DEFAULT);
+  if (!primary) {
+    throw new Error(
+      `PAYMENT_GATEWAY_DEFAULT is "${config.PAYMENT_GATEWAY_DEFAULT}", which is not a payment gateway that is set up ` +
+        `(set up: ${[...byProvider.keys()].join(", ") || "none"}).`,
+    );
+  }
+
+  const known = new Set(plugins.map((plugin) => plugin.provider as string));
+  for (const { provider } of config.PAYMENT_GATEWAY_BY_COUNTRY) {
+    if (!known.has(provider)) {
+      console.warn(
+        `[commerce] PAYMENT_GATEWAY_BY_COUNTRY names "${provider}", which is not a payment gateway; that pair is ignored.`,
       );
     }
-    console.warn(
-      "[commerce] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set — the payment " +
-        "gateway is unconfigured. Checkout and payment endpoints will fail until they are set.",
-    );
   }
+  // Pairs whose gateway is not set up are left out, so that a country they
+  // name falls through to "*" or the default.
+  const rules = config.PAYMENT_GATEWAY_BY_COUNTRY.flatMap(
+    ({ country, provider }) => {
+      const gateway = byProvider.get(provider);
+      return gateway ? [{ country, gateway }] : [];
+    },
+  );
 
-  if (!config.RAZORPAY_WEBHOOK_SECRET && config.NODE_ENV !== "production") {
-    console.warn(
-      "[commerce] RAZORPAY_WEBHOOK_SECRET is not set — all incoming Razorpay " +
-        "webhooks will be rejected as invalid until it is set.",
-    );
-  }
-
-  return new RazorpayPaymentGateway({
-    keyId: config.RAZORPAY_KEY_ID ?? "",
-    keySecret: config.RAZORPAY_KEY_SECRET ?? "",
-    webhookSecret: config.RAZORPAY_WEBHOOK_SECRET,
-  });
+  return {
+    primary,
+    all: [primary, ...[...byProvider.values()].filter((g) => g !== primary)],
+    get: (provider) => byProvider.get(provider),
+    forCountry(country) {
+      const code = country?.trim().toUpperCase();
+      if (!code || UNKNOWN_COUNTRIES.has(code)) return primary;
+      return (
+        rules.find((rule) => rule.country === code)?.gateway ??
+        rules.find((rule) => rule.country === "*")?.gateway ??
+        primary
+      );
+    },
+  };
 }

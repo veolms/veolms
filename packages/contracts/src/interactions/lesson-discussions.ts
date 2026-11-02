@@ -10,13 +10,18 @@ export const lessonDiscussionKindSchema = z.enum([
 ]);
 export type LessonDiscussionKind = z.infer<typeof lessonDiscussionKindSchema>;
 
-export const lessonDiscussionSortSchema = z.enum(["newest", "top"]);
+export const lessonDiscussionSortSchema = z.enum(["newest", "oldest", "top"]);
 export type LessonDiscussionSort = z.infer<typeof lessonDiscussionSortSchema>;
 
 export const listLessonDiscussionsQuerySchema = z.object({
   kind: lessonDiscussionKindSchema.default("all"),
   sort: lessonDiscussionSortSchema.default("newest"),
   mine: z.stringbool().optional(),
+  /**
+   * Words to find in a post or its title, in its replies, or in the name of
+   * whoever wrote either. Empty is no search.
+   */
+  search: z.string().trim().max(200).optional(),
   cursor: z.string().max(1024).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });

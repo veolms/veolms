@@ -11,11 +11,19 @@ type PlayerInputMode = "keyboard" | "pointer";
 export interface UseControlsVisibilityOptions {
   rootRef: RefObject<HTMLElement | null>;
   idleDelay?: number;
+  /**
+   * How long the controls stay after a touch, when that differs from
+   * `idleDelay`. A finger has no hover to keep them: a tap shows them and
+   * the next tap must find them still there, so a phone keeps them longer
+   * than a mouse that can wake them by moving.
+   */
+  touchIdleDelay?: number;
   keepVisibleUntilFirstPlay?: boolean;
 }
 
 export function useControlsVisibility({
   idleDelay = 2_200,
+  touchIdleDelay = idleDelay,
   keepVisibleUntilFirstPlay = false,
   rootRef,
 }: UseControlsVisibilityOptions): void {
@@ -25,6 +33,9 @@ export function useControlsVisibility({
   const pointerModeRef = useRef<PlayerPointerMode>("touch");
   const pointerInsideRef = useRef(false);
   const inputModeRef = useRef<PlayerInputMode>("pointer");
+  // A keyboard shortcut showed the controls: they stay for the idle delay
+  // even with the mouse away from the player, as after a mouse move.
+  const keyboardRevealRef = useRef(false);
   const pointerFocusPendingRef = useRef(false);
   const initializedPointerModeRef = useRef(false);
   const previousPausedRef = useRef(true);
@@ -87,12 +98,19 @@ export function useControlsVisibility({
       typeof window !== "undefined" && typeof window.matchMedia === "function"
         ? window.matchMedia(FINE_POINTER_QUERY)
         : null;
-    const usesDesktopPointer = () =>
-      !mobileInteraction && (pointerQuery?.matches ?? false);
+    // A mouse shows the controls as it comes over the player and hides them
+    // as it leaves, in the phone layout too (a narrow window on a computer).
+    // In between, the desktop layout shows them whenever the mouse moves;
+    // the phone layout leaves that to a click, as a tap, which shows or
+    // hides them (PlayerGestureSurface), and moving only keeps up the ones
+    // that are already showing. A finger shows and hides them with taps.
+    const usesDesktopPointer = () => pointerQuery?.matches ?? false;
     const isDesktopMousePointer = (event: PointerEvent) =>
-      event.pointerType === "mouse" && !mobileInteraction;
+      event.pointerType === "mouse";
     if (!initializedPointerModeRef.current || mobileInteraction) {
-      pointerModeRef.current = usesDesktopPointer() ? "mouse" : "touch";
+      if (!initializedPointerModeRef.current) {
+        pointerModeRef.current = usesDesktopPointer() ? "mouse" : "touch";
+      }
       initializedPointerModeRef.current = true;
       previousPausedRef.current = paused;
     }
@@ -132,7 +150,11 @@ export function useControlsVisibility({
         return;
       }
 
-      if (pointerModeRef.current === "mouse" && !pointerInsideRef.current) {
+      if (
+        pointerModeRef.current === "mouse" &&
+        !pointerInsideRef.current &&
+        !keyboardRevealRef.current
+      ) {
         controller.setControlsVisible(false);
         return;
       }
@@ -140,18 +162,23 @@ export function useControlsVisibility({
         return;
       }
 
-      hideTimerRef.current = setTimeout(() => {
-        hideTimerRef.current = null;
-        if (controlsMustRemainVisible()) {
-          controller.setControlsVisible(true);
-          return;
-        }
-        controller.setControlsVisible(false);
-      }, idleDelay);
+      hideTimerRef.current = setTimeout(
+        () => {
+          hideTimerRef.current = null;
+          keyboardRevealRef.current = false;
+          if (controlsMustRemainVisible()) {
+            controller.setControlsVisible(true);
+            return;
+          }
+          controller.setControlsVisible(false);
+        },
+        pointerModeRef.current === "touch" ? touchIdleDelay : idleDelay,
+      );
     };
 
     const revealFromPointer = (event: PointerEvent) => {
       inputModeRef.current = "pointer";
+      keyboardRevealRef.current = false;
       const desktopMousePointer = isDesktopMousePointer(event);
       pointerModeRef.current = desktopMousePointer ? "mouse" : "touch";
       pointerInsideRef.current = desktopMousePointer;
@@ -165,6 +192,11 @@ export function useControlsVisibility({
 
     const handlePointerMove = (event: PointerEvent) => {
       if (!isDesktopMousePointer(event)) return;
+      if (mobileInteraction && !controller.getSnapshot().ui.controlsVisible) {
+        pointerModeRef.current = "mouse";
+        pointerInsideRef.current = true;
+        return;
+      }
       revealFromPointer(event);
     };
 
@@ -225,6 +257,7 @@ export function useControlsVisibility({
     const handlePointerLeave = (event: PointerEvent) => {
       if (!isDesktopMousePointer(event)) return;
       pointerInsideRef.current = false;
+      keyboardRevealRef.current = false;
       clearTimer();
       if (controlsMustRemainVisible()) {
         controller.setControlsVisible(true);
@@ -233,16 +266,25 @@ export function useControlsVisibility({
       controller.setControlsVisible(false);
     };
 
-    const handleDocumentKeyDown = (event: KeyboardEvent) => {
-      inputModeRef.current = "keyboard";
-      if (!(event.target instanceof Node) || !root.contains(event.target))
-        return;
+    const revealFromKeyboard = () => {
       if (controlsTemporarilySuppressed()) {
         controller.setControlsVisible(false);
         return;
       }
+      keyboardRevealRef.current = true;
       controller.setControlsVisible(true);
       scheduleHide();
+    };
+
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      // Moving between the controls with Tab keeps them on screen while one
+      // of them has focus. A shortcut (an arrow, Space) does not: the
+      // controls it shows hide again after the idle delay, as after a mouse
+      // move, though the player kept the focus a click gave it.
+      if (event.key === "Tab") inputModeRef.current = "keyboard";
+      if (!(event.target instanceof Node) || !root.contains(event.target))
+        return;
+      revealFromKeyboard();
     };
 
     const handleFocusIn = (event: FocusEvent) => {
@@ -315,6 +357,7 @@ export function useControlsVisibility({
     root.addEventListener("focusin", handleFocusIn);
     root.addEventListener("focusout", handleFocusOut);
     document.addEventListener("keydown", handleDocumentKeyDown, true);
+    const stopRevealRequests = controller.onControlsReveal(revealFromKeyboard);
     pointerQuery?.addEventListener("change", handlePointerCapabilityChange);
 
     return () => {
@@ -329,6 +372,7 @@ export function useControlsVisibility({
       root.removeEventListener("focusin", handleFocusIn);
       root.removeEventListener("focusout", handleFocusOut);
       document.removeEventListener("keydown", handleDocumentKeyDown, true);
+      stopRevealRequests();
       pointerQuery?.removeEventListener(
         "change",
         handlePointerCapabilityChange,
@@ -339,6 +383,7 @@ export function useControlsVisibility({
     controlsLocked,
     controlsVisible,
     idleDelay,
+    touchIdleDelay,
     keepVisibleUntilFirstPlay,
     mobileInteraction,
     paused,

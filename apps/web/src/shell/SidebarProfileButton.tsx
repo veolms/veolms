@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import type { CourseRole } from "../courses/catalogue";
 import { ShellProfileAvatar } from "./ShellProfileAvatar";
-import { ProfileButtonPlaceholder } from "./ProfileButtonPlaceholder";
+import { EarlyProfileButtons } from "./EarlyProfileButtons";
 import type { AuthIdentityHint } from "../store/auth.store";
 import { hasAdminRole } from "./workspaceRole";
 import type { NavigateTo } from "../routing/navigation";
@@ -124,15 +124,19 @@ export function SidebarProfileButton({
             }
           />
         </button>
-      ) : accountStatusUnknown ? (
-        <ProfileButtonPlaceholder
+      ) : !authUserFetched ? (
+        // Until the session check answers: "Login", the remembered
+        // account's button, or a placeholder, picked by the document's head
+        // before the first paint (see EarlyProfileButtons).
+        <EarlyProfileButtons
           className={SIDEBAR_PROFILE_BUTTON_CLASS}
+          arrowSize={16}
+          onLogin={() => onNavigatePage("/login")}
         />
       ) : (
         <LoginProfileButton
           className={SIDEBAR_PROFILE_BUTTON_CLASS}
           arrowSize={16}
-          remembered={authUserFetched ? null : authIdentityHint}
           onLogin={() => onNavigatePage("/login")}
         />
       )}

@@ -55,12 +55,15 @@ const RESERVED_PROFILE_PATHS = new Set([
   "/auth",
   "/explore-courses",
 ]);
-const DASHBOARD_PERMISSION = "analytics.revenue.read";
-
+/**
+ * Whether the dashboard home opens. It does for every team member: what
+ * it shows follows their permissions (the API leaves out the numbers they
+ * may not see), so no one is sent away from Home.
+ */
 export function hasDashboardAnalyticsPermission(
   permissions: readonly string[] | null | undefined,
 ): boolean {
-  return permissions?.includes(DASHBOARD_PERMISSION) ?? false;
+  return permissions !== null && permissions !== undefined;
 }
 
 export function normalizeAppPath(pathname: string): string {
@@ -369,6 +372,19 @@ export function stripLoginDialogParams(search: string): string {
   params.delete(LOGIN_PURPOSE_PARAM);
   const query = params.toString();
   return query ? `?${query}` : "";
+}
+
+/**
+ * Whether two addresses show the same page and differ only by the login
+ * pop-up over it: it came up, went away or was asked for differently.
+ */
+export function differOnlyByLoginDialog(a: string, b: string): boolean {
+  const pageBehind = (path: string) => {
+    const url = new URL(path, "https://procodrr.local");
+    const search = new URLSearchParams(stripLoginDialogParams(url.search));
+    return `${url.pathname}?${search.toString()}${url.hash}`;
+  };
+  return a !== b && pageBehind(a) === pageBehind(b);
 }
 
 /**

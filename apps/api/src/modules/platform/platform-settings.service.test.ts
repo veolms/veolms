@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { clearAllCaches } from "@veolms/api-core";
 import { DEFAULT_PLATFORM_INVOICE_SETTINGS } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely, RawBuilder } from "kysely";
 
 import { config } from "../../config.ts";
-import { createPlatformSettingsService } from "./platform-settings.service.ts";
+import {
+  createPlatformSettingsService,
+  PHONE_VERIFICATION_NEW_ACCOUNTS_FROM,
+} from "./platform-settings.service.ts";
 
 /**
  * Stands in for the database the repository talks to: the single settings
@@ -14,6 +18,8 @@ import { createPlatformSettingsService } from "./platform-settings.service.ts";
  * the parameter of the `::jsonb` cast the repository sends.
  */
 function fakeDatabase(stored?: unknown) {
+  // Settings are cached per process; each case starts from its own row.
+  clearAllCaches();
   let row: { settings: unknown; updated_at: Date } | null =
     stored === undefined
       ? null
@@ -56,6 +62,7 @@ await test("before anything is saved, the defaults apply and the phone rule foll
       security: {
         requireVerifiedPhoneForEnrollment:
           config.REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT,
+        maxDevicesPerStudent: 3,
       },
       invoice: DEFAULT_PLATFORM_INVOICE_SETTINGS,
     },
@@ -79,6 +86,7 @@ await test("a saved document fills in what it lacks, setting by setting", async 
   assert.deepEqual(settings.security, {
     requireVerifiedPhoneForEnrollment:
       config.REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT,
+    maxDevicesPerStudent: 3,
   });
 });
 
@@ -199,4 +207,69 @@ await test("only a change to a security setting drops the cached sign-in answers
     null,
   );
   assert.equal(dropped, 1);
+});
+
+/** The settings row, and one account opened at `createdAt` (if any). */
+function fakeDatabaseWithAccount(
+  requireVerifiedPhoneForEnrollment: boolean,
+  createdAt: Date | null,
+) {
+  clearAllCaches();
+  const settings = { security: { requireVerifiedPhoneForEnrollment } };
+  return {
+    selectFrom: (table: string) => ({
+      select: () => ({
+        where: () => ({
+          executeTakeFirst: async () =>
+            table === "users"
+              ? createdAt
+                ? { created_at: createdAt }
+                : undefined
+              : { settings, updated_at: new Date("2026-10-01T00:00:00Z") },
+        }),
+      }),
+    }),
+  } as unknown as Kysely<Database>;
+}
+
+await test("only accounts opened since the phone rule began are asked for a verified number", async () => {
+  const before = new Date(PHONE_VERIFICATION_NEW_ACCOUNTS_FROM.getTime() - 1);
+  const since = PHONE_VERIFICATION_NEW_ACCOUNTS_FROM;
+
+  const existing = createPlatformSettingsService({
+    database: fakeDatabaseWithAccount(true, before),
+  });
+  assert.equal(await existing.requiresVerifiedPhoneForEnrollment("u1"), false);
+
+  const fresh = createPlatformSettingsService({
+    database: fakeDatabaseWithAccount(true, since),
+  });
+  assert.equal(await fresh.requiresVerifiedPhoneForEnrollment("u1"), true);
+
+  // The academy-wide answer, with no learner, is the setting itself.
+  assert.equal(await existing.requiresVerifiedPhoneForEnrollment(), true);
+});
+
+await test("with the phone rule off, no account is asked", async () => {
+  const service = createPlatformSettingsService({
+    database: fakeDatabaseWithAccount(
+      false,
+      new Date(PHONE_VERIFICATION_NEW_ACCOUNTS_FROM.getTime() + 1),
+    ),
+  });
+  assert.equal(await service.requiresVerifiedPhoneForEnrollment("u1"), false);
+});
+
+await test("a student device limit: 3 until set, null for no limit, and a stray value falls back to 3", async () => {
+  const read = async (stored: unknown) =>
+    (
+      await createPlatformSettingsService({
+        database: fakeDatabase(stored).database,
+      }).getSettings()
+    ).settings.security.maxDevicesPerStudent;
+  assert.equal(await read(undefined), 3);
+  assert.equal(await read({ security: { maxDevicesPerStudent: 5 } }), 5);
+  assert.equal(await read({ security: { maxDevicesPerStudent: null } }), null);
+  assert.equal(await read({ security: { maxDevicesPerStudent: 0 } }), 3);
+  assert.equal(await read({ security: { maxDevicesPerStudent: "many" } }), 3);
 });

@@ -17,6 +17,8 @@ export interface LessonContentPanelProps {
   discussionPersistenceKey: string;
   courseSlug: string | undefined;
   courseId: string | undefined;
+  /** Who created the course: they moderate its discussion. */
+  courseCreatorId: string | null | undefined;
   backendLessonId: string | undefined;
   noteDeepLinkId: string | null;
   mobileBottomNavigation: boolean;
@@ -50,6 +52,7 @@ export function LessonContentPanel({
   discussionPersistenceKey,
   courseSlug,
   courseId,
+  courseCreatorId,
   backendLessonId,
   noteDeepLinkId,
   mobileBottomNavigation,
@@ -102,6 +105,7 @@ export function LessonContentPanel({
             persistenceKey={discussionPersistenceKey}
             courseSlug={courseSlug}
             courseId={courseId}
+            courseCreatorId={courseCreatorId}
             lessonId={backendLessonId}
             noteDeepLinkId={noteDeepLinkId}
             isThreadDeepLinkReady={isLearningDeepLinkReady}

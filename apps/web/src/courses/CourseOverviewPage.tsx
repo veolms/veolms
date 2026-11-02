@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import type { MouseEvent } from "react";
-import { useParams } from "react-router";
+import { useLocation, useParams } from "react-router";
 import { BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
 import { PencilSimple } from "@phosphor-icons/react/PencilSimple";
@@ -19,14 +19,19 @@ import { Heart } from "@phosphor-icons/react/Heart";
 import { Play } from "@phosphor-icons/react/Play";
 import { ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
 import {
-  CHECKOUT_WINDOW_SECONDS,
   MAX_VOLUNTARY_AMOUNT,
   type Category,
   type CheckoutPreviewResponse,
+  type CourseAccessEnrollment,
   type CourseAccessResume,
   type CourseEditorDataResponse,
   type CourseOverviewResponse,
+  type InternationalCoursePrice,
+  type PartialAccessOffer,
 } from "@veolms/contracts";
+import { formatMoney, toMajorUnits } from "@veolms/contracts/commerce/money";
+import { usePriceRegion } from "./priceRegion";
+import { CoursePriceSwitch } from "./CoursePriceSwitch";
 import {
   getCourseRouteKey,
   type Course,
@@ -52,9 +57,21 @@ import { formatPlainDescription } from "./overview/formatPlainDescription";
 import { useCourseWishlisted, useToggleWishlistCourse } from "../wishlist";
 import type { CourseSection } from "../learning/courseContent";
 import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
+import { useLearningProgressResumeContext } from "../services/learning-progress";
+import {
+  useLessonListOpenIntent,
+  useLessonOpenIntent,
+} from "../learning/lessonOpenIntent";
+import type { LessonIntentFor } from "./overview/CourseOverviewCurriculum";
 import type { NavigateTo } from "../routing/navigation";
 import { productName } from "../routing/routeDescriptors";
-import { useAuthStore } from "../store/auth.store";
+import { authStore, useAuthStore } from "../store/auth.store";
+import { LOGIN_DIALOG_PARAM } from "../routing/routeAccess";
+import {
+  forgetPendingPurchase,
+  rememberPendingPurchase,
+  takePendingPurchase,
+} from "./overview/pendingPurchase";
 import { useCoursePageData } from "./overview/useCoursePageData";
 import { CurriculumIntentContext } from "./overview/curriculumIntent";
 import type { CourseCurriculumPreview } from "./staticCurriculum";
@@ -62,20 +79,28 @@ import { getApiError } from "../lib/api-error";
 import { trackAnalyticsEvent } from "../lib/analytics-track";
 import {
   readCheckoutStartError,
-  CHECKOUT_WINDOW_BLOCKED_MESSAGE,
-  openCheckoutWindow,
+  openGatewayCheckout,
+  type StopGatewayCheckout,
   useCheckoutPreview,
   useAwaitPaidOrder,
   useCreateCheckoutOrder,
   useReleaseCheckoutOrder,
   useVerifyPayment,
 } from "../services/payments";
-import { useAuthConfig, useCurrentUser } from "../services/auth";
+import { useCurrentUser } from "../services/auth";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
-import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
+import {
+  formatCourseDuration,
+  formatDuration,
+  resolveCourseDurationSeconds,
+} from "./courseAdapter";
+import { IncludedCoursesList } from "./overview/IncludedCoursesList";
+import { FreeWithCourseNote } from "./FreeWithCourseNote";
 import { CourseLearnerProgressBar } from "./overview/CourseLearnerProgressBar";
+import { CourseLearnerProgressBarEarly } from "./overview/CourseLearnerProgressBarEarly";
 import { CourseOverviewCurriculum } from "./overview/CourseOverviewCurriculum";
+import { courseValidityLabel } from "./overview/courseValidity";
 import {
   CourseOverviewHero,
   overviewColumnClasses,
@@ -83,11 +108,16 @@ import {
 import { CourseOverviewSkeleton } from "./overview/CourseOverviewSkeleton";
 import { CourseLoadError } from "./overview/CourseLoadError";
 import { CourseManagerBar } from "./overview/CourseManagerBar";
+import { CourseBandLoadError } from "./overview/CourseBandLoadError";
 import { CourseViewerBandPlaceholder } from "./overview/CourseViewerBandPlaceholder";
+import { PartialAccessNotice } from "./overview/PartialAccessNotice";
+import { usePartialAccessOffer } from "../services/courses";
 import {
   coursePurchaseCheckoutNote,
+  coursePurchaseCheckoutNoteInternational,
   coursePurchaseGuarantee,
   getCoursePurchasePerks,
+  type CourseIncludeLine,
 } from "./overview/coursePurchasePerks";
 import {
   presumedGuestOnlyClasses,
@@ -96,10 +126,10 @@ import {
 } from "./overview/courseViewerState";
 import { HoverFillIcon } from "./overview/HoverFillIcon";
 import { PayCardIcon } from "./overview/PayCardIcon";
-import "../services/payments/razorpay-checkout.css";
 import {
   CoursePriceBar,
   type CoursePriceDisplayPrice,
+  type RegionalPriceView,
 } from "./overview/CoursePriceBar";
 import {
   bandHeaderClasses,
@@ -130,27 +160,6 @@ export { CourseOverviewSkeleton };
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
 export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
-
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => {
-      open: () => void;
-      close?: () => void;
-    };
-  }
-}
-
-async function loadRazorpay() {
-  if (typeof window === "undefined" || window.Razorpay) return;
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve();
-    script.onerror = () =>
-      reject(new Error("Unable to load payment checkout."));
-    document.head.appendChild(script);
-  });
-}
 
 export function getPriceSizeVariant(priceStr: string): PriceSizeVariant {
   if (!priceStr || priceStr.toLowerCase() === "free") return "normal";
@@ -232,6 +241,14 @@ export interface CourseOverviewPricingProps {
   /** The marked price in major units, when `originalPrice` is shown. */
   originalAmount?: number;
   currency?: string;
+  /** What the price box calls the discount, when it is not a sale. */
+  discountName?: string;
+  /**
+   * The same at the course's price for buyers outside India, when it has
+   * one: its amounts are major units with cents (43.99). Which of the two
+   * a visitor sees is their region's (see `priceRegion.ts`).
+   */
+  international?: CourseOverviewPricingProps;
 }
 
 export function isFreeCoursePricing(
@@ -246,6 +263,47 @@ export function isFreeCoursePricing(
 }
 
 function toOverviewPricingProps(
+  pr?: {
+    pricingType: "free" | "paid";
+    price: number;
+    currency?: string;
+    salePrice?: number | null;
+    international?: InternationalCoursePrice | null;
+  } | null,
+): CourseOverviewPricingProps {
+  const domestic = toDomesticOverviewPricingProps(pr);
+  const international =
+    pr?.pricingType === "paid" && pr.international
+      ? toInternationalOverviewPricingProps(pr.international)
+      : undefined;
+  return international ? { ...domestic, international } : domestic;
+}
+
+/** A course's price for buyers outside India, as the price box shows it. */
+function toInternationalOverviewPricingProps({
+  currency,
+  priceMinor,
+  salePriceMinor,
+}: InternationalCoursePrice): CourseOverviewPricingProps {
+  const amount = toMajorUnits(salePriceMinor, currency);
+  if (priceMinor <= salePriceMinor) {
+    return {
+      price: formatMoney(salePriceMinor, { currency }),
+      amount,
+      currency,
+    };
+  }
+  return {
+    price: formatMoney(salePriceMinor, { currency }),
+    originalPrice: formatMoney(priceMinor, { currency }),
+    discount: `${Math.round(((priceMinor - salePriceMinor) / priceMinor) * 100)}% OFF`,
+    amount,
+    originalAmount: toMajorUnits(priceMinor, currency),
+    currency,
+  };
+}
+
+function toDomesticOverviewPricingProps(
   pr?: {
     pricingType: "free" | "paid";
     price: number;
@@ -291,16 +349,65 @@ function toOverviewPricingProps(
   };
 }
 
+/**
+ * A paid course's own price as the price box shows it with no coupon and
+ * no amount of the buyer's own: the line and the full breakdown. The same
+ * figures the purchase section works out for that case.
+ */
+function coursePriceView(
+  pricing: CourseOverviewPricingProps,
+): RegionalPriceView {
+  const label = pricing.price ?? "Free";
+  const currency = pricing.currency ?? "INR";
+  const amount = pricing.amount ?? 0;
+  const sizeClassName = priceTextClasses[getPriceSizeVariant(label)];
+  return {
+    price: {
+      label,
+      sizeClassName,
+      struckThrough: pricing.originalPrice,
+      badge: pricing.discount,
+    },
+    priceBreakdown: {
+      sale:
+        pricing.originalPrice && pricing.discount && pricing.originalAmount
+          ? {
+              marked: pricing.originalPrice,
+              discount: formatPriceWithCurrency(
+                pricing.originalAmount - amount,
+                currency,
+              ),
+              label: pricing.discount.replace(/\s*off$/i, "").trim() + " off",
+              name: pricing.discountName,
+            }
+          : undefined,
+      beforeCoupon: formatPriceWithCurrency(amount, currency),
+      total: label,
+      totalSizeClassName: sizeClassName,
+    },
+  };
+}
+
 function appliedCouponFromPreview(
   code: string,
   res: CheckoutPreviewResponse,
   pricedForAmount: number,
 ): AppliedCoupon {
-  const discountAmount = res.pricing.discountAmount;
   const currency = res.pricing.currency || "INR";
-  const totalAmount = res.pricing.totalAmount;
+  // A preview for a course at its price for buyers outside India is in
+  // cents; the card works in major units, as its prices are.
+  const inCents = res.pricing.amountUnit === "minor";
+  const toMajor = (amount: number) =>
+    inCents ? toMajorUnits(amount, currency) : amount;
+  const discountAmount = toMajor(res.pricing.discountAmount);
+  const totalAmount = toMajor(res.pricing.totalAmount);
   let discountLabel: string | undefined;
-  if (res.couponValidation?.discountValue) {
+  // A fixed coupon's own value is rupees: in cents the amount it took off
+  // is what to name.
+  if (
+    res.couponValidation?.discountValue &&
+    (!inCents || res.couponValidation.discountType === "percentage")
+  ) {
     discountLabel =
       res.couponValidation.discountType === "percentage"
         ? `${res.couponValidation.discountValue}% OFF`
@@ -331,24 +438,58 @@ const SUPPORT_AMOUNTS_OFFERED: boolean = false;
 interface CoursePurchaseSectionProps {
   course: Course;
   pricing?: CourseOverviewPricingProps;
-  inclusions?: string[];
+  inclusions?: readonly CourseIncludeLine[];
   onNavigatePage?: NavigateTo;
   isReadOnlyPreview?: boolean;
   isCreator?: boolean;
   /** The overview's `canSelfEnroll`; only `false` closes enrolment. */
   canSelfEnroll?: boolean;
+  /**
+   * The overview's `includedWith`: for a linked-only course, the courses
+   * it comes free with. The card sends a visitor to the first of them.
+   */
+  includedWith?: CourseOverviewResponse["includedWith"];
+  /** The overview's `includedCourses`: the courses that come free with it. */
+  includedCourses?: CourseOverviewResponse["includedCourses"];
+  /**
+   * Whether the page knows who is looking (see `courseViewerState`): a
+   * purchase started before signing in waits for it.
+   */
+  viewerKnown?: boolean;
+  /**
+   * What is bought, when it is not the course itself: the part of it a
+   * partial access link sells (an unlisted course). `pricing` is its price.
+   */
+  purchaseCourseId?: string;
+  /** What the payment window names, with `purchaseCourseId`. */
+  purchaseTitle?: string;
 }
 
 function CoursePurchaseSection({
   course,
-  pricing,
+  pricing: pricingForAllRegions,
   inclusions,
   onNavigatePage,
   isReadOnlyPreview = false,
   isCreator = false,
   canSelfEnroll,
+  includedWith,
+  includedCourses,
+  viewerKnown = true,
+  purchaseCourseId,
+  purchaseTitle,
 }: CoursePurchaseSectionProps) {
   const user = useAuthStore((state) => state.user);
+  // The prices this visitor is charged: the ones for buyers outside India
+  // there. Until the region is known the price box shows a shimmer for a
+  // course that has both (`regionalPrices` below), never one of the two.
+  const priceRegion = usePriceRegion();
+  const pricing =
+    priceRegion === "international" && pricingForAllRegions?.international
+      ? pricingForAllRegions.international
+      : pricingForAllRegions;
+  // What checkout sells: the course, or the part of it this page offers.
+  const buyCourseId = purchaseCourseId ?? course.id;
   const preview = useCheckoutPreview();
   const createOrder = useCreateCheckoutOrder();
   // The course page being opened, for the conversion funnel.
@@ -364,29 +505,21 @@ function CoursePurchaseSection({
   const paymentConfirmationRef = useRef<AbortController | null>(null);
   useEffect(() => () => paymentConfirmationRef.current?.abort(), []);
   // The watch kept on the gateway's window while it is open (see
-  // `watchForUnansweredClose`).
-  const checkoutWatchRef = useRef<number | null>(null);
-  const stopCheckoutWatch = () => {
-    if (checkoutWatchRef.current !== null) {
-      window.clearInterval(checkoutWatchRef.current);
-      checkoutWatchRef.current = null;
-    }
-  };
-  useEffect(() => stopCheckoutWatch, []);
-  // Whether the gateway's window came up (see openCheckoutWindow).
-  const stopWindowLoadWatchRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => stopWindowLoadWatchRef.current?.(), []);
+  // `openGatewayCheckout`).
+  const stopGatewayCheckoutRef = useRef<StopGatewayCheckout | null>(null);
+  useEffect(() => () => stopGatewayCheckoutRef.current?.(), []);
   const isEnrolled = Boolean(user && course.enrolled);
 
   const [isPaymentBusy, setIsPaymentBusy] = useState(false);
   // A verified mobile number before the first enrolment, where the academy
-  // asks for one (REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT): the enrolment
-  // waits behind the number's pop-up and carries on once it is verified.
-  const requiresVerifiedPhone =
-    useAuthConfig().data?.requireVerifiedPhoneForEnrollment === true;
+  // asks for one (REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT) of a new account:
+  // the server says so when the order is asked for (only new accounts are
+  // asked), and the enrolment waits behind the number's pop-up and carries
+  // on once it is verified.
   const currentUser = useCurrentUser();
   const [phoneGate, setPhoneGate] = useState<{
     amount: number | undefined;
+    couponCode: string | undefined;
   } | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
@@ -423,15 +556,20 @@ function CoursePurchaseSection({
       isFree,
       canSelfEnroll,
     }) === "invitation-only";
+  // A linked-only course is not enrolled in on its own: it is had by
+  // buying the course it comes with. The card shows it as free with that
+  // course, and its button opens that course's page, where it is bought
+  // (with a coupon, if there is one).
+  const includingCourse = isInvitationOnly ? includedWith?.[0] : undefined;
 
   const checkoutItem = useMemo(
     () =>
-      checkoutCourseItem(course.id, {
+      checkoutCourseItem(buyCourseId, {
         isFree,
         amount: voluntaryAmount,
         catalogPrice: baseNumericPrice,
       }),
-    [course.id, isFree, voluntaryAmount, baseNumericPrice],
+    [buyCourseId, isFree, voluntaryAmount, baseNumericPrice],
   );
 
   // What a payment would charge before the coupon, and whether the coupon
@@ -581,6 +719,7 @@ function CoursePurchaseSection({
                 currency,
               ),
               label: discount.replace(/\s*off$/i, "").trim() + " off",
+              name: pricing?.discountName,
             }
           : undefined,
       beforeCoupon: formatPriceWithCurrency(before, currency),
@@ -626,6 +765,8 @@ function CoursePurchaseSection({
       });
 
       if (res.couponValidation && !res.couponValidation.valid) {
+        // Never the code itself: a private code is the creator's to share.
+        trackAnalyticsEvent("coupon_rejected", { courseId: course.id });
         setCouponError(
           (res.couponValidation.message || "Invalid coupon code.") +
             stillApplied,
@@ -637,6 +778,7 @@ function CoursePurchaseSection({
       // buyer changed theirs while it was in flight, the total is stale on
       // arrival and the effect above asks again.
       setAppliedCoupon(appliedCouponFromPreview(code, res, payableAmount));
+      trackAnalyticsEvent("coupon_applied", { courseId: course.id });
       setCouponInputOpen(false);
       setCouponCodeInput("");
     } catch (err) {
@@ -663,6 +805,20 @@ function CoursePurchaseSection({
     setCouponCodeInput("");
   };
 
+  // The server has the money: unlike `payment_result: paid`, which the
+  // gateway's window reports before the server has checked anything.
+  const trackPaidEnrollment = (orderId: string) => {
+    trackAnalyticsEvent("payment_confirmed", {
+      courseId: course.id,
+      orderId,
+      props: { item: "course" },
+    });
+    trackAnalyticsEvent("enrollment_completed", {
+      courseId: course.id,
+      props: { kind: "paid", item: "course" },
+    });
+  };
+
   const confirmPaidOrder = async (orderId: string) => {
     paymentConfirmationRef.current?.abort();
     const confirmation = new AbortController();
@@ -681,6 +837,7 @@ function CoursePurchaseSection({
     setPaymentNotice(null);
     setIsPaymentBusy(false);
     if (paid) {
+      trackPaidEnrollment(orderId);
       onNavigatePage?.(
         `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
       );
@@ -699,34 +856,13 @@ function CoursePurchaseSection({
    * card may already have been charged by then, as it was when this was
    * found: the gateway had captured the payment and failed afterwards.
    *
-   * So while the window is open the page watches it, and if it closes
-   * unanswered the button is given back with a message that tells the truth
-   * about what is not known, and the order goes on being watched: the
-   * server's recovery cycle marks a captured payment paid within a few
-   * minutes, and the course then opens without the learner paying twice.
+   * So while the window is open it is watched (see openGatewayCheckout),
+   * and if it closes unanswered the button is given back with a message
+   * that tells the truth about what is not known, and the order goes on
+   * being watched: the server's recovery cycle marks a captured payment paid
+   * within a few minutes, and the course then opens without the learner
+   * paying twice.
    */
-  const watchForUnansweredClose = (
-    orderId: string,
-    answered: () => boolean,
-  ) => {
-    stopCheckoutWatch();
-    let seenOpen = false;
-    checkoutWatchRef.current = window.setInterval(() => {
-      if (answered()) return stopCheckoutWatch();
-      const container = document.querySelector(".razorpay-container");
-      const isOpen =
-        container !== null &&
-        window.getComputedStyle(container).display !== "none";
-      if (isOpen) {
-        seenOpen = true;
-        return;
-      }
-      if (!seenOpen) return;
-      stopCheckoutWatch();
-      void followUpUnansweredClose(orderId);
-    }, 500);
-  };
-
   const followUpUnansweredClose = async (orderId: string) => {
     paymentConfirmationRef.current?.abort();
     const confirmation = new AbortController();
@@ -742,6 +878,7 @@ function CoursePurchaseSection({
     if (confirmation.signal.aborted) return;
     paymentConfirmationRef.current = null;
     if (paid) {
+      trackPaidEnrollment(orderId);
       setPaymentError(null);
       onNavigatePage?.(
         `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
@@ -751,47 +888,53 @@ function CoursePurchaseSection({
 
   const handlePayNow = async (
     voluntaryContributionAmount?: number,
-    { phoneChecked = false }: { phoneChecked?: boolean } = {},
+    {
+      phoneChecked = false,
+      couponCode: couponOverride,
+      resumed = false,
+    }: {
+      phoneChecked?: boolean;
+      /** The coupon to buy with, when it is not (yet) the applied one. */
+      couponCode?: string;
+      /** Carried on after signing in; the press was counted then. */
+      resumed?: boolean;
+    } = {},
   ) => {
     if (isReadOnlyPreview) return;
-    if (!phoneChecked) {
+    if (!phoneChecked && !resumed) {
       trackAnalyticsEvent("enroll_click", {
         courseId: course.id,
         outcome: user ? "signed_in" : "guest",
       });
     }
     if (!user) {
-      // Opens the login pop-up over this course page, so the visitor is back
-      // on the price card as soon as they are signed in.
-      if (onNavigatePage) onNavigatePage("/login");
-      else setPaymentError("Please log in before enrolling.");
+      // Opens the login pop-up over this course page, and keeps the press:
+      // once signed in, the page carries on with this purchase (see
+      // pendingPurchase.ts).
+      if (onNavigatePage) {
+        rememberPendingPurchase({
+          courseId: buyCourseId,
+          ...(voluntaryContributionAmount !== undefined
+            ? { amount: voluntaryContributionAmount }
+            : {}),
+          ...(!isFree && appliedCoupon
+            ? { couponCode: appliedCoupon.code }
+            : {}),
+        });
+        onNavigatePage("/login");
+      } else setPaymentError("Please log in before enrolling.");
       return;
     }
-    if (
-      !phoneChecked &&
-      requiresVerifiedPhone &&
-      currentUser.data &&
-      !currentUser.data.mobileVerified
-    ) {
-      setPaymentError(null);
-      setPhoneGate({ amount: voluntaryContributionAmount });
-      trackAnalyticsEvent("checkout_step", {
-        courseId: course.id,
-        step: "phone_verification",
-      });
-      return;
-    }
-
     setIsPaymentBusy(true);
     setPaymentError(null);
 
     try {
-      const item = checkoutCourseItem(course.id, {
+      const item = checkoutCourseItem(buyCourseId, {
         isFree,
         amount: voluntaryContributionAmount ?? 0,
         catalogPrice: baseNumericPrice,
       });
-      const coupon = appliedCoupon?.code?.trim();
+      const coupon = (couponOverride ?? appliedCoupon?.code)?.trim();
       const couponCode = !isFree && coupon ? coupon.toUpperCase() : undefined;
       // The key identifies this purchase, not this click: a second click on
       // the same course, amount and coupon must reach the same order. A new
@@ -817,6 +960,10 @@ function CoursePurchaseSection({
           orderId: order.order.id,
           outcome: "free",
         });
+        trackAnalyticsEvent("enrollment_completed", {
+          courseId: course.id,
+          props: { kind: "free", item: "course" },
+        });
         setIsPaymentBusy(false);
         onNavigatePage?.(
           `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
@@ -832,73 +979,60 @@ function CoursePurchaseSection({
         return;
       }
 
-      await loadRazorpay();
-      if (!window.Razorpay) {
-        throw new Error("Payment checkout is unavailable.");
-      }
+      // The order is cancelled on the server, so paying again (with another
+      // coupon, at another amount) is not refused as a second payment while
+      // the closed window's time runs out. The button waits for that
+      // answer, so a quick second click does not race it. A payment the
+      // gateway may still take keeps its order.
+      const releaseThisOrder = () =>
+        void releaseOrder
+          .mutateAsync(order.order.id)
+          .then((result) => {
+            if (result.released) checkoutIntentRef.current = null;
+          })
+          .catch(() => undefined)
+          .finally(() => setIsPaymentBusy(false));
 
-      trackAnalyticsEvent("checkout_step", {
-        courseId: course.id,
-        orderId: order.order.id,
-        step: "gateway_opened",
-      });
-      // Whether the gateway's window has told the page how it ended.
-      let checkoutAnswered = false;
-      // The gateway refused to load its window here (see
-      // openCheckoutWindow); its own close then says nothing more.
-      let windowBlocked = false;
-      const rzp = new window.Razorpay({
-        key: order.gateway.keyId,
-        amount: order.gateway.amount,
-        currency: order.gateway.currency,
-        name: productName,
-        description:
-          (voluntaryContributionAmount ?? 0) > baseNumericPrice ||
-          (isFree && (voluntaryContributionAmount ?? 0) > 0)
-            ? `Support Creator - ${course.title}`
-            : course.title,
-        order_id: order.gateway.gatewayOrderId,
-        // The window closes itself, so a payment cannot be completed in it
-        // long after the server has let the buyer start another one.
-        timeout: CHECKOUT_WINDOW_SECONDS,
-        prefill: {
-          name: user.displayName || user.username,
-          email: user.email,
+      // The gateway the server chose for this buyer (by their country):
+      // Razorpay in India, Dodo Payments elsewhere.
+      stopGatewayCheckoutRef.current?.();
+      stopGatewayCheckoutRef.current = await openGatewayCheckout(
+        {
+          gateway: order.gateway,
+          name: productName,
+          description:
+            (voluntaryContributionAmount ?? 0) > baseNumericPrice ||
+            (isFree && (voluntaryContributionAmount ?? 0) > 0)
+              ? `Support Creator - ${course.title}`
+              : (purchaseTitle ?? course.title),
+          prefill: {
+            name: user.displayName || user.username,
+            email: user.email,
+          },
         },
-        handler: async (response: {
-          razorpay_order_id: string;
-          razorpay_payment_id: string;
-          razorpay_signature: string;
-        }) => {
-          checkoutAnswered = true;
-          trackAnalyticsEvent("payment_result", {
-            courseId: course.id,
-            orderId: order.order.id,
-            outcome: "paid",
-          });
-          try {
-            await verify.mutateAsync({
+        {
+          onPaid: async (proof) => {
+            trackAnalyticsEvent("payment_result", {
+              courseId: course.id,
               orderId: order.order.id,
-              gatewayOrderId: response.razorpay_order_id,
-              gatewayPaymentId: response.razorpay_payment_id,
-              gatewaySignature: response.razorpay_signature,
+              outcome: "paid",
             });
-            setIsPaymentBusy(false);
-            onNavigatePage?.(
-              `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-            );
-          } catch {
-            // The gateway has taken the payment; only our confirmation call
-            // failed. The server still fulfils the order from the gateway
-            // webhook or its recovery cycle, so wait for that rather than
-            // telling the learner to pay again.
-            await confirmPaidOrder(order.order.id);
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            checkoutAnswered = true;
-            if (windowBlocked) return;
+            try {
+              await verify.mutateAsync({ orderId: order.order.id, ...proof });
+              trackPaidEnrollment(order.order.id);
+              setIsPaymentBusy(false);
+              onNavigatePage?.(
+                `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+              );
+            } catch {
+              // The gateway has taken the payment; only our confirmation
+              // call failed. The server still fulfils the order from the
+              // gateway webhook or its recovery cycle, so wait for that
+              // rather than telling the learner to pay again.
+              await confirmPaidOrder(order.order.id);
+            }
+          },
+          onDismissed: () => {
             // A payment that went through is being confirmed; the gateway
             // closing its own window afterwards is not a cancellation.
             const confirmation = paymentConfirmationRef.current;
@@ -911,54 +1045,39 @@ function CoursePurchaseSection({
             setPaymentError(
               "The payment window was closed before the payment was completed. You can try again whenever you are ready.",
             );
-            // The order is cancelled on the server, so paying again (with
-            // another coupon, at another amount) is not refused as a second
-            // payment while the closed window's time runs out. The button
-            // waits for that answer, so a quick second click does not race
-            // it. A payment the gateway may still take keeps its order.
-            void releaseOrder
-              .mutateAsync(order.order.id)
-              .then((result) => {
-                if (result.released) checkoutIntentRef.current = null;
-              })
-              .catch(() => undefined)
-              .finally(() => setIsPaymentBusy(false));
+            releaseThisOrder();
           },
+          // The window never came up, so nothing can have been paid in it:
+          // the order is let go and the button given back with the reason.
+          onBlocked: (message) => {
+            trackAnalyticsEvent("payment_result", {
+              courseId: course.id,
+              orderId: order.order.id,
+              outcome: "blocked",
+            });
+            setPaymentError(message);
+            releaseThisOrder();
+          },
+          onClosedUnanswered: () =>
+            void followUpUnansweredClose(order.order.id),
         },
+      );
+      trackAnalyticsEvent("checkout_step", {
+        courseId: course.id,
+        orderId: order.order.id,
+        step: "gateway_opened",
       });
-
-      // Opens the window. If it never comes up, nothing can have been paid
-      // in it, so the order is let go and the button given back with the
-      // reason.
-      stopWindowLoadWatchRef.current?.();
-      stopWindowLoadWatchRef.current = openCheckoutWindow(rzp, () => {
-        windowBlocked = true;
-        checkoutAnswered = true;
-        stopCheckoutWatch();
-        trackAnalyticsEvent("payment_result", {
-          courseId: course.id,
-          orderId: order.order.id,
-          outcome: "blocked",
-        });
-        setPaymentError(CHECKOUT_WINDOW_BLOCKED_MESSAGE);
-        void releaseOrder
-          .mutateAsync(order.order.id)
-          .then((result) => {
-            if (result.released) checkoutIntentRef.current = null;
-          })
-          .catch(() => undefined)
-          .finally(() => setIsPaymentBusy(false));
-      });
-      watchForUnansweredClose(order.order.id, () => checkoutAnswered);
     } catch (error) {
-      // The server asks for the number when this page could not tell
-      // (the account had not loaded yet, or the setting was just turned on).
+      // The server asks for the number of a new account that has none.
       if (
         (error as { code?: string } | null)?.code ===
         "PHONE_VERIFICATION_REQUIRED"
       ) {
         setIsPaymentBusy(false);
-        setPhoneGate({ amount: voluntaryContributionAmount });
+        setPhoneGate({
+          amount: voluntaryContributionAmount,
+          couponCode: couponOverride,
+        });
         trackAnalyticsEvent("checkout_step", {
           courseId: course.id,
           step: "phone_verification",
@@ -979,6 +1098,61 @@ function CoursePurchaseSection({
       setIsPaymentBusy(false);
     }
   };
+
+  // A purchase started before signing in (see pendingPurchase.ts) carries
+  // on by itself once the buyer is signed in and the page knows the course
+  // is still theirs to buy: the mobile number first where it is asked for,
+  // then the payment window. Someone who turns out to own or manage the
+  // course is shown that instead (the page drops the press).
+  const canResumePurchase =
+    Boolean(user) &&
+    viewerKnown &&
+    !isReadOnlyPreview &&
+    !isCreatorNormal &&
+    !isEnrolled &&
+    !isInvitationOnly;
+  const resumePendingPurchase = useEffectEvent(() => {
+    const pending = takePendingPurchase(buyCourseId);
+    if (!pending) return;
+    trackAnalyticsEvent("checkout_step", {
+      courseId: course.id,
+      step: "resumed_after_sign_in",
+    });
+    // The guest's coupon goes back on the card as well; the order is made
+    // with it either way.
+    if (pending.couponCode && !appliedCoupon) {
+      void applyCouponCode(pending.couponCode);
+    }
+    void handlePayNow(pending.amount, {
+      couponCode: pending.couponCode,
+      resumed: true,
+    });
+  });
+  useEffect(() => {
+    if (canResumePurchase) resumePendingPurchase();
+  }, [canResumePurchase]);
+
+  // Closing the login pop-up without signing in drops the press: signing in
+  // later, some other way, is not taken to mean paying. Signing in closes
+  // the pop-up too, about when the session reaches this page, so only a
+  // pop-up that closed with nobody signed in a moment later counts.
+  const location = useLocation();
+  const loginOpen = new URLSearchParams(location.search).has(
+    LOGIN_DIALOG_PARAM,
+  );
+  const loginWasOpenRef = useRef(false);
+  useEffect(() => {
+    if (loginOpen) {
+      loginWasOpenRef.current = true;
+      return undefined;
+    }
+    if (!loginWasOpenRef.current) return undefined;
+    loginWasOpenRef.current = false;
+    const timer = window.setTimeout(() => {
+      if (!authStore.getState().user) forgetPendingPurchase(buyCourseId);
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [loginOpen, buyCourseId]);
 
   // "Pay Now", with a card for its icon: the amount stands on the bar
   // beside the button. A buyer's own, higher amount is still named, and a
@@ -1216,6 +1390,15 @@ function CoursePurchaseSection({
     }
   }
 
+  const includingCoursePath = includingCourse
+    ? `/courses/${encodeURIComponent(includingCourse.slug)}/overview`
+    : undefined;
+  if (includingCourse && includingCoursePath) {
+    ctaLabel = includingCourse.title;
+    ctaDisabled = false;
+    ctaOnClick = () => onNavigatePage?.(includingCoursePath);
+  }
+
   const priceLabel = isFree
     ? originalPrice
       ? basePrice
@@ -1225,24 +1408,56 @@ function CoursePurchaseSection({
     (isFree ? originalPrice : true) && displayDiscount
       ? displayDiscount
       : undefined;
+  // A course that also has a price for buyers outside India draws both in
+  // its box, and the visitor's region shows one (a shimmer until it is
+  // known), as long as the box shows the course's own price: no coupon, no
+  // amount of the buyer's own, nothing bought by staff here. Drawn from the
+  // two prices alone, so the prerendered page is the same for everyone.
+  const regionalPrices =
+    pricingForAllRegions?.international &&
+    !isFree &&
+    !appliedCoupon &&
+    !isPayingAbovePrice &&
+    !isCreatorNormal &&
+    !includingCourse
+      ? {
+          domestic: coursePriceView(pricingForAllRegions),
+          international: coursePriceView(pricingForAllRegions.international),
+        }
+      : undefined;
 
   return (
     <CoursePriceBar
+      regional={regionalPrices}
       price={
         isCreatorNormal
           ? undefined
-          : {
-              label: priceLabel,
-              sizeClassName: priceTextClasses[priceSizeVariant],
-              struckThrough: struckThroughPrice,
-              badge: priceBadge,
-              // The only saving shown, and it is the coupon's.
-              badgeIsCoupon: Boolean(
-                priceBadge && appliedCoupon && !couponOnTopOfSale,
-              ),
-              couponBadge:
-                priceBadge && couponOnTopOfSale ? couponSavingLabel : undefined,
-            }
+          : includingCourse
+            ? {
+                label: "Free",
+                sizeClassName: priceTextClasses[priceSizeVariant],
+                note: (
+                  <FreeWithCourseNote
+                    title={includingCourse.title}
+                    href={includingCoursePath}
+                    onNavigate={onNavigatePage}
+                  />
+                ),
+              }
+            : {
+                label: priceLabel,
+                sizeClassName: priceTextClasses[priceSizeVariant],
+                struckThrough: struckThroughPrice,
+                badge: priceBadge,
+                // The only saving shown, and it is the coupon's.
+                badgeIsCoupon: Boolean(
+                  priceBadge && appliedCoupon && !couponOnTopOfSale,
+                ),
+                couponBadge:
+                  priceBadge && couponOnTopOfSale
+                    ? couponSavingLabel
+                    : undefined,
+              }
       }
       priceBreakdown={
         priceBreakdown
@@ -1286,13 +1501,41 @@ function CoursePurchaseSection({
         icon: ctaIcon,
         disabled: ctaDisabled,
         onClick: ctaOnClick,
+        ...(includingCoursePath
+          ? { link: { href: includingCoursePath, eyebrow: "Enroll in" } }
+          : {}),
       }}
-      closedMessage={isInvitationOnly ? INVITATION_ONLY_MESSAGE : undefined}
+      closedMessage={
+        isInvitationOnly && !includingCourse
+          ? INVITATION_ONLY_MESSAGE
+          : undefined
+      }
       notice={paymentNotice}
       error={paymentError}
       onDismissError={() => setPaymentError(null)}
       perks={perksList}
-      checkoutNote={isPaidPurchase ? coursePurchaseCheckoutNote : undefined}
+      includedCourses={
+        includedCourses && includedCourses.length > 0 ? (
+          <IncludedCoursesList
+            courses={includedCourses}
+            onOpenCourse={onNavigatePage}
+          />
+        ) : undefined
+      }
+      checkoutNote={
+        !isPaidPurchase ? undefined : pricingForAllRegions?.international ? (
+          // How a buyer can pay depends on where they are: rupees by UPI,
+          // cards and net banking in India, dollars by card elsewhere.
+          <CoursePriceSwitch
+            display="inline"
+            pending="Secure checkout"
+            domestic={coursePurchaseCheckoutNote}
+            international={coursePurchaseCheckoutNoteInternational}
+          />
+        ) : (
+          coursePurchaseCheckoutNote
+        )
+      }
       guarantee={isPaidPurchase ? coursePurchaseGuarantee : undefined}
     >
       {SUPPORT_AMOUNTS_OFFERED &&
@@ -1324,9 +1567,9 @@ function CoursePurchaseSection({
             }
             onClose={() => setPhoneGate(null)}
             onVerified={() => {
-              const { amount } = phoneGate;
+              const { amount, couponCode } = phoneGate;
               setPhoneGate(null);
-              void handlePayNow(amount, { phoneChecked: true });
+              void handlePayNow(amount, { phoneChecked: true, couponCode });
             }}
           />
         </Suspense>
@@ -1515,7 +1758,8 @@ export interface AdaptedOverviewData {
   categoryName: string | undefined;
   language: string | undefined;
   sections: CourseSection[];
-  inclusions: string[];
+  /** The course's "This course includes" lines; absent on an old page. */
+  inclusions: CourseIncludeLine[] | undefined;
   pricing: CourseOverviewPricingProps;
   instructorName: string | undefined;
   trailerMediaId: string | null;
@@ -1524,6 +1768,35 @@ export interface AdaptedOverviewData {
    * is built from the course's saved settings rather than from an overview.
    */
   canSelfEnroll?: boolean;
+  /** The overview's `accessValidity`: how long the course stays with a learner. */
+  accessValidity?: CourseOverviewResponse["accessValidity"];
+  /** The overview's `includedWith`, for a linked-only course. */
+  includedWith?: CourseOverviewResponse["includedWith"];
+  /** The overview's `includedCourses`: the courses that come free with it. */
+  includedCourses?: CourseOverviewResponse["includedCourses"];
+}
+
+/**
+ * A course's stored "This course includes" lines, in their order. Absent
+ * (a page built before lines were stored) stays absent, so the card falls
+ * back to the standard lines.
+ */
+function toCourseIncludeLines(
+  includes:
+    ReadonlyArray<CourseIncludeLine & { position: number }> | null | undefined,
+): CourseIncludeLine[] | undefined {
+  if (!Array.isArray(includes)) return undefined;
+  return includes
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .filter((line) => line.text.trim())
+    .map(({ text, detail, icon, color, kind }) => ({
+      text: text.trim(),
+      detail,
+      icon,
+      color,
+      kind,
+    }));
 }
 
 export function adaptCourseOverviewResponse(
@@ -1555,7 +1828,7 @@ export function adaptCourseOverviewResponse(
     overview.stats?.totalDurationSeconds,
     overview.settings?.estimatedDuration,
   );
-  const resolvedDuration = formatDuration(resolvedDurationSeconds);
+  const resolvedDuration = formatCourseDuration(resolvedDurationSeconds);
 
   const resolvedThumbnail = c.thumbnailUrl || "";
 
@@ -1574,6 +1847,8 @@ export function adaptCourseOverviewResponse(
     students: 0,
     thumbnail: resolvedThumbnail,
     thumbnailSrcSet: c.thumbnailSrcSet,
+    banner: c.bannerUrl || undefined,
+    bannerSrcSet: c.bannerSrcSet,
     lifecycleStatus: (c.status === "published" || c.status === "archived"
       ? c.status
       : "draft") as CourseLifecycleStatus,
@@ -1586,6 +1861,7 @@ export function adaptCourseOverviewResponse(
     .sort((a, b) => a.position - b.position)
     .map((sec, secIdx) => ({
       id: secIdx + 1,
+      sectionId: sec.id,
       title: sec.title || `Section ${secIdx + 1}`,
       progress: `0/${sec.lessons?.length ?? 0}`,
       lessons: (sec.lessons || [])
@@ -1606,14 +1882,7 @@ export function adaptCourseOverviewResponse(
         }),
     }));
 
-  const finalPerks: string[] = Array.isArray(overview.includes)
-    ? overview.includes
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((inc) => inc.text.trim())
-        .filter(Boolean)
-        .slice(0, 6)
-    : [];
+  const finalPerks = toCourseIncludeLines(overview.includes);
 
   let pricingProps: CourseOverviewPricingProps = toOverviewPricingProps(
     overview.pricing,
@@ -1631,6 +1900,9 @@ export function adaptCourseOverviewResponse(
     instructorName: resolvedInstructorName,
     trailerMediaId: c.trailerMediaId ?? null,
     canSelfEnroll: overview.canSelfEnroll,
+    accessValidity: overview.accessValidity,
+    includedWith: overview.includedWith,
+    includedCourses: overview.includedCourses,
   };
 }
 
@@ -1677,10 +1949,12 @@ export function adaptPreviewDataToOverview(
     lectures: totalLessons,
     progress: null,
     enrolled: false,
-    duration: formatDuration(totalDurationSeconds),
+    duration: formatCourseDuration(totalDurationSeconds),
     students: 0,
     thumbnail: c.thumbnailUrl || "",
     thumbnailSrcSet: c.thumbnailSrcSet,
+    banner: c.bannerUrl || undefined,
+    bannerSrcSet: c.bannerSrcSet,
     lifecycleStatus: (c.status === "published" || c.status === "archived"
       ? c.status
       : "draft") as CourseLifecycleStatus,
@@ -1693,6 +1967,7 @@ export function adaptPreviewDataToOverview(
     .sort((a, b) => a.position - b.position)
     .map((sec, secIdx) => ({
       id: secIdx + 1,
+      sectionId: sec.id,
       title: sec.title || `Section ${secIdx + 1}`,
       progress: `0/${sec.lessons?.length ?? 0}`,
       lessons: (sec.lessons || [])
@@ -1713,14 +1988,7 @@ export function adaptPreviewDataToOverview(
         }),
     }));
 
-  const finalPerks: string[] = Array.isArray(previewData.includes)
-    ? previewData.includes
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((inc) => inc.text.trim())
-        .filter(Boolean)
-        .slice(0, 6)
-    : [];
+  const finalPerks = toCourseIncludeLines(previewData.includes);
 
   const pricingProps: CourseOverviewPricingProps = toOverviewPricingProps(
     previewData.pricing,
@@ -1743,6 +2011,21 @@ export function adaptPreviewDataToOverview(
 export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const { courseSlug: routeCourseSlug } = useParams();
   const courseSlug = props.courseSlug ?? routeCourseSlug;
+  // A partial access link: `?access=<its slug>` sells part of the course.
+  const pageLocation = useLocation();
+  const offerSlug = new URLSearchParams(pageLocation.search).get("access");
+  const offerQuery = usePartialAccessOffer(courseSlug, offerSlug);
+  const partialOffer: PartialOfferState = !offerSlug
+    ? null
+    : offerQuery.data
+      ? { status: "ready", offer: offerQuery.data }
+      : offerQuery.isError
+        ? // Only a link the server does not know is dead; any other failure
+          // is asked again, and the whole course is not offered meanwhile.
+          offerQuery.error.status === 404
+          ? { status: "missing" }
+          : { status: "failed", retry: () => void offerQuery.refetch() }
+        : { status: "loading" };
   const serverCategories = props.categories ?? [];
   const authUser = useAuthStore((s) => s.user);
   const defaultInstructorName =
@@ -1756,6 +2039,9 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     refetch: refetchOverview,
     access,
     accessPending,
+    accessFailed,
+    priceStatus,
+    pricingType,
     totalSections,
     sectionsComplete,
     requestAllSections,
@@ -1765,6 +2051,12 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     preview: props.initialCurriculum,
     enabled: !props.previewData && !props.customCourse && Boolean(courseSlug),
     awaitsAccess,
+    viewerKind:
+      props.role === "creator" || props.viewerSettled === false
+        ? null
+        : authUser
+          ? "learner"
+          : "guest",
   });
 
   // If previewData is provided, adapt it cleanly from persisted server state
@@ -1800,6 +2092,10 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         : accessPending
           ? "pending"
           : "known";
+
+  // The price and the viewer come from the API for a course page; the
+  // editor's preview and a course handed in whole bring their own.
+  const pricedByPage = !props.previewData && !props.customCourse;
 
   // The viewer's enrolment, from the same answer that decides which lessons
   // open to them.
@@ -1901,12 +2197,42 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         sectionsComplete={sectionsComplete}
         onRequestAllSections={requestAllSections}
         resume={access?.resume}
+        partialOffer={partialOffer}
+        // A page built (or opened) before the price has come: whether the
+        // course is paid still marks its free lessons from the first paint.
+        isPaidCourse={
+          props.isPaidCourse ??
+          (pricedByPage && priceStatus !== "known" && pricingType
+            ? pricingType === "paid"
+            : undefined)
+        }
+        priceStatus={pricedByPage ? priceStatus : "known"}
+        accessFailed={pricedByPage && accessFailed}
+        onRetryAccess={refetchOverview}
+        enrolmentAccess={
+          access?.enrolled
+            ? {
+                accessExpiresAt: access.accessExpiresAt ?? null,
+                enrollment: access.enrollment ?? null,
+              }
+            : null
+        }
       />
     </CurriculumIntentContext.Provider>
   );
 }
 
+/** What a partial access link (`?access=`) offers, as it is loaded. */
+type PartialOfferState =
+  | null
+  | { status: "loading" }
+  | { status: "missing" }
+  | { status: "failed"; retry: () => void }
+  | { status: "ready"; offer: PartialAccessOffer };
+
 type CourseOverviewContentProps = CourseOverviewPageProps & {
+  /** Set when the page was opened from a partial access link. */
+  partialOffer?: PartialOfferState;
   course: Course;
   courseSlug: string | undefined;
   adaptedFromPreview: AdaptedOverviewData | null;
@@ -1919,6 +2245,27 @@ type CourseOverviewContentProps = CourseOverviewPageProps & {
   onRequestAllSections?: () => void;
   /** Where an enrolled learner carries on, from the access answer. */
   resume?: CourseAccessResume | null;
+  /**
+   * An enrolled learner's end of access and their enrolment, from the
+   * access answer.
+   */
+  enrolmentAccess?: {
+    accessExpiresAt: string | null;
+    enrollment?: CourseAccessEnrollment | null;
+  } | null;
+  /**
+   * Whether the course's price in force is known (see `useCoursePageData`).
+   * Until it is, the band shows a placeholder where the price and the
+   * button go; if it failed to load, it says so.
+   */
+  priceStatus?: "known" | "pending" | "failed";
+  /**
+   * A signed-in learner's access answer failed and nothing says whether
+   * the course is theirs: neither a price nor their progress is shown.
+   */
+  accessFailed?: boolean;
+  /** Asks again for the access answer (the band's "Try again"). */
+  onRetryAccess?: () => void;
 };
 
 function CourseOverviewContent({
@@ -1945,14 +2292,42 @@ function CourseOverviewContent({
   sectionsComplete = true,
   onRequestAllSections,
   resume,
+  enrolmentAccess,
+  partialOffer = null,
+  priceStatus = "known",
+  accessFailed = false,
+  onRetryAccess,
 }: CourseOverviewContentProps) {
+  const offer = partialOffer?.status === "ready" ? partialOffer.offer : null;
+  // The part is shown against the whole course's price; what it saves is
+  // its partial access discount.
+  const offerPricing = offer
+    ? {
+        ...toOverviewPricingProps({
+          pricingType: offer.salePrice > 0 ? "paid" : "free",
+          price: Math.max(offer.price, offer.salePrice),
+          salePrice: offer.salePrice,
+          currency: offer.currency,
+        }),
+        discountName: "Partial access discount",
+      }
+    : undefined;
+  const includedSectionIds = useMemo(
+    () => (offer ? new Set(offer.sectionIds) : undefined),
+    [offer],
+  );
   const user = useAuthStore((state) => state.user);
+  // A lesson in the curriculum is readied while the pointer rests on it,
+  // and opens playing.
+  const lessonRowsIntent = useLessonListOpenIntent(
+    isReadOnlyPreview ? null : getCourseRouteKey(course),
+  );
   const handleSelectLesson = (lessonNumber: number) => {
     if (isReadOnlyPreview) return;
     onSelectLesson?.(lessonNumber);
     if (!onNavigatePage) return;
-    onNavigatePage(
-      getCoursePlayerPath(getCourseRouteKey(course), lessonNumber),
+    lessonRowsIntent.open(lessonNumber, (opened) =>
+      onNavigatePage(getCoursePlayerPath(getCourseRouteKey(course), opened)),
     );
   };
   const locationHash =
@@ -2000,12 +2375,12 @@ function CourseOverviewContent({
       ? propIsPaidCourse
       : !isFreeCoursePricing(activePricing);
 
-  const inclusions: string[] | undefined = adaptedFromPreview
+  const inclusions: CourseIncludeLine[] | undefined = adaptedFromPreview
     ? adaptedFromPreview.inclusions
     : customInclusions !== undefined
       ? Array.from(
           new Set(customInclusions.map((s) => s.trim()).filter(Boolean)),
-        )
+        ).map((text) => ({ text }))
       : customIncludes !== undefined
         ? Array.from(
             new Set(
@@ -2017,7 +2392,7 @@ function CourseOverviewContent({
                     !/on-demand content/i.test(label),
                 ),
             ),
-          )
+          ).map((text) => ({ text }))
         : undefined;
 
   const [openSections, setOpenSections] = useState<Set<number>>(
@@ -2101,6 +2476,63 @@ function CourseOverviewContent({
         : undefined,
   };
   const isEnrolled = Boolean(user && course.enrolled);
+  // A purchase started before signing in is not carried on for a course
+  // the buyer turns out to own or manage (see pendingPurchase.ts).
+  const ownsOrManages = Boolean(user) && (isEnrolled || managesCourse);
+  useEffect(() => {
+    if (viewer === "known" && ownsOrManages) forgetPendingPurchase(course.id);
+  }, [viewer, ownsOrManages, course.id]);
+  // An enrolled learner's play button on the picture opens the lesson they
+  // go on with, as the band's button under the hero does (it shares its
+  // request for that lesson when the page was not given it).
+  const learnerPlays =
+    isEnrolled && !managesCourse && viewer === "known" && !isReadOnlyPreview;
+  const learnerResumeQuery = useLearningProgressResumeContext(
+    getCourseRouteKey(course),
+    { enabled: learnerPlays && !resume },
+  );
+  const learnerPercent = course.progress ?? 0;
+  // The lesson the learner carries on with, readied ahead of the press on
+  // the picture's play button or the band's "Continue Learning", and once
+  // the page is idle, as the home readies its hero's: it is the press this
+  // page is most likely to get, and a phone has no hover to ready it on.
+  const learnerIntent = useLessonOpenIntent(
+    learnerPlays
+      ? {
+          courseKey: getCourseRouteKey(course),
+          lesson: "resume",
+          known:
+            (resume ?? learnerResumeQuery.data)?.resumeLesson?.lessonNumber ??
+            null,
+          review: learnerPercent >= 100,
+        }
+      : null,
+  );
+  const readyLearnerLesson = learnerIntent.ready;
+  useEffect(() => {
+    if (!learnerPlays) return undefined;
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(readyLearnerLesson, {
+        timeout: 1500,
+      });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(readyLearnerLesson, 300);
+    return () => window.clearTimeout(timer);
+  }, [learnerPlays, readyLearnerLesson]);
+  const learnerPlayLabel =
+    learnerPercent >= 100
+      ? "Review course"
+      : course.started || learnerPercent > 0
+        ? "Continue learning"
+        : "Start learning";
+  const openLearning = () => {
+    if (isReadOnlyPreview || !onNavigatePage) return;
+    const courseKey = getCourseRouteKey(course);
+    learnerIntent.open((lessonNumber) =>
+      onNavigatePage(getCoursePlayerPath(courseKey, lessonNumber)),
+    );
+  };
   // What a visitor can watch before buying: the lessons a paid course marks
   // as free previews (the ones the curriculum labels "Free").
   const firstFreeLessonNumber = isPaidCourse
@@ -2113,15 +2545,43 @@ function CourseOverviewContent({
   // nor holds it is offered: that waits until the viewer is known.
   const previewDependsOnViewer =
     !trailerMediaId && firstFreeLessonNumber !== undefined;
+  // While the viewer is not known the guest's preview is in the page, and
+  // the document's head shows or hides it (see `courseViewerState`).
+  // Which lessons in the curriculum the viewer can play, so only those are
+  // readied while the pointer rests on them.
+  const lessonIntentFor: LessonIntentFor | undefined = isReadOnlyPreview
+    ? undefined
+    : (lessonNumber, isPreview) =>
+        managesCourse || isEnrolled || isPreview || !isPaidCourse
+          ? lessonRowsIntent.handlersFor(lessonNumber)
+          : undefined;
   const canPreview =
     Boolean(trailerMediaId) ||
-    (viewer !== "pending" &&
-      !managesCourse &&
-      !isEnrolled &&
-      firstFreeLessonNumber !== undefined);
+    (!managesCourse && !isEnrolled && firstFreeLessonNumber !== undefined);
+  // A visitor's preview is the course's first free lesson, readied ahead of
+  // the press and opened playing (a trailer opens as it always has).
+  const previewLesson =
+    !isReadOnlyPreview &&
+    !trailerMediaId &&
+    !managesCourse &&
+    !isEnrolled &&
+    firstFreeLessonNumber !== undefined
+      ? firstFreeLessonNumber
+      : null;
+  const previewIntent = useLessonOpenIntent(
+    previewLesson !== null
+      ? { courseKey: getCourseRouteKey(course), lesson: previewLesson }
+      : null,
+  );
   const openPreview = () => {
     if (isReadOnlyPreview || !onNavigatePage) return;
     const courseKey = getCourseRouteKey(course);
+    if (previewLesson !== null) {
+      previewIntent.open((lessonNumber) =>
+        onNavigatePage(getCoursePlayerPath(courseKey, lessonNumber)),
+      );
+      return;
+    }
     onNavigatePage(
       trailerMediaId || firstFreeLessonNumber === undefined
         ? `/learn/${encodeURIComponent(courseKey)}`
@@ -2146,6 +2606,8 @@ function CourseOverviewContent({
       duration={course.duration}
       thumbnail={thumbnail}
       thumbnailSrcSet={course.thumbnailSrcSet}
+      banner={course.banner}
+      bannerSrcSet={course.bannerSrcSet}
       onBack={onNavigateCourses}
       // The link names the page it returns to. The course list is "All
       // courses" from here, where one course is open; any other page keeps
@@ -2161,7 +2623,7 @@ function CourseOverviewContent({
       // No heart for someone who manages the course, nor for a learner who
       // is enrolled in it: a wish list is for courses not yet taken.
       wishlist={
-        managesCourse || isEnrolled || viewer === "pending"
+        managesCourse || isEnrolled
           ? undefined
           : {
               wishlisted,
@@ -2175,17 +2637,33 @@ function CourseOverviewContent({
       preview={
         managesCourse && viewer === "known"
           ? { onOpen: openCourse, disabled: isReadOnlyPreview, kind: "open" }
-          : canPreview
-            ? { onOpen: openPreview, disabled: isReadOnlyPreview }
-            : undefined
+          : learnerPlays
+            ? {
+                onOpen: openLearning,
+                disabled: false,
+                kind: "open",
+                label: learnerPlayLabel,
+                intent: learnerIntent.handlers,
+              }
+            : canPreview
+              ? {
+                  onOpen: openPreview,
+                  disabled: isReadOnlyPreview,
+                  intent:
+                    previewLesson !== null ? previewIntent.handlers : undefined,
+                }
+              : undefined
       }
       viewerPlaceholders={
         viewer === "known"
           ? undefined
           : {
-              for: viewer === "pending" ? "everyone" : "expected-session",
+              // Pending is a browser that remembers a session, as an
+              // expected session is: the same parts, picked by the head.
+              for: "expected-session",
               preview: previewDependsOnViewer,
               wishlist: true,
+              heldPlay: !isReadOnlyPreview,
             }
       }
     />
@@ -2194,6 +2672,9 @@ function CourseOverviewContent({
   return (
     <div
       data-course-overview
+      // What the document's head keys this course's early state on (see
+      // `courseCardEarlyState`), as the course cards do.
+      data-course-card-id={course.id}
       // On the course page the first box touches the hero; in the editor's
       // preview the hero is a card in the column like the rest.
       className={`flex w-full flex-col text-(--text) ${
@@ -2202,6 +2683,10 @@ function CourseOverviewContent({
           : overviewPageContainerClasses
       }`}
     >
+      {/* The lesson pages readied ahead of a press (see lessonOpenIntent). */}
+      {learnerIntent.pageLinks}
+      {previewIntent.pageLinks}
+      {lessonRowsIntent.pageLinks}
       {/* 1. Title and course facts over the thumbnail */}
       {isReadOnlyPreview ? null : hero}
 
@@ -2233,50 +2718,92 @@ function CourseOverviewContent({
         <div
           className={isReadOnlyPreview ? undefined : overviewBandColumnClasses}
         >
-          {viewer === "pending" ? (
-            <CourseViewerBandPlaceholder />
-          ) : (
+          {/* While the viewer is not known (presumed a guest, or pending)
+              the box holds every form the band can take and the document's
+              head picks one before the first paint (see
+              `courseViewerState`): the guest's band, the learner's progress
+              band when this tab's copies say the course is theirs, or the
+              placeholder when it has none. The band itself stays the first
+              element throughout. */}
+          {partialOffer && partialOffer.status !== "loading" ? (
+            <PartialAccessNotice
+              offer={offer}
+              courseTitle={title}
+              totalSections={totalSections ?? courseSections.length}
+              onRetry={
+                partialOffer.status === "failed"
+                  ? partialOffer.retry
+                  : undefined
+              }
+            />
+          ) : null}
+          <div
+            className={
+              viewer === "known" ? undefined : presumedGuestOnlyClasses
+            }
+            data-course-card-early={viewer === "known" ? undefined : "offer"}
+          >
+            {managesCourse ? (
+              <CourseManagerBar
+                course={course}
+                price={managerPrice}
+                onNavigatePage={onNavigatePage}
+              />
+            ) : isEnrolled ? (
+              <CourseLearnerProgressBar
+                courseKey={getCourseRouteKey(course)}
+                courseTitle={title}
+                progress={course.progress ?? 0}
+                started={Boolean(course.started)}
+                totalLessons={course.lectures}
+                resume={resume}
+                enrolment={enrolmentAccess}
+                onNavigatePage={onNavigatePage}
+                openIntent={learnerPlays ? learnerIntent : undefined}
+              />
+            ) : partialOffer?.status === "loading" ||
+              partialOffer?.status === "failed" ||
+              (offer && !offer.onSale) ? (
+              // The part's price is not known yet, or it is not sold: the
+              // course's own price must not stand in for it.
+              offer || partialOffer?.status === "failed" ? null : (
+                <CourseViewerBandPlaceholder />
+              )
+            ) : accessFailed || (!offer && priceStatus === "failed") ? (
+              // Whether the course is theirs, or what it costs, could not be
+              // loaded: a price would be wrong for a learner who holds it.
+              <CourseBandLoadError onRetry={onRetryAccess} />
+            ) : !offer && priceStatus === "pending" ? (
+              // A page is built with no price; it comes from the API.
+              <CourseViewerBandPlaceholder />
+            ) : (
+              <CoursePurchaseSection
+                course={course}
+                pricing={offerPricing ?? activePricing}
+                inclusions={inclusions}
+                onNavigatePage={onNavigatePage}
+                isReadOnlyPreview={isReadOnlyPreview}
+                isCreator={isCreator}
+                // A part on sale is bought on its own terms; the course's
+                // restriction (a free course entered by invitation) is not
+                // its own.
+                canSelfEnroll={offer ? true : adaptedFromPreview?.canSelfEnroll}
+                includedWith={adaptedFromPreview?.includedWith}
+                includedCourses={adaptedFromPreview?.includedCourses}
+                viewerKnown={viewer === "known"}
+                purchaseCourseId={offer?.courseId}
+                purchaseTitle={offer?.title}
+              />
+            )}
+          </div>
+          {viewer === "known" ? null : (
             <>
-              <div
-                className={
-                  viewer === "presumed-guest"
-                    ? presumedGuestOnlyClasses
-                    : undefined
-                }
-              >
-                {managesCourse ? (
-                  <CourseManagerBar
-                    course={course}
-                    price={managerPrice}
-                    onNavigatePage={onNavigatePage}
-                  />
-                ) : isEnrolled ? (
-                  <CourseLearnerProgressBar
-                    courseKey={getCourseRouteKey(course)}
-                    courseTitle={title}
-                    progress={course.progress ?? 0}
-                    started={Boolean(course.started)}
-                    totalLessons={course.lectures}
-                    resume={resume}
-                    onNavigatePage={onNavigatePage}
-                  />
-                ) : (
-                  <CoursePurchaseSection
-                    course={course}
-                    pricing={activePricing}
-                    inclusions={inclusions}
-                    onNavigatePage={onNavigatePage}
-                    isReadOnlyPreview={isReadOnlyPreview}
-                    isCreator={isCreator}
-                    canSelfEnroll={adaptedFromPreview?.canSelfEnroll}
-                  />
-                )}
+              <div className="hidden" data-course-card-early="held">
+                <CourseLearnerProgressBarEarly />
               </div>
-              {viewer === "presumed-guest" ? (
-                <div className={sessionExpectedOnlyClasses}>
-                  <CourseViewerBandPlaceholder />
-                </div>
-              ) : null}
+              <div className={sessionExpectedOnlyClasses}>
+                <CourseViewerBandPlaceholder />
+              </div>
             </>
           )}
         </div>
@@ -2290,11 +2817,17 @@ function CourseOverviewContent({
           onExpandAll={expandAllSections}
           onCollapseAll={collapseAllSections}
           onSelectLesson={handleSelectLesson}
+          lessonIntentFor={lessonIntentFor}
           isReadOnlyPreview={isReadOnlyPreview}
           isPaidCourse={isPaidCourse}
+          validityLabel={courseValidityLabel(
+            adaptedFromPreview?.accessValidity,
+            enrolmentAccess,
+          )}
           totalSections={totalSections}
           sectionsComplete={sectionsComplete}
           onRequestAllSections={onRequestAllSections}
+          includedSectionIds={includedSectionIds}
         />
 
         {/* 4. About this course, under the curriculum */}

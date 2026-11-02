@@ -22,13 +22,20 @@
  *   the page's code is still loading, so they are hidden there from the
  *   first paint and their placeholders shown instead, by the mark the
  *   document's head puts on the root (see `sessionPresence`).
+ *
+ * A signed-in browser whose tab holds copies of the learner's answers
+ * (`data-course-cards-early`, see `courseCardEarlyState`) is shown the
+ * page as the learner will get it from the first paint instead: the
+ * guest's parts stay unless the learner holds the course, and a style
+ * from the head puts their progress band in its place. The same goes while
+ * the page is `pending`, so nothing changes when the answers come.
  */
 export type CourseViewerState = "known" | "pending" | "presumed-guest";
 
 /** On a guest's part of the page, while the visitor is only presumed one. */
 export const presumedGuestOnlyClasses =
-  "[:root[data-session-hint=signed-in]_&]:hidden!";
+  "[:root[data-session-hint=signed-in]:not([data-course-cards-early])_&]:hidden!";
 
 /** On the box that holds a placeholder standing in for such a part. */
 export const sessionExpectedOnlyClasses =
-  "hidden [:root[data-session-hint=signed-in]_&]:block";
+  "hidden [:root[data-session-hint=signed-in]:not([data-course-cards-early])_&]:block";

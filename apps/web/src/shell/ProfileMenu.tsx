@@ -10,10 +10,11 @@ import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { ShellProfileAvatar } from "./ShellProfileAvatar";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useLocation } from "react-router";
 import type { AvatarImageVariant } from "@veolms/contracts";
 import { isValidPublicProfileUsername } from "@veolms/contracts/username-rules";
 import type { CourseRole } from "../courses/catalogue";
-import { getRoleDisplayName } from "./workspaceRole";
+import { getRoleDisplayName, hasAdminRole } from "./workspaceRole";
 import { useWebContributions } from "../lib/web-contributions";
 
 export interface ProfileIdentityData {
@@ -146,6 +147,10 @@ interface ProfileMenuProps {
 /** How long the closing slide takes (`profile-menu-slide-shut`). */
 const PROFILE_MENU_SHUT_MS = 260;
 
+/** The settings menu's mark for the page that is open (courses.css). */
+const currentPageItemClasses =
+  "aria-[current=page]:text-(--text) aria-[current=page]:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))]! aria-[current=page]:hover:bg-[color-mix(in_srgb,var(--accent)_30%,var(--surface-strong))]!";
+
 export function ProfileMenu({
   role,
   allowedRoles,
@@ -170,6 +175,11 @@ export function ProfileMenu({
   // the animation off and expanding it turns it back on.
   const [hasOpened, setHasOpened] = useState(false);
   if (isOpen && !hasOpened) setHasOpened(true);
+  // The page the learner is on is marked in the menu, as the settings menu
+  // marks its tab.
+  const { pathname } = useLocation();
+  const isCurrentPage = (path: string) =>
+    pathname === path || pathname.startsWith(`${path}/`);
   useEffect(() => {
     if (isOpen || !hasOpened) return undefined;
     const timer = window.setTimeout(
@@ -201,8 +211,11 @@ export function ProfileMenu({
   };
 
   // Links plugins add to the account section (see web-core contributions).
+  const isAdmin = hasAdminRole(userRoles);
   const contributedLinks = useWebContributions().profileMenuLinks.filter(
-    (link) => !link.roles || link.roles.includes(role),
+    (link) =>
+      (!link.roles || link.roles.includes(role)) &&
+      (!link.adminOnly || isAdmin),
   );
 
   const canPreviewAsStudent = allowedRoles.includes("student");
@@ -303,14 +316,16 @@ export function ProfileMenu({
 
       <div className="profile-menu__group profile-menu__group--account">
         <a
-          className="profile-menu__item profile-menu__item--notifications"
+          className={`profile-menu__item profile-menu__item--notifications ${currentPageItemClasses}${isCurrentPage("/notifications") ? " is-active" : ""}`}
           role="menuitem"
           href="/notifications"
+          aria-current={isCurrentPage("/notifications") ? "page" : undefined}
           onClick={(event) => openDestination(event, "/notifications")}
         >
           <Bell
             className="profile-menu__item-icon profile-menu__item-icon--notifications"
             size={21}
+            weight={isCurrentPage("/notifications") ? "fill" : "regular"}
           />
           <span>Notifications</span>
           {unreadNotificationCount > 0 ? (
@@ -336,14 +351,16 @@ export function ProfileMenu({
           ) : null}
         </a>
         <a
-          className="profile-menu__item"
+          className={`profile-menu__item ${currentPageItemClasses}${isCurrentPage("/progress") ? " is-active" : ""}`}
           role="menuitem"
           href="/progress"
+          aria-current={isCurrentPage("/progress") ? "page" : undefined}
           onClick={(event) => openDestination(event, "/progress")}
         >
           <ChartLineUp
             className="profile-menu__item-icon text-[#fb923c]"
             size={21}
+            weight={isCurrentPage("/progress") ? "fill" : "regular"}
           />
           <span>Progress</span>
         </a>
@@ -363,14 +380,18 @@ export function ProfileMenu({
         ))}
         {role === "student" ? (
           <a
-            className="profile-menu__item profile-menu__item--orders"
+            className={`profile-menu__item profile-menu__item--orders ${currentPageItemClasses}${isCurrentPage("/purchase-history") ? " is-active" : ""}`}
             role="menuitem"
             href="/purchase-history"
+            aria-current={
+              isCurrentPage("/purchase-history") ? "page" : undefined
+            }
             onClick={(event) => openDestination(event, "/purchase-history")}
           >
             <Receipt
               className="profile-menu__item-icon profile-menu__item-icon--orders"
               size={21}
+              weight={isCurrentPage("/purchase-history") ? "fill" : "regular"}
             />
             <span>Purchase History</span>
           </a>

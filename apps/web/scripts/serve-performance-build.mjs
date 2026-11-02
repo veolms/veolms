@@ -6,12 +6,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createBrotliCompress, createGzip, constants } from "node:zlib";
 import {
-  LEARNING_PRERENDER_FLAGS,
+  isLearningPrerenderArgument,
   runPerformanceBuild,
 } from "./build-performance.mjs";
 
 const buildExitCode = await runPerformanceBuild(
-  LEARNING_PRERENDER_FLAGS.filter((flag) => process.argv.includes(flag)),
+  process.argv.slice(2).filter(isLearningPrerenderArgument),
   {
     // A local preview must build its SSG catalogue from the local API too;
     // never inherit a production STATIC_BUILD_API_URL from .env.production.

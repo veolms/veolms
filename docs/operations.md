@@ -151,12 +151,16 @@ with the old key.
 
 ## Performance-related env added in this work
 
-| Env                                    | Default | Purpose                                                                                                                                            |
-| -------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SESSION_AUTH_CACHE_TTL_MS`            | 10000   | Per-request auth context cache; `0` disables. Revocation/MFA changes evict immediately in-process; cross-instance staleness is bounded by the TTL. |
-| `NOTIFICATION_INLINE_WORKER`           | true    | See above.                                                                                                                                         |
-| `NOTIFICATION_INLINE_INTERVAL_SECONDS` | 5       | Inline processor cycle.                                                                                                                            |
-| `OPS_HEARTBEAT_SECONDS`                | 60      | Ops gauge interval; `0` disables.                                                                                                                  |
+| Env                                    | Default | Purpose                                                                                                                                                                                           |
+| -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SESSION_AUTH_CACHE_TTL_MS`            | 30000   | Per-user caches: sign-in, roles behind permission checks, side navigation; `0` disables. Revocation, role and MFA changes clear them in every process at once; the TTL bounds a lost bus message. |
+| `COURSE_CACHE_TTL_MS`                  | 30000   | Public course content cache (signed-out overview, curriculum, version); `0` disables, max 30000. Course writes evict in-process; other instances within the TTL.                                  |
+| `CACHE_ENABLED`                        | true    | Every process-local cache; `false` sends every read to the database. See docs/caching.md.                                                                                                         |
+| `CACHE_BUS_ENABLED`                    | true    | Cross-process cache invalidation over Postgres LISTEN/NOTIFY (one connection per process).                                                                                                        |
+| `NOTIFICATION_INLINE_WORKER`           | true    | See above.                                                                                                                                                                                        |
+| `NOTIFICATION_INLINE_INTERVAL_SECONDS` | 5       | Inline processor cycle.                                                                                                                                                                           |
+| `NOTIFICATION_COURSE_WIDE_EMAIL`       | true    | `false` keeps course-wide notifications (course published, quiz assigned) in-app only, so they send no bulk email. Sign-in codes and account/payment emails are unaffected.                       |
+| `OPS_HEARTBEAT_SECONDS`                | 60      | Ops gauge interval; `0` disables.                                                                                                                                                                 |
 
 ## Migration notes
 

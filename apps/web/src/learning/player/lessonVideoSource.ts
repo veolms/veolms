@@ -1,15 +1,16 @@
+import type { VideoPlaybackSubtitle } from "@veolms/contracts";
 import type { ExternalTextTrack, VideoSource } from "@veolms/video-player";
 import type { CourseVideo } from "../courseContent";
 import {
   createLearningHlsRequestFilter,
   LEARNING_HLS_MIME_TYPE,
-  LEARNING_HLS_STREAMING,
+  learningHlsStreaming,
   toAbsoluteLearningMediaUrl,
 } from "./learningHlsConstants";
 
 export {
   LEARNING_HLS_MIME_TYPE,
-  LEARNING_HLS_STREAMING,
+  learningHlsStreaming,
 } from "./learningHlsConstants";
 export { createLearningHlsPreloadSource } from "./learningHlsPreloadSource";
 
@@ -44,6 +45,8 @@ export function createLearningLessonVideoSource(options: {
   segmentTokenExpiresAt?: number;
   /** The master playlist from the bootstrap, served in place of fetching it. */
   inlinedMasterManifest?: string;
+  /** The video's subtitle tracks from the bootstrap (WebVTT). */
+  subtitles?: readonly VideoPlaybackSubtitle[];
   refreshSegmentToken?: () => Promise<{
     token: string;
     expiresAt?: number;
@@ -71,7 +74,7 @@ export function createLearningLessonVideoSource(options: {
       duration: options.media.duration,
       // Editable lesson titles belong to the UI, not the media load request.
     },
-    streaming: streaming ? { ...LEARNING_HLS_STREAMING } : undefined,
+    streaming: streaming ? learningHlsStreaming(options.media.src) : undefined,
     inlinedManifest: streaming ? options.inlinedMasterManifest : undefined,
     networking: streaming
       ? {
@@ -83,6 +86,14 @@ export function createLearningLessonVideoSource(options: {
           }),
         }
       : undefined,
-    textTracks: undefined,
+    textTracks: options.subtitles?.length
+      ? options.subtitles.map((track): ExternalTextTrack => ({
+          src: track.url,
+          language: track.language,
+          label: track.label,
+          kind: track.kind,
+          mimeType: "text/vtt",
+        }))
+      : undefined,
   };
 }

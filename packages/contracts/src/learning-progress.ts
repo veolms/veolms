@@ -7,6 +7,12 @@ export const learningProgressCourseParamsSchema = z.strictObject({
 export const learningProgressItemSchema = z.strictObject({
   lessonId: z.uuid(),
   progressPercent: z.number().int().min(0).max(100),
+  /**
+   * Where in the lesson's video the learner is now, in whole seconds. It is
+   * the last point watched, not the furthest (which `progressPercent`
+   * keeps), and saving it marks the lesson as the course's last played.
+   */
+  positionSeconds: z.number().int().min(0).max(86_400).optional(),
 });
 
 export const learningProgressBatchRequestSchema = z.strictObject({
@@ -33,11 +39,28 @@ export const learningProgressLessonSchema = z.strictObject({
   lessonId: z.uuid(),
   lessonNumber: z.number().int().positive(),
   progressPercent: z.number().int().min(0).max(100),
+  /** Where the learner last was in its video, when it is known. */
+  positionSeconds: z.number().int().min(0).optional(),
+  /** When that position was saved. */
+  positionUpdatedAt: z.iso.datetime().optional(),
 });
 
-/** Only lessons the learner has made progress on are listed. */
+/** The lesson of the course the learner played last, and where. */
+export const learningProgressLastPlayedSchema = z.strictObject({
+  lessonId: z.uuid(),
+  lessonNumber: z.number().int().positive(),
+  positionSeconds: z.number().int().min(0),
+  playedAt: z.iso.datetime(),
+});
+
+/**
+ * Only lessons the learner has made progress on, or played, are listed.
+ * `lastPlayed` is absent from an older API, and null when no position has
+ * been saved for the course yet.
+ */
 export const learningProgressResponseSchema = z.strictObject({
   lessons: z.array(learningProgressLessonSchema),
+  lastPlayed: learningProgressLastPlayedSchema.nullable().optional(),
 });
 
 export const learningProgressResumeLessonSchema = z.strictObject({
@@ -46,6 +69,8 @@ export const learningProgressResumeLessonSchema = z.strictObject({
   title: z.string().min(1),
   sectionTitle: z.string().min(1),
   progressPercent: z.number().int().min(0).max(100),
+  /** Where the learner last was in its video, when it is known. */
+  positionSeconds: z.number().int().min(0).optional(),
 });
 
 export const learningProgressResumeContextResponseSchema = z.strictObject({
@@ -67,6 +92,9 @@ export type LearningProgressCourseParams = z.infer<
 export type LearningProgressItem = z.infer<typeof learningProgressItemSchema>;
 export type LearningProgressBatchRequest = z.infer<
   typeof learningProgressBatchRequestSchema
+>;
+export type LearningProgressLastPlayed = z.infer<
+  typeof learningProgressLastPlayedSchema
 >;
 export type LearningProgressLesson = z.infer<
   typeof learningProgressLessonSchema

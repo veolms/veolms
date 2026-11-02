@@ -225,7 +225,7 @@
     .learning-workspace__player-wrap .youtube-player,
     .learning-workspace__curriculum-column .learning-curriculum,
     .learning-curriculum--compact,
-    .learning-curriculum__section-toggle,
+    .learning-curriculum--compact .learning-curriculum__section-toggle,
     .learning-curriculum__lesson
   ) {
   border-radius: 0 !important;
@@ -315,13 +315,15 @@
     var(--control-radius-learning-compact) !important;
 }
 
+/* The phone's lessons sheet rounds its top like the section blocks inside
+   it, which keep a fixed 16px (Curriculum.tsx, rounded-2xl, data-fixed-radius)
+   whatever the radius setting. */
 :root[data-control-radius]
   .learning-course-content-drawer[data-swipe-axis="y"]:not([data-expanded]),
 :root[data-control-radius]
   .learning-course-content-drawer[data-swipe-axis="y"]
   .learning-curriculum {
-  border-radius: var(--control-radius-learning-panel)
-    var(--control-radius-learning-panel) 0 0 !important;
+  border-radius: 16px 16px 0 0 !important;
 }
 
 :root[data-control-radius]
@@ -365,6 +367,9 @@
     .video-shell:fullscreen,
     .video-shell:fullscreen .youtube-player,
     .video-shell:fullscreen video,
+    .video-shell[data-player-page-fullscreen],
+    .video-shell[data-player-page-fullscreen] .youtube-player,
+    .video-shell[data-player-page-fullscreen] video,
     .youtube-player:fullscreen,
     [data-learning-persistent-player]:fullscreen,
     [data-learning-persistent-player]:fullscreen

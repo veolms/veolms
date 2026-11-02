@@ -30,6 +30,7 @@ const RESERVED_ROLE_NAMES = new Set([
   STUDENT_ROLE,
   "administrator",
   "platform_admin",
+  "platform administrator",
   "creator",
 ]);
 
@@ -111,14 +112,48 @@ export function assertNoSelfLockout(
   }
 }
 
-export function assertEditableRole(role: Pick<RoleFacts, "isSystem">): void {
+/**
+ * Admin always holds every permission, so its role is never edited. The
+ * other built-in roles are an admin's to tune; anyone else duplicates them.
+ */
+export function assertEditableRole(
+  actor: Actor,
+  role: Pick<RoleFacts, "name" | "isSystem">,
+): void {
+  if (isAdminRole(role)) {
+    throw new AppError(
+      409,
+      "ROLE_IS_SYSTEM",
+      "The admin role always holds every permission.",
+    );
+  }
+  if (role.isSystem && !isAdmin(actor)) {
+    throw new AppError(
+      409,
+      "ROLE_IS_SYSTEM",
+      "Only an admin can change a built-in role. Duplicate it to make your own.",
+    );
+  }
+}
+
+export function assertDeletableRole(role: Pick<RoleFacts, "isSystem">): void {
   if (role.isSystem) {
     throw new AppError(
       409,
       "ROLE_IS_SYSTEM",
-      "Built-in roles cannot be changed. Duplicate it to make your own.",
+      "Built-in roles cannot be deleted.",
     );
   }
+}
+
+/** Taking someone off the team is its own permission, however it is asked. */
+export function assertCanRemoveMembers(actor: Actor): void {
+  if (isAdmin(actor) || actor.permissions.has("team.remove")) return;
+  throw new AppError(
+    403,
+    "PERMISSION_DENIED",
+    "Taking someone off the team needs the team.remove permission.",
+  );
 }
 
 export function assertRoleUnused(usage: number): void {

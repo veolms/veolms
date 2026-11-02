@@ -1,3 +1,8 @@
+import {
+  noteLessonPosition,
+  parseLessonMediaKey,
+} from "../lessonPositionOutbox";
+
 const PLAYER_MUTED_STORAGE_KEY = "veolms-player-muted";
 const PLAYER_AMBIENT_STORAGE_KEY = "veolms-player-ambient";
 const PLAYER_AUTOPLAY_STORAGE_KEY = "veolms-player-autoplay";
@@ -57,7 +62,15 @@ export const lessonPlayerStorageKeys = {
   volume: PLAYER_VOLUME_STORAGE_KEY,
   volumeChange: PLAYER_VOLUME_CHANGE_STORAGE_KEY,
   resume: (mediaKey: string) => `veolms-watch-${mediaKey}`,
+  /** When the position (or its clearing) was kept, in ms since 1970. */
+  resumeAt: (mediaKey: string) => `veolms-watch-at-${mediaKey}`,
 } as const;
+
+/**
+ * A lesson opened where it was left starts this far before that point, so
+ * the learner hears the last moments again and knows where they are.
+ */
+export const RESUME_REWIND_SECONDS = 5;
 
 export function clampPlayerVolume(value: number): number {
   if (!Number.isFinite(value)) return 1;
@@ -322,12 +335,103 @@ export function writeResumePosition(
   mediaKey: string,
   position: number,
   storage: StorageWriter | null = getBrowserStorage(),
+  /** When it was the position: now, unless it comes from elsewhere. */
+  savedAt = Date.now(),
 ): void {
   if (!Number.isFinite(position) || position <= 0) return;
   try {
     storage?.setItem(
       lessonPlayerStorageKeys.resume(mediaKey),
       String(position),
+    );
+    storage?.setItem(
+      lessonPlayerStorageKeys.resumeAt(mediaKey),
+      String(savedAt),
+    );
+  } catch {
+    // Resume persistence is optional and must never interrupt playback.
+  }
+  // Played here: kept for the account too, for every device.
+  const lesson = parseLessonMediaKey(mediaKey);
+  if (lesson && savedAt >= Date.now() - 1000) {
+    noteLessonPosition(lesson.courseKey, lesson.lessonNumber, position);
+  }
+}
+
+/**
+ * A position kept this recently is picked up exactly where it was: the
+ * page was reloaded, or the lesson reopened a moment later. Older than
+ * this, it is a return, and the few seconds before help pick the thread
+ * up again.
+ */
+export const RESUME_EXACT_WINDOW_MS = 5 * 60_000;
+
+/**
+ * Where to start a lesson that is opened (not one handed over between
+ * players, which carries on where it was): exactly where it was left when
+ * that was moments ago (`RESUME_EXACT_WINDOW_MS`), otherwise a few seconds
+ * before (`RESUME_REWIND_SECONDS`).
+ */
+export function readStartPosition(
+  mediaKey: string,
+  duration?: number,
+  storage: StorageReader | null = getBrowserStorage(),
+  now = Date.now(),
+): number {
+  const position = readResumePosition(mediaKey, duration, storage);
+  if (position <= 0) return 0;
+  let savedAt = 0;
+  try {
+    savedAt = Number(
+      storage?.getItem(lessonPlayerStorageKeys.resumeAt(mediaKey)),
+    );
+  } catch {
+    savedAt = 0;
+  }
+  if (
+    Number.isFinite(savedAt) &&
+    savedAt > 0 &&
+    now - savedAt <= RESUME_EXACT_WINDOW_MS
+  ) {
+    return position;
+  }
+  return position > RESUME_REWIND_SECONDS
+    ? position - RESUME_REWIND_SECONDS
+    : 0;
+}
+
+/**
+ * Takes the position the account last had in a lesson, saved from any
+ * device, when it is newer than the one this browser has (or this browser
+ * has none). `savedAt` is the server's time for it.
+ */
+export function adoptAccountResumePosition(
+  mediaKey: string,
+  seconds: number,
+  savedAt: string,
+  storage: StorageMutator | null = getBrowserStorage(),
+): void {
+  const accountAt = Date.parse(savedAt);
+  if (!storage || !Number.isFinite(seconds) || !Number.isFinite(accountAt)) {
+    return;
+  }
+  try {
+    const localAt = Number(
+      storage.getItem(lessonPlayerStorageKeys.resumeAt(mediaKey)) ?? 0,
+    );
+    if (Number.isFinite(localAt) && localAt >= accountAt) return;
+    // Watched to the end (or started again) there: from the beginning.
+    if (seconds <= 0) {
+      storage.removeItem(lessonPlayerStorageKeys.resume(mediaKey));
+    } else {
+      storage.setItem(
+        lessonPlayerStorageKeys.resume(mediaKey),
+        String(seconds),
+      );
+    }
+    storage.setItem(
+      lessonPlayerStorageKeys.resumeAt(mediaKey),
+      String(accountAt),
     );
   } catch {
     // Resume persistence is optional and must never interrupt playback.
@@ -368,6 +472,9 @@ export function seedResumePositionFromProgress(
     mediaKey,
     Math.floor((progressPercent / 100) * durationSeconds),
     storage,
+    // A guess, not a place the learner was seen at: any position saved
+    // for the account is taken over it, and it is not sent as one.
+    0,
   );
 }
 
@@ -377,11 +484,23 @@ export function seedResumePositionFromProgress(
  */
 export function clearResumePosition(
   mediaKey: string,
-  storage: Pick<StorageMutator, "removeItem"> | null = getBrowserStorage(),
+  storage: Pick<
+    StorageMutator,
+    "removeItem" | "setItem"
+  > | null = getBrowserStorage(),
 ): void {
   try {
     storage?.removeItem(lessonPlayerStorageKeys.resume(mediaKey));
+    // When it was cleared: an older position from another device is not
+    // taken in its place.
+    storage?.setItem(
+      lessonPlayerStorageKeys.resumeAt(mediaKey),
+      String(Date.now()),
+    );
   } catch {
     // Resume persistence is optional and must never interrupt playback.
   }
+  // The account's devices start it from the beginning too.
+  const lesson = parseLessonMediaKey(mediaKey);
+  if (lesson) noteLessonPosition(lesson.courseKey, lesson.lessonNumber, 0);
 }

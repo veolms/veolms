@@ -53,6 +53,33 @@ const otpResendCooldownSecondsSchema = z.coerce
   .max(3600)
   .default(60);
 
+/**
+ * "IN:razorpay,*:dodo": the gateway a checkout opens, by the buyer's
+ * country. Parsed into pairs in the order written; "*" is any country.
+ */
+const paymentGatewayByCountrySchema = (defaultValue: string) =>
+  z
+    .string()
+    .default(defaultValue)
+    .transform((value, context) => {
+      const pairs: Array<{ country: string; provider: string }> = [];
+      for (const part of value.split(",")) {
+        if (!part.trim()) continue;
+        const match = /^\s*(\*|[A-Za-z]{2})\s*:\s*([a-z][a-z0-9_]*)\s*$/u.exec(
+          part,
+        );
+        if (!match) {
+          context.addIssue({
+            code: "custom",
+            message: `Expected country:gateway pairs such as "IN:razorpay,*:dodo"; "${part.trim()}" is not one.`,
+          });
+          return z.NEVER;
+        }
+        pairs.push({ country: match[1]!.toUpperCase(), provider: match[2]! });
+      }
+      return pairs;
+    });
+
 const folderListSchema = (defaultValue: string) =>
   z
     .string()
@@ -167,18 +194,47 @@ const serverConfigSchema = z.object({
     .max(168)
     .default(0),
   /**
-   * TTL for the process-local per-request authentication cache (ms).
-   * Bounds how long a role/MFA-factor change made OUTSIDE the session
-   * repository — or on another instance — can be served stale. Session
-   * revocation/rotation/MFA verification evict immediately in-process.
-   * 0 disables the cache.
+   * TTL (ms) for what is cached per signed-in user: the sign-in itself, the
+   * roles behind permission checks, the side navigation. Revocation, role
+   * and MFA changes clear them in every process at once (the cache bus);
+   * this bounds only a change the bus did not carry (a lost message, a
+   * write outside the API that does not publish). 0 disables them.
    */
   SESSION_AUTH_CACHE_TTL_MS: z.coerce
     .number()
     .int()
     .min(0)
     .max(60_000)
-    .default(10_000),
+    .default(30_000),
+  /**
+   * TTL for the process-local cache of a course as every visitor sees it
+   * (the signed-out overview, the public curriculum and its version), in
+   * ms. A change made through the API clears that course at once in the
+   * process that made it; other instances, and writes from the CLI or a
+   * background job, are seen when the entry expires. At most 30 s so a
+   * signed thumbnail URL in a cached answer (valid for at least 60 s, see
+   * CDN_TOKEN_TTL_SECONDS) is never handed out expired. 0 disables it.
+   */
+  COURSE_CACHE_TTL_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(30_000)
+    .default(30_000),
+  /**
+   * Master switch for every process-local cache built on api-core's
+   * `createCache`. Off, every read goes to the database: for diagnosing a
+   * suspected stale answer without a deploy.
+   */
+  CACHE_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Tells the other API processes when cached data changes (Postgres
+   * LISTEN/NOTIFY, one extra connection per process), so a write made in one
+   * process is not served stale by another until its TTL runs out. Needs a
+   * direct connection: LISTEN does not work through a transaction-mode
+   * pooler. Off, other processes see a change when their entry expires.
+   */
+  CACHE_BUS_ENABLED: booleanEnvironmentValueSchema.default(true),
   /**
    * Runs the notification outbox/email processor inside the API process.
    * Nothing in the repository schedules the standalone worker scripts, so
@@ -302,6 +358,19 @@ const serverConfigSchema = z.object({
     }),
 
   /**
+   * Local development only: every sign-in, email and phone verification
+   * code is this six-digit code (for example "123456"), and none is emailed
+   * or texted; the send limits do not apply either. Any account, staff
+   * included, signs in with it, so it is honoured only when `NODE_ENV` is
+   * `development` and the API refuses to start in production with it set.
+   * Unset (the default) sends real codes as usual.
+   */
+  LOCAL_FIXED_OTP: z
+    .string()
+    .regex(/^\d{6}$/u, "Expected a six-digit code, such as 123456.")
+    .optional(),
+
+  /**
    * Enables the `mock_<email>` OAuth short-circuit, which skips both the
    * provider round-trip and the state/CSRF check. Requires `NODE_ENV` to be
    * `development` as well, so it can never be switched on in a deployed
@@ -348,6 +417,13 @@ const serverConfigSchema = z.object({
     .int()
     .min(1)
     .default(30),
+  /**
+   * Emails notifications that go to everyone in a course (a course published,
+   * a quiz assigned). Off, they still appear in-app but send no email: one
+   * such event mails thousands of people at once, and a burst like that gets
+   * the sending domain rate-limited by Gmail, delaying sign-in codes too.
+   */
+  NOTIFICATION_COURSE_WIDE_EMAIL: booleanEnvironmentValueSchema.default(true),
 
   // SMS Delivery
   /**
@@ -436,6 +512,42 @@ const serverConfigSchema = z.object({
     ])
     .default("mediaconvert"),
 
+  /**
+   * "Import from YouTube" in the lesson editor. Off by default: the API
+   * then downloads with yt-dlp, runs ffmpeg (and, with the cloud DRM
+   * plugin, Shaka Packager) on this host, so an operator turns it on where
+   * there is disk and CPU for it.
+   */
+  YOUTUBE_IMPORT_ENABLED: booleanEnvironmentValueSchema.default(false),
+  /** Imports one API instance works on at once. */
+  YOUTUBE_IMPORT_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(1),
+  /** Disk-backed scratch folder; defaults to the CLI's (VEOLMS_IMPORT_TMP, /var/lib/veolms/import, …). */
+  YOUTUBE_IMPORT_SCRATCH_DIR: z.string().optional(),
+  /** The most scratch space all imports on one instance may hold, in GiB. */
+  YOUTUBE_IMPORT_MAX_SCRATCH_GB: z.coerce.number().min(1).max(500).default(20),
+  /** An import does not start when less than this is free on the scratch disk, in GiB. */
+  YOUTUBE_IMPORT_MIN_FREE_DISK_GB: z.coerce.number().min(0).max(500).default(8),
+  /** Heights to keep from YouTube's ladder, highest first. */
+  YOUTUBE_IMPORT_QUALITIES: z
+    .string()
+    .default("1080,720,480,360")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim().replace(/p$/i, ""))
+        .filter((item) => /^\d{3,4}$/.test(item)),
+    ),
+  /** A yt-dlp binary to use instead of the managed ~/.veolms/bin copy. */
+  YTDLP_PATH: z.string().optional(),
+  /**
+   * Netscape-format cookies for yt-dlp, for hosts YouTube asks to "confirm
+   * you're not a bot". Keep it outside the repository, readable only by the
+   * API's user.
+   */
+  YTDLP_COOKIES_FILE: z.string().optional(),
+  /** An ffmpeg binary; otherwise ~/.veolms/bin, PATH, or a downloaded static build. */
+  FFMPEG_PATH: z.string().optional(),
+
   // AWS MediaConvert Configuration
   MEDIACONVERT_ENDPOINT: z.string().optional(),
   MEDIACONVERT_REGION: z.string().optional(),
@@ -458,6 +570,73 @@ const serverConfigSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+
+  // Dodo Payments, a merchant of record that takes cards from abroad. Off
+  // while its API key is unset. The webhook key is the endpoint's secret
+  // (whsec_…) from the Dodo dashboard. Test and live mode have separate
+  // keys; the mode must match the key.
+  DODO_PAYMENTS_API_KEY: z.string().optional(),
+  DODO_PAYMENTS_WEBHOOK_KEY: z.string().optional(),
+  DODO_PAYMENTS_ENVIRONMENT: z
+    .enum(["test_mode", "live_mode"])
+    .default("test_mode"),
+  // Dodo, as the seller, charges the buyer's tax (GST, VAT, sales tax).
+  // false: added on top of the course price at checkout, paid by the buyer.
+  // true: taken out of the course price, so less of it reaches us.
+  DODO_PAYMENTS_TAX_INCLUSIVE: booleanEnvironmentValueSchema.default(false),
+
+  // Cashfree Payments, an Indian gateway that also takes cards and PayPal
+  // from abroad (once Cashfree turns international payments on). Off while
+  // its keys are unset. Its webhooks are signed with the secret key, so it
+  // has no webhook secret of its own. Sandbox and production have separate
+  // keys; the environment must match them.
+  CASHFREE_APP_ID: z.string().optional(),
+  CASHFREE_SECRET_KEY: z.string().optional(),
+  CASHFREE_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
+
+  // Which gateway a new checkout opens. PAYMENT_GATEWAY_BY_COUNTRY lists
+  // country:gateway pairs, ISO country codes, "*" for every other country:
+  // by default buyers in India pay through Razorpay and everyone else
+  // through Dodo Payments. A pair naming a gateway that is not set up is
+  // skipped. A buyer whose country is not known gets PAYMENT_GATEWAY_DEFAULT.
+  PAYMENT_GATEWAY_DEFAULT: z.string().trim().min(1).default("razorpay"),
+  PAYMENT_GATEWAY_BY_COUNTRY:
+    paymentGatewayByCountrySchema("IN:razorpay,*:dodo"),
+  // The request header that carries the buyer's country, as Cloudflare
+  // sends it in front of the API.
+  PAYMENT_COUNTRY_HEADER: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .default("cf-ipcountry"),
+  // Development only: the country a checkout is taken to come from when
+  // the request says none (there is no Cloudflare in front of a local API).
+  // Set it to US to get the international gateway on localhost.
+  PAYMENT_TEST_COUNTRY: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{2}$/u, "Expected a two-letter country code, such as US.")
+    .transform((value) => value.toUpperCase())
+    .optional(),
+  // Automatic prices for buyers outside India use the day's USD/INR rate,
+  // fetched from public sources (European Central Bank via Frankfurter, then
+  // open.er-api.com). Set this to use a fixed rate instead: rupees per
+  // dollar, such as 95.
+  INTERNATIONAL_PRICE_INR_PER_USD: z.coerce.number().positive().optional(),
+  // Countries whose buyers see and pay a course's rupee price, comma
+  // separated ISO codes. Everywhere else, a course that has a price for
+  // buyers outside India is shown and sold at that price. A buyer whose
+  // country is not known gets the rupee price.
+  DOMESTIC_PRICING_COUNTRIES: z
+    .string()
+    .trim()
+    .default("IN")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((code) => code.trim().toUpperCase())
+        .filter((code) => /^[A-Z]{2}$/u.test(code)),
+    ),
 
   // An extra payment taken by the gateway (a second payment for a paid
   // order, or a late payment for something the buyer already has) is sent
@@ -639,6 +818,12 @@ export function loadServerConfig(
   const missingRequired = findMissingRequiredInProduction(parsed);
 
   if (parsed.NODE_ENV === "production") {
+    if (parsed.LOCAL_FIXED_OTP) {
+      throw new Error(
+        "Refusing to start in production with LOCAL_FIXED_OTP set: it lets anyone sign in to any account. " +
+          "Remove it from the environment.",
+      );
+    }
     if (offenders.length > 0) {
       throw new Error(
         `Refusing to start in production with default value(s) for: ${offenders.join(", ")}. ` +

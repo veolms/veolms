@@ -1,8 +1,14 @@
-import { useLayoutEffect, useRef, type CanvasHTMLAttributes } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  type CanvasHTMLAttributes,
+  type Ref,
+} from "react";
 import {
   decodeSpriteSheet,
   getDecodedSpriteSheet,
   getNearestDecodedFrame,
+  isFrameFetched,
   subscribeFramesDecoded,
 } from "../storyboard/spriteSheetStore";
 import type { StoryboardFrame } from "../storyboard/storyboardTypes";
@@ -81,6 +87,11 @@ function paint(canvas: HTMLCanvasElement, drawn: Drawn): boolean {
  * moved on is still drawn, unless one asked for later is already on the
  * canvas: a sweep faster than decoding then shows pictures trailing just
  * behind the pointer instead of holding one picture until it stops.
+ *
+ * While the frame's picture is not downloaded yet (a preview video fetches
+ * its parts only where the timeline is used), whatever is shown is dimmed
+ * under a passing shimmer until its own picture is drawn, so a picture
+ * from elsewhere is never taken for this moment.
  */
 export function SpriteFrameCanvas({
   className,
@@ -106,6 +117,12 @@ export function SpriteFrameCanvas({
   useLayoutEffect(() => {
     onDrawnRef.current = onDrawn;
   });
+  // Shown and hidden directly, like the canvas itself: a drag changes the
+  // frame on every animation frame.
+  const pendingRef = useRef<HTMLSpanElement>(null);
+  const setPending = (pending: boolean) => {
+    if (pendingRef.current) pendingRef.current.hidden = !pending;
+  };
 
   // Follows the canvas's size on screen; a new size clears the drawing, so
   // the last picture is drawn again at once.
@@ -150,7 +167,10 @@ export function SpriteFrameCanvas({
       drawnRef.current = drawn;
       canvas.style.opacity = "1";
       drawnRequestRef.current = order;
-      if (exact && request === requestRef.current) exactRef.current = true;
+      if (exact && request === requestRef.current) {
+        exactRef.current = true;
+        setPending(false);
+      }
       onDrawnRef.current?.();
     };
 
@@ -158,6 +178,11 @@ export function SpriteFrameCanvas({
     if (decoded) {
       draw(decoded, request, true);
       return undefined;
+    }
+    if (!isFrameFetched(frame.imageUrl)) {
+      setPending(true);
+      // A card waiting for its first picture opens on the placeholder.
+      onDrawnRef.current?.();
     }
     const standIn = getNearestDecodedFrame(frame.imageUrl);
     if (standIn) draw(standIn, request - 0.5, false);
@@ -201,17 +226,40 @@ export function SpriteFrameCanvas({
         canvas.style.opacity = "1";
         drawnRequestRef.current = requestRef.current;
         exactRef.current = true;
+        setPending(false);
         onDrawnRef.current?.();
       }),
     [],
   );
 
   return (
-    <canvas
-      {...canvasProps}
-      ref={canvasRef}
+    <>
+      <canvas
+        {...canvasProps}
+        ref={canvasRef}
+        aria-hidden="true"
+        className={`opacity-0 ${className ?? ""}`}
+      />
+      <PendingPicture ref={pendingRef} />
+    </>
+  );
+}
+
+/**
+ * Over a picture not downloaded yet: the canvas (or the video behind it)
+ * dimmed, with a soft light passing across. The sweep's keyframes are in
+ * the player's stylesheet. Hidden until a picture is waited for.
+ */
+function PendingPicture({ ref }: { ref: Ref<HTMLSpanElement> }) {
+  return (
+    <span
+      ref={ref}
+      hidden
       aria-hidden="true"
-      className={`opacity-0 ${className ?? ""}`}
-    />
+      data-video-player-preview-pending=""
+      className="pointer-events-none absolute inset-0 z-1 overflow-hidden rounded-[inherit] bg-black/45"
+    >
+      <span className="absolute inset-y-0 -left-1/2 w-1/2 animate-[video-player-preview-pending_1.3s_ease-in-out_infinite] bg-linear-to-r from-transparent via-white/14 to-transparent motion-reduce:animate-none" />
+    </span>
   );
 }

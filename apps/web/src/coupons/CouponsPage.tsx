@@ -7,7 +7,6 @@ import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
 import { useCapabilities } from "../services/authorization";
-import { getUserRoles, isStaffRole } from "../shell/workspaceRole";
 import type { NavigateTo } from "../routing/navigation";
 import { useUpdateCoupon } from "../services/coupons";
 import { getApiError } from "../lib/api-error";
@@ -28,11 +27,8 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
   const storeUser = useAuthStore((s) => s.user);
   const isAuthReady = Boolean(storeUser) || authUserFetched;
   const user = authUserFetched ? authUser : storeUser;
-  const userRoles = getUserRoles(user);
   const { can } = useCapabilities({ enabled: Boolean(user) });
-  const isAuthorized = Boolean(
-    user && isStaffRole(userRoles) && can("coupon.read"),
-  );
+  const isAuthorized = Boolean(user && can("coupon.read"));
   // Reading coupons and changing them are separate permissions.
   const managesCoupons = can("coupon.manage");
 

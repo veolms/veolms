@@ -2,8 +2,13 @@ import type { DatabaseExecutor } from "@veolms/database";
 import type { LessonDiscussionSort } from "@veolms/contracts";
 import { sql } from "kysely";
 import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
+import { containsPattern } from "../../../../lib/like-pattern.ts";
 import { toDate } from "../shared/discussion.utils.ts";
 import { discussionVisibilityPredicate } from "../shared/discussion.visibility.ts";
+import {
+  fuzzyMatchesAny,
+  termFromContainsPattern,
+} from "../../../../lib/fuzzy-search.ts";
 
 export const FEED_SOURCE_RANK = {
   note: 1,
@@ -30,7 +35,14 @@ export interface FeedCandidateOptions {
   /** Whose private and unlisted posts are visible; nobody's when absent. */
   viewerUserId: string | null | undefined;
   mine: boolean;
+  /** Text to find, as typed; none lists everything. */
+  search?: string;
   sort: LessonDiscussionSort;
+  /**
+   * `exclude` leaves pinned threads out (they are listed on their own, above
+   * the feed); `only` lists just them, newest pin first, with no notes.
+   */
+  pinned?: "exclude" | "only";
   cursor?: {
     entityId: string;
     sourceRank: number;
@@ -51,11 +63,63 @@ export interface DiscussionsFeedRepository {
   ): Promise<FeedCandidate[]>;
 }
 
+/**
+ * The member in `userIdColumn` is named (display name or username) like the
+ * pattern. Unlike the hub's search, an email is never matched: guests read
+ * this feed, and a search must not tell them whose address posted here.
+ */
+function authorNamedSql(userIdColumn: string, pattern: string) {
+  return sql<boolean>`exists (
+    select 1 from users su
+    where su.id = ${sql.ref(userIdColumn)}
+      and su.is_deleted = false
+      and (
+        lower(su.display_name) like ${pattern}
+        or lower(su.username) like ${pattern}
+        or ${fuzzyMatchesAny(termFromContainsPattern(pattern), [
+          sql.ref("su.display_name"),
+          sql.ref("su.username"),
+        ])}
+      )
+  )`;
+}
+
+/** The thread's own words, its replies' words, or any of their authors. */
+function threadSearchSql(pattern: string) {
+  return sql<boolean>`(
+    lower(coalesce(t.title, '')) like ${pattern}
+    or ${fuzzyMatchesAny(termFromContainsPattern(pattern), [sql.ref("t.title")])}
+    or lower(t.plain_text) like ${pattern}
+    or ${authorNamedSql("t.user_id", pattern)}
+    or exists (
+      select 1 from learning_replies sr
+      where sr.thread_id = t.id
+        and sr.status = 'active'
+        and (
+          lower(sr.plain_text) like ${pattern}
+          or ${authorNamedSql("sr.user_id", pattern)}
+        )
+    )
+  )`;
+}
+
+function noteSearchSql(pattern: string) {
+  return sql<boolean>`(
+    lower(coalesce(n.title, '')) like ${pattern}
+    or ${fuzzyMatchesAny(termFromContainsPattern(pattern), [sql.ref("n.title")])}
+    or lower(n.plain_text) like ${pattern}
+    or ${authorNamedSql("n.user_id", pattern)}
+  )`;
+}
+
 export function createDiscussionsFeedRepository(): DiscussionsFeedRepository {
   return {
     async listCandidates(db, options) {
       const sources = [];
       const kinds = options.threadKinds;
+      const searchPattern = options.search
+        ? containsPattern(options.search)
+        : null;
 
       if (kinds.length > 0) {
         const kindPredicate = sql` t.kind in (${sql.join(
@@ -80,7 +144,32 @@ export function createDiscussionsFeedRepository(): DiscussionsFeedRepository {
           options.viewerUserId,
           options.mine,
         )}
+        ${searchPattern ? sql`and ${threadSearchSql(searchPattern)}` : sql``}
+        ${
+          options.pinned === "exclude"
+            ? sql`and t.pinned_at is null`
+            : options.pinned === "only"
+              ? sql`and t.pinned_at is not null`
+              : sql``
+        }
     `);
+      }
+
+      if (options.pinned === "only") {
+        if (sources.length === 0) return [];
+        const pinnedRows = await sql<FeedCandidate>`
+    select feed.*
+    from (${sources[0]}) as feed
+    join learning_threads as pt on pt.id = feed."entityId"
+    order by pt.pinned_at desc, feed."entityId" desc
+    limit ${options.limit}
+  `.execute(db);
+        return pinnedRows.rows.map((row) => ({
+          ...row,
+          createdAt: toDate(row.createdAt),
+          sourceRank: Number(row.sourceRank),
+          score: Number(row.score),
+        }));
       }
 
       if (options.includeNotes) {
@@ -100,6 +189,7 @@ export function createDiscussionsFeedRepository(): DiscussionsFeedRepository {
           options.viewerUserId,
           options.mine,
         )}
+        ${searchPattern ? sql`and ${noteSearchSql(searchPattern)}` : sql``}
     `);
       }
 
@@ -135,7 +225,20 @@ export function createDiscussionsFeedRepository(): DiscussionsFeedRepository {
             and "entityId" < ${cursor.entityId}::uuid
           )
         )`
-          : sql`where (
+          : options.sort === "oldest"
+            ? sql`where (
+          "createdAt" > ${cursorCreatedAt}
+          or (
+            "createdAt" = ${cursorCreatedAt}
+            and "sourceRank" > ${cursor.sourceRank}
+          )
+          or (
+            "createdAt" = ${cursorCreatedAt}
+            and "sourceRank" = ${cursor.sourceRank}
+            and "entityId" > ${cursor.entityId}::uuid
+          )
+        )`
+            : sql`where (
           "createdAt" < ${cursorCreatedAt}
           or (
             "createdAt" = ${cursorCreatedAt}
@@ -152,10 +255,13 @@ export function createDiscussionsFeedRepository(): DiscussionsFeedRepository {
       // Top: the most liked first, and among equally liked ones the oldest
       // first: the first things said about a lesson, which is what a lesson
       // whose discussions have no likes yet opens with.
+      // Oldest: the newest order turned round, the first said first.
       const orderBy =
         options.sort === "top"
           ? sql`order by score desc, "createdAt" asc, "sourceRank" desc, "entityId" desc`
-          : sql`order by "createdAt" desc, "sourceRank" desc, "entityId" desc`;
+          : options.sort === "oldest"
+            ? sql`order by "createdAt" asc, "sourceRank" asc, "entityId" asc`
+            : sql`order by "createdAt" desc, "sourceRank" desc, "entityId" desc`;
 
       const result = await sql<FeedCandidate>`
     select *

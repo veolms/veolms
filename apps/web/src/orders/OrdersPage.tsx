@@ -6,17 +6,14 @@ import type { CourseRole } from "../courses/catalogue";
 import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
 import type { NavigateTo } from "../routing/navigation";
 import { useCurrentUser } from "../services/auth";
+import { useCapabilities } from "../services/authorization";
 import {
   useFetchOrder,
   useOrder,
   useOrdersNeedingRefund,
 } from "../services/orders";
 import { useAuthStore } from "../store/auth.store";
-import {
-  getUserRoles,
-  getWorkspaceRoleStorageKey,
-  isStaffRole,
-} from "../shell/workspaceRole";
+import { getWorkspaceRoleStorageKey } from "../shell/workspaceRole";
 import { useOrdersFilter } from "./useOrdersFilter";
 import { OrderSummaryCards } from "./OrderSummaryCards";
 import { OrderFiltersBar } from "./OrderFiltersBar";
@@ -24,7 +21,6 @@ import { OrdersTable } from "./OrdersTable";
 import { OrderDetailsPanel } from "./OrderDetailsPanel";
 import { OrderRefundModal } from "./OrderRefundModal";
 import { NeedsRefundNotice } from "./NeedsRefundNotice";
-import { canRejectTransferRequests } from "./needsRefundHelpers";
 
 const NO_NEEDS_REFUND_ENTRIES: readonly NeedsRefundEntry[] = [];
 
@@ -49,7 +45,6 @@ export function OrdersPage({
   const storeUser = useAuthStore((s) => s.user);
   const isAuthReady = Boolean(storeUser) || authUserFetched;
   const user = authUserFetched ? authUser : storeUser;
-  const userRoles = getUserRoles(user);
 
   // Resolve active workspace role (respecting role switcher)
   const activeRole = useMemo(() => {
@@ -66,8 +61,12 @@ export function OrdersPage({
     }
   }, [role, user?.id]);
 
+  // The staff screen is for whoever may read the academy's orders.
+  const capabilities = useCapabilities({
+    enabled: Boolean(user) && activeRole !== "student",
+  });
   const isStaff = Boolean(
-    user && isStaffRole(userRoles) && activeRole !== "student",
+    user && capabilities.can("billing.read") && activeRole !== "student",
   );
 
   const filterState = useOrdersFilter({ enabled: isStaff });
@@ -125,8 +124,8 @@ export function OrdersPage({
 
   usePageSearchShortcut("orders-search-input");
 
-  // Waiting for authentication
-  if (!isAuthReady) {
+  // Waiting for authentication, and for what this account may do
+  if (!isAuthReady || capabilities.isLoading) {
     return (
       <main
         className="mx-auto grid min-h-52 w-full max-w-[1360px] place-items-center py-24"
@@ -197,7 +196,7 @@ export function OrdersPage({
         entries={needsRefundEntries}
         hasMore={Boolean(needsRefund.data?.nextCursor)}
         onOpenOrder={openFlaggedOrder}
-        canRejectTransfers={canRejectTransferRequests(userRoles)}
+        canRejectTransfers={capabilities.can("payment.manual.verify")}
         setNotice={setNotice}
       />
 

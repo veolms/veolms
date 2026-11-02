@@ -35,10 +35,54 @@ export interface FrameProvider {
   /** A close picture already decoded, to show while `key` is decoded. */
   getNearestDecoded?(key: string): ImageBitmap | null;
   decode(key: string): Promise<ImageBitmap | null>;
+  /** Whether `key`'s picture is downloaded (decoding it needs no fetch). */
+  isFetched?(key: string): boolean;
+  /** Which parts of the video have their pictures downloaded. */
+  availability?(): PreviewAvailability;
+}
+
+/** Parts of a video, in seconds from its start (`[start, end)` pairs). */
+export interface PreviewAvailability {
+  duration: number;
+  /** Downloaded (or kept on the device). */
+  loaded: ReadonlyArray<readonly [number, number]>;
+  /** Being downloaded. */
+  loading: ReadonlyArray<readonly [number, number]>;
 }
 
 const providers = new Map<string, FrameProvider>();
 const decodeListeners = new Set<() => void>();
+const availabilityListeners = new Set<() => void>();
+
+/** Called by providers when the parts they have downloaded change. */
+export function notifyPreviewAvailability(): void {
+  for (const listener of availabilityListeners) listener();
+}
+
+/** Tells `listener` whenever a provider's `availability` changes. */
+export function subscribePreviewAvailability(listener: () => void): () => void {
+  availabilityListeners.add(listener);
+  return () => {
+    availabilityListeners.delete(listener);
+  };
+}
+
+/**
+ * What the provider drawing `key` has downloaded, or null for pictures cut
+ * from sheets (a sheet is drawn only once it is all here).
+ */
+export function getPreviewAvailability(
+  key: string,
+): PreviewAvailability | null {
+  return providerFor(key)?.availability?.() ?? null;
+}
+
+/** Whether `key`'s picture can be decoded without a download first. */
+export function isFrameFetched(key: string): boolean {
+  const provider = providerFor(key);
+  if (!provider) return true;
+  return provider.isFetched?.(key) ?? true;
+}
 
 /** Called by providers when new pictures have been decoded. */
 export function notifyFramesDecoded(): void {
@@ -61,8 +105,10 @@ export function registerFrameProvider(
   provider: FrameProvider,
 ): () => void {
   providers.set(prefix, provider);
+  notifyPreviewAvailability();
   return () => {
     if (providers.get(prefix) === provider) providers.delete(prefix);
+    notifyPreviewAvailability();
   };
 }
 

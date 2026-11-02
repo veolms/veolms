@@ -1,11 +1,30 @@
-import type { FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import type {
   CheckoutPreviewRequest,
   CreateCheckoutOrderRequest,
 } from "@veolms/contracts";
 import type { CheckoutService } from "./checkout.service.ts";
 import { AppError } from "../../../lib/errors.ts";
+import { config } from "../../../config.ts";
+import { pricingRegionForCountry } from "../shared/pricing-region.ts";
 import type { PlatformSettingsService } from "../../platform/index.ts";
+
+/**
+ * The buyer's country, as the proxy in front of the API (Cloudflare) names
+ * it in PAYMENT_COUNTRY_HEADER. On a development machine, with no proxy,
+ * PAYMENT_TEST_COUNTRY stands in for it.
+ */
+function buyerCountry(request: FastifyRequest): string | null {
+  const header = request.headers[config.PAYMENT_COUNTRY_HEADER];
+  const value = Array.isArray(header) ? header[0] : header;
+  if (value && /^[A-Za-z0-9]{2}$/u.test(value.trim())) {
+    return value.trim().toUpperCase();
+  }
+  if (config.NODE_ENV === "development" && config.PAYMENT_TEST_COUNTRY) {
+    return config.PAYMENT_TEST_COUNTRY;
+  }
+  return null;
+}
 
 export function createCheckoutController({
   service,
@@ -21,18 +40,35 @@ export function createCheckoutController({
     request: FastifyRequest<{ Body: CheckoutPreviewRequest }>,
   ) {
     const userId = request.user?.id;
-    return await service.previewCheckout(userId, request.body);
+    return await service.previewCheckout(userId, request.body, {
+      country: buyerCountry(request),
+    });
+  }
+
+  /** Which prices this visitor sees, for the page to show the right one. */
+  async function getPricingRegion(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) {
+    const country = buyerCountry(request);
+    // Answered per request: a shared cache would hand one visitor's
+    // country to the next.
+    reply.header("Cache-Control", "private, no-store");
+    return { region: pricingRegionForCountry(country), country };
   }
 
   async function createOrder(
     request: FastifyRequest<{ Body: CreateCheckoutOrderRequest }>,
   ) {
     // Paid or free, an enrolment needs a verified mobile number when the
-    // academy asks for one (Platform > Security). The course page asks for
-    // it before it gets here; this holds for any other way in.
+    // academy asks for one (Platform > Security), from accounts opened since
+    // it does. The course page asks for the number when this answers that it
+    // is needed.
     if (
       !request.user!.mobileVerified &&
-      (await platformSettings.requiresVerifiedPhoneForEnrollment())
+      (await platformSettings.requiresVerifiedPhoneForEnrollment(
+        request.user!.id,
+      ))
     ) {
       throw new AppError(
         403,
@@ -46,7 +82,9 @@ export function createCheckoutController({
       email: request.user!.email,
       phone: request.user!.phoneNo,
     };
-    return await service.createOrder(user, request.body);
+    return await service.createOrder(user, request.body, {
+      country: buyerCountry(request),
+    });
   }
 
   async function releaseCheckoutOrder(
@@ -60,6 +98,7 @@ export function createCheckoutController({
 
   return {
     previewCheckout,
+    getPricingRegion,
     createOrder,
     releaseCheckoutOrder,
   };

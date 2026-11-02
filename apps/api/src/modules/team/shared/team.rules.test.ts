@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { AppError } from "../../../lib/errors.ts";
 import {
   assertCanHandleRoles,
+  assertCanRemoveMembers,
+  assertDeletableRole,
   assertEditableRole,
   assertKeepsAnAdmin,
   assertNoSelfLockout,
@@ -73,9 +75,29 @@ await test("you cannot take away your own team or role permissions", () => {
   assertNoSelfLockout(now, new Set(["team.read", "role.assign"]));
 });
 
-await test("built-in roles cannot be changed", () => {
-  rejectsWith("ROLE_IS_SYSTEM", () => assertEditableRole({ isSystem: true }));
-  assertEditableRole({ isSystem: false });
+await test("only an admin changes a built-in role, and never admin itself", () => {
+  const admin = actor(["admin"], []);
+  const lead = actor(["team_lead"], ["role.update"]);
+  const builtIn = { name: "VeoLMS Team", isSystem: true };
+  assertEditableRole(admin, builtIn);
+  rejectsWith("ROLE_IS_SYSTEM", () => assertEditableRole(lead, builtIn));
+  rejectsWith("ROLE_IS_SYSTEM", () =>
+    assertEditableRole(admin, { name: "admin", isSystem: true }),
+  );
+  assertEditableRole(lead, { name: "Support", isSystem: false });
+});
+
+await test("built-in roles cannot be deleted", () => {
+  rejectsWith("ROLE_IS_SYSTEM", () => assertDeletableRole({ isSystem: true }));
+  assertDeletableRole({ isSystem: false });
+});
+
+await test("taking someone off the team needs team.remove", () => {
+  assertCanRemoveMembers(actor(["admin"], []));
+  assertCanRemoveMembers(actor(["team_lead"], ["team.remove"]));
+  rejectsWith("PERMISSION_DENIED", () =>
+    assertCanRemoveMembers(actor(["team_lead"], ["role.assign"])),
+  );
 });
 
 await test("a role in use cannot be deleted", () => {
@@ -84,7 +106,13 @@ await test("a role in use cannot be deleted", () => {
 });
 
 await test("custom roles cannot take an admin-looking name", () => {
-  for (const name of ["admin", " Admin ", "Administrator", "student"]) {
+  for (const name of [
+    "admin",
+    " Admin ",
+    "Administrator",
+    "Platform Administrator",
+    "student",
+  ]) {
     assert.equal(isReservedRoleName(name), true, name);
   }
   assert.equal(isReservedRoleName("Support"), false);

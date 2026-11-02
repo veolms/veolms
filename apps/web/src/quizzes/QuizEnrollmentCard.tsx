@@ -5,17 +5,12 @@ import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
 import { Lock } from "@phosphor-icons/react/Lock";
 import { Tag } from "@phosphor-icons/react/Tag";
-import { CHECKOUT_WINDOW_SECONDS } from "@veolms/contracts";
 import { Button } from "../components/Button";
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { productName } from "../routing/routeDescriptors";
 import { useCurrentUser } from "../services/auth";
 import { readCheckoutStartError } from "../services/payments/checkoutError";
-import {
-  CHECKOUT_WINDOW_BLOCKED_MESSAGE,
-  openCheckoutWindow,
-} from "../services/payments/checkoutWindowLoad";
-import "../services/payments/razorpay-checkout.css";
+import { openGatewayCheckout } from "../services/payments/gateways/gatewayCheckout";
 import {
   useAwaitPaidOrder,
   useCreateCheckoutOrder,
@@ -27,6 +22,7 @@ import {
   paymentConfirmationDelayedMessage,
 } from "../services/payments/paymentConfirmation";
 import { quizKeys } from "../services/quizzes/quizzes.keys";
+import { trackAnalyticsEvent } from "../lib/analytics-track";
 import { useQuizPricingPreview } from "../services/quizzes/quizzes.queries";
 import {
   QUIZ_EYEBROW,
@@ -40,26 +36,6 @@ import {
   QuizStageBody,
 } from "./attempt/QuizStage";
 import { QuizStageMessage } from "./attempt/QuizStageMessage";
-
-async function loadRazorpay(): Promise<void> {
-  if (typeof window === "undefined") return;
-  if (window.Razorpay) return;
-  await new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector(
-      'script[src="https://checkout.razorpay.com/v1/checkout.js"]',
-    );
-    if (existing) {
-      resolve();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve();
-    script.onerror = () =>
-      reject(new Error("Failed to load payment gateway SDK"));
-    document.body.appendChild(script);
-  });
-}
 
 export interface QuizEnrollmentCardProps {
   courseId: string;
@@ -172,7 +148,18 @@ export function QuizEnrollmentCard({
   const isFree = pricingType === "free";
 
   /** Access is in place: refresh what the page knows and hand over. */
-  const finishEnrollment = async () => {
+  const finishEnrollment = async (kind: "free" | "paid", orderId: string) => {
+    if (kind === "paid") {
+      trackAnalyticsEvent("payment_confirmed", {
+        courseId,
+        orderId,
+        props: { item: "quiz" },
+      });
+    }
+    trackAnalyticsEvent("enrollment_completed", {
+      courseId,
+      props: { kind, item: "quiz" },
+    });
     await queryClient.invalidateQueries({ queryKey: quizKeys.all });
     await pricingPreviewQuery.refetch();
     setIsProcessing(false);
@@ -200,7 +187,7 @@ export function QuizEnrollmentCard({
 
     setConfirmationNotice(null);
     if (paid) {
-      await finishEnrollment();
+      await finishEnrollment("paid", orderId);
       return;
     }
     setIsProcessing(false);
@@ -234,87 +221,27 @@ export function QuizEnrollmentCard({
         ],
         idempotencyKey: checkoutIntentRef.current.key,
       });
+      trackAnalyticsEvent("checkout_start", {
+        courseId,
+        orderId: order.order.id,
+        outcome: order.gateway ? "payment" : "free",
+        props: { item: "quiz" },
+      });
 
       // No payment step (nothing to pay), or the same purchase was already
       // paid on an earlier attempt whose confirmation did not reach this
       // page: access is granted, and reopening the gateway would only show
       // an error for an order that is complete.
       if (!order.gateway || order.order.status === "paid") {
-        await finishEnrollment();
+        await finishEnrollment(order.gateway ? "paid" : "free", order.order.id);
         return;
       }
 
-      await loadRazorpay();
-      if (!window.Razorpay) {
-        throw new Error("Payment gateway is unavailable. Please try again.");
-      }
-
-      // The gateway refused to load its window here (see
-      // openCheckoutWindow); its own close then says nothing more.
-      let windowBlocked = false;
-      const rzp = new window.Razorpay({
-        key: order.gateway.keyId,
-        amount: order.gateway.amount,
-        currency: order.gateway.currency,
-        name: productName,
-        description: `Quiz Access - ${quizTitle || "Assessment"}`,
-        order_id: order.gateway.gatewayOrderId,
-        // The window closes itself, so a payment cannot be completed in it
-        // long after the server has let the buyer start another one.
-        timeout: CHECKOUT_WINDOW_SECONDS,
-        prefill: {
-          name: user?.displayName || user?.username || "",
-          email: user?.email || "",
-        },
-        handler: async (response: {
-          razorpay_order_id: string;
-          razorpay_payment_id: string;
-          razorpay_signature: string;
-        }) => {
-          try {
-            await verify.mutateAsync({
-              orderId: order.order.id,
-              gatewayOrderId: response.razorpay_order_id,
-              gatewayPaymentId: response.razorpay_payment_id,
-              gatewaySignature: response.razorpay_signature,
-            });
-            await finishEnrollment();
-          } catch {
-            // The gateway has taken the payment; only our confirmation call
-            // failed. This used to read "Payment verification failed.
-            // Please contact support." every time (the rejection is a plain
-            // object, so the `instanceof Error` test never matched), which
-            // told a learner who had been charged that they had not paid.
-            await confirmPaidOrder(order.order.id);
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            if (windowBlocked) return;
-            // A payment that went through is being confirmed; the gateway
-            // closing its own window afterwards is not a cancellation.
-            const confirmation = paymentConfirmationRef.current;
-            if (confirmation && !confirmation.signal.aborted) return;
-            // As on the course page: the order is cancelled on the server
-            // (unless a payment for it may still arrive), so buying again
-            // is not refused while the closed window's time runs out.
-            void releaseOrder
-              .mutateAsync(order.order.id)
-              .then((result) => {
-                if (result.released) checkoutIntentRef.current = null;
-              })
-              .catch(() => undefined)
-              .finally(() => setIsProcessing(false));
-          },
-        },
-      });
-
-      // Opens the window. If it never comes up, nothing can have been paid
-      // in it, so the order is let go and the button given back with the
-      // reason.
-      openCheckoutWindow(rzp, () => {
-        windowBlocked = true;
-        setErrorMessage(CHECKOUT_WINDOW_BLOCKED_MESSAGE);
+      // The order is let go and the button given back: the order is
+      // cancelled on the server (unless a payment for it may still arrive),
+      // so buying again is not refused while the closed window's time runs
+      // out.
+      const releaseThisOrder = () =>
         void releaseOrder
           .mutateAsync(order.order.id)
           .then((result) => {
@@ -322,7 +249,59 @@ export function QuizEnrollmentCard({
           })
           .catch(() => undefined)
           .finally(() => setIsProcessing(false));
-      });
+
+      // The gateway the server chose for this buyer (by their country).
+      await openGatewayCheckout(
+        {
+          gateway: order.gateway,
+          name: productName,
+          description: `Quiz Access - ${quizTitle || "Assessment"}`,
+          prefill: {
+            name: user?.displayName || user?.username || "",
+            email: user?.email || "",
+          },
+        },
+        {
+          onPaid: async (proof) => {
+            try {
+              await verify.mutateAsync({ orderId: order.order.id, ...proof });
+              await finishEnrollment("paid", order.order.id);
+            } catch {
+              // The gateway has taken the payment; only our confirmation call
+              // failed. This used to read "Payment verification failed.
+              // Please contact support." every time (the rejection is a plain
+              // object, so the `instanceof Error` test never matched), which
+              // told a learner who had been charged that they had not paid.
+              await confirmPaidOrder(order.order.id);
+            }
+          },
+          onDismissed: () => {
+            // A payment that went through is being confirmed; the gateway
+            // closing its own window afterwards is not a cancellation.
+            const confirmation = paymentConfirmationRef.current;
+            if (confirmation && !confirmation.signal.aborted) return;
+            trackAnalyticsEvent("payment_result", {
+              courseId,
+              orderId: order.order.id,
+              outcome: "dismissed",
+              props: { item: "quiz" },
+            });
+            releaseThisOrder();
+          },
+          // The window never came up, so nothing can have been paid in it:
+          // the reason is shown.
+          onBlocked: (message) => {
+            trackAnalyticsEvent("payment_result", {
+              courseId,
+              orderId: order.order.id,
+              outcome: "blocked",
+              props: { item: "quiz" },
+            });
+            setErrorMessage(message);
+            releaseThisOrder();
+          },
+        },
+      );
     } catch (err: unknown) {
       setIsProcessing(false);
       // A refusal from the server is a plain object, not an `Error`; read

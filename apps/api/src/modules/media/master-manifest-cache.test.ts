@@ -95,6 +95,24 @@ await test("entries expire after the TTL and the oldest is evicted when full", a
   assert.equal(cache.get("b"), undefined);
 });
 
+await test("by default an entry never expires", () => {
+  let now = 1_000;
+  const cache = createMasterManifestCache({ now: () => now });
+  cache.set("a", MASTER);
+  now += 365 * 24 * 60 * 60 * 1000;
+  assert.equal(cache.get("a"), MASTER);
+});
+
+await test("a manifest that is read is not the one evicted", () => {
+  const cache = createMasterManifestCache({ maxEntries: 2 });
+  cache.set("a", MASTER);
+  cache.set("b", MASTER);
+  assert.equal(cache.get("a"), MASTER);
+  cache.set("c", MASTER);
+  assert.equal(cache.get("a"), MASTER);
+  assert.equal(cache.get("b"), undefined);
+});
+
 await test("only an #EXTM3U playlist of a sane size is inlinable", () => {
   assert.equal(isInlinableMasterManifest(MASTER), true);
   assert.equal(isInlinableMasterManifest("  #EXTM3U\n"), true);

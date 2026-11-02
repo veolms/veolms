@@ -23,6 +23,13 @@ import type { Executor } from "./access.repository.ts";
  *   one (refunded, expired) is taken over by the link.
  * - The link's access lasts as long as the longest parent: lifetime when
  *   any parent is lifetime.
+ * - A link can open only some sections of the linked course
+ *   (`course_links.section_ids`). The grant opens what the learner's links
+ *   open between them: every section when any of them opens the whole
+ *   course, otherwise the sections they name, kept on the grant as
+ *   `section_ids`. Like the end date, it is worked out at the sync: when
+ *   a parent that opened more ends before the others, the grant keeps what
+ *   it opened until the learner's next sync.
  * - When no parent is left, the link's rows are marked `expired`, not
  *   `revoked`. `revoked` on a linked row means staff took it away, and a
  *   later sync does not hand it back; "Restore" does.
@@ -37,7 +44,11 @@ const parentGrantIsLive = sql`(
   and (p.valid_until is null or p.valid_until > now())
 )`;
 
-/** For each learner, the linked courses they should hold and until when. */
+/**
+ * For each learner, the linked courses they should hold, until when, and
+ * which of their sections (null for all of them, sorted otherwise, so an
+ * unchanged answer compares equal to the one stored).
+ */
 function desiredLinkedAccess(userIds: string[]) {
   return sql`
     select
@@ -46,10 +57,16 @@ function desiredLinkedAccess(userIds: string[]) {
       case
         when bool_or(p.valid_until is null) then null
         else max(p.valid_until)
-      end as valid_until
+      end as valid_until,
+      case
+        when bool_or(cl.section_ids is null) then null
+        else array_agg(distinct s.section_id order by s.section_id)
+          filter (where s.section_id is not null)
+      end as section_ids
     from access_grants p
     join course_links cl on cl.course_id = p.course_id
     join courses lc on lc.id = cl.linked_course_id and lc.deleted_at is null
+    left join lateral unnest(cl.section_ids) as s(section_id) on true
     where p.user_id = any(${userIds}::uuid[])
       and ${parentGrantIsLive}
     group by p.user_id, cl.linked_course_id
@@ -61,14 +78,15 @@ async function syncChunk(database: Executor, userIds: string[]) {
     with desired as (${desiredLinkedAccess(userIds)})
     insert into access_grants
       (id, user_id, course_id, order_id, status, source,
-       valid_from, valid_until, created_at, updated_at)
+       valid_from, valid_until, section_ids, created_at, updated_at)
     select gen_random_uuid(), d.user_id, d.course_id, null, 'active',
-      'linked_course', now(), d.valid_until, now(), now()
+      'linked_course', now(), d.valid_until, d.section_ids, now(), now()
     from desired d
     on conflict (user_id, course_id) do update set
       order_id = null,
       status = 'active',
       source = 'linked_course',
+      section_ids = excluded.section_ids,
       valid_from = case
         when access_grants.source = 'linked_course'
           and access_grants.status = 'active'
@@ -81,7 +99,8 @@ async function syncChunk(database: Executor, userIds: string[]) {
       access_grants.source = 'linked_course'
       and access_grants.status <> 'revoked'
       and (access_grants.status <> 'active'
-           or access_grants.valid_until is distinct from excluded.valid_until)
+           or access_grants.valid_until is distinct from excluded.valid_until
+           or access_grants.section_ids is distinct from excluded.section_ids)
     ) or (
       access_grants.source <> 'linked_course'
       and (access_grants.status <> 'active'

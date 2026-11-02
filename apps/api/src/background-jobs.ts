@@ -17,11 +17,15 @@ import { createDiscussionUploadStore } from "./modules/discussion-uploads/index.
 import { createAttachmentsRepository } from "./modules/learning/discussions/attachments/attachments.repository.ts";
 import { createAttachmentsService } from "./modules/learning/discussions/attachments/attachments.service.ts";
 import { createNotificationProcessor } from "./modules/notifications/index.ts";
+import { startYoutubeImportWorker } from "./modules/media/youtube-import/youtube-import.worker.ts";
+import { getYoutubeImportTools } from "./modules/media/youtube-import/youtube-import.tools.ts";
+import { getHeroVideoReadyWatch } from "./modules/home/home-hero-video-ready.ts";
 import {
   createInvoiceService,
   invoiceStorage,
 } from "./modules/commerce/invoices/invoice.service.ts";
 import { createInvoiceAttachmentResolver } from "./modules/commerce/invoices/invoice-email-attachment.ts";
+import { getCacheStats } from "@veolms/api-core";
 import { getDatabasePoolMetrics } from "@veolms/database";
 import * as webhookRepo from "./modules/commerce/webhooks/webhook.repository.ts";
 import * as outboxRepo from "./events/outbox.repository.ts";
@@ -57,12 +61,12 @@ export function registerBackgroundJobs(
     logger: app.log,
     // With the gateway, an extra payment is refunded as soon as its event
     // is processed rather than on the scheduler's next pass.
-    paymentGateway: services.paymentGateway,
+    paymentGateways: services.paymentGateways,
   });
 
   const paymentEventQueue = new BackgroundPaymentEventQueue({
     database,
-    paymentGateway: services.paymentGateway,
+    paymentGateways: services.paymentGateways,
     logger: app.log,
     handler: async (event) => {
       await paymentWorker.processPaymentJob(event);
@@ -72,7 +76,7 @@ export function registerBackgroundJobs(
 
   const fulfillmentScheduler = new CommerceFulfillmentScheduler({
     database,
-    paymentGateway: services.paymentGateway,
+    paymentGateways: services.paymentGateways,
     logger: app.log,
   });
   fulfillmentScheduler.start();
@@ -97,7 +101,42 @@ export function registerBackgroundJobs(
 
   const stopInvoicePdfJob = startInvoicePdfJob(app, database, services);
 
+  // "Import from YouTube": off unless an operator turns it on, because it
+  // downloads and packages video on this host.
+  let stopYoutubeImportWorker: (() => Promise<void>) | null = null;
+  if (config.YOUTUBE_IMPORT_ENABLED) {
+    const youtubeImportTools = getYoutubeImportTools(services.config, app.log);
+    // yt-dlp is found and updated now, not while the first video is checked.
+    void youtubeImportTools.getYtDlp().catch((error: unknown) => {
+      app.log.warn(
+        { err: error, feature: "youtube-import" },
+        "yt-dlp is not ready yet",
+      );
+    });
+    stopYoutubeImportWorker = startYoutubeImportWorker({
+      database,
+      services,
+      tools: youtubeImportTools,
+      logger: app.log,
+    });
+  }
+
+  // The static home page is built again once the video chosen for its hero
+  // has been processed; a restart picks that watch up from the settings.
+  const heroVideoReadyWatch = getHeroVideoReadyWatch({
+    database,
+    onReady: () => services.courseStaticPages?.requestHomePageRefresh(),
+    logger: app.log,
+  });
+  void heroVideoReadyWatch.resume().catch((error: unknown) => {
+    app.log.warn(
+      { err: error, feature: "home-hero-video" },
+      "Could not resume watching the hero video",
+    );
+  });
+
   app.addHook("onClose", async () => {
+    heroVideoReadyWatch.stop();
     await paymentEventQueue.stop?.();
     // Awaited so an in-flight reconciliation cycle finishes before the
     // shared Kysely instance is destroyed right after these hooks.
@@ -106,6 +145,7 @@ export function registerBackgroundJobs(
     await stopNotificationLoop?.();
     await stopDiscussionUploadPurge?.();
     await stopInvoicePdfJob?.();
+    await stopYoutubeImportWorker?.();
     stopHeartbeat?.();
   });
 
@@ -319,7 +359,7 @@ function startDiscussionUploadPurge(
 }
 
 /**
- * Periodic one-line ops gauge: pool saturation and queue depths.
+ * Periodic one-line ops gauge: pool saturation, queue depths and caches.
  *
  * The audit's biggest production unknowns were exactly these numbers —
  * pool starvation queued requests invisibly, and a growing webhook or
@@ -346,6 +386,7 @@ function startOpsHeartbeat(
         {
           job: "ops-heartbeat",
           pools: getDatabasePoolMetrics(),
+          caches: getCacheStats(),
           webhookQueue,
           outbox,
           emailBacklog,

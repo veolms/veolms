@@ -6,7 +6,7 @@ import { ASK_ADMIN_TO_REJECT_TRANSFER } from "./needsRefundHelpers";
 
 export interface RejectTransferRequestActionProps {
   /**
-   * Whether the viewer may reject transfer requests (admins only). Anyone
+   * Whether the viewer may reject transfer requests (`payment.manual.verify`). Anyone
    * else is told to ask an admin, in the button's place.
    */
   canReject: boolean;

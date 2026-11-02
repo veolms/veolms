@@ -87,8 +87,6 @@ export type ReadyAttachmentRow = DiscussionAttachmentRow & {
  * the ready attachments of a post.
  */
 export interface DiscussionRepository {
-  findAcademyId(db: DatabaseExecutor): Promise<{ id: string } | undefined>;
-
   /** The course row by id, deleted or not. */
   findCourseId(
     db: DatabaseExecutor,
@@ -230,10 +228,6 @@ export interface DiscussionRepository {
 
 export function createDiscussionRepository(): DiscussionRepository {
   return {
-    async findAcademyId(db) {
-      return db.selectFrom("academy").select("id").executeTakeFirst();
-    },
-
     async findCourseId(db, courseId) {
       return db
         .selectFrom("courses")

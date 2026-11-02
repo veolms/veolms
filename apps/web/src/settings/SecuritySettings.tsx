@@ -982,7 +982,9 @@ export function SecuritySettings({
                         </strong>
                         <small>
                           <span className="truncate">
-                            {session.ipAddress ?? "Unknown IP"}
+                            {session.location ??
+                              session.ipAddress ??
+                              "Unknown IP"}
                           </span>
                           <span aria-hidden className="shrink-0">
                             ·

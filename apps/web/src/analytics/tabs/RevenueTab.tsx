@@ -384,7 +384,7 @@ export default function RevenueTab({
   const hasRefunds = revenue.daily.some((day) => day.refundedAmount > 0);
 
   return (
-    <div className="grid gap-3.5 sm:gap-6">
+    <div className="grid grid-cols-1 gap-3.5 sm:gap-6">
       <section className={kpiGridClass}>
         <KpiCard
           icon={<CurrencyInr size={20} weight="bold" />}
@@ -456,7 +456,7 @@ export default function RevenueTab({
         />
       </ChartSection>
 
-      <div className="grid gap-3.5 sm:gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3.5 sm:gap-6 lg:grid-cols-2">
         <ChartSection
           title="Revenue by Product"
           description="Net revenue of each course, bundle or quiz sold"
@@ -504,7 +504,7 @@ export default function RevenueTab({
         </ChartSection>
       </div>
 
-      <div className="grid gap-3.5 sm:gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3.5 sm:gap-6 lg:grid-cols-2">
         <ChartSection
           title="Payment Methods"
           description="Paid orders by the method that settled them"
@@ -551,7 +551,7 @@ export default function RevenueTab({
         </ChartSection>
       </div>
 
-      <div className="grid gap-3.5 sm:gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3.5 sm:gap-6 lg:grid-cols-5">
         <ChartSection
           title="Coupon Performance"
           description="Orders and revenue by coupon code"

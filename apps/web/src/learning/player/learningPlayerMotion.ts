@@ -695,6 +695,31 @@ export const setLearningMiniPlayerPreferredLeft = (left: number | null) => {
   preferredMiniPlayerLeft = left;
 };
 
+/**
+ * How far in from the viewport's left edge the sidebar reaches, when one
+ * stands there in view (the wide and collapsed layouts); 0 otherwise (the
+ * phone layout, or a sidebar hidden off screen). The bottom-left corner the
+ * mini player rests in starts past it, so the player does not lie over the
+ * sidebar's profile and appearance controls.
+ */
+const getLeftSidebarInset = (viewport: LearningPlayerViewportBounds) => {
+  const sidebar = document.querySelector(".courses-sidebar");
+  if (!sidebar) return 0;
+  const rect = sidebar.getBoundingClientRect();
+  const standsAtLeftEdge =
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.left <= viewport.left + LEARNING_MINI_PLAYER_MARGIN &&
+    rect.right > viewport.left;
+  return standsAtLeftEdge ? rect.right - viewport.left : 0;
+};
+
+/** The left edge of the bottom-left corner the mini player rests in. */
+export const getLearningMiniPlayerLeftDock = (
+  viewport = getLearningPlayerViewportBounds(),
+) =>
+  viewport.left + getLeftSidebarInset(viewport) + LEARNING_MINI_PLAYER_MARGIN;
+
 export const getDefaultLearningMiniPlayerLayout = (
   maximumSourceWidth = Number.POSITIVE_INFINITY,
   viewport = getLearningPlayerViewportBounds(),
@@ -711,7 +736,7 @@ export const getDefaultLearningMiniPlayerLayout = (
     viewport.left + viewport.width - LEARNING_MINI_PLAYER_MARGIN - width;
   const usualLeft =
     readMiniPlayerSidePreference() === "left"
-      ? Math.min(viewport.left + LEARNING_MINI_PLAYER_MARGIN, cornerLeft)
+      ? Math.min(getLearningMiniPlayerLeftDock(viewport), cornerLeft)
       : cornerLeft;
   return {
     left:

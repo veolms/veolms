@@ -112,10 +112,12 @@ export function MobileBottomNavigation({
                 avatarSrcSet={shellProfileAvatarSrcSet}
               />
             ) : (
+              // Laid out as a block filling the 24px box: left inline, the
+              // SVG would sit on the text baseline and hang a little low.
               <GuestProfileIcon
                 size={24}
                 ringWidth={16}
-                className="!text-(--accent)"
+                className="block size-full !text-(--accent)"
                 aria-hidden="true"
               />
             )}

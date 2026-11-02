@@ -15,6 +15,7 @@ import {
   SIDEBAR_CONTENT_REVEAL_DISTANCE,
 } from "../academyShellConstants";
 import type { SidebarResize, SidebarTooltip } from "../academyShellTypes";
+import { writeSidebarResizeWidth } from "../academyShellGeometry";
 
 export interface UseSidebarTooltipArgs {
   sidebarMode: SidebarMode;
@@ -122,10 +123,7 @@ export function useSidebarTooltip({
       (sidebarResizing ? sidebarResizeRef.current?.previewWidth : undefined) ??
       sidebarResizePreviewWidth ??
       SIDEBAR_COLLAPSED_WIDTH;
-    coursesAppRef.current?.style.setProperty(
-      "--sidebar-resize-preview-width",
-      `${width}px`,
-    );
+    writeSidebarResizeWidth(coursesAppRef.current, width);
   });
 
   useEffect(() => {

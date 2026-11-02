@@ -10,6 +10,7 @@ import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { QuizAuthoringLoadingSkeleton } from "./QuizAuthoringLoadingSkeleton";
 import { ElevatedCard } from "../components/ElevatedCard";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 
 const QuizAuthoringPanel = lazy(() =>
   import("./QuizAuthoringPanel").then((module) => ({
@@ -34,9 +35,8 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
 
   const filteredCourses = useMemo(() => {
     if (!searchQuery.trim()) return rawCourses;
-    const lower = searchQuery.toLowerCase().trim();
     return rawCourses.filter((course) =>
-      course.title.toLowerCase().includes(lower),
+      fuzzyMatches(searchQuery, course.title),
     );
   }, [rawCourses, searchQuery]);
 

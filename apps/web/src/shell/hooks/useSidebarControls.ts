@@ -35,6 +35,8 @@ import type {
 } from "../academyShellTypes";
 
 export interface UseSidebarControlsArgs {
+  /** A click on the logo: the home page, as on most sites. */
+  onLogoPress: () => void;
   setSidebarMode: Dispatch<SetStateAction<SidebarMode>>;
   sidebarWidth: number;
   compactNavigation: boolean;
@@ -81,6 +83,7 @@ export interface UseSidebarControlsResult {
 }
 
 export function useSidebarControls({
+  onLogoPress,
   setSidebarMode,
   sidebarWidth,
   compactNavigation,
@@ -207,7 +210,10 @@ export function useSidebarControls({
     deferFirstPress: compactNavigation,
     secondPressWindow: compactNavigation ? 700 : undefined,
   });
+  // A click opens the home page; a click and then a press held floats the
+  // sidebar (the hold's own click does not count as a press).
   const sidebarLogoGesture = useSecondPressHold<HTMLSpanElement>({
+    onPress: onLogoPress,
     onSecondPressHold: floatSidebar,
   });
 

@@ -154,6 +154,22 @@ function playKeyStroke(context: AudioContext, stroke: "down" | "up") {
 }
 
 /**
+ * Gets the sound ready before the key is pressed. Starting the browser's
+ * audio takes a long moment (some 90ms), and done at the press it held the
+ * lesson's opening back by that much. Called when the pointer comes over
+ * the key's row or the key takes the focus; the audio is only started at
+ * the press.
+ */
+export function prepareEnterKeySound() {
+  if (audioContext || readLampSoundMuted()) return;
+  try {
+    getAudioContext();
+  } catch {
+    // Made at the press instead.
+  }
+}
+
+/**
  * Plays the Enter key going down or coming back up. It keeps to the mute of
  * the hero's other sounds (the lamp's switch), and is silent where audio is
  * unavailable. It must be called from the press itself, which is what lets

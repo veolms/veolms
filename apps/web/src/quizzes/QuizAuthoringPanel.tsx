@@ -74,6 +74,7 @@ import {
   readAccountScopedItem,
 } from "../store/accountScopedStorage";
 import { useAuthStore } from "../store/auth.store";
+import { useCapabilities } from "../services/authorization";
 import { ElevatedCard } from "../components/ElevatedCard";
 
 interface Props {
@@ -395,6 +396,21 @@ export function QuizAuthoringPanel({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDetachConfirm, setShowDetachConfirm] = useState(false);
   const quiz = useQuiz(quizId);
+  // Each action shows only to whoever may take it. The quiz routes take
+  // these through any role (the services keep authors to their own); a
+  // draft's questions and details go out with it when it is created.
+  const { can, canOnCourse } = useCapabilities();
+  const createsQuizzes = can("quiz.create");
+  const editsSettings = can("quiz.settings.update");
+  const publishesQuizzes = can("quiz.publish");
+  const deletesQuizzes = can("quiz.delete");
+  const editsQuestions = quizId ? can("quiz.questions.manage") : createsQuizzes;
+  const editsDetails = quizId ? editsSettings : createsQuizzes;
+  // The lesson's own Free Preview switch is a lesson detail.
+  const editsLessonPreview = canOnCourse(
+    "lesson.details.update",
+    courseEditor.data?.course,
+  );
   const assignment = useMemo(() => {
     return selectQuizAssignment({
       assignments: [
@@ -797,7 +813,7 @@ export function QuizAuthoringPanel({
 
   const flushDetailsPersistence = useCallback(
     (overrideTitle?: string, overrideDesc?: string, overrideInstr?: string) => {
-      if (!quizId) return;
+      if (!quizId || !editsSettings) return;
       const t = (
         overrideTitle !== undefined ? overrideTitle : quizTitle
       ).trim();
@@ -851,7 +867,7 @@ export function QuizAuthoringPanel({
         },
       );
     },
-    [quizId, quizTitle, description, instructions, updateQuiz],
+    [quizId, editsSettings, quizTitle, description, instructions, updateQuiz],
   );
 
   const scheduleAutoSaveDetails = useCallback(
@@ -1071,6 +1087,7 @@ export function QuizAuthoringPanel({
   openQuestionForEditingRef.current = editQuestion;
 
   const handleToggleExpandQuestion = (question: EditableQuestion) => {
+    if (!editsQuestions) return;
     if (editingQuestionId === question.id) {
       flushQuestionSave();
       setEditingQuestionId(null);
@@ -1180,7 +1197,7 @@ export function QuizAuthoringPanel({
   };
 
   const flushAssignmentPersistence = useCallback(() => {
-    if (!assignment) return;
+    if (!assignment || !editsSettings) return;
     if (assignmentTimerRef.current !== null) {
       window.clearTimeout(assignmentTimerRef.current);
       assignmentTimerRef.current = null;
@@ -1208,7 +1225,13 @@ export function QuizAuthoringPanel({
         },
       },
     );
-  }, [assignment, assignmentPayload, assignmentVersionId, updateAssignment]);
+  }, [
+    assignment,
+    editsSettings,
+    assignmentPayload,
+    assignmentVersionId,
+    updateAssignment,
+  ]);
 
   const scheduleAutoSaveAssignment = useCallback(() => {
     if (!assignment) return;
@@ -1263,7 +1286,7 @@ export function QuizAuthoringPanel({
 
   /** Points the lesson at a published version of this quiz. */
   const moveLessonToVersion = (versionId: string) => {
-    if (!assignment) return;
+    if (!assignment || !editsSettings) return;
     setAssignmentVersionId(versionId);
     setAssignmentSaveStatus("saving");
     updateAssignment.mutate(
@@ -1508,6 +1531,18 @@ export function QuizAuthoringPanel({
     );
   const publishingChanges =
     publishStep !== null || publish.isPending || updateAssignment.isPending;
+  // The buttons below, offered only with every permission their steps take:
+  // creating the quiz, publishing it, pointing the lesson at it.
+  const assignsToLesson = Boolean(effectiveCourseId && effectiveLessonId);
+  const mayPublishAndAssign =
+    (quizId ? true : createsQuizzes) &&
+    (quizId && version?.publishedAt && assignsToLesson
+      ? true
+      : publishesQuizzes) &&
+    (!assignsToLesson || editsSettings);
+  const mayUpdateLessonVersion = hasUnpublishedChanges
+    ? publishesQuizzes && editsSettings
+    : editsSettings;
 
   // The question open in the editor, as it stands right now.
   const editingProblem = editingQuestionId
@@ -1594,7 +1629,7 @@ export function QuizAuthoringPanel({
               </div>
             ) : null}
 
-            {assignment && Boolean(courseId && lessonId) && (
+            {assignment && Boolean(courseId && lessonId) && editsSettings && (
               <button
                 type="button"
                 onClick={() => setShowDetachConfirm(true)}
@@ -1614,28 +1649,30 @@ export function QuizAuthoringPanel({
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={
-                !quizId ||
-                deleteQuizMutation.isPending ||
-                deleteAssignmentMutation.isPending
-              }
-              className="h-8.5 sm:h-9 px-3 sm:px-3.5 inline-flex items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-red-500/60 bg-red-600/20 text-xs sm:text-sm font-semibold text-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-[var(--card-compact-shadow)] transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-40"
-              title={
-                quizId
-                  ? "Permanently delete this quiz"
-                  : "No quiz loaded to delete"
-              }
-            >
-              <Trash
-                size={14}
-                weight="bold"
-                className="shrink-0 text-red-400 group-hover:text-white"
-              />
-              <span>Delete quiz</span>
-            </button>
+            {deletesQuizzes && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={
+                  !quizId ||
+                  deleteQuizMutation.isPending ||
+                  deleteAssignmentMutation.isPending
+                }
+                className="h-8.5 sm:h-9 px-3 sm:px-3.5 inline-flex items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-red-500/60 bg-red-600/20 text-xs sm:text-sm font-semibold text-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-[var(--card-compact-shadow)] transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-40"
+                title={
+                  quizId
+                    ? "Permanently delete this quiz"
+                    : "No quiz loaded to delete"
+                }
+              >
+                <Trash
+                  size={14}
+                  weight="bold"
+                  className="shrink-0 text-red-400 group-hover:text-white"
+                />
+                <span>Delete quiz</span>
+              </button>
+            )}
           </div>
         </div>
       </ElevatedCard>
@@ -1672,7 +1709,11 @@ export function QuizAuthoringPanel({
               )}
             </div>
 
-            <div className="space-y-3 sm:space-y-4">
+            {/* Shown, not editable, without quiz.settings.update. */}
+            <div
+              inert={!editsDetails}
+              className={`space-y-3 sm:space-y-4 ${editsDetails ? "" : "opacity-60"}`}
+            >
               <label className="block">
                 <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
                   Quiz title <span className="text-(--accent)">*</span>
@@ -1833,6 +1874,7 @@ export function QuizAuthoringPanel({
                         </span>
                         <button
                           type="button"
+                          hidden={!editsQuestions}
                           disabled={deleteQuestion.isPending}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -2236,7 +2278,10 @@ export function QuizAuthoringPanel({
             </div>
 
             {/* Add Question Button (Course Curriculum Style) */}
-            <div className="mt-3 pt-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+            <div
+              hidden={!editsQuestions}
+              className="mt-3 pt-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+            >
               <button
                 type="button"
                 onClick={handleAddNewQuestion}
@@ -2400,6 +2445,7 @@ export function QuizAuthoringPanel({
                       </div>
                       <button
                         type="button"
+                        hidden={!editsSettings}
                         onClick={() => setShowDetachConfirm(true)}
                         disabled={deleteAssignmentMutation.isPending}
                         className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold text-rose-500 hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
@@ -2428,72 +2474,79 @@ export function QuizAuthoringPanel({
                   )
                 ) : null}
 
-                <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-3">
-                  <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Pass percentage
-                    </span>
+                {/* The delivery rules take quiz.settings.update; without it
+                    they are shown, not editable. */}
+                <div
+                  inert={!editsSettings}
+                  className={`space-y-3 sm:space-y-4 ${editsSettings ? "" : "opacity-60"}`}
+                >
+                  <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-3">
+                    <label className="block">
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Pass percentage
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={passPercentage}
+                        onChange={(event) => {
+                          setPassPercentage(Number(event.target.value));
+                          scheduleAutoSaveAssignment();
+                        }}
+                        onBlur={flushAssignmentPersistence}
+                        className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Maximum attempts
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={maxAttempts}
+                        onChange={(event) => {
+                          setMaxAttempts(Number(event.target.value));
+                          scheduleAutoSaveAssignment();
+                        }}
+                        onBlur={flushAssignmentPersistence}
+                        className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Time limit (minutes)
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="1440"
+                        value={timeLimitMinutes}
+                        onChange={(event) => {
+                          setTimeLimitMinutes(Number(event.target.value));
+                          scheduleAutoSaveAssignment();
+                        }}
+                        onBlur={flushAssignmentPersistence}
+                        className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      />
+                    </label>
+                  </div>
+
+                  <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
                     <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={passPercentage}
+                      type="checkbox"
+                      checked={required}
                       onChange={(event) => {
-                        setPassPercentage(Number(event.target.value));
+                        setRequired(event.target.checked);
                         scheduleAutoSaveAssignment();
                       }}
-                      onBlur={flushAssignmentPersistence}
-                      className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
                     />
-                  </label>
-                  <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Maximum attempts
-                    </span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={maxAttempts}
-                      onChange={(event) => {
-                        setMaxAttempts(Number(event.target.value));
-                        scheduleAutoSaveAssignment();
-                      }}
-                      onBlur={flushAssignmentPersistence}
-                      className={`${inputClass} w-full !h-9.5 sm:!h-10`}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Time limit (minutes)
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="1440"
-                      value={timeLimitMinutes}
-                      onChange={(event) => {
-                        setTimeLimitMinutes(Number(event.target.value));
-                        scheduleAutoSaveAssignment();
-                      }}
-                      onBlur={flushAssignmentPersistence}
-                      className={`${inputClass} w-full !h-9.5 sm:!h-10`}
-                    />
+                    <span>Required course assessment to complete lesson</span>
                   </label>
                 </div>
-
-                <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={required}
-                    onChange={(event) => {
-                      setRequired(event.target.checked);
-                      scheduleAutoSaveAssignment();
-                    }}
-                    className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
-                  />
-                  <span>Required course assessment to complete lesson</span>
-                </label>
 
                 {/* Free Preview Toggle & Standalone Pricing Note */}
                 <div className="rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] space-y-3">
@@ -2507,7 +2560,10 @@ export function QuizAuthoringPanel({
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                  <div
+                    hidden={!editsLessonPreview}
+                    className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                  >
                     <div className="pr-3">
                       <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
                         Free Preview
@@ -2545,107 +2601,114 @@ export function QuizAuthoringPanel({
                   </div>
                 </div>
 
-                {assignment && versionOptions.length > 0 ? (
+                <div
+                  inert={!editsSettings}
+                  className={`space-y-3 sm:space-y-4 ${editsSettings ? "" : "opacity-60"}`}
+                >
+                  {assignment && versionOptions.length > 0 ? (
+                    <div>
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Assigned published version
+                      </span>
+                      <ThemedSelect
+                        value={assignmentVersionId ?? ""}
+                        onValueChange={(val) => {
+                          setAssignmentVersionId(val);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        options={versionOptions}
+                        ariaLabel="Assigned published version"
+                        triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
+                      />
+                    </div>
+                  ) : null}
+
                   <div>
                     <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Assigned published version
+                      Result feedback mode
                     </span>
                     <ThemedSelect
-                      value={assignmentVersionId ?? ""}
+                      value={feedbackMode}
                       onValueChange={(val) => {
-                        setAssignmentVersionId(val);
+                        setFeedbackMode(val as typeof feedbackMode);
                         scheduleAutoSaveAssignment();
                       }}
-                      options={versionOptions}
-                      ariaLabel="Assigned published version"
+                      options={FEEDBACK_MODE_OPTIONS}
+                      ariaLabel="Result feedback mode"
                       triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
                     />
                   </div>
-                ) : null}
 
-                <div>
-                  <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                    Result feedback mode
-                  </span>
-                  <ThemedSelect
-                    value={feedbackMode}
-                    onValueChange={(val) => {
-                      setFeedbackMode(val as typeof feedbackMode);
-                      scheduleAutoSaveAssignment();
-                    }}
-                    options={FEEDBACK_MODE_OPTIONS}
-                    ariaLabel="Result feedback mode"
-                    triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
-                  />
-                </div>
-
-                <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-2">
-                  <div>
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Available from{" "}
-                      <span className="text-(--muted) font-normal">
-                        (optional)
+                  <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-2">
+                    <div>
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Available from{" "}
+                        <span className="text-(--muted) font-normal">
+                          (optional)
+                        </span>
                       </span>
-                    </span>
-                    <ThemedDateTimePicker
-                      value={availableFrom}
-                      onChange={(val) => {
-                        setAvailableFrom(val);
-                        scheduleAutoSaveAssignment();
-                      }}
-                      ariaLabel="Available from"
-                      placeholder="dd/mm/yyyy --:--"
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Available until{" "}
-                      <span className="text-(--muted) font-normal">
-                        (optional)
+                      <ThemedDateTimePicker
+                        value={availableFrom}
+                        onChange={(val) => {
+                          setAvailableFrom(val);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        ariaLabel="Available from"
+                        placeholder="dd/mm/yyyy --:--"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                        Available until{" "}
+                        <span className="text-(--muted) font-normal">
+                          (optional)
+                        </span>
                       </span>
-                    </span>
-                    <ThemedDateTimePicker
-                      value={availableUntil}
-                      onChange={(val) => {
-                        setAvailableUntil(val);
-                        scheduleAutoSaveAssignment();
-                      }}
-                      ariaLabel="Available until"
-                      placeholder="dd/mm/yyyy --:--"
-                    />
+                      <ThemedDateTimePicker
+                        value={availableUntil}
+                        onChange={(val) => {
+                          setAvailableUntil(val);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        ariaLabel="Available until"
+                        placeholder="dd/mm/yyyy --:--"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={shuffleQuestions}
-                      onChange={(event) => {
-                        setShuffleQuestions(event.target.checked);
-                        scheduleAutoSaveAssignment();
-                      }}
-                      className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
-                    />
-                    <span>Shuffle questions for each student attempt</span>
-                  </label>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shuffleQuestions}
+                        onChange={(event) => {
+                          setShuffleQuestions(event.target.checked);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
+                      />
+                      <span>Shuffle questions for each student attempt</span>
+                    </label>
 
-                  <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={shuffleOptions}
-                      onChange={(event) => {
-                        setShuffleOptions(event.target.checked);
-                        scheduleAutoSaveAssignment();
-                      }}
-                      className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
-                    />
-                    <span>Shuffle answer options for each student attempt</span>
-                  </label>
+                    <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shuffleOptions}
+                        onChange={(event) => {
+                          setShuffleOptions(event.target.checked);
+                          scheduleAutoSaveAssignment();
+                        }}
+                        className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
+                      />
+                      <span>
+                        Shuffle answer options for each student attempt
+                      </span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="pt-2 sm:pt-3 flex flex-wrap items-center gap-3">
-                  {!quizId ? (
+                  {!quizId && createsQuizzes ? (
                     <Button
                       onClick={() => persistBrowserDraft()}
                       disabled={!canPersistBrowserDraft || create.isPending}
@@ -2656,7 +2719,10 @@ export function QuizAuthoringPanel({
                     </Button>
                   ) : null}
                   {hasUnpublishedChanges || lessonOnOlderVersion ? (
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <div
+                      hidden={!mayUpdateLessonVersion}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-2"
+                    >
                       <Button
                         onClick={
                           hasUnpublishedChanges
@@ -2692,7 +2758,7 @@ export function QuizAuthoringPanel({
                       <CheckCircle size={16} weight="bold" />
                       <span>Assigned to lesson</span>
                     </span>
-                  ) : (
+                  ) : mayPublishAndAssign ? (
                     <Button
                       onClick={publishAndAssign}
                       disabled={
@@ -2719,7 +2785,7 @@ export function QuizAuthoringPanel({
                         "Publish & assign"
                       )}
                     </Button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -2731,7 +2797,7 @@ export function QuizAuthoringPanel({
                 </p>
                 {!version?.publishedAt && (
                   <div className="mt-3 flex flex-wrap justify-center gap-2">
-                    {!quizId ? (
+                    {!quizId && createsQuizzes ? (
                       <Button
                         onClick={() => persistBrowserDraft()}
                         disabled={!canPersistBrowserDraft || create.isPending}
@@ -2742,6 +2808,7 @@ export function QuizAuthoringPanel({
                       </Button>
                     ) : null}
                     <Button
+                      hidden={!mayPublishAndAssign}
                       onClick={publishAndAssign}
                       disabled={
                         !editableQuestions.length ||

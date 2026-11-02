@@ -68,6 +68,27 @@ export function listUserDisplayNamesByIds(
 }
 
 /**
+ * Bulk name and email lookup, for staff lists that find people by either
+ * (the quiz report's student search). Same narrow shape as the name lookup.
+ */
+export function listUserNamesAndEmailsByIds(
+  database: Executor,
+  userIds: readonly string[],
+) {
+  if (userIds.length === 0) {
+    return Promise.resolve(
+      [] as { id: string; display_name: string; email: string }[],
+    );
+  }
+  return database
+    .selectFrom("users")
+    .select(["id", "display_name", "email"])
+    .where("id", "in", [...userIds])
+    .where("is_deleted", "=", false)
+    .execute();
+}
+
+/**
  * Bulk id+email lookup for notification fan-out. Includes soft-deleted
  * users, matching findUserByIdIncludingDeleted's semantics (the per-id
  * variant the notification worker used one query at a time).

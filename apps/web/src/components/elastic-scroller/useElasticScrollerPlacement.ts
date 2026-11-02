@@ -159,16 +159,42 @@ export function useElasticScrollerPlacement({
       // Where its centre is when it sits where it normally does.
       const homeX = button.left + button.width / 2 - start.x;
       const homeY = button.top + button.height / 2 - start.y;
+      // It is kept on the screen as well as in the scrolling area, which can
+      // reach past it (a phone's page scroller is the page's full height),
+      // and whole: its centre stays far enough in for all of it to show.
+      const screen = window.visualViewport;
+      const screenLeft = screen?.offsetLeft ?? 0;
+      const screenTop = screen?.offsetTop ?? 0;
+      const visible = {
+        left: Math.max(scrollport.left, screenLeft),
+        top: Math.max(scrollport.top, screenTop),
+        right: Math.min(
+          scrollport.right,
+          screenLeft + (screen?.width ?? window.innerWidth),
+        ),
+        bottom: Math.min(
+          scrollport.bottom,
+          screenTop + (screen?.height ?? window.innerHeight),
+        ),
+      };
+      const insetX = Math.max(EDGE_INSET, button.width / 2 + 4);
+      const insetY = Math.max(EDGE_INSET, button.height / 2 + 4);
       pressRef.current = {
         pointerId: event.pointerId,
         x: event.clientX,
         y: event.clientY,
         startOffset: start,
         limits: {
-          minX: scrollport.left + EDGE_INSET - homeX,
-          maxX: scrollport.right - EDGE_INSET - homeX,
-          minY: scrollport.top + EDGE_INSET - homeY,
-          maxY: scrollport.bottom - EDGE_INSET - homeY,
+          minX: visible.left + insetX - homeX,
+          maxX: Math.max(
+            visible.left + insetX - homeX,
+            visible.right - insetX - homeX,
+          ),
+          minY: visible.top + insetY - homeY,
+          maxY: Math.max(
+            visible.top + insetY - homeY,
+            visible.bottom - insetY - homeY,
+          ),
         },
         area: {
           left: scrollport.left - homeX,

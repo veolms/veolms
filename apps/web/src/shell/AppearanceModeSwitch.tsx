@@ -1,11 +1,16 @@
 import { createLucideIcon, Sun } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { themeRevealOriginFromClick } from "./themeViewTransition";
+import {
+  onThemeRevealStart,
+  themeRevealAvailable,
+  themeRevealOriginFromClick,
+} from "./themeViewTransition";
 import type { ThemeRevealOrigin } from "./themeViewTransition";
 
 export type AppearanceMode = "light" | "dark";
@@ -32,6 +37,9 @@ const CrescentMoon = createLucideIcon("crescent-moon", [
 // names as text).
 // How far a sideways swipe must travel to change the mode.
 const SWIPE_DISTANCE = 24;
+// The slab moves when the page's reveal starts (see `onThemeRevealStart`);
+// should no reveal come, it moves after this long anyway.
+const REVEAL_START_FALLBACK_MS = 1_500;
 
 const MODE_OPTIONS = [
   [
@@ -163,10 +171,14 @@ export function AppearanceModeSwitch({
   onChange: commitMode,
 }: AppearanceModeSwitchProps) {
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  // The side just chosen, shown at once: the mode the shell hands back
-  // arrives only after the page has restyled for it, and the slab waited for
-  // it (about half a second on a lesson page). A new mode from the shell
-  // (this press landing, or a change made elsewhere) replaces it.
+  // The side just chosen, shown as soon as anything can be: the mode the
+  // shell hands back arrives only after the page has restyled for it, and
+  // the slab waited for it (about half a second on a lesson page). With a
+  // reveal, the slab moves the moment the reveal starts drawing: nothing is
+  // drawn before that, and a slide started at the press was half over (on an
+  // iPhone almost all of it) by the first frame, so it jumped. A new mode
+  // from the shell (this press landing, or a change made elsewhere) replaces
+  // it.
   const [shownMode, setShownMode] = useState(committedMode);
   const [lastCommittedMode, setLastCommittedMode] = useState(committedMode);
   if (committedMode !== lastCommittedMode) {
@@ -174,8 +186,44 @@ export function AppearanceModeSwitch({
     setShownMode(committedMode);
   }
   const mode = shownMode;
+  const pendingModeRef = useRef<AppearanceMode | null>(null);
+  const pendingTimerRef = useRef<number | null>(null);
+  const showPendingMode = () => {
+    const pending = pendingModeRef.current;
+    pendingModeRef.current = null;
+    if (pendingTimerRef.current !== null) {
+      window.clearTimeout(pendingTimerRef.current);
+      pendingTimerRef.current = null;
+    }
+    // Drawn at once, ahead of the shell's own re-render for the new mode.
+    if (pending) flushSync(() => setShownMode(pending));
+  };
+  const showPendingModeRef = useRef(showPendingMode);
+  showPendingModeRef.current = showPendingMode;
+  useEffect(() => {
+    const stop = onThemeRevealStart((kind) => {
+      if (kind === "mode") showPendingModeRef.current();
+    });
+    return () => {
+      stop();
+      if (pendingTimerRef.current !== null) {
+        window.clearTimeout(pendingTimerRef.current);
+      }
+    };
+  }, []);
   const onChange = (nextMode: AppearanceMode, origin?: ThemeRevealOrigin) => {
-    setShownMode(nextMode);
+    if (themeRevealAvailable()) {
+      pendingModeRef.current = nextMode;
+      if (pendingTimerRef.current !== null) {
+        window.clearTimeout(pendingTimerRef.current);
+      }
+      pendingTimerRef.current = window.setTimeout(
+        () => showPendingModeRef.current(),
+        REVEAL_START_FALLBACK_MS,
+      );
+    } else {
+      setShownMode(nextMode);
+    }
     commitMode(nextMode, origin);
   };
 
@@ -256,10 +304,17 @@ export function AppearanceModeSwitch({
           className="inset-x-0 text-[color-mix(in_srgb,var(--text)_70%,transparent)]"
         />
         {/* Raised out of the pit: the shadows follow the S edges, so they
-            are drop-shadow filters (on a wrapper, outside the masks). */}
+            are drop-shadow filters (on a wrapper, outside the masks).
+            The wrapper is clipped to the track's rounded shape itself:
+            Safari does not cut the moving pieces at the track's rounded
+            `overflow`, and the chosen side's outer corners came out
+            square. On iOS (`-webkit-touch-callout` is iOS Safari's own)
+            the shadows are left off while the page's reveal runs: the
+            filter is redrawn on every frame the slab moves, and with the
+            page restyling for the new mode the slab jumped. */}
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-1 [filter:drop-shadow(0_1px_2px_rgb(0_0_0/50%))_drop-shadow(0_4px_10px_rgb(0_0_0/45%))] in-data-[theme=light]:[filter:drop-shadow(0_1px_2px_color-mix(in_srgb,var(--text)_28%,transparent))_drop-shadow(0_4px_10px_color-mix(in_srgb,var(--text)_22%,transparent))]"
+          className="pointer-events-none absolute inset-0 z-1 [clip-path:inset(0_round_14px)] [filter:drop-shadow(0_1px_2px_rgb(0_0_0/50%))_drop-shadow(0_4px_10px_rgb(0_0_0/45%))] in-data-[theme=light]:[filter:drop-shadow(0_1px_2px_color-mix(in_srgb,var(--text)_28%,transparent))_drop-shadow(0_4px_10px_color-mix(in_srgb,var(--text)_22%,transparent))] supports-[-webkit-touch-callout:none]:in-data-[theme-transition]:[filter:none]!"
         >
           {/* The left end. */}
           <span

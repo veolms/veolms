@@ -223,7 +223,11 @@ export function CommentComposer({
             data-comment-toolbar
             className="flex shrink-0 items-center gap-1.5 bg-[color-mix(in_srgb,var(--surface)_84%,transparent)] px-2.5 py-2.5 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)] sm:gap-2 sm:px-3"
           >
-            <DiscussionAvatar src={avatar} className="size-9 sm:size-10" />
+            <DiscussionAvatar
+              src={avatar}
+              viewer
+              className="size-9 sm:size-10"
+            />
             {editorController ? (
               <CommentFormattingToolbar
                 editor={editorController}
@@ -257,12 +261,16 @@ export function CommentComposer({
       ) : (
         <div
           key="publish"
-          className={`flex min-h-0 flex-col motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-250 ${presentation === "drawer" ? "flex-1 overflow-y-auto overscroll-contain" : ""}`}
+          className={`flex min-h-0 flex-col motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-250 ${presentation === "drawer" ? "flex-1" : ""}`}
         >
+          {/* In the drawer the options scroll and Back and Post stay below
+              them. Shrunk without scrolling, the options spilled under the
+              buttons in a short phone drawer. Elsewhere nothing scrolls
+              here, so the visibility tooltips are not clipped. */}
           <div
             ref={reviewHeadingRef}
             tabIndex={-1}
-            className="flex min-h-0 flex-1 outline-none"
+            className={`flex min-h-0 flex-1 outline-none ${presentation === "drawer" ? "overflow-y-auto overscroll-contain" : ""}`}
           >
             <CommentPublishingOptions
               entryKind={entryKind}

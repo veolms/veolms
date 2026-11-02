@@ -1,4 +1,4 @@
-import { sql } from "kysely";
+import { sql, type SqlBool } from "kysely";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 
 export interface RoleRow {
@@ -15,7 +15,7 @@ export async function listTeamRoles(
   database: Executor,
   roleId?: string,
 ): Promise<RoleRow[]> {
-  return await database
+  const roles = await database
     .selectFrom("roles as r")
     .select([
       "r.id",
@@ -28,20 +28,35 @@ export async function listTeamRoles(
         join permissions p on p.id = rp.permission_id
         where rp.role_id = r.id and rp.effect = 'allow'
       ), '{}')`.as("permissions"),
-      sql<number>`(
-        select count(distinct ra.user_id)::int
-        from role_assignments ra
-        join users u on u.id = ra.user_id and u.is_deleted = false
-        where ra.role_id = r.id
-          and ra.scope_type = 'platform'
-          and (ra.expires_at is null or ra.expires_at > now())
-      )`.as("member_count"),
     ])
     .where("r.name", "<>", "student")
     .$if(Boolean(roleId), (qb) => qb.where("r.id", "=", roleId!))
     .orderBy("r.is_system", "desc")
     .orderBy("r.name")
     .execute();
+  if (roles.length === 0) return [];
+
+  // Counted for the listed ids only: a correlated count per role was planned
+  // without the id and read every user once.
+  const counts = await database
+    .selectFrom("role_assignments as ra")
+    .innerJoin("users as u", "u.id", "ra.user_id")
+    .select(["ra.role_id", sql<number>`count(*)::int`.as("member_count")])
+    .where(
+      sql<SqlBool>`ra.role_id = any(${roles.map((role) => role.id)}::uuid[])`,
+    )
+    .where("ra.scope_type", "=", "platform")
+    .where("u.is_deleted", "=", false)
+    .where(sql<SqlBool>`(ra.expires_at is null or ra.expires_at > now())`)
+    .groupBy("ra.role_id")
+    .execute();
+  const countByRole = new Map(
+    counts.map((row) => [row.role_id, row.member_count]),
+  );
+  return roles.map((role) => ({
+    ...role,
+    member_count: countByRole.get(role.id) ?? 0,
+  }));
 }
 
 export async function isRoleNameTaken(
@@ -111,7 +126,11 @@ export async function replaceRolePermissions(
     .execute();
 }
 
-/** People holding the role plus open invitations that would grant it. */
+/**
+ * People holding the role plus open invitations that would grant it. Like
+ * the member count shown, lapsed grants and deleted accounts do not count;
+ * their rows go with the role.
+ */
 export async function countRoleUsage(
   database: Executor,
   roleId: string,
@@ -119,7 +138,10 @@ export async function countRoleUsage(
   const row = await database
     .selectNoFrom([
       sql<number>`(
-        (select count(*) from role_assignments where role_id = ${roleId}::uuid)
+        (select count(*) from role_assignments ra
+         join users u on u.id = ra.user_id and u.is_deleted = false
+         where ra.role_id = ${roleId}::uuid
+           and (ra.expires_at is null or ra.expires_at > now()))
         + (select count(*) from team_invitation_roles tir
            join team_invitations ti on ti.id = tir.invitation_id
            where tir.role_id = ${roleId}::uuid

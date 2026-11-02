@@ -103,6 +103,7 @@ export function SlideOverPanel({
   closeRef,
   headerActions,
   headerContent,
+  className,
   children,
 }: {
   label: string;
@@ -114,10 +115,12 @@ export function SlideOverPanel({
   headerActions?: ReactNode;
   /** Header rows under the title. */
   headerContent?: ReactNode;
+  /** The panel's width limit, when the default 500px is too narrow. */
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <SlideOverFrame label={label} onClose={onClose}>
+    <SlideOverFrame label={label} onClose={onClose} className={className}>
       <div className="flex flex-col border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-5 sm:p-6 shrink-0">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-bold tracking-tight text-(--text)">

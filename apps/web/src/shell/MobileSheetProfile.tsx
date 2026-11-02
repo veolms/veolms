@@ -1,5 +1,5 @@
 import { Suspense, type Dispatch, type SetStateAction } from "react";
-import { ProfileButtonPlaceholder } from "./ProfileButtonPlaceholder";
+import { EarlyProfileButtons } from "./EarlyProfileButtons";
 import type { AuthIdentityHint } from "../store/auth.store";
 import type { NavigateTo } from "../routing/navigation";
 import { ProfileMenuIdentity } from "./academyLazyPages";
@@ -63,13 +63,16 @@ export function MobileSheetProfile({
             }}
           />
         </Suspense>
-      ) : accountStatusUnknown ? (
-        <ProfileButtonPlaceholder className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]!" />
+      ) : !authUserFetched ? (
+        <EarlyProfileButtons
+          className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]! hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,white_10%)]!"
+          arrowSize={17}
+          onLogin={() => onNavigatePage("/login")}
+        />
       ) : (
         <LoginProfileButton
           className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]! hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,white_10%)]!"
           arrowSize={17}
-          remembered={authUserFetched ? null : authIdentityHint}
           preloadWhenShown
           onLogin={() => onNavigatePage("/login")}
         />

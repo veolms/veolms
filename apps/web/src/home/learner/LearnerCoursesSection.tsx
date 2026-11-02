@@ -1,6 +1,7 @@
 import type { EnrolledCourse } from "@veolms/contracts";
 import type { ReactNode } from "react";
 import type { NavigateTo } from "../../routing/navigation";
+import type { CourseOpenOptions } from "../../courses/catalogue";
 import { GuestHomeSectionHeader } from "../guest/GuestHomeSectionHeader";
 import { LearnerCourseCard } from "./LearnerCourseCard";
 import { learnerCourseGridClasses } from "./LearnerHomeSkeleton";
@@ -38,7 +39,7 @@ export function LearnerCoursesSection({
   courseMenu: string | null;
   setCourseMenu: (courseId: string | null) => void;
   getCourseHref: (course: EnrolledCourse) => string;
-  onOpenCourse: (course: EnrolledCourse) => void;
+  onOpenCourse: (course: EnrolledCourse, options?: CourseOpenOptions) => void;
   /** The course the learner pinned to the home, if they pinned one. */
   pinnedCourseId: string | null;
   /** Makes the course the one the home's hero leads with. */
@@ -71,7 +72,7 @@ export function LearnerCoursesSection({
             priority={index < 3}
             menuOpen={courseMenu === course.courseId}
             setMenuOpen={setCourseMenu}
-            onOpen={() => onOpenCourse(course)}
+            onOpen={(options) => onOpenCourse(course, options)}
             pinned={course.courseId === pinnedCourseId}
             onPin={() => onPinCourse(course)}
             onUnpin={onUnpinCourse}

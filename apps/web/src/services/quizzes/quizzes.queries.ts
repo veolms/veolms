@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ApiError } from "../../lib/api-error";
 import { quizKeys } from "./quizzes.keys";
 import { quizzesService } from "./quizzes.service";
@@ -96,6 +96,33 @@ export function useCourseQuizAnalytics(courseId: string | null | undefined) {
       : [...quizKeys.all, "course-analytics", null],
     queryFn: () => quizzesService.courseAnalytics(courseId!),
     enabled: Boolean(courseId),
+    staleTime: 15_000,
+  });
+}
+/**
+ * One student's attempt on an assignment, for the people who manage the
+ * course. `attemptId` null reads the newest attempt.
+ */
+export function useQuizSubmission(
+  assignmentId: string | null | undefined,
+  studentId: string | null | undefined,
+  attemptId: string | null = null,
+) {
+  return useQuery({
+    queryKey:
+      assignmentId && studentId
+        ? quizKeys.submission(assignmentId, studentId, attemptId)
+        : [...quizKeys.all, "submission", null],
+    queryFn: () =>
+      quizzesService.submission(
+        assignmentId!,
+        studentId!,
+        attemptId ?? undefined,
+      ),
+    enabled: Boolean(assignmentId && studentId),
+    // Switching between a student's attempts keeps the one on screen until
+    // the next arrives. A different student is a new panel, with no previous.
+    placeholderData: keepPreviousData,
     staleTime: 15_000,
   });
 }

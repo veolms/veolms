@@ -6,6 +6,7 @@ import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import type { Permission } from "@veolms/contracts";
 import type { ComponentType } from "react";
+import { CURRICULUM_PERMISSIONS } from "./curriculumPermissions";
 
 export type CourseWizardStepId =
   "basics" | "curriculum" | "access-rules" | "pricing" | "extras" | "publish";
@@ -34,13 +35,14 @@ export const WIZARD_STEPS: readonly WizardStepDefinition[] = [
 
 /**
  * What changing each step takes (any one of them). Basics holds the
- * thumbnail, so a thumbnail editor opens it too.
+ * thumbnail, so a thumbnail editor opens it too; the curriculum holds the
+ * lessons (see CURRICULUM_PERMISSIONS).
  */
 export const WIZARD_STEP_PERMISSIONS: Readonly<
   Record<CourseWizardStepId, readonly Permission[]>
 > = {
   basics: ["course.details.update", "course.thumbnail.update"],
-  curriculum: ["course.curriculum.update"],
+  curriculum: CURRICULUM_PERMISSIONS,
   "access-rules": ["course.details.update"],
   pricing: ["course.pricing.update"],
   extras: ["course.details.update"],

@@ -11,6 +11,16 @@ import {
   playbackRatesMatch,
 } from "../playback/playbackRates";
 import { usePlayerController } from "../react/context";
+import { PLAYER_FEEDBACK_DURATION_MS } from "../controls/feedbackTiming";
+
+/** One press of Up or Down: 5% of the volume, as on YouTube. */
+const KEYBOARD_VOLUME_STEP = 0.05;
+
+interface KeyboardSeekRun {
+  direction: -1 | 1;
+  totalSeconds: number;
+  at: number;
+}
 
 interface SharedKeyboardScope {
   arbiter: PlayerKeyboardArbiter;
@@ -69,6 +79,9 @@ export function usePlayerKeyboard({
   const rateBeforeBoostRef = useRef<number | null>(null);
   const pausedBeforeBoostRef = useRef(false);
   const controlsVisibleBeforeBoostRef = useRef(true);
+  // Presses in the same direction while the last one is still on screen
+  // add up, as double taps do: "+10", "+20", "+30".
+  const seekRunRef = useRef<KeyboardSeekRun | null>(null);
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return undefined;
@@ -78,12 +91,54 @@ export function usePlayerKeyboard({
       getPlayerRoot: () => rootRef.current,
       actions: {
         togglePlayPause: () => controller.togglePlayback(),
-        seekBy: (seconds) =>
-          controller.seekBy(
+        seekBy: (seconds) => {
+          const delta =
             Math.abs(seconds) === 5
               ? Math.sign(seconds) * seekIntervalSeconds
-              : seconds,
-          ),
+              : seconds;
+          if (delta === 0) return;
+          const direction: -1 | 1 = delta < 0 ? -1 : 1;
+          const now = performance.now();
+          const run = seekRunRef.current;
+          const totalSeconds =
+            (run?.direction === direction &&
+            now - run.at < PLAYER_FEEDBACK_DURATION_MS
+              ? run.totalSeconds
+              : 0) + Math.round(Math.abs(delta));
+          seekRunRef.current = { direction, totalSeconds, at: now };
+          controller.seekBy(delta);
+          controller.showHud(`${direction < 0 ? "−" : "+"}${totalSeconds}`, {
+            direction,
+            variant: "keyboard-seek",
+          });
+          controller.revealControls();
+        },
+        adjustVolume: (direction) => {
+          const { muted, volume } = controller.getSnapshot().media;
+          if (muted && direction < 0) {
+            // Down leaves a muted video muted (setVolume would unmute it).
+            controller.showHud("Muted", {
+              direction,
+              level: 0,
+              variant: "volume",
+            });
+            controller.revealControls();
+            return;
+          }
+          // Kept on the 5% steps, whatever the slider left it at; any step
+          // brings a muted video's sound back (setVolume does).
+          const next = Math.min(
+            1,
+            Math.max(
+              0,
+              Math.round((volume + direction * KEYBOARD_VOLUME_STEP) * 20) / 20,
+            ),
+          );
+          if (next !== volume) controller.setVolume(next);
+          else if (muted && next > 0) controller.setMuted(false);
+          controller.showVolume(next, direction);
+          controller.revealControls();
+        },
         seekToPercentage: (percentage) => {
           const duration = controller.getSnapshot().media.duration;
           controller.seekTo(duration * (percentage / 100));

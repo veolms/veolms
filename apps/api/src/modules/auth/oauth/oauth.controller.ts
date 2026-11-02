@@ -13,6 +13,7 @@ import {
   setSessionCookie,
 } from "../shared/auth.cookies.ts";
 import { presentLogin } from "../shared/auth.presenters.ts";
+import { requestLocation } from "../shared/request-location.ts";
 
 export function createOauthController(context: AuthContext) {
   const { oauthService } = context;
@@ -45,6 +46,7 @@ export function createOauthController(context: AuthContext) {
     const result = await oauthService.login(request.body.provider, callback, {
       ip: request.ip,
       userAgent: request.headers["user-agent"] ?? null,
+      location: requestLocation(request.headers),
       existingSessionToken,
     });
 
@@ -62,6 +64,7 @@ export function createOauthController(context: AuthContext) {
       {
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
+        location: requestLocation(request.headers),
         existingSessionToken,
       },
     );
@@ -85,6 +88,7 @@ export function createOauthController(context: AuthContext) {
     const result = await oauthService.register(request.body, callback, {
       ip: request.ip,
       userAgent: request.headers["user-agent"] ?? null,
+      location: requestLocation(request.headers),
       existingSessionToken,
     });
 

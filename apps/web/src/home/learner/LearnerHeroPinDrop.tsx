@@ -1,6 +1,10 @@
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
-import { useState } from "react";
-import { readPinCourseDrop } from "./pinCourseDrag";
+import { useEffect, useRef, useState } from "react";
+import {
+  PIN_DROP_EVENT,
+  PIN_DROP_OVER_EVENT,
+  readPinCourseDrop,
+} from "./pinCourseDrag";
 
 /**
  * Lies over the hero's course card while one of the learner's course cards
@@ -8,6 +12,9 @@ import { readPinCourseDrop } from "./pinCourseDrag";
  * past the card on every side, so the drop need not be exact. It is only
  * there during the drag, so the card's own controls are never under it
  * otherwise. Goes inside a `relative` box the size of the card.
+ *
+ * A mouse's drag arrives as the browser's drag events, a finger's as the
+ * page's own (see `getPinCourseDragProps`).
  */
 export function LearnerHeroPinDrop({
   onPin,
@@ -15,9 +22,32 @@ export function LearnerHeroPinDrop({
   onPin: (courseId: string) => void;
 }) {
   const [over, setOver] = useState(false);
+  const zoneRef = useRef<HTMLDivElement>(null);
+  const onPinRef = useRef(onPin);
+  onPinRef.current = onPin;
+
+  useEffect(() => {
+    const zone = zoneRef.current;
+    if (!zone) return;
+    const touchOver = (event: Event) => {
+      setOver((event as CustomEvent<{ over: boolean }>).detail.over);
+    };
+    const touchDrop = (event: Event) => {
+      onPinRef.current(
+        (event as CustomEvent<{ courseId: string }>).detail.courseId,
+      );
+    };
+    zone.addEventListener(PIN_DROP_OVER_EVENT, touchOver);
+    zone.addEventListener(PIN_DROP_EVENT, touchDrop);
+    return () => {
+      zone.removeEventListener(PIN_DROP_OVER_EVENT, touchOver);
+      zone.removeEventListener(PIN_DROP_EVENT, touchDrop);
+    };
+  }, []);
 
   return (
     <div
+      ref={zoneRef}
       data-learner-hero-pin-drop=""
       onDragEnter={() => setOver(true)}
       onDragLeave={(event) => {

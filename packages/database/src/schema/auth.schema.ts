@@ -87,12 +87,37 @@ export interface SessionTable {
   token_hash: string;
   ip_address: string | null;
   user_agent: string | null;
+  /** Roughly where it was signed in from (Cloudflare's location headers). */
+  location_city: string | null;
+  location_region: string | null;
+  location_country: string | null;
   mfa_verified: Generated<boolean>;
   revoked_at: Date | null;
   expires_at: Date;
   last_used_at: Generated<Date>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+}
+
+/**
+ * A student's sign-in held back while they chose a device to sign out, as
+ * the academy's device limit once asked (see the device-limit migration).
+ * No longer written: the limit now signs the oldest device out instead.
+ * Kept until a migration drops it, so the code it replaced can still run
+ * beside it during a deploy.
+ */
+export interface PendingDeviceSignInTable {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  location_city: string | null;
+  location_region: string | null;
+  location_country: string | null;
+  expires_at: Date;
+  used_at: Date | null;
+  created_at: Generated<Date>;
 }
 
 export interface OauthAccountTable {

@@ -10,9 +10,11 @@ import { AppError } from "../../../lib/errors.ts";
 import { secureCompare } from "../../../lib/secure-compare.ts";
 import type { CreateUserInput } from "../authentication/authentication.types.ts";
 import * as academyRepository from "./setup.repository.ts";
+import { forgetAcademy, getAcademyRow } from "./academy-cache.ts";
 import type { AuthService } from "../authentication/authentication.service.ts";
 import type { SessionService } from "../session/session.service.ts";
 import { normalizePhoneIdentifier } from "../shared/auth.utils.ts";
+import type { SessionLocation } from "../shared/request-location.ts";
 
 const setupSessionSchema = z.object({ exp: z.number() });
 
@@ -53,7 +55,7 @@ export function createSetupService({
   }
 
   async function getAcademy() {
-    return await academyRepository.findAcademy(database);
+    return await getAcademyRow(database);
   }
 
   function assertValidSetupSession(
@@ -110,7 +112,11 @@ export function createSetupService({
 
   async function registerCreator(
     input: CreatorRegisterRequest,
-    request: { ip: string; userAgent: string | null },
+    request: {
+      ip: string;
+      userAgent: string | null;
+      location?: SessionLocation | null;
+    },
   ) {
     await assertSetupOpen();
 
@@ -169,6 +175,7 @@ export function createSetupService({
       customDomain: input.customDomain || null,
       exists: Boolean(existing),
     });
+    forgetAcademy();
 
     return {
       id: academyId,
@@ -200,6 +207,7 @@ export function createSetupService({
     }
 
     await academyRepository.markSetupCompleted(database, academy.id);
+    forgetAcademy();
   }
 
   return {

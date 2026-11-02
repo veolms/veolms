@@ -8,3 +8,8 @@ export {
   createLessonProgressResetService,
   type LessonProgressResetService,
 } from "./lesson-progress-reset.service.ts";
+// Used by the media module's playback bootstrap.
+export {
+  createLessonPositionReader,
+  type LessonPositionReader,
+} from "./lesson-position.service.ts";

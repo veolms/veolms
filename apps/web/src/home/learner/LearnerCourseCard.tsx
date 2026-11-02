@@ -26,6 +26,9 @@ import { ALT_DRAG_TEXT_SELECT_CLASSES } from "../../courses/altDragTextSelect";
 import { getPinCourseDragProps } from "./pinCourseDrag";
 import { useIsCutOff } from "./useIsCutOff";
 import { raisedCourseCardClasses } from "../../components/cardElevation";
+import type { CourseOpenOptions } from "../../courses/catalogue";
+import { useLessonOpenIntent } from "../../learning/lessonOpenIntent";
+import { getEnrolledCourseKey } from "./learnerHomePlan";
 
 const plural = (count: number, one: string, many: string) =>
   `${count} ${count === 1 ? one : many}`;
@@ -83,7 +86,8 @@ export function LearnerCourseCard({
   priority: boolean;
   menuOpen: boolean;
   setMenuOpen: (courseId: string | null) => void;
-  onOpen: () => void;
+  /** Opens the course's lessons, at the lesson named, playing when asked. */
+  onOpen: (options?: CourseOpenOptions) => void;
   /** The home's hero leads with this course because the learner pinned it. */
   pinned: boolean;
   /** Makes this the course the home's hero leads with. */
@@ -104,6 +108,16 @@ export function LearnerCourseCard({
     run();
   };
   const overviewHref = getEnrolledCourseOverviewHref(course);
+  // The picture and the action open the lesson the learner carries on with,
+  // readied while the pointer rests on either, and playing (see
+  // lessonOpenIntent). A finished course opens as its address does.
+  const playIntent = useLessonOpenIntent({
+    courseKey: getEnrolledCourseKey(course),
+    lesson: "resume",
+    review: completed,
+  });
+  const openPlaying = () =>
+    playIntent.open((lessonNumber) => onOpen({ lessonNumber, autoplay: true }));
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleCutOff = useIsCutOff(titleRef, course.courseTitle);
 
@@ -118,7 +132,7 @@ export function LearnerCourseCard({
       }
       className={`${ALT_DRAG_TEXT_SELECT_CLASSES} group/card relative flex min-w-0 items-center gap-3.5 overflow-hidden rounded-2xl border border-(--card-border,var(--border)) bg-(--card-surface,var(--surface)) bg-(image:--raised-surface-image) p-3 shadow-(--card-shadow) transition-[background-color,box-shadow] duration-200 hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow) ${raisedCourseCardClasses} @lg/courses:flex-col @lg/courses:items-stretch @lg/courses:gap-0 @lg/courses:p-0`}
     >
-      <div className="relative aspect-video w-30 shrink-0 overflow-hidden rounded-lg bg-[#05070c] @lg/courses:w-auto @lg/courses:rounded-none">
+      <div className="relative aspect-video w-30 shrink-0 overflow-hidden rounded-lg @lg/courses:w-auto @lg/courses:rounded-none">
         <LearnerCourseThumbnail course={course} priority={priority} />
         <span
           aria-hidden="true"
@@ -133,13 +147,15 @@ export function LearnerCourseCard({
             keyboard reaches. */}
         <GuestHomeLink
           href={href}
-          onNavigatePage={onOpen}
+          onNavigatePage={openPlaying}
+          {...playIntent.handlers}
           tabIndex={-1}
           aria-hidden="true"
           title={actionLabel}
           data-course-start=""
           className="absolute inset-0 z-20"
         />
+        {playIntent.pageLinks}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col @lg/courses:px-4 @lg/courses:pt-2.5 @lg/courses:pb-4">
@@ -249,7 +265,8 @@ export function LearnerCourseCard({
         <div className="mt-auto pt-2.5 @lg/courses:pt-3.5">
           <GuestHomeLink
             href={href}
-            onNavigatePage={onOpen}
+            onNavigatePage={openPlaying}
+            {...playIntent.handlers}
             aria-label={`${action} ${course.courseTitle}`}
             data-course-start=""
             className={actionClasses}

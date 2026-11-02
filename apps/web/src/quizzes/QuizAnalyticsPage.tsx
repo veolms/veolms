@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useQueries } from "@tanstack/react-query";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
@@ -40,7 +48,22 @@ import {
   useMyQuizzes,
 } from "../services/quizzes";
 import { SelectCourseForQuizModal } from "./SelectCourseForQuizModal";
+import { formatMarksOutOf } from "./quizMarks";
+import { useStudentOutcomeFilter } from "./useStudentOutcomeFilter";
+import { useCoursesWithQuizzes } from "./useCoursesWithQuizzes";
 import { ElevatedCard, elevatedCardClasses } from "../components/ElevatedCard";
+import { fuzzyMatches } from "../lib/fuzzySearch";
+
+// A submission is opened on demand, and it brings the Markdown renderer for
+// question text, so it stays out of the page's own code. It is fetched when
+// the pointer or focus reaches the student list, ahead of the click.
+const loadSubmissionPanel = () => import("./submission/QuizSubmissionPanel");
+const QuizSubmissionPanel = lazy(() =>
+  loadSubmissionPanel().then((module) => ({
+    default: module.QuizSubmissionPanel,
+  })),
+);
+const preloadSubmissionPanel = () => void loadSubmissionPanel();
 
 interface Props {
   role: "student" | "creator";
@@ -51,6 +74,8 @@ type InstructorView = "overview" | "library" | "analytics";
 type LearnerFilter = "all" | "todo" | "in_progress" | "completed";
 
 const surfaceClass = `${elevatedCardClasses} text-(--text)`;
+// A stable empty list, so the student filter is not recomputed every render.
+const NO_STUDENTS: never[] = [];
 const insetClass = elevatedCardClasses;
 const inputClass =
   "h-9 sm:h-10 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 text-xs sm:text-sm text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20";
@@ -332,15 +357,13 @@ function InstructorOverview({
       enabled: readsResults,
     })),
   });
+  const quizCourses = useCoursesWithQuizzes(courses.data?.courses);
 
   useEffect(() => {
-    if (courseId && courses.data?.courses) {
-      const exists = courses.data.courses.some((c) => c.id === courseId);
-      if (!exists) {
-        setCourseId(null);
-      }
+    if (courseId && !quizCourses.some((c) => c.id === courseId)) {
+      setCourseId(null);
     }
-  }, [courseId, courses.data?.courses]);
+  }, [courseId, quizCourses]);
 
   const analytics = courseAnalytics.data;
   const published = quizzes.filter(
@@ -413,24 +436,11 @@ function InstructorOverview({
 
   const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const list: ThemedSelectOption[] = [["", "All courses"]];
-    const sorted = [...(courses.data?.courses ?? [])].sort((a, b) => {
-      const dateA = a.updatedAt
-        ? Date.parse(a.updatedAt)
-        : a.createdAt
-          ? Date.parse(a.createdAt)
-          : 0;
-      const dateB = b.updatedAt
-        ? Date.parse(b.updatedAt)
-        : b.createdAt
-          ? Date.parse(b.createdAt)
-          : 0;
-      return dateB - dateA;
-    });
-    for (const course of sorted) {
+    for (const course of quizCourses) {
       list.push([course.id, course.title]);
     }
     return list;
-  }, [courses.data?.courses]);
+  }, [quizCourses]);
 
   const {
     displayedItems: recentQuizzes,
@@ -659,16 +669,15 @@ function InstructorOverview({
             description="Keep your assessment workflow moving."
           />
           <div className="mt-5 grid gap-2">
-            <QuickAction
-              icon={<Plus size={19} weight="bold" />}
-              title="Create a quiz"
-              detail="Start a new draft"
-              onClick={() =>
-                onOpenCreateQuiz
-                  ? onOpenCreateQuiz()
-                  : onNavigatePage?.("/quizzes/create")
-              }
-            />
+            {/* Left out without quiz.create, as the header's button is. */}
+            {onOpenCreateQuiz ? (
+              <QuickAction
+                icon={<Plus size={19} weight="bold" />}
+                title="Create a quiz"
+                detail="Start a new draft"
+                onClick={onOpenCreateQuiz}
+              />
+            ) : null}
             <QuickAction
               icon={<ChartBar size={19} weight="bold" />}
               title="Review analytics"
@@ -709,7 +718,7 @@ function QuizLibrary({
   const visible = quizzes.filter(
     (quiz) =>
       (status === "all" || quiz.status === status) &&
-      quiz.title.toLowerCase().includes(debouncedSearch.trim().toLowerCase()),
+      fuzzyMatches(debouncedSearch, quiz.title),
   );
   const {
     displayedItems: displayedLibraryQuizzes,
@@ -831,12 +840,68 @@ function InstructorAnalytics() {
   );
   const studentReport = useStudentQuizReport(readsResults ? studentId : null);
   const studentsContainerRef = useRef<HTMLDivElement>(null);
-
+  // The submission open in the side panel. It belongs to the assessment it
+  // was opened from, so choosing another assessment or course closes it.
+  const [submission, setSubmission] = useState<{
+    assignmentId: string;
+    studentId: string;
+  } | null>(null);
+  const openSubmission = useCallback(
+    (forAssignmentId: string, forStudentId: string) => {
+      setStudentId(forStudentId);
+      setSubmission({
+        assignmentId: forAssignmentId,
+        studentId: forStudentId,
+      });
+    },
+    [],
+  );
+  const closeSubmission = useCallback(() => setSubmission(null), []);
   useEffect(() => {
-    if (!courseId && courses.data?.courses[0]) {
-      setCourseId(courses.data.courses[0].id);
+    if (submission && submission.assignmentId !== assignmentId)
+      setSubmission(null);
+  }, [assignmentId, submission]);
+  const outcomes = useStudentOutcomeFilter(
+    assignmentAnalytics.data?.students ?? NO_STUDENTS,
+  );
+  // Students with an attempt among those listed, in the list's order: the
+  // ones whose submission can be opened, and stepped through in the panel.
+  const submittedStudents = useMemo(
+    () => outcomes.visible.filter((student) => student.attemptCount > 0),
+    [outcomes.visible],
+  );
+  const openSubmissionIndex =
+    submission && submission.assignmentId === assignmentId
+      ? submittedStudents.findIndex(
+          (student) => student.studentId === submission.studentId,
+        )
+      : -1;
+  const openSubmissionStudent = submittedStudents[openSubmissionIndex];
+  const submissionStep = useMemo(() => {
+    const stepTo = (index: number) => {
+      const target = submittedStudents[index];
+      if (target && assignmentId)
+        openSubmission(assignmentId, target.studentId);
+    };
+    return {
+      hasPrev: openSubmissionIndex > 0,
+      hasNext:
+        openSubmissionIndex >= 0 &&
+        openSubmissionIndex < submittedStudents.length - 1,
+      onPrev: () => stepTo(openSubmissionIndex - 1),
+      onNext: () => stepTo(openSubmissionIndex + 1),
+    };
+  }, [assignmentId, openSubmission, openSubmissionIndex, submittedStudents]);
+
+  const quizCourses = useCoursesWithQuizzes(courses.data?.courses);
+  // Opens on the newest course with quizzes, and leaves one found to have
+  // none once the counts arrive.
+  useEffect(() => {
+    const first = quizCourses[0];
+    if (first && !quizCourses.some((c) => c.id === courseId)) {
+      setCourseId(first.id);
     }
-  }, [courseId, courses.data?.courses]);
+  }, [courseId, quizCourses]);
   useEffect(() => {
     const first = assignments.data?.[0];
     if (
@@ -849,22 +914,10 @@ function InstructorAnalytics() {
 
   const analytics = courseAnalytics.data;
 
-  const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
-    const sorted = [...(courses.data?.courses ?? [])].sort((a, b) => {
-      const dateA = a.updatedAt
-        ? Date.parse(a.updatedAt)
-        : a.createdAt
-          ? Date.parse(a.createdAt)
-          : 0;
-      const dateB = b.updatedAt
-        ? Date.parse(b.updatedAt)
-        : b.createdAt
-          ? Date.parse(b.createdAt)
-          : 0;
-      return dateB - dateA;
-    });
-    return sorted.map((course) => [course.id, course.title] as const);
-  }, [courses.data?.courses]);
+  const courseOptions: readonly ThemedSelectOption[] = useMemo(
+    () => quizCourses.map((course) => [course.id, course.title] as const),
+    [quizCourses],
+  );
 
   const assignmentOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const list: ThemedSelectOption[] = [["", "Select assessment"]];
@@ -884,7 +937,7 @@ function InstructorAnalytics() {
     displayedItems: displayedStudents,
     hasMore: hasMoreStudents,
     loadMore: loadMoreStudents,
-  } = useInfiniteList(assignmentAnalytics.data?.students ?? [], 20);
+  } = useInfiniteList(outcomes.visible, 20);
 
   return (
     <div className="grid gap-3.5 sm:gap-6">
@@ -1095,17 +1148,68 @@ function InstructorAnalytics() {
         >
           <SectionHeading
             title="Student outcomes"
-            description="Choose a learner to open their quiz report."
+            description="Choose a learner to review their submission and quiz report."
           />
+          {assignmentAnalytics.data?.students.length ? (
+            <div className="grid gap-2.5 border-b border-(--border) px-3 py-2.5 sm:px-5 sm:py-3.5">
+              <label className="relative flex items-center">
+                <span className="sr-only">Search students</span>
+                <MagnifyingGlass
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-(--muted)"
+                  size={16}
+                />
+                <input
+                  type="search"
+                  value={outcomes.search}
+                  onChange={(event) => outcomes.setSearch(event.target.value)}
+                  placeholder={
+                    assignmentAnalytics.data.students.some(
+                      (student) => student.studentEmail,
+                    )
+                      ? "Search by name or email..."
+                      : "Search by name..."
+                  }
+                  className={`${inputClass} w-full !pl-9`}
+                />
+              </label>
+              <FilterTabs
+                label="Student filters"
+                compact
+                value={outcomes.filter}
+                onChange={outcomes.setFilter}
+                options={[
+                  ["attempted", "Attempted", outcomes.counts.attempted],
+                  [
+                    "not_attempted",
+                    "Not attempted",
+                    outcomes.counts.not_attempted,
+                  ],
+                  ["all", "All", outcomes.counts.all],
+                ]}
+              />
+              <p className="text-xs text-(--muted)" aria-live="polite">
+                {outcomes.query
+                  ? `${outcomes.visible.length.toLocaleString()} matching ${outcomes.visible.length === 1 ? "student" : "students"}`
+                  : `${outcomes.counts.attempted.toLocaleString()} attempted of ${outcomes.counts.all.toLocaleString()} students`}
+              </p>
+            </div>
+          ) : null}
           <div
             ref={studentsContainerRef}
+            onPointerEnter={preloadSubmissionPanel}
+            onFocus={preloadSubmissionPanel}
             className="divide-y divide-(--border) max-h-[580px] overflow-y-auto"
           >
             {displayedStudents.map((student) => (
               <button
                 key={student.studentId}
                 type="button"
-                onClick={() => setStudentId(student.studentId)}
+                onClick={() =>
+                  assignmentId && student.attemptCount > 0
+                    ? openSubmission(assignmentId, student.studentId)
+                    : setStudentId(student.studentId)
+                }
+                aria-haspopup={student.attemptCount > 0 ? "dialog" : undefined}
                 className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 sm:px-5 sm:py-4 text-left transition-colors hover:bg-(--hover) ${studentId === student.studentId ? "bg-(--accent)/5" : ""}`}
               >
                 <span className="min-w-0">
@@ -1115,20 +1219,30 @@ function InstructorAnalytics() {
                   <span className="mt-1 block text-xs text-(--muted)">
                     {student.attemptCount} attempt
                     {student.attemptCount === 1 ? "" : "s"} ·{" "}
-                    {student.lastAttempt
-                      ? formatDate(student.lastAttempt)
-                      : "Never attempted"}
+                    {student.status === "in_progress"
+                      ? "Attempt in progress"
+                      : student.lastAttempt
+                        ? formatDate(student.lastAttempt)
+                        : "Never attempted"}
                   </span>
                 </span>
                 <span className="shrink-0 text-right">
                   <span
                     className={`block text-sm font-semibold ${student.status === "passed" ? "text-emerald-500" : student.status === "failed" ? "text-red-400" : "text-(--text)"}`}
                   >
-                    {student.latestScore === null
-                      ? "—"
-                      : percent(student.latestScore)}
+                    {student.latestMarks
+                      ? formatMarksOutOf(
+                          student.latestMarks.obtained,
+                          student.latestMarks.max,
+                        )
+                      : student.latestScore === null
+                        ? "—"
+                        : percent(student.latestScore)}
                   </span>
                   <span className="mt-1 block text-[0.68rem] capitalize text-(--muted)">
+                    {student.latestMarks && student.latestScore !== null
+                      ? `${percent(student.latestScore)} · `
+                      : null}
                     {student.status.replaceAll("_", " ")}
                   </span>
                 </span>
@@ -1139,12 +1253,51 @@ function InstructorAnalytics() {
               onLoadMore={loadMoreStudents}
               containerRef={studentsContainerRef}
             />
-            {!assignmentAnalytics.data?.students.length ? (
+            {/* A failed or unfinished request used to read as "No learner
+                data", the same as an assessment nobody is enrolled in. */}
+            {assignmentAnalytics.isError && !assignmentAnalytics.data ? (
+              <EmptyState
+                compact
+                icon={<Users size={22} />}
+                title="Learner outcomes could not be loaded"
+                message="Please check your connection and try again."
+                action={
+                  <Button onClick={() => void assignmentAnalytics.refetch()}>
+                    Try again
+                  </Button>
+                }
+              />
+            ) : assignmentAnalytics.isLoading ? (
+              <LoadingRows />
+            ) : !assignmentAnalytics.data?.students.length ? (
               <EmptyState
                 compact
                 icon={<Users size={22} />}
                 title="No learner data"
-                message="Select an assessment to view participation."
+                message={
+                  assignmentAnalytics.data
+                    ? "No students are enrolled in this assessment's course yet."
+                    : "Select an assessment to view participation."
+                }
+              />
+            ) : !outcomes.visible.length ? (
+              <EmptyState
+                compact
+                icon={<MagnifyingGlass size={22} />}
+                title={
+                  outcomes.query
+                    ? "No matching students"
+                    : outcomes.filter === "attempted"
+                      ? "No attempts yet"
+                      : "Everyone has attempted"
+                }
+                message={
+                  outcomes.query
+                    ? "Try another name or email, or a different filter."
+                    : outcomes.filter === "attempted"
+                      ? "No student has attempted this assessment yet."
+                      : "Every student on this assessment has an attempt."
+                }
               />
             ) : null}
           </div>
@@ -1155,6 +1308,20 @@ function InstructorAnalytics() {
           report={studentReport.data}
           onClose={() => setStudentId(null)}
         />
+      ) : null}
+      {assignmentId && openSubmissionStudent ? (
+        <Suspense fallback={null}>
+          <QuizSubmissionPanel
+            // A fresh panel per student: the attempt picked for one student
+            // never carries over to the next.
+            key={`${assignmentId}:${openSubmissionStudent.studentId}`}
+            assignmentId={assignmentId}
+            studentId={openSubmissionStudent.studentId}
+            studentName={openSubmissionStudent.studentName}
+            step={submissionStep}
+            onClose={closeSubmission}
+          />
+        </Suspense>
       ) : null}
     </div>
   );
@@ -1317,31 +1484,17 @@ function LearnerQuizDashboard({
               Required work and optional practice in one place.
             </p>
           </div>
-          <div
-            className="flex flex-wrap gap-1 rounded-lg border border-(--border) bg-(--canvas) p-1"
-            role="tablist"
-            aria-label="Quiz filters"
-          >
-            {(
-              [
-                ["all", "All"],
-                ["todo", "To do"],
-                ["in_progress", "In progress"],
-                ["completed", "Completed"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={filter === key}
-                onClick={() => setFilter(key)}
-                className={`rounded-md px-2.5 py-1 sm:px-3 sm:py-1.5 text-xs font-semibold ${filter === key ? "bg-(--surface) text-(--text) shadow-sm" : "text-(--muted) hover:text-(--text)"}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <FilterTabs
+            label="Quiz filters"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              ["all", "All"],
+              ["todo", "To do"],
+              ["in_progress", "In progress"],
+              ["completed", "Completed"],
+            ]}
+          />
         </div>
         <div className="grid gap-2.5 sm:gap-3 p-3 sm:grid-cols-2 sm:p-7 xl:grid-cols-3">
           {assignments.isLoading ? (
@@ -1601,6 +1754,61 @@ function QuizLibraryRow({
           <ArrowRight size={14} weight="bold" />
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A row of filter tabs on a sunken track, the selected one raised: the
+ * learner's quiz filters and the Student outcomes filter. A count, when
+ * given, follows the label.
+ */
+function FilterTabs<Value extends string>({
+  label,
+  value,
+  onChange,
+  options,
+  compact = false,
+}: {
+  label: string;
+  value: Value;
+  onChange: (value: Value) => void;
+  options: readonly (readonly [Value, string, number?])[];
+  /**
+   * Equal tabs across the track's width, each count under its label, so
+   * they fit a narrow column without wrapping.
+   */
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`${compact ? "grid auto-cols-fr grid-flow-col" : "flex flex-wrap"} gap-1 rounded-lg border border-(--border) bg-(--canvas) p-1`}
+      role="tablist"
+      aria-label={label}
+    >
+      {options.map(([key, text, count]) => (
+        <button
+          key={key}
+          type="button"
+          role="tab"
+          aria-selected={value === key}
+          onClick={() => onChange(key)}
+          className={`rounded-md text-xs font-semibold ${compact ? "flex min-w-0 flex-col items-center px-1.5 py-1.5" : "px-2.5 py-1 sm:px-3 sm:py-1.5"} ${value === key ? "bg-(--surface) text-(--text) shadow-sm" : "text-(--muted) hover:text-(--text)"}`}
+        >
+          <span
+            className={compact ? "max-w-full truncate leading-4" : undefined}
+          >
+            {text}
+          </span>
+          {count === undefined ? null : (
+            <span
+              className={`tabular-nums text-(--muted) ${compact ? "mt-0.5 text-[0.68rem] leading-3.5 font-medium" : "ml-1.5"}`}
+            >
+              {count}
+            </span>
+          )}
+        </button>
+      ))}
     </div>
   );
 }

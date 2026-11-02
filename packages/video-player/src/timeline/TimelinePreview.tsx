@@ -143,23 +143,29 @@ const SCRUB_PILL_OVERHANG_PX = 6;
  * same height (astride where the card's bottom edge would be), the picture
  * being shown over the whole video instead. It stays centred over the
  * thumb right to either end, only stopping where it would run off the
- * player.
+ * player. Over a video with chapters, the name of the chapter at that
+ * moment stands above it, in the middle of the player.
  */
 function ScrubTimePill({
+  chapterTitle,
   position,
   previewTime,
   touch,
 }: {
+  chapterTitle: string | null;
   position: number;
   previewTime: number;
-  /** A finger drag: the pill rises clear of the thumb on the timeline. */
+  /**
+   * A finger drag: the pill rises clear of the fingertip on the thumb, a
+   * little above it (higher, it read as apart from the thumb).
+   */
   touch: boolean;
 }) {
   // The thumb's centre, as the thumb itself is placed (see `Timeline`).
   const thumbX = `(${position / 100} * (100cqw - ${TIMELINE_THUMB_SIZE_PX}px) + ${TIMELINE_THUMB_SIZE_PX / 2}px)`;
   return (
     <div
-      className={`pointer-events-none absolute inset-x-0 bottom-full z-30 h-0 @container ${touch ? "mb-12.5" : "mb-5"}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-full z-30 h-0 @container ${touch ? "mb-8" : "mb-5"}`}
       data-video-player-preview=""
       data-video-player-preview-mode="time"
     >
@@ -172,6 +178,14 @@ function ScrubTimePill({
       >
         {formatMediaTime(previewTime)}
       </span>
+      {chapterTitle ? (
+        <p
+          data-video-player-preview-chapter=""
+          className="absolute bottom-7 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate text-center text-sm font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]"
+        >
+          {chapterTitle}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -220,10 +234,12 @@ function FramePreviewCard({
             app's side menu (its dark `--surface-depth-shadow`): a lit top
             and left edge and a darker bottom edge drawn over the picture
             (the ::after layer, edges only: the picture itself stays
-            clean), and soft layered shadows beneath. */}
+            clean), and soft layered shadows beneath. Isolated, so the
+            loading sweep over a picture not downloaded yet (z-1) stays
+            under the time pill that overlaps the frame's bottom edge. */}
         <div
           data-video-player-preview-frame=""
-          className="relative overflow-hidden rounded-2xl bg-black shadow-[0_2px_6px_rgb(0_0_0/0.45),0_14px_32px_rgb(0_0_0/0.5),0_28px_56px_rgb(0_0_0/0.28)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_1px_0_rgb(255_255_255/0.28),inset_1px_0_0_rgb(255_255_255/0.1),inset_-1px_0_0_rgb(255_255_255/0.05),inset_0_-1px_0_rgb(0_0_0/0.35),inset_0_0_0_1px_rgb(255_255_255/0.07)] after:content-['']"
+          className="relative isolate overflow-hidden rounded-2xl bg-black shadow-[0_2px_6px_rgb(0_0_0/0.45),0_14px_32px_rgb(0_0_0/0.5),0_28px_56px_rgb(0_0_0/0.28)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_1px_0_rgb(255_255_255/0.28),inset_1px_0_0_rgb(255_255_255/0.1),inset_-1px_0_0_rgb(255_255_255/0.05),inset_0_-1px_0_rgb(0_0_0/0.35),inset_0_0_0_1px_rgb(255_255_255/0.07)] after:content-['']"
         >
           <StoryboardImage frame={frame} onDrawn={() => setDrawn(true)} />
         </div>
@@ -295,6 +311,10 @@ export function TimelinePreview({
   if (scrubbing && (layout === "centered-pill" || layout === "follow-pill")) {
     return (
       <ScrubTimePill
+        // On the phone layout only: a desktop drag keeps to the time.
+        chapterTitle={
+          layout === "centered-pill" ? controllerData.chapterTitle : null
+        }
         previewTime={previewTime}
         position={timeToPositionPercent(previewTime, duration)}
         touch={scrubPointerType === "touch"}
@@ -370,7 +390,7 @@ export function TimelinePreview({
       data-video-player-preview-mode={hasRichPreview ? "rich" : "time"}
     >
       {frame ? (
-        <div className="overflow-hidden bg-black">
+        <div className="relative overflow-hidden bg-black">
           <StoryboardImage frame={frame} />
         </div>
       ) : null}

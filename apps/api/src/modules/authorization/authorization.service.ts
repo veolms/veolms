@@ -1,6 +1,11 @@
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import type { Permission, CapabilitiesResponse } from "@veolms/contracts";
-import * as repo from "./authorization.repository.ts";
+import {
+  checkPermission,
+  isFeatureOn,
+  listEffectivePermissions,
+} from "./permission-cache.ts";
+import { resolveResourceCourseId } from "./scope-cache.ts";
 
 export interface AuthorizationCheckRequest {
   userId: string;
@@ -49,10 +54,7 @@ export function createAuthorizationService(
 
       // 1. Check Feature Entitlement if a feature is bound to this action
       if (featureKey) {
-        const featureEnabled = await repo.isFeatureEnabled(
-          database,
-          featureKey,
-        );
+        const featureEnabled = await isFeatureOn(database, featureKey);
         if (!featureEnabled) {
           return {
             allowed: false,
@@ -64,7 +66,7 @@ export function createAuthorizationService(
       }
 
       // 2. Check Scoped Role Permissions
-      const result = await repo.checkUserPermission(database, {
+      const result = await checkPermission(database, {
         userId,
         permissionKey: permission,
         courseId,
@@ -96,8 +98,8 @@ export function createAuthorizationService(
       const { userId, courseId } = params;
 
       const [permissions, academyPermissions] = await Promise.all([
-        repo.getUserEffectivePermissions(database, { userId, courseId }),
-        repo.getUserEffectivePermissions(database, {
+        listEffectivePermissions(database, { userId, courseId }),
+        listEffectivePermissions(database, {
           userId,
           excludeOwnCoursesOnlyRoles: true,
         }),
@@ -113,28 +115,15 @@ export function createAuthorizationService(
         return { courseId: null };
       }
 
-      if (resourceType === "course") {
-        const resolved = await repo.resolveCourseScope(database, resourceId);
-        return {
-          courseId: resolved?.courseId ?? resourceId,
-        };
-      }
-
-      if (resourceType === "lesson") {
-        const resolved = await repo.resolveLessonScope(database, resourceId);
-        return {
-          courseId: resolved?.courseId ?? null,
-        };
-      }
-
-      if (resourceType === "section") {
-        const resolved = await repo.resolveSectionScope(database, resourceId);
-        return {
-          courseId: resolved?.courseId ?? null,
-        };
-      }
-
-      return { courseId: null };
+      const courseId = await resolveResourceCourseId(
+        database,
+        resourceType,
+        resourceId,
+      );
+      // An unknown course keeps the id it was asked by, as before.
+      return {
+        courseId: courseId ?? (resourceType === "course" ? resourceId : null),
+      };
     },
   };
 }

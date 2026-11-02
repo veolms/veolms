@@ -33,6 +33,15 @@ export interface AuthorizationGuard {
     resourceType?: ResourceType,
     featureKey?: string,
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  /**
+   * Allowed only with every permission the request needs, as `pick` reads
+   * them from it: one route that changes several things (a lesson's title,
+   * its content, whether it is published) checks each thing it changes.
+   */
+  authorizeEach: (
+    pick: (request: FastifyRequest) => readonly Permission[],
+    resourceType?: ResourceType,
+  ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
 
 export function createAuthorizationGuard(
@@ -169,8 +178,25 @@ export function createAuthorizationGuard(
     return authorizeAny([permission], resourceType, featureKey);
   }
 
+  function authorizeEach(
+    pick: (request: FastifyRequest) => readonly Permission[],
+    resourceType: ResourceType = "platform",
+  ) {
+    return async function authorizeEachHandler(
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ): Promise<void> {
+      for (const permission of pick(request)) {
+        await authorizeAny([permission], resourceType)(request, reply);
+        // The first permission missing has answered 401 or 403.
+        if (reply.sent) return;
+      }
+    };
+  }
+
   return {
     authorize,
     authorizeAny,
+    authorizeEach,
   };
 }

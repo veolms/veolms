@@ -44,6 +44,21 @@ export function useLessonAccess({
   const courseAccess = courseAccessQuery.data;
   const opensEveryLesson = courseAccess?.access === "full";
 
+  /**
+   * The lessons of the sections a learner holding part of the course may
+   * open (`openSectionIds`), by number.
+   */
+  const openLessonNumbers = useMemo<ReadonlySet<number>>(() => {
+    const open = new Set<number>();
+    const sectionIds = new Set(courseAccess?.openSectionIds ?? []);
+    if (!adaptedCurriculum || sectionIds.size === 0) return open;
+    for (const section of adaptedCurriculum.sections) {
+      if (!sectionIds.has(section.sectionId)) continue;
+      for (const lesson of section.lessons) open.add(lesson[0]);
+    }
+    return open;
+  }, [adaptedCurriculum, courseAccess?.openSectionIds]);
+
   const lessonContentAccess = useMemo<LessonContentAccessState>(() => {
     if (!courseOverview || !adaptedCurriculum) return "pending";
 
@@ -60,13 +75,16 @@ export function useLessonAccess({
     if (isAuthResolutionPending) return "pending";
     if (!isAuthenticated) return "denied";
     if (!courseAccess) return "pending";
-    return opensEveryLesson ? "granted" : "denied";
+    return opensEveryLesson || openLessonNumbers.has(selectedLesson)
+      ? "granted"
+      : "denied";
   }, [
     adaptedCurriculum,
     courseAccess,
     courseOverview,
     isAuthResolutionPending,
     isAuthenticated,
+    openLessonNumbers,
     opensEveryLesson,
     selectedLesson,
   ]);
@@ -74,8 +92,9 @@ export function useLessonAccess({
   /**
    * The lessons this visitor cannot play: every lesson that is not a
    * preview, unless the server says they open every lesson, and except the
-   * course's first lesson when it opens to them. Nothing is marked until
-   * the server has answered, so locks never flash on and off.
+   * course's first lesson when it opens to them and the lessons of the
+   * sections they hold. Nothing is marked until the server has answered,
+   * so locks never flash on and off.
    */
   const lockedLessonNumbers = useMemo<ReadonlySet<number>>(() => {
     const locked = new Set<number>();
@@ -86,14 +105,14 @@ export function useLessonAccess({
       ...adaptedCurriculum.lessonsByNumber.keys(),
     );
     for (const [number, lesson] of adaptedCurriculum.lessonsByNumber) {
-      if (lesson.isPreview) continue;
+      if (lesson.isPreview || openLessonNumbers.has(number)) continue;
       if (courseAccess.firstLessonOpen && number === firstLessonNumber) {
         continue;
       }
       locked.add(number);
     }
     return locked;
-  }, [adaptedCurriculum, courseAccess, opensEveryLesson]);
+  }, [adaptedCurriculum, courseAccess, openLessonNumbers, opensEveryLesson]);
 
   const lessonContentAccessReason =
     lessonContentAccess === "denied"

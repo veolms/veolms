@@ -14,12 +14,6 @@ const SLOW_PREVIEW_SECONDS_PER_SECOND = 30;
 const PREVIEW_DWELL_MS = 150;
 /** Pace is measured over at least this much time, not event to event. */
 const PREVIEW_PACE_WINDOW_MS = 80;
-/**
- * How long after the lesson's video is ready a preview video starts to be
- * filled in behind it (at low priority), so that it does not compete with
- * the start of playback and a first hover finds its pictures there.
- */
-const BACKGROUND_FILL_DELAY_MS = 2_000;
 
 function resolveDocumentUrl(url: string): string {
   if (typeof document === "undefined") return url;
@@ -76,30 +70,15 @@ export function useSpriteStoryboard(
     let anchor: { time: number; at: number } | null = null;
     let lastTime: number | null = null;
     let dwellTimer: number | undefined;
-    let fillTimer: number | undefined;
-    let filled = false;
-    // Fetches a preview video (when the storyboard has one) behind the
-    // lesson at low priority, once.
-    const fill = (from: number) => {
-      if (filled) return;
-      filled = true;
-      window.clearTimeout(fillTimer);
-      loader.fillInBackground(from);
-    };
+    let indexRequested = false;
     const unsubscribe = controller.subscribe(() => {
       const snapshot = controller.getSnapshot();
       // Once the lesson's video is ready (its playback token is known by
-      // then): the index at once, the preview video a moment later...
-      if (
-        !filled &&
-        fillTimer === undefined &&
-        snapshot.media.lifecycle === "ready"
-      ) {
+      // then), the index, so a first hover is quick. The pictures come only
+      // where the timeline is used (see `PreviewVideoFrames`).
+      if (!indexRequested && snapshot.media.lifecycle === "ready") {
+        indexRequested = true;
         void loader.prepare();
-        fillTimer = window.setTimeout(
-          () => fill(controller.getSnapshot().media.currentTime),
-          BACKGROUND_FILL_DELAY_MS,
-        );
       }
       const { previewTime } = snapshot.ui;
       if (previewTime === null || previewTime === lastTime) return;
@@ -108,9 +87,6 @@ export function useSpriteStoryboard(
       }
       lastTime = previewTime;
       void loader.start();
-      // ...or at once when the viewer points at the timeline: previews are
-      // wanted now, starting from there.
-      fill(previewTime);
 
       const now = performance.now();
       // A pointer that rested before moving again starts a new measure.
@@ -136,7 +112,6 @@ export function useSpriteStoryboard(
     return () => {
       unsubscribe();
       window.clearTimeout(dwellTimer);
-      window.clearTimeout(fillTimer);
       loader.destroy();
       controller.setScrubWithStoryboard(false);
       controller.setStoryboard([]);

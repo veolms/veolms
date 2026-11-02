@@ -105,7 +105,7 @@ export function LearnerNameSkeleton() {
  */
 export function LearnerQuoteSkeleton() {
   return (
-    <div aria-hidden="true" className={heroQuoteBoxClasses}>
+    <div aria-hidden="true" aria-busy="true" className={heroQuoteBoxClasses}>
       {/* As wide as the box of a quote of two lines is, so the author's
           bar has the room the author has. */}
       <div className="w-[28em] max-w-full">
@@ -132,19 +132,21 @@ export function LearnerQuoteSkeleton() {
 /** The hero's course row (see `LearnerResumeRow`), before its course is known. */
 export function LearnerResumeRowSkeleton() {
   return (
-    <div className={resumeRowBoxClasses} aria-hidden="true">
+    <div className={resumeRowBoxClasses} aria-hidden="true" aria-busy="true">
       <div className={resumePaneClasses}>
         <div className={resumeRowContentClasses}>
           <span className={`${resumeThumbnailClasses} ${onHero}`} />
           {/* As tall as the row's three lines of text (what to do, the
               course, its progress), so the row is the real one's height
-              where its thumbnail is left out as well. */}
+              where its thumbnail is left out as well. The key after it
+              is left out where the row has none (see LearnerResumeRow): a
+              phone, and beside the picture on a page under 56rem. */}
           <div className="flex min-h-[3.8rem] min-w-0 flex-1 flex-col justify-center @[50rem]/home:w-52 @[50rem]/home:flex-none">
             <span className={`${onHero} block h-3 w-28`} />
             <span className={`${onHero} mt-2.5 block h-4 w-full max-w-52`} />
           </div>
           <span
-            className={`${onHero} mb-1 block h-11 w-full shrink-0 rounded-[0.625rem] max-sm:hidden @[28rem]/resume:w-24 @[50rem]/home:w-24`}
+            className={`${onHero} mb-1 block h-11 w-full shrink-0 rounded-[0.625rem] max-sm:hidden @[28rem]/resume:w-24 @[50rem]/home:w-24 @[50rem]/home:@max-[56rem]/home:hidden`}
           />
         </div>
       </div>
@@ -221,6 +223,7 @@ export function LearnerCoursesSkeleton() {
  */
 export function LearnerHomeShell({
   learnerName = "",
+  pictureWhenShown = false,
 }: {
   /**
    * The name this tab remembers, where the shell is only ever rendered in
@@ -229,6 +232,12 @@ export function LearnerHomeShell({
    * to say it, so a page built ahead of time must not be given one.
    */
   learnerName?: string;
+  /**
+   * For a shell put in the page hidden, in case it is the one to show: its
+   * picture is then fetched only if it is drawn. A visitor's phone, shown
+   * no picture on its own home, would otherwise download this one too.
+   */
+  pictureWhenShown?: boolean;
 }) {
   const firstName = learnerName.trim().split(/\s+/u)[0] ?? "";
   const pictures = (
@@ -236,7 +245,7 @@ export function LearnerHomeShell({
       <HeroPicture
         picture={guestHeroImage}
         position={picturePlacementClasses}
-        priority
+        priority={!pictureWhenShown}
         className="-z-40 max-sm:translate-x-[calc(0.34%+0.72px)] [:root[data-theme=light]_&]:invisible"
       />
       <HeroPicture
@@ -276,9 +285,19 @@ export function LearnerHomeShell({
                       <span className={heroNameClasses}>{firstName}.</span>
                     </>
                   ) : (
-                    <span
-                      className={`${onHero} inline-block h-[0.72em] w-[10.4em] max-w-full`}
-                    />
+                    // Built ahead of time, it knows no name. A tab that
+                    // remembers the account says the greeting outright: the
+                    // document's head hands the words over before the
+                    // first paint (see learnerHomeSnapshot.ts).
+                    <>
+                      <span
+                        className={`${onHero} inline-block h-[0.72em] w-[10.4em] max-w-full [:root[data-learner-home-greeting]_&]:hidden`}
+                      />
+                      <span className="hidden after:content-(--learner-home-greeting) [:root[data-learner-home-greeting]_&]:inline" />
+                      <span
+                        className={`${heroNameClasses} hidden after:content-(--learner-home-name) [:root[data-learner-home-greeting]_&]:inline`}
+                      />
+                    </>
                   )}
                 </p>
               </div>

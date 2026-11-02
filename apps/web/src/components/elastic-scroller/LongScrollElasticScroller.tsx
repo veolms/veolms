@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ElasticScroller } from "./ElasticScroller";
+import { scrollEventTarget } from "./pageScrollport";
 import type { ElasticScrollerProps } from "./ElasticScroller";
 
 /** The scroller is offered once there is this many screens' worth to scroll. */
@@ -85,12 +86,13 @@ export function LongScrollElasticScroller({
     measure();
     // A check while scrolling as well: the control only shows on a scroll,
     // so it is then always right, whatever the observers missed.
-    scrollport.addEventListener("scroll", measure, { passive: true });
+    const scrollEvents = scrollEventTarget(scrollport);
+    scrollEvents.addEventListener("scroll", measure, { passive: true });
 
     return () => {
       sizes.disconnect();
       children.disconnect();
-      scrollport.removeEventListener("scroll", measure);
+      scrollEvents.removeEventListener("scroll", measure);
     };
   }, [disabled, minScrollScreens, scrollportRef]);
 

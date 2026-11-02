@@ -2,15 +2,15 @@ import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/Pape
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { ShieldWarningIcon as ShieldWarning } from "@phosphor-icons/react/ShieldWarning";
 import { UserPlusIcon as UserPlus } from "@phosphor-icons/react/UserPlus";
-import { useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { Button } from "../components/Button";
+import { ElevatedCard } from "../components/ElevatedCard";
+import { PageHeading } from "../components/PageHeading";
+import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import type { NavigateTo } from "../routing/navigation";
-import {
-  useTeamInvitations,
-  useTeamMembers,
-  useTeamRoles,
-} from "../services/team";
+import { useTeamRoles } from "../services/team";
+import { SettingsTabBar } from "../settings/SettingsTabBar";
 import { AcademyPageFallback } from "../shell/academyPageFallbacks";
 import type { ToastMessage } from "../ToastNotification";
 import { InvitationsTab } from "./invitations/InvitationsTab";
@@ -21,11 +21,14 @@ import { RoleEditorPanel } from "./roles/RoleEditorPanel";
 import { RolesTab } from "./roles/RolesTab";
 import {
   TEAM_TAB_DEFINITIONS,
+  TEAM_TABS,
   isTeamTab,
   teamTabFromPath,
   type TeamTab,
 } from "./teamTabs";
 import { useTeamAccess } from "./useTeamAccess";
+import "../styles/features/settings/foundation.css";
+import "../styles/features/settings/preferences-responsive.css";
 
 export interface TeamPageProps {
   tab?: string;
@@ -37,17 +40,28 @@ type Panel = "add-member" | "invite" | "new-role" | null;
 
 function AccessDenied({ onNavigatePage }: { onNavigatePage?: NavigateTo }) {
   return (
-    <div className="mx-auto mt-10 grid max-w-xl place-items-center rounded-2xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-10 text-center">
-      <span className="flex size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
-        <ShieldWarning size={24} weight="bold" />
-      </span>
-      <h1 className="mt-3 text-lg font-semibold">Access denied</h1>
-      <p className="mt-1 max-w-md text-sm text-(--muted)">
-        Your roles do not include managing the team.
-      </p>
-      <div className="mt-4">
-        <Button onClick={() => onNavigatePage?.("/")}>Return home</Button>
-      </div>
+    <div className="settings-page">
+      <ElevatedCard
+        as="div"
+        className="mx-auto mt-6 grid max-w-xl place-items-center p-10 text-center"
+      >
+        <span className="flex size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
+          <ShieldWarning size={24} weight="bold" />
+        </span>
+        <h1 className="mt-3 text-lg font-semibold">Access denied</h1>
+        <p className="mt-1 max-w-md text-sm text-(--muted)">
+          Your roles do not include viewing the team.
+        </p>
+        <div className="mt-4">
+          <Button
+            elevation="flat"
+            motion="static"
+            onClick={() => onNavigatePage?.("/")}
+          >
+            Return home
+          </Button>
+        </div>
+      </ElevatedCard>
     </div>
   );
 }
@@ -71,25 +85,35 @@ export function TeamPage({ tab, onNavigatePage, setNotice }: TeamPageProps) {
   );
 }
 
+/** Members and invitations need team.read; roles need role.read. */
+const TAB_PERMISSION: Record<TeamTab, "team.read" | "role.read"> = {
+  members: "team.read",
+  roles: "role.read",
+  invitations: "team.read",
+};
+
 function TeamWorkspace({ tab, onNavigatePage, setNotice }: TeamPageProps) {
   const { pathname } = useLocation();
-  const activeTab: TeamTab = isTeamTab(tab) ? tab : teamTabFromPath(pathname);
   const { can } = useTeamAccess();
   const [panel, setPanel] = useState<Panel>(null);
+  const tabListRef = useRef<HTMLElement>(null);
 
-  const members = useTeamMembers("");
-  const roles = useTeamRoles();
-  const invitations = useTeamInvitations("all");
+  const visibleTabs = useMemo(
+    () => TEAM_TABS.filter((id) => can(TAB_PERMISSION[id])),
+    [can],
+  );
+  const requested: TeamTab = isTeamTab(tab) ? tab : teamTabFromPath(pathname);
+  const activeTab = visibleTabs.includes(requested)
+    ? requested
+    : (visibleTabs[0] ?? requested);
+
+  const roles = useTeamRoles({ enabled: can("role.read") });
   const customRolesEnabled = roles.data?.customRolesEnabled ?? false;
-  const pendingInvites = (invitations.data?.pages ?? [])
-    .flatMap((page) => page.invitations)
-    .filter((invitation) => invitation.status === "pending").length;
 
-  const counts: Record<TeamTab, number | undefined> = {
-    members: members.data?.pages[0]?.totalCount,
-    roles: roles.data?.roles.length,
-    invitations: invitations.data ? pendingInvites : undefined,
-  };
+  const navigateTab = useCallback(
+    (id: TeamTab) => onNavigatePage?.(`/team/${id}`, { resetScroll: true }),
+    [onNavigatePage],
+  );
 
   const action =
     activeTab === "members" && can("role.assign")
@@ -105,81 +129,73 @@ function TeamWorkspace({ tab, onNavigatePage, setNotice }: TeamPageProps) {
           : null;
 
   return (
-    <div className="pb-10" aria-labelledby="team-page-title">
-      <header className="flex flex-wrap items-start justify-between gap-4 px-1 pt-2">
-        <div>
-          <h1
+    <div className="settings-page" aria-labelledby="team-page-title">
+      {/* As on Platform, only the tabs stay pinned; the heading scrolls
+          away, so the header takes no box of its own. */}
+      <header className="settings-page__topbar contents!">
+        <div className="settings-page__heading mb-2 items-end!">
+          <PageHeading
             id="team-page-title"
-            className="text-[1.75rem] leading-tight font-bold tracking-tight text-(--text)"
-          >
-            Team
-          </h1>
-          <p className="mt-1 text-sm text-(--muted)">
-            Who works on the academy and what each person may do.
-          </p>
+            title="Team"
+            description="Who works on the academy and what each person may do."
+            copyClassName="settings-page__heading-copy"
+          />
+          {action ? (
+            <Button
+              elevation="flat"
+              motion="static"
+              className="shrink-0"
+              onClick={() => setPanel(action.panel)}
+            >
+              <action.icon size={17} weight="bold" />
+              {action.label}
+            </Button>
+          ) : null}
         </div>
-        {action ? (
-          <Button onClick={() => setPanel(action.panel)}>
-            <action.icon size={17} weight="bold" />
-            {action.label}
-          </Button>
-        ) : null}
+
+        <SettingsTabBar
+          tabs={TEAM_TAB_DEFINITIONS.filter(({ id }) =>
+            visibleTabs.includes(id),
+          )}
+          activeTab={activeTab}
+          idPrefix="team-tab"
+          panelId="team-tab-panel"
+          label="Team sections"
+          navRef={tabListRef}
+          onPrepare={() => undefined}
+          onSelect={navigateTab}
+        />
       </header>
 
-      <nav
-        aria-label="Team sections"
-        className="mt-6 flex gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+      <SwipeableTabPanel
+        tabs={visibleTabs}
+        activeTab={activeTab}
+        onTabChange={navigateTab}
+        tabListRef={tabListRef}
+        id="team-tab-panel"
+        className="settings-tab-content pt-2 pb-10"
+        stateAttribute="data-team-tab"
+        labelledBy={`team-tab-${activeTab}`}
+        nativeOnFinePointer
+        focusable={false}
       >
-        {TEAM_TAB_DEFINITIONS.map((definition) => {
-          const active = definition.id === activeTab;
-          const count = counts[definition.id];
-          return (
-            <button
-              key={definition.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              // A square tab: the global control rounding would bend the
-              // underline up at both ends.
-              data-fixed-radius
-              onClick={() =>
-                onNavigatePage?.(`/team/${definition.id}`, {
-                  resetScroll: true,
-                })
-              }
-              className={`-mb-px flex h-11 cursor-pointer items-center gap-2 rounded-none border-b-2 px-3 text-sm font-semibold whitespace-nowrap transition-colors ${active ? "border-(--accent) text-(--accent)" : "border-transparent text-(--muted) hover:text-(--text)"}`}
-            >
-              {definition.label}
-              {typeof count === "number" ? (
-                <span
-                  className={`rounded-md px-1.5 py-px text-[0.7rem] tabular-nums ${active ? "bg-(--accent)/15 text-(--accent)" : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"}`}
-                >
-                  {count}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="mt-6" role="tabpanel">
-        {activeTab === "members" ? (
-          <MembersTab
-            setNotice={setNotice}
-            onAddMember={() => setPanel("add-member")}
-          />
-        ) : activeTab === "roles" ? (
-          <RolesTab setNotice={setNotice} />
-        ) : (
-          <InvitationsTab
-            setNotice={setNotice}
-            onInvite={() => setPanel("invite")}
-            onViewMember={() =>
-              onNavigatePage?.("/team/members", { resetScroll: true })
-            }
-          />
-        )}
-      </div>
+        {(panelTab) =>
+          panelTab !== activeTab ? null : panelTab === "members" ? (
+            <MembersTab
+              setNotice={setNotice}
+              onAddMember={() => setPanel("add-member")}
+            />
+          ) : panelTab === "roles" ? (
+            <RolesTab setNotice={setNotice} />
+          ) : (
+            <InvitationsTab
+              setNotice={setNotice}
+              onInvite={() => setPanel("invite")}
+              onViewMember={() => navigateTab("members")}
+            />
+          )
+        }
+      </SwipeableTabPanel>
 
       {panel === "add-member" ? (
         <AddMemberPanel onClose={() => setPanel(null)} setNotice={setNotice} />

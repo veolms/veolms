@@ -2,6 +2,7 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
 import type { QuizResult } from "@veolms/contracts";
 import { Button } from "../../components/Button";
+import { formatMarksOutOf } from "../quizMarks";
 import { QuizFormattedText } from "./QuizFormattedText";
 import { QuizScoreRing } from "./QuizScoreRing";
 import {
@@ -76,8 +77,8 @@ export function QuizResultView({
             </p>
             <dl className="mt-4 grid grid-cols-2 gap-2.5 text-left sm:max-w-sm">
               <QuizStat
-                label="Score"
-                value={`${result.score} / ${result.maxScore}`}
+                label="Marks"
+                value={formatMarksOutOf(result.score, result.maxScore)}
               />
               <QuizStat
                 label="Attempt"

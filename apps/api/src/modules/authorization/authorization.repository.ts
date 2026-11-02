@@ -264,3 +264,66 @@ export async function resolveSectionScope(
     courseId: row.course_id,
   };
 }
+
+/**
+ * Every role the user holds, wherever it applies: role assignments (platform
+ * or one course, possibly expiring) and platform roles. Expired assignments
+ * are included; whoever evaluates them compares `expires_at` with the time
+ * of the check. See permission-cache.ts.
+ */
+export async function listUserRoleHoldings(
+  database: Executor,
+  userId: string,
+): Promise<
+  Array<{
+    role_id: string;
+    scope_type: string;
+    course_id: string | null;
+    expires_at: Date | null;
+  }>
+> {
+  const [assignments, platformRoles] = await Promise.all([
+    database
+      .selectFrom("role_assignments")
+      .select(["role_id", "scope_type", "course_id", "expires_at"])
+      .where("user_id", "=", userId)
+      .execute(),
+    database
+      .selectFrom("user_roles")
+      .select("role_id")
+      .where("user_id", "=", userId)
+      .execute(),
+  ]);
+  return [
+    ...assignments,
+    ...platformRoles.map(({ role_id }) => ({
+      role_id,
+      scope_type: "platform",
+      course_id: null,
+      expires_at: null,
+    })),
+  ];
+}
+
+/** Every role with the permissions it allows or denies. */
+export async function listRolePermissionRules(database: Executor) {
+  return await database
+    .selectFrom("roles as r")
+    .leftJoin("role_permissions as rp", "rp.role_id", "r.id")
+    .leftJoin("permissions as p", "p.id", "rp.permission_id")
+    .select([
+      "r.id as role_id",
+      "r.own_courses_only",
+      "p.permission_key",
+      "rp.effect",
+    ])
+    .execute();
+}
+
+/** Every feature flag that has a row, with whether it is on. */
+export async function listFeatureFlags(database: Executor) {
+  return await database
+    .selectFrom("features")
+    .select(["feature_key", "enabled"])
+    .execute();
+}

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { cn } from "../lib/utils";
 import {
   LoginFieldLabel,
@@ -19,6 +19,7 @@ import {
   toNationalNumber,
   validateEmail,
   validateMobile,
+  withDefaultEmailDomain,
 } from "./identifier";
 import type { CountryOption, IdentifierMethod } from "./identifier";
 import {
@@ -50,7 +51,14 @@ export interface IdentifierFormProps {
   /** The submit button's words, when not the login's "Continue with …". */
   submitLabel?: string;
   /** The line under the button, when not the login's. */
-  footnote?: string;
+  footnote?: ReactNode;
+  /** The mobile field's label, when not "Mobile number". */
+  mobileLabel?: string;
+  /**
+   * Where an error is shown: beside the field's label, or in a box under
+   * the field, for a message too long for the label's line.
+   */
+  errorPlacement?: "label" | "below";
   /**
    * A number to start the mobile field with (international form, such as
    * "+918317390847"), in place of what was typed last time.
@@ -74,6 +82,8 @@ export function IdentifierForm({
   submitTone = "primary",
   submitLabel,
   footnote,
+  mobileLabel = "Mobile number",
+  errorPlacement = "label",
   initialPhoneNo,
 }: IdentifierFormProps) {
   const sending = status === "sending";
@@ -108,9 +118,12 @@ export function IdentifierForm({
   }, []);
 
   const error = invalidReason ?? errorMessage ?? null;
+  const labelError = errorPlacement === "label" ? error : null;
 
   const checkIdentifier = () =>
-    method === "email" ? validateEmail(email) : validateMobile(mobile, country);
+    method === "email"
+      ? validateEmail(withDefaultEmailDomain(email))
+      : validateMobile(mobile, country);
 
   // An address is only judged when the visitor presses Continue, and the
   // verdict goes as soon as they type again: an unfinished address is not
@@ -137,7 +150,10 @@ export function IdentifierForm({
 
     onSubmit(
       method === "email"
-        ? { method: "email", email: normalizeEmail(email) }
+        ? {
+            method: "email",
+            email: normalizeEmail(withDefaultEmailDomain(email)),
+          }
         : {
             method: "mobile",
             phoneNo: toInternationalPhoneNumber(mobile, country),
@@ -170,7 +186,7 @@ export function IdentifierForm({
       {usingEmail && (
         <div className="flex flex-col gap-2">
           <LoginFieldLabel
-            error={error}
+            error={labelError}
             errorId={ERROR_ID}
             htmlFor={EMAIL_FIELD_ID}
             label="Email"
@@ -201,10 +217,10 @@ export function IdentifierForm({
       {usingMobile && (
         <div className="flex flex-col gap-2">
           <LoginFieldLabel
-            error={error}
+            error={labelError}
             errorId={ERROR_ID}
             htmlFor={MOBILE_FIELD_ID}
-            label="Mobile number"
+            label={mobileLabel}
           />
           <div className="flex min-w-0 items-stretch gap-2.5">
             <CountryCodeSelect
@@ -236,6 +252,16 @@ export function IdentifierForm({
           </div>
         </div>
       )}
+
+      {errorPlacement === "below" && error ? (
+        <p
+          className="m-0 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3.5 py-2.5 text-[0.8125rem] leading-5 text-(--muted)"
+          id={ERROR_ID}
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : null}
 
       <LoginSubmitButton
         busy={sending}

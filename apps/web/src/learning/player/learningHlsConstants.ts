@@ -1,4 +1,6 @@
 import type { VideoNetworkRequest } from "@veolms/video-player";
+import { installSegmentCache } from "./segmentCache";
+import { cachedStartHeight } from "./segmentCacheStart";
 
 export const LEARNING_HLS_MIME_TYPE = "application/x-mpegurl";
 
@@ -124,7 +126,7 @@ function carriesPlaybackToken(type: VideoNetworkRequest["type"]): boolean {
   );
 }
 
-export function createLearningHlsRequestFilter(options?: {
+type LearningHlsRequestOptions = {
   protectedPlayback?: boolean;
   segmentToken?: string;
   segmentTokenExpiresAt?: number;
@@ -132,7 +134,22 @@ export function createLearningHlsRequestFilter(options?: {
     token: string;
     expiresAt?: number;
   } | null>;
-}) {
+};
+
+/**
+ * The lesson player's request filter: the cache version and the playback
+ * token on every request that needs them. Segments the browser already
+ * keeps are answered from there (see segmentCache.ts, set up here: this is
+ * made before the player's runtime is loaded).
+ */
+export function createLearningHlsRequestFilter(
+  options?: LearningHlsRequestOptions,
+) {
+  installSegmentCache();
+  return createTokenRequestFilter(options);
+}
+
+function createTokenRequestFilter(options?: LearningHlsRequestOptions) {
   if (!options?.segmentToken && !options?.refreshSegmentToken) {
     return appendLearningHlsCacheVersion;
   }
@@ -195,13 +212,86 @@ function appendLearningHlsQueryParameter(
   }
 }
 
-export const LEARNING_HLS_STREAMING = {
-  abrEnabled: true,
-  // Start as soon as one 2s segment is in (1.5s), then build a 60s cushion
-  // so a phone losing signal for half a minute keeps playing. 30s is kept
-  // behind the playhead, so seeking back a little needs no network. The
-  // cushion sits in MSE SourceBuffers, which the page cannot read back.
-  rebufferingGoal: 1.5,
-  bufferingGoal: 60,
-  bufferBehind: 30,
-} as const;
+/**
+ * Played video kept in memory: 3 minutes, so going back that far needs no
+ * download at all. With the 60s ahead that is ~80MB of 1080p, inside every
+ * browser's per-video buffer cap (Chrome 150MB, Firefox 100MB) with room
+ * for bitrate peaks. Further back is still on this device, in the segment
+ * cache (segmentCache.ts), so it costs no network either.
+ */
+const LEARNING_BUFFER_BEHIND_SECONDS = 180;
+/** A phone with 2GB of memory or less keeps what it kept before. */
+const LEARNING_LEAN_BUFFER_BEHIND_SECONDS = 30;
+const LEARNING_LEAN_DEVICE_MEMORY_GB = 2;
+
+/** How much played video this device keeps in memory. */
+export function learningBufferBehindSeconds(): number {
+  const deviceMemory =
+    typeof navigator === "undefined"
+      ? undefined
+      : (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return typeof deviceMemory === "number" &&
+    deviceMemory <= LEARNING_LEAN_DEVICE_MEMORY_GB
+    ? LEARNING_LEAN_BUFFER_BEHIND_SECONDS
+    : LEARNING_BUFFER_BEHIND_SECONDS;
+}
+
+/**
+ * The picture height the learner picked in the player's quality menu, kept
+ * with the learning settings as `videoQuality` ("1080", or "auto"), or
+ * undefined for auto. Read from storage directly, as the preload's resume
+ * setting is (learningHlsPreloadSource.ts): this module is in the early
+ * preload chunk, which the settings module would weigh down.
+ */
+export function readPreferredVideoHeight(): number | undefined {
+  try {
+    const stored = JSON.parse(
+      globalThis.localStorage?.getItem("veolms-learning-preferences") || "{}",
+    ) as { videoQuality?: unknown };
+    const height = Number(stored.videoQuality);
+    return Number.isInteger(height) && height > 0 ? height : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Start as soon as one 2s segment is in (1.5s), then build a 60s cushion so
+ * a phone losing signal for half a minute keeps playing; more ahead is
+ * downloaded for nothing when a learner skips or leaves. Played video is
+ * kept as above. The buffer sits in MSE SourceBuffers, which the page
+ * cannot read back. A video starts at the quality the learner picked, if
+ * any (else ABR starts low and climbs); a lesson the device keeps at a
+ * taller rendition plays that rendition. Read per source, and the live and
+ * preload sources share it, so a preload is made at the quality playback
+ * starts at and is not cleared by a config mismatch. On auto, a lesson
+ * the device keeps at some quality plays at that one for as long as its
+ * segments come from the device (segmentCacheStart.ts): a replay fetches
+ * nothing. The first video segment from the network hands over to ABR.
+ */
+export function learningHlsStreaming(manifestUrl?: string) {
+  const chosenVideoHeight = readPreferredVideoHeight();
+  const cachedVideoHeight = manifestUrl
+    ? cachedStartHeight(manifestUrl)
+    : undefined;
+  // A chosen quality applies to every lesson on this device. One the
+  // device keeps at a taller rendition plays that one (there is nothing to
+  // fetch for it; the quality menu shows what plays); the chosen quality
+  // stays what the next lessons start at. A shorter kept rendition does not
+  // lower the chosen quality.
+  const preferredVideoHeight =
+    chosenVideoHeight &&
+    cachedVideoHeight &&
+    cachedVideoHeight > chosenVideoHeight
+      ? cachedVideoHeight
+      : chosenVideoHeight;
+  const holdVideoHeight = chosenVideoHeight ? undefined : cachedVideoHeight;
+  return {
+    abrEnabled: true,
+    ...(preferredVideoHeight ? { preferredVideoHeight } : {}),
+    ...(holdVideoHeight ? { holdVideoHeight } : {}),
+    rebufferingGoal: 1.5,
+    bufferingGoal: 60,
+    bufferBehind: learningBufferBehindSeconds(),
+  } as const;
+}

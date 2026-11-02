@@ -1,3 +1,5 @@
+import { cacheTags } from "./cache/tags.ts";
+
 /**
  * Which requests change what the site's static pages show (the course
  * pages, the catalogue, the home page, the platform's look), so the pages
@@ -94,4 +96,16 @@ export function detectSiteContentChange(request: {
   }
 
   return null;
+}
+
+/**
+ * The cache tags a change clears: a course's own entries and the course
+ * lists, or for a site-wide change everything pages draw from.
+ */
+export function cacheTagsForSiteContentChange(
+  change: SiteContentChange,
+): string[] {
+  return change.scope === "course"
+    ? [cacheTags.course(change.courseId), cacheTags.catalog]
+    : [cacheTags.site, cacheTags.catalog];
 }

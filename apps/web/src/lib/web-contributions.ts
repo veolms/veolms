@@ -31,6 +31,8 @@ const SERVER_CONTRIBUTIONS: WebContributions = {
   lessonCardActions: [],
   profileMenuLinks: [],
   analyticsTabs: [],
+  courseEditorSections: [],
+  settingsRows: [],
 };
 
 function getServerWebContributions(): WebContributions {

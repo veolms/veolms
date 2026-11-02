@@ -61,6 +61,13 @@ export interface UseCurriculumScreenSwipeArgs {
   isCourseContentDrawerLayout: () => boolean;
   openLessonDrawer: () => void;
   closeLessonDrawer: () => void;
+  /**
+   * Whether the lessons open beside the video inside full screen (see
+   * useLessonDrawerControls' `toggleLessonDrawerFromPlayer`); the shortcut
+   * then works them as the player's Lessons button does.
+   */
+  fullscreenLessonsBeside: boolean;
+  toggleLessonDrawerFromPlayer: (presentation: "drawer" | "side") => void;
 }
 
 export interface UseCurriculumScreenSwipeResult {
@@ -91,6 +98,8 @@ export function useCurriculumScreenSwipe({
   isCourseContentDrawerLayout,
   openLessonDrawer,
   closeLessonDrawer,
+  fullscreenLessonsBeside,
+  toggleLessonDrawerFromPlayer,
 }: UseCurriculumScreenSwipeArgs): UseCurriculumScreenSwipeResult {
   const startCurriculumScreenSwipe = (
     event: CurriculumScreenSwipeStartEvent,
@@ -352,6 +361,10 @@ export function useCurriculumScreenSwipe({
         return;
 
       event.preventDefault();
+      if (fullscreenLessonsBeside) {
+        toggleLessonDrawerFromPlayer("side");
+        return;
+      }
       if (isCourseContentDrawerLayout()) {
         if (lessonDrawer) closeLessonDrawer();
         else openLessonDrawer();
@@ -366,10 +379,12 @@ export function useCurriculumScreenSwipe({
       window.removeEventListener("keydown", handleCurriculumShortcut, true);
   }, [
     closeLessonDrawer,
+    fullscreenLessonsBeside,
     isCourseContentDrawerLayout,
     lessonDrawer,
     openLessonDrawer,
     setCurriculumCollapsed,
+    toggleLessonDrawerFromPlayer,
   ]);
   return {
     startCurriculumScreenSwipe,

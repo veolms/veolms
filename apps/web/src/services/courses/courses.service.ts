@@ -1,6 +1,7 @@
 import { coursePublicCurriculumSchema } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
 import { staticCurriculumUrl } from "../../courses/staticCurriculum";
+import type { HeroVideoPlayback, VideoPlaybackToken } from "@veolms/contracts";
 import type {
   Category,
   CourseAccessListResponse,
@@ -33,6 +34,11 @@ import type {
   DeletedCoursesListResponse,
   DeletedCoursesQuery,
   LinkedCoursesListResponse,
+  PartialAccessListResponse,
+  PartialAccessOffer,
+  PartialAccessOptionsResponse,
+  CreatePartialAccessRequest,
+  UpdatePartialAccessRequest,
   MyCoursesListResponse,
   PublicCourse,
   LessonResource,
@@ -205,6 +211,21 @@ export const coursesService = {
     payload: UpdateCourseBasicsRequest,
   ): Promise<CourseBasicsResponse> => {
     return api.patch<CourseBasicsResponse>(`/courses/${id}/basics`, payload);
+  },
+
+  /** The trailer's stream, for the course editor's preview and the overview. */
+  getCourseTrailerPlayback: (idOrSlug: string): Promise<HeroVideoPlayback> => {
+    return api.get<HeroVideoPlayback>(
+      `/courses/${encodeURIComponent(idOrSlug)}/trailer/playback`,
+    );
+  },
+
+  getCourseTrailerPlaybackToken: (
+    idOrSlug: string,
+  ): Promise<VideoPlaybackToken> => {
+    return api.get<VideoPlaybackToken>(
+      `/courses/${encodeURIComponent(idOrSlug)}/trailer/playback-token`,
+    );
   },
 
   deleteCourse: (id: string): Promise<CourseDeleteResponse> => {
@@ -429,6 +450,57 @@ export const coursesService = {
   ): Promise<LinkedCoursesListResponse> => {
     return api.delete<LinkedCoursesListResponse>(
       `/courses/${courseId}/linked-courses/${linkedCourseId}`,
+    );
+  },
+
+  /** Public: a part of a course as its link's page sells it. */
+  getPartialAccessOffer: (
+    idOrSlug: string,
+    offerSlug: string,
+  ): Promise<PartialAccessOffer> => {
+    return api.get<PartialAccessOffer>(
+      `/course-offers/${encodeURIComponent(idOrSlug)}/${encodeURIComponent(offerSlug)}`,
+    );
+  },
+
+  /** Every partial access, for a coupon to be limited to. */
+  listPartialAccessOptions: (): Promise<PartialAccessOptionsResponse> => {
+    return api.get<PartialAccessOptionsResponse>("/course-offers");
+  },
+
+  listPartialAccess: (courseId: string): Promise<PartialAccessListResponse> => {
+    return api.get<PartialAccessListResponse>(
+      `/courses/${courseId}/partial-access`,
+    );
+  },
+
+  createPartialAccess: (
+    courseId: string,
+    payload: CreatePartialAccessRequest,
+  ): Promise<PartialAccessListResponse> => {
+    return api.post<PartialAccessListResponse>(
+      `/courses/${courseId}/partial-access`,
+      payload,
+    );
+  },
+
+  updatePartialAccess: (
+    courseId: string,
+    partialCourseId: string,
+    payload: UpdatePartialAccessRequest,
+  ): Promise<PartialAccessListResponse> => {
+    return api.patch<PartialAccessListResponse>(
+      `/courses/${courseId}/partial-access/${partialCourseId}`,
+      payload,
+    );
+  },
+
+  deletePartialAccess: (
+    courseId: string,
+    partialCourseId: string,
+  ): Promise<PartialAccessListResponse> => {
+    return api.delete<PartialAccessListResponse>(
+      `/courses/${courseId}/partial-access/${partialCourseId}`,
     );
   },
 };

@@ -52,6 +52,21 @@ type ScrollbarDrag = {
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
+/**
+ * Writes an attribute only when its value changes. Each scroll frame syncs
+ * the scrollbar, and Chrome treats every `setAttribute`, even one with the
+ * same value, as a change: `aria-hidden` appears inside a `:has()` rule
+ * (`.courses-profile`), so rewriting it restyled the whole lesson page
+ * (40 to 70 ms) on a frame of a scroll.
+ */
+function setChangedAttribute(
+  element: HTMLElement,
+  name: string,
+  value: string,
+) {
+  if (element.getAttribute(name) !== value) element.setAttribute(name, value);
+}
+
 export function FloatingScrollbar({
   scrollportRef,
   ariaControls = "courses-main-scrollport",
@@ -108,11 +123,15 @@ export function FloatingScrollbar({
         scrollport.scrollHeight > scrollport.clientHeight + 1;
 
       scrollbar.classList.toggle("is-visible", canScroll);
-      scrollbar.setAttribute("aria-hidden", canScroll ? "false" : "true");
-      scrollbar.tabIndex = canScroll ? 0 : -1;
+      setChangedAttribute(
+        scrollbar,
+        "aria-hidden",
+        canScroll ? "false" : "true",
+      );
+      setChangedAttribute(scrollbar, "tabindex", canScroll ? "0" : "-1");
       if (!canScroll) {
-        scrollbar.setAttribute("aria-valuemax", "0");
-        scrollbar.setAttribute("aria-valuenow", "0");
+        setChangedAttribute(scrollbar, "aria-valuemax", "0");
+        setChangedAttribute(scrollbar, "aria-valuenow", "0");
         return;
       }
 
@@ -161,11 +180,13 @@ export function FloatingScrollbar({
       const thumbOffset =
         maximumThumbOffset * (scrollport.scrollTop / maximumScrollOffset);
 
-      scrollbar.setAttribute(
+      setChangedAttribute(
+        scrollbar,
         "aria-valuemax",
         String(Math.round(maximumScrollOffset)),
       );
-      scrollbar.setAttribute(
+      setChangedAttribute(
+        scrollbar,
         "aria-valuenow",
         String(Math.round(scrollport.scrollTop)),
       );
@@ -203,6 +224,18 @@ export function FloatingScrollbar({
         animationFrame = window.requestAnimationFrame(syncScrollbar);
       }
     };
+    // A resize observer reports once the browser has laid the page out, so
+    // measuring right then costs nothing. Put off to the next frame, as a
+    // scroll is, the measurement came before that frame's layout and laid
+    // the whole page out anew whenever anything had changed since (30 to
+    // 40 ms a time while a lesson page loads).
+    const syncAfterLayout = () => {
+      if (animationFrame !== 0) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
+      }
+      syncScrollbar();
+    };
 
     // A scrollport can move without resizing when navigation or the sidebar
     // changes the surrounding layout. Observe and listen through that chain so
@@ -231,7 +264,7 @@ export function FloatingScrollbar({
     const resizeObserver =
       typeof ResizeObserver === "undefined"
         ? null
-        : new ResizeObserver(scheduleSync);
+        : new ResizeObserver(syncAfterLayout);
     resizeObserver?.observe(scrollport);
     if (rightEdgeRef?.current) resizeObserver?.observe(rightEdgeRef.current);
     layoutAncestors.forEach((ancestor) => resizeObserver?.observe(ancestor));

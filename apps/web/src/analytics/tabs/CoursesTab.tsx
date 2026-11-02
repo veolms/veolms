@@ -268,7 +268,7 @@ export default function CoursesTab({
   ];
 
   return (
-    <div className="grid gap-3.5 sm:gap-6">
+    <div className="grid grid-cols-1 gap-3.5 sm:gap-6">
       <section className={kpiGridClass}>
         <KpiCard
           icon={<BookOpen size={20} weight="bold" />}
@@ -323,7 +323,7 @@ export default function CoursesTab({
         />
       </ChartSection>
 
-      <div className="grid gap-3.5 sm:gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3.5 sm:gap-6 lg:grid-cols-5">
         <ChartSection
           title="Top Courses"
           description="By enrollments in this period"
@@ -382,7 +382,7 @@ export default function CoursesTab({
         </ChartSection>
       </div>
 
-      <div className="grid gap-3.5 sm:gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3.5 sm:gap-6 lg:grid-cols-2">
         <ChartSection
           title="Lesson Mix"
           description="Published lessons by type"

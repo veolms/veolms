@@ -48,11 +48,24 @@ export async function assertCanManageCourse(
   course: { id: string; creator_id: string | null },
   permission: Permission,
 ) {
-  if (
-    await mayManageCourse(database, course, actor.id, actor.roles, permission)
-  )
-    return;
+  if (await canManageCourse(database, actor, course, permission)) return;
   throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
+}
+
+/** The same rule as `assertCanManageCourse`, as a yes or no. */
+export async function canManageCourse(
+  database: Kysely<Database>,
+  actor: QuizActor,
+  course: { id: string; creator_id: string | null },
+  permission: Permission,
+) {
+  return await mayManageCourse(
+    database,
+    course,
+    actor.id,
+    actor.roles,
+    permission,
+  );
 }
 
 /**

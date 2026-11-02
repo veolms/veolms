@@ -26,6 +26,7 @@ import type {
   PublicProfileResponse,
   RegisterRequest,
   SessionResponse,
+  SignInFailureReportRequest,
   UserAvatarListResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
@@ -177,6 +178,12 @@ export const authService = {
 
   getAuthConfig: (): Promise<AuthConfigResponse> => {
     return api.get<AuthConfigResponse>("/auth/config");
+  },
+
+  reportSignInFailures: (
+    payload: SignInFailureReportRequest,
+  ): Promise<AuthMessageResponse> => {
+    return api.post<AuthMessageResponse>("/auth/sign-in-failures", payload);
   },
 
   googleOneTapLogin: (

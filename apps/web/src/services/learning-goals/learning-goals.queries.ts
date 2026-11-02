@@ -5,12 +5,20 @@ import { getApiError, type ApiError } from "../../lib/api-error";
 import { learningGoalKeys } from "./learning-goals.keys";
 import { learningGoalsService } from "./learning-goals.service";
 
+/**
+ * How long today's learning is taken as current. A copy is kept in the tab
+ * (see `services/accountSessionCopies.ts`): within this a reload shows it
+ * and asks nothing; after it, it is shown and asked for again. Learning in
+ * this tab marks it out of date as soon as it is synced.
+ */
+export const LEARNING_SUMMARY_STALE_MS = 60_000;
+
 export function useLearningSummary(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: learningGoalKeys.summary(),
     queryFn: learningGoalsService.summary,
     enabled: options?.enabled ?? true,
-    staleTime: 30_000,
+    staleTime: LEARNING_SUMMARY_STALE_MS,
     refetchOnWindowFocus: true,
   });
 }

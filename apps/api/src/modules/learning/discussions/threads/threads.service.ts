@@ -1,3 +1,4 @@
+import { cacheTags, createCache } from "@veolms/api-core";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
   CreateLearningThreadRequest,
@@ -68,6 +69,18 @@ import type {
 import type { S3StorageService } from "@veolms/storage";
 
 const MENTIONS_WORKSPACE_SORT = "mentions";
+
+/**
+ * The public popular discussions (the home page, the discussions page): the
+ * same for every visitor. Activity is not tracked here, so the list follows
+ * it within this time, as the guest home page that shows it always has.
+ */
+const popularDiscussions = createCache<PublicPopularDiscussionsResponse>({
+  name: "discussions.public-popular",
+  ttlMs: 30_000,
+  maxEntries: 100,
+  maxBytes: 4 * 1024 * 1024,
+});
 
 export type ThreadsListQuery = ListLearningThreadsQuery & {
   currentUserId?: string;
@@ -151,6 +164,8 @@ export interface ThreadsService {
       limit?: number;
       /** Keep only each author's most popular discussion. */
       onePerAuthor?: boolean;
+      /** Read only these discussions (see the repository), in any order. */
+      threadIds?: readonly string[];
     },
   ): Promise<PublicPopularDiscussionsResponse>;
 }
@@ -700,41 +715,52 @@ export function createThreadsService(
     },
 
     async listPublicPopularDiscussions(db, options) {
-      const academyId = await resolveAcademyId(db);
-      const rows: PublicPopularThreadRow[] =
-        await threadsRepo.listPublicPopularThreads(db, {
-          academyId,
-          limit: options?.limit ?? 20,
-          onePerAuthor: options?.onePerAuthor,
-        });
+      // A chosen set of discussions (pinned ones) is read live.
+      if (options?.threadIds) return await read();
+      return await popularDiscussions.fetch(
+        JSON.stringify([options?.limit ?? 20, options?.onePerAuthor ?? false]),
+        read,
+        { tags: [cacheTags.site] },
+      );
 
-      return {
-        discussions: rows.map((row) => ({
-          id: row.id,
-          kind: row.kind,
-          // SQL left(…, 500) counts code points; the schema counts UTF-16
-          // units, so one emoji in a long post made this public endpoint
-          // return 500 for everyone.
-          title: row.title === null ? null : clampText(row.title, 255),
-          snippet: clampText(row.snippet ?? "", 500),
-          author: {
-            displayName: clampText(
-              row.authorName?.trim() || "Anonymous Learner",
-              100,
-            ),
-            username: row.authorUsername,
-            avatarUrl: row.authorAvatarUrl,
-            avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
-          },
-          courseId: row.courseId,
-          lessonId: row.lessonId,
-          courseTitle: row.courseTitle,
-          lessonTitle: row.lessonTitle,
-          replyCount: row.replyCount,
-          likeCount: row.likeCount,
-          updatedAt: toIsoString(row.updatedAt),
-        })),
-      };
+      async function read() {
+        const academyId = await resolveAcademyId(db);
+        const rows: PublicPopularThreadRow[] =
+          await threadsRepo.listPublicPopularThreads(db, {
+            academyId,
+            limit: options?.limit ?? 20,
+            onePerAuthor: options?.onePerAuthor,
+            threadIds: options?.threadIds,
+          });
+
+        return {
+          discussions: rows.map((row) => ({
+            id: row.id,
+            kind: row.kind,
+            // SQL left(…, 500) counts code points; the schema counts UTF-16
+            // units, so one emoji in a long post made this public endpoint
+            // return 500 for everyone.
+            title: row.title === null ? null : clampText(row.title, 255),
+            snippet: clampText(row.snippet ?? "", 500),
+            author: {
+              displayName: clampText(
+                row.authorName?.trim() || "Anonymous Learner",
+                100,
+              ),
+              username: row.authorUsername,
+              avatarUrl: row.authorAvatarUrl,
+              avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
+            },
+            courseId: row.courseId,
+            lessonId: row.lessonId,
+            courseTitle: row.courseTitle,
+            lessonTitle: row.lessonTitle,
+            replyCount: row.replyCount,
+            likeCount: row.likeCount,
+            updatedAt: toIsoString(row.updatedAt),
+          })),
+        };
+      }
     },
 
     async getDiscussionsWorkspace(db, query) {
@@ -744,7 +770,7 @@ export function createThreadsService(
       };
       const tab = query.tab || "q-and-a";
       // Anyone on the team may have something to moderate; which courses,
-      // if any, is the permission check in listModeratableCourseIds.
+      // if any, is the permission check in listStaffReadableCourseIds.
       const isStaff = actor.roles.some((r) => r.toLowerCase() !== "student");
       const isAuthorRestrictedTab =
         tab === "all" ||
@@ -769,18 +795,20 @@ export function createThreadsService(
         }
       }
 
-      // The staff view (everyone's threads) covers only the courses the
-      // actor may moderate: all of them for an admin, the courses they
-      // created for anyone else. Asking for a course outside that set drops
-      // the actor back to the ordinary learner view.
-      const moderatableCourseIds = isStaff
-        ? await courseAccess.listModeratableCourseIds(db, actor)
+      // The staff view (everyone's threads, read-only) covers the courses
+      // the actor reads as staff: every course with "View discussions" (or
+      // moderation) held for every course, the courses they created
+      // otherwise. Asking for a course outside that set, or holding none,
+      // drops the actor back to the ordinary learner view rather than an
+      // empty staff one. Moderating stays per thread (canModerateCourse).
+      const staffCourseIds = isStaff
+        ? await courseAccess.listStaffReadableCourseIds(db, actor)
         : [];
       const hasStaffView =
         isStaff &&
-        (moderatableCourseIds === "all" ||
-          !query.courseId ||
-          moderatableCourseIds.includes(query.courseId));
+        (staffCourseIds === "all" ||
+          (staffCourseIds.length > 0 &&
+            (!query.courseId || staffCourseIds.includes(query.courseId))));
       const effectiveMine =
         isAuthorRestrictedTab && !hasStaffView ? true : query.mine;
 
@@ -792,7 +820,7 @@ export function createThreadsService(
         tab === "mentions" ||
         !hasStaffView
           ? await courseAccess.listAccessibleCourseIds(db, actor)
-          : moderatableCourseIds;
+          : staffCourseIds;
 
       if (
         accessibleCourseIds !== "all" &&
@@ -1228,6 +1256,55 @@ export function createThreadsService(
     },
   };
 
+  /**
+   * The pin and creator's heart of each thread, read in one lookup for a page
+   * rather than joined into every query that lists threads.
+   */
+  async function addThreadMarks<
+    T extends { id: string; itemType?: "thread" | "note" | "reply" },
+  >(db: DatabaseExecutor, items: readonly T[]): Promise<T[]> {
+    const threadIds = items.flatMap((item) =>
+      !item.itemType || item.itemType === "thread" ? [item.id] : [],
+    );
+    if (threadIds.length === 0) return [...items];
+    const marks = new Map(
+      (await threadsRepo.listThreadMarks(db, threadIds)).map((row) => [
+        row.id,
+        row,
+      ]),
+    );
+    return items.map((item) => {
+      if (item.itemType && item.itemType !== "thread") return item;
+      const mark = marks.get(item.id);
+      return {
+        ...item,
+        pinnedAt: mark?.pinnedAt ? toIsoString(mark.pinnedAt) : null,
+        creatorHeart: mark?.heartedAt
+          ? {
+              displayName: mark.hearterName || "Creator",
+              avatarUrl: mark.hearterAvatarUrl,
+            }
+          : null,
+      };
+    });
+  }
+
+  const getThreadWithoutMarks = service.getThread;
+  service.getThread = async (db, threadId, actor) => {
+    const thread = await getThreadWithoutMarks(db, threadId, actor);
+    const [marked] = await addThreadMarks(db, [thread]);
+    return marked ?? thread;
+  };
+
+  const listThreadsWithoutMarks = service.listThreads;
+  service.listThreads = async (db, query) => {
+    const response = await listThreadsWithoutMarks(db, query);
+    return {
+      ...response,
+      threads: await addThreadMarks(db, response.threads),
+    };
+  };
+
   // Every tab of the Discussions page shows a Like button, so each item says
   // whether the viewer liked it. Added here, in one lookup for the page,
   // rather than in each tab's own query.
@@ -1258,9 +1335,10 @@ export function createThreadsService(
     const numberByLesson = new Map(
       lessonNumbers.map((row) => [row.id, row.lessonNumber]),
     );
+    const marked = await addThreadMarks(db, response.items);
     return {
       ...response,
-      items: response.items.map((item) => ({
+      items: marked.map((item) => ({
         ...item,
         ...(likes ? { isLiked: liked.has(`${item.itemType}:${item.id}`) } : {}),
         lessonNumber: item.lessonId

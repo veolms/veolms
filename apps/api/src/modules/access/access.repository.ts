@@ -331,3 +331,24 @@ export async function listActiveUserIdsForCourse(
     .execute();
   return rows.map((row) => row.user_id);
 }
+
+/** The learner and course a manual grant names, as far as the grant cares. */
+export async function findManualGrantTargets(
+  database: Executor,
+  userId: string,
+  courseId: string,
+) {
+  const [user, course] = await Promise.all([
+    database
+      .selectFrom("users")
+      .select(["id", "is_deleted"])
+      .where("id", "=", userId)
+      .executeTakeFirst(),
+    database
+      .selectFrom("courses")
+      .select(["id", "status", "deleted_at"])
+      .where("id", "=", courseId)
+      .executeTakeFirst(),
+  ]);
+  return { user, course };
+}

@@ -10,6 +10,8 @@ export interface DiscussionProps {
   persistenceKey: string;
   courseSlug?: string;
   courseId?: string;
+  /** Who created the course: they moderate its discussion. */
+  courseCreatorId?: string | null;
   lessonId?: string;
   mobileLessonHeader?: React.ReactNode;
   mobileBottomNavigation?: boolean;

@@ -72,8 +72,18 @@ export type {
   PlayerSettingsView,
   PlayerZoomState,
 } from "./react/playerState";
+export {
+  BUFFERED_PLAYBACK_GRACE_SECONDS,
+  isCurrentPositionBuffered,
+  isPlaybackStalled,
+} from "./core/playbackStall";
 export { usePlayerMobileInteraction } from "./react/PlayerInteractionMode";
 export type { PlayerInteractionMode } from "./react/PlayerInteractionMode";
+export {
+  getPageFullscreenElement,
+  isPageFullscreenTurned,
+  PAGE_FULLSCREEN_CHANGE_EVENT,
+} from "./react/pageFullscreen";
 export type {
   PlayerPresentationEvent,
   VideoPlayerEvent,

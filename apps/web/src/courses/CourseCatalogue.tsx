@@ -41,6 +41,8 @@ import { useCurrentUser } from "../services/auth";
 import { useCapabilities } from "../services/authorization/authorization.queries";
 import { hasAdminRole } from "../shell/workspaceRole";
 import { courseMatchesWishlist, getCourseRouteKey } from "./catalogue";
+import { useCatalogSearchTracking } from "./useCatalogSearchTracking";
+import { ShownCourseThumbnailsScript } from "./CourseCardThumbnail";
 
 // Only a learner leaving a free course needs this, so it stays out of the
 // catalogue's own code.
@@ -140,14 +142,23 @@ export function CourseCatalogue({
   onRestoreCourse,
   deletingCourseIds,
 }: CourseCatalogueProps) {
-  const canCreateCourse = useCapabilities({
-    enabled: role === "creator",
-  }).can("course.create");
+  const capabilities = useCapabilities({ enabled: role === "creator" });
+  const canCreateCourse = capabilities.can("course.create");
+  // The bin lists every deleted course, so it takes the academy-wide key.
+  const canOpenBin =
+    isAdmin || capabilities.canOnCourse("course.restore", null);
+  useCatalogSearchTracking(
+    search,
+    isLoading,
+    totalCoursesCount ?? visibleCourses.length,
+  );
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
   const [pendingUnenroll, setPendingUnenroll] = useState<Course | null>(null);
-  // An admin in Student view can leave any course they enrolled in, and
-  // doing so clears their progress in it.
-  const accountIsAdmin = hasAdminRole(useCurrentUser().data?.roles);
+  // An admin in Student view, or a shared test account, can leave any
+  // course they enrolled in, and doing so clears their progress in it.
+  const currentUser = useCurrentUser().data;
+  const leavesAnyCourse =
+    hasAdminRole(currentUser?.roles) || Boolean(currentUser?.isTestAccount);
   const quickFilterTabsRef = useRef<HTMLDivElement>(null);
   const [hasQuickFilterOverflow, setHasQuickFilterOverflow] = useState(false);
   const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(
@@ -179,7 +190,7 @@ export function CourseCatalogue({
           ["all", "All"],
           ["published", "Published"],
           ["draft", "Draft"],
-          ...(isAdmin ? [["bin", "Bin"] as const] : []),
+          ...(canOpenBin ? [["bin", "Bin"] as const] : []),
         ]
       : [
           ["all", "All"],
@@ -277,13 +288,13 @@ export function CourseCatalogue({
       isAdmin={isAdmin}
       wishlisted={courseMatchesWishlist(course, wishlisted)}
       onWishlist={onWishlist}
-      onOpen={(selected) =>
-        onOpenCourse(
-          selected,
-          role === "student" && !selected.enrolled
+      onOpen={(selected, options) =>
+        onOpenCourse(selected, {
+          ...(role === "student" && !selected.enrolled
             ? { preview: true }
-            : undefined,
-        )
+            : {}),
+          ...options,
+        })
       }
       onExplore={(selected) =>
         onNavigatePage(
@@ -312,7 +323,7 @@ export function CourseCatalogue({
       onDeleteRequested={setPendingDelete}
       onRestoreRequested={onRestoreCourse}
       onUnenrollRequested={role === "student" ? setPendingUnenroll : undefined}
-      canUnenrollFromAnyCourse={accountIsAdmin}
+      canUnenrollFromAnyCourse={leavesAnyCourse}
       onNavigatePage={onNavigatePage}
       menuOpen={courseMenu === course.id}
       setMenuOpen={setCourseMenu}
@@ -504,6 +515,7 @@ export function CourseCatalogue({
               renderCard(course, priorityImageIndexes.has(index)),
             )}
           </div>
+          <ShownCourseThumbnailsScript />
         </div>
       ) : (
         <CourseCatalogueEmptyState
@@ -577,7 +589,7 @@ export function CourseCatalogue({
         <Suspense fallback={null}>
           <UnenrollCourseModal
             course={pendingUnenroll}
-            resetsProgress={accountIsAdmin}
+            resetsProgress={leavesAnyCourse}
             onClose={() => setPendingUnenroll(null)}
             setNotice={setNotice}
           />

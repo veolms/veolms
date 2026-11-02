@@ -13,12 +13,12 @@ import { COMPACT_NAVIGATION_QUERY } from "./sidebarVisibility";
  * that switch the app between its phone and wide layouts wait (see
  * `watchLayoutQuery`), and catch up once the hold ends; a query read
  * through `layoutQueryMatches` keeps the answer it had when the hold
- * began. The hold ends when
- * the video has left full screen and the screen is phone-sized again, or
- * after `RELEASE_TIMEOUT_MS` for a phone the viewer keeps sideways. Until
- * then only the video shows, still filling the screen (see
- * `[data-phone-video-leaving]` in player.css), so the page never appears
- * sideways.
+ * began. The hold ends when the video has left full screen and the screen
+ * is phone-sized again. Until then only the video shows, still filling the
+ * screen (see `[data-phone-video-leaving]` in player.css), so the page never
+ * appears sideways; a phone the viewer keeps sideways for
+ * `RELEASE_TIMEOUT_MS` gets the page back, still in the phone layout (see
+ * `uncover`).
  */
 const RELEASE_TIMEOUT_MS = 2_000;
 const HELD_ATTRIBUTE = "data-phone-layout-held";
@@ -97,6 +97,19 @@ function release(): void {
   window.requestAnimationFrame(clearLeaving);
 }
 
+/**
+ * A phone kept sideways after its video left full screen: the page shows
+ * again, laid out, but still in the phone layout, which the hold keeps until
+ * the screen is upright (`releaseWhenUpright`). Let go here, the wide layout
+ * took over, sidebar and all, and stayed until the phone was turned back,
+ * so turning it upright a moment later showed the desktop sidebar on the way.
+ */
+function uncover(): void {
+  releaseTimer = null;
+  document.documentElement.removeAttribute(HELD_ATTRIBUTE);
+  clearLeaving();
+}
+
 function install(): () => void {
   const compact = window.matchMedia(COMPACT_NAVIGATION_QUERY);
   let fullscreenSurface: Element | null = null;
@@ -118,6 +131,7 @@ function install(): () => void {
       }
       if (held) {
         clearLeaving();
+        document.documentElement.setAttribute(HELD_ATTRIBUTE, "");
         if (releaseTimer !== null) window.clearTimeout(releaseTimer);
         releaseTimer = null;
       }
@@ -128,11 +142,12 @@ function install(): () => void {
       release();
       return;
     }
-    // Still sideways: only the video shows until the screen turns upright.
+    // Still sideways: only the video shows until the screen turns upright,
+    // or for `RELEASE_TIMEOUT_MS` at most.
     leavingSurface = fullscreenSurface;
     leavingSurface?.setAttribute(LEAVING_SURFACE_ATTRIBUTE, "");
     document.documentElement.setAttribute(LEAVING_ATTRIBUTE, "");
-    releaseTimer = window.setTimeout(release, RELEASE_TIMEOUT_MS);
+    releaseTimer = window.setTimeout(uncover, RELEASE_TIMEOUT_MS);
   };
 
   document.addEventListener("fullscreenchange", handleFullscreenChange);

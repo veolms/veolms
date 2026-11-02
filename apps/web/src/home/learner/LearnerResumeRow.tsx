@@ -12,7 +12,7 @@ import {
   primaryActionClasses,
 } from "../guest/heroActionClasses";
 import { formatCourseProgress } from "../../learning/courseProgressFormat";
-import { playEnterKeySound } from "./enterKeySound";
+import { playEnterKeySound, prepareEnterKeySound } from "./enterKeySound";
 import { LearnerCourseThumbnail } from "./LearnerCourseThumbnail";
 import {
   getEnrolledCourseOverviewHref,
@@ -128,7 +128,10 @@ export function LearnerResumeRow({
   const actionRef = useRef<HTMLAnchorElement>(null);
   /** The key's current press is a finger's (or a pen's), not a mouse's. */
   const touchPressRef = useRef(false);
-  const enterPressed = useEnterKeyAction(actionRef, onOpen);
+  // Enter opens the lesson on every page, the row standing in for its key
+  // where the key is not drawn (a phone, and beside the picture on a page
+  // under 56rem).
+  const enterPressed = useEnterKeyAction(actionRef, onOpen, paneRef);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleCutOff = useIsCutOff(titleRef, course.courseTitle);
 
@@ -140,7 +143,13 @@ export function LearnerResumeRow({
 
   return (
     <div className={resumeRowBoxClasses}>
-      <div ref={paneRef} className={resumePaneClasses}>
+      <div
+        ref={paneRef}
+        className={resumePaneClasses}
+        // The key's sound is made ready on the way to a press.
+        onPointerEnter={prepareEnterKeySound}
+        onFocus={prepareEnterKeySound}
+      >
         <span aria-hidden="true" className={paneLampLightClasses} />
         {/* The whole row opens the course, so the pointer is a hand all over
             it. This lies under the words, which let the pointer through to

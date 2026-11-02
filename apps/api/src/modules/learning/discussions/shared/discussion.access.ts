@@ -1,3 +1,4 @@
+import { cacheTags, createCache } from "@veolms/api-core";
 import type { DatabaseExecutor } from "@veolms/database";
 import type { DiscussionVisibility } from "@veolms/contracts";
 import { findCourseSettings } from "../../../courses/index.ts";
@@ -9,6 +10,26 @@ import { hasAcademyPermission } from "../../../authorization/index.ts";
 import { httpError } from "../../../../lib/errors.ts";
 import { DiscussionErrors } from "./discussion.errors.ts";
 import { createDiscussionRepository } from "./discussion.repository.ts";
+
+/**
+ * Every published course with its price and access rule: read by every
+ * notes, threads, workspace and bookmarks listing to find the free courses
+ * a learner may read. The same for everyone; any course change clears it
+ * (`catalog`).
+ */
+const publishedCourseOpenness = createCache<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof createDiscussionRepository
+      >["listPublishedCourseOpenness"]
+    >
+  >
+>({
+  name: "discussions.published-course-openness",
+  ttlMs: 5 * 60_000,
+  maxBytes: 4 * 1024 * 1024,
+});
 
 // "Is this course open to a signed-in learner who holds no grant" is asked
 // of `isOpenFreeCourse`, the rule lesson playback, quizzes and the course
@@ -100,6 +121,16 @@ export interface DiscussionAccess {
    * the courses the actor created.
    */
   listModeratableCourseIds(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+  ): Promise<readonly string[] | "all">;
+  /**
+   * Courses whose discussions the actor reads as staff (everyone's threads,
+   * read-only): every course with discussion.read or discussion.moderate
+   * held for every course, otherwise the courses the actor created.
+   * Moderating is still `canModerateCourse`'s.
+   */
+  listStaffReadableCourseIds(
     db: DatabaseExecutor,
     actor: DiscussionActor,
   ): Promise<readonly string[] | "all">;
@@ -314,7 +345,13 @@ export function createDiscussionAccess(): DiscussionAccess {
       const [grants, created, publishedCourses] = await Promise.all([
         access.listUserGrants(db, actor.userId),
         discussionRepo.listCreatedCourseIds(db, actor.userId),
-        discussionRepo.listPublishedCourseOpenness(db),
+        db.isTransaction
+          ? discussionRepo.listPublishedCourseOpenness(db)
+          : publishedCourseOpenness.fetch(
+              "all",
+              () => discussionRepo.listPublishedCourseOpenness(db),
+              { tags: [cacheTags.catalog, cacheTags.site] },
+            ),
       ]);
 
       const now = new Date();
@@ -334,6 +371,20 @@ export function createDiscussionAccess(): DiscussionAccess {
 
     async listModeratableCourseIds(db, actor) {
       if (await moderatesEveryCourse(db, actor)) return "all";
+      const rows = await discussionRepo.listActiveCreatedCourseIds(
+        db,
+        actor.userId,
+      );
+      return rows.map((row) => row.id);
+    },
+
+    async listStaffReadableCourseIds(db, actor) {
+      if (
+        (await readsEveryCourse(db, actor)) ||
+        (await moderatesEveryCourse(db, actor))
+      ) {
+        return "all";
+      }
       const rows = await discussionRepo.listActiveCreatedCourseIds(
         db,
         actor.userId,

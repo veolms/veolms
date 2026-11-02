@@ -16,7 +16,11 @@ export const HOME_PAGE_MAX_SELECTED_COURSES = HOME_PAGE_COURSES_PER_SECTION;
 /** How many comments the home page holds, shown a page at a time. */
 export const HOME_PAGE_DISCUSSION_COUNT = 36;
 export const HOME_PAGE_DISCUSSIONS_PER_PAGE = 6;
-export const HOME_PAGE_MAX_PINNED_DISCUSSIONS = 5;
+/**
+ * Comments an admin can list. Settings with more than an older API allows
+ * fail its parse and fall back to the defaults, so deploy before adding more.
+ */
+export const HOME_PAGE_MAX_PINNED_DISCUSSIONS = 200;
 export const HOME_PAGE_MAX_HIDDEN_DISCUSSIONS = 200;
 
 /**
@@ -29,6 +33,8 @@ export const HOME_PAGE_HERO_LESSON = {
 } as const;
 
 export interface HomePageHero {
+  /** A short line above the headline, such as "Welcome to …". May be empty. */
+  eyebrow: string;
   headline: string;
   /** The second headline line, shown in the accent colour. May be empty. */
   highlightedHeadline: string;
@@ -87,10 +93,11 @@ export interface HomePageSettings {
 
 export const DEFAULT_HOME_PAGE_SETTINGS: HomePageSettings = {
   hero: {
+    eyebrow: "Welcome to ProCodrr",
     headline: "Learn In Depth.",
     highlightedHeadline: "Build With Confidence.",
     description:
-      "Deep understanding and practical foundations give you the confidence to build beyond tutorials.",
+      "Go deep enough and you stop chasing possibilities. You create them.",
     primaryActionLabel: "Explore Courses",
     secondaryActionLabel: "Watch Free Courses",
   },

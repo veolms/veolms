@@ -123,7 +123,7 @@ export function ProgressCalendar({
               standing === "under" ? (
                 <GoalRing
                   share={goalShare(day!.seconds, day!.goalMinutes)}
-                  stroke={3.2}
+                  stroke={4.4}
                   animate={false}
                   className="size-full text-(--text)"
                 >

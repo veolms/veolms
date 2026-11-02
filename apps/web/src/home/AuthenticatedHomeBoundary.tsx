@@ -1,19 +1,17 @@
 import type { LearningCourse } from "../StudentPages";
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import type { CourseOpenOptions } from "../courses/catalogue";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import type { NavigateTo } from "../routing/navigation";
 import { useEnrolledCourses } from "../services/enrollments";
 import type { GuestHomeCourseCardActions } from "./guest/GuestHomeCourseSection";
 import { readHomeHint, rememberHomeHint } from "../store/homeHint";
+import { learnerHomeBody } from "../routing/prerenderedBodies";
 import { LearnerHomeShell } from "./learner/LearnerHomeSkeleton";
 
-const LearnerHome = lazy(() =>
-  import("./learner/LearnerHome").then((module) => ({
-    default: module.LearnerHome,
-  })),
-);
+const LearnerHome = learnerHomeBody.Body;
 
 interface AuthenticatedHomeBoundaryProps {
-  onOpenCourse: (course: LearningCourse) => void;
+  onOpenCourse: (course: LearningCourse, options?: CourseOpenOptions) => void;
   onNavigatePage: NavigateTo;
   /** The learner's display name; it may be empty. */
   learnerName: string;
@@ -103,7 +101,10 @@ export function AuthenticatedHomeBoundary({
   notEnrolledContent,
 }: AuthenticatedHomeBoundaryProps) {
   const enrollmentQuery = useEnrolledCourses({ enabled: !sessionPending });
-  const enrollmentData = sessionPending ? undefined : enrollmentQuery.data;
+  // Nothing is asked for until the session is confirmed, but the courses
+  // this tab kept for the account (see services/accountSessionCopies.ts)
+  // are shown meanwhile: a reload draws the home as it was.
+  const enrollmentData = enrollmentQuery.data;
   // Which home this learner had last time, read once: it only stands in
   // until their courses answer, and must not change under the page.
   const [wasNotEnrolled] = useState(() => readHomeHint() === "new-learner");
@@ -132,10 +133,10 @@ export function AuthenticatedHomeBoundary({
     if (enrollmentData === undefined && pendingContent) {
       return <>{pendingContent}</>;
     }
+  }
 
-    if (enrollmentData?.courses.length === 0) {
-      return <>{notEnrolledContent}</>;
-    }
+  if (enrollmentData?.courses.length === 0) {
+    return <>{notEnrolledContent}</>;
   }
 
   // A learner who had no courses last time is shown that home while the

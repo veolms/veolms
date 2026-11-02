@@ -405,7 +405,7 @@
   :root
     .courses-app--resize-content-visible.courses-app--collapsed
     .courses-nav {
-    margin-top: -6px;
+    margin-top: -1px;
   }
 
   :root

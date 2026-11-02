@@ -5,6 +5,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type TouchEvent as ReactTouchEvent,
 } from "react";
+import { playerRectOf, toPlayerPoint } from "../react/pageFullscreen";
 import type { PlayerController } from "../react/PlayerController";
 import type { PlayerZoomState } from "../react/playerState";
 
@@ -78,15 +79,26 @@ const FULLSCREEN_SWIPE_TOP_ZONE_SELECTOR =
   "[data-player-fullscreen-swipe-top-zone]";
 
 function startsInFullscreenTopZone(root: HTMLElement, y: number): boolean {
-  const top = root.getBoundingClientRect().top;
+  const top = playerRectOf(root).top;
   let zoneBottom = top;
   for (const element of root.querySelectorAll<HTMLElement>(
     FULLSCREEN_SWIPE_TOP_ZONE_SELECTOR,
   )) {
-    const bounds = element.getBoundingClientRect();
+    const bounds = playerRectOf(element);
     if (bounds.height > 0) zoneBottom = Math.max(zoneBottom, bounds.bottom);
   }
   return y < zoneBottom;
+}
+
+/**
+ * A pointer position in the player's own axes, so "down" is down on the
+ * video even while a page full screen turns it a quarter (pageFullscreen.ts).
+ */
+function gesturePoint(
+  element: HTMLElement,
+  point: { clientX: number; clientY: number },
+): GesturePoint {
+  return toPlayerPoint(point.clientX, point.clientY, element);
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -147,7 +159,7 @@ export function usePlayerFullscreenSwipe(
       const { ui } = controller.getSnapshot();
       if (!ui.fullscreen && ui.zoom.scale > 1.001) return;
       const root = getPlayerRoot(element);
-      const bounds = root.getBoundingClientRect();
+      const bounds = playerRectOf(root);
       if (bounds.height <= 0) return;
       if (ui.fullscreen && startsInFullscreenTopZone(root, point.y)) return;
       swipeRef.current = {
@@ -282,8 +294,22 @@ export function usePlayerFullscreenSwipe(
     if (!enabled) cancelSwipe(true);
   }, [cancelSwipe, enabled]);
 
+  // A swipe holds the legacy touch events back until it ends. One whose end
+  // never came (the system took the touch over) must not keep every later
+  // tap and click on the player swallowed: a new finger with no swipe under
+  // way lets them through again.
+  const clearStaleLegacyTouchSuppression = () => {
+    if (
+      !swipeRef.current?.active &&
+      suppressLegacyTouchUntilRef.current === Number.POSITIVE_INFINITY
+    ) {
+      suppressLegacyTouchUntilRef.current = Number.NEGATIVE_INFINITY;
+    }
+  };
+
   const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (!enabled || event.pointerType !== "touch") return false;
+    if (event.isPrimary) clearStaleLegacyTouchSuppression();
     lastPointerEventAtRef.current = Date.now();
     if (isFullscreenSwipeIgnored(event.target)) {
       cancelSwipe(false);
@@ -293,20 +319,21 @@ export function usePlayerFullscreenSwipe(
       cancelSwipe(false);
       return false;
     }
-    prepareSwipe(event.currentTarget, event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-    });
+    prepareSwipe(
+      event.currentTarget,
+      event.pointerId,
+      gesturePoint(event.currentTarget, event),
+    );
     return false;
   };
 
   const onPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     if (!enabled || event.pointerType !== "touch") return false;
     lastPointerEventAtRef.current = Date.now();
-    const handled = updateSwipe(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-    });
+    const handled = updateSwipe(
+      event.pointerId,
+      gesturePoint(event.currentTarget, event),
+    );
     if (handled) event.preventDefault();
     return handled;
   };
@@ -316,7 +343,7 @@ export function usePlayerFullscreenSwipe(
     lastPointerEventAtRef.current = Date.now();
     const handled = finishSwipe(
       event.pointerId,
-      { x: event.clientX, y: event.clientY },
+      gesturePoint(event.currentTarget, event),
       event.type === "pointercancel",
     );
     if (handled) {
@@ -331,6 +358,7 @@ export function usePlayerFullscreenSwipe(
     Date.now() - lastPointerEventAtRef.current < POINTER_TOUCH_DEDUPE_MS;
 
   const onTouchStart = (event: ReactTouchEvent<HTMLElement>) => {
+    if (event.touches.length === 1) clearStaleLegacyTouchSuppression();
     if (!enabled || legacyTouchIsPointerBacked()) return false;
     if (isFullscreenSwipeIgnored(event.target)) {
       cancelSwipe(false);
@@ -342,10 +370,11 @@ export function usePlayerFullscreenSwipe(
     }
     const touch = event.touches[0];
     if (!touch) return false;
-    prepareSwipe(event.currentTarget, touch.identifier, {
-      x: touch.clientX,
-      y: touch.clientY,
-    });
+    prepareSwipe(
+      event.currentTarget,
+      touch.identifier,
+      gesturePoint(event.currentTarget, touch),
+    );
     return false;
   };
 
@@ -356,10 +385,10 @@ export function usePlayerFullscreenSwipe(
       (candidate) => candidate.identifier === gesture?.pointerId,
     );
     if (!touch) return false;
-    const handled = updateSwipe(touch.identifier, {
-      x: touch.clientX,
-      y: touch.clientY,
-    });
+    const handled = updateSwipe(
+      touch.identifier,
+      gesturePoint(event.currentTarget, touch),
+    );
     if (handled) {
       event.preventDefault();
       suppressLegacyTouchUntilRef.current = Number.POSITIVE_INFINITY;
@@ -377,10 +406,9 @@ export function usePlayerFullscreenSwipe(
     if (!touch && event.type !== "touchcancel") return false;
     const handled = finishSwipe(
       gesture.pointerId,
-      {
-        x: touch?.clientX ?? gesture.lastX,
-        y: touch?.clientY ?? gesture.lastY,
-      },
+      touch
+        ? gesturePoint(event.currentTarget, touch)
+        : { x: gesture.lastX, y: gesture.lastY },
       event.type === "touchcancel",
     );
     if (handled) event.preventDefault();

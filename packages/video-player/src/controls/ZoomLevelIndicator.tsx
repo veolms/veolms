@@ -24,15 +24,17 @@ export function ZoomLevelIndicator({
   const controlsRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const { controlsVisible, feedbackVisible, scale } = usePlayerState(
+  const { controlsVisible, feedbackVisible, snap, scale } = usePlayerState(
     ({ ui }) => ({
       controlsVisible: ui.controlsVisible,
       feedbackVisible: ui.zoom.feedbackVisible,
+      snap: ui.zoom.snap,
       scale: ui.zoom.scale,
     }),
     (left, right) =>
       left.controlsVisible === right.controlsVisible &&
       left.feedbackVisible === right.feedbackVisible &&
+      left.snap === right.snap &&
       left.scale === right.scale,
   );
   const feedback = variant === "feedback";
@@ -87,19 +89,32 @@ export function ZoomLevelIndicator({
   }
 
   return (
-    <button
-      type="button"
-      className={classNames(
-        "pointer-events-auto absolute right-2 top-2 z-50 grid size-10 touch-manipulation place-items-center rounded-full bg-(--video-player-control-surface) text-[13px] leading-none font-medium tabular-nums text-(--video-player-control-text) shadow-(--video-player-control-shadow) transition-colors before:absolute before:-inset-0.5 before:rounded-full hover:bg-(--video-player-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) motion-reduce:transition-none",
-        className,
-      )}
-      aria-label={`Reset video zoom from ${label} to 1×`}
-      data-player-controls-reveal="delayed"
-      data-player-zoom-indicator="feedback"
-      data-player-zoom-reset=""
-      onClick={resetZoom}
-    >
-      {label}
-    </button>
+    <>
+      {snap ? (
+        // Said near the top of the picture as it snaps, as YouTube's app
+        // does.
+        <span
+          role="status"
+          className="pointer-events-none absolute top-[11%] left-1/2 z-50 -translate-x-1/2 rounded-lg bg-black/60 px-4 py-2.5 text-base leading-tight font-medium whitespace-nowrap text-white motion-safe:animate-in motion-safe:fade-in"
+          data-player-zoom-snap-label={snap}
+        >
+          {snap === "fill" ? "Zoomed to fill" : "Original"}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        className={classNames(
+          "pointer-events-auto absolute right-2 top-2 z-50 grid size-10 touch-manipulation place-items-center rounded-full bg-(--video-player-control-surface) text-[13px] leading-none font-medium tabular-nums text-(--video-player-control-text) shadow-(--video-player-control-shadow) transition-colors before:absolute before:-inset-0.5 before:rounded-full hover:bg-(--video-player-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) motion-reduce:transition-none",
+          className,
+        )}
+        aria-label={`Reset video zoom from ${label} to 1×`}
+        data-player-controls-reveal="delayed"
+        data-player-zoom-indicator="feedback"
+        data-player-zoom-reset=""
+        onClick={resetZoom}
+      >
+        {label}
+      </button>
+    </>
   );
 }

@@ -44,6 +44,8 @@ import type {
 } from "../learning/player/PersistentLearningPlayerHost";
 import type { LessonPlayerMinimizeGestureState } from "../learning/player/useLessonPlayerMinimizeGesture";
 import { resetLessonPlayerHeight } from "../learning/player/LessonPlayerHeightHandle";
+import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
+import { requestLessonAutoplay } from "../learning/lessonAutoplayRequest";
 import {
   easeLearningPlayerMotionProgress,
   getLearningBackgroundMotionState,
@@ -68,13 +70,9 @@ import {
   VideoPlaybackBootstrapError,
 } from "../learning/videoPlaybackBootstrap";
 
-const loadPersistentLearningPlayerHost = () =>
-  import("../learning/player/PersistentLearningPlayerHost");
-const PersistentLearningPlayerHost = lazy(() =>
-  loadPersistentLearningPlayerHost().then((module) => ({
-    default: module.PersistentLearningPlayerHost,
-  })),
-);
+const loadPersistentLearningPlayerHost =
+  persistentLearningPlayerHostBody.preload;
+const PersistentLearningPlayerHost = persistentLearningPlayerHostBody.Body;
 const loadLearningMiniPlayer = () =>
   import("../learning/player/LearningMiniPlayer");
 const LearningMiniPlayer = lazy(() =>
@@ -93,12 +91,14 @@ import {
 } from "../learning/player/learningMiniPlayerStore";
 import type { NavigateTo, NavigationOptions } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
+import { persistentLearningPlayerHostBody } from "../routing/prerenderedBodies";
 import { useCapabilities } from "../services/authorization/authorization.queries";
 import { ProfileNavigationProvider } from "../profiles/ProfileLink";
 import { ProfilePreviewHost } from "../profiles/ProfilePreviewHost";
 import {
   buildLoginDialogPath,
   buildLoginPath,
+  differOnlyByLoginDialog,
   isPublicProfilePath,
   LOGIN_PATH,
   readLoginPurpose,
@@ -137,8 +137,15 @@ import {
   getNavigationMatch,
   resolveActiveRouteSection,
 } from "../routing/activeRouteSection";
+import { useHydrated } from "../courses/viewerCourseState";
+import { rememberNavigationOrigin } from "../routing/navigationOriginEarlyState";
 import { NO_VIDEO_NOTICE } from "../learning/lessonWithoutVideo";
 import { videoPlaybackFailureNotice } from "../learning/videoPlaybackFailure";
+import {
+  beginLessonOpening,
+  endLessonOpening,
+} from "../learning/lessonOpeningState";
+import { LessonOpeningOverlay } from "../learning/LessonOpeningOverlay";
 import {
   getDestinationPath,
   getMatchedRouteDescriptor,
@@ -495,7 +502,17 @@ export default function AcademyLayout() {
     currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
   const originSectionValue =
     currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+  // The page is built without knowing where the reader came from; what the
+  // origin changes (the highlighted menu item, the back link's words) is
+  // applied in the render after hydration, an update React does apply. In
+  // the hydrating render itself it would differ from the built page, and
+  // React keeps a built attribute it disagrees with: the menu item stayed
+  // on Courses after a reload of a course page opened from Home. Before
+  // the first paint the document's head shows the origin already (see
+  // `routing/navigationOriginEarlyState.ts`).
+  const hydrated = useHydrated();
   const hasValidNavigationOrigin =
+    hydrated &&
     typeof originPathValue === "string" &&
     originPathValue.startsWith("/") &&
     !originPathValue.startsWith("//") &&
@@ -528,6 +545,20 @@ export default function AcademyLayout() {
     menuKnown: authUserFetched || Boolean(storeUser),
   });
   const showRouteBackButton = !currentNavigationMatch?.exact;
+  // Kept for a reload of this page in this tab: the hosted site's redirect
+  // to the address with a trailing slash drops the history state.
+  useEffect(() => {
+    if (!hasValidNavigationOrigin) return;
+    rememberNavigationOrigin(location.pathname, {
+      section: originSectionValue as string,
+      path: originPathValue as string,
+    });
+  }, [
+    hasValidNavigationOrigin,
+    location.pathname,
+    originPathValue,
+    originSectionValue,
+  ]);
 
   useLayoutEffect(() => {
     locationPathRef.current = currentLocationPath;
@@ -599,11 +630,14 @@ export default function AcademyLayout() {
     const previousPath = renderedLocationPathRef.current;
     const pending = pendingScrollPositionRef.current;
     if (previousPath === currentLocationPath && !pending) return;
-    // The page only tidied its own address: the reader stays where they are.
+    // The page only tidied its own address, or the login pop-up came up over
+    // it or went away (however it was opened or closed, Back included): the
+    // reader stays where they are.
     if (
       previousPath !== currentLocationPath &&
       !pending &&
-      asksToKeepScroll(location.state)
+      (asksToKeepScroll(location.state) ||
+        differOnlyByLoginDialog(previousPath, currentLocationPath))
     ) {
       renderedLocationPathRef.current = currentLocationPath;
       return;
@@ -683,9 +717,22 @@ export default function AcademyLayout() {
   // then stays where it was, and the recorded address must follow it, or
   // every later request for the same page would look like "already there"
   // and do nothing.
+  // Whichever page the app lands on next takes over from a lesson's loading
+  // state (see LessonOpeningOverlay): the lesson page, or wherever it went
+  // instead (a sign-in, a course it cannot open). In the same commit, so
+  // nothing shows in between.
+  useLayoutEffect(() => {
+    endLessonOpening();
+  }, [location.key]);
+
   const followNavigation = useCallback(
     (path: string, navigation: void | Promise<void>) => {
       void Promise.resolve(navigation).then(() => {
+        // A lesson asked for and then cancelled on the way leaves this page
+        // up: it must not stay covered by the lesson's loading state.
+        if (!isLearningRoutePath(window.location.pathname)) {
+          endLessonOpening();
+        }
         if (locationPathRef.current !== path) return;
         const { pathname, search, hash } = window.location;
         locationPathRef.current = `${pathname}${search}${hash}`;
@@ -940,6 +987,14 @@ export default function AcademyLayout() {
         );
       };
 
+      // From another page, the lesson page's loading state goes up now:
+      // the route waits for the lesson page's code before it changes.
+      if (
+        isLearningRoutePath(requestedPathname) &&
+        !isLearningRoutePath(locationPathRef.current)
+      ) {
+        beginLessonOpening();
+      }
       void autosyncManager.flushAll().then(performNavigation);
     },
     [
@@ -1138,7 +1193,9 @@ export default function AcademyLayout() {
   const openCourse = useCallback(
     (course: Course | LearningCourse, options?: CourseOpenOptions) => {
       const courseRouteKey = getCourseRouteKey(course);
-      const playerPath = `/learn/${encodeURIComponent(courseRouteKey)}${options?.preview ? "/1" : ""}`;
+      const playerPath = options?.lessonNumber
+        ? getCoursePlayerPath(courseRouteKey, options.lessonNumber)
+        : `/learn/${encodeURIComponent(courseRouteKey)}${options?.preview ? "/1" : ""}`;
       const activePlayer = persistentPlayerRef.current;
       if (
         shouldRestoreMiniPlayerForMatchingCourse({
@@ -1154,6 +1211,7 @@ export default function AcademyLayout() {
         navigateTo(activePlayer.lessonPath, { exact: true });
         return;
       }
+      if (options?.autoplay) requestLessonAutoplay(courseRouteKey);
       navigateTo(playerPath);
     },
     [navigateTo],
@@ -1980,10 +2038,6 @@ export default function AcademyLayout() {
     )
       ? learningReturnLocation.section
       : null;
-  const learningOriginPage =
-    onLearningRoute && isSettingsPath(learningReturnLocation.path)
-      ? "settings"
-      : null;
 
   return (
     <AcademyRouteGuard>
@@ -2023,7 +2077,6 @@ export default function AcademyLayout() {
             miniPlayerLessonPath: learningMiniPlayer?.lessonPath,
           })}
           learningBackground={learningBackground}
-          learningOriginPage={learningOriginPage}
           learningOriginSection={learningOriginSection}
           learningMotionStageRef={learningMotionStageRef}
           onNavigatePage={navigateTo}
@@ -2082,6 +2135,13 @@ export default function AcademyLayout() {
             />
           </Suspense>
         ) : null}
+        <LessonOpeningOverlay
+          suppressed={
+            onLearningRoute ||
+            Boolean(persistentPlayer) ||
+            Boolean(learningMiniPlayer)
+          }
+        />
         <LoginDialogHost />
         <ProfilePreviewHost />
       </ProfileNavigationProvider>

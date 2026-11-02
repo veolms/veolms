@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -48,6 +49,7 @@ import type {
 import { isInfiniteCacheData } from "./paginated-cache";
 import type { InfiniteData } from "@tanstack/react-query";
 import { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
+import { readAccountCopy } from "../accountSessionCopies";
 
 export { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
 
@@ -71,6 +73,12 @@ export interface LessonInteractionCounts {
 
 export type LessonInteractionCountsOptions = {
   enabled?: boolean;
+  /**
+   * Start from this tab's copy of the counts for the remembered account
+   * (see `readAccountCopy`): the lesson page's document shows them from
+   * that copy before its scripts run, and its first render must agree.
+   */
+  fromTabCopy?: boolean;
 };
 
 export function usePopularDiscussions(options?: { enabled?: boolean }) {
@@ -106,11 +114,16 @@ export function useLessonInteractionCounts(
   lessonId: string | undefined,
   options: LessonInteractionCountsOptions,
 ) {
+  const queryKey = learningInteractionKeys.lessonInteractionCounts(
+    courseId ?? "",
+    lessonId ?? "",
+  );
+  const copy =
+    options.fromTabCopy && courseId && lessonId
+      ? () => readAccountCopy<LessonInteractionCounts>(queryKey)
+      : undefined;
   return useQuery<LessonInteractionCounts, ApiError>({
-    queryKey: learningInteractionKeys.lessonInteractionCounts(
-      courseId ?? "",
-      lessonId ?? "",
-    ),
+    queryKey,
     queryFn: () => {
       if (!courseId || !lessonId) {
         throw new Error(
@@ -120,6 +133,8 @@ export function useLessonInteractionCounts(
       return fetchLessonInteractionCounts(courseId, lessonId);
     },
     enabled: (options.enabled ?? true) && Boolean(courseId && lessonId),
+    initialData: copy ? () => copy()?.value : undefined,
+    initialDataUpdatedAt: copy ? () => copy()?.savedAt : undefined,
     retry: false,
     staleTime: 30 * 1000,
   });
@@ -667,6 +682,8 @@ export function useLessonDiscussions(
      * and, being as old as the build, asked for again straight away.
      */
     initialPage?: { page: LessonDiscussionsListResponse; updatedAt: number };
+    /** Show the last query's pages while this one's first page loads. */
+    keepPreviousData?: boolean;
   },
 ) {
   const queryKey = learningInteractionKeys.lessonDiscussions(
@@ -695,6 +712,7 @@ export function useLessonDiscussions(
       ? { pages: [options.initialPage.page], pageParams: [null] }
       : undefined,
     initialDataUpdatedAt: options?.initialPage?.updatedAt,
+    placeholderData: options?.keepPreviousData ? keepPreviousData : undefined,
     retry: false,
     staleTime: 30 * 1000,
   });

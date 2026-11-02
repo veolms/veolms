@@ -1,9 +1,7 @@
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import type { Permission } from "@veolms/contracts";
-import {
-  checkUserPermission,
-  type PermissionCheckContext,
-} from "./authorization.repository.ts";
+import type { PermissionCheckContext } from "./authorization.repository.ts";
+import { checkPermission } from "./permission-cache.ts";
 
 export interface CourseActionRequest {
   userId: string | null | undefined;
@@ -53,7 +51,7 @@ export async function hasAcademyPermission(
   permission: Permission,
 ): Promise<boolean> {
   if (!userId) return false;
-  const result = await checkUserPermission(database, {
+  const result = await checkPermission(database, {
     userId,
     permissionKey: permission,
     excludeOwnCoursesOnlyRoles: true,
@@ -66,7 +64,7 @@ export function canActOnCourse(
   request: CourseActionRequest,
 ): Promise<boolean> {
   return canActOnCourseWith(
-    (context) => checkUserPermission(database, context),
+    (context) => checkPermission(database, context),
     request,
   );
 }

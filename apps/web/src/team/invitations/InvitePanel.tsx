@@ -127,7 +127,7 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
     >
       <PanelBody>
         {results ? (
-          <ul className="m-0 flex list-none flex-col divide-y divide-[color-mix(in_srgb,var(--text)_8%,transparent)] p-0">
+          <ul className="m-0 flex list-none flex-col divide-y divide-(--border) p-0">
             {results.map((result) => {
               const outcome = OUTCOME_LABELS[result.outcome];
               return (
@@ -195,7 +195,7 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
               <div
                 role="radiogroup"
                 aria-label="How they join"
-                className="grid grid-cols-2 gap-1 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_3%,transparent)] p-1"
+                className="grid grid-cols-2 gap-1 rounded-xl border border-(--border) bg-(--card-surface) p-1"
               >
                 {MODES.map((mode) => {
                   const active = kind === mode.id;
@@ -264,11 +264,13 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
         )}
       </PanelBody>
 
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-4 sm:px-6">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-(--border) p-4 sm:px-6">
         {results ? (
           <>
             <span />
-            <Button onClick={onClose}>Done</Button>
+            <Button elevation="flat" motion="static" onClick={onClose}>
+              Done
+            </Button>
           </>
         ) : (
           <>
@@ -301,7 +303,12 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
               >
                 Cancel
               </button>
-              <Button disabled={!canSend} onClick={() => void submit()}>
+              <Button
+                elevation="flat"
+                motion="static"
+                disabled={!canSend}
+                onClick={() => void submit()}
+              >
                 {create.isPending ? "Sending…" : sendLabel(kind, valid.length)}
               </Button>
             </div>

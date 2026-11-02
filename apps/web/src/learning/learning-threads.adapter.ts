@@ -67,5 +67,9 @@ export function adaptLearningThreadToComment(
     isLocked: Boolean(thread.isLocked),
     isBookmarked: Boolean(thread.isBookmarked),
     isFollowing: Boolean(thread.isFollowing),
+    courseId: thread.courseId,
+    lessonId: thread.lessonId ?? null,
+    pinnedAt: thread.pinnedAt ?? null,
+    creatorHeart: thread.creatorHeart ?? null,
   };
 }

@@ -1,6 +1,7 @@
 import { sql, type Expression, type SqlBool } from "kysely";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import { containsPattern } from "../../../lib/like-pattern.ts";
+import { fuzzyMatchesAny } from "../../../lib/fuzzy-search.ts";
 
 export interface MemberRow {
   user_id: string;
@@ -40,6 +41,7 @@ function userSearch(
     lower(u.display_name) like ${pattern}
     or lower(u.username) like ${pattern}
     or lower(coalesce(u.email, '')) like ${pattern}
+    or ${fuzzyMatchesAny(search, [sql.ref("u.display_name"), sql.ref("u.username")])}
   )`;
 }
 
@@ -49,12 +51,17 @@ function userSearch(
  */
 export async function listMembers(
   database: Executor,
-  options: { limit: number; search?: string; cursor?: MemberCursor },
+  options: {
+    /** Every role but student: matching them by id uses the role index. */
+    teamRoleIds: readonly string[];
+    limit: number;
+    search?: string;
+    cursor?: MemberCursor;
+  },
 ): Promise<MemberRow[]> {
   const search = userSearch(options.search);
   let query = database
     .selectFrom("role_assignments as ra")
-    .innerJoin("roles as r", "r.id", "ra.role_id")
     .innerJoin("users as u", "u.id", "ra.user_id")
     .select([
       "u.id as user_id",
@@ -68,7 +75,7 @@ export async function listMembers(
       )`.as("last_active_at"),
     ])
     .where("ra.scope_type", "=", "platform")
-    .where("r.name", "<>", "student")
+    .where(sql<SqlBool>`ra.role_id = any(${options.teamRoleIds}::uuid[])`)
     .where("u.is_deleted", "=", false)
     .where(sql<SqlBool>`(ra.expires_at is null or ra.expires_at > now())`)
     .groupBy("u.id");
@@ -89,21 +96,31 @@ export async function listMembers(
 
 export async function countMembers(
   database: Executor,
+  teamRoleIds: readonly string[],
   search?: string,
 ): Promise<number> {
   const condition = userSearch(search);
   let query = database
     .selectFrom("role_assignments as ra")
-    .innerJoin("roles as r", "r.id", "ra.role_id")
     .innerJoin("users as u", "u.id", "ra.user_id")
     .select(sql<number>`count(distinct u.id)::int`.as("total"))
     .where("ra.scope_type", "=", "platform")
-    .where("r.name", "<>", "student")
+    .where(sql<SqlBool>`ra.role_id = any(${teamRoleIds}::uuid[])`)
     .where("u.is_deleted", "=", false)
     .where(sql<SqlBool>`(ra.expires_at is null or ra.expires_at > now())`);
   if (condition) query = query.where(condition);
   const row = await query.executeTakeFirstOrThrow();
   return row.total;
+}
+
+/** Every role but student; the roles table holds a handful of rows. */
+export async function listTeamRoleIds(database: Executor): Promise<string[]> {
+  const rows = await database
+    .selectFrom("roles")
+    .select("id")
+    .where("name", "<>", "student")
+    .execute();
+  return rows.map((row) => row.id);
 }
 
 /** Live platform roles (student left out) for each of the given users. */

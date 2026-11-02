@@ -2,9 +2,11 @@ import type { RefObject } from "react";
 import type { ReactNode, Ref } from "react";
 import { deepGroundClasses } from "../components/ElevatedCard";
 import { LongScrollElasticScroller } from "../components/elastic-scroller";
+import { usePageScrollportRef } from "../components/elastic-scroller/pageScrollport";
 import type { CourseRole } from "../courses/catalogue";
 import { AcademyRouteSkeleton } from "../routing/AcademyRouteSkeleton";
 import { FrameEdge } from "./FrameEdge";
+import { SCROLLING_MARK_CLASS } from "./useScrollingMark";
 import { LearningBackgroundSurface } from "../learning/LearningBackgroundSurface";
 import type { CoursesPageRenderContext } from "./academyShellTypes";
 
@@ -78,6 +80,9 @@ export function ShellMainFrame({
   compactNavigation,
   mobileBottomNavHidden,
 }: ShellMainFrameProps) {
+  // On a phone the document scrolls, not the main box (see
+  // `usePageScrollportRef`); the control is set up again when that changes.
+  const pageScrollportRef = usePageScrollportRef(mainScrollportRef);
   // prettier-ignore
   return (
     <div className="courses-main-frame">
@@ -91,8 +96,14 @@ export function ShellMainFrame({
           "courses-main",
           // While the page is being scrolled nothing in it answers the
           // pointer, so nothing changes its hover look as it passes under
-          // a resting pointer (see useScrollingMark).
-          "data-scrolling:**:pointer-events-none!",
+          // a resting pointer (see useScrollingMark). Not on a lesson's
+          // page: there the rule restyled every element of the page each
+          // time a scroll started or stopped (80 to 140 ms, measured
+          // 2026-11-01 on a lesson with 24 discussions, with the rule on
+          // the scroller's children only as well), while a comment passing
+          // under the pointer costs well under a millisecond. Without the
+          // class the mark is not written either.
+          renderMain ? "" : SCROLLING_MARK_CLASS,
           // The frame's own colour, painted by the scroller as well. On a
           // screen scaled under 150% the browser only slides a scroller's
           // content when the scroller has a solid ground of its own to
@@ -141,7 +152,8 @@ export function ShellMainFrame({
               A lesson's page counts as long sooner, since its video stays
               in view and leaves less room to read in. */}
         <LongScrollElasticScroller
-          scrollportRef={mainScrollportRef}
+          key={compactNavigation ? "page" : "main"}
+          scrollportRef={pageScrollportRef}
           ariaControls="courses-main-scrollport"
           scrollAreaLabel="Page"
           contentRevision={`${page}:${cataloguePathname}`}

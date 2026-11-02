@@ -17,6 +17,14 @@
   initial-value: 76px;
 }
 
+/* The logo's opacity at the width a drag has reached (written with the
+   width, see writeSidebarResizeWidth). Not inherited, for the same reason. */
+@property --sidebar-resize-logo-opacity {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
 @property --main-surface-inline-start {
   syntax: "<length>";
   inherits: false;
@@ -206,19 +214,15 @@
     pointer-events: none;
   }
 
-  /* With a mouse or trackpad the overlay draws the edge highlight. On touch
-     devices it paints nothing and FrameEdge draws the edge instead: a box
-     this size above the page costs the compositor a frame-sized layer however
-     little it draws, and a high-density tablet does not have the tile memory
-     for it while the sidebar is dragged. */
-  @media not (pointer: coarse) {
-    :root[data-content-layout="framed"] .courses-app::after {
-      box-shadow: var(
-        --application-frame-edge-shadow,
-        var(--surface-depth-edge-shadow, none)
-      );
-    }
-  }
+  /* With a mouse or trackpad the frame draws the edge highlight over its own
+     page, from an overlay of its own (below). It used to be this shell-level
+     overlay, but that box only follows the frame through its `left`, and
+     Safari did not repaint the place it had just left: collapsing the
+     sidebar left a faint copy of the frame's rounded edge standing over the
+     page. On touch devices neither paints and FrameEdge draws the edge
+     instead: a box this size above the page costs the compositor a
+     frame-sized layer however little it draws, and a high-density tablet
+     does not have the tile memory for it while the sidebar is dragged. */
 }
 
 @media (min-width: 641px) {
@@ -232,6 +236,33 @@
     border-radius: 18px;
     background: var(--main-surface);
     box-shadow: var(--application-frame-shadow, var(--card-shadow));
+  }
+
+  /* The edge highlight, laid over the page in the frame's single grid cell
+     (a grid item stacks by its z-index without being positioned, so the
+     frame does not become a containing block for the page's own boxes).
+     A split frame positions its overlay itself (split-frame-pane.css). */
+  @media not (pointer: coarse) {
+    :root[data-content-layout="framed"] .courses-main-frame {
+      display: grid;
+      grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    }
+
+    :root[data-content-layout="framed"] .courses-main-frame > .courses-main,
+    :root[data-content-layout="framed"] .courses-main-frame::after {
+      grid-area: 1 / 1;
+    }
+
+    :root[data-content-layout="framed"] .courses-main-frame::after {
+      content: "";
+      z-index: 46;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: var(
+        --application-frame-edge-shadow,
+        var(--surface-depth-edge-shadow, none)
+      );
+    }
   }
 
   /* Chromium can leak a one-pixel compositor edge when the same rounded box
@@ -338,13 +369,30 @@
   display: block;
 }
 
+/* The sidebar's collapse icon: the theme's accent, bright enough to find at
+   a glance, and brighter still (more of the accent, never white) under the
+   pointer. By day the page is near white, so it takes more of the accent. */
 :root {
   --sidebar-toggle-surface: color-mix(
     in srgb,
-    var(--accent) 28%,
+    var(--accent) 50%,
+    var(--surface)
+  );
+  --sidebar-toggle-surface-hover: color-mix(
+    in srgb,
+    var(--accent) 80%,
     var(--surface)
   );
   --sidebar-toggle-ink: color-mix(in srgb, var(--accent) 22%, var(--text));
+}
+
+:root[data-theme="light"] {
+  --sidebar-toggle-surface: color-mix(
+    in srgb,
+    var(--accent) 66%,
+    var(--surface)
+  );
+  --sidebar-toggle-surface-hover: var(--accent);
 }
 
 .sidebar-collapse {
@@ -383,13 +431,14 @@
     color-mix(in srgb, var(--accent-shadow) 48%, transparent);
 }
 
+/* 14px to grab, 2px of it drawn (the line below sits in its middle). */
 .sidebar-resize-handle {
   position: absolute;
   top: 0;
-  right: -5px;
+  right: -7px;
   bottom: 0;
   z-index: 80;
-  width: 10px;
+  width: 14px;
   border: 0;
   padding: 0;
   cursor: e-resize;
@@ -420,9 +469,9 @@
   content: "";
   position: absolute;
   top: 14px;
-  right: 4px;
+  right: 6px;
   bottom: 14px;
-  left: 4px;
+  left: 6px;
   border-radius: 999px;
   background: linear-gradient(
     180deg,

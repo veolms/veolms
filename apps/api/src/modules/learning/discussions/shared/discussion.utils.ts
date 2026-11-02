@@ -2,7 +2,12 @@ import type { DatabaseExecutor } from "@veolms/database";
 import { sql } from "kysely";
 import { httpError } from "../../../../lib/errors.ts";
 import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
+import { getAcademyId } from "../../../auth/index.ts";
 import { createDiscussionRepository } from "./discussion.repository.ts";
+import {
+  fuzzyMatchesAny,
+  termFromContainsPattern,
+} from "../../../../lib/fuzzy-search.ts";
 
 const discussionRepo = createDiscussionRepository();
 
@@ -203,27 +208,19 @@ export function mapAuthorRole(
 }
 
 /**
- * The academy is a singleton whose id is assigned once at setup and never
- * changes afterwards (later setup steps update its columns, not its id) —
- * yet this lookup ran on EVERY discussion request, often more than once
- * per request (feed hydration re-resolves it). Cache the id for the
- * process lifetime; the not-configured case is deliberately not cached so
- * setup completing is picked up on the next call.
+ * The academy's id (one academy per installation, read from the shared
+ * cache): discussion requests ask for it, often more than once.
  */
-let cachedAcademyId: string | null = null;
-
 export async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
-  if (cachedAcademyId) return cachedAcademyId;
-  const academy = await discussionRepo.findAcademyId(db);
-  if (!academy?.id) {
+  const academyId = await getAcademyId(db);
+  if (!academyId) {
     throw httpError(
       500,
       "ACADEMY_NOT_CONFIGURED",
       "Academy is not configured.",
     );
   }
-  cachedAcademyId = academy.id;
-  return academy.id;
+  return academyId;
 }
 
 /**
@@ -240,6 +237,10 @@ export function authorMatchesSql(userIdColumn: string, pattern: string) {
         lower(su.display_name) like ${pattern}
         or lower(su.username) like ${pattern}
         or lower(coalesce(su.email, '')) like ${pattern}
+        or ${fuzzyMatchesAny(termFromContainsPattern(pattern), [
+          sql.ref("su.display_name"),
+          sql.ref("su.username"),
+        ])}
       )
   )`;
 }

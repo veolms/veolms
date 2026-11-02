@@ -131,8 +131,9 @@ export function useLessonPlayerSizing({
     sizes.observe(playerWrap);
     sizes.observe(main);
     const stopCatchingUp = onPhoneLayoutRelease(place);
+    // The page hears with the first settle, not at once: on a lesson just
+    // opened that restyled all of it in the middle of drawing the video.
     place();
-    tellPage();
     return () => {
       sizes.disconnect();
       stopCatchingUp();

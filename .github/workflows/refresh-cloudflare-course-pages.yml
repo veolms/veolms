@@ -4,13 +4,9 @@ run-name: Public pages refresh ${{ inputs.request_id }}
 on:
   workflow_dispatch:
     inputs:
-      course_id:
-        description: Course UUID to refresh
+      course_ids:
+        description: Course UUIDs to refresh, comma-separated
         required: true
-        type: string
-      course_slug:
-        description: Course slug, supplied to remove pages after unpublishing
-        required: false
         type: string
       request_id:
         description: Unique refresh request ID
@@ -88,8 +84,8 @@ jobs:
         env:
           VEO_PUBLIC_API_BASE_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
-          COURSE_STATIC_COURSE_ID: ${{ inputs.course_id }}
-          COURSE_STATIC_COURSE_SLUG: ${{ inputs.course_slug }}
+          STATIC_BUILD_API_URL: ${{ vars.VEO_PUBLIC_API_BASE_URL || vars.VITE_API_BASE_URL || 'https://api.procodrr.dev/v1' }}
+          COURSE_STATIC_COURSE_IDS: ${{ inputs.course_ids }}
 
       - name: Deploy updated static assets to Cloudflare
         if: steps.generate.outputs.changed == 'true'

@@ -2,6 +2,7 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type {
   GuestHomePageResponse,
   HomeDiscoveryResponse,
+  HomePageDiscussionListResponse,
   HomePageLessonVideoOptionsResponse,
   HomePageOptionsResponse,
   HomePageSettingsResponse,
@@ -17,7 +18,11 @@ import {
   enrolledCoursesQueryOptions,
   enrollmentsService,
 } from "../enrollments";
-import { learningGoalKeys, learningGoalsService } from "../learning-goals";
+import {
+  LEARNING_SUMMARY_STALE_MS,
+  learningGoalKeys,
+  learningGoalsService,
+} from "../learning-goals";
 import { learningProgressKeys } from "../learning-progress";
 import { homeKeys } from "./home.keys";
 import { homeService } from "./home.service";
@@ -107,6 +112,19 @@ export function useHomePageSettingsOptions() {
   });
 }
 
+/**
+ * Which comments the home page lists and hides, for "Add to home page" on
+ * a comment. Only for those who can change the home page.
+ */
+export function useHomePageDiscussionList(options?: { enabled?: boolean }) {
+  return useQuery<HomePageDiscussionListResponse, ApiError>({
+    queryKey: homeKeys.discussionList(),
+    queryFn: () => homeService.getDiscussionList(),
+    enabled: options?.enabled ?? true,
+    staleTime: 60 * 1000,
+  });
+}
+
 /** The lessons of a course that have a video, for the hero video picker. */
 export function useHomePageLessonVideoOptions(courseId: string | null) {
   return useQuery<HomePageLessonVideoOptionsResponse, ApiError>({
@@ -116,9 +134,6 @@ export function useHomePageLessonVideoOptions(courseId: string | null) {
     staleTime: 60 * 1000,
   });
 }
-
-/** How long the goal summary is taken as current; `useLearningSummary`'s own. */
-const LEARNING_SUMMARY_STALE_MS = 30_000;
 
 /**
  * Asks for a signed-in learner's home ahead of the page that shows it, in

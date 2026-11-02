@@ -1,14 +1,17 @@
 import {
+  DEFAULT_MAX_DEVICES_PER_STUDENT,
   DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
   DEFAULT_PLATFORM_INVOICE_SETTINGS,
   platformAppearanceSettingsSchema,
   platformInvoiceSettingsSchema,
+  platformSecuritySettingsSchema,
   type PlatformInvoiceSettings,
   type PlatformSettings,
   type PlatformSettingsResponse,
   type PublicPlatformSettings,
   type UpdatePlatformSettingsRequest,
 } from "@veolms/contracts";
+import { cacheTags, createCache, invalidateCache } from "@veolms/api-core";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { config } from "../../config.ts";
@@ -20,12 +23,21 @@ import {
 } from "./platform-settings.repository.ts";
 
 /**
- * The student sign-in rule is read on signed-in requests, so the settings
- * are kept in memory for a short while instead of being read each time. A
- * save replaces them at once in this process; any other API process sees the
- * change within this time.
+ * The settings are read by public pages, sign-in, checkout and every
+ * invoice, so they are kept in memory. A save replaces them in this process
+ * and clears them in every other (`site`); this TTL only bounds a missed
+ * message.
  */
-const SETTINGS_CACHE_MS = 30_000;
+const SETTINGS_CACHE_MS = 5 * 60_000;
+const SETTINGS_KEY = "settings";
+/**
+ * Accounts opened before this are not asked to verify a mobile number to
+ * enrol (Platform > Security): the requirement is for new learners, and
+ * learners who were already here keep enrolling as they did.
+ */
+export const PHONE_VERIFICATION_NEW_ACCOUNTS_FROM = new Date(
+  "2026-10-28T00:00:00Z",
+);
 
 type StoredDocument = Record<string, Record<string, unknown>>;
 
@@ -36,15 +48,13 @@ interface StoredSettings {
   updatedAt: Date | null;
 }
 
-interface CachedSettings {
-  expiresAt: number;
-  value: Promise<StoredSettings>;
-}
-
-// One copy per database for every service instance: the auth module builds
-// its own instance for each route plugin, and all of them must see a save at
-// once.
-const cachedSettings = new WeakMap<object, CachedSettings>();
+// One copy for every service instance: the auth module builds its own
+// instance for each route plugin, and all of them must see a save at once.
+const cachedSettings = createCache<StoredSettings>({
+  name: "platform.settings",
+  ttlMs: SETTINGS_CACHE_MS,
+  maxBytes: 1024 * 1024,
+});
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -105,6 +115,14 @@ function resolveSettings(document: StoredDocument): PlatformSettings {
         typeof security.requireVerifiedPhoneForEnrollment === "boolean"
           ? security.requireVerifiedPhoneForEnrollment
           : config.REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT,
+      // Null is "no limit", saved by an admin; anything else that does not
+      // read as a limit is the default.
+      maxDevicesPerStudent:
+        security.maxDevicesPerStudent === null
+          ? null
+          : (platformSecuritySettingsSchema.shape.maxDevicesPerStudent.safeParse(
+              security.maxDevicesPerStudent,
+            ).data ?? DEFAULT_MAX_DEVICES_PER_STUDENT),
     },
     invoice: resolveInvoiceSettings(document.invoice ?? {}),
   };
@@ -132,7 +150,14 @@ export interface PlatformSettingsService {
     changes: UpdatePlatformSettingsRequest,
     updatedBy: string | null,
   ): Promise<PlatformSettingsResponse>;
-  requiresVerifiedPhoneForEnrollment(): Promise<boolean>;
+  /**
+   * Whether enrolling needs a verified mobile number: the academy's
+   * setting, and, for a given learner, only when their account is new (see
+   * `PHONE_VERIFICATION_NEW_ACCOUNTS_FROM`).
+   */
+  requiresVerifiedPhoneForEnrollment(userId?: string): Promise<boolean>;
+  /** How many devices a student may be signed in on at once; null for any. */
+  maxDevicesPerStudent(): Promise<number | null>;
 }
 
 export function createPlatformSettingsService({
@@ -165,19 +190,10 @@ export function createPlatformSettingsService({
   }
 
   function readSettings(): Promise<StoredSettings> {
-    const now = Date.now();
-    const cached = cachedSettings.get(database);
-    if (cached && cached.expiresAt > now) return cached.value;
-    const value = loadSettings();
-    const entry = { expiresAt: now + SETTINGS_CACHE_MS, value };
-    cachedSettings.set(database, entry);
     // A failed read is not kept: the next request tries again.
-    value.catch(() => {
-      if (cachedSettings.get(database) === entry) {
-        cachedSettings.delete(database);
-      }
+    return cachedSettings.fetch(SETTINGS_KEY, loadSettings, {
+      tags: [cacheTags.site],
     });
-    return value;
   }
 
   async function updateSettings(
@@ -185,7 +201,7 @@ export function createPlatformSettingsService({
     updatedBy: string | null,
   ): Promise<PlatformSettingsResponse> {
     // Read fresh, so a change saved by another process is not written over.
-    cachedSettings.delete(database);
+    cachedSettings.delete(SETTINGS_KEY);
     const current = await readSettings();
     // Only the settings named in the request are written; the others keep
     // following their defaults (the phone rule follows the server's
@@ -228,10 +244,10 @@ export function createPlatformSettingsService({
       settings: resolveSettings(readDocument(row.settings)),
       updatedAt: row.updatedAt,
     };
-    cachedSettings.set(database, {
-      expiresAt: Date.now() + SETTINGS_CACHE_MS,
-      value: Promise.resolve(saved),
-    });
+    // Every other process reads the saved settings again; this one keeps
+    // what it just wrote.
+    invalidateCache([cacheTags.site]);
+    cachedSettings.set(SETTINGS_KEY, saved, { tags: [cacheTags.site] });
     if (
       JSON.stringify(saved.settings.security) !==
       JSON.stringify(current.settings.security)
@@ -247,8 +263,20 @@ export function createPlatformSettingsService({
       toPublicSettings((await readSettings()).settings),
     getInvoiceSettings: async () => (await readSettings()).settings.invoice,
     updateSettings,
-    requiresVerifiedPhoneForEnrollment: async () =>
-      (await readSettings()).settings.security
-        .requireVerifiedPhoneForEnrollment,
+    maxDevicesPerStudent: async () =>
+      (await readSettings()).settings.security.maxDevicesPerStudent,
+    requiresVerifiedPhoneForEnrollment: async (userId?: string) => {
+      const required = (await readSettings()).settings.security
+        .requireVerifiedPhoneForEnrollment;
+      if (!required || !userId) return required;
+      const account = await database
+        .selectFrom("users")
+        .select("created_at")
+        .where("id", "=", userId)
+        .executeTakeFirst();
+      return (
+        !account || account.created_at >= PHONE_VERIFICATION_NEW_ACCOUNTS_FROM
+      );
+    },
   };
 }

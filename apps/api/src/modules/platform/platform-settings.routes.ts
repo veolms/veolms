@@ -1,6 +1,7 @@
 import {
   platformSettingsResponseSchema,
   publicPlatformSettingsResponseSchema,
+  staticSiteRebuildStatusSchema,
   updatePlatformSettingsRequestSchema,
 } from "@veolms/contracts";
 import { errorResponse } from "../../lib/errors.ts";
@@ -23,7 +24,10 @@ const platformSettingsRoutes: RoutePlugin = async (app, options) => {
     database: options.database,
     onSecuritySettingsChange: sessionService.forgetCachedAuthContexts,
   });
-  const controller = createPlatformSettingsController({ service });
+  const controller = createPlatformSettingsController({
+    service,
+    staticPages: options.services.courseStaticPages,
+  });
 
   app.get(
     "/platform/public-settings",
@@ -90,6 +94,50 @@ const platformSettingsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.updateSettings,
+  );
+
+  app.get(
+    "/platform/static-pages",
+    {
+      preHandler: requires("platform.settings.update"),
+      schema: {
+        operationId: "getStaticSiteRebuildStatus",
+        tags: ["Platform"],
+        summary: "Get the state of the last rebuild of all public pages",
+        response: {
+          200: jsonResponse(
+            "The last rebuild this API process started.",
+            staticSiteRebuildStatusSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+        },
+      },
+    },
+    controller.getStaticSiteRebuildStatus,
+  );
+
+  app.post(
+    "/platform/static-pages/rebuild",
+    {
+      preHandler: requires("platform.settings.update"),
+      schema: {
+        operationId: "rebuildStaticSite",
+        tags: ["Platform"],
+        summary: "Build and deploy every public page again",
+        description:
+          "Course pages are rebuilt on their own after a course changes; this rebuilds all of them, the lesson pages and the home page, for changes that reach every page (the academy's look, the home page).",
+        response: {
+          200: jsonResponse(
+            "The rebuild, queued or already under way.",
+            staticSiteRebuildStatusSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+        },
+      },
+    },
+    controller.rebuildStaticSite,
   );
 };
 

@@ -12,6 +12,13 @@ import type {
 import type { StoryboardFrame } from "../storyboard/storyboardTypes";
 import type { TimelineMarker } from "../timeline/timelineMath";
 import {
+  canUseElementFullscreen,
+  enterPageFullscreen,
+  exitPageFullscreen,
+  getPageFullscreenElement,
+  PAGE_FULLSCREEN_CHANGE_EVENT,
+} from "./pageFullscreen";
+import {
   forwardedVideoEngineEvents,
   type VideoPlayerEvent,
   type VideoPlayerEventListener,
@@ -66,6 +73,13 @@ const SCRUB_REST_TOLERANCE_SHARE = 0.006;
  * the two.
  */
 const SCRUB_LESSON_FALL_BEHIND_TOLERANCES = 2;
+/**
+ * The lesson's frame stands in for the pointer's moment only this close to
+ * it, however long the video: the rest tolerance alone let a 4 h lesson
+ * show a frame some 3 minutes from the pointer through a slow drag, where
+ * the preview picture is the exact one.
+ */
+const SCRUB_LESSON_MAX_LAG_SECONDS = 1;
 
 function isTimeBuffered(ranges: TimeRanges, time: number): boolean {
   for (let index = 0; index < ranges.length; index += 1) {
@@ -100,8 +114,17 @@ interface WebkitFullscreenElement extends HTMLElement {
   webkitRequestFullscreen?: () => Promise<void> | void;
 }
 
+/**
+ * The video element's own full screen (Safari on iPhone, which has no
+ * element full screen): the system player, entered and left here, reported
+ * by `webkitbeginfullscreen` / `webkitendfullscreen` on the element itself,
+ * never by the document.
+ */
 interface WebkitFullscreenVideo extends HTMLVideoElement {
   webkitEnterFullscreen?: () => void;
+  webkitExitFullscreen?: () => void;
+  webkitDisplayingFullscreen?: boolean;
+  webkitSupportsFullscreen?: boolean;
 }
 
 interface PictureInPictureDocument {
@@ -119,7 +142,9 @@ const getFullscreenElement = () => {
   if (typeof document === "undefined") return null;
   const webkitDocument = document as WebkitFullscreenDocument;
   return (
-    document.fullscreenElement ?? webkitDocument.webkitFullscreenElement ?? null
+    document.fullscreenElement ??
+    webkitDocument.webkitFullscreenElement ??
+    getPageFullscreenElement()
   );
 };
 
@@ -146,6 +171,8 @@ export class PlayerController {
   #focusTarget: HTMLElement | null = null;
   #presentationContainer: HTMLElement | null = null;
   #presentationContainerResolver: (() => HTMLElement | null) | null = null;
+  // The shell this player put in a page full screen (see pageFullscreen.ts).
+  #pageFullscreenShell: HTMLElement | null = null;
   #media: HTMLVideoElement | null = null;
   #requestedMedia: HTMLVideoElement | null = null;
   #mediaAttached = false;
@@ -157,6 +184,8 @@ export class PlayerController {
   #destroyed = false;
   #loadGeneration = 0;
   #playRequestGeneration = 0;
+  /** Settles once the last `stop` is done; a load waits for it. */
+  #stopping: Promise<void> = Promise.resolve();
   #hudId = 0;
   #standbyMedia: HTMLVideoElement | null = null;
   // The newest drag position still waiting for the seek in flight to finish.
@@ -184,6 +213,7 @@ export class PlayerController {
   // last finished seek landed.
   #scrubLessonTime: number | null = null;
   readonly #activeMediaListeners = new Set<ActiveMediaListener>();
+  readonly #controlsRevealListeners = new Set<() => void>();
 
   constructor(engine: VideoEngine) {
     this.engine = engine;
@@ -212,11 +242,18 @@ export class PlayerController {
     this.#activated = true;
 
     this.#engineUnsubscribers.push(
-      this.engine.on("snapshotchange", (media) => {
+      this.engine.on("snapshotchange", (engineMedia) => {
         const activeChapter = getActiveChapter(
           this.#snapshot.chapters,
-          media.currentTime,
+          engineMedia.currentTime,
         );
+        // A speed chosen before the media could take it is shown as chosen
+        // until it is applied (see setPlaybackRate).
+        const pendingRate = this.#pendingMediaProperties.playbackRate;
+        const media =
+          pendingRate === undefined
+            ? engineMedia
+            : { ...engineMedia, playbackRate: pendingRate };
         this.#snapshot = {
           ...this.#snapshot,
           media,
@@ -243,6 +280,10 @@ export class PlayerController {
       );
       document.addEventListener(
         "webkitfullscreenchange",
+        this.handleFullscreenChange,
+      );
+      document.addEventListener(
+        PAGE_FULLSCREEN_CHANGE_EVENT,
         this.handleFullscreenChange,
       );
     }
@@ -274,6 +315,10 @@ export class PlayerController {
       );
       document.removeEventListener(
         "webkitfullscreenchange",
+        this.handleFullscreenChange,
+      );
+      document.removeEventListener(
+        PAGE_FULLSCREEN_CHANGE_EVENT,
         this.handleFullscreenChange,
       );
     }
@@ -356,23 +401,9 @@ export class PlayerController {
     if (!(media instanceof HTMLVideoElement)) return;
     const previous = this.#media;
     if (previous) {
-      previous.removeEventListener(
-        "enterpictureinpicture",
-        this.handlePictureInPictureChange,
-      );
-      previous.removeEventListener(
-        "leavepictureinpicture",
-        this.handlePictureInPictureChange,
-      );
+      this.unlistenMedia(previous);
     }
-    media.addEventListener(
-      "enterpictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    media.addEventListener(
-      "leavepictureinpicture",
-      this.handlePictureInPictureChange,
-    );
+    this.listenToMedia(media);
     this.#media = media;
     this.#requestedMedia = media;
     this.#standbyMedia = standby instanceof HTMLVideoElement ? standby : null;
@@ -407,12 +438,45 @@ export class PlayerController {
     this.resetZoom();
     this.#clearScrubFrame();
     const generation = ++this.#loadGeneration;
+    // A pause asked for while the video loads holds: it used to be dropped
+    // (nothing is ready to pause yet) and the load's autoplay started the
+    // video anyway, a lesson being left among them.
+    const playRequest = this.#playRequestGeneration;
+    await this.#stopping;
     await this.waitForMedia();
     if (generation !== this.#loadGeneration || this.#destroyed) return;
     await this.engine.load(source, options);
-    if (generation !== this.#loadGeneration || this.#destroyed || !autoPlay)
+    if (
+      generation !== this.#loadGeneration ||
+      this.#destroyed ||
+      !autoPlay ||
+      playRequest !== this.#playRequestGeneration
+    )
       return;
     await this.engine.play();
+  }
+
+  /**
+   * Stops the video outright (see `VideoEngine.stop`): paused at once, a
+   * load on its way not played when it is in, the source taken off and the
+   * engine's streaming player destroyed. The next `load` starts afresh.
+   */
+  async stop(): Promise<void> {
+    this.assertActive();
+    this.#playRequestGeneration += 1;
+    this.#loadGeneration += 1;
+    this.#media?.pause();
+    const engine = this.engine;
+    const stopping = (async () => {
+      try {
+        engine.pause();
+      } catch {
+        // Nothing loaded to pause.
+      }
+      await (engine.stop ? engine.stop() : engine.unload());
+    })().catch(() => undefined);
+    this.#stopping = stopping;
+    await stopping;
   }
 
   async play(): Promise<void> {
@@ -435,6 +499,10 @@ export class PlayerController {
     if (!this.isMediaReady()) {
       await this.waitForMedia();
     }
+    this.assertActive();
+    // The next video is still loading into the element: played now, the one
+    // it replaces (paused, or playing on) would start under the loader.
+    await this.waitForSourceLoaded();
     this.assertActive();
     if (generation !== this.#playRequestGeneration) return;
     await this.engine.play();
@@ -541,17 +609,18 @@ export class PlayerController {
     this.#scrubTarget = null;
     this.#scrubRestTime = time;
     const tolerance = this.#scrubRestTolerance();
+    const lessonTolerance = this.#scrubLessonTolerance();
     if (this.#scrubLessonTime === null && !media.seeking) {
       this.#scrubLessonTime = media.currentTime;
     }
     const lessonTime = this.#scrubLessonTime;
     const lag = lessonTime === null ? Infinity : Math.abs(time - lessonTime);
-    if (!this.#scrubShowsLesson && lag <= tolerance) {
+    if (!this.#scrubShowsLesson && lag <= lessonTolerance) {
       this.#scrubShowsLesson = true;
       this.#clearScrubFrame();
     } else if (
       this.#scrubShowsLesson &&
-      lag > tolerance * SCRUB_LESSON_FALL_BEHIND_TOLERANCES
+      lag > lessonTolerance * SCRUB_LESSON_FALL_BEHIND_TOLERANCES
     ) {
       this.#scrubShowsLesson = false;
     }
@@ -585,7 +654,7 @@ export class PlayerController {
     if (
       time === null ||
       this.#scrubShowsLesson ||
-      Math.abs(time - media.currentTime) > this.#scrubRestTolerance()
+      Math.abs(time - media.currentTime) > this.#scrubLessonTolerance()
     ) {
       return;
     }
@@ -604,6 +673,10 @@ export class PlayerController {
     return Number.isFinite(duration) && duration > 0
       ? duration * SCRUB_REST_TOLERANCE_SHARE
       : 0;
+  }
+
+  #scrubLessonTolerance(): number {
+    return Math.min(this.#scrubRestTolerance(), SCRUB_LESSON_MAX_LAG_SECONDS);
   }
 
   #scheduleScrubRestSeek(delay: number): void {
@@ -784,7 +857,18 @@ export class PlayerController {
       });
     }
     if (!this.isMediaReady()) {
+      // Kept until the media is ready, and shown and reported as the speed
+      // now: left at the old one, the speed menu snapped back and the
+      // choice looked refused while a video loaded.
       this.#pendingMediaProperties.playbackRate = rate;
+      if (this.#snapshot.media.playbackRate !== rate) {
+        this.#snapshot = {
+          ...this.#snapshot,
+          media: { ...this.#snapshot.media, playbackRate: rate },
+        };
+        this.notify();
+        this.emit({ type: "ratechange", detail: { playbackRate: rate } });
+      }
       return;
     }
     this.engine.setPlaybackRate(rate);
@@ -833,6 +917,21 @@ export class PlayerController {
       type: "controlsvisibilitychange",
       detail: { visible: controlsVisible },
     });
+  }
+
+  /**
+   * Shows the controls, and the pointer with them, as a mouse moving over
+   * the player does, to hide again after the same idle delay: a keyboard
+   * shortcut (a seek, the volume) acted on the player.
+   * `useControlsVisibility` does the showing and the timing.
+   */
+  revealControls(): void {
+    for (const listener of this.#controlsRevealListeners) listener();
+  }
+
+  onControlsReveal(listener: () => void): () => void {
+    this.#controlsRevealListeners.add(listener);
+    return () => this.#controlsRevealListeners.delete(listener);
   }
 
   setControlsLocked(controlsLocked: boolean): void {
@@ -905,7 +1004,8 @@ export class PlayerController {
       zoom.panY === current.panY &&
       zoom.gestureActive === current.gestureActive &&
       zoom.feedbackVisible === current.feedbackVisible &&
-      zoom.transitioning === current.transitioning
+      zoom.transitioning === current.transitioning &&
+      zoom.snap === current.snap
     ) {
       return;
     }
@@ -927,6 +1027,19 @@ export class PlayerController {
     this.updateUi({ hud: { ...options, id: this.#hudId, text } });
   }
 
+  /**
+   * Says the volume at the top of the player, with the speaker: a slider,
+   * the wheel over it or the Up and Down keys changed it.
+   */
+  showVolume(volume: number, direction?: -1 | 1): void {
+    const level = Math.min(1, Math.max(0, volume));
+    this.showHud(`${Math.round(level * 100)}%`, {
+      direction,
+      level,
+      variant: "volume",
+    });
+  }
+
   clearHud(id?: number): void {
     if (id !== undefined && this.#snapshot.ui.hud?.id !== id) return;
     this.updateUi({ hud: null });
@@ -936,15 +1049,48 @@ export class PlayerController {
     const container =
       this.getPresentationContainer() as WebkitFullscreenElement | null;
     if (!container) return;
-    if (container.requestFullscreen) await container.requestFullscreen();
-    else if (container.webkitRequestFullscreen)
-      await container.webkitRequestFullscreen();
-    else this.enterVideoFullscreen();
+    if (!canUseElementFullscreen(container)) {
+      const video = this.videoFullscreen();
+      if (video) {
+        // Safari on iPhone: the video's own system player, as YouTube's site
+        // uses there. The page comes back as it was, with its own controls,
+        // when the player is closed (`webkitendfullscreen`).
+        try {
+          video.webkitEnterFullscreen?.();
+        } catch {
+          // Refused until the video has loaded enough to show; a later
+          // press works.
+        }
+      } else {
+        this.#pageFullscreenShell = container;
+        enterPageFullscreen(container, {
+          contentLandscape: () => this.isContentLandscape(),
+          onExitRequest: () =>
+            void this.exitFullscreen().catch(() => undefined),
+        });
+      }
+    } else if (container.requestFullscreen) {
+      await container.requestFullscreen();
+    } else {
+      await container.webkitRequestFullscreen?.();
+    }
     this.syncFullscreen();
   }
 
   async exitFullscreen(): Promise<void> {
     if (typeof document === "undefined") return;
+    const video = this.videoFullscreen();
+    if (video && (this.#videoFullscreen || video.webkitDisplayingFullscreen)) {
+      video.webkitExitFullscreen?.();
+      this.syncFullscreen();
+      return;
+    }
+    const shell = this.#pageFullscreenShell;
+    this.#pageFullscreenShell = null;
+    if (shell && exitPageFullscreen(shell)) {
+      this.syncFullscreen();
+      return;
+    }
     const webkitDocument = document as WebkitFullscreenDocument;
     if (document.exitFullscreen) await document.exitFullscreen();
     else await webkitDocument.webkitExitFullscreen?.();
@@ -952,8 +1098,76 @@ export class PlayerController {
   }
 
   async toggleFullscreen(): Promise<void> {
-    if (getFullscreenElement()) await this.exitFullscreen();
+    if (this.isFullscreenActive()) await this.exitFullscreen();
     else await this.enterFullscreen();
+  }
+
+  /** The media as its own full-screen player, where the browser has one. */
+  private videoFullscreen(): WebkitFullscreenVideo | null {
+    const video = this.#media as WebkitFullscreenVideo | null;
+    if (!video || typeof video.webkitEnterFullscreen !== "function")
+      return null;
+    if (video.webkitSupportsFullscreen === false) return null;
+    return video;
+  }
+
+  /**
+   * Whether the video is in its own system player, by its begin and end
+   * events: `webkitDisplayingFullscreen` can still read true while the end
+   * event is being delivered, which left the player believing it was full
+   * screen after the system player had closed.
+   */
+  #videoFullscreen = false;
+
+  /** Whether the player is full screen in any of its three ways. */
+  private isFullscreenActive(): boolean {
+    const presentationContainer = this.getPresentationContainer();
+    if (
+      presentationContainer &&
+      getFullscreenElement() === presentationContainer
+    ) {
+      return true;
+    }
+    return this.#videoFullscreen;
+  }
+
+  private listenToMedia(media: HTMLVideoElement): void {
+    media.addEventListener(
+      "enterpictureinpicture",
+      this.handlePictureInPictureChange,
+    );
+    media.addEventListener(
+      "leavepictureinpicture",
+      this.handlePictureInPictureChange,
+    );
+    media.addEventListener(
+      "webkitbeginfullscreen",
+      this.handleVideoFullscreenBegin,
+    );
+    media.addEventListener(
+      "webkitendfullscreen",
+      this.handleVideoFullscreenEnd,
+    );
+  }
+
+  private unlistenMedia(media: HTMLVideoElement | null | undefined): void {
+    if (!media) return;
+    media.removeEventListener(
+      "enterpictureinpicture",
+      this.handlePictureInPictureChange,
+    );
+    media.removeEventListener(
+      "leavepictureinpicture",
+      this.handlePictureInPictureChange,
+    );
+    media.removeEventListener(
+      "webkitbeginfullscreen",
+      this.handleVideoFullscreenBegin,
+    );
+    media.removeEventListener(
+      "webkitendfullscreen",
+      this.handleVideoFullscreenEnd,
+    );
   }
 
   canUsePictureInPicture(): boolean {
@@ -1022,24 +1236,39 @@ export class PlayerController {
       recoverable: false,
     });
     for (const waiter of this.#mediaWaiters.splice(0)) waiter.reject(error);
+    // A page full screen is the page's own: it does not end with the player.
+    if (this.#pageFullscreenShell)
+      exitPageFullscreen(this.#pageFullscreenShell);
+    this.#pageFullscreenShell = null;
     this.deactivate();
     this.#listeners.clear();
     this.#eventListeners.clear();
+    this.#controlsRevealListeners.clear();
     await this.#mediaTransition;
-    this.#media?.removeEventListener(
-      "enterpictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    this.#media?.removeEventListener(
-      "leavepictureinpicture",
-      this.handlePictureInPictureChange,
-    );
+    this.unlistenMedia(this.#media);
     this.#media = null;
     this.#mediaAttached = false;
     await this.engine.destroy();
   }
 
   private readonly handleFullscreenChange = (): void => this.syncFullscreen();
+
+  /**
+   * The system player closed (iPhone): the page is back, and the lesson's
+   * controls are shown again so it does not come back bare. Safari may
+   * close the player with the video paused; the controls say so.
+   */
+  private readonly handleVideoFullscreenBegin = (): void => {
+    this.#videoFullscreen = true;
+    this.syncFullscreen();
+  };
+
+  private readonly handleVideoFullscreenEnd = (): void => {
+    this.#videoFullscreen = false;
+    this.syncFullscreen();
+    this.setSettingsView("closed");
+    this.setControlsVisible(true);
+  };
 
   private readonly handlePictureInPictureChange = (): void =>
     this.syncPictureInPicture();
@@ -1067,25 +1296,18 @@ export class PlayerController {
   }
 
   /**
-   * A browser that cannot make an element fullscreen (Safari on iPhone) can
-   * still hand the video itself to the system's fullscreen player. Without
-   * this the fullscreen button did nothing there. The system player has its
-   * own controls and its own way out, and this page is not what it shows,
-   * so the player's fullscreen state is left as it is.
+   * Whether the picture is wider than tall, which decides whether a page
+   * full screen on an upright phone turns it (see pageFullscreen.ts). A
+   * video whose size is not known yet counts as wide, as lessons are.
    */
-  private enterVideoFullscreen(): void {
-    try {
-      (this.#media as WebkitFullscreenVideo | null)?.webkitEnterFullscreen?.();
-    } catch {
-      // Refused until the video has loaded enough to show; a later press works.
-    }
+  private isContentLandscape(): boolean {
+    const media = this.#media;
+    if (!media?.videoWidth || !media.videoHeight) return true;
+    return media.videoWidth >= media.videoHeight;
   }
 
   private syncFullscreen(): void {
-    const presentationContainer = this.getPresentationContainer();
-    const active = Boolean(
-      presentationContainer && getFullscreenElement() === presentationContainer,
-    );
+    const active = this.isFullscreenActive();
     if (active === this.#snapshot.ui.fullscreen) return;
     this.updateUi({ fullscreen: active });
     this.emit({ type: "fullscreenchange", detail: { active } });
@@ -1211,22 +1433,8 @@ export class PlayerController {
     ) {
       return;
     }
-    media.removeEventListener(
-      "enterpictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    media.removeEventListener(
-      "leavepictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    media.addEventListener(
-      "enterpictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    media.addEventListener(
-      "leavepictureinpicture",
-      this.handlePictureInPictureChange,
-    );
+    this.unlistenMedia(media);
+    this.listenToMedia(media);
     this.#settledMediaGeneration = generation;
     this.flushPendingMediaProperties();
     this.syncCapabilities();
@@ -1237,14 +1445,7 @@ export class PlayerController {
   private async detachAttachedMedia(): Promise<void> {
     const media = this.#media;
     if (!media || !this.#mediaAttached) return;
-    media.removeEventListener(
-      "enterpictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    media.removeEventListener(
-      "leavepictureinpicture",
-      this.handlePictureInPictureChange,
-    );
+    this.unlistenMedia(media);
     this.#media = null;
     this.#mediaAttached = false;
     this.#settledMediaGeneration = 0;
@@ -1277,6 +1478,20 @@ export class PlayerController {
     if (this.isMediaReady()) return Promise.resolve();
     return new Promise((resolve, reject) => {
       this.#mediaWaiters.push({ resolve, reject });
+    });
+  }
+
+  /** Settles once no source is loading (it loaded, or failed). */
+  private waitForSourceLoaded(): Promise<void> {
+    if (this.engine.getSnapshot().lifecycle !== "loading") {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const stop = this.engine.on("snapshotchange", (media) => {
+        if (media.lifecycle === "loading") return;
+        stop();
+        resolve();
+      });
     });
   }
 

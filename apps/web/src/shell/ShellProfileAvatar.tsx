@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { AvatarImageVariant } from "@veolms/contracts";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 
-const FALLBACK_AVATAR_CLASS =
+export const FALLBACK_AVATAR_CLASS =
   "shell-profile-avatar shell-profile-avatar--fallback";
 
 /**
@@ -13,7 +13,7 @@ const FALLBACK_AVATAR_CLASS =
  * the button around it and has no disc at all. By day a dark disc would be
  * a hole in a light sidebar, so there it is a light tint of the accent.
  */
-const IMAGE_AVATAR_CLASS =
+export const IMAGE_AVATAR_CLASS =
   "shell-profile-avatar bg-[color-mix(in_srgb,var(--accent)_12%,#181d29)]! [:root[data-theme=light]_&]:bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface-strong))]!";
 
 /**

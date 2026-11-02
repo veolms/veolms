@@ -28,6 +28,11 @@ const staticApplicationPages = [
   "/settings/learning",
   "/settings/security",
   "/settings/account",
+  "/terms",
+  "/privacy",
+  "/refund-policy",
+  "/contact",
+  "/about",
 ];
 
 const requestedLearningPrerenderScope =
@@ -37,6 +42,17 @@ const learningPrerenderScope: LearningPrerenderScope =
   requestedLearningPrerenderScope === "first-section"
     ? requestedLearningPrerenderScope
     : "all-lectures";
+
+// `VEO_LEARNING_PRERENDER_ONLY` ("<course>:<count>,..."): lesson pages for
+// those courses only, their first <count> lessons each (a local trial, see
+// scripts/build-performance.mjs `--lessons=`).
+const learningPrerenderOnly = new Map(
+  (process.env.VEO_LEARNING_PRERENDER_ONLY ?? "")
+    .split(",")
+    .map((entry) => entry.trim().split(":"))
+    .filter(([slug, count]) => slug && Number(count) > 0)
+    .map(([slug, count]) => [slug, Math.floor(Number(count))] as const),
+);
 
 // React Router evaluates this config through Vite's config runner, whose
 // environment is a dev server even during `react-router build`. The build
@@ -106,6 +122,9 @@ async function getStaticLearningPaths(courseSlugs: readonly string[]) {
   if (learningPrerenderScope === "none") return [];
   const courses = [];
   for (const slug of courseSlugs) {
+    if (learningPrerenderOnly.size > 0 && !learningPrerenderOnly.has(slug)) {
+      continue;
+    }
     const response = await fetchStaticBuildApi(
       `${getStaticApiBaseUrl()}/courses/${encodeURIComponent(slug)}/curriculum`,
       90_000,
@@ -124,11 +143,15 @@ async function getStaticLearningPaths(courseSlugs: readonly string[]) {
         `The build API returned an invalid curriculum for ${slug}.`,
       );
     }
+    const lessonCount = result.data.sections.reduce(
+      (total, section) => total + (section.lessons?.length ?? 0),
+      0,
+    );
     courses.push({
       slug,
-      lessonCount: result.data.sections.reduce(
-        (total, section) => total + (section.lessons?.length ?? 0),
-        0,
+      lessonCount: Math.min(
+        lessonCount,
+        learningPrerenderOnly.get(slug) ?? lessonCount,
       ),
     });
   }
@@ -149,7 +172,9 @@ const prerenderConfig = {
       ...(await getStaticLearningPaths(courseSlugs)),
     ];
   },
-  concurrency: 1,
+  // Pages rendered at once. A lesson page mostly waits on the API, so a
+  // deployment build (over a thousand pages) sets a few; one by default.
+  concurrency: Math.max(1, Number(process.env.VEO_PRERENDER_CONCURRENCY) || 1),
   timeout: 120_000,
   retryCount: 2,
   retryDelay: 1_000,
@@ -157,8 +182,9 @@ const prerenderConfig = {
 
 export default {
   appDirectory: "src",
-  // React Router accepts timeout/retry options at build time even though the
-  // public Config type only documents paths and concurrency.
+  // React Router 8.3 passes only `concurrency` on to its prerender pass: the
+  // timeout/retry options above are ignored, and each prerender request has
+  // a fixed 10 second limit (see warmServerBuildPlugin in vite.config.ts).
   // Prerendering is a build-time feature. Enabling it in `react-router dev`
   // disables SPA mode and makes the first request build the full server route
   // graph before it can render. Keep dev on the configured SPA fallback.

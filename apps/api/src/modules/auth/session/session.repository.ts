@@ -1,6 +1,6 @@
+import type { SessionLocation } from "../shared/request-location.ts";
 import type { Executor } from "../shared/repository.types.ts";
 import {
-  clearSessionAuthCache,
   evictCachedSession,
   evictCachedUserSessions,
 } from "../shared/session-auth-cache.ts";
@@ -21,6 +21,7 @@ export async function insertSession(
     tokenHash: string;
     ipAddress: string | null;
     userAgent: string | null;
+    location?: SessionLocation | null;
     mfaVerified: boolean;
     expiresAt: Date;
   },
@@ -33,6 +34,9 @@ export async function insertSession(
       token_hash: input.tokenHash,
       ip_address: input.ipAddress,
       user_agent: input.userAgent,
+      location_city: input.location?.city ?? null,
+      location_region: input.location?.region ?? null,
+      location_country: input.location?.country ?? null,
       mfa_verified: input.mfaVerified,
       expires_at: input.expiresAt,
     })
@@ -114,7 +118,15 @@ export function listUserSessions(
 ) {
   return database
     .selectFrom("sessions")
-    .select(["id", "ip_address", "user_agent", "last_used_at"])
+    .select([
+      "id",
+      "ip_address",
+      "user_agent",
+      "location_city",
+      "location_region",
+      "location_country",
+      "last_used_at",
+    ])
     .where("user_id", "=", userId)
     .where("revoked_at", "is", null)
     .where("expires_at", ">", now)
@@ -156,6 +168,7 @@ export async function rotateSession(
     tokenHash: string;
     ipAddress: string | null;
     userAgent: string | null;
+    location?: SessionLocation | null;
     mfaVerified: boolean;
     expiresAt: Date;
     now?: Date;
@@ -168,6 +181,9 @@ export async function rotateSession(
       token_hash: input.tokenHash,
       ip_address: input.ipAddress,
       user_agent: input.userAgent,
+      location_city: input.location?.city ?? null,
+      location_region: input.location?.region ?? null,
+      location_country: input.location?.country ?? null,
       mfa_verified: input.mfaVerified,
       expires_at: input.expiresAt,
       last_used_at: now,
@@ -196,7 +212,14 @@ export async function purgeOldSessions(
     )
     .executeTakeFirst();
 
-  clearSessionAuthCache();
+  // Only sessions revoked or expired long ago are deleted, and neither is
+  // ever served from the sign-in cache: nothing to clear.
+  // Sign-ins that once waited on the device limit (none are added since
+  // the limit signs the oldest device out instead) are kept no longer.
+  await database
+    .deleteFrom("pending_device_sign_ins")
+    .where("expires_at", "<", cutoffDate)
+    .execute();
   return Number(result.numDeletedRows);
 }
 
@@ -210,4 +233,51 @@ export async function touchSession(
     .set({ last_used_at: now })
     .where("id", "=", sessionId)
     .execute();
+}
+
+/**
+ * Signs the user out of the sessions in use now (not signed out, not
+ * expired) that were used longest ago, until `keep` are left; returns how
+ * many it signed out.
+ */
+export async function revokeLeastRecentlyUsedSessions(
+  database: Executor,
+  userId: string,
+  keep: number,
+  now: Date = new Date(),
+): Promise<number> {
+  const revoked = await database
+    .updateTable("sessions")
+    .set({ revoked_at: now })
+    .where("id", "in", (eb) =>
+      eb
+        .selectFrom("sessions")
+        .select("id")
+        .where("user_id", "=", userId)
+        .where("revoked_at", "is", null)
+        .where("expires_at", ">", now)
+        .orderBy("last_used_at", "desc")
+        .orderBy("created_at", "desc")
+        .offset(keep),
+    )
+    .returning("id")
+    .execute();
+  for (const { id } of revoked) evictCachedSession(id);
+  return revoked.length;
+}
+
+/**
+ * Holds the user's row until the transaction ends, so two sign-ins of the
+ * same person at once count their sessions one after the other.
+ */
+export async function lockUserForSignIn(
+  database: Executor,
+  userId: string,
+): Promise<void> {
+  await database
+    .selectFrom("users")
+    .select("id")
+    .where("id", "=", userId)
+    .forUpdate()
+    .executeTakeFirst();
 }

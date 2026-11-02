@@ -42,6 +42,7 @@ import { createLearningLessonVideoSource } from "./lessonVideoSource";
 import { CenteredLoadingSpinner } from "../../components/LoadingSpinner";
 import { useAuthStore } from "../../store/auth.store";
 import { useLearningMiniPlayerGestures } from "./useLearningMiniPlayerGestures";
+import { useMiniPlayerSwipeVolume } from "./useMiniPlayerSwipeVolume";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 import {
   MiniPlayerControls,
@@ -52,7 +53,11 @@ import {
   lessonReadingShellClasses,
 } from "./LessonReadingStage";
 import { LearningMiniPlayerBufferingIndicator } from "./learningMiniPlayerBufferingIndicator";
-import { MiniPlayerInfoBar } from "./MiniPlayerInfoBar";
+import {
+  MINI_PLAYER_VIDEO_CORNERS_CLASS,
+  MINI_PLAYER_VIDEO_SHELL_CLASS,
+  MiniPlayerInfoBar,
+} from "./MiniPlayerInfoBar";
 import { MiniPlayerReadingModeEffects } from "./MiniPlayerReadingModeEffects";
 import { MiniPlayerResizeHandles } from "./MiniPlayerResizeHandles";
 import { useLearningPlayerMinimizeShortcut } from "./useLearningPlayerMinimizeShortcut";
@@ -178,6 +183,14 @@ export function LearningMiniPlayer({
     true,
     handleRestore,
     isExpanded,
+  );
+
+  // Dragged out of the window, its sound drops with how much of it is out;
+  // swiped away, it fades out with the player instead of stopping at once.
+  useMiniPlayerSwipeVolume(
+    playerRef,
+    miniPlayerGestures.subscribeOutsideFraction,
+    miniPlayerGestures.mode === "dismissing",
   );
 
   const selectedLesson = session.selectedLesson ?? 1;
@@ -586,6 +599,7 @@ export function LearningMiniPlayer({
       segmentToken: playbackBootstrap.segmentToken,
       segmentTokenExpiresAt: playbackBootstrap.segmentTokenExpiresAt,
       inlinedMasterManifest: playbackBootstrap.inlinedMasterManifest,
+      subtitles: playbackBootstrap.subtitles,
       refreshSegmentToken: playbackBootstrap.segmentToken
         ? () =>
             refreshVideoPlaybackToken({
@@ -665,8 +679,9 @@ export function LearningMiniPlayer({
           // The controls draw a failure under their own expand and close.
           errorOverlay={false}
           ariaLabel={`Mini player video for ${session.lessonTitle}`}
-          className="!rounded-none"
-          playerClassName="!rounded-none !shadow-none"
+          className={MINI_PLAYER_VIDEO_SHELL_CLASS}
+          playerClassName={`${MINI_PLAYER_VIDEO_CORNERS_CLASS} !shadow-none`}
+          mediaClassName={MINI_PLAYER_VIDEO_CORNERS_CLASS}
           centralControl={false}
           playbackFeedback={false}
           bufferingIndicator={<LearningMiniPlayerBufferingIndicator />}
@@ -699,7 +714,6 @@ export function LearningMiniPlayer({
         expandedSectionIds={expandedSectionIds}
         onExpandAllSections={expandAllSections}
         onCollapseAllSections={collapseAllSections}
-        onOpenCourseOverview={onOpenCourseOverview}
         contextMenuPortalHostRef={miniPlayerRef}
       />
       {isExpanded ? (

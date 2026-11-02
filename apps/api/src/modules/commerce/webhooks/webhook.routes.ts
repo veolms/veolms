@@ -12,7 +12,7 @@ declare module "fastify" {
 }
 
 const webhookRoutes: RoutePlugin = async (app, options) => {
-  // Retain the raw byte buffer for HMAC signature verification (Razorpay
+  // Retain the raw byte buffer for HMAC signature verification (gateway
   // webhooks). Registered here rather than app-wide: Fastify scopes content
   // type parsers to the plugin (and its children) they're registered in, so
   // this only affects requests to routes registered below — every other
@@ -44,22 +44,24 @@ const webhookRoutes: RoutePlugin = async (app, options) => {
 
   const service = createWebhookService({
     database: options.database,
-    paymentGateway: options.services.paymentGateway,
+    paymentGateways: options.services.paymentGateways,
     eventQueue: options.paymentEventQueue,
   });
 
   const controller = createWebhookController({ service });
 
-  // POST /webhooks/razorpay - Ingestion endpoint for Razorpay webhook events
+  // POST /webhooks/:provider - Ingestion endpoint for a payment gateway's
+  // webhook events: /webhooks/razorpay, /webhooks/dodo.
   app.post(
-    "/webhooks/razorpay",
+    "/webhooks/:provider",
     {
       schema: {
-        operationId: "handleRazorpayWebhook",
+        operationId: "handleGatewayWebhook",
         tags: ["Commerce - Webhooks"],
-        summary: "Ingest Razorpay webhook events",
+        summary: "Ingest a payment gateway's webhook events",
         description:
-          "Verifies webhook signature, deduplicates event, and queues payment fulfillment in background.",
+          "Verifies the webhook signature of the gateway named in the path (razorpay, dodo), deduplicates event, and queues payment fulfillment in background.",
+        params: z.object({ provider: z.string().min(1).max(40) }),
         response: {
           200: jsonResponse(
             "Webhook received successfully",
@@ -72,7 +74,7 @@ const webhookRoutes: RoutePlugin = async (app, options) => {
         },
       },
     },
-    controller.handleRazorpayWebhook,
+    controller.handleGatewayWebhook,
   );
 };
 

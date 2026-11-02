@@ -25,10 +25,16 @@ export function VolumeControl({
   const controller = usePlayerController();
   const { muted, volume } = useVolume();
   const groupRef = useRef<HTMLDivElement>(null);
+  // Whatever changes the volume here, the player says it at the top
+  // (controller.showVolume), as it does for the Up and Down keys.
+  const changeVolume = (next: number) => {
+    controller.setVolume(next);
+    controller.showVolume(next);
+  };
   const setVolumeFromPointer = (event: PointerEvent<HTMLInputElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     if (bounds.width <= 0) return;
-    controller.setVolume(
+    changeVolume(
       Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
     );
   };
@@ -51,7 +57,9 @@ export function VolumeControl({
             Math.min(1, displayedVolume + direction * VOLUME_WHEEL_STEP),
           ) * 100,
         ) / 100;
-      if (nextVolume !== displayedVolume) controller.setVolume(nextVolume);
+      if (nextVolume === displayedVolume) return;
+      controller.setVolume(nextVolume);
+      controller.showVolume(nextVolume, direction);
     };
 
     group.addEventListener("wheel", changeVolumeFromWheel, { passive: false });
@@ -89,9 +97,7 @@ export function VolumeControl({
             "--video-player-volume": `${(muted ? 0 : volume) * 100}%`,
           } as CSSProperties
         }
-        onChange={(event) =>
-          controller.setVolume(event.currentTarget.valueAsNumber)
-        }
+        onChange={(event) => changeVolume(event.currentTarget.valueAsNumber)}
         onPointerDown={setVolumeFromPointer}
       />
     </div>

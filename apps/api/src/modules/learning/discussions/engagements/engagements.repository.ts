@@ -6,6 +6,7 @@ import type {
 import { sql } from "kysely";
 import { escapeLikePattern } from "../../../../lib/like-pattern.ts";
 import { isCourseParticipant } from "../shared/discussion.mentions.ts";
+import { fuzzyMatchesAny } from "../../../../lib/fuzzy-search.ts";
 
 export interface EngagementExistenceRow {
   id: string;
@@ -242,6 +243,10 @@ export function createEngagementsRepository(): EngagementsRepository {
           eb.or([
             eb(sql<string>`lower(display_name)`, "like", pattern),
             eb(sql<string>`lower(username)`, "like", pattern),
+            fuzzyMatchesAny(cleanQuery, [
+              sql.ref("display_name"),
+              sql.ref("username"),
+            ]),
           ]),
         )
         .where(isCourseParticipant(courseId));

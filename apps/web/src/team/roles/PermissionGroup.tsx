@@ -1,5 +1,4 @@
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
-import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import {
   getPermissionCatalogueEntry,
@@ -7,7 +6,8 @@ import {
   type PermissionCatalogueEntry,
   type PermissionCatalogueGroup,
 } from "@veolms/contracts";
-import { SquareCheck } from "../TeamBits";
+import { CheckboxIndicator } from "../../components/Checkbox";
+import { chipClassName } from "../TeamBits";
 
 /** "Needs view + edit": the first word of each permission it relies on. */
 function needsLabel(entry: PermissionCatalogueEntry): string | null {
@@ -52,10 +52,9 @@ export function PermissionGroup({
   const held = keys.filter((key) => selected.has(key)).length;
   const allHeld = held === keys.length;
   const panelId = `permission-group-${group.area}`;
-  const Caret = open ? CaretDown : CaretRight;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_2%,transparent)]">
+    <section className="overflow-hidden rounded-xl border border-(--border) bg-(--card-surface)">
       <div className="flex items-center gap-3 px-4 py-3">
         <button
           type="button"
@@ -64,31 +63,26 @@ export function PermissionGroup({
           aria-controls={panelId}
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left"
         >
-          <Caret size={13} weight="bold" className="shrink-0 text-(--muted)" />
+          <CaretDown
+            size={13}
+            weight="bold"
+            className={`shrink-0 text-(--muted) transition-transform ${open ? "" : "-rotate-90"}`}
+          />
           <span className="truncate text-sm font-semibold text-(--text)">
             {group.label}
           </span>
         </button>
-        {readOnly ? (
-          !open ? (
-            <span className="hidden h-1 w-20 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] sm:block">
-              <span
-                className="block h-full rounded-full bg-(--accent)"
-                style={{ width: `${(held / keys.length) * 100}%` }}
-              />
-            </span>
-          ) : null
-        ) : (
+        {readOnly ? null : (
           <button
             type="button"
             onClick={() => onSelectAll(keys, !allHeld)}
-            className="cursor-pointer text-xs font-semibold text-(--accent) hover:underline"
+            className="cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-semibold text-(--accent) transition-colors hover:bg-(--accent)/10"
           >
             {allHeld ? "Clear" : "Select all"}
           </button>
         )}
         <span
-          className={`font-mono text-xs tabular-nums ${held > 0 ? "text-(--accent)" : "text-(--muted)"}`}
+          className={`${chipClassName} tabular-nums ${held > 0 ? "text-(--accent)!" : "text-(--muted)!"}`}
         >
           {held}/{keys.length}
         </span>
@@ -97,13 +91,13 @@ export function PermissionGroup({
       {open ? (
         <ul
           id={panelId}
-          className="m-0 grid list-none gap-x-6 gap-y-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-4 py-4 sm:grid-cols-2"
+          className="m-0 grid list-none gap-x-6 gap-y-1 border-t border-(--border) px-4 py-3 sm:grid-cols-2"
         >
           {entries.map((entry) => {
             const checked = selected.has(entry.key);
             if (readOnly) {
               return (
-                <li key={entry.key} className="flex gap-2.5">
+                <li key={entry.key} className="flex gap-2.5 py-1">
                   {checked ? (
                     <Check
                       size={14}
@@ -132,19 +126,22 @@ export function PermissionGroup({
               <li key={entry.key}>
                 <label
                   htmlFor={inputId}
-                  className={`-mx-2 flex gap-2.5 rounded-lg px-2 py-1 ${needed || locked ? "cursor-not-allowed" : "cursor-pointer hover:bg-(--hover)"} ${locked ? "opacity-55" : ""}`}
+                  className={`-mx-2 flex gap-2.5 rounded-lg px-2 py-1.5 transition-colors ${needed || locked ? "cursor-not-allowed" : "cursor-pointer hover:bg-(--hover)"} ${locked ? "opacity-55" : ""}`}
                 >
                   <input
                     id={inputId}
                     type="checkbox"
-                    className="sr-only"
+                    className="peer sr-only"
                     checked={checked}
                     disabled={needed || locked}
                     onChange={(event) =>
                       onToggleKey(entry.key, event.target.checked)
                     }
                   />
-                  <SquareCheck checked={checked} className="mt-0.5" />
+                  <CheckboxIndicator
+                    checked={checked}
+                    className="mt-0.5 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-(--accent)"
+                  />
                   <span className="min-w-0">
                     <span className="block text-sm font-medium text-(--text)">
                       {entry.label}

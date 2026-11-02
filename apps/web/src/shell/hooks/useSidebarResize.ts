@@ -26,7 +26,10 @@ import type {
   PointerPositionEvent,
   SidebarScreenSwipeStartEvent,
 } from "../academyShellTypes";
-import { getSidebarResizeRenderKey } from "../academyShellGeometry";
+import {
+  getSidebarResizeRenderKey,
+  writeSidebarResizeWidth,
+} from "../academyShellGeometry";
 
 export interface UseSidebarResizeArgs {
   setSidebarMode: Dispatch<SetStateAction<SidebarMode>>;
@@ -138,10 +141,7 @@ export function useSidebarResize({
       }
     }
 
-    coursesAppRef.current?.style.setProperty(
-      "--sidebar-resize-preview-width",
-      `${width}px`,
-    );
+    writeSidebarResizeWidth(coursesAppRef.current, width);
 
     if (sidebarPreferences.showResizeDimensions === true) {
       setSidebarResizePreviewWidth(width);

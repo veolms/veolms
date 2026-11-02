@@ -1,6 +1,4 @@
 import {
-  lazy,
-  Suspense,
   useEffect,
   useRef,
   useState,
@@ -46,12 +44,8 @@ import { useDiscussionReplyFocus } from "./discussionReplyFocus";
 import { TimeAgo } from "../components/TimeAgo";
 import { DiscussionCourseThumbnail } from "./DiscussionCourseThumbnail";
 import { DiscussionAttachmentsList } from "../learning/discussion-attachments/DiscussionAttachmentsList";
-
-const DiscussionMarkdown = lazy(() =>
-  import("../learning/discussion-editor/DiscussionMarkdown").then((module) => ({
-    default: module.DiscussionMarkdown,
-  })),
-);
+import { DiscussionStaffActions } from "./DiscussionStaffActions";
+import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 
 /** The thread's replies as the replies query keeps them. */
 type RepliesPages = InfiniteData<{ replies: LearningReply[] }>;
@@ -102,25 +96,15 @@ function PostBody({
     // whole: text, line height and what is embedded in it, such as a link
     // preview, keep their proportions.
     <div style={textScale === 1 ? undefined : { zoom: textScale }}>
-      <Suspense
-        fallback={
-          <p
-            className={`m-0 whitespace-pre-wrap wrap-anywhere text-(--text) ${textClass}`}
-          >
-            {content}
-          </p>
-        }
-      >
-        <DiscussionMarkdown
-          content={{
-            format: "markdown",
-            markdown: content,
-            plainText: content,
-          }}
-          label={label}
-          className={`max-w-none wrap-anywhere text-(--text) ${textClass}`}
-        />
-      </Suspense>
+      <DiscussionMarkdown
+        content={{
+          format: "markdown",
+          markdown: content,
+          plainText: content,
+        }}
+        label={label}
+        className={`max-w-none wrap-anywhere text-(--text) ${textClass}`}
+      />
     </div>
   );
 }
@@ -867,12 +851,13 @@ export function DiscussionPanelContent({
           </div>
 
           {!isReplyCard && postActions.canLike && (
-            <div className="mt-3 -ml-2.5 flex items-center gap-1">
+            <div className="mt-3 -ml-2.5 flex flex-wrap items-center gap-1">
               <DiscussionLikeButton
                 liked={Boolean(card.isLiked)}
                 count={card.likes}
                 onToggle={postActions.like}
               />
+              <DiscussionStaffActions card={card} staff={postActions.staff} />
             </div>
           )}
         </article>

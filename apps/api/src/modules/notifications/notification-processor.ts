@@ -81,6 +81,7 @@ export function createNotificationProcessor({
     | "NOTIFICATION_EMAIL_MAX_ATTEMPTS"
     | "NOTIFICATION_RETRY_SECONDS"
     | "NOTIFICATION_OUTBOX_RETENTION_DAYS"
+    | "NOTIFICATION_COURSE_WIDE_EMAIL"
   >;
   handlers: NotificationHandlerDependencies;
   recipients: NotificationRecipientDirectory;
@@ -111,7 +112,10 @@ export function createNotificationProcessor({
         const intents = await createNotificationIntents(
           event.event_type,
           event.payload,
-          handlers,
+          {
+            ...handlers,
+            courseWideEmail: config.NOTIFICATION_COURSE_WIDE_EMAIL,
+          },
         );
         const outcome = await service.processClaimedEvent(
           event,

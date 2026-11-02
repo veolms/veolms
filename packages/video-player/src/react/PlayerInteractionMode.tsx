@@ -4,6 +4,10 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import {
+  getPageFullscreenElement,
+  PAGE_FULLSCREEN_CHANGE_EVENT,
+} from "./pageFullscreen";
 
 export type PlayerInteractionMode = "desktop" | "mobile" | "responsive";
 
@@ -41,7 +45,9 @@ function getFullscreenActive(): boolean {
     webkitFullscreenElement?: Element | null;
   };
   return Boolean(
-    document.fullscreenElement ?? webkitDocument.webkitFullscreenElement,
+    document.fullscreenElement ??
+    webkitDocument.webkitFullscreenElement ??
+    getPageFullscreenElement(),
   );
 }
 
@@ -99,6 +105,10 @@ function startResponsiveModeStore(): void {
     "webkitfullscreenchange",
     updateResponsiveModeStore,
   );
+  document.addEventListener(
+    PAGE_FULLSCREEN_CHANGE_EVENT,
+    updateResponsiveModeStore,
+  );
   responsiveModeListening = true;
 }
 
@@ -116,6 +126,10 @@ function stopResponsiveModeStore(): void {
   document.removeEventListener("fullscreenchange", updateResponsiveModeStore);
   document.removeEventListener(
     "webkitfullscreenchange",
+    updateResponsiveModeStore,
+  );
+  document.removeEventListener(
+    PAGE_FULLSCREEN_CHANGE_EVENT,
     updateResponsiveModeStore,
   );
   responsiveModeMediaQuery = null;

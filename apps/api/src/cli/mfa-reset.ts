@@ -18,6 +18,7 @@
 /* eslint-disable no-console -- an operator CLI: the terminal is its output */
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
+import { cacheTags, publishCacheInvalidation } from "@veolms/api-core";
 import { createDatabase } from "@veolms/database";
 import { config } from "../config.ts";
 import * as mfaRepository from "../modules/auth/mfa/mfa.repository.ts";
@@ -90,6 +91,8 @@ async function main() {
       await mfaRepository.deleteBackupCodes(trx, user.id);
       await sessionRepository.deleteAllUserSessions(trx, user.id);
     });
+    // Running API processes drop this user's cached sign-ins at once.
+    await publishCacheInvalidation(database, [cacheTags.user(user.id)]);
 
     console.log(
       `\n${green("✓ Two-factor sign-in reset for")} ${bold(identifier)}`,
@@ -97,8 +100,7 @@ async function main() {
     console.log(
       dim(
         "  Passkeys, authenticator app and backup codes removed; all sessions ended.\n" +
-          "  A running API may honour an already-open session for a few more seconds\n" +
-          "  (its sign-in cache), then asks for a fresh sign-in.\n",
+          "  A running API asks for a fresh sign-in on the next request.\n",
       ),
     );
   } catch (error) {

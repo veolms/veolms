@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import type { GatewayWebhookHeaders } from "@veolms/contracts";
 import type { WebhookService } from "./webhook.service.ts";
 
 export function createWebhookController({
@@ -6,27 +7,26 @@ export function createWebhookController({
 }: {
   service: WebhookService;
 }) {
-  async function handleRazorpayWebhook(
-    request: FastifyRequest,
-    reply: FastifyReply,
+  async function handleGatewayWebhook(
+    request: FastifyRequest<{ Params: { provider: string } }>,
+    _reply: FastifyReply,
   ) {
-    const signature = request.headers["x-razorpay-signature"] as
-      string | undefined;
-    const eventId = request.headers["x-razorpay-event-id"] as
-      string | undefined;
-    const rawBody = request.rawBody;
+    // Each gateway signs its deliveries in headers of its own; the gateway
+    // reads the ones it needs.
+    const headers: GatewayWebhookHeaders = {};
+    for (const [name, value] of Object.entries(request.headers)) {
+      headers[name] = Array.isArray(value) ? value[0] : value;
+    }
 
-    const result = await service.processGatewayWebhook(
-      rawBody,
-      signature,
+    return await service.processGatewayWebhook(
+      request.params.provider,
+      request.rawBody,
+      headers,
       request.body,
-      eventId,
     );
-
-    return result;
   }
 
   return {
-    handleRazorpayWebhook,
+    handleGatewayWebhook,
   };
 }

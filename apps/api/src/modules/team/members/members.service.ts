@@ -18,6 +18,7 @@ import { publishTeamEvent } from "../shared/team.events.ts";
 import * as teamRepository from "../shared/team.repository.ts";
 import {
   assertCanHandleRoles,
+  assertCanRemoveMembers,
   assertKeepsAnAdmin,
   assertNoSelfLockout,
   diffRoleIds,
@@ -73,8 +74,10 @@ export function createTeamMembersService({
     query: TeamMemberListQuery,
   ): Promise<TeamMemberListResponse> {
     const firstPage = !query.cursor;
+    const teamRoleIds = await repository.listTeamRoleIds(database);
     const [rows, awaiting, totalCount] = await Promise.all([
       repository.listMembers(database, {
+        teamRoleIds,
         limit: query.limit + 1,
         search: query.search,
         cursor: query.cursor ? decodeCursor(query.cursor) : undefined,
@@ -83,7 +86,7 @@ export function createTeamMembersService({
         ? repository.listAwaitingSignIn(database, query.search)
         : Promise.resolve([]),
       firstPage
-        ? repository.countMembers(database, query.search)
+        ? repository.countMembers(database, teamRoleIds, query.search)
         : Promise.resolve(undefined),
     ]);
 
@@ -206,6 +209,7 @@ export function createTeamMembersService({
 
       const removedRoles = await teamRepository.findRolesByIds(trx, removed);
       const actor = await teamRepository.loadActor(trx, actorUserId);
+      if (nextRoleIds.length === 0) assertCanRemoveMembers(actor);
       assertCanHandleRoles(actor, [
         ...nextRoles.filter((role) => added.includes(role.id)),
         ...removedRoles,

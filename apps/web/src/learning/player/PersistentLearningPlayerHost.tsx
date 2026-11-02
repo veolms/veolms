@@ -7,8 +7,11 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { useAnchorPositionFallback } from "./useAnchorPositionFallback";
 import "../learning-feature.css";
 import { createPortal } from "react-dom";
+import { getPageFullscreenElement } from "@veolms/video-player";
+import { getDocumentFullscreenElement } from "../../fullscreen";
 import {
   LessonVideoPlayer,
   type LessonVideoPlayerProps,
@@ -172,6 +175,12 @@ export function PersistentLearningPlayerHost({
   presentation,
 }: PersistentLearningPlayerHostProps) {
   const hostRef = useRef<HTMLElement>(null);
+  // Over its slot by measurement where the stylesheet's anchor positioning
+  // is not understood (Safari before 26); nothing elsewhere.
+  useAnchorPositionFallback(
+    hostRef,
+    presentation === "mini" ? null : player.anchor,
+  );
   const mainScrollportRef = useRef<HTMLElement | null>(
     player.anchor?.closest<HTMLElement>(".courses-main") ?? null,
   );
@@ -453,6 +462,10 @@ export function PersistentLearningPlayerHost({
         return;
       }
 
+      // In full screen the page is not on screen: the wheel is left to
+      // what is (the lessons beside the video scroll with it).
+      if (getDocumentFullscreenElement() ?? getPageFullscreenElement()) return;
+
       const target = event.target;
       if (
         target instanceof Element &&
@@ -461,6 +474,23 @@ export function PersistentLearningPlayerHost({
         )
       ) {
         return;
+      }
+
+      // A list over the player (the course's lessons) scrolls itself while
+      // it has further to go in the wheel's direction.
+      for (
+        let element = target instanceof Element ? target : null;
+        element && element !== host;
+        element = element.parentElement
+      ) {
+        if (!/(auto|scroll)/.test(getComputedStyle(element).overflowY)) {
+          continue;
+        }
+        const room =
+          event.deltaY > 0
+            ? element.scrollHeight - element.clientHeight - element.scrollTop
+            : element.scrollTop;
+        if (room > 1) return;
       }
 
       // A reading scrolls inside the player. While it has further to go in
@@ -810,6 +840,10 @@ export function PersistentLearningPlayerHost({
         onMinimizeGestureStart={finishRestoreBeforeMinimize}
         onMinimizeTriggerReady={setMinimizeTrigger}
         presentation={presentation}
+        fadeOutAudio={mini && miniPlayer.mode === "dismissing"}
+        subscribeSwipeOutsideFraction={
+          mini ? miniPlayer.subscribeOutsideFraction : undefined
+        }
         onMiniClose={onClose}
         onMiniRestore={restoreFromCurrentRect}
         onMiniPlayerRestoreReady={undefined}
@@ -841,7 +875,6 @@ export function PersistentLearningPlayerHost({
           expandedSectionIds={miniExpandedSectionIds}
           onExpandAllSections={expandAllMiniSections}
           onCollapseAllSections={collapseAllMiniSections}
-          onOpenCourseOverview={onOpenCourseOverview}
           contextMenuPortalHostRef={hostRef}
         />
       </div>

@@ -9,6 +9,7 @@ import { XIcon as X } from "@phosphor-icons/react/X";
 import { useMyCourses } from "../services/courses";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 
 export interface SelectCourseForQuizModalProps {
   isOpen: boolean;
@@ -97,9 +98,8 @@ export function SelectCourseForQuizModal({
 
   const filteredCourses = useMemo(() => {
     if (!searchQuery.trim()) return rawCourses;
-    const lower = searchQuery.toLowerCase().trim();
     return rawCourses.filter((course) =>
-      course.title.toLowerCase().includes(lower),
+      fuzzyMatches(searchQuery, course.title),
     );
   }, [rawCourses, searchQuery]);
 

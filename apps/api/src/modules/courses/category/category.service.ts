@@ -1,9 +1,22 @@
 import crypto from "node:crypto";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
+import { cacheTags, createCache } from "@veolms/api-core";
 import { AppError } from "../../../lib/errors.ts";
 import * as categoryRepo from "./category.repository.ts";
 import { slugify } from "../shared/courses.utils.ts";
+
+/**
+ * The category list. A category write is a site-wide change (api-core's
+ * site-content-changes), which clears it in every process.
+ */
+const categoryLists = createCache<
+  Awaited<ReturnType<typeof categoryRepo.listCategories>>
+>({
+  name: "courses.categories",
+  ttlMs: 10 * 60_000,
+  maxBytes: 1024 * 1024,
+});
 
 export interface CategoryServiceOptions {
   database: Kysely<Database>;
@@ -11,7 +24,11 @@ export interface CategoryServiceOptions {
 
 export function createCategoryService({ database }: CategoryServiceOptions) {
   async function listCategories() {
-    return await categoryRepo.listCategories(database);
+    return await categoryLists.fetch(
+      "all",
+      () => categoryRepo.listCategories(database),
+      { tags: [cacheTags.site] },
+    );
   }
 
   async function createCategory(name: string) {

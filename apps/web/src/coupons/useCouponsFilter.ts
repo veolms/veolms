@@ -5,6 +5,7 @@ import {
   type CouponSortOption,
   type CouponTabFilter,
 } from "./couponHelpers";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 
 export type {
   CouponStatus,
@@ -100,11 +101,7 @@ export function useCouponsFilter(options?: {
         }
 
         if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase().trim();
-          const matchCode = coupon.code.toLowerCase().includes(query);
-          const matchDesc =
-            coupon.description?.toLowerCase().includes(query) ?? false;
-          if (!matchCode && !matchDesc) {
+          if (!fuzzyMatches(searchQuery, coupon.code, coupon.description)) {
             return false;
           }
         }

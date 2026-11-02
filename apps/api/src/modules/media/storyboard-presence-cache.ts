@@ -22,7 +22,13 @@ export const STORYBOARD_INDEX_FILE = "storyboard/index.json";
 export const STORYBOARD_PRESENT_TTL_MS = 15 * 60 * 1000;
 export const STORYBOARD_MISSING_TTL_MS = 5 * 60 * 1000;
 export const STORYBOARD_READ_TIMEOUT_MS = 300;
-export const STORYBOARD_INDEX_MAX_BYTES = 64 * 1024;
+/**
+ * `storyboard/index.json` is a copy of the run's whole index (every sheet
+ * and the preview video's chunk offsets), about 20 KB per hour of video: a
+ * 4 h 20 min lesson's is 85 KB, and at the 64 KB this once was, lessons
+ * over about 3 h were offered no storyboard at all.
+ */
+export const STORYBOARD_INDEX_MAX_BYTES = 1024 * 1024;
 const STORYBOARD_CACHE_MAX_ENTRIES = 2_000;
 const RUN_INDEX_PATH = /^[\w.-]+\/index\.json$/u;
 

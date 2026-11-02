@@ -13,6 +13,8 @@ export const DEFAULT_PLAYER_SHORTCUTS = {
   seekForward: ["ArrowRight"],
   seekBackwardLarge: ["KeyJ"],
   seekForwardLarge: ["KeyL"],
+  volumeUp: ["ArrowUp"],
+  volumeDown: ["ArrowDown"],
   toggleMute: ["KeyM"],
   toggleCaptions: ["KeyC"],
   toggleFullscreen: ["KeyF"],

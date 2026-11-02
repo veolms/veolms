@@ -358,10 +358,29 @@ export interface LearningPreferences {
    * again in every section.
    */
   continuousLessonNumbering: boolean;
+  /**
+   * An open section's heading holds to the top of the curriculum panel
+   * while its lessons scroll under it.
+   */
+  stickOpenSection: boolean;
 }
 
 export const LEARNING_PREFERENCES_KEY = "veolms-learning-preferences";
 export const LEARNING_PREFERENCES_EVENT = "veolms:learning-preferences";
+/**
+ * `stickOpenSection` on <html> (`data-curriculum-stick-open-section`, "on"
+ * or "off"), set before the first paint (getScrollbarBootstrapScript) and
+ * whenever the setting is stored: the curriculum's open headings hold to
+ * the panel's top only while it is "on". The panel reads the setting itself
+ * only once the page runs, and a reload showed the headings held until
+ * then.
+ */
+export const CURRICULUM_STICK_OPEN_SECTION_DATASET =
+  "curriculumStickOpenSection";
+export const markCurriculumStickOpenSection = (stick: boolean) => {
+  document.documentElement.dataset[CURRICULUM_STICK_OPEN_SECTION_DATASET] =
+    stick ? "on" : "off";
+};
 export const LEARNING_SEEK_INTERVAL_MIN = 5;
 export const LEARNING_SEEK_INTERVAL_MAX = 60;
 export const LEARNING_SEEK_INTERVAL_DEFAULT = 10;
@@ -402,6 +421,7 @@ export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   automaticallyMoveNextSection: true,
   keepCompletedLecturesVisible: true,
   continuousLessonNumbering: false,
+  stickOpenSection: true,
 };
 
 export const LEARNING_REMINDER_DAYS: readonly (readonly [
@@ -639,7 +659,7 @@ export const getScrollbarBootstrapScript = (): string =>
     ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
   )}}try{const learning=JSON.parse(localStorage.getItem(${JSON.stringify(
     LEARNING_PREFERENCES_KEY,
-  )})||"{}");root.dataset.lessonPageScrollbar=learning.showLessonPageScrollbar===false?"hidden":"visible";root.dataset.curriculumScrollbar=learning.showCurriculumScrollbar===false?"hidden":"visible"}catch{root.dataset.lessonPageScrollbar="visible";root.dataset.curriculumScrollbar="visible"}})();`;
+  )})||"{}");root.dataset.lessonPageScrollbar=learning.showLessonPageScrollbar===false?"hidden":"visible";root.dataset.curriculumScrollbar=learning.showCurriculumScrollbar===false?"hidden":"visible";root.dataset.${CURRICULUM_STICK_OPEN_SECTION_DATASET}=learning.stickOpenSection===false?"off":"on"}catch{root.dataset.lessonPageScrollbar="visible";root.dataset.curriculumScrollbar="visible";root.dataset.${CURRICULUM_STICK_OPEN_SECTION_DATASET}="on"}})();`;
 
 export const readElevatedSurfaces = (): boolean =>
   readStoredBoolean(ELEVATED_SURFACES_KEY, true);
@@ -783,4 +803,28 @@ export const readLearningPreferences = (): LearningPreferences => {
   } catch {
     return LEARNING_PREFERENCE_DEFAULTS;
   }
+};
+
+/**
+ * Stores a change to the learning settings and tells the page's listeners
+ * (the curriculum's lesson numbering, the player's seek interval and theme),
+ * as the settings page does when one of its controls is changed.
+ */
+export const updateLearningPreferences = (
+  next: Partial<LearningPreferences>,
+): LearningPreferences => {
+  const preferences = { ...readLearningPreferences(), ...next };
+  try {
+    window.localStorage.setItem(
+      LEARNING_PREFERENCES_KEY,
+      JSON.stringify(preferences),
+    );
+  } catch {
+    // The change still reaches this page's listeners when storage is blocked.
+  }
+  window.dispatchEvent(
+    new CustomEvent(LEARNING_PREFERENCES_EVENT, { detail: preferences }),
+  );
+  markCurriculumStickOpenSection(preferences.stickOpenSection);
+  return preferences;
 };

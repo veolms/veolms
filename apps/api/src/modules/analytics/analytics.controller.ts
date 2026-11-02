@@ -18,8 +18,8 @@ type TabRequest = FastifyRequest<{ Querystring: AnalyticsFilterQuery }>;
 
 /**
  * The admin and instructor routes of a tab share a handler: the service
- * widens an admin's scope to the whole academy by their role, and the
- * route's permission guard is what tells the two apart.
+ * widens the scope to the whole academy for analytics held on every course,
+ * and keeps money from a caller without the revenue permission.
  */
 export function createAnalyticsController({
   service,

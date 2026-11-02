@@ -1,7 +1,11 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListPartsCommand,
   PutObjectCommand,
   PutBucketCorsCommand,
   S3Client,
@@ -9,6 +13,7 @@ import {
   S3ServiceException,
   DeleteObjectsCommand,
   ListObjectsV2Command,
+  UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createHmac } from "node:crypto";
@@ -71,6 +76,13 @@ export interface StorageUploadItem {
   key: string;
   filename?: string;
   contentType?: string;
+}
+
+export interface UploadFilesOptions {
+  /** Stops starting new uploads (and retries) once aborted. */
+  signal?: AbortSignal;
+  /** Called after each file is uploaded, with the running count and the file. */
+  onUploaded?: (uploadedCount: number, item: StorageUploadItem) => void;
 }
 
 export type StorageVisibility = "public" | "protected";
@@ -349,6 +361,7 @@ export class S3StorageService {
   async uploadFiles(
     files: readonly StorageUploadItem[],
     concurrency = 6,
+    options: UploadFilesOptions = {},
   ): Promise<number> {
     if (files.length === 0) {
       return 0;
@@ -359,6 +372,7 @@ export class S3StorageService {
 
     const uploadWorker = async (): Promise<void> => {
       while (cursor < files.length) {
+        options.signal?.throwIfAborted();
         const itemIndex = cursor++;
         const item = files[itemIndex];
         if (!item) {
@@ -374,10 +388,11 @@ export class S3StorageService {
           try {
             await this.uploadFile(item.key, item.localFilePath, contentType);
             uploadedCount++;
+            options.onUploaded?.(uploadedCount, item);
             break;
           } catch (err) {
             attempts++;
-            if (attempts >= maxRetries) {
+            if (attempts >= maxRetries || options.signal?.aborted) {
               throw err;
             }
             await new Promise((resolve) =>
@@ -530,6 +545,113 @@ export class S3StorageService {
         ? { signableHeaders: new Set(["content-type"]) }
         : {}),
     });
+  }
+
+  /**
+   * Starts an S3/R2 multipart upload. The upload id is the durable handle a
+   * client (or the API on its behalf) uses to resume after an interruption.
+   */
+  async createMultipartUpload(
+    key: string,
+    contentType: string,
+  ): Promise<string> {
+    const storageKey = this.keyForWrite(key);
+    const response = await this.client.send(
+      new CreateMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: storageKey,
+        ContentType: contentType,
+      }),
+    );
+    if (!response.UploadId) {
+      throw new Error("Storage did not return a multipart upload id.");
+    }
+    return response.UploadId;
+  }
+
+  /** Presigns one `UploadPart` request for a resumable upload. */
+  async getPresignedUploadPartUrl(
+    key: string,
+    uploadId: string,
+    partNumber: number,
+    expiresIn = 3_600,
+  ): Promise<string> {
+    const command = new UploadPartCommand({
+      Bucket: this.bucket,
+      Key: this.keyForWrite(key),
+      UploadId: uploadId,
+      PartNumber: partNumber,
+    });
+    return getSignedUrl(this.client, command, { expiresIn });
+  }
+
+  /**
+   * Lists the parts storage has already accepted. This is the source of truth
+   * when a client reconnects: it can skip those parts instead of restarting.
+   */
+  async listMultipartUploadParts(
+    key: string,
+    uploadId: string,
+  ): Promise<Array<{ partNumber: number; etag: string; size: number }>> {
+    const storageKey = this.keyForWrite(key);
+    const parts: Array<{ partNumber: number; etag: string; size: number }> = [];
+    let marker: string | undefined;
+
+    do {
+      const response = await this.client.send(
+        new ListPartsCommand({
+          Bucket: this.bucket,
+          Key: storageKey,
+          UploadId: uploadId,
+          PartNumberMarker: marker,
+        }),
+      );
+      for (const part of response.Parts ?? []) {
+        if (part.PartNumber === undefined || !part.ETag) continue;
+        parts.push({
+          partNumber: part.PartNumber,
+          etag: part.ETag,
+          size: part.Size ?? 0,
+        });
+      }
+      marker = response.IsTruncated ? response.NextPartNumberMarker : undefined;
+    } while (marker);
+
+    return parts;
+  }
+
+  /** Finalizes a multipart upload from the parts storage has accepted. */
+  async completeMultipartUpload(
+    key: string,
+    uploadId: string,
+    parts: ReadonlyArray<{ partNumber: number; etag: string }>,
+  ): Promise<void> {
+    await this.client.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: this.keyForWrite(key),
+        UploadId: uploadId,
+        MultipartUpload: {
+          Parts: parts
+            .map((part) => ({
+              PartNumber: part.partNumber,
+              ETag: part.etag,
+            }))
+            .sort((left, right) => left.PartNumber! - right.PartNumber!),
+        },
+      }),
+    );
+  }
+
+  /** Discards an in-flight multipart upload and its uploaded parts. */
+  async abortMultipartUpload(key: string, uploadId: string): Promise<void> {
+    await this.client.send(
+      new AbortMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: this.keyForWrite(key),
+        UploadId: uploadId,
+      }),
+    );
   }
 
   /**
@@ -723,8 +845,20 @@ export function getMimeType(filename: string): string {
   if (filename.endsWith(".ts")) {
     return "video/mp2t";
   }
+  if (filename.endsWith(".mpd")) {
+    return "application/dash+xml";
+  }
+  if (filename.endsWith(".m4s")) {
+    return "video/iso.segment";
+  }
+  if (filename.endsWith(".vtt")) {
+    return "text/vtt";
+  }
   if (filename.endsWith(".mp4")) {
     return "video/mp4";
+  }
+  if (filename.endsWith(".m4s")) {
+    return "video/iso.segment";
   }
   if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
     return "image/jpeg";

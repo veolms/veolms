@@ -83,9 +83,10 @@ export function SidebarBrand({
     >
       <span
         className="courses-logo-clip"
+        data-sidebar-resize-reader=""
         role="img"
         aria-label="ProCodrr"
-        title="Click, then hold to float sidebar"
+        title="Home. Click, then hold to float the sidebar"
         data-second-press-holding={
           sidebarLogoGesture.isSecondPressHolding || undefined
         }
@@ -105,7 +106,10 @@ export function SidebarBrand({
         }
         {...sidebarToggleGesture.handlers}
       >
-        <span className="sidebar-collapse__asset" aria-hidden="true">
+        <span
+          className="sidebar-collapse__asset [--sidebar-resize-preview-width:inherit]"
+          aria-hidden="true"
+        >
           <SidebarToggleIcon
             direction={
               compactNavigation

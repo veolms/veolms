@@ -30,12 +30,6 @@ interface Scenario {
  */
 function fakeDatabase(scenario: Scenario) {
   const rows: Record<string, unknown> = {
-    course_access_rules: scenario.accessType
-      ? { access_type: scenario.accessType }
-      : undefined,
-    course_pricing: scenario.pricingType
-      ? { pricing_type: scenario.pricingType }
-      : undefined,
     access_grants: scenario.grant,
   };
   const builder = (table: string): unknown =>
@@ -68,10 +62,17 @@ function build(scenario: Scenario) {
     courseService: {
       findCourseById: async () => course,
       findCourseBySlug: async () => course,
-    } as never,
-    curriculumService: {
-      findSectionsByCourseId: async () => [],
-      findLessonsByCourseId: async () => [],
+      // The course's rules and curriculum, as its shared content holds them.
+      getCourseContent: async () => ({
+        sections: [],
+        lessons: [],
+        accessRule: scenario.accessType
+          ? { access_type: scenario.accessType }
+          : null,
+        pricing: scenario.pricingType
+          ? { pricing_type: scenario.pricingType }
+          : null,
+      }),
     } as never,
     quizCompletionService: {
       listPassedLessonIds: async () => new Set<string>(),

@@ -238,6 +238,7 @@ export interface UseSavingStateResult {
       currency: string;
       salePrice?: number | null | undefined;
       showDiscountBadge?: boolean | undefined;
+      linkedOnly?: boolean | undefined;
     },
     ApiError,
     { courseId: string; payload: UpdateCoursePricingRequest },

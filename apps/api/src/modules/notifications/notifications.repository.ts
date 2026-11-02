@@ -12,6 +12,7 @@ import type {
 import { sql, type Kysely, type Selectable } from "kysely";
 import { exactCursorTimestamp } from "../../lib/keyset.ts";
 import { escapeLikePattern } from "../../lib/like-pattern.ts";
+import { fuzzyMatchesAny } from "../../lib/fuzzy-search.ts";
 
 export interface NotificationCursor {
   createdAt: Date;
@@ -71,6 +72,7 @@ export async function findNotifications(
       expression.or([
         expression("notifications.title", "ilike", pattern),
         expression("notifications.body", "ilike", pattern),
+        fuzzyMatchesAny(input.search!, [sql.ref("notifications.title")]),
       ]),
     );
   }

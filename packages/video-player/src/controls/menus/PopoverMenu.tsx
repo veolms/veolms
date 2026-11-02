@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 
 import { classNames } from "../../utils/classNames";
 import { getPlayerThemeStyle } from "../../themes/playerThemes";
+import { playerRectOf, toPlayerPoint } from "../../react/pageFullscreen";
 import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { usePlayerMobileInteraction } from "../../react/PlayerInteractionMode";
 
@@ -90,6 +91,11 @@ type PopoverPanelLayout = {
   right?: number;
 };
 
+/** How far down a sheet drag is, in the player's own axes. */
+function sheetDragY(event: ReactPointerEvent<HTMLElement>): number {
+  return toPlayerPoint(event.clientX, event.clientY, event.currentTarget).y;
+}
+
 function getPopoverOverlayHost(from: HTMLElement | null) {
   if (!from) return null;
   return (
@@ -107,9 +113,10 @@ function measurePopoverPanelLayout(
   if (!host) return null;
   const player =
     trigger.closest<HTMLElement>("[data-video-player-root]") ?? host;
-  const hostRect = host.getBoundingClientRect();
-  const playerRect = player.getBoundingClientRect();
-  const triggerRect = trigger.getBoundingClientRect();
+  // In the player's own axes, which a page full screen can turn a quarter.
+  const hostRect = playerRectOf(host);
+  const playerRect = playerRectOf(player);
+  const triggerRect = playerRectOf(trigger);
   const horizontal =
     align === "start"
       ? { left: triggerRect.left - hostRect.left }
@@ -380,10 +387,10 @@ export function PopoverMenu({
   ) => {
     mobileSheetDragRef.current = {
       pointerId: event.pointerId,
-      startY: event.clientY,
+      startY: sheetDragY(event),
     };
     setMobileSheetDragStartHeight(
-      panelRef.current?.getBoundingClientRect().height ?? null,
+      panelRef.current ? playerRectOf(panelRef.current).height : null,
     );
     setMobileSheetDragging(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -394,7 +401,7 @@ export function PopoverMenu({
   ) => {
     const drag = mobileSheetDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const dragDelta = event.clientY - drag.startY;
+    const dragDelta = sheetDragY(event) - drag.startY;
     // Dragging up only means something on an expandable sheet that is not
     // already filling the screen.
     setMobileSheetDragOffset(
@@ -415,7 +422,7 @@ export function PopoverMenu({
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     }
-    const dragDelta = event.clientY - drag.startY;
+    const dragDelta = sheetDragY(event) - drag.startY;
     if (!cancelled && expandableSheet) {
       if (!mobileSheetExpanded && dragDelta <= -mobileSheetDismissDistance) {
         setMobileSheetExpanded(true);

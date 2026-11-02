@@ -25,7 +25,12 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { isPendingMfaLoginAbandoned } from "../store/pendingMfaLogin";
 import { canOpenNavigationPath } from "../shell/navigationPermissions";
-import { hasAdminRole, hasTeamRole } from "../shell/workspaceRole";
+import {
+  hasAdminRole,
+  hasTeamRole,
+  readSavedWorkspaceView,
+  resolveWorkspaceRole,
+} from "../shell/workspaceRole";
 import {
   APP_HOME_PATH,
   buildMfaChallengePath,
@@ -119,8 +124,18 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   // An address no page answers to shows the not-found screen to everyone.
   const addressUnknown = isUnknownAddress(matches, location.pathname);
   const authenticationRequired = !guestMayView(path, addressUnknown);
+  // The home is the dashboard only in the creator view. A team member in
+  // the student view (their own choice, or by default for every team role
+  // but admin) is shown the learner home, and was sent to the courses a
+  // moment later when they lacked the dashboard's permission.
   const isDashboardPath =
-    path === "/" && access.isAuthenticated && hasCourseAuthorRole(user?.roles);
+    path === "/" &&
+    access.isAuthenticated &&
+    hasCourseAuthorRole(user?.roles) &&
+    resolveWorkspaceRole(
+      user?.roles,
+      readSavedWorkspaceView(user?.id, user?.roles),
+    ) === "creator";
   const dashboardCapabilities = useCapabilities({
     enabled: access.isSessionReady,
   });
@@ -132,16 +147,24 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const canAccessDashboard =
     dashboardCapabilitiesResolved &&
     hasDashboardAnalyticsPermission(dashboardCapabilities.permissions);
+  // Denied only on an answer that says so: a request that failed (offline,
+  // a deploy restarting the API) is not "no permission", and used to send
+  // the account away from its home.
   const dashboardRouteDenied =
     isDashboardPath &&
     access.isSessionReady &&
-    dashboardCapabilities.isFetched &&
+    dashboardCapabilities.isSuccess &&
     !canAccessDashboard;
   // A team member on a staff page their permissions do not open (typed
   // in, or an old link) goes home instead, as the sidebar never offers it.
+  // The home is left to the check above: it is a staff page only as the
+  // dashboard. In the student view it is the learner home the menu offers,
+  // and judging it here sent a team member without the revenue permission
+  // back to the courses each time they opened Home.
   const staffPageDenied =
+    path !== APP_HOME_PATH &&
     access.isSessionReady &&
-    dashboardCapabilities.isFetched &&
+    dashboardCapabilities.isSuccess &&
     hasTeamRole(user?.roles) &&
     !hasAdminRole(user?.roles) &&
     !canOpenNavigationPath(

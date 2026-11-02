@@ -19,6 +19,7 @@ import {
 import {
   type CurriculumLessonItem,
   type CurriculumSectionItem,
+  getLessonInitialState,
   isLessonDirty,
 } from "../curriculumItems";
 import type { PersistLessonOptions } from "../editorLocalTypes";
@@ -127,7 +128,17 @@ export interface UseLessonHandlersArgs {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       },
       ApiError
     >
@@ -232,7 +243,17 @@ export interface UseLessonHandlersArgs {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       },
       ApiError
     >
@@ -716,6 +737,28 @@ export function useLessonHandlers({
         isPreview: isPreviewVal,
       };
 
+      // Only what changed is sent: the API asks for a permission per field
+      // (details, content, publishing), so an untouched field must not ask
+      // for one the editor may not hold.
+      const init = getLessonInitialState(les);
+      const changes: UpdateCourseLessonRequest = {};
+      if (trimmedTitle !== init.title.trim()) changes.title = trimmedTitle;
+      if (persistedSnapshot.description !== (init.description || "")) {
+        changes.description = persistedSnapshot.description;
+      }
+      if (les.contentType !== init.contentType) {
+        changes.contentType = persistedSnapshot.contentType;
+      }
+      if (persistedSnapshot.contentMediaId !== (init.contentMediaId ?? null)) {
+        changes.contentMediaId = persistedSnapshot.contentMediaId;
+      }
+      if (isPublishedVal !== (init.isPublished ?? true)) {
+        changes.isPublished = isPublishedVal;
+      }
+      if (isPreviewVal !== (init.isPreview ?? false)) {
+        changes.isPreview = isPreviewVal;
+      }
+
       const targetCourseId = options?.explicitCourseId || currentCourseId;
 
       if (
@@ -729,7 +772,7 @@ export function useLessonHandlers({
           await updateLessonMutation.mutateAsync({
             courseId: targetCourseId,
             lessonId,
-            payload: persistedSnapshot,
+            payload: changes,
           });
 
           setSections((prev) => {

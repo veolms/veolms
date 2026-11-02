@@ -1,8 +1,8 @@
-import { readResumePosition } from "./lessonPlayerPersistence";
+import { readStartPosition } from "./lessonPlayerPersistence";
 import {
   createLearningHlsRequestFilter,
   LEARNING_HLS_MIME_TYPE,
-  LEARNING_HLS_STREAMING,
+  learningHlsStreaming,
   toAbsoluteLearningMediaUrl,
 } from "./learningHlsConstants";
 
@@ -39,10 +39,15 @@ export function createLearningHlsPreloadSource(options: {
     token: string;
     expiresAt?: number;
   } | null>;
+  /**
+   * How many segments the preload fetches past the start; one unless the
+   * lesson is very likely to be opened next (the home page's).
+   */
+  segmentPrefetchLimit?: number;
 }) {
   const startTime =
     options.mediaKey && shouldResumeFromLastPosition()
-      ? readResumePosition(options.mediaKey)
+      ? readStartPosition(options.mediaKey)
       : 0;
   const isDash = /\.mpd(?:$|[?#])/i.test(options.manifestUrl);
   return {
@@ -52,8 +57,9 @@ export function createLearningHlsPreloadSource(options: {
     kind: isDash ? ("dash" as const) : ("hls" as const),
     startTime,
     streaming: {
-      ...LEARNING_HLS_STREAMING,
-      segmentPrefetchLimit: PRELOAD_SEGMENT_PREFETCH_LIMIT,
+      ...learningHlsStreaming(options.manifestUrl),
+      segmentPrefetchLimit:
+        options.segmentPrefetchLimit ?? PRELOAD_SEGMENT_PREFETCH_LIMIT,
     },
     inlinedManifest: options.inlinedMasterManifest,
     networking: {

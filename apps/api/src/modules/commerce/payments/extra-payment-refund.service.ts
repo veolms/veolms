@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { PaymentGateway } from "@veolms/contracts";
+import type { PaymentGateway, PaymentGateways } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely, Transaction } from "kysely";
@@ -149,11 +149,11 @@ export interface ExtraPaymentRefundService {
 
 export function createExtraPaymentRefundService({
   database,
-  paymentGateway,
+  paymentGateways,
   logger,
 }: {
   database: Kysely<Database>;
-  paymentGateway: PaymentGateway;
+  paymentGateways: PaymentGateways;
   logger?: FastifyBaseLogger;
 }): ExtraPaymentRefundService {
   const log = logger?.child({ job: "extra-payment-refund" });
@@ -180,12 +180,15 @@ export function createExtraPaymentRefundService({
       await refundRepo.failUnsentRefund(database, reservation.id, new Date());
       return "skipped";
     }
+    // Sent back through the gateway that took it.
+    const paymentGateway =
+      payment && paymentGateways.get(payment.gateway_provider);
     if (
       !payment ||
       payment.status !== "captured" ||
       payment.error_code !== SURPLUS_CAPTURE_ERROR_CODE ||
       !payment.gateway_payment_id ||
-      payment.gateway_provider !== paymentGateway.providerName
+      !paymentGateway
     ) {
       return "skipped";
     }
@@ -330,7 +333,9 @@ export function createExtraPaymentRefundService({
     };
     const unsent = await refundRepo.listDueAutoRefunds(database, {
       now: new Date(),
-      gatewayProvider: paymentGateway.providerName,
+      gatewayProviders: paymentGateways.all.map(
+        (gateway) => gateway.providerName,
+      ),
     });
     // One at a time: there are only ever as many as there were extra
     // payments, and each is one gateway call.

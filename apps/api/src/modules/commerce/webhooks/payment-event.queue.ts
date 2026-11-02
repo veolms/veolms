@@ -1,4 +1,7 @@
-import type { NormalizedPaymentEvent, PaymentGateway } from "@veolms/contracts";
+import type {
+  NormalizedPaymentEvent,
+  PaymentGateways,
+} from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
@@ -12,7 +15,7 @@ export interface PaymentEventQueue {
 
 export interface DurablePaymentEventQueueOptions {
   database: Kysely<Database>;
-  paymentGateway: PaymentGateway;
+  paymentGateways: PaymentGateways;
   logger?: FastifyBaseLogger;
   handler: (event: NormalizedPaymentEvent) => Promise<void>;
   pollIntervalMs?: number;
@@ -40,7 +43,7 @@ export interface DurablePaymentEventQueueOptions {
  */
 export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
   private readonly database: Kysely<Database>;
-  private readonly paymentGateway: PaymentGateway;
+  private readonly paymentGateways: PaymentGateways;
   private readonly logger?: FastifyBaseLogger;
   private readonly handler: (event: NormalizedPaymentEvent) => Promise<void>;
   private readonly pollIntervalMs: number;
@@ -51,7 +54,7 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
 
   constructor(options: DurablePaymentEventQueueOptions) {
     this.database = options.database;
-    this.paymentGateway = options.paymentGateway;
+    this.paymentGateways = options.paymentGateways;
     this.logger = options.logger;
     this.handler = options.handler;
     this.pollIntervalMs = options.pollIntervalMs ?? 5000;
@@ -166,8 +169,15 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
         });
 
         try {
-          // Reconstruct normalized domain event from stored database payload
-          const normalizedEvent = this.paymentGateway.normalizeWebhookEvent(
+          // Reconstruct normalized domain event from stored database
+          // payload, by the gateway that sent it.
+          const paymentGateway = this.paymentGateways.get(eventRow.provider);
+          if (!paymentGateway) {
+            throw new Error(
+              `Payment gateway "${eventRow.provider}" is not set up; its event is kept for when it is`,
+            );
+          }
+          const normalizedEvent = paymentGateway.normalizeWebhookEvent(
             eventRow.payload,
             eventRow.event_id,
           );

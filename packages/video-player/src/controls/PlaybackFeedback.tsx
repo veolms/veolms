@@ -76,11 +76,14 @@ export function PlaybackFeedback({
   if (!feedback || mobileInteraction) return null;
   const Icon = feedback.kind === "play" ? icons.play : icons.pause;
 
+  // Not on a device with a touch screen (a tablet, a touch screen laptop),
+  // as not on a phone: the play and pause button in the middle of the
+  // player is shown there, and the flash would be a second one over it.
   return (
     <div
       aria-hidden="true"
       className={classNames(
-        "pointer-events-none absolute inset-0 z-25 hidden place-items-center sm:grid",
+        "pointer-events-none absolute inset-0 z-25 hidden place-items-center sm:grid [@media(any-pointer:coarse)]:!hidden",
         className,
       )}
       data-video-player-playback-feedback={feedback.kind}

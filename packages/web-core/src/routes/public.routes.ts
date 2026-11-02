@@ -19,5 +19,15 @@ export function getPublicRoutes(): RouteConfigEntry[] {
       id: "public-course-overview",
       caseSensitive: true,
     }),
+    // The legal and company pages, one module for all of them.
+    ...[
+      ["terms", "legal-terms"],
+      ["privacy", "legal-privacy"],
+      ["refund-policy", "legal-refund-policy"],
+      ["contact", "legal-contact"],
+      ["about", "legal-about"],
+    ].map(([path, id]) =>
+      route(path!, "routes/legal-page.tsx", { id, caseSensitive: true }),
+    ),
   ];
 }

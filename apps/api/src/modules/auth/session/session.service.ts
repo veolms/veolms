@@ -28,16 +28,18 @@ import * as userRepository from "../authentication/authentication.repository.ts"
 import {
   generateRandomToken,
   hashToken,
+  isTestLoginAccount,
   toUserProfileFields,
 } from "../shared/auth.utils.ts";
 import {
   clearSessionAuthCache,
-  getCachedAuthContext,
-  setCachedAuthContext,
+  getAuthContext,
 } from "../shared/session-auth-cache.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import type { Executor } from "../shared/repository.types.ts";
 import { runSignInClaim } from "../shared/sign-in-claim.ts";
+import { type SessionLocation } from "../shared/request-location.ts";
+import { createPlatformSettingsService } from "../../platform/platform-settings.service.ts";
 
 export interface SessionServiceOptions {
   database: Kysely<Database>;
@@ -58,6 +60,7 @@ export interface SessionPrerequisites {
 
 export function createSessionService({ database }: SessionServiceOptions) {
   const outbox = createOutboxService();
+  const platformSettings = createPlatformSettingsService({ database });
 
   /**
    * Whether two-factor sign-in is off for this account: it is for staff
@@ -160,6 +163,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
       ip: string;
       userAgent: string | null;
       existingSessionToken?: string | null;
+      location?: SessionLocation | null;
     },
     /** Pass when already loaded for this user and request; read here otherwise. */
     prerequisites?: SessionPrerequisites,
@@ -226,15 +230,42 @@ export function createSessionService({ database }: SessionServiceOptions) {
     }
 
     const sessionId = crypto.randomUUID();
-
-    await sessionRepository.insertSession(database, {
+    const newSession = {
       id: sessionId,
       userId: user.id,
       tokenHash,
       ipAddress,
       userAgent,
+      location: request.location ?? null,
       mfaVerified,
       expiresAt,
+    };
+
+    // A new device for a student counts against the academy's limit; staff
+    // and the shared test accounts (TEST_LOGIN_ACCOUNTS), which several
+    // testers sign in to at once, are never limited, and a browser already
+    // signed in (above) is no new device.
+    const limit =
+      isStaffAccount(roles) || isTestLoginAccount(user.email)
+        ? null
+        : await platformSettings.maxDevicesPerStudent();
+    if (limit === null) {
+      await sessionRepository.insertSession(database, newSession);
+      return { token, sessionId, mfa, roles };
+    }
+
+    await database.transaction().execute(async (trx) => {
+      // Two sign-ins of the same student at once count one after the other.
+      await sessionRepository.lockUserForSignIn(trx, user.id);
+      // At the limit, the newest sign-in always gets in: the devices used
+      // longest ago are signed out to make room, without a notice. Each
+      // finds itself signed out at its next request.
+      await sessionRepository.revokeLeastRecentlyUsedSessions(
+        trx,
+        user.id,
+        limit - 1,
+      );
+      await sessionRepository.insertSession(trx, newSession);
     });
 
     return { token, sessionId, mfa, roles };
@@ -309,18 +340,14 @@ export function createSessionService({ database }: SessionServiceOptions) {
   ): Promise<AuthenticatedRequestContext | null> {
     const tokenHash = hashToken(token);
 
-    // Process-local short-TTL cache: this path runs 5 queries in 3 serial
-    // round trips on EVERY authenticated request. Coherence (including
-    // immediate in-process eviction on revocation/rotation/MFA changes) is
-    // documented in shared/session-auth-cache.ts.
-    const cached = getCachedAuthContext(
-      tokenHash,
-      config.SESSION_AUTH_CACHE_TTL_MS,
-    );
-    if (cached) {
-      return cached;
-    }
+    // Every authenticated request needs this; it is cached per token (see
+    // shared/session-auth-cache.ts for when it is cleared).
+    return await getAuthContext(tokenHash, () => loadAuthContext(tokenHash));
+  }
 
+  async function loadAuthContext(
+    tokenHash: string,
+  ): Promise<AuthenticatedRequestContext | null> {
     const session = await sessionRepository.findActiveSession(
       database,
       tokenHash,
@@ -374,7 +401,6 @@ export function createSessionService({ database }: SessionServiceOptions) {
       },
     };
 
-    setCachedAuthContext(tokenHash, context, config.SESSION_AUTH_CACHE_TTL_MS);
     return context;
   }
 

@@ -83,7 +83,6 @@ export interface SidebarAppearanceDockProps {
     mobile?: boolean,
   ) => void;
   page: string;
-  learningOriginPage: string | null;
   settingsControlTitle: string;
   primaryShortcutModifier: "Meta" | "Control";
   settingsQuickMenu: "desktop" | "mobile" | null;
@@ -143,7 +142,6 @@ export function SidebarAppearanceDock({
   showReadingModeMenu,
   openReadingModeMenu,
   page,
-  learningOriginPage,
   settingsControlTitle,
   primaryShortcutModifier,
   settingsQuickMenu,
@@ -300,23 +298,23 @@ export function SidebarAppearanceDock({
               data-reading-mode-trigger
               type="button"
               className={`sidebar-appearance__reading-mode${readingModeEnabled ? " is-active" : ""}`}
-              aria-label={`Reading mode settings. Reading mode is ${readingModeEnabled ? "on" : "off"}`}
-              title={`Reading mode - ${readingModeEnabled ? "on" : "off"}`}
-              aria-haspopup="dialog"
-              aria-expanded={readingModeMenu === "desktop"}
+              aria-label={`Reading mode. Right-click or hold for its settings`}
+              aria-pressed={readingModeEnabled}
               aria-controls="desktop-reading-mode-quick-settings"
-              // A click opens the reading-mode menu; its own switch
-              // turns reading mode on and off.
+              title={`Reading mode - ${readingModeEnabled ? "on" : "off"} (right-click or hold for settings)`}
+              // A click turns reading mode on and off. Its menu opens on a
+              // right-click or a long press (the click that ends a long
+              // press is swallowed, so it does not also switch it).
               onClick={(event) => {
                 if (consumeAppearanceGestureClick(event)) return;
-                if (readingModeMenu === "desktop")
-                  setReadingModeMenu(null);
-                else showReadingModeMenu(false);
+                updateReadingMode({ enabled: !readingModeEnabled });
               }}
               onContextMenu={openReadingModeMenu}
               onPointerDown={(event) =>
-                startDockLongPress(event, () =>
-                  showReadingModeMenu(false),
+                startDockLongPress(
+                  event,
+                  () => showReadingModeMenu(false),
+                  true,
                 )
               }
               onPointerMove={moveDockLongPress}
@@ -340,8 +338,7 @@ export function SidebarAppearanceDock({
         }
 
         if (item === "settings") {
-          const settingsActive =
-            page === "settings" || learningOriginPage === "settings";
+          const settingsActive = page === "settings";
           return (
             <button
               key={item}

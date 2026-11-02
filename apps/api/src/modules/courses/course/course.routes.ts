@@ -20,6 +20,8 @@ import {
   lessonDescriptionResponseSchema,
   courseDeleteResponseSchema,
   courseStaticPageRefreshStatusResponseSchema,
+  heroVideoPlaybackSchema,
+  videoPlaybackTokenSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../../lib/errors.ts";
@@ -225,6 +227,61 @@ const courseRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.getCourseOverview,
+  );
+
+  const trailerParams = z.object({
+    idOrSlug: z
+      .string()
+      .min(1)
+      .max(160)
+      .meta({ description: "Course UUID or URL-safe slug." }),
+  });
+  // Who may see the overview may play its trailer: everyone on a published
+  // course, those who manage it on a draft.
+  const trailerPreHandler = [
+    ctx.middleware.authenticate,
+    ctx.middleware.requireMfaVerifiedIfAuthenticated,
+  ];
+
+  app.get(
+    "/courses/:idOrSlug/trailer/playback",
+    {
+      schema: {
+        operationId: "getCourseTrailerPlayback",
+        tags: ["Courses"],
+        summary: "Get what is needed to stream a course's trailer",
+        params: trailerParams,
+        response: {
+          200: jsonResponse(
+            "The trailer's stream and segment token.",
+            heroVideoPlaybackSchema,
+          ),
+          404: errorResponse("No course, or the course has no trailer."),
+          409: errorResponse("The trailer is still being prepared."),
+        },
+      },
+      preHandler: trailerPreHandler,
+    },
+    controller.getCourseTrailerPlayback,
+  );
+
+  app.get(
+    "/courses/:idOrSlug/trailer/playback-token",
+    {
+      schema: {
+        operationId: "getCourseTrailerPlaybackToken",
+        tags: ["Courses"],
+        summary: "Renew the segment token of a course's trailer",
+        params: trailerParams,
+        response: {
+          200: jsonResponse("A fresh segment token.", videoPlaybackTokenSchema),
+          404: errorResponse("No course, or the course has no trailer."),
+          409: errorResponse("The trailer is still being prepared."),
+        },
+      },
+      preHandler: trailerPreHandler,
+    },
+    controller.getCourseTrailerPlaybackToken,
   );
 
   app.get(

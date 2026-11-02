@@ -26,9 +26,22 @@ import {
   type VideoJobProgressResponse,
   type VideoJobStatus,
 } from "@veolms/contracts";
-import { mediaService } from "../../services/media";
+import {
+  mediaService,
+  readVideoUploadCheckpoint,
+  uploadVideoResumable,
+  useAttachedVideoStatus,
+  useLessonYoutubeImport,
+  useYoutubeImportAvailability,
+} from "../../services/media";
 import { useBeforeUnloadWarning } from "../../hooks/useBeforeUnloadWarning";
 import { LessonUploadDropzone } from "../LessonUploadDropzone";
+import {
+  VideoSourceTabs,
+  YoutubeImportPanel,
+  type VideoSource,
+} from "../../components/youtube-import/YoutubeImportPanel";
+import type { YoutubeImportTarget } from "./youtube-import-target";
 
 export interface LessonVideoUploadProps {
   mediaAssetId?: string | null;
@@ -38,6 +51,10 @@ export interface LessonVideoUploadProps {
   hideTrigger?: boolean;
   inline?: boolean;
   attachedActionLabel?: string;
+  /** The trigger's words while no video is attached. */
+  uploadLabel?: string;
+  /** What the video is called in the pop-up, lower case: "trailer". */
+  videoNoun?: string;
   stackStatusBelow?: boolean;
   onPreviewFile?: (file: File | null) => void;
   onMediaAttached: (
@@ -50,6 +67,15 @@ export interface LessonVideoUploadProps {
    * exists once processing passes THUMBNAIL_READY_PROGRESS_PERCENT.
    */
   onThumbnailAvailable?: (mediaAssetId: string) => void;
+  /**
+   * The lesson this video is for. When set, and the account may import
+   * from YouTube, the picker also offers "Import from YouTube".
+   */
+  youtubeImport?: YoutubeImportTarget | null;
+}
+
+function toTitleCase(words: string): string {
+  return words.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export interface LessonVideoUploadHandle {
@@ -80,6 +106,12 @@ const BUSY_PHASES = new Set<UploadPhase>([
 const MODAL_FRAME_CLASS =
   "relative flex max-h-[calc(100dvh-16px)] w-full max-w-[680px] min-w-0 flex-col overflow-hidden rounded-[20px] sm:rounded-[24px] border-none bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--surface-frame-edge-shadow),var(--card-floating-shadow)] sm:max-h-[calc(100dvh-32px)]";
 
+// The lesson studio's own standalone card (its Thumbnail card when no video
+// sits above it): an import has no local file to preview, so its status row
+// stands alone instead of closing a player card.
+const STANDALONE_CARD_CLASS =
+  "rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow)";
+
 const RAISED_CARD_CLASS =
   "rounded-[14px] sm:rounded-[16px] border-none bg-(--card-surface-raised,color-mix(in_srgb,var(--surface-strong,var(--surface))_85%,var(--surface))) shadow-(--card-shadow,var(--surface-depth-shadow))";
 
@@ -104,11 +136,14 @@ export const LessonVideoUpload = forwardRef<
     hideTrigger = false,
     inline = false,
     attachedActionLabel = "Change Video",
+    uploadLabel = "Upload",
+    videoNoun = "lesson video",
     stackStatusBelow = false,
     onPreviewFile,
     onMediaAttached,
     onProcessingComplete,
     onThumbnailAvailable,
+    youtubeImport = null,
   },
   ref,
 ) {
@@ -117,6 +152,7 @@ export const LessonVideoUpload = forwardRef<
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
   const requestIdRef = useRef(0);
   const uploadAbortControllerRef = useRef<AbortController | null>(null);
+  const discardUploadRef = useRef(false);
   const mountedRef = useRef(true);
   const uploadedThisSessionRef = useRef(false);
   const committedMediaIdRef = useRef<string | null>(null);
@@ -158,6 +194,7 @@ export const LessonVideoUpload = forwardRef<
   const [isOpen, setIsOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [resumeAvailable, setResumeAvailable] = useState(false);
   const [activeMediaId, setActiveMediaId] = useState<string | null>(
     mediaAssetId ?? null,
   );
@@ -183,13 +220,34 @@ export const LessonVideoUpload = forwardRef<
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReplacingVideo, setIsReplacingVideo] = useState(false);
+  const [videoSource, setVideoSource] = useState<VideoSource>("upload");
+  // The active video is a YouTube import: retry/cancel go to the import.
+  const [youtubeImportMediaId, setYoutubeImportMediaId] = useState<
+    string | null
+  >(null);
+  const [youtubeImportOnServer, setYoutubeImportOnServer] = useState(false);
 
   // Leaving the page loses an in-flight upload, and a processed video is only
-  // attached to the lesson when this component sees processing complete.
+  // attached to the lesson when this component sees processing complete. A
+  // YouTube import runs on the server and attaches itself, so leaving is fine.
+  const isFollowingImport =
+    activeMediaId !== null && youtubeImportMediaId === activeMediaId;
+  // An import into a saved lesson attaches itself on the server; one for a
+  // lesson not saved yet is attached here on completion, like an upload.
+  const importAttachesItself = isFollowingImport && youtubeImportOnServer;
+  // The lesson studio puts this section under a player only when there is
+  // something to play: the lesson's video or a chosen file. An import has
+  // neither, so its rows stand as cards of their own.
+  const inlineStandalone = inline && !mediaAssetId && !selectedFile;
   useBeforeUnloadWarning(
-    isBusy(phase) || (phase === "ready" && candidateMediaId !== null),
+    !importAttachesItself &&
+      (isBusy(phase) || (phase === "ready" && candidateMediaId !== null)),
   );
   const isUploadSurfaceActive = inline || isOpen;
+  const canImportFromYoutube = useYoutubeImportAvailability(
+    Boolean(youtubeImport) && isUploadSurfaceActive,
+  );
+  const showYoutubeImport = Boolean(youtubeImport) && canImportFromYoutube;
 
   useEffect(() => {
     onPreviewFile?.(selectedFile);
@@ -314,6 +372,9 @@ export const LessonVideoUpload = forwardRef<
       }
 
       const next: VideoJobProgressResponse = parsed.data;
+      if (next.source === "youtube") {
+        setYoutubeImportMediaId(activeMediaId);
+      }
       setHasReceivedProgress(true);
       setProgressStreamError(null);
       setStreamConnectionState("connected");
@@ -623,7 +684,11 @@ export const LessonVideoUpload = forwardRef<
     setPhase("transcoding");
     setTrackProgress(false);
     try {
-      await mediaService.retryTranscode(activeMediaId);
+      if (youtubeImportMediaId === activeMediaId) {
+        await mediaService.retryYoutubeImport(activeMediaId);
+      } else {
+        await mediaService.retryTranscode(activeMediaId);
+      }
       setTrackProgress(true);
       setProgressStreamAttempt((attempt) => attempt + 1);
     } catch (error) {
@@ -634,7 +699,7 @@ export const LessonVideoUpload = forwardRef<
         error instanceof Error ? error.message : "Retry could not be started.",
       );
     }
-  }, [activeMediaId, resetReconnectBackoff]);
+  }, [activeMediaId, resetReconnectBackoff, youtubeImportMediaId]);
 
   const cancelTranscoding = useCallback(async () => {
     if (!activeMediaId) return;
@@ -642,7 +707,11 @@ export const LessonVideoUpload = forwardRef<
     setTrackProgress(false);
     resetReconnectBackoff();
     try {
-      await mediaService.cancelTranscode(activeMediaId);
+      if (youtubeImportMediaId === activeMediaId) {
+        await mediaService.cancelYoutubeImport(activeMediaId);
+      } else {
+        await mediaService.cancelTranscode(activeMediaId);
+      }
       setProgressStreamAttempt((attempt) => attempt + 1);
       setTranscodeStatus("cancelled");
       setPhase("failed");
@@ -655,7 +724,130 @@ export const LessonVideoUpload = forwardRef<
           : "Unable to cancel video processing.",
       );
     }
-  }, [activeMediaId, resetReconnectBackoff]);
+  }, [activeMediaId, resetReconnectBackoff, youtubeImportMediaId]);
+
+  /**
+   * A YouTube import was queued (or an earlier import of the same video is
+   * reused): follow it exactly like an uploaded video after its upload, so
+   * the lesson gets it when processing completes.
+   */
+  const followYoutubeImport = useCallback(
+    (mediaId: string, attachesOnServer: boolean) => {
+      resetReconnectBackoff();
+      setYoutubeImportOnServer(attachesOnServer);
+      committedMediaIdRef.current = null;
+      replacementForMediaIdRef.current = mediaAssetId ?? null;
+      uploadedThisSessionRef.current = true;
+      onPreviewFile?.(null);
+      setSelectedFile(null);
+      setIsReplacingVideo(false);
+      setYoutubeImportMediaId(mediaId);
+      setActiveMediaId(mediaId);
+      setCandidateMediaId(mediaId);
+      setErrorMessage(null);
+      setAttachmentError(null);
+      setUploadProgress(100);
+      setTranscodeProgress(0);
+      highestTranscodeProgressRef.current = 0;
+      setTranscodeStatus("queued");
+      setHasReceivedProgress(false);
+      setStreamErrorCount(0);
+      setStreamConnectionState("idle");
+      setPhase("transcoding");
+      setTrackProgress(true);
+    },
+    [mediaAssetId, onPreviewFile, resetReconnectBackoff],
+  );
+
+  // An import runs on the server and the lesson only gets the video once it
+  // is ready, so an editor opened meanwhile would show an empty picker.
+  // Pick a running (or failed, retryable) import back up instead.
+  const isIdleForResume =
+    (phase === "idle" || phase === "attached") &&
+    !candidateMediaId &&
+    !selectedFile;
+  // Only a saved lesson has imports of its own to resume.
+  const savedImportLesson =
+    youtubeImport?.courseId && youtubeImport.lessonId
+      ? { courseId: youtubeImport.courseId, lessonId: youtubeImport.lessonId }
+      : null;
+  const { data: lessonImport } = useLessonYoutubeImport(
+    savedImportLesson,
+    showYoutubeImport && isIdleForResume,
+  );
+  const resumedImportMediaIdRef = useRef<string | null>(null);
+  const resumableImportMediaId = lessonImport?.import?.mediaId ?? null;
+  useEffect(() => {
+    if (
+      !resumableImportMediaId ||
+      !isIdleForResume ||
+      resumedImportMediaIdRef.current === resumableImportMediaId
+    ) {
+      return;
+    }
+    resumedImportMediaIdRef.current = resumableImportMediaId;
+    // Only imports into the saved lesson are found here, and those attach
+    // themselves on the server.
+    followYoutubeImport(resumableImportMediaId, true);
+  }, [followYoutubeImport, isIdleForResume, resumableImportMediaId]);
+
+  // A lesson can already hold a video that is still being processed: the
+  // editor was closed during an upload or import (the first video of a
+  // lesson is attached then, see the unmount effect). Opening it again only
+  // set "attached" and showed an empty player; follow the processing instead.
+  const isAttachedOnly =
+    phase === "attached" &&
+    Boolean(mediaAssetId) &&
+    activeMediaId === mediaAssetId &&
+    !candidateMediaId;
+  const { data: attachedStatus } = useAttachedVideoStatus(
+    mediaAssetId ?? null,
+    isUploadSurfaceActive && isAttachedOnly,
+  );
+  const checkedAttachedMediaIdRef = useRef<string | null>(null);
+  const adoptAttachedVideoStatus = useCallback(
+    (mediaId: string, status: VideoJobProgressResponse) => {
+      if (status.source === "youtube") {
+        setYoutubeImportMediaId(mediaId);
+        // It is the lesson's video already: nothing is left to attach here.
+        setYoutubeImportOnServer(true);
+      }
+      if (
+        status.status === "queued" ||
+        status.status === "provisioning" ||
+        status.status === "processing"
+      ) {
+        highestTranscodeProgressRef.current = status.progressPercent;
+        setTranscodeProgress(status.progressPercent);
+        setTranscodeStatus(status.status);
+        setHasReceivedProgress(true);
+        setPhase("transcoding");
+        setTrackProgress(true);
+      } else if (status.status === "failed" || status.status === "cancelled") {
+        setTranscodeStatus(status.status);
+        setPhase("failed");
+        setErrorMessage(
+          status.error ||
+            (status.status === "cancelled"
+              ? "Video processing was cancelled."
+              : "The video could not be processed."),
+        );
+      }
+    },
+    [],
+  );
+  useEffect(() => {
+    if (
+      !attachedStatus ||
+      !mediaAssetId ||
+      !isAttachedOnly ||
+      checkedAttachedMediaIdRef.current === mediaAssetId
+    ) {
+      return;
+    }
+    checkedAttachedMediaIdRef.current = mediaAssetId;
+    adoptAttachedVideoStatus(mediaAssetId, attachedStatus);
+  }, [adoptAttachedVideoStatus, attachedStatus, isAttachedOnly, mediaAssetId]);
 
   const retryAttachment = useCallback(async () => {
     if (!candidateMediaId || phase !== "ready") return;
@@ -691,6 +883,9 @@ export const LessonVideoUpload = forwardRef<
       replacementForMediaIdRef.current = null;
       setCandidateMediaId(null);
       setActiveMediaId(mediaAssetId ?? null);
+      setResumeAvailable(
+        readVideoUploadCheckpoint(file, visibility ?? "protected") !== null,
+      );
       onPreviewFile?.(file);
       setSelectedFile(file);
       setErrorMessage(null);
@@ -706,7 +901,14 @@ export const LessonVideoUpload = forwardRef<
       setPhase("idle");
       setTrackProgress(false);
     },
-    [mediaAssetId, onPreviewFile, phase, resetReconnectBackoff, validateFile],
+    [
+      mediaAssetId,
+      onPreviewFile,
+      phase,
+      resetReconnectBackoff,
+      validateFile,
+      visibility,
+    ],
   );
 
   useImperativeHandle(
@@ -743,6 +945,7 @@ export const LessonVideoUpload = forwardRef<
       uploadAbortControllerRef.current?.abort();
       const uploadAbortController = new AbortController();
       uploadAbortControllerRef.current = uploadAbortController;
+      discardUploadRef.current = false;
       const requestId = ++requestIdRef.current;
       uploadedThisSessionRef.current = true;
       resetReconnectBackoff();
@@ -763,36 +966,36 @@ export const LessonVideoUpload = forwardRef<
       setTrackProgress(false);
 
       try {
-        const presigned = await mediaService.presignVideoUpload({
-          filename: file.name,
-          contentType: file.type,
-          fileSize: file.size,
-          visibility,
-        });
-
-        if (!mountedRef.current || requestId !== requestIdRef.current) return;
-
-        await mediaService.uploadFileToPresignedUrl(
-          presigned.uploadUrl,
+        const result = await uploadVideoResumable({
           file,
-          ({ loadedBytes, percent }) => {
+          visibility,
+          signal: uploadAbortController.signal,
+          discardOnAbort: () => discardUploadRef.current,
+          onResuming: ({ loadedBytes, percent }) => {
+            if (!mountedRef.current || requestId !== requestIdRef.current) {
+              return;
+            }
+            setUploadProgress(percent);
+            setUploadLoadedBytes(loadedBytes);
+          },
+          onProgress: ({ loadedBytes, percent }) => {
             if (mountedRef.current && requestId === requestIdRef.current) {
               setUploadProgress(percent);
               setUploadLoadedBytes(loadedBytes);
             }
           },
-          uploadAbortController.signal,
-        );
+          onCompleting: () => {
+            if (mountedRef.current && requestId === requestIdRef.current) {
+              setPhase("confirming");
+            }
+          },
+        });
 
         if (!mountedRef.current || requestId !== requestIdRef.current) return;
-        setPhase("confirming");
 
-        await mediaService.confirmUpload(presigned.mediaAssetId);
-
-        if (!mountedRef.current || requestId !== requestIdRef.current) return;
-
-        setActiveMediaId(presigned.mediaAssetId);
-        setCandidateMediaId(presigned.mediaAssetId);
+        setResumeAvailable(false);
+        setActiveMediaId(result.mediaAssetId);
+        setCandidateMediaId(result.mediaAssetId);
         uploadedThisSessionRef.current = true;
         setTranscodeStatus("queued");
         setPhase("transcoding");
@@ -810,6 +1013,9 @@ export const LessonVideoUpload = forwardRef<
 
         setPhase("failed");
         setTrackProgress(false);
+        setResumeAvailable(
+          readVideoUploadCheckpoint(file, visibility ?? "protected") !== null,
+        );
         setErrorMessage(resolveUploadError(error));
       } finally {
         if (uploadAbortControllerRef.current === uploadAbortController) {
@@ -897,7 +1103,9 @@ export const LessonVideoUpload = forwardRef<
   const retryButtonLabel = canRetryAttachment
     ? "Retry Attachment"
     : canRetryTranscoding
-      ? "Retry Transcoding"
+      ? isFollowingImport
+        ? "Retry Import"
+        : "Retry Transcoding"
       : "Retry Status";
 
   const [isRetrying, setIsRetrying] = useState(false);
@@ -934,8 +1142,10 @@ export const LessonVideoUpload = forwardRef<
 
   const cancelUpload = useCallback(() => {
     requestIdRef.current += 1;
+    discardUploadRef.current = true;
     uploadAbortControllerRef.current?.abort();
     uploadAbortControllerRef.current = null;
+    setResumeAvailable(false);
     uploadedThisSessionRef.current = false;
     resetReconnectBackoff();
     replacementForMediaIdRef.current = null;
@@ -965,6 +1175,7 @@ export const LessonVideoUpload = forwardRef<
   const removeSelectedFile = useCallback(() => {
     onPreviewFile?.(null);
     setSelectedFile(null);
+    setResumeAvailable(false);
     setErrorMessage(null);
     setIsReplacingVideo(false);
     setPhase(mediaAssetId ? "attached" : "idle");
@@ -982,6 +1193,52 @@ export const LessonVideoUpload = forwardRef<
     (phase === "failed" ? "Video processing could not be completed." : null);
 
   const hasVideo = Boolean(activeMediaId || mediaAssetId);
+
+  const renderSelectStage = (isReplacement: boolean) => {
+    const filePicker = (
+      <SelectVideoStage
+        canChooseFile={canChooseFile}
+        isDragging={isDragging}
+        minimal={inline}
+        onChooseFile={() => fileInputRef.current?.click()}
+        onUploadFile={() => {
+          if (selectedFile) void startUpload(selectedFile);
+        }}
+        onDragEnter={handleDragOver}
+        onDragLeave={() => setIsDragging(false)}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onRemoveFile={removeSelectedFile}
+        selectedFile={selectedFile}
+        isReplacement={isReplacement}
+        resumeAvailable={resumeAvailable}
+      />
+    );
+    if (!showYoutubeImport || !youtubeImport) return filePicker;
+    return (
+      <div className="min-w-0 space-y-3.5">
+        <VideoSourceTabs
+          value={videoSource}
+          onChange={setVideoSource}
+          disabled={!canChooseFile || Boolean(selectedFile)}
+        />
+        {videoSource === "youtube" ? (
+          <YoutubeImportPanel
+            courseId={youtubeImport.courseId}
+            lessonId={youtubeImport.lessonId}
+            isReplacement={isReplacement}
+            disabled={disabled || !canChooseFile}
+            onImportStarted={(mediaId) =>
+              followYoutubeImport(mediaId, Boolean(youtubeImport.lessonId))
+            }
+            onReuseExisting={(mediaId) => followYoutubeImport(mediaId, false)}
+          />
+        ) : (
+          filePicker
+        )}
+      </div>
+    );
+  };
 
   const stageContent = isReplacingVideo ? (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
@@ -1014,40 +1271,10 @@ export const LessonVideoUpload = forwardRef<
         </button>
       </div>
 
-      <SelectVideoStage
-        canChooseFile={canChooseFile}
-        isDragging={isDragging}
-        minimal={inline}
-        onChooseFile={() => fileInputRef.current?.click()}
-        onUploadFile={() => {
-          if (selectedFile) void startUpload(selectedFile);
-        }}
-        onDragEnter={handleDragOver}
-        onDragLeave={() => setIsDragging(false)}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        onRemoveFile={removeSelectedFile}
-        selectedFile={selectedFile}
-        isReplacement={true}
-      />
+      {renderSelectStage(true)}
     </div>
   ) : uploadStage === "select" ? (
-    <SelectVideoStage
-      canChooseFile={canChooseFile}
-      isDragging={isDragging}
-      minimal={inline}
-      onChooseFile={() => fileInputRef.current?.click()}
-      onUploadFile={() => {
-        if (selectedFile) void startUpload(selectedFile);
-      }}
-      onDragEnter={handleDragOver}
-      onDragLeave={() => setIsDragging(false)}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      onRemoveFile={removeSelectedFile}
-      selectedFile={selectedFile}
-      isReplacement={false}
-    />
+    renderSelectStage(false)
   ) : uploadStage === "uploading" ? (
     <UploadProgressStage
       file={selectedFile}
@@ -1060,14 +1287,29 @@ export const LessonVideoUpload = forwardRef<
     <TranscodingProgressStage
       file={selectedFile}
       mediaAttached={!selectedFile && Boolean(activeMediaId)}
+      videoNoun={videoNoun}
       progress={hasReceivedProgress ? transcodeProgress : null}
       status={transcodeStatus}
       errorMessage={isStreamError ? null : errorMessage}
       isReplacement={isPendingReplacement}
       embedded={inline}
+      standalone={inlineStandalone}
+      isYoutubeImport={isFollowingImport}
       onReplace={
         mediaAssetId && !isReplacingVideo && !selectedFile
           ? () => fileInputRef.current?.click()
+          : undefined
+      }
+      onReplaceFromYoutube={
+        showYoutubeImport &&
+        mediaAssetId &&
+        !isReplacingVideo &&
+        !selectedFile &&
+        !isBusy(phase)
+          ? () => {
+              setVideoSource("youtube");
+              setIsReplacingVideo(true);
+            }
           : undefined
       }
     />
@@ -1106,7 +1348,7 @@ export const LessonVideoUpload = forwardRef<
               className={`${stackStatusBelow ? "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] text-[0.8rem] font-bold" : "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)]"} transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 cursor-pointer`}
             >
               {hasVideo ? <PlayCircle size={15} /> : <UploadSimple size={15} />}
-              <span>{hasVideo ? attachedActionLabel : "Upload"}</span>
+              <span>{hasVideo ? attachedActionLabel : uploadLabel}</span>
             </button>
           )}
           {isReplacementFlow && mediaAssetId ? (
@@ -1171,7 +1413,7 @@ export const LessonVideoUpload = forwardRef<
                 className="mt-0.5 shrink-0 text-emerald-400"
               />
               <span>
-                Your current lesson video stays available until this replacement
+                Your current {videoNoun} stays available until this replacement
                 is ready.
               </span>
             </div>
@@ -1180,7 +1422,7 @@ export const LessonVideoUpload = forwardRef<
           {displayErrorMessage && (
             <div
               role="alert"
-              className={`flex flex-col items-start justify-between gap-3 p-3.5 sm:flex-row sm:items-center sm:p-4 ${inline ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface))" : RAISED_CARD_CLASS}`}
+              className={`flex flex-col items-start justify-between gap-3 p-3.5 sm:flex-row sm:items-center sm:p-4 ${inline ? (inlineStandalone ? STANDALONE_CARD_CLASS : "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface))") : RAISED_CARD_CLASS}`}
             >
               <div className="flex min-w-0 items-center gap-3">
                 <WarningCircle
@@ -1237,10 +1479,10 @@ export const LessonVideoUpload = forwardRef<
                         className="m-0 truncate text-[0.98rem] sm:text-[1.05rem] font-semibold tracking-[-0.01em] text-(--text)"
                       >
                         {isReplacingVideo
-                          ? "Replace Lesson Video"
+                          ? `Replace ${toTitleCase(videoNoun)}`
                           : phase === "ready" || phase === "attached"
-                            ? "Lesson Video"
-                            : "Upload Lesson Video"}
+                            ? toTitleCase(videoNoun)
+                            : `Upload ${toTitleCase(videoNoun)}`}
                       </h2>
                     </div>
                   </div>
@@ -1288,7 +1530,9 @@ export const LessonVideoUpload = forwardRef<
                             {canRetryAttachment
                               ? "The video is ready, but the lesson update did not save. Retry attaching it."
                               : canRetryTranscoding
-                                ? "You can restart the video transcoding job."
+                                ? isFollowingImport
+                                  ? "You can restart the import; finished steps are kept."
+                                  : "You can restart the video transcoding job."
                                 : isStreamError
                                   ? "The video state is preserved. Reconnect to resume live updates."
                                   : "Review the error and choose another video if needed."}
@@ -1375,7 +1619,11 @@ export const LessonVideoUpload = forwardRef<
                       onClick={() => void startUpload(selectedFile)}
                       className={`${PRIMARY_ACTION_CLASS} min-w-[120px] px-5`}
                     >
-                      {isReplacingVideo ? "Upload Replacement" : "Upload Video"}
+                      {resumeAvailable
+                        ? "Resume Upload"
+                        : isReplacingVideo
+                          ? "Upload Replacement"
+                          : "Upload Video"}
                     </button>
                   ) : uploadStage === "uploading" ? (
                     <button
@@ -1425,6 +1673,7 @@ interface SelectVideoStageProps {
   onDrop: (event: DragEvent<HTMLDivElement>) => void;
   onRemoveFile?: () => void;
   selectedFile: File | null;
+  resumeAvailable?: boolean;
 }
 
 function SelectVideoStage({
@@ -1440,6 +1689,7 @@ function SelectVideoStage({
   onDrop,
   onRemoveFile,
   selectedFile,
+  resumeAvailable = false,
 }: SelectVideoStageProps) {
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
@@ -1532,12 +1782,23 @@ function SelectVideoStage({
           </div>
         ))}
 
+      {selectedFile && resumeAvailable && (
+        <p className="m-0 rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-3 py-2 text-[0.72rem] leading-relaxed text-(--text-secondary)">
+          An interrupted upload of{" "}
+          <span className="font-semibold text-(--text)">
+            {selectedFile.name}
+          </span>{" "}
+          was found. Uploading resumes from the parts already sent.
+        </p>
+      )}
+
       {selectedFile && (
         <VideoFileSummary
           file={selectedFile}
           embedded={minimal}
           onUpload={minimal ? onUploadFile : undefined}
           uploadTextOnly={minimal}
+          uploadLabel={resumeAvailable ? "Resume" : "Upload"}
           onRemove={onRemoveFile}
         />
       )}
@@ -1577,7 +1838,7 @@ function UploadProgressStage({
               Uploading video
             </h3>
             <p className="m-0 mt-0.5 sm:mt-1 text-[0.72rem] sm:text-[0.74rem] text-(--muted)">
-              Please keep this window open while uploading.
+              If this is interrupted, choose the same file again to resume.
             </p>
           </div>
           <span className="shrink-0 text-[0.88rem] sm:text-[0.92rem] font-bold text-(--text) tabular-nums">
@@ -1599,23 +1860,33 @@ function UploadProgressStage({
 interface TranscodingProgressStageProps {
   file: File | null;
   mediaAttached: boolean;
+  videoNoun: string;
   progress?: number | null;
   status?: string;
   errorMessage?: string | null;
   isReplacement: boolean;
   embedded?: boolean;
+  /** Inline with no player above it: drawn as a card of its own. */
+  standalone?: boolean;
+  /** The video is a YouTube import rather than a file chosen here. */
+  isYoutubeImport?: boolean;
   onReplace?: () => void;
+  onReplaceFromYoutube?: () => void;
 }
 
 function TranscodingProgressStage({
   file,
   mediaAttached,
+  videoNoun,
   progress = null,
   status,
   errorMessage,
   isReplacement,
   embedded = false,
+  standalone = false,
+  isYoutubeImport = false,
   onReplace,
+  onReplaceFromYoutube,
 }: TranscodingProgressStageProps) {
   // A worker can report 100% FFmpeg progress while the job is still doing
   // final output/attachment work. Only the durable completed status means the
@@ -1630,11 +1901,34 @@ function TranscodingProgressStage({
       <VideoFileSummary
         file={file}
         mediaAttached={mediaAttached}
+        videoNoun={videoNoun}
         badge={badge}
         processingProgress={badge === "Processing" ? progress : undefined}
         embedded={embedded}
+        standalone={standalone}
         onReplace={onReplace}
+        labels={
+          isYoutubeImport
+            ? {
+                name: "YouTube video",
+                meta: isReady
+                  ? "Imported from YouTube"
+                  : isFailed
+                    ? "From YouTube"
+                    : "Importing from YouTube",
+              }
+            : null
+        }
       />
+      {onReplaceFromYoutube ? (
+        <button
+          type="button"
+          onClick={onReplaceFromYoutube}
+          className="cursor-pointer border-none bg-transparent px-1 text-[0.74rem] font-semibold text-(--accent) underline-offset-4 hover:underline"
+        >
+          Import a replacement from YouTube
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -1646,10 +1940,16 @@ interface VideoFileSummaryProps {
   isUploading?: boolean;
   onUpload?: () => void;
   mediaAttached?: boolean;
+  videoNoun?: string;
   onRemove?: () => void;
   onReplace?: () => void;
   processingProgress?: number | null;
+  uploadLabel?: string;
   uploadTextOnly?: boolean;
+  /** Name and second line when there is no local file to describe. */
+  labels?: { name: string; meta: string } | null;
+  /** Drawn as a card of its own (see STANDALONE_CARD_CLASS). */
+  standalone?: boolean;
 }
 
 function VideoFileSummary({
@@ -1659,11 +1959,19 @@ function VideoFileSummary({
   isUploading = false,
   onUpload,
   mediaAttached = false,
+  videoNoun = "lesson video",
   onRemove,
   onReplace,
   processingProgress = null,
+  uploadLabel = "Upload",
   uploadTextOnly = false,
+  labels = null,
+  standalone = false,
 }: VideoFileSummaryProps) {
+  const name =
+    file?.name ||
+    labels?.name ||
+    (mediaAttached ? `Current ${videoNoun}` : "Selected video");
   const processingTooltipId = useId();
   const [videoDimensions, setVideoDimensions] = useState<string | null>(null);
 
@@ -1704,27 +2012,25 @@ function VideoFileSummary({
   return (
     <div
       className={`flex min-w-0 items-center gap-3 sm:gap-3.5 ${
-        embedded
-          ? `border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) px-2.5 ${isUploading ? "pb-3.5 sm:pb-4" : "pb-2.5 sm:pb-3"} pt-2 sm:px-3 sm:pt-2.5`
-          : `${RAISED_CARD_CLASS} p-2.5 sm:p-3`
+        standalone
+          ? `${STANDALONE_CARD_CLASS} p-3.5 sm:p-4`
+          : embedded
+            ? `border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) px-2.5 ${isUploading ? "pb-3.5 sm:pb-4" : "pb-2.5 sm:pb-3"} pt-2 sm:px-3 sm:pt-2.5`
+            : `${RAISED_CARD_CLASS} p-2.5 sm:p-3`
       }`}
     >
       <VideoThumbnail file={file} />
       <div className="min-w-0 flex-1">
         <p
           className="m-0 truncate text-[0.78rem] sm:text-[0.82rem] font-medium text-(--text)"
-          title={
-            file?.name ||
-            (mediaAttached ? "Current lesson video" : "Selected video")
-          }
+          title={name}
         >
-          {file?.name ||
-            (mediaAttached ? "Current lesson video" : "Selected video")}
+          {name}
         </p>
         <p className="m-0 mt-0.5 text-[0.7rem] sm:text-[0.72rem] text-(--muted)">
           {file
             ? `${formatBytes(file.size)}${videoDimensions ? ` • ${videoDimensions}` : ""}`
-            : "Existing lesson media"}
+            : (labels?.meta ?? `Existing ${videoNoun}`)}
         </p>
       </div>
       {onReplace && (
@@ -1744,11 +2050,11 @@ function VideoFileSummary({
         <button
           type="button"
           onClick={onUpload}
-          aria-label="Upload video"
+          aria-label={`${uploadLabel} video`}
           className={`inline-flex h-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-(--accent) px-3.5 text-[0.76rem] font-semibold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all hover:bg-(--accent-hover,var(--accent)) active:scale-95 ${uploadTextOnly ? "" : "gap-1.5"}`}
         >
           {!uploadTextOnly && <CloudArrowUp size={15} weight="bold" />}
-          <span>Upload</span>
+          <span>{uploadLabel}</span>
         </button>
       )}
       {badge === "Processing" ? (

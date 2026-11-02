@@ -58,7 +58,7 @@ export async function listLessonsByIds(
   if (lessonIds.length === 0) return [];
   return await database
     .selectFrom("course_lessons")
-    .select(["id", "course_id", "title", "is_published"])
+    .select(["id", "course_id", "section_id", "title", "is_published"])
     .where("id", "in", lessonIds)
     .where("deleted_at", "is", null)
     .execute();
@@ -612,7 +612,7 @@ export async function listAssignmentRefsForQuizzes(
   if (quizIds.length === 0) return [];
   return await database
     .selectFrom("quiz_assignments")
-    .select(["id", "quiz_id", "lesson_id"])
+    .select(["id", "quiz_id", "lesson_id", "course_id"])
     .where("quiz_id", "in", quizIds)
     .orderBy("created_at", "asc")
     .execute();
@@ -749,6 +749,37 @@ export async function listAttemptsForAssignments(
     .where("user_id", "=", userId)
     .where("assignment_id", "in", [...assignmentIds])
     .orderBy("created_at", "desc")
+    .execute();
+}
+
+/**
+ * One user's attempts on one assignment, newest first, with everything a
+ * submission review shows of each. Ordered like `listAnalyticsAttempts`, so
+ * the first row is the attempt the analytics list reports as the latest.
+ */
+export async function listSubmissionAttempts(
+  database: DatabaseExecutor,
+  assignmentId: string,
+  userId: string,
+) {
+  return await database
+    .selectFrom("quiz_attempts")
+    .select([
+      "id",
+      "quiz_version_id",
+      "attempt_number",
+      "status",
+      "started_at",
+      "submitted_at",
+      "score_obtained",
+      "max_score",
+      "score_percentage",
+      "is_passed",
+    ])
+    .where("assignment_id", "=", assignmentId)
+    .where("user_id", "=", userId)
+    .orderBy("created_at", "desc")
+    .orderBy("attempt_number", "desc")
     .execute();
 }
 
@@ -920,12 +951,36 @@ export async function listAnalyticsAttempts(
     .select([
       "user_id as studentId",
       "status",
+      "quiz_version_id as quizVersionId",
+      "score_obtained as scoreObtained",
+      "max_score as maxScore",
       "score_percentage as scorePercentage",
       "created_at as createdAt",
       "submitted_at as submittedAt",
     ])
     .where("assignment_id", "=", assignmentId)
     .orderBy("created_at", "desc")
+    .execute();
+}
+
+/**
+ * Each version's total points, for attempts that do not record their own
+ * maximum (`max_score`): one grouped query for all the versions asked for.
+ */
+export async function listVersionPointTotals(
+  database: DatabaseExecutor,
+  versionIds: readonly string[],
+) {
+  if (versionIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_questions")
+    .select(({ fn }) => [
+      "quiz_version_id as versionId",
+      fn.sum<string>("points").as("totalPoints"),
+    ])
+    .where("quiz_version_id", "in", [...versionIds])
+    .where("deleted_at", "is", null)
+    .groupBy("quiz_version_id")
     .execute();
 }
 

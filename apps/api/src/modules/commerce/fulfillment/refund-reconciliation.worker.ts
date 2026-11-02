@@ -1,7 +1,7 @@
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type { FastifyBaseLogger } from "fastify";
-import type { GatewayRefundDetails, PaymentGateway } from "@veolms/contracts";
+import type { GatewayRefundDetails, PaymentGateways } from "@veolms/contracts";
 import * as refundRepo from "../refunds/refund.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
@@ -13,7 +13,7 @@ import { SURPLUS_CAPTURE_ERROR_CODE } from "../payments/surplus-payment.ts";
 
 export interface RefundReconciliationWorkerOptions {
   database: Kysely<Database>;
-  paymentGateway: PaymentGateway;
+  paymentGateways: PaymentGateways;
   logger?: FastifyBaseLogger;
   /** How old (in minutes) a pending refund must be before reconciliation queries the gateway. Default: 10 */
   staleAfterMinutes?: number;
@@ -39,7 +39,7 @@ const STRANDED_RESERVATION_HOURS = 24;
 
 export function createRefundReconciliationWorker({
   database,
-  paymentGateway,
+  paymentGateways,
   logger,
   staleAfterMinutes = 10,
   batchSize = 100,
@@ -99,7 +99,9 @@ export function createRefundReconciliationWorker({
       staleRefunds,
       concurrency,
       async (refund) => {
-        if (!refund.gateway_refund_id) {
+        // Asked of the gateway the refunded payment was made through.
+        const paymentGateway = paymentGateways.get(refund.gateway_provider);
+        if (!refund.gateway_refund_id || !paymentGateway) {
           return {
             refund,
             gatewayRefund: null as GatewayRefundDetails | null,

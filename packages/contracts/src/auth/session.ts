@@ -121,6 +121,9 @@ export const sessionResponseSchema = z.object({
   id: z.uuid(),
   ipAddress: z.string().max(45).nullable(),
   userAgent: z.string().max(255).nullable(),
+  location: z.string().max(255).nullable().meta({
+    description: "Roughly where the device signed in from, e.g. a city.",
+  }),
   isCurrent: z.boolean(),
   lastUsedAt: z.string().max(40),
 });

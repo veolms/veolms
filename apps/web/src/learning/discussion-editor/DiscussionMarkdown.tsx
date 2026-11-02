@@ -23,6 +23,13 @@ import type { DiscussionAttachmentItem } from "../discussion-attachments";
 import { normalizePreviewUrl } from "@veolms/contracts";
 
 import { renderContentWithMentions } from "./MentionLink";
+import { tabSeparatedTablesToMarkdown } from "./tabSeparatedTables";
+import { textDiagramsToCodeBlocks } from "./textDiagrams";
+import { findSearchMatches } from "../../lib/fuzzySearch";
+import {
+  SEARCH_MATCH_CLASS,
+  useSearchHighlight,
+} from "../../lib/searchHighlight";
 
 export { renderContentWithMentions };
 
@@ -223,7 +230,7 @@ type MarkdownNode = {
   value?: string;
   url?: string;
   children?: MarkdownNode[];
-  data?: { hName?: string };
+  data?: { hName?: string; hProperties?: Record<string, string> };
 };
 
 interface HighlightDelimiter {
@@ -376,6 +383,46 @@ function remarkHighlightMarks() {
       node.children = wrapHighlightedChildren(node.children);
     };
 
+    visit(tree);
+  };
+}
+
+/**
+ * The words the search a post was found with finds in it are highlighted
+ * (see findSearchMatches): text only, so code is left as it is, and not a
+ * word that is part of a mention ("@name"), which is drawn as a link.
+ */
+function remarkSearchMatches(query: string) {
+  return (tree: MarkdownNode) => {
+    const visit = (node: MarkdownNode) => {
+      if (!node.children) return;
+      node.children = node.children.flatMap((child) => {
+        visit(child);
+        if (child.type !== "text" || !child.value) return [child];
+        const text = child.value;
+        const ranges = findSearchMatches(query, text).filter(
+          ([start]) => text[start - 1] !== "@",
+        );
+        if (ranges.length === 0) return [child];
+        const pieces: MarkdownNode[] = [];
+        let index = 0;
+        for (const [start, end] of ranges) {
+          if (start > index) {
+            pieces.push({ type: "text", value: text.slice(index, start) });
+          }
+          pieces.push({
+            type: "searchMatch",
+            data: { hName: "mark", hProperties: { dataSearchMatch: "" } },
+            children: [{ type: "text", value: text.slice(start, end) }],
+          });
+          index = end;
+        }
+        if (index < text.length) {
+          pieces.push({ type: "text", value: text.slice(index) });
+        }
+        return pieces;
+      });
+    };
     visit(tree);
   };
 }
@@ -657,7 +704,9 @@ const MARKDOWN_COMPONENTS: Components = {
   pre: ({ children }) => <>{children}</>,
   table: ({ children }) => (
     <div className="my-3 max-w-full overflow-x-auto rounded-lg shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
-      <table className="w-full border-collapse text-left text-sm">
+      {/* Words keep whole in a cell: the text around it may break anywhere,
+          which let columns shrink to a letter instead of the box scrolling. */}
+      <table className="w-full border-collapse text-left text-sm wrap-normal">
         {children}
       </table>
     </div>
@@ -687,19 +736,48 @@ const MARKDOWN_COMPONENTS: Components = {
       <MarkdownInlineContent>{children}</MarkdownInlineContent>
     </del>
   ),
-  mark: ({ children }) => (
-    <mark className="rounded-[0.2em] bg-[color-mix(in_srgb,var(--accent)_22%,transparent)] box-decoration-clone px-0.5 text-inherit">
-      <MarkdownInlineContent>{children}</MarkdownInlineContent>
-    </mark>
-  ),
+  mark: ({ children, node }) =>
+    node?.properties?.dataSearchMatch !== undefined ||
+    node?.properties?.["data-search-match"] !== undefined ? (
+      // A word the search found (remarkSearchMatches).
+      <mark className={SEARCH_MATCH_CLASS} data-search-match="">
+        <MarkdownInlineContent>{children}</MarkdownInlineContent>
+      </mark>
+    ) : (
+      <mark className="rounded-[0.2em] bg-[color-mix(in_srgb,var(--accent)_22%,transparent)] box-decoration-clone px-0.5 text-inherit">
+        <MarkdownInlineContent>{children}</MarkdownInlineContent>
+      </mark>
+    ),
   ul: ({ children }) => (
     <ul className="my-2 list-disc space-y-1 pl-6">{children}</ul>
   ),
 };
 
-const MARKDOWN_PLUGINS = [remarkGfm, remarkHighlightMarks];
+/**
+ * A line of "=" or "-" under text is Markdown's underlined heading. Nobody
+ * writes headings that way in a comment, but plain text does it by chance:
+ * a comment brought over from the old platform listed "const", "age", ":",
+ * "number", "=" one per line, and the lone "=" turned the lines above it
+ * into a large heading. Headings are written with "#" only.
+ */
+function remarkNoUnderlinedHeadings(this: {
+  data(): { micromarkExtensions?: unknown[] };
+}) {
+  const data = this.data();
+  data.micromarkExtensions = [
+    ...(data.micromarkExtensions ?? []),
+    { disable: { null: ["setextUnderline"] } },
+  ];
+}
+
+const MARKDOWN_PLUGINS = [
+  remarkGfm,
+  remarkNoUnderlinedHeadings,
+  remarkHighlightMarks,
+];
 const MARKDOWN_SOFT_BREAK_PLUGINS = [
   remarkGfm,
+  remarkNoUnderlinedHeadings,
   remarkHighlightMarks,
   remarkLessonDescriptionSoftBreaks,
 ];
@@ -714,8 +792,11 @@ export function DiscussionMarkdown({
   preserveSoftBreaks = false,
   className = "",
 }: DiscussionMarkdownProps) {
-  const markdown =
-    typeof content === "string" ? content : content.markdown || "";
+  const markdown = textDiagramsToCodeBlocks(
+    tabSeparatedTablesToMarkdown(
+      typeof content === "string" ? content : content.markdown || "",
+    ),
+  );
   const chapterMarkdown = chapterDeclarations
     ? preparePlainChapterMarkdown(markdown, chapterDeclarations)
     : markdown;
@@ -733,13 +814,20 @@ export function DiscussionMarkdown({
       onSeekToTimestamp,
     ],
   );
-  // The text is parsed again only when it changes, not on every render of
-  // the comment around it.
-  const renderedMarkdown = useMemo(
-    () => (
+  // A list of search results highlights the words its search found.
+  const searchQuery = useSearchHighlight().trim();
+  // The text is parsed again only when it (or the search) changes, not on
+  // every render of the comment around it.
+  const renderedMarkdown = useMemo(() => {
+    const plugins = preserveSoftBreaks
+      ? MARKDOWN_SOFT_BREAK_PLUGINS
+      : MARKDOWN_PLUGINS;
+    return (
       <ReactMarkdown
         remarkPlugins={
-          preserveSoftBreaks ? MARKDOWN_SOFT_BREAK_PLUGINS : MARKDOWN_PLUGINS
+          searchQuery
+            ? [...plugins, () => remarkSearchMatches(searchQuery)]
+            : plugins
         }
         skipHtml
         urlTransform={safeMarkdownUrl}
@@ -747,9 +835,8 @@ export function DiscussionMarkdown({
       >
         {chapterMarkdown}
       </ReactMarkdown>
-    ),
-    [chapterMarkdown, preserveSoftBreaks],
-  );
+    );
+  }, [chapterMarkdown, preserveSoftBreaks, searchQuery]);
 
   return (
     <div

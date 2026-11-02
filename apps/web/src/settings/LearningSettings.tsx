@@ -7,6 +7,7 @@ import { AppSlider } from "../AppSlider";
 import { LaptopWallpaperSettingsCard } from "./LaptopWallpaperSettingsCard";
 import { LearningGoalSettingsCard } from "./LearningGoalSettingsCard";
 import { PlayerThemePicker } from "./PlayerThemePicker";
+import { StorageSettingsCard } from "./StorageSettingsCard";
 import { useAdminOnlySettings } from "./useAdminOnlySettings";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
 import "../styles/features/settings/learning.css";
@@ -17,10 +18,42 @@ import {
   LEARNING_SEEK_INTERVAL_MAX,
   LEARNING_SEEK_INTERVAL_MIN,
   LEARNING_SEEK_INTERVAL_PRESETS,
+  markCurriculumStickOpenSection,
   normalizeLearningSeekInterval,
   readLearningPreferences,
 } from "./settingsPreferences";
 import type { LearningPreferences } from "./settingsPreferences";
+/**
+ * The heights lesson videos come in: uploads are encoded at 360p, 720p and
+ * 1080p (`VIDEO_QUALITIES` in the API's media service), YouTube imports
+ * also have 480p. Stored as the player stores a quality picked in its menu
+ * ("1080"): the two set the same preference. A video without the chosen
+ * height plays the tallest it has below it (the shortest it has when all
+ * are taller); see `variantForHeight` in the Shaka engine.
+ */
+const VIDEO_QUALITY_HEIGHTS = [1080, 720, 480, 360] as const;
+
+/**
+ * The options, with a height picked in the player that is not among them
+ * (a YouTube import's 1440p, say) kept in the list, so the setting shows it.
+ */
+function videoQualityOptions(saved: string): [string, string][] {
+  const heights: number[] = [...VIDEO_QUALITY_HEIGHTS];
+  const savedHeight = Number(saved);
+  if (
+    Number.isInteger(savedHeight) &&
+    savedHeight > 0 &&
+    !heights.includes(savedHeight)
+  ) {
+    heights.push(savedHeight);
+  }
+  return [
+    ["auto", "Auto (Recommended)"],
+    ...heights
+      .sort((left, right) => right - left)
+      .map((height): [string, string] => [String(height), `${height}p`]),
+  ];
+}
 
 export function LearningSettings({
   isAuthenticated = true,
@@ -33,7 +66,7 @@ export function LearningSettings({
   // Shown to admins alone (see `useAdminOnlySettings`): the player theme,
   // which learners are not offered yet (see `useLearningPlayerTheme`), and
   // the settings below that nothing reads yet, so changing them did nothing:
-  // default quality and speed (the player keeps its own), theatre mode on
+  // default speed (the player keeps its own), theatre mode on
   // opening, captions by default and their language, the transcript (there
   // is none), four course navigation choices, and the two scrollbars (with
   // scrollbars hidden by default they changed nothing either).
@@ -84,6 +117,7 @@ export function LearningSettings({
       preferences.showLessonPageScrollbar ? "visible" : "hidden";
     document.documentElement.dataset.curriculumScrollbar =
       preferences.showCurriculumScrollbar ? "visible" : "hidden";
+    markCurriculumStickOpenSection(preferences.stickOpenSection);
   }, [preferences, storageReady]);
 
   return (
@@ -122,19 +156,6 @@ export function LearningSettings({
                   onChange={(videoPlayerTheme) => update({ videoPlayerTheme })}
                 />
                 <LearningSelectRow
-                  id="learning-video-quality"
-                  label="Default video quality"
-                  note="Select quality for all videos."
-                  value={preferences.videoQuality}
-                  onChange={(videoQuality) => update({ videoQuality })}
-                  options={[
-                    ["auto", "Auto (Recommended)"],
-                    ["1080", "1080p"],
-                    ["720", "720p"],
-                    ["480", "480p"],
-                  ]}
-                />
-                <LearningSelectRow
                   id="learning-playback-speed"
                   label="Default playback speed"
                   note="Select the default speed for videos."
@@ -150,6 +171,14 @@ export function LearningSettings({
                 />
               </>
             ) : null}
+            <LearningSelectRow
+              id="learning-video-quality"
+              label="Default video quality"
+              note="Every video starts at this quality. Picking one in the player changes it too."
+              value={preferences.videoQuality}
+              onChange={(videoQuality) => update({ videoQuality })}
+              options={videoQualityOptions(preferences.videoQuality)}
+            />
             <LearningSelectRow
               id="learning-seek-interval"
               label="Skip interval"
@@ -336,15 +365,15 @@ export function LearningSettings({
               </>
             ) : null}
             <LearningToggleRow
-              label="Number lessons across the whole course"
-              note="Keep counting from one section into the next instead of starting every section at 1."
-              checked={preferences.continuousLessonNumbering}
-              onChange={(continuousLessonNumbering) =>
-                update({ continuousLessonNumbering })
-              }
+              label="Keep the open section's heading in view"
+              note="The heading of an open section stays at the top of the course outline while its lessons scroll."
+              checked={preferences.stickOpenSection}
+              onChange={(stickOpenSection) => update({ stickOpenSection })}
             />
           </div>
         </section>
+
+        {isAuthenticated ? <StorageSettingsCard /> : null}
       </div>
     </div>
   );

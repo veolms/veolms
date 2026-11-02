@@ -28,7 +28,7 @@ export interface ThemedDateTimePickerProps {
   contentClassName?: string;
 }
 
-const MONTH_NAMES = [
+export const MONTH_NAMES = [
   "Jan",
   "Feb",
   "Mar",
@@ -43,7 +43,7 @@ const MONTH_NAMES = [
   "Dec",
 ] as const;
 
-const FULL_MONTH_NAMES = [
+export const FULL_MONTH_NAMES = [
   "January",
   "February",
   "March",
@@ -58,14 +58,70 @@ const FULL_MONTH_NAMES = [
   "December",
 ] as const;
 
-const DAY_HEADERS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
+export const DAY_HEADERS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 60 }, (_, i) => i);
 
-const joinClasses = (
+export const joinClasses = (
   ...classes: Array<string | false | null | undefined>
 ): string => classes.filter(Boolean).join(" ");
+
+/** The closed control, as the filter rows draw a select. */
+export const pickerTriggerClassName = joinClasses(
+  "flex w-full items-center justify-between gap-2 text-left transition-all",
+  "h-9.5 sm:h-10 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]",
+  "bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 text-xs sm:text-sm text-(--text)",
+  "outline-none cursor-pointer select-none",
+);
+export const pickerTriggerOpenClassName =
+  "border-(--accent) ring-2 ring-(--accent)/20";
+export const pickerTriggerIdleClassName =
+  "hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)] focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20";
+
+/** The calendar popover. */
+export const pickerContentClassName = joinClasses(
+  "rounded-[16px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]",
+  "bg-[color-mix(in_srgb,var(--surface-strong,var(--surface))_96%,var(--canvas))]",
+  "p-3 text-(--text) shadow-2xl backdrop-blur-md select-none",
+  "animate-in fade-in zoom-in-95 duration-140",
+);
+
+/** A month arrow in the calendar header. */
+export const pickerNavButtonClassName =
+  "flex size-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) hover:bg-(--accent)/15 hover:text-(--accent) active:scale-95 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-40";
+
+export interface CalendarCell {
+  day: number;
+  isCurrentMonth: boolean;
+  monthOffset: number;
+}
+
+/** A month as whole weeks: the trailing days of the month before and the leading days of the next fill the first and last rows. */
+export function buildCalendarCells(
+  year: number,
+  month: number,
+): CalendarCell[] {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+  const cells: CalendarCell[] = [];
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    cells.push({
+      day: daysInPrevMonth - i,
+      isCurrentMonth: false,
+      monthOffset: -1,
+    });
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ day: d, isCurrentMonth: true, monthOffset: 0 });
+  }
+  const totalCells = Math.ceil(cells.length / 7) * 7;
+  for (let d = 1; cells.length < totalCells; d++) {
+    cells.push({ day: d, isCurrentMonth: false, monthOffset: 1 });
+  }
+  return cells;
+}
 
 interface PopoverPosition {
   left: number;
@@ -286,45 +342,10 @@ export function ThemedDateTimePicker({
     }
   };
 
-  const calendarCells = useMemo(() => {
-    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-    const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
-    const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
-
-    const cells: Array<{
-      day: number;
-      isCurrentMonth: boolean;
-      monthOffset: number;
-    }> = [];
-
-    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-      cells.push({
-        day: daysInPrevMonth - i,
-        isCurrentMonth: false,
-        monthOffset: -1,
-      });
-    }
-
-    for (let d = 1; d <= daysInMonth; d++) {
-      cells.push({
-        day: d,
-        isCurrentMonth: true,
-        monthOffset: 0,
-      });
-    }
-
-    const totalCells = Math.ceil(cells.length / 7) * 7;
-    const nextDaysNeeded = totalCells - cells.length;
-    for (let d = 1; d <= nextDaysNeeded; d++) {
-      cells.push({
-        day: d,
-        isCurrentMonth: false,
-        monthOffset: 1,
-      });
-    }
-
-    return cells;
-  }, [viewYear, viewMonth]);
+  const calendarCells = useMemo(
+    () => buildCalendarCells(viewYear, viewMonth),
+    [viewYear, viewMonth],
+  );
 
   const handleSelectDay = (day: number, monthOffset: number) => {
     const targetDate = new Date(viewYear, viewMonth + monthOffset, day);
@@ -426,13 +447,8 @@ export function ThemedDateTimePicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         className={joinClasses(
-          "flex w-full items-center justify-between gap-2 text-left transition-all",
-          "h-9.5 sm:h-10 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]",
-          "bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 text-xs sm:text-sm text-(--text)",
-          "outline-none cursor-pointer select-none",
-          open
-            ? "border-(--accent) ring-2 ring-(--accent)/20"
-            : "hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)] focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20",
+          pickerTriggerClassName,
+          open ? pickerTriggerOpenClassName : pickerTriggerIdleClassName,
           disabled && "opacity-50 cursor-not-allowed",
           triggerClassName,
         )}
@@ -494,13 +510,7 @@ export function ThemedDateTimePicker({
                 zIndex: 700,
               } as CSSProperties
             }
-            className={joinClasses(
-              "rounded-[16px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]",
-              "bg-[color-mix(in_srgb,var(--surface-strong,var(--surface))_96%,var(--canvas))]",
-              "p-3 text-(--text) shadow-2xl backdrop-blur-md select-none",
-              "animate-in fade-in zoom-in-95 duration-140",
-              contentClassName,
-            )}
+            className={joinClasses(pickerContentClassName, contentClassName)}
           >
             <div className="flex flex-col gap-2.5">
               {/* Header: Month & Year navigation */}
@@ -509,7 +519,7 @@ export function ThemedDateTimePicker({
                   type="button"
                   onClick={handlePrevMonth}
                   aria-label="Previous month"
-                  className="flex size-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) hover:bg-(--accent)/15 hover:text-(--accent) active:scale-95 transition-all cursor-pointer"
+                  className={pickerNavButtonClassName}
                 >
                   <CaretLeft size={14} weight="bold" />
                 </button>
@@ -520,7 +530,7 @@ export function ThemedDateTimePicker({
                   type="button"
                   onClick={handleNextMonth}
                   aria-label="Next month"
-                  className="flex size-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) hover:bg-(--accent)/15 hover:text-(--accent) active:scale-95 transition-all cursor-pointer"
+                  className={pickerNavButtonClassName}
                 >
                   <CaretRight size={14} weight="bold" />
                 </button>

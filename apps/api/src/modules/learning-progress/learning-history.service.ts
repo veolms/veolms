@@ -16,6 +16,7 @@ import type { Kysely } from "kysely";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
 import { ADMIN_ROLE, createAuthService } from "../auth/index.ts";
+import { hasAcademyPermission } from "../authorization/index.ts";
 import { displayAvatarUrl } from "../avatars/index.ts";
 import { createCourseService } from "../courses/index.ts";
 import * as historyRepository from "./learning-history.repository.ts";
@@ -115,12 +116,19 @@ export function createLearningHistoryService({
     }
     const learnerId = user.id;
     const isOwn = learnerId === viewer.id;
-    const isAdmin = viewer.roles.includes(ADMIN_ROLE);
     const calendar = await historyRepository.findLearnerCalendar(
       database,
       learnerId,
     );
-    if (!isOwn && !isAdmin && !calendar.shared) {
+    // Staff who see every student (admin, or student.read for every course)
+    // see their progress whether or not it is shared.
+    const isAdmin = viewer.roles.includes(ADMIN_ROLE);
+    const seesEveryStudent =
+      isAdmin ||
+      (!isOwn &&
+        !calendar.shared &&
+        (await hasAcademyPermission(database, viewer.id, "student.read")));
+    if (!isOwn && !seesEveryStudent && !calendar.shared) {
       throw new AppError(
         403,
         "PROGRESS_NOT_SHARED",

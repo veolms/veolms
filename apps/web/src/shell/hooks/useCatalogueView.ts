@@ -38,6 +38,11 @@ import type { NavigateTo } from "../../routing/navigation";
 import { getCatalogueCardProgressPercent } from "../../learning/catalogueCardProgress";
 import { hasStartedCourse } from "@veolms/contracts/learner-home-plan";
 import { readLearningProgress } from "../../learning/learningProgressStorage";
+import {
+  cardPriceStatus,
+  coursePriceState,
+  useCoursePrices,
+} from "../../courses/liveCoursePrices";
 import type { useCurrentUser } from "../../services/auth";
 import type { useEnrolledCourses } from "../../services/enrollments";
 import type { useMyCourses } from "../../services/courses";
@@ -75,6 +80,10 @@ export interface UseCatalogueViewArgs {
   >;
   publishedCourses: CourseSummary[];
   enrolledCoursesData: ReturnType<typeof useEnrolledCourses>["data"];
+  learnerStateKnown: boolean;
+  learnerStateFailed: boolean;
+  /** The shell's own word on whether someone is signed in. */
+  signedIn: boolean;
   myCoursesData: ReturnType<typeof useMyCourses>["data"];
   deletedCoursesData:
     | {
@@ -141,6 +150,9 @@ export function useCatalogueView({
   pagedCourseQuery,
   publishedCourses,
   enrolledCoursesData,
+  learnerStateKnown,
+  learnerStateFailed,
+  signedIn,
   myCoursesData,
   deletedCoursesData,
   deleteCourseMutation,
@@ -216,6 +228,10 @@ export function useCatalogueView({
     forgetLegacyLearningProgress();
   }, []);
 
+  // The prices in force: never the ones the list was built with (see
+  // liveCoursePrices.ts).
+  const coursePrices = useCoursePrices();
+
   const allCourses = useMemo(() => {
     if (effectiveRole !== "creator") {
       const enrolledSet = new Set<string>();
@@ -264,8 +280,12 @@ export function useCatalogueView({
         }
       }
       return publishedCourses.map((summary) => {
+        const price = coursePriceState(coursePrices, summary.id);
+        const priceStatus = cardPriceStatus(price, signedIn);
         const course = adaptCourseSummaryToCatalogueCourse(
-          summary,
+          price.status === "known"
+            ? { ...summary, pricing: price.pricing }
+            : summary,
           enrolledSet,
           progressMap,
         );
@@ -274,6 +294,9 @@ export function useCatalogueView({
           started:
             startedSet.has(course.id) ||
             (course.slug ? startedSet.has(course.slug) : false),
+          viewerStatePending: !learnerStateKnown,
+          viewerStateFailed: learnerStateFailed,
+          ...(priceStatus ? { priceStatus } : {}),
         };
       });
     }
@@ -289,6 +312,10 @@ export function useCatalogueView({
     effectiveRole,
     enrollmentFilter,
     enrolledCoursesData,
+    coursePrices,
+    learnerStateFailed,
+    learnerStateKnown,
+    signedIn,
     myCoursesData?.courses,
     publishedCourses,
   ]);
@@ -360,8 +387,7 @@ export function useCatalogueView({
       // See visibleCourses below: the student "All" list arrives already
       // searched, so the count must not narrow it a second time.
       search:
-        !needsCompleteCourseList &&
-        (effectiveRole === "student" || pagedCourseQuery.isPlaceholderData)
+        !needsCompleteCourseList && effectiveRole === "student"
           ? ""
           : debouncedSearch,
     });
@@ -378,7 +404,6 @@ export function useCatalogueView({
     deletedCoursesData?.courses?.length,
     effectiveRole,
     needsCompleteCourseList,
-    pagedCourseQuery.isPlaceholderData,
     statusFilter,
     wishlisted,
   ]);
@@ -408,10 +433,13 @@ export function useCatalogueView({
         // The student "All" list is searched by the server, which also
         // matches the full description. Filtering it again here on title
         // and short description hid a course found only by its long
-        // description. Lists the server does not search keep this filter.
+        // description. Lists the server does not search keep this filter:
+        // a creator's own courses are one. (Whether the student list is
+        // showing its previous page meanwhile says nothing about them: the
+        // creator's search changed its key too, and left it showing a
+        // placeholder, which had turned their search off.)
         search:
-          !needsCompleteCourseList &&
-          (effectiveRole === "student" || pagedCourseQuery.isPlaceholderData)
+          !needsCompleteCourseList && effectiveRole === "student"
             ? ""
             : debouncedSearch,
         sort,
@@ -424,7 +452,6 @@ export function useCatalogueView({
       enrollmentPromotionAllowed,
       debouncedSearch,
       needsCompleteCourseList,
-      pagedCourseQuery.isPlaceholderData,
       sort,
       statusFilter,
       wishlisted,

@@ -1,6 +1,7 @@
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
@@ -14,6 +15,9 @@ import {
 } from "vite";
 
 import { parseSiteOrigin } from "./src/routing/siteOrigin.ts";
+import { colorMixFallbackPlugin } from "./scripts/colorMixFallbackPlugin.ts";
+import { containerUnitFallbackPlugin } from "./scripts/containerUnitFallbackPlugin.ts";
+import { legacyStylesheetsDevPlugin } from "./scripts/legacyStylesheetsDevPlugin.ts";
 
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
 const webSourceRoot = fileURLToPath(new URL("./src", import.meta.url));
@@ -195,6 +199,14 @@ const ROUTE_CHUNK_PRELOADS = [
     manifestSrcSuffix: "courses/CourseOverviewPage.tsx",
     devUrl: "/src/courses/CourseOverviewPage.tsx",
   },
+  {
+    placeholder: "__VEO_LEARNING_PLAYER_HOST_CHUNK_URL__",
+    cssPlaceholder: "__VEO_LEARNING_PLAYER_HOST_CSS_URLS__",
+    jsPlaceholder: "__VEO_LEARNING_PLAYER_HOST_JS_URLS__",
+    moduleSuffix: "/src/learning/player/PersistentLearningPlayerHost.tsx",
+    manifestSrcSuffix: "learning/player/PersistentLearningPlayerHost.tsx",
+    devUrl: "/src/learning/player/PersistentLearningPlayerHost.tsx",
+  },
 ];
 
 // The chunk a lazy route body's dynamic import loads. Usually the module is
@@ -221,9 +233,41 @@ function findRouteBodyChunk(
   );
 }
 
+/**
+ * A digest of the code of every module in the route bodies' static graphs:
+ * what their chunks' hashed file names, and so the replaced URLs, are made
+ * of. Computed once per output pass.
+ */
+function routeBodyGraphDigest(
+  context: Pick<Rolldown.PluginContext, "getModuleInfo">,
+): string {
+  const hash = createHash("sha1");
+  const seen = new Set<string>();
+  const appRoot = path.dirname(fileURLToPath(import.meta.url));
+  const moduleInfo = (id: string) =>
+    context.getModuleInfo(id) ??
+    context.getModuleInfo(id.replaceAll("/", "\\")) ??
+    context.getModuleInfo(id.replaceAll("\\", "/"));
+  for (const entry of ROUTE_CHUNK_PRELOADS) {
+    const pending = [path.join(appRoot, entry.devUrl)];
+    while (pending.length) {
+      const id = pending.pop() as string;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const info = moduleInfo(id);
+      if (!info) continue;
+      hash.update(id.replaceAll("\\", "/")).update(" ");
+      hash.update(info.code ?? "").update(" ");
+      pending.push(...info.importedIds);
+    }
+  }
+  return hash.digest("hex");
+}
+
 function routeChunkPreloadPlugin(): Plugin {
   let publicBase = "/";
   let command: "build" | "serve" = "build";
+  let graphDigest: string | null = null;
   // What the client pass resolved. React Router builds the client first and
   // shares plugin instances across its environments, so the server pass,
   // which renders the prerendered documents, reuses these.
@@ -234,6 +278,35 @@ function routeChunkPreloadPlugin(): Plugin {
     configResolved(config) {
       command = config.command;
       publicBase = config.base || "/";
+    },
+    renderStart() {
+      graphDigest = null;
+    },
+    // The URLs are written into the chunks below (generateBundle), after
+    // their hashed file names were settled with the placeholders still in.
+    // A chunk such as routeChunkPreloads' own would keep its file name from
+    // build to build while the URLs inside it changed, and a browser holding
+    // it (assets are immutable for a year) would preload, wait for and link
+    // the previous build's chunks. So the hash of every chunk that carries
+    // a placeholder also takes in what the replaced URLs are made of: the
+    // code of the route bodies' whole static graphs.
+    augmentChunkHash(chunk) {
+      if (command !== "build") return undefined;
+      const placeholders = ROUTE_CHUNK_PRELOADS.flatMap((entry) => [
+        entry.placeholder,
+        entry.cssPlaceholder,
+        entry.jsPlaceholder,
+      ]);
+      const carries = Object.keys(chunk.modules).some((id) => {
+        const code = this.getModuleInfo(id)?.code;
+        return Boolean(
+          code &&
+          placeholders.some((placeholder) => code.includes(placeholder)),
+        );
+      });
+      if (!carries) return undefined;
+      graphDigest ??= routeBodyGraphDigest(this);
+      return graphDigest;
     },
     transform(code) {
       if (command !== "serve") return undefined;
@@ -420,6 +493,27 @@ function routeChunkPreloadPlugin(): Plugin {
   };
 }
 
+// Dev server only. Vite's page script reloads the whole page whenever its
+// live-update socket closes and the server answers again. Tunnels such as
+// BrowserStack Local close a socket that carries nothing for a while, so a
+// page opened through one reloaded by itself every few minutes (mid-video
+// too). A small message every 20 s keeps the socket in use; pages ignore it.
+const DEV_SOCKET_KEEPALIVE_MS = 20_000;
+
+function devSocketKeepalivePlugin(): Plugin {
+  return {
+    name: "veo-dev-socket-keepalive",
+    apply: "serve",
+    configureServer(server) {
+      const timer = setInterval(() => {
+        server.ws.send({ type: "custom", event: "veo:keepalive" });
+      }, DEV_SOCKET_KEEPALIVE_MS);
+      timer.unref();
+      server.httpServer?.once("close", () => clearInterval(timer));
+    },
+  };
+}
+
 // Dev server only. Each `import picture from "./a.webp"` is a module of its
 // own in dev (`export default "/src/assets/a.webp"`), fetched and checked
 // for changes on every page load: about 120 requests before the app can
@@ -526,8 +620,13 @@ function extraStyleSourcesPlugin(): Plugin {
       if (sources.length === 0) return null;
       const [file = "", query = ""] = id.split("?");
       if (path.normalize(file) !== stylesEntry) return null;
-      // Only the stylesheet itself: `?url` and the like are JS modules.
-      if (query && !/^(?:direct|inline)(?:&|$)/u.test(query)) return null;
+      // Only the stylesheet itself: `?url` and the like are JS modules. A
+      // build compiles a stylesheet imported with `?url` (appStylesheet.ts)
+      // as `?transform-only`; without it here the plugins' classes were
+      // never generated in production (the download button had no tile).
+      if (query && !/^(?:direct|inline|transform-only)(?:&|$)/u.test(query)) {
+        return null;
+      }
       const lines = sources.map(
         (source) => `@source ${JSON.stringify(source.replaceAll("\\", "/"))};`,
       );
@@ -539,6 +638,42 @@ function extraStyleSourcesPlugin(): Plugin {
 // Writes a module-to-chunk report for the client build when
 // VEO_BUNDLE_REPORT is set, so bundle composition can be audited offline.
 // No effect on normal builds.
+/**
+ * Loads the server bundle as soon as it is written, during a prerendering
+ * build. React Router's preview server otherwise imports it on the first
+ * prerender request (`/`), and that request has a fixed 10 second limit:
+ * the 11 MB bundle takes about 4 s to import even when the disk is warm,
+ * and right after it was written (cold cache, antivirus scanning the new
+ * file) the import alone could push `/` past the limit, failing the first
+ * build after a change while the next one passed. The preview server
+ * imports the same file URL, so Node's module cache answers it at once.
+ */
+function warmServerBuildPlugin(): Plugin {
+  return {
+    name: "veo-warm-server-build",
+    apply: "build",
+    async writeBundle(outputOptions, bundle) {
+      if (process.env.VEO_REACT_ROUTER_BUILD !== "true") return;
+      if (!this.environment?.config.build.ssr) return;
+      if (!outputOptions.dir || !("index.js" in bundle)) return;
+      const entry = path.resolve(outputOptions.dir, "index.js");
+      const started = Date.now();
+      try {
+        await import(pathToFileURL(entry).href);
+        this.environment.logger.info(
+          `Server bundle loaded for prerendering in ${Date.now() - started} ms`,
+        );
+      } catch (error) {
+        // Only a head start: the preview server imports it again and
+        // reports a real problem itself.
+        this.environment.logger.warn(
+          `Server bundle could not be preloaded: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    },
+  };
+}
+
 function bundleReportPlugin(): Plugin {
   return {
     name: "veo-bundle-report",
@@ -692,9 +827,15 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
       earlyHlsPreloadPlugin(),
       routeChunkPreloadPlugin(),
       devAssetImportInlinePlugin(),
+      devSocketKeepalivePlugin(),
       bundleReportPlugin(),
+      warmServerBuildPlugin(),
       extraStyleSourcesPlugin(),
       tailwindcss(),
+      // Older Safari (iOS 15): see each plugin.
+      colorMixFallbackPlugin(),
+      containerUnitFallbackPlugin(),
+      legacyStylesheetsDevPlugin(),
       reactRouter(),
     ],
     // React Router's prerender pass fetches route data from Vite's temporary
@@ -744,6 +885,13 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
       ],
     },
     build: {
+      // The default targets, with Safari and iPhones from 15 instead of
+      // 16.4. With the default the minifier writes every breakpoint in
+      // range syntax (`@media (width>=40rem)`), which Safari reads only
+      // from 16.4: on iOS 15 no breakpoint applied at all (a phone got the
+      // desktop rail and its sheets). These targets keep `min-width` and
+      // `max-width`. See also the two fallback plugins above.
+      cssTarget: ["chrome111", "edge111", "firefox114", "safari15", "ios15"],
       rollupOptions: {
         output: {
           manualChunks(id) {

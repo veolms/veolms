@@ -29,6 +29,29 @@ export function getWorkspaceRoleStorageKey(userId?: string | null): string {
   return userId ? `veolms-role-${userId}` : "veolms-role";
 }
 
+/**
+ * The view an account opens in: the one it last chose on this device, or,
+ * with none saved, the creator view for an admin and the student view for
+ * everyone else (other team roles included). The shell opens in it, and the
+ * route guard judges the home page by it: the home is the dashboard only in
+ * the creator view.
+ */
+export function readSavedWorkspaceView(
+  userId: string | null | undefined,
+  roles: readonly string[] | null | undefined,
+): CourseRole {
+  let stored: string | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      stored = window.localStorage.getItem(getWorkspaceRoleStorageKey(userId));
+    } catch {
+      stored = null;
+    }
+  }
+  if (stored === "student") return "student";
+  return stored === "creator" || hasAdminRole(roles) ? "creator" : "student";
+}
+
 export function getAllowedWorkspaceRoles(
   roles: readonly string[] | null | undefined,
 ): CourseRole[] {

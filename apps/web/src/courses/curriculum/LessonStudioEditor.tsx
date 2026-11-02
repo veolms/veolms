@@ -28,6 +28,7 @@ import {
   LessonVideoUpload,
   type LessonVideoUploadHandle,
 } from "../lesson-video-upload/LessonVideoUpload";
+import type { YoutubeImportTarget } from "../lesson-video-upload/youtube-import-target";
 import {
   LessonContentTypeSelector,
   type StudioLessonContentType,
@@ -90,6 +91,8 @@ export interface LessonStudioEditorProps {
     mediaAssetId: string,
   ) => void | boolean | Promise<void | boolean>;
   onProcessingComplete?: () => void | Promise<void>;
+  /** Where "Import from YouTube" imports to; null hides the option. */
+  youtubeImport?: YoutubeImportTarget | null;
   onChangeVideoClick?: () => void;
   onUploadThumbnail?: (file: File) => void | Promise<void>;
   onAddResourceFile?: (file: File) => void | Promise<void>;
@@ -99,6 +102,12 @@ export interface LessonStudioEditorProps {
   resourcesSection?: ReactNode;
   hideHeader?: boolean;
   playbackSuspended?: boolean;
+  /** Title and Free Preview: lesson.details.update. */
+  canEditDetails?: boolean;
+  /** Content type and media: lesson.content.update. */
+  canEditContent?: boolean;
+  /** Visibility: lesson.publish. */
+  canPublish?: boolean;
 }
 
 export const LessonStudioEditor = forwardRef<
@@ -128,6 +137,7 @@ export const LessonStudioEditor = forwardRef<
     onUploadMedia,
     onMediaAttached,
     onProcessingComplete,
+    youtubeImport = null,
     onUploadThumbnail,
     onAddResourceFile,
     onDeleteResource,
@@ -136,6 +146,9 @@ export const LessonStudioEditor = forwardRef<
     resourcesSection,
     hideHeader = false,
     playbackSuspended = false,
+    canEditDetails = true,
+    canEditContent = true,
+    canPublish = true,
   }: LessonStudioEditorProps,
   ref,
 ) {
@@ -262,18 +275,21 @@ export const LessonStudioEditor = forwardRef<
         </div>
       </div>
 
-      <input
-        ref={resourceFileInputRef}
-        type="file"
-        aria-label="Upload resource file"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file && onAddResourceFile) void onAddResourceFile(file);
-        }}
-      />
+      {onAddResourceFile && (
+        <input
+          ref={resourceFileInputRef}
+          type="file"
+          aria-label="Upload resource file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void onAddResourceFile(file);
+          }}
+        />
+      )}
 
       <div
+        hidden={!onAddResourceFile}
         onClick={() => resourceFileInputRef.current?.click()}
         onDragOver={(e) => {
           e.preventDefault();
@@ -468,19 +484,23 @@ export const LessonStudioEditor = forwardRef<
                 </div>
               ) : (
                 <div
-                  onClick={() => setIsEditingTitle(true)}
-                  className="group flex min-w-0 flex-1 items-center gap-2 cursor-pointer"
+                  onClick={
+                    canEditDetails ? () => setIsEditingTitle(true) : undefined
+                  }
+                  className={`group flex min-w-0 flex-1 items-center gap-2 ${canEditDetails ? "cursor-pointer" : ""}`}
                 >
                   <h1 className="m-0 truncate text-lg sm:text-xl font-bold tracking-[-0.015em] text-(--text)">
                     {title || "Untitled Lesson"}
                   </h1>
-                  <button
-                    type="button"
-                    aria-label="Edit lesson title"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-(--muted) opacity-60 group-hover:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) transition-all cursor-pointer"
-                  >
-                    <PencilSimple size={15} weight="bold" />
-                  </button>
+                  {canEditDetails && (
+                    <button
+                      type="button"
+                      aria-label="Edit lesson title"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-(--muted) opacity-60 group-hover:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) transition-all cursor-pointer"
+                    >
+                      <PencilSimple size={15} weight="bold" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -531,7 +551,12 @@ export const LessonStudioEditor = forwardRef<
             mediaInfo={workspaceMediaInfo}
             playbackRevision={playbackRevision}
             previewFile={previewFile}
-            disabled={isSaving}
+            // Without a way to attach what is uploaded, nothing is offered.
+            disabled={
+              isSaving ||
+              !canEditContent ||
+              (contentType === "video" ? !onMediaAttached : !onUploadMedia)
+            }
             onUploadFile={(file) => {
               if (contentType === "video") {
                 videoUploadRef.current?.open(file);
@@ -549,6 +574,7 @@ export const LessonStudioEditor = forwardRef<
                   disabled={isSaving}
                   onPreviewFile={setPreviewFile}
                   onMediaAttached={onMediaAttached}
+                  youtubeImport={youtubeImport}
                   onThumbnailAvailable={setProcessingThumbnailMediaId}
                   onProcessingComplete={() => {
                     setPlaybackRevision((revision) => revision + 1);
@@ -569,7 +595,7 @@ export const LessonStudioEditor = forwardRef<
             <LessonContentTypeSelector
               value={contentType}
               onChange={handleContentTypeChange}
-              disabled={isSaving}
+              disabled={isSaving || !canEditContent}
             />
           </ElevatedCard>
 
@@ -595,7 +621,7 @@ export const LessonStudioEditor = forwardRef<
                   ["published", "Published"],
                   ["draft", "Draft (Hidden)"],
                 ]}
-                disabled={isSaving}
+                disabled={isSaving || !canPublish}
                 ariaLabel="Lesson visibility"
                 triggerClassName="!h-9 !w-full !rounded-[9px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !px-3 !text-[0.80rem] !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] font-semibold"
               />
@@ -626,6 +652,7 @@ export const LessonStudioEditor = forwardRef<
               checked={isPreview}
               onChange={setIsPreview}
               label="Toggle free preview"
+              disabled={!canEditDetails}
             />
           </ElevatedCard>
         </div>

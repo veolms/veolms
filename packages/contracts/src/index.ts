@@ -10,6 +10,7 @@ export * from "./quotes.ts";
 export * from "./wishlist.ts";
 export * from "./commerce/index.ts";
 export * from "./media.ts";
+export * from "./youtube-import.ts";
 export * from "./video-playback.ts";
 export * from "./discussion.ts";
 export * from "./interactions/index.ts";

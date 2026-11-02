@@ -151,6 +151,22 @@ export const learningInteractionsService = {
     return api.post(`/moderation/threads/${serverId}`, { action: "unhide" });
   },
 
+  /**
+   * Pins a thread to the top of its lesson or gives it the creator's heart
+   * (or takes either back). Course owners and moderators.
+   */
+  markThread(
+    courseId: string,
+    threadId: string,
+    action: "pin" | "unpin" | "heart" | "unheart",
+  ): Promise<unknown> {
+    const serverId = requireServerEntityId(threadId);
+    return api.post(
+      `/courses/${encodeURIComponent(courseId)}/moderation/threads/${serverId}`,
+      { action },
+    );
+  },
+
   unhideReply(replyId: string): Promise<unknown> {
     const serverId = requireServerEntityId(replyId);
     return api.post(`/moderation/replies/${serverId}`, { action: "unhide" });

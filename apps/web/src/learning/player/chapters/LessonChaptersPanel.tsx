@@ -1,6 +1,8 @@
 import { XIcon as X } from "@phosphor-icons/react/X";
 import {
+  getPageFullscreenElement,
   getPlayerThemeStyle,
+  PAGE_FULLSCREEN_CHANGE_EVENT,
   useChapters,
   usePlayerTheme,
 } from "@veolms/video-player";
@@ -9,11 +11,17 @@ import { createPortal } from "react-dom";
 import { cn } from "../../../lib/utils";
 import { LessonChapterRows } from "./LessonChapterRows";
 
+// A full screen the page draws itself (Safari on iPhone) counts as one.
 const subscribeToFullscreen = (onChange: () => void) => {
   document.addEventListener("fullscreenchange", onChange);
-  return () => document.removeEventListener("fullscreenchange", onChange);
+  document.addEventListener(PAGE_FULLSCREEN_CHANGE_EVENT, onChange);
+  return () => {
+    document.removeEventListener("fullscreenchange", onChange);
+    document.removeEventListener(PAGE_FULLSCREEN_CHANGE_EVENT, onChange);
+  };
 };
-const getFullscreenActive = () => Boolean(document.fullscreenElement);
+const getFullscreenActive = () =>
+  Boolean(document.fullscreenElement ?? getPageFullscreenElement());
 const getServerFullscreenActive = () => false;
 
 export interface LessonChaptersPanelProps {

@@ -12,6 +12,7 @@ import type { S3StorageService } from "@veolms/storage";
 import { config } from "../../config.ts";
 import { AppError } from "../../lib/errors.ts";
 import { detectImageContentType } from "../avatars/avatar-storage.ts";
+import { forgetAcademy, getAcademyRow } from "../auth/index.ts";
 import * as repository from "./academy-brand.repository.ts";
 import {
   academyLogoKey,
@@ -21,14 +22,10 @@ import {
 } from "./academy-logo.ts";
 
 /**
- * How long a read of the academy's name and logo is kept. Every code email
- * needs them, so they are not read from the database for each one; a save
- * here clears the copy at once, and another API instance picks the change
- * up within this time.
+ * The last brand read, for a code email when the database cannot be read:
+ * the email must still go out.
  */
-const BRAND_CACHE_MS = 60_000;
-
-let cached: { brand: AcademyBrandResponse; at: number } | null = null;
+let lastKnownBrand: AcademyBrandResponse | null = null;
 
 /** Used before the academy has a row (an install not yet through setup). */
 function fallbackBrand(): AcademyBrandResponse {
@@ -50,16 +47,24 @@ export function createAcademyBrandService({
       : fallbackBrand();
   }
 
-  /** For the emails: the brand, from the short-lived copy when it is fresh. */
+  /**
+   * For the emails: the brand, from the cached academy row (cleared in
+   * every process when the brand is saved).
+   */
   async function getBrand(): Promise<AcademyBrandResponse> {
-    if (cached && Date.now() - cached.at < BRAND_CACHE_MS) return cached.brand;
     try {
-      const brand = await readBrand();
-      cached = { brand, at: Date.now() };
+      const row = await getAcademyRow(database);
+      const brand = row
+        ? {
+            name: row.name.trim() || config.ACADEMY_NAME,
+            logoUrl: row.logo_url,
+          }
+        : fallbackBrand();
+      lastKnownBrand = brand;
       return brand;
     } catch {
       // A code email must still go out when this read fails.
-      return cached?.brand ?? fallbackBrand();
+      return lastKnownBrand ?? fallbackBrand();
     }
   }
 
@@ -80,7 +85,7 @@ export function createAcademyBrandService({
     brand: AcademyBrandResponse,
   ): Promise<AcademyBrandResponse> {
     await repository.updateAcademyBrand(database, { id, ...brand });
-    cached = { brand, at: Date.now() };
+    forgetAcademy();
     return brand;
   }
 

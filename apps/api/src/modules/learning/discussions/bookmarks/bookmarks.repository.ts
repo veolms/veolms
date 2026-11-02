@@ -20,6 +20,7 @@ import {
   type DiscussionListCursor,
   createdAtIdDescSql,
 } from "../shared/discussion.utils.ts";
+import { fuzzyMatchesAny } from "../../../../lib/fuzzy-search.ts";
 
 export const BOOKMARKS_WORKSPACE_SORT = "bookmarked";
 
@@ -220,6 +221,7 @@ function applyBookmarkFilters<O>(
         or lower(coalesce(t.plain_text, '')) like ${pattern}
         or lower(coalesce(n.title, '')) like ${pattern}
         or lower(coalesce(n.plain_text, '')) like ${pattern}
+        or ${fuzzyMatchesAny(options.search!, [sql.ref("t.title"), sql.ref("n.title")])}
       )`,
     );
   }

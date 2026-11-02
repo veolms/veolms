@@ -116,6 +116,9 @@ function writeIdentityHint(hint: AuthIdentityHint | null) {
 }
 
 let identityHint = readIdentityHint();
+// The account this tab remembered when the page started (see
+// `useRememberedAccount`).
+const identityHintAtBoot = identityHint;
 // Captured once at startup: whether this browser looked signed in before the
 // session check ran.
 const sessionPresentAtBoot = readSessionPresence();
@@ -281,5 +284,21 @@ export function useAuthIdentityHint(): AuthIdentityHint | null {
     authStore.subscribe,
     () => authStore.getIdentityHint(),
     () => null,
+  );
+}
+
+/**
+ * The account this tab remembers, for a page whose document was drawn for
+ * that account before its scripts ran (the lesson page, see
+ * `learning/lessonPageEarlyState.ts`): unlike `useAuthIdentityHint`, known
+ * during hydration too, so the first render agrees with the document.
+ * Null once the session check has found no session, or another account.
+ * What it says is for display only: nothing is sent or unlocked on its word.
+ */
+export function useRememberedAccount(): AuthIdentityHint | null {
+  return useSyncExternalStore(
+    authStore.subscribe,
+    () => authStore.getIdentityHint(),
+    () => identityHintAtBoot,
   );
 }

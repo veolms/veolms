@@ -1,6 +1,6 @@
 import {
+  isPlaybackStalled,
   FullscreenButton,
-  MuteButton,
   PlayerIconButton,
   PlayerMenuItem,
   PlayButton,
@@ -10,10 +10,13 @@ import {
   VolumeControl,
   ZoomLevelIndicator,
   getPlayerThemeStyle,
+  isPageFullscreenTurned,
+  PAGE_FULLSCREEN_CHANGE_EVENT,
   useChapters,
   usePlayerMobileInteraction,
   usePlayerState,
   usePlayerTheme,
+  type VideoQuality,
 } from "@veolms/video-player";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
@@ -49,6 +52,18 @@ import {
   LessonChaptersToggleButton,
 } from "./chapters/LessonChaptersControl";
 import { LessonChaptersPanel } from "./chapters/LessonChaptersPanel";
+import { LessonVolumePill } from "./LessonVolumePill";
+import { updateLearningPreferences } from "../../settings/settingsPreferences";
+
+/**
+ * The quality picked in the player is where every video starts from now on
+ * (and what a lesson is preloaded at): see `learningHlsStreaming`.
+ */
+function rememberQualityChoice(quality: VideoQuality | null): void {
+  updateLearningPreferences({
+    videoQuality: quality?.height ? String(quality.height) : "auto",
+  });
+}
 
 export const PLAYER_SURFACE_CLASS =
   "bg-(--video-player-control-surface) text-(--video-player-control-text) shadow-(--video-player-control-shadow)";
@@ -61,23 +76,38 @@ export const MOBILE_INVISIBLE_HIT_SURFACE_CLASS =
 const LANDSCAPE_ORIENTATION_QUERY = "(orientation: landscape)";
 
 /**
- * Whether the screen is sideways. A turn is applied as a transition: the
- * controls' landscape layout reaches the lesson page, whose re-render took
- * over a second on a phone in development, and an urgent update kept the
- * phone from drawing the turned screen meanwhile (it stayed black). As a
- * transition the turned video is drawn first and the layout follows.
+ * Whether the screen is sideways, or the player is turned sideways on an
+ * upright phone (a page full screen on an iPhone, see pageFullscreen.ts in
+ * the video player). A turn is applied as a transition: the controls'
+ * landscape layout reaches the lesson page, whose re-render took over a
+ * second on a phone in development, and an urgent update kept the phone from
+ * drawing the turned screen meanwhile (it stayed black). As a transition the
+ * turned video is drawn first and the layout follows.
  */
 function useLandscapeOrientation(): boolean {
   const [landscape, setLandscape] = useState(false);
   useEffect(() => {
     const media = window.matchMedia(LANDSCAPE_ORIENTATION_QUERY);
-    setLandscape(media.matches);
-    const sync = () => startTransition(() => setLandscape(media.matches));
+    const read = () => media.matches || isPageFullscreenTurned();
+    setLandscape(read());
+    const sync = () => startTransition(() => setLandscape(read()));
     media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
+    document.addEventListener(PAGE_FULLSCREEN_CHANGE_EVENT, sync);
+    return () => {
+      media.removeEventListener("change", sync);
+      document.removeEventListener(PAGE_FULLSCREEN_CHANGE_EVENT, sync);
+    };
   }, []);
   return landscape;
 }
+
+// A player turned sideways on an upright phone (a page full screen, see
+// pageFullscreen.ts in the video player) is laid out as on a sideways phone,
+// but the screen is still narrow, so the `sm:` placements of a sideways phone
+// are repeated for it: the timeline 44px up, the corner controls 64px up.
+const QUARTER_TURN_TIMELINE_CLASS =
+  "[[data-player-quarter-turn]_&]:!bottom-11 [[data-player-quarter-turn]_&]:!translate-y-0";
+const QUARTER_TURN_CORNER_CLASS = "[[data-player-quarter-turn]_&]:!bottom-16";
 
 // Matches Tailwind's `sm` breakpoint. Settings and autoplay are rendered in
 // exactly one place, so their desktop position is decided in JS, not CSS.
@@ -94,11 +124,33 @@ const getWideViewportSnapshot = () =>
 
 const getWideViewportServerSnapshot = () => false;
 
+const subscribeToNothing = () => () => {};
+const getHydratedSnapshot = () => true;
+const getHydratedServerSnapshot = () => false;
+
+// The prerendered page, and the render that hydrates it, take the viewport
+// as narrow, which put the actions pill in the top corner until React took
+// over and moved it down. So that first frame draws the pill in both of its
+// places and a container query on the control frame shows the one the
+// measured layout then keeps: the bottom row while everything fits there
+// (stage 0 of measureDesktopEndControlsStage), the top corner otherwise.
+// 607px is that stage-0 sum on a lesson page with the time at "0:00 /
+// 0:00", as it reads until the video loads: the start pills 299 (42, 84,
+// 42 and 107 with their gaps), Lessons 104, the pill with fullscreen 168,
+// gaps and insets 36.
+const STATIC_ACTIONS_BOTTOM_CLASS =
+  "hidden @min-[607px]/player-controls:contents";
+const STATIC_ACTIONS_TOP_CLASS =
+  "contents sm:@min-[607px]/player-controls:hidden";
+const STATIC_FULLSCREEN_CORNER_CLASS =
+  "contents @min-[607px]/player-controls:hidden";
+
 /**
  * Keeps a control layer hidden while the expand (maximize) motion is still
  * carrying the player to its resting place. The motion marks the full host
  * with this phase for exactly that stretch; once it clears, the layer's own
- * `transition-opacity` fades the controls in over the landed video.
+ * fade (opacity and visibility together) brings the controls in over the
+ * landed video.
  */
 const EXPAND_MOTION_HIDDEN_CLASS =
   "[[data-learning-player-restore-phase=expanding]_&]:!invisible [[data-learning-player-restore-phase=expanding]_&]:!opacity-0 [[data-learning-player-restore-phase=expanding]_&]:!transition-none [[data-learning-player-restore-phase=expanding]_&_*]:!pointer-events-none";
@@ -451,6 +503,24 @@ export interface LessonPlayerControlsProps {
    */
   seekTimeOnly?: boolean;
   ambientEnabled: boolean;
+  /** False leaves ambient mode out of the settings. */
+  showAmbientControl?: boolean;
+  /**
+   * Classes for the phone layout's settings and chapters sheets outside a
+   * sideways full screen (a page that shows the phone layout on a wide
+   * screen narrows them).
+   */
+  sheetPanelClassName?: string;
+  /**
+   * How the phone layout opens its settings: as a sheet from the bottom of
+   * the screen, or as the desktop's menu in the player.
+   */
+  settingsPresentation?: "sheet" | "popover";
+  /**
+   * The phone layout keeps a thin progress line along the video's foot
+   * while its controls are hidden. False hides it with them.
+   */
+  progressWhileHidden?: boolean;
   autoplayEnabled: boolean;
   showAutoplayControl?: boolean;
   circularSettingsControl?: boolean;
@@ -885,10 +955,20 @@ function MenuToggle({ checked }: { checked: boolean }) {
   );
 }
 
+/** See `wideLessonsBeside` in `LessonPlayerControls`. */
+function markWideLessonsBeside(shell: HTMLElement, wide: boolean) {
+  if (wide) shell.setAttribute("data-fullscreen-lessons-beside", "wide");
+  else shell.removeAttribute("data-fullscreen-lessons-beside");
+}
+
 export function LessonPlayerControls({
   shortPlayer = false,
   seekTimeOnly = false,
   ambientEnabled,
+  showAmbientControl = true,
+  sheetPanelClassName,
+  settingsPresentation = "sheet",
+  progressWhileHidden = true,
   autoplayEnabled,
   showAutoplayControl = true,
   circularSettingsControl = false,
@@ -924,6 +1004,11 @@ export function LessonPlayerControls({
     getWideViewportSnapshot,
     getWideViewportServerSnapshot,
   );
+  const hydrated = useSyncExternalStore(
+    subscribeToNothing,
+    getHydratedSnapshot,
+    getHydratedServerSnapshot,
+  );
   const timelineAnchorRef = useRef<HTMLSpanElement>(null);
   const [timelineHost, setTimelineHost] = useState<HTMLElement | null>(null);
   const controlFrameRef = useRef<HTMLDivElement>(null);
@@ -945,38 +1030,41 @@ export function LessonPlayerControls({
   const MinimizeIcon = playerTheme.icons.minimize;
   const mobileInteraction = usePlayerMobileInteraction();
   const {
-    buffering,
+    stalled,
     controlsVisible,
     error,
     fullscreen,
     lifecycle,
-    previewTime,
+    previewing,
     scrubbing,
     settingsOpen,
   } = usePlayerState(
     ({ media, ui }) => ({
-      buffering: media.buffering,
+      stalled: isPlaybackStalled(media),
       controlsVisible: ui.controlsVisible,
       error: media.error,
       fullscreen: ui.fullscreen,
       lifecycle: media.lifecycle,
-      previewTime: ui.previewTime,
+      // Whether a moment is previewed, not which: the time changes on every
+      // move over the timeline, and this whole bar re-rendered for each.
+      previewing: ui.previewTime !== null,
       scrubbing: ui.scrubbing,
       settingsOpen: ui.settingsView !== "closed",
     }),
     (left, right) =>
-      left.buffering === right.buffering &&
+      left.stalled === right.stalled &&
       left.controlsVisible === right.controlsVisible &&
       left.error === right.error &&
       left.fullscreen === right.fullscreen &&
       left.lifecycle === right.lifecycle &&
-      left.previewTime === right.previewTime &&
+      left.previewing === right.previewing &&
       left.scrubbing === right.scrubbing &&
       left.settingsOpen === right.settingsOpen,
   );
   const ready = lifecycle === "ready";
   const hasError = lifecycle === "error" || Boolean(error);
-  const loading = lifecycle !== "ready" || buffering;
+  // Held up for data (not the raw buffering flag: see isPlaybackStalled).
+  const loading = lifecycle !== "ready" || stalled;
   const visible =
     !controlsSuppressed && (controlsVisible || settingsOpen || endScreenOpen);
   // Moving the timeline means the learner is going back into the video:
@@ -1001,14 +1089,22 @@ export function LessonPlayerControls({
   const chaptersSideHost =
     desktopLayout && !fullscreen ? (chaptersPanelHost ?? null) : null;
   const persistentProgressVisible =
-    ready && !controlsSuppressed && mobileInteraction && !fullscreen;
+    progressWhileHidden &&
+    ready &&
+    !controlsSuppressed &&
+    mobileInteraction &&
+    !fullscreen;
   const timelineDisplayed = visible || persistentProgressVisible;
   const landscapeOrientation = useLandscapeOrientation();
   const mobileLandscapeFullscreen = mobileFullscreen && landscapeOrientation;
+  // Full screen shows the video shell alone, so the page's own lesson list
+  // (beside the video on a wide screen) is out of sight: the lessons open
+  // beside the video inside full screen instead, on a wide screen as on a
+  // phone turned sideways.
+  const fullscreenLessonsBeside =
+    mobileLandscapeFullscreen || (fullscreen && desktopLayout);
   const fullscreenCoursePanelVisible =
-    mobileLandscapeFullscreen &&
-    courseLessonsOpen &&
-    Boolean(courseLessonsPanel);
+    fullscreenLessonsBeside && courseLessonsOpen && Boolean(courseLessonsPanel);
   const mobileTimelineGeometry = scrubbing
     ? "max-sm:[&_[data-timeline-track]]:!h-0.75"
     : "max-sm:[&_[data-timeline-track]]:!h-0.5";
@@ -1018,12 +1114,19 @@ export function LessonPlayerControls({
       : "[&_[data-timeline-track]]:!h-0.5"
     : "";
 
+  // The seek-preview bar runs along the top edge, under this layer (and under the
+  // full screen vignette layer), so the top vignette fades out while the bar is on
+  // screen (PreviewLoadBar marks it data-shown; once a lesson's previews are all
+  // here it shows no more) and comes back as the bar fades. On a phone a drag also
+  // hides the buttons along the top (PersistentLearningPlayerHost), and the
+  // vignette goes with them.
+  const topVignetteHiddenClass = `[.video-shell:has([data-video-player-preview-bar][data-shown=true])_&]:opacity-0 [.video-shell:has([data-video-player-preview-bar][data-shown=true])_&]:delay-0 [.video-shell:has([data-video-player-preview-bar][data-shown=true])_&]:duration-150 ${scrubbing ? "max-[640px]:opacity-0 max-[640px]:delay-0 max-[640px]:duration-150" : ""}`;
   const mobileVignettes = (
     <>
       <div
         aria-hidden="true"
         data-mobile-player-vignette="top"
-        className={`absolute inset-x-0 top-0 h-16 bg-[linear-gradient(180deg,color-mix(in_srgb,#05070b_50%,var(--accent)_4%)_0%,color-mix(in_srgb,#05070b_20%,var(--accent)_2%)_58%,transparent_100%)] sm:hidden ${mobileInteraction ? "sm:!block" : ""}`}
+        className={`absolute inset-x-0 top-0 h-16 bg-[linear-gradient(180deg,color-mix(in_srgb,#05070b_50%,var(--accent)_4%)_0%,color-mix(in_srgb,#05070b_20%,var(--accent)_2%)_58%,transparent_100%)] transition-opacity delay-500 duration-300 motion-reduce:transition-none sm:hidden ${mobileInteraction ? "sm:!block" : ""} ${topVignetteHiddenClass}`}
       />
       <div
         aria-hidden="true"
@@ -1040,8 +1143,18 @@ export function LessonPlayerControls({
   }, []);
 
   useEffect(() => {
-    onMobileLandscapeFullscreenChange?.(mobileLandscapeFullscreen);
-  }, [mobileLandscapeFullscreen, onMobileLandscapeFullscreenChange]);
+    onMobileLandscapeFullscreenChange?.(fullscreenLessonsBeside);
+  }, [fullscreenLessonsBeside, onMobileLandscapeFullscreenChange]);
+  // Marks a wide screen's full screen with the lessons beside the video,
+  // for the player sized by the page (LessonVideoPlayer): there it keeps the
+  // screen's height, with the picture letterboxed in its narrower pane, so
+  // its control bar stays at the foot of the screen.
+  const wideLessonsBeside = fullscreenCoursePanelVisible && !mobileInteraction;
+  useLayoutEffect(() => {
+    if (!timelineHost) return undefined;
+    markWideLessonsBeside(timelineHost, wideLessonsBeside);
+    return () => markWideLessonsBeside(timelineHost, false);
+  }, [timelineHost, wideLessonsBeside]);
 
   // In fullscreen on a touch device at landscape widths, the timeline sits
   // 44px up and the corner controls 64px up, which leaves 12px between the
@@ -1050,7 +1163,7 @@ export function LessonPlayerControls({
     <div
       data-player-timeline-wrap=""
       data-player-timeline-layer=""
-      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${EXPAND_MOTION_HIDDEN_CLASS} ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-11 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-11 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${EXPAND_MOTION_HIDDEN_CLASS} ${wideLessonsBeside ? "sm:!right-[calc(100%-var(--learning-fullscreen-video-width)+0.75rem)]" : ""} ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? `!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-11 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3 ${QUARTER_TURN_TIMELINE_CLASS}` : `!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-11 sm:!w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3 ${QUARTER_TURN_TIMELINE_CLASS}`) : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
     >
@@ -1065,9 +1178,9 @@ export function LessonPlayerControls({
 
   const mobileSheetPanelClassName = mobileLandscapeFullscreen
     ? fullscreenCoursePanelVisible
-      ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(100dvh,var(--learning-fullscreen-video-width))] !-translate-x-1/2"
-      : "[&&]:!rounded-b-none mx-auto max-w-[100dvh]"
-    : undefined;
+      ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(var(--player-screen-height,100dvh),var(--learning-fullscreen-video-width))] !-translate-x-1/2"
+      : "[&&]:!rounded-b-none mx-auto max-w-[var(--player-screen-height,100dvh)]"
+    : sheetPanelClassName;
   const mobileSheetPortalTarget = mobileLandscapeFullscreen
     ? mobileSettingsSheetHost
     : undefined;
@@ -1108,11 +1221,13 @@ export function LessonPlayerControls({
   const mobileTimeCorner = (
     <div
       data-mobile-player-corner="time"
-      data-preview-obscured={previewTime !== null ? "true" : "false"}
-      className={`pointer-events-none absolute bottom-2.5 left-2 flex h-11 w-fit items-center transition-opacity duration-150 ease-out motion-reduce:transition-none sm:bottom-2.5 sm:left-3 sm:right-auto sm:h-auto ${mobileInteraction ? `sm:!h-11 ${mobileFullscreen ? "!bottom-15 !left-3 sm:!bottom-16 sm:!left-3" : "sm:!left-2"}` : ""} ${
-        fullscreenCoursePanelVisible ? "!static sm:!static" : ""
+      data-preview-obscured={previewing ? "true" : "false"}
+      className={`pointer-events-none absolute bottom-2.5 left-2 flex h-11 w-fit items-center transition-opacity duration-150 ease-out motion-reduce:transition-none sm:bottom-2.5 sm:left-3 sm:right-auto sm:h-auto ${mobileInteraction ? `sm:!h-11 ${mobileFullscreen ? `!bottom-15 !left-3 sm:!bottom-16 sm:!left-3 ${QUARTER_TURN_CORNER_CLASS}` : "sm:!left-2"}` : ""} ${
+        fullscreenCoursePanelVisible && mobileInteraction
+          ? "!static sm:!static"
+          : ""
       } ${
-        previewTime !== null
+        previewing
           ? `max-sm:pointer-events-none max-sm:opacity-0 ${mobileInteraction ? "sm:!pointer-events-none sm:!opacity-0" : ""}`
           : "max-sm:opacity-100"
       }`}
@@ -1162,11 +1277,13 @@ export function LessonPlayerControls({
   const mobileFullscreenCorner = (
     <div
       data-mobile-player-corner="fullscreen"
-      data-preview-obscured={previewTime !== null ? "true" : "false"}
-      className={`pointer-events-auto absolute bottom-2.5 right-2 z-60 transition-opacity duration-150 ease-out motion-reduce:transition-none sm:hidden ${mobileInteraction ? `sm:!block ${mobileFullscreen ? "!bottom-15 !right-3 sm:!bottom-16 sm:!right-3" : ""}` : ""} ${
-        fullscreenCoursePanelVisible ? "!static sm:!static" : ""
+      data-preview-obscured={previewing ? "true" : "false"}
+      className={`pointer-events-auto absolute bottom-2.5 right-2 z-60 transition-opacity duration-150 ease-out motion-reduce:transition-none sm:hidden ${mobileInteraction ? `sm:!block ${mobileFullscreen ? `!bottom-15 !right-3 sm:!bottom-16 sm:!right-3 ${QUARTER_TURN_CORNER_CLASS}` : ""}` : ""} ${
+        fullscreenCoursePanelVisible && mobileInteraction
+          ? "!static sm:!static"
+          : ""
       } ${
-        previewTime !== null
+        previewing
           ? `max-sm:pointer-events-none max-sm:opacity-0 ${mobileInteraction ? "sm:!pointer-events-none sm:!opacity-0" : ""}`
           : "max-sm:opacity-100"
       }`}
@@ -1198,9 +1315,9 @@ export function LessonPlayerControls({
   const bottomCornerControlsLayer = (
     <div
       data-player-bottom-corner-controls-layer=""
-      className={`pointer-events-none absolute z-180 text-white transition-opacity duration-200 motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
+      className={`pointer-events-none absolute z-180 text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
         mobileFullscreen
-          ? "inset-y-0 left-1/2 right-auto w-[min(100%,calc(100dvh*16/9))] max-w-full -translate-x-1/2"
+          ? "inset-y-0 left-1/2 right-auto w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] max-w-full -translate-x-1/2"
           : "inset-0"
       } ${
         visible
@@ -1219,7 +1336,7 @@ export function LessonPlayerControls({
   const fullscreenBottomControlsLayer = (
     <div
       data-player-fullscreen-bottom-controls=""
-      className={`pointer-events-none absolute bottom-15 sm:bottom-16 left-(--learning-fullscreen-video-offset-x) z-180 flex h-11 w-(--learning-fullscreen-video-width) max-w-full items-center justify-between px-3 text-white transition-opacity duration-200 motion-reduce:transition-none ${
+      className={`pointer-events-none absolute bottom-15 sm:bottom-16 ${QUARTER_TURN_CORNER_CLASS} left-(--learning-fullscreen-video-offset-x) z-180 flex h-11 w-(--learning-fullscreen-video-width) max-w-full items-center justify-between px-3 text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none ${
         visible
           ? "visible opacity-100"
           : "invisible opacity-0 [&_*]:!pointer-events-none"
@@ -1241,11 +1358,29 @@ export function LessonPlayerControls({
   const actionsInBottomRow = desktopLayout && !actionsAtTop;
   const fullscreenInActionsPill =
     actionsInBottomRow && !circularSettingsControl;
-  const playerActions = (
+  // Only for the lesson page's own row, which the 607px above is measured on.
+  const staticActionsPlacement =
+    !hydrated &&
+    !mobileInteraction &&
+    showAutoplayControl &&
+    showLessonNavigation &&
+    !circularSettingsControl &&
+    Boolean(onCourseLessonsToggle);
+  const renderPlayerActions = (inBottomRow: boolean) => (
     <PlayerControlSurface
       cluster="player-actions"
       className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${circularSettingsControl ? "!size-9 !rounded-full !p-0 !justify-center sm:!size-9 sm:!p-0 [&>div]:!size-9 [&>div>button]:!size-9" : ""}`}
     >
+      {/* First in the corner: tapped, it opens into a pill with the
+          volume slider that grows to the left. */}
+      <span
+        className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
+        data-mobile-volume-control=""
+      >
+        <LessonVolumePill
+          buttonClassName={getPlayerIconPillClass(mobileInteraction)}
+        />
+      </span>
       {showAutoplayControl ? (
         <AutoplayToggle
           enabled={autoplayEnabled}
@@ -1253,18 +1388,9 @@ export function LessonPlayerControls({
           onEnabledChange={onAutoplayEnabledChange}
         />
       ) : null}
-      <span
-        className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
-        data-mobile-volume-control=""
-      >
-        <MuteButton
-          className={getPlayerIconPillClass(mobileInteraction)}
-          iconSize={22}
-        />
-      </span>
       <SettingsMenu
         includePictureInPicture
-        mobilePresentation="sheet"
+        mobilePresentation={settingsPresentation}
         forceSheet={desktopSettingsAsSheet}
         mobileSheetPanelClassName={mobileSheetPanelClassName}
         mobileSheetPortalTarget={mobileSheetPortalTarget}
@@ -1287,14 +1413,17 @@ export function LessonPlayerControls({
             "!inline-flex !size-9 !w-9 !items-center !justify-center !p-0 !rounded-full !leading-none [&>svg]:!block [&>svg]:!shrink-0",
         )}
         extraMainItems={
-          <AmbientSettingsItem
-            enabled={ambientEnabled}
-            onEnabledChange={onAmbientEnabledChange}
-          />
+          showAmbientControl ? (
+            <AmbientSettingsItem
+              enabled={ambientEnabled}
+              onEnabledChange={onAmbientEnabledChange}
+            />
+          ) : undefined
         }
-        side={actionsInBottomRow ? "top" : "bottom"}
+        side={inBottomRow ? "top" : "bottom"}
+        onQualityChange={rememberQualityChoice}
       />
-      {fullscreenInActionsPill ? (
+      {inBottomRow && !circularSettingsControl ? (
         <FullscreenButton
           className={getPlayerIconPillClass(mobileInteraction)}
           iconSize={22}
@@ -1322,7 +1451,11 @@ export function LessonPlayerControls({
         onToggle={() =>
           onCourseLessonsToggle(courseLessonsSidePanel ? "side" : "drawer")
         }
-        secondPressHold={courseLessonsSecondPressHold}
+        // The page's lesson column answers the second press and hold; in
+        // full screen the lessons open beside the video instead, by a press.
+        secondPressHold={
+          fullscreenLessonsBeside ? undefined : courseLessonsSecondPressHold
+        }
         shortcutLabel={courseLessonsShortcutLabel}
         sidePanel={courseLessonsSidePanel}
         opensFromBottom={!courseLessonsSidePanel && courseLessonsBottomSheet}
@@ -1430,10 +1563,13 @@ export function LessonPlayerControls({
       {timelineHost && fullscreenCoursePanelVisible
         ? createPortal(courseLessonsPanel, timelineHost)
         : null}
-      {timelineHost && fullscreenCoursePanelVisible
+      {/* A phone beside its lessons gets a bottom row of its own; a wide
+          screen keeps the player's control bar, which shrinks with the
+          video. */}
+      {timelineHost && fullscreenCoursePanelVisible && mobileInteraction
         ? createPortal(fullscreenBottomControlsLayer, timelineHost)
         : null}
-      {timelineHost && !fullscreenCoursePanelVisible
+      {timelineHost && !(fullscreenCoursePanelVisible && mobileInteraction)
         ? createPortal(bottomCornerControlsLayer, timelineHost)
         : null}
       {chaptersPanel && (chaptersSideHost ?? timelineHost)
@@ -1462,7 +1598,7 @@ export function LessonPlayerControls({
       {onMinimize ? (
         <div
           className={cn(
-            "pointer-events-none absolute inset-0 z-50 text-white transition-opacity duration-200 motion-reduce:transition-none",
+            "pointer-events-none absolute inset-0 z-50 text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none",
             EXPAND_MOTION_HIDDEN_CLASS,
             minimizeVisible
               ? "visible opacity-100"
@@ -1479,7 +1615,7 @@ export function LessonPlayerControls({
               mobileFullscreen
                 ? fullscreenCoursePanelVisible
                   ? "absolute inset-0"
-                  : "absolute inset-y-0 left-1/2 w-[min(100%,calc(100dvh*16/9))] max-w-full -translate-x-1/2"
+                  : "absolute inset-y-0 left-1/2 w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] max-w-full -translate-x-1/2"
                 : "absolute inset-0"
             }
           >
@@ -1492,7 +1628,7 @@ export function LessonPlayerControls({
         </div>
       ) : null}
       <div
-        className={`pointer-events-none absolute inset-0 ${settingsOpen ? "z-180" : "z-30"} text-white transition-opacity duration-200 motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
+        className={`pointer-events-none absolute inset-0 ${settingsOpen ? "z-180" : "z-30"} text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
           visible
             ? "visible opacity-100"
             : `invisible opacity-0 [&_*]:!pointer-events-none ${
@@ -1509,13 +1645,13 @@ export function LessonPlayerControls({
           ? createPortal(timelineLayer, timelineHost)
           : timelineLayer}
         <div
-          className={
+          className={`${
             mobileFullscreen
               ? fullscreenCoursePanelVisible
                 ? "absolute inset-0"
-                : "absolute inset-y-0 left-1/2 w-[min(100%,calc(100dvh*16/9))] max-w-full -translate-x-1/2"
+                : "absolute inset-y-0 left-1/2 w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] max-w-full -translate-x-1/2"
               : "absolute inset-0"
-          }
+          } ${staticActionsPlacement ? "@container/player-controls" : ""}`}
           ref={controlFrameRef}
           data-player-control-frame=""
           data-player-mobile-fullscreen-frame={
@@ -1542,7 +1678,15 @@ export function LessonPlayerControls({
               />
             ) : null}
             {lessonsAtTop ? desktopLessonsButton : null}
-            {desktopLayout && !actionsAtTop ? null : playerActions}
+            {desktopLayout && !actionsAtTop ? null : (
+              <span
+                className={
+                  staticActionsPlacement ? STATIC_ACTIONS_TOP_CLASS : "contents"
+                }
+              >
+                {renderPlayerActions(false)}
+              </span>
+            )}
           </div>
 
           {!mobileInteraction ? (
@@ -1551,9 +1695,27 @@ export function LessonPlayerControls({
               className="pointer-events-auto absolute right-2 bottom-2.5 hidden items-center gap-2 sm:flex"
             >
               {lessonsAtTop ? null : desktopLessonsButton}
-              {actionsInBottomRow ? playerActions : null}
+              {actionsInBottomRow || staticActionsPlacement ? (
+                <span
+                  className={
+                    staticActionsPlacement
+                      ? STATIC_ACTIONS_BOTTOM_CLASS
+                      : "contents"
+                  }
+                >
+                  {renderPlayerActions(true)}
+                </span>
+              ) : null}
               {fullscreenInActionsPill ? null : (
-                <CircularFullscreenButton desktop />
+                <span
+                  className={
+                    staticActionsPlacement
+                      ? STATIC_FULLSCREEN_CORNER_CLASS
+                      : "contents"
+                  }
+                >
+                  <CircularFullscreenButton desktop />
+                </span>
               )}
             </div>
           ) : null}
@@ -1587,29 +1749,38 @@ export function LessonCentralControls({
   onGoNext,
   onGoPrevious,
 }: LessonCentralControlsProps) {
-  const { buffering, controlsVisible, lifecycle, scrubbing } = usePlayerState(
-    ({ media, ui }) => ({
-      buffering: media.buffering,
-      controlsVisible: ui.controlsVisible,
-      lifecycle: media.lifecycle,
-      scrubbing: ui.scrubbing,
-    }),
-    (left, right) =>
-      left.buffering === right.buffering &&
-      left.controlsVisible === right.controlsVisible &&
-      left.lifecycle === right.lifecycle &&
-      left.scrubbing === right.scrubbing,
-  );
+  const { stalled, controlsVisible, lifecycle, paused, scrubbing } =
+    usePlayerState(
+      ({ media, ui }) => ({
+        stalled: isPlaybackStalled(media),
+        controlsVisible: ui.controlsVisible,
+        lifecycle: media.lifecycle,
+        paused: media.paused,
+        scrubbing: ui.scrubbing,
+      }),
+      (left, right) =>
+        left.stalled === right.stalled &&
+        left.controlsVisible === right.controlsVisible &&
+        left.lifecycle === right.lifecycle &&
+        left.paused === right.paused &&
+        left.scrubbing === right.scrubbing,
+    );
   const mobileInteraction = usePlayerMobileInteraction();
-  const loading = lifecycle !== "ready" || buffering;
+  // A paused video is not waiting for anything the learner can see; its play
+  // button stays. While playing, only a playhead with nothing buffered under
+  // it counts (Safari on iPhone reports buffering with plenty buffered).
+  const loading = lifecycle !== "ready" || (stalled && !paused);
   // A drag on the timeline shows the moment over the whole picture; the
   // play and lesson buttons in its middle step aside for it.
   const visible =
     !controlsSuppressed && !loading && controlsVisible && !scrubbing;
 
+  // Shown in the phone layout and on any device with a touch screen (a
+  // tablet, a touch screen laptop), where a tap on the picture only brings
+  // the controls up: the play button in the middle is the one in reach.
   return (
     <div
-      className={`pointer-events-none absolute inset-0 z-20 hidden place-items-center transition-opacity duration-200 max-sm:grid ${EXPAND_MOTION_HIDDEN_CLASS} ${mobileInteraction ? "sm:!grid" : ""} ${
+      className={`pointer-events-none absolute inset-0 z-20 hidden place-items-center transition-[opacity,visibility] duration-200 ease-in-out max-sm:grid [@media(any-pointer:coarse)]:grid ${EXPAND_MOTION_HIDDEN_CLASS} ${mobileInteraction ? "sm:!grid" : ""} ${
         visible
           ? "visible opacity-100"
           : `invisible opacity-0 [&_*]:!pointer-events-none ${

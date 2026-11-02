@@ -1,3 +1,5 @@
+import type { IncludedWithCourse } from "@veolms/contracts";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
@@ -23,6 +25,10 @@ export type CourseLifecycleStatus = "published" | "draft" | "archived";
 
 export interface CourseOpenOptions {
   preview?: boolean;
+  /** The lesson to open, rather than the one the course's address picks. */
+  lessonNumber?: number;
+  /** Pressed to watch: the lesson opens playing (see lessonOpenIntent). */
+  autoplay?: boolean;
 }
 
 export interface CoursePricing {
@@ -36,6 +42,12 @@ export interface CoursePricing {
   showDiscountBadge?: boolean;
   /** The course costs nothing to enroll in. */
   free?: boolean;
+  /**
+   * The same line at the course's price for buyers outside India, when it
+   * has one; the page shows whichever the visitor's region calls for (see
+   * `priceRegion.ts`).
+   */
+  international?: Pick<CoursePricing, "price" | "originalPrice" | "discount">;
 }
 
 export interface Course {
@@ -54,10 +66,35 @@ export interface Course {
    */
   started?: boolean;
   enrolled: boolean;
+  /**
+   * Whether this viewer holds the course is not known yet (the prerendered
+   * page, or a signed-in browser before its enrolments arrive). The card
+   * then shows neither a price nor progress: either could be wrong.
+   */
+  viewerStatePending?: boolean;
+  /**
+   * A signed-in viewer's courses could not be loaded: whether this one is
+   * theirs is not known, so the card offers it neither way and says so.
+   */
+  viewerStateFailed?: boolean;
+  /**
+   * The price in force is not known yet ("pending": the card shimmers) or
+   * could not be loaded for a signed-in learner ("failed": the card says
+   * so). `pricing` is then the course list's, which says whether the
+   * course is free but is not shown as its price (see
+   * `liveCoursePrices.ts`). Absent when `pricing` is shown: the price in
+   * force, or for a visitor who is not signed in and whose prices could not
+   * be loaded, the list's (they hold no course, so no price can be wrong
+   * for them).
+   */
+  priceStatus?: "pending" | "failed";
   duration: string;
   students: number;
   thumbnail: string;
   thumbnailSrcSet?: readonly { url: string; width: number }[];
+  /** The wide picture behind the overview hero on desktop, when one is set. */
+  banner?: string;
+  bannerSrcSet?: readonly { url: string; width: number }[];
   lifecycleStatus: CourseLifecycleStatus;
   pricing?: CoursePricing;
   certificateAvailable?: boolean;
@@ -73,6 +110,22 @@ export interface Course {
    * that did not come from that list.
    */
   canSelfEnroll?: boolean;
+  /**
+   * The course list's `includedWith`: for a linked-only course, the courses
+   * it comes free with. Its card shows "Free with" the first of them in
+   * place of a price, and "Enroll Now" opens that course.
+   */
+  includedWith?: readonly IncludedWithCourse[];
+}
+
+/**
+ * Free for anyone to start: a linked-only course (`includedWith`) costs
+ * nothing too, but comes only with the course it is part of.
+ */
+export function isOpenlyFree(
+  course: Pick<Course, "pricing" | "includedWith">,
+): boolean {
+  return Boolean(course.pricing?.free) && !course.includedWith?.length;
 }
 
 /**
@@ -144,9 +197,7 @@ function matchesCourseSearch(
 ): boolean {
   return (
     !normalizedSearch ||
-    `${course.title} ${course.description}`
-      .toLowerCase()
-      .includes(normalizedSearch)
+    fuzzyMatches(normalizedSearch, course.title, course.description)
   );
 }
 
@@ -216,7 +267,7 @@ export function getCourseQuickFilterCounts(
       all: pool.length,
       enrolled,
       "not-enrolled": pool.length - enrolled,
-      free: pool.filter((course) => course.pricing?.free).length,
+      free: pool.filter(isOpenlyFree).length,
       published: 0,
       draft: 0,
       bin: 0,
@@ -278,7 +329,7 @@ export function getVisibleCourses(
     if (
       role === "student" &&
       enrollmentFilter === "free" &&
-      !course.pricing?.free
+      !isOpenlyFree(course)
     )
       return false;
     if (
@@ -305,9 +356,7 @@ export function getVisibleCourses(
     }
     return (
       !normalizedSearch ||
-      `${course.title} ${course.description}`
-        .toLowerCase()
-        .includes(normalizedSearch)
+      fuzzyMatches(normalizedSearch, course.title, course.description)
     );
   });
   if (

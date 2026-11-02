@@ -40,6 +40,7 @@ export function HeroLampSoundToggle({
       aria-pressed={muted}
       title={label}
       inert={!visible}
+      data-hero-measured=""
       style={{
         left: Math.max(8, lamp.left - GAP_FROM_LAMP_PX - TOGGLE_SIZE_PX),
         top: Math.max(8, lamp.top + (lamp.height - TOGGLE_SIZE_PX) / 2),
