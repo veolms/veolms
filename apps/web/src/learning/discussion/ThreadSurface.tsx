@@ -47,6 +47,7 @@ import {
   MobileCompactComposerPortal,
   CompactComposer,
 } from "./CompactComposer";
+import { useStableHandlers } from "./useStableHandlers";
 import {
   type ComposerMode,
   DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT,
@@ -686,26 +687,45 @@ export function ThreadSurface({
     onNoteDeepLinkHandled?.(noteDeepLinkTargetId);
   }, [entryFilter, noteDeepLinkTargetId, onNoteDeepLinkHandled]);
 
+  // The cards are memoized; handlers that kept changing identity rendered
+  // every card again on every render of the discussion.
+  const cardHandlers = useStableHandlers({
+    onLike,
+    onEdit,
+    onDelete,
+    onReplyEditFailure,
+    onDeleteFailure,
+    onReport,
+    onOpenThread,
+    onToggleAcceptReply,
+    onToggleLockThread,
+    onToggleBookmark,
+    onToggleFollow,
+    onSeekToTimestamp,
+    onCopyTextNotice,
+    onThreadHighlightShown,
+  });
+
   const renderEntry = useCallback(
     (entry: Comment) => (
       <CommentCard
         comment={entry}
-        onLike={onLike}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onEditFailure={onReplyEditFailure}
-        onDeleteFailure={onDeleteFailure}
-        onReport={onReport}
-        onOpenThread={onOpenThread}
+        onLike={cardHandlers.onLike}
+        onEdit={cardHandlers.onEdit}
+        onDelete={cardHandlers.onDelete}
+        onEditFailure={cardHandlers.onReplyEditFailure}
+        onDeleteFailure={cardHandlers.onDeleteFailure}
+        onReport={cardHandlers.onReport}
+        onOpenThread={cardHandlers.onOpenThread}
         isBackendMode={isBackendMode}
         currentUserId={currentUserId}
         canModerate={canModerate}
-        onToggleAcceptReply={onToggleAcceptReply}
-        onToggleLockThread={onToggleLockThread}
-        onToggleBookmark={onToggleBookmark}
-        onToggleFollow={onToggleFollow}
-        onSeekToTimestamp={onSeekToTimestamp}
-        onCopyTextNotice={onCopyTextNotice}
+        onToggleAcceptReply={cardHandlers.onToggleAcceptReply}
+        onToggleLockThread={cardHandlers.onToggleLockThread}
+        onToggleBookmark={cardHandlers.onToggleBookmark}
+        onToggleFollow={cardHandlers.onToggleFollow}
+        onSeekToTimestamp={cardHandlers.onSeekToTimestamp}
+        onCopyTextNotice={cardHandlers.onCopyTextNotice}
         courseId={courseId}
         canParticipate={canParticipate}
         constrainToContainer
@@ -732,32 +752,19 @@ export function ThreadSurface({
           entry.entryKind !== "note" &&
           getServerEntityId(entry) === highlightedThreadId,
         )}
-        onHighlightShown={onThreadHighlightShown}
+        onHighlightShown={cardHandlers.onThreadHighlightShown}
       />
     ),
     [
+      cardHandlers,
       courseId,
       currentUserId,
       isBackendMode,
-      onDelete,
-      onDeleteFailure,
-      onEdit,
-      onLike,
-      onOpenThread,
-      onReplyEditFailure,
-      onReport,
-      onToggleAcceptReply,
-      onToggleBookmark,
-      onToggleFollow,
-      onSeekToTimestamp,
-      onCopyTextNotice,
-      onToggleLockThread,
       capabilities.allowNotes,
       canParticipate,
       noteDeepLinkTargetId,
       linkedThreadId,
       highlightedThreadId,
-      onThreadHighlightShown,
       canModerate,
     ],
   );

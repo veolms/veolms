@@ -149,7 +149,8 @@ const STATIC_FULLSCREEN_CORNER_CLASS =
  * Keeps a control layer hidden while the expand (maximize) motion is still
  * carrying the player to its resting place. The motion marks the full host
  * with this phase for exactly that stretch; once it clears, the layer's own
- * `transition-opacity` fades the controls in over the landed video.
+ * fade (opacity and visibility together) brings the controls in over the
+ * landed video.
  */
 const EXPAND_MOTION_HIDDEN_CLASS =
   "[[data-learning-player-restore-phase=expanding]_&]:!invisible [[data-learning-player-restore-phase=expanding]_&]:!opacity-0 [[data-learning-player-restore-phase=expanding]_&]:!transition-none [[data-learning-player-restore-phase=expanding]_&_*]:!pointer-events-none";
@@ -1162,7 +1163,7 @@ export function LessonPlayerControls({
     <div
       data-player-timeline-wrap=""
       data-player-timeline-layer=""
-      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${EXPAND_MOTION_HIDDEN_CLASS} ${wideLessonsBeside ? "sm:!right-[calc(100%-var(--learning-fullscreen-video-width)+0.75rem)]" : ""} ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? `!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-11 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3 ${QUARTER_TURN_TIMELINE_CLASS}` : `!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-11 sm:!w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3 ${QUARTER_TURN_TIMELINE_CLASS}`) : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${EXPAND_MOTION_HIDDEN_CLASS} ${wideLessonsBeside ? "sm:!right-[calc(100%-var(--learning-fullscreen-video-width)+0.75rem)]" : ""} ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? `!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-11 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3 ${QUARTER_TURN_TIMELINE_CLASS}` : `!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-11 sm:!w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3 ${QUARTER_TURN_TIMELINE_CLASS}`) : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
     >
@@ -1314,7 +1315,7 @@ export function LessonPlayerControls({
   const bottomCornerControlsLayer = (
     <div
       data-player-bottom-corner-controls-layer=""
-      className={`pointer-events-none absolute z-180 text-white transition-opacity duration-200 motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
+      className={`pointer-events-none absolute z-180 text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
         mobileFullscreen
           ? "inset-y-0 left-1/2 right-auto w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] max-w-full -translate-x-1/2"
           : "inset-0"
@@ -1335,7 +1336,7 @@ export function LessonPlayerControls({
   const fullscreenBottomControlsLayer = (
     <div
       data-player-fullscreen-bottom-controls=""
-      className={`pointer-events-none absolute bottom-15 sm:bottom-16 ${QUARTER_TURN_CORNER_CLASS} left-(--learning-fullscreen-video-offset-x) z-180 flex h-11 w-(--learning-fullscreen-video-width) max-w-full items-center justify-between px-3 text-white transition-opacity duration-200 motion-reduce:transition-none ${
+      className={`pointer-events-none absolute bottom-15 sm:bottom-16 ${QUARTER_TURN_CORNER_CLASS} left-(--learning-fullscreen-video-offset-x) z-180 flex h-11 w-(--learning-fullscreen-video-width) max-w-full items-center justify-between px-3 text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none ${
         visible
           ? "visible opacity-100"
           : "invisible opacity-0 [&_*]:!pointer-events-none"
@@ -1597,7 +1598,7 @@ export function LessonPlayerControls({
       {onMinimize ? (
         <div
           className={cn(
-            "pointer-events-none absolute inset-0 z-50 text-white transition-opacity duration-200 motion-reduce:transition-none",
+            "pointer-events-none absolute inset-0 z-50 text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none",
             EXPAND_MOTION_HIDDEN_CLASS,
             minimizeVisible
               ? "visible opacity-100"
@@ -1627,7 +1628,7 @@ export function LessonPlayerControls({
         </div>
       ) : null}
       <div
-        className={`pointer-events-none absolute inset-0 ${settingsOpen ? "z-180" : "z-30"} text-white transition-opacity duration-200 motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
+        className={`pointer-events-none absolute inset-0 ${settingsOpen ? "z-180" : "z-30"} text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
           visible
             ? "visible opacity-100"
             : `invisible opacity-0 [&_*]:!pointer-events-none ${
@@ -1779,7 +1780,7 @@ export function LessonCentralControls({
   // the controls up: the play button in the middle is the one in reach.
   return (
     <div
-      className={`pointer-events-none absolute inset-0 z-20 hidden place-items-center transition-opacity duration-200 max-sm:grid [@media(any-pointer:coarse)]:grid ${EXPAND_MOTION_HIDDEN_CLASS} ${mobileInteraction ? "sm:!grid" : ""} ${
+      className={`pointer-events-none absolute inset-0 z-20 hidden place-items-center transition-[opacity,visibility] duration-200 ease-in-out max-sm:grid [@media(any-pointer:coarse)]:grid ${EXPAND_MOTION_HIDDEN_CLASS} ${mobileInteraction ? "sm:!grid" : ""} ${
         visible
           ? "visible opacity-100"
           : `invisible opacity-0 [&_*]:!pointer-events-none ${

@@ -9,7 +9,15 @@ export type PlayerSettingsView =
 
 export interface PlayerHudOptions {
   direction?: -1 | 1;
-  variant?: "default" | "mobile-seek" | "playback-rate" | "temporary-speed";
+  /** The volume shown by the `volume` variant, from 0 to 1. */
+  level?: number;
+  variant?:
+    | "default"
+    | "keyboard-seek"
+    | "mobile-seek"
+    | "playback-rate"
+    | "temporary-speed"
+    | "volume";
 }
 
 export interface PlayerHudMessage extends PlayerHudOptions {

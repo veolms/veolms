@@ -41,29 +41,6 @@ import { runSignInClaim } from "../shared/sign-in-claim.ts";
 import { type SessionLocation } from "../shared/request-location.ts";
 import { createPlatformSettingsService } from "../../platform/platform-settings.service.ts";
 
-/** How long a sign-in may wait for its student to sign another device out. */
-export const PENDING_DEVICE_SIGN_IN_TTL_MS = 10 * 60_000;
-
-/**
- * A student already signed in on as many devices as the academy allows
- * (Platform > Security). The sign-in is kept waiting under `signInToken`,
- * which goes to the browser in a cookie; signing one of the other devices
- * out lets it in (`resolveDeviceLimit`).
- */
-export class DeviceLimitReachedError extends AppError {
-  readonly signInToken: string;
-
-  constructor(signInToken: string) {
-    super(
-      409,
-      "DEVICE_LIMIT_REACHED",
-      "You are signed in on as many devices as your academy allows. Sign out of one to sign in here.",
-    );
-    this.name = "DeviceLimitReachedError";
-    this.signInToken = signInToken;
-  }
-}
-
 export interface SessionServiceOptions {
   database: Kysely<Database>;
 }
@@ -190,8 +167,6 @@ export function createSessionService({ database }: SessionServiceOptions) {
     },
     /** Pass when already loaded for this user and request; read here otherwise. */
     prerequisites?: SessionPrerequisites,
-    /** Set once the student has signed a device out to make room. */
-    options?: { skipDeviceLimit?: boolean },
   ): Promise<EstablishedSession> {
     if (user.is_deleted) {
       throw new AppError(
@@ -271,9 +246,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     // testers sign in to at once, are never limited, and a browser already
     // signed in (above) is no new device.
     const limit =
-      options?.skipDeviceLimit ||
-      isStaffAccount(roles) ||
-      isTestLoginAccount(user.email)
+      isStaffAccount(roles) || isTestLoginAccount(user.email)
         ? null
         : await platformSettings.maxDevicesPerStudent();
     if (limit === null) {
@@ -281,123 +254,21 @@ export function createSessionService({ database }: SessionServiceOptions) {
       return { token, sessionId, mfa, roles };
     }
 
-    const signInToken = await database.transaction().execute(async (trx) => {
+    await database.transaction().execute(async (trx) => {
       // Two sign-ins of the same student at once count one after the other.
       await sessionRepository.lockUserForSignIn(trx, user.id);
-      const active = await sessionRepository.countActiveUserSessions(
+      // At the limit, the newest sign-in always gets in: the devices used
+      // longest ago are signed out to make room, without a notice. Each
+      // finds itself signed out at its next request.
+      await sessionRepository.revokeLeastRecentlyUsedSessions(
         trx,
         user.id,
+        limit - 1,
       );
-      if (active < limit) {
-        await sessionRepository.insertSession(trx, newSession);
-        return null;
-      }
-      const pendingToken = generateRandomToken();
-      await sessionRepository.insertPendingDeviceSignIn(trx, {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        tokenHash: hashToken(pendingToken),
-        ipAddress,
-        userAgent,
-        location: request.location ?? null,
-        expiresAt: new Date(Date.now() + PENDING_DEVICE_SIGN_IN_TTL_MS),
-      });
-      return pendingToken;
+      await sessionRepository.insertSession(trx, newSession);
     });
-    if (signInToken !== null) throw new DeviceLimitReachedError(signInToken);
 
     return { token, sessionId, mfa, roles };
-  }
-
-  async function findPendingSignIn(signInToken: string | undefined) {
-    const pending = signInToken
-      ? await sessionRepository.findPendingDeviceSignIn(
-          database,
-          hashToken(signInToken),
-        )
-      : undefined;
-    if (!pending) {
-      throw new AppError(
-        401,
-        "DEVICE_SIGN_IN_EXPIRED",
-        "This sign-in has expired. Sign in again.",
-      );
-    }
-    return pending;
-  }
-
-  /** The devices a waiting sign-in can make room on, and the limit. */
-  async function getDeviceLimitChoice(signInToken: string | undefined) {
-    const pending = await findPendingSignIn(signInToken);
-    const [limit, sessions] = await Promise.all([
-      platformSettings.maxDevicesPerStudent(),
-      sessionRepository.listUserSessions(database, pending.user_id),
-    ]);
-    return { limit, sessions };
-  }
-
-  /**
-   * Signs the student's chosen device out and lets the waiting sign-in in,
-   * on the device and from the place it came from.
-   */
-  async function resolveDeviceLimit(
-    signInToken: string | undefined,
-    sessionId: string,
-  ) {
-    const pending = await findPendingSignIn(signInToken);
-    await database.transaction().execute(async (trx) => {
-      const revoked = await sessionRepository.revokeUserSession(
-        trx,
-        pending.user_id,
-        sessionId,
-      );
-      if (!revoked) {
-        throw new AppError(
-          404,
-          "SESSION_NOT_FOUND",
-          "That device is no longer signed in. Choose another.",
-        );
-      }
-      // Used once: a second try with the same cookie finds it gone.
-      if (!(await sessionRepository.usePendingDeviceSignIn(trx, pending.id))) {
-        throw new AppError(
-          401,
-          "DEVICE_SIGN_IN_EXPIRED",
-          "This sign-in has expired. Sign in again.",
-        );
-      }
-      await outbox.publish(trx, {
-        type: "auth.session_revoked",
-        version: 1,
-        dedupeKey: `auth.session_revoked:${sessionId}`,
-        occurredAt: new Date(),
-        payload: { recipientUserId: pending.user_id, sessionId },
-      });
-    });
-
-    const user = await userRepository.findUserById(database, pending.user_id);
-    if (!user) {
-      throw new AppError(
-        403,
-        "ACCOUNT_DEACTIVATED",
-        "This account has been deactivated.",
-      );
-    }
-    const session = await establishSession(
-      user,
-      {
-        ip: pending.ip_address ?? "",
-        userAgent: pending.user_agent,
-        location: {
-          city: pending.location_city,
-          region: pending.location_region,
-          country: pending.location_country,
-        },
-      },
-      undefined,
-      { skipDeviceLimit: true },
-    );
-    return { user: { ...user, roles: session.roles }, session };
   }
 
   async function completeMfaEnrolment(
@@ -543,8 +414,6 @@ export function createSessionService({ database }: SessionServiceOptions) {
     forgetCachedAuthContexts: clearSessionAuthCache,
     loadSessionPrerequisites,
     establishSession,
-    getDeviceLimitChoice,
-    resolveDeviceLimit,
     completeMfaEnrolment,
     logout,
     listSessions,

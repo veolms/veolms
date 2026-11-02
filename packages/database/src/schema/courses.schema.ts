@@ -110,6 +110,19 @@ export interface CoursePricingTable {
    * of the catalogue (see 20261029120000).
    */
   linked_only: Generated<boolean>;
+  /**
+   * The price for buyers outside India, in this currency's minor units
+   * (cents): set together or not at all (see 20261101120000). A course
+   * without it is sold in rupees everywhere.
+   */
+  international_currency: string | null;
+  international_price_minor: number | null;
+  international_sale_price_minor: number | null;
+  /**
+   * The international price is the automatic one (the rupee prices at the
+   * day's rate, rounded up to .99), worked out again when they change.
+   */
+  international_price_auto: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

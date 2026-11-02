@@ -81,11 +81,8 @@ export const SETUP_SESSION_TTL_SECONDS = 30 * 60;
 export const SESSION_COOKIE = "veolms-session";
 export const OAUTH_STATE_COOKIE = "veolms-oauth-state";
 export const SETUP_COOKIE = "veolms-setup-token";
-/** A sign-in waiting for its student to sign another device out. */
-export const DEVICE_SIGN_IN_COOKIE = "veolms-device-sign-in";
 
 export const OAUTH_STATE_TTL_SECONDS = 10 * 60;
-export const DEVICE_SIGN_IN_TTL_SECONDS = 10 * 60;
 
 // --- Roles ------------------------------------------------------------------
 

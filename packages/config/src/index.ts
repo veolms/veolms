@@ -618,6 +618,25 @@ const serverConfigSchema = z.object({
     .regex(/^[A-Za-z]{2}$/u, "Expected a two-letter country code, such as US.")
     .transform((value) => value.toUpperCase())
     .optional(),
+  // Automatic prices for buyers outside India use the day's USD/INR rate,
+  // fetched from public sources (European Central Bank via Frankfurter, then
+  // open.er-api.com). Set this to use a fixed rate instead: rupees per
+  // dollar, such as 95.
+  INTERNATIONAL_PRICE_INR_PER_USD: z.coerce.number().positive().optional(),
+  // Countries whose buyers see and pay a course's rupee price, comma
+  // separated ISO codes. Everywhere else, a course that has a price for
+  // buyers outside India is shown and sold at that price. A buyer whose
+  // country is not known gets the rupee price.
+  DOMESTIC_PRICING_COUNTRIES: z
+    .string()
+    .trim()
+    .default("IN")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((code) => code.trim().toUpperCase())
+        .filter((code) => /^[A-Z]{2}$/u.test(code)),
+    ),
 
   // An extra payment taken by the gateway (a second payment for a paid
   // order, or a late payment for something the buyer already has) is sent

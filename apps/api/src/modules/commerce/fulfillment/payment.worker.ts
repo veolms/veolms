@@ -137,6 +137,19 @@ export function createPaymentWorker({
       gatewayPaymentId: event.gatewayPaymentId,
       paymentMethod: event.paymentMethod ?? null,
     });
+    // A payment in another currency: what it settles for, for the revenue
+    // reports. Whichever path saw the capture first records it.
+    if (
+      (result.outcome === "finalized" ||
+        result.outcome === "already_captured") &&
+      event.settlementAmount !== undefined &&
+      event.settlementCurrency
+    ) {
+      await orderRepository.recordOrderSettlement(database, payment.order_id, {
+        amount: event.settlementAmount,
+        currency: event.settlementCurrency,
+      });
+    }
 
     await webhookRepository.markWebhookEventProcessed(database, event.eventId);
     if (

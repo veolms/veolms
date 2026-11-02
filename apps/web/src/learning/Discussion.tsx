@@ -67,6 +67,7 @@ export type {
 export { DISCUSSION_COMMENT_CHARACTER_LIMIT } from "./discussion/discussionConstants";
 export { shouldShowDiscussionEnd } from "./discussion/ThreadSurface";
 import { ToastNotification, type ToastMessage } from "../ToastNotification";
+import { TimeAgoBuiltAt } from "../components/TimeAgo";
 import type { Comment, CommentReply } from "./CommentCard";
 import { withKeepScroll } from "../shell/applicationScroll";
 import {
@@ -2512,219 +2513,145 @@ function DiscussionInner({
   };
 
   return (
-    <section className="learning-discussion" aria-label="Lesson discussion">
-      <ToastNotification
-        message={creationToast}
-        type="error"
-        onDismiss={() => setCreationToast(null)}
-      />
-      <SearchHighlightProvider value={feedSearch}>
-        <ThreadSurface
-          scrollMemoryKey={persistenceKey}
-          lessonDescription={lessonDescription}
-          isLessonDescriptionLoading={isLessonDescriptionLoading}
-          mobileLessonHeader={mobileLessonHeader}
-          draft={activeDraft}
-          draftRestoreToken={draftRestoreToken}
-          entryKind={activeEntryKind}
-          visibility={activeVisibility}
-          editingEntryId={editingEntry?.id ?? null}
-          notice={notice}
-          entryFilter={entryFilter}
-          feedView={feedView}
-          canFilterMine={Boolean(currentUser)}
-          search={discussionSearch}
-          isSearchActive={Boolean(feedSearch)}
-          isSearchPending={unifiedDiscussions.isPlaceholderData}
-          onSearchChange={setDiscussionSearch}
-          entries={displayEntries}
-          noteDeepLinkTargetId={
-            noteDeepLinkReadyForFocus ? noteDeepLinkId : null
-          }
-          onNoteDeepLinkHandled={consumeNoteDeepLink}
-          linkedThreadId={spotlightEntry ? spotlightThreadId : null}
-          highlightedThreadId={highlightedThreadId}
-          onThreadHighlightShown={clearHighlightedThread}
-          discussionCount={discussionCount}
-          discussionCountSource={discussionCountSource}
-          draftIsTooLong={draftIsTooLong}
-          draftAttachmentCount={draftAttachmentCount}
-          canSubmitDraft={canSubmitDraft}
-          attachments={composerAttachments}
-          onAttachmentsChange={setComposerAttachments}
-          isNotesLoading={
-            isNotesLoading ||
-            Boolean(
-              isNoteDeepLinkPending &&
-              isValidNoteDeepLink &&
-              isDirectNoteLoading &&
-              !noteDeepLinkTargetEntry,
-            )
-          }
-          isNotesError={isNotesError}
-          onRetryNotes={() => refetchNotes()}
-          onLoadMore={loadMoreDiscussion}
-          onRetryNextPage={loadMoreDiscussion}
-          hasNextPage={isNoteDeepLinkPending ? false : hasNextDiscussionPage}
-          isFetchingNextPage={isFetchingNextDiscussionPage}
-          isNextPageError={
-            isNoteDeepLinkPending
-              ? false
-              : unifiedDiscussions.isFetchNextPageError
-          }
-          isThreadsLoading={isThreadsLoading}
-          isThreadDeepLinkPending={isThreadDeepLinkPending}
-          isAllInitialLoading={isAllInitialLoading}
-          isThreadsError={isThreadsError}
-          onRetryThreads={() => refetchThreads()}
-          mobileBottomNavigation={mobileBottomNavigation}
-          mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-          capabilities={capabilities}
-          isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
-          isAllDisabled={isAllDisabled}
-          availableFilters={availableFilters}
-          enabledKinds={enabledKinds}
-          promptText={promptText}
-          authorAvatar={authorAvatar}
-          viewerKnown={Boolean(currentUser)}
-          lessonContentAccess={lessonContentAccess}
-          lessonContentAccessReason={lessonContentAccessReason}
-          canParticipate={canParticipate}
-          participationState={participationState}
-          participationActionLabel={participationActionLabel}
-          onParticipationAction={onParticipationAction}
-          loginToParticipate={loginToParticipate}
-          onDraftChange={(value) => {
-            if (editingEntry) {
-              setEditingEntry((current) =>
-                current ? { ...current, draft: value } : current,
-              );
-            } else {
-              setDraft(value);
-            }
-            setNotice(
-              countCharacters(value.plainText) >
-                DISCUSSION_COMMENT_CHARACTER_LIMIT
-                ? COMMENT_LENGTH_NOTICE
-                : "",
-            );
-          }}
-          onEntryKindChange={(value) => {
-            if (editingEntry) return;
-            setEntryKind(value);
-            setVisibility((current) => getAllowedVisibility(value, current));
-          }}
-          onVisibilityChange={(value) => {
-            const allowedVisibility = getAllowedVisibility(
-              activeEntryKind,
-              value,
-            );
-            if (editingEntry) {
-              setEditingEntry((current) =>
-                current
-                  ? { ...current, visibility: allowedVisibility }
-                  : current,
-              );
-            } else {
-              setVisibility(allowedVisibility);
-            }
-          }}
-          onSubmit={submitEntry}
-          onCancelEdit={() => setEditingEntry(null)}
-          onEntryFilterChange={setEntryFilter}
-          onFeedViewChange={setFeedView}
-          onLike={onLike}
-          onEdit={beginEditingEntry}
-          onDelete={deleteEntry}
-          onReport={handleOpenReport}
-          onOpenThread={(id, focusComposer = false) => {
-            const entry = combinedEntries.find(
-              (candidate) => getClientEntityId(candidate) === String(id),
-            );
-            if (entry?.entryKind === "note") return;
-            if (!entry) return;
-            const clientId = getClientEntityId(entry);
-            const serverId = getServerEntityId(entry);
-            expectThreadAddress(serverId);
-            setOpenThread({
-              id: clientId,
-              focusComposer: canParticipate && focusComposer,
-            });
-            setSearchParams(
-              (prev) => {
-                const next = new URLSearchParams(prev);
-                if (serverId) next.set("thread", serverId);
-                else next.delete("thread");
-                return next;
-              },
-              {
-                replace: true,
-                state: withKeepScroll(window.history.state?.usr),
-              },
-            );
-          }}
-          isBackendMode={isBackendMode}
-          currentUserId={currentUser?.id}
-          canModerate={canModerate}
-          onToggleAcceptReply={handleToggleAcceptReply}
-          onToggleLockThread={handleToggleLockThread}
-          onToggleBookmark={handleToggleBookmark}
-          onToggleFollow={handleToggleFollow}
-          onSeekToTimestamp={onSeekToTimestamp}
-          onCopyTextNotice={setNotice}
-          onReplyEditFailure={() =>
-            setNotice("Failed to update reply. Please try again.")
-          }
-          onDeleteFailure={setNotice}
-          courseId={courseId}
+    <TimeAgoBuiltAt value={builtDiscussions?.updatedAt}>
+      <section className="learning-discussion" aria-label="Lesson discussion">
+        <ToastNotification
+          message={creationToast}
+          type="error"
+          onDismiss={() => setCreationToast(null)}
         />
-      </SearchHighlightProvider>
-      {threadPanelMounted ? (
-        <Suspense fallback={null}>
-          <DiscussionThreadPanel
-            open={threadPanelOpen}
-            onCloseComplete={() => setThreadPanelMounted(false)}
-            activeEntryId={openThread?.id ?? null}
-            entries={threadEntries}
-            isBackendMode={isBackendMode}
-            currentUserId={currentUser?.id}
-            canModerate={canModerate}
-            currentUser={{ name: authorName, avatar: authorAvatar }}
+        <SearchHighlightProvider value={feedSearch}>
+          <ThreadSurface
+            scrollMemoryKey={persistenceKey}
+            lessonDescription={lessonDescription}
+            isLessonDescriptionLoading={isLessonDescriptionLoading}
+            mobileLessonHeader={mobileLessonHeader}
+            draft={activeDraft}
+            draftRestoreToken={draftRestoreToken}
+            entryKind={activeEntryKind}
+            visibility={activeVisibility}
+            editingEntryId={editingEntry?.id ?? null}
+            notice={notice}
+            entryFilter={entryFilter}
+            feedView={feedView}
+            canFilterMine={Boolean(currentUser)}
+            search={discussionSearch}
+            isSearchActive={Boolean(feedSearch)}
+            isSearchPending={unifiedDiscussions.isPlaceholderData}
+            onSearchChange={setDiscussionSearch}
+            entries={displayEntries}
+            noteDeepLinkTargetId={
+              noteDeepLinkReadyForFocus ? noteDeepLinkId : null
+            }
+            onNoteDeepLinkHandled={consumeNoteDeepLink}
+            linkedThreadId={spotlightEntry ? spotlightThreadId : null}
+            highlightedThreadId={highlightedThreadId}
+            onThreadHighlightShown={clearHighlightedThread}
+            discussionCount={discussionCount}
+            discussionCountSource={discussionCountSource}
+            draftIsTooLong={draftIsTooLong}
+            draftAttachmentCount={draftAttachmentCount}
+            canSubmitDraft={canSubmitDraft}
+            attachments={composerAttachments}
+            onAttachmentsChange={setComposerAttachments}
+            isNotesLoading={
+              isNotesLoading ||
+              Boolean(
+                isNoteDeepLinkPending &&
+                isValidNoteDeepLink &&
+                isDirectNoteLoading &&
+                !noteDeepLinkTargetEntry,
+              )
+            }
+            isNotesError={isNotesError}
+            onRetryNotes={() => refetchNotes()}
+            onLoadMore={loadMoreDiscussion}
+            onRetryNextPage={loadMoreDiscussion}
+            hasNextPage={isNoteDeepLinkPending ? false : hasNextDiscussionPage}
+            isFetchingNextPage={isFetchingNextDiscussionPage}
+            isNextPageError={
+              isNoteDeepLinkPending
+                ? false
+                : unifiedDiscussions.isFetchNextPageError
+            }
+            isThreadsLoading={isThreadsLoading}
+            isThreadDeepLinkPending={isThreadDeepLinkPending}
+            isAllInitialLoading={isAllInitialLoading}
+            isThreadsError={isThreadsError}
+            onRetryThreads={() => refetchThreads()}
+            mobileBottomNavigation={mobileBottomNavigation}
+            mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+            capabilities={capabilities}
+            isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
+            isAllDisabled={isAllDisabled}
+            availableFilters={availableFilters}
+            enabledKinds={enabledKinds}
+            promptText={promptText}
+            authorAvatar={authorAvatar}
+            viewerKnown={Boolean(currentUser)}
+            lessonContentAccess={lessonContentAccess}
+            lessonContentAccessReason={lessonContentAccessReason}
             canParticipate={canParticipate}
             participationState={participationState}
             participationActionLabel={participationActionLabel}
             onParticipationAction={onParticipationAction}
-            courseId={courseId}
-            lessonId={lessonId}
-            focusComposerOnOpen={Boolean(openThread?.focusComposer)}
-            onOpenChange={(open) => {
-              if (!open) {
-                suppressThreadUrlSyncRef.current = true;
-                pendingThreadAddressRef.current = null;
-                setOpenThread(null);
-                setSearchParams(
-                  (prev) => {
-                    if (!prev.has("thread")) return prev;
-                    const next = new URLSearchParams(prev);
-                    next.delete("thread");
-                    return next;
-                  },
-                  {
-                    replace: true,
-                    state: withKeepScroll(window.history.state?.usr),
-                  },
+            loginToParticipate={loginToParticipate}
+            onDraftChange={(value) => {
+              if (editingEntry) {
+                setEditingEntry((current) =>
+                  current ? { ...current, draft: value } : current,
                 );
+              } else {
+                setDraft(value);
+              }
+              setNotice(
+                countCharacters(value.plainText) >
+                  DISCUSSION_COMMENT_CHARACTER_LIMIT
+                  ? COMMENT_LENGTH_NOTICE
+                  : "",
+              );
+            }}
+            onEntryKindChange={(value) => {
+              if (editingEntry) return;
+              setEntryKind(value);
+              setVisibility((current) => getAllowedVisibility(value, current));
+            }}
+            onVisibilityChange={(value) => {
+              const allowedVisibility = getAllowedVisibility(
+                activeEntryKind,
+                value,
+              );
+              if (editingEntry) {
+                setEditingEntry((current) =>
+                  current
+                    ? { ...current, visibility: allowedVisibility }
+                    : current,
+                );
+              } else {
+                setVisibility(allowedVisibility);
               }
             }}
-            onActiveEntryChange={(id) => {
-              const entry = threadEntries.find(
+            onSubmit={submitEntry}
+            onCancelEdit={() => setEditingEntry(null)}
+            onEntryFilterChange={setEntryFilter}
+            onFeedViewChange={setFeedView}
+            onLike={onLike}
+            onEdit={beginEditingEntry}
+            onDelete={deleteEntry}
+            onReport={handleOpenReport}
+            onOpenThread={(id, focusComposer = false) => {
+              const entry = combinedEntries.find(
                 (candidate) => getClientEntityId(candidate) === String(id),
               );
-              const serverId = entry ? getServerEntityId(entry) : undefined;
+              if (entry?.entryKind === "note") return;
+              if (!entry) return;
+              const clientId = getClientEntityId(entry);
+              const serverId = getServerEntityId(entry);
               expectThreadAddress(serverId);
-              setOpenThread((current) =>
-                current ? { id, focusComposer: false } : current,
-              );
+              setOpenThread({
+                id: clientId,
+                focusComposer: canParticipate && focusComposer,
+              });
               setSearchParams(
                 (prev) => {
                   const next = new URLSearchParams(prev);
@@ -2738,43 +2665,119 @@ function DiscussionInner({
                 },
               );
             }}
-            onLike={onLike}
-            onAddReply={addReply}
-            onEditEntry={beginEditingEntry}
-            onDeleteEntry={deleteEntry}
-            onEditReply={editReply}
-            onDeleteReply={deleteReply}
-            onReport={handleOpenReport}
+            isBackendMode={isBackendMode}
+            currentUserId={currentUser?.id}
+            canModerate={canModerate}
             onToggleAcceptReply={handleToggleAcceptReply}
             onToggleLockThread={handleToggleLockThread}
             onToggleBookmark={handleToggleBookmark}
             onToggleFollow={handleToggleFollow}
             onSeekToTimestamp={onSeekToTimestamp}
             onCopyTextNotice={setNotice}
-            onReplyCreateError={() =>
-              setCreationToast({
-                message: "Couldn't post your reply. Please try again.",
-                type: "error",
-              })
-            }
-            onReplyEditError={() =>
+            onReplyEditFailure={() =>
               setNotice("Failed to update reply. Please try again.")
             }
-            onReplyDeleteError={() =>
-              setNotice("Couldn't delete this reply. Please try again.")
-            }
+            onDeleteFailure={setNotice}
+            courseId={courseId}
           />
-        </Suspense>
-      ) : null}
-      <DiscussionReportDialog
-        open={reportDialogOpen}
-        target={reportingTarget}
-        courseId={courseId}
-        onClose={handleCloseReport}
-        onSubmit={handleSubmitReport}
-        isSubmitting={Boolean(createReportMutation?.isPending)}
-      />
-    </section>
+        </SearchHighlightProvider>
+        {threadPanelMounted ? (
+          <Suspense fallback={null}>
+            <DiscussionThreadPanel
+              open={threadPanelOpen}
+              onCloseComplete={() => setThreadPanelMounted(false)}
+              activeEntryId={openThread?.id ?? null}
+              entries={threadEntries}
+              isBackendMode={isBackendMode}
+              currentUserId={currentUser?.id}
+              canModerate={canModerate}
+              currentUser={{ name: authorName, avatar: authorAvatar }}
+              canParticipate={canParticipate}
+              participationState={participationState}
+              participationActionLabel={participationActionLabel}
+              onParticipationAction={onParticipationAction}
+              courseId={courseId}
+              lessonId={lessonId}
+              focusComposerOnOpen={Boolean(openThread?.focusComposer)}
+              onOpenChange={(open) => {
+                if (!open) {
+                  suppressThreadUrlSyncRef.current = true;
+                  pendingThreadAddressRef.current = null;
+                  setOpenThread(null);
+                  setSearchParams(
+                    (prev) => {
+                      if (!prev.has("thread")) return prev;
+                      const next = new URLSearchParams(prev);
+                      next.delete("thread");
+                      return next;
+                    },
+                    {
+                      replace: true,
+                      state: withKeepScroll(window.history.state?.usr),
+                    },
+                  );
+                }
+              }}
+              onActiveEntryChange={(id) => {
+                const entry = threadEntries.find(
+                  (candidate) => getClientEntityId(candidate) === String(id),
+                );
+                const serverId = entry ? getServerEntityId(entry) : undefined;
+                expectThreadAddress(serverId);
+                setOpenThread((current) =>
+                  current ? { id, focusComposer: false } : current,
+                );
+                setSearchParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    if (serverId) next.set("thread", serverId);
+                    else next.delete("thread");
+                    return next;
+                  },
+                  {
+                    replace: true,
+                    state: withKeepScroll(window.history.state?.usr),
+                  },
+                );
+              }}
+              onLike={onLike}
+              onAddReply={addReply}
+              onEditEntry={beginEditingEntry}
+              onDeleteEntry={deleteEntry}
+              onEditReply={editReply}
+              onDeleteReply={deleteReply}
+              onReport={handleOpenReport}
+              onToggleAcceptReply={handleToggleAcceptReply}
+              onToggleLockThread={handleToggleLockThread}
+              onToggleBookmark={handleToggleBookmark}
+              onToggleFollow={handleToggleFollow}
+              onSeekToTimestamp={onSeekToTimestamp}
+              onCopyTextNotice={setNotice}
+              onReplyCreateError={() =>
+                setCreationToast({
+                  message: "Couldn't post your reply. Please try again.",
+                  type: "error",
+                })
+              }
+              onReplyEditError={() =>
+                setNotice("Failed to update reply. Please try again.")
+              }
+              onReplyDeleteError={() =>
+                setNotice("Couldn't delete this reply. Please try again.")
+              }
+            />
+          </Suspense>
+        ) : null}
+        <DiscussionReportDialog
+          open={reportDialogOpen}
+          target={reportingTarget}
+          courseId={courseId}
+          onClose={handleCloseReport}
+          onSubmit={handleSubmitReport}
+          isSubmitting={Boolean(createReportMutation?.isPending)}
+        />
+      </section>
+    </TimeAgoBuiltAt>
   );
 }
 

@@ -214,7 +214,8 @@ export async function purgeOldSessions(
 
   // Only sessions revoked or expired long ago are deleted, and neither is
   // ever served from the sign-in cache: nothing to clear.
-  // Sign-ins that waited on the device limit are kept no longer.
+  // Sign-ins that once waited on the device limit (none are added since
+  // the limit signs the oldest device out instead) are kept no longer.
   await database
     .deleteFrom("pending_device_sign_ins")
     .where("expires_at", "<", cutoffDate)
@@ -234,20 +235,35 @@ export async function touchSession(
     .execute();
 }
 
-/** The user's sessions in use now (not signed out, not expired). */
-export async function countActiveUserSessions(
+/**
+ * Signs the user out of the sessions in use now (not signed out, not
+ * expired) that were used longest ago, until `keep` are left; returns how
+ * many it signed out.
+ */
+export async function revokeLeastRecentlyUsedSessions(
   database: Executor,
   userId: string,
+  keep: number,
   now: Date = new Date(),
 ): Promise<number> {
-  const row = await database
-    .selectFrom("sessions")
-    .select((eb) => eb.fn.countAll<number>().as("count"))
-    .where("user_id", "=", userId)
-    .where("revoked_at", "is", null)
-    .where("expires_at", ">", now)
-    .executeTakeFirst();
-  return Number(row?.count ?? 0);
+  const revoked = await database
+    .updateTable("sessions")
+    .set({ revoked_at: now })
+    .where("id", "in", (eb) =>
+      eb
+        .selectFrom("sessions")
+        .select("id")
+        .where("user_id", "=", userId)
+        .where("revoked_at", "is", null)
+        .where("expires_at", ">", now)
+        .orderBy("last_used_at", "desc")
+        .orderBy("created_at", "desc")
+        .offset(keep),
+    )
+    .returning("id")
+    .execute();
+  for (const { id } of revoked) evictCachedSession(id);
+  return revoked.length;
 }
 
 /**
@@ -264,63 +280,4 @@ export async function lockUserForSignIn(
     .where("id", "=", userId)
     .forUpdate()
     .executeTakeFirst();
-}
-
-export async function insertPendingDeviceSignIn(
-  database: Executor,
-  input: {
-    id: string;
-    userId: string;
-    tokenHash: string;
-    ipAddress: string | null;
-    userAgent: string | null;
-    location?: SessionLocation | null;
-    expiresAt: Date;
-  },
-): Promise<void> {
-  await database
-    .insertInto("pending_device_sign_ins")
-    .values({
-      id: input.id,
-      user_id: input.userId,
-      token_hash: input.tokenHash,
-      ip_address: input.ipAddress,
-      user_agent: input.userAgent,
-      location_city: input.location?.city ?? null,
-      location_region: input.location?.region ?? null,
-      location_country: input.location?.country ?? null,
-      expires_at: input.expiresAt,
-    })
-    .execute();
-}
-
-/** A sign-in still waiting on the device limit: not used, not expired. */
-export function findPendingDeviceSignIn(
-  database: Executor,
-  tokenHash: string,
-  now: Date = new Date(),
-) {
-  return database
-    .selectFrom("pending_device_sign_ins")
-    .selectAll()
-    .where("token_hash", "=", tokenHash)
-    .where("used_at", "is", null)
-    .where("expires_at", ">", now)
-    .executeTakeFirst();
-}
-
-/** Marks it used; false when it already was (it can be used once only). */
-export async function usePendingDeviceSignIn(
-  database: Executor,
-  id: string,
-  now: Date = new Date(),
-): Promise<boolean> {
-  const result = await database
-    .updateTable("pending_device_sign_ins")
-    .set({ used_at: now })
-    .where("id", "=", id)
-    .where("used_at", "is", null)
-    .where("expires_at", ">", now)
-    .executeTakeFirst();
-  return Number(result.numUpdatedRows) > 0;
 }

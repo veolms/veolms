@@ -123,3 +123,7 @@ export const coursePurchaseGuarantee: CoursePurchaseGuarantee = {
 /** Said under the button of a course that is paid for. */
 export const coursePurchaseCheckoutNote =
   "Secure checkout · UPI, cards, net banking";
+
+/** The same for a buyer outside India, who pays in dollars by card. */
+export const coursePurchaseCheckoutNoteInternational =
+  "Secure checkout · cards";

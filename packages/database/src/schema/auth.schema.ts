@@ -100,8 +100,11 @@ export interface SessionTable {
 }
 
 /**
- * A student's sign-in held back while they choose a device to sign out, as
- * the academy's device limit asks (see the device-limit migration).
+ * A student's sign-in held back while they chose a device to sign out, as
+ * the academy's device limit once asked (see the device-limit migration).
+ * No longer written: the limit now signs the oldest device out instead.
+ * Kept until a migration drops it, so the code it replaced can still run
+ * beside it during a deploy.
  */
 export interface PendingDeviceSignInTable {
   id: string;

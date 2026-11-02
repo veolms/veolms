@@ -26,8 +26,12 @@ import {
   type CourseAccessResume,
   type CourseEditorDataResponse,
   type CourseOverviewResponse,
+  type InternationalCoursePrice,
   type PartialAccessOffer,
 } from "@veolms/contracts";
+import { formatMoney, toMajorUnits } from "@veolms/contracts/commerce/money";
+import { usePriceRegion } from "./priceRegion";
+import { CoursePriceSwitch } from "./CoursePriceSwitch";
 import {
   getCourseRouteKey,
   type Course,
@@ -104,11 +108,13 @@ import {
 import { CourseOverviewSkeleton } from "./overview/CourseOverviewSkeleton";
 import { CourseLoadError } from "./overview/CourseLoadError";
 import { CourseManagerBar } from "./overview/CourseManagerBar";
+import { CourseBandLoadError } from "./overview/CourseBandLoadError";
 import { CourseViewerBandPlaceholder } from "./overview/CourseViewerBandPlaceholder";
 import { PartialAccessNotice } from "./overview/PartialAccessNotice";
 import { usePartialAccessOffer } from "../services/courses";
 import {
   coursePurchaseCheckoutNote,
+  coursePurchaseCheckoutNoteInternational,
   coursePurchaseGuarantee,
   getCoursePurchasePerks,
   type CourseIncludeLine,
@@ -123,6 +129,7 @@ import { PayCardIcon } from "./overview/PayCardIcon";
 import {
   CoursePriceBar,
   type CoursePriceDisplayPrice,
+  type RegionalPriceView,
 } from "./overview/CoursePriceBar";
 import {
   bandHeaderClasses,
@@ -236,6 +243,12 @@ export interface CourseOverviewPricingProps {
   currency?: string;
   /** What the price box calls the discount, when it is not a sale. */
   discountName?: string;
+  /**
+   * The same at the course's price for buyers outside India, when it has
+   * one: its amounts are major units with cents (43.99). Which of the two
+   * a visitor sees is their region's (see `priceRegion.ts`).
+   */
+  international?: CourseOverviewPricingProps;
 }
 
 export function isFreeCoursePricing(
@@ -250,6 +263,47 @@ export function isFreeCoursePricing(
 }
 
 function toOverviewPricingProps(
+  pr?: {
+    pricingType: "free" | "paid";
+    price: number;
+    currency?: string;
+    salePrice?: number | null;
+    international?: InternationalCoursePrice | null;
+  } | null,
+): CourseOverviewPricingProps {
+  const domestic = toDomesticOverviewPricingProps(pr);
+  const international =
+    pr?.pricingType === "paid" && pr.international
+      ? toInternationalOverviewPricingProps(pr.international)
+      : undefined;
+  return international ? { ...domestic, international } : domestic;
+}
+
+/** A course's price for buyers outside India, as the price box shows it. */
+function toInternationalOverviewPricingProps({
+  currency,
+  priceMinor,
+  salePriceMinor,
+}: InternationalCoursePrice): CourseOverviewPricingProps {
+  const amount = toMajorUnits(salePriceMinor, currency);
+  if (priceMinor <= salePriceMinor) {
+    return {
+      price: formatMoney(salePriceMinor, { currency }),
+      amount,
+      currency,
+    };
+  }
+  return {
+    price: formatMoney(salePriceMinor, { currency }),
+    originalPrice: formatMoney(priceMinor, { currency }),
+    discount: `${Math.round(((priceMinor - salePriceMinor) / priceMinor) * 100)}% OFF`,
+    amount,
+    originalAmount: toMajorUnits(priceMinor, currency),
+    currency,
+  };
+}
+
+function toDomesticOverviewPricingProps(
   pr?: {
     pricingType: "free" | "paid";
     price: number;
@@ -295,16 +349,65 @@ function toOverviewPricingProps(
   };
 }
 
+/**
+ * A paid course's own price as the price box shows it with no coupon and
+ * no amount of the buyer's own: the line and the full breakdown. The same
+ * figures the purchase section works out for that case.
+ */
+function coursePriceView(
+  pricing: CourseOverviewPricingProps,
+): RegionalPriceView {
+  const label = pricing.price ?? "Free";
+  const currency = pricing.currency ?? "INR";
+  const amount = pricing.amount ?? 0;
+  const sizeClassName = priceTextClasses[getPriceSizeVariant(label)];
+  return {
+    price: {
+      label,
+      sizeClassName,
+      struckThrough: pricing.originalPrice,
+      badge: pricing.discount,
+    },
+    priceBreakdown: {
+      sale:
+        pricing.originalPrice && pricing.discount && pricing.originalAmount
+          ? {
+              marked: pricing.originalPrice,
+              discount: formatPriceWithCurrency(
+                pricing.originalAmount - amount,
+                currency,
+              ),
+              label: pricing.discount.replace(/\s*off$/i, "").trim() + " off",
+              name: pricing.discountName,
+            }
+          : undefined,
+      beforeCoupon: formatPriceWithCurrency(amount, currency),
+      total: label,
+      totalSizeClassName: sizeClassName,
+    },
+  };
+}
+
 function appliedCouponFromPreview(
   code: string,
   res: CheckoutPreviewResponse,
   pricedForAmount: number,
 ): AppliedCoupon {
-  const discountAmount = res.pricing.discountAmount;
   const currency = res.pricing.currency || "INR";
-  const totalAmount = res.pricing.totalAmount;
+  // A preview for a course at its price for buyers outside India is in
+  // cents; the card works in major units, as its prices are.
+  const inCents = res.pricing.amountUnit === "minor";
+  const toMajor = (amount: number) =>
+    inCents ? toMajorUnits(amount, currency) : amount;
+  const discountAmount = toMajor(res.pricing.discountAmount);
+  const totalAmount = toMajor(res.pricing.totalAmount);
   let discountLabel: string | undefined;
-  if (res.couponValidation?.discountValue) {
+  // A fixed coupon's own value is rupees: in cents the amount it took off
+  // is what to name.
+  if (
+    res.couponValidation?.discountValue &&
+    (!inCents || res.couponValidation.discountType === "percentage")
+  ) {
     discountLabel =
       res.couponValidation.discountType === "percentage"
         ? `${res.couponValidation.discountValue}% OFF`
@@ -364,7 +467,7 @@ interface CoursePurchaseSectionProps {
 
 function CoursePurchaseSection({
   course,
-  pricing,
+  pricing: pricingForAllRegions,
   inclusions,
   onNavigatePage,
   isReadOnlyPreview = false,
@@ -377,6 +480,14 @@ function CoursePurchaseSection({
   purchaseTitle,
 }: CoursePurchaseSectionProps) {
   const user = useAuthStore((state) => state.user);
+  // The prices this visitor is charged: the ones for buyers outside India
+  // there. Until the region is known the price box shows a shimmer for a
+  // course that has both (`regionalPrices` below), never one of the two.
+  const priceRegion = usePriceRegion();
+  const pricing =
+    priceRegion === "international" && pricingForAllRegions?.international
+      ? pricingForAllRegions.international
+      : pricingForAllRegions;
   // What checkout sells: the course, or the part of it this page offers.
   const buyCourseId = purchaseCourseId ?? course.id;
   const preview = useCheckoutPreview();
@@ -1297,9 +1408,27 @@ function CoursePurchaseSection({
     (isFree ? originalPrice : true) && displayDiscount
       ? displayDiscount
       : undefined;
+  // A course that also has a price for buyers outside India draws both in
+  // its box, and the visitor's region shows one (a shimmer until it is
+  // known), as long as the box shows the course's own price: no coupon, no
+  // amount of the buyer's own, nothing bought by staff here. Drawn from the
+  // two prices alone, so the prerendered page is the same for everyone.
+  const regionalPrices =
+    pricingForAllRegions?.international &&
+    !isFree &&
+    !appliedCoupon &&
+    !isPayingAbovePrice &&
+    !isCreatorNormal &&
+    !includingCourse
+      ? {
+          domestic: coursePriceView(pricingForAllRegions),
+          international: coursePriceView(pricingForAllRegions.international),
+        }
+      : undefined;
 
   return (
     <CoursePriceBar
+      regional={regionalPrices}
       price={
         isCreatorNormal
           ? undefined
@@ -1393,7 +1522,20 @@ function CoursePurchaseSection({
           />
         ) : undefined
       }
-      checkoutNote={isPaidPurchase ? coursePurchaseCheckoutNote : undefined}
+      checkoutNote={
+        !isPaidPurchase ? undefined : pricingForAllRegions?.international ? (
+          // How a buyer can pay depends on where they are: rupees by UPI,
+          // cards and net banking in India, dollars by card elsewhere.
+          <CoursePriceSwitch
+            display="inline"
+            pending="Secure checkout"
+            domestic={coursePurchaseCheckoutNote}
+            international={coursePurchaseCheckoutNoteInternational}
+          />
+        ) : (
+          coursePurchaseCheckoutNote
+        )
+      }
       guarantee={isPaidPurchase ? coursePurchaseGuarantee : undefined}
     >
       {SUPPORT_AMOUNTS_OFFERED &&
@@ -1897,6 +2039,9 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     refetch: refetchOverview,
     access,
     accessPending,
+    accessFailed,
+    priceStatus,
+    pricingType,
     totalSections,
     sectionsComplete,
     requestAllSections,
@@ -1947,6 +2092,10 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         : accessPending
           ? "pending"
           : "known";
+
+  // The price and the viewer come from the API for a course page; the
+  // editor's preview and a course handed in whole bring their own.
+  const pricedByPage = !props.previewData && !props.customCourse;
 
   // The viewer's enrolment, from the same answer that decides which lessons
   // open to them.
@@ -2049,6 +2198,17 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         onRequestAllSections={requestAllSections}
         resume={access?.resume}
         partialOffer={partialOffer}
+        // A page built (or opened) before the price has come: whether the
+        // course is paid still marks its free lessons from the first paint.
+        isPaidCourse={
+          props.isPaidCourse ??
+          (pricedByPage && priceStatus !== "known" && pricingType
+            ? pricingType === "paid"
+            : undefined)
+        }
+        priceStatus={pricedByPage ? priceStatus : "known"}
+        accessFailed={pricedByPage && accessFailed}
+        onRetryAccess={refetchOverview}
         enrolmentAccess={
           access?.enrolled
             ? {
@@ -2093,6 +2253,19 @@ type CourseOverviewContentProps = CourseOverviewPageProps & {
     accessExpiresAt: string | null;
     enrollment?: CourseAccessEnrollment | null;
   } | null;
+  /**
+   * Whether the course's price in force is known (see `useCoursePageData`).
+   * Until it is, the band shows a placeholder where the price and the
+   * button go; if it failed to load, it says so.
+   */
+  priceStatus?: "known" | "pending" | "failed";
+  /**
+   * A signed-in learner's access answer failed and nothing says whether
+   * the course is theirs: neither a price nor their progress is shown.
+   */
+  accessFailed?: boolean;
+  /** Asks again for the access answer (the band's "Try again"). */
+  onRetryAccess?: () => void;
 };
 
 function CourseOverviewContent({
@@ -2121,6 +2294,9 @@ function CourseOverviewContent({
   resume,
   enrolmentAccess,
   partialOffer = null,
+  priceStatus = "known",
+  accessFailed = false,
+  onRetryAccess,
 }: CourseOverviewContentProps) {
   const offer = partialOffer?.status === "ready" ? partialOffer.offer : null;
   // The part is shown against the whole course's price; what it saves is
@@ -2593,6 +2769,13 @@ function CourseOverviewContent({
               offer || partialOffer?.status === "failed" ? null : (
                 <CourseViewerBandPlaceholder />
               )
+            ) : accessFailed || (!offer && priceStatus === "failed") ? (
+              // Whether the course is theirs, or what it costs, could not be
+              // loaded: a price would be wrong for a learner who holds it.
+              <CourseBandLoadError onRetry={onRetryAccess} />
+            ) : !offer && priceStatus === "pending" ? (
+              // A page is built with no price; it comes from the API.
+              <CourseViewerBandPlaceholder />
             ) : (
               <CoursePurchaseSection
                 course={course}

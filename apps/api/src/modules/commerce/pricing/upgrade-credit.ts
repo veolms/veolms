@@ -25,6 +25,8 @@ export async function listCoursesOpenedBy(
 export interface PartialHolding {
   /** What the learner paid for the parts, in major units of `currency`. */
   credit: number;
+  /** The same in minor units, for a course bought in cents. */
+  creditMinor: number;
   currency: string | null;
   /** The parts' titles: "Core Concepts Edition". */
   fromTitles: string[];
@@ -81,6 +83,7 @@ export async function listPartialHoldings(
   for (const row of rows) {
     const holding = holdings.get(row.course_id) ?? {
       credit: 0,
+      creditMinor: 0,
       currency: null,
       fromTitles: [],
     };
@@ -94,6 +97,7 @@ export async function listPartialHoldings(
       currenciesByCourse.set(row.course_id, currencies);
       holding.currency = row.currency;
       holding.credit += Math.floor(toMajorUnits(paidMinor, row.currency));
+      holding.creditMinor += paidMinor;
     }
     holdings.set(row.course_id, holding);
   }
@@ -103,6 +107,7 @@ export async function listPartialHoldings(
       holdings.set(courseId, {
         ...holdings.get(courseId)!,
         credit: 0,
+        creditMinor: 0,
         currency: null,
       });
     }

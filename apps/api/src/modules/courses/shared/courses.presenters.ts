@@ -7,6 +7,10 @@ import type {
   CourseSection,
   CourseSettings,
 } from "@veolms/contracts";
+import {
+  presentInternationalPrice,
+  type StoredInternationalPrice,
+} from "./international-price.ts";
 
 /**
  * The single place course rows become API objects. A response schema strips
@@ -229,7 +233,9 @@ export function presentPricing(
     // Absent until the migration that adds the column has run.
     show_discount_badge?: boolean | null;
     linked_only?: boolean | null;
-  },
+  } & StoredInternationalPrice & {
+      international_price_auto?: boolean | null;
+    },
 ): CoursePricing {
   return {
     id: pricing.id,
@@ -239,6 +245,8 @@ export function presentPricing(
     salePrice: pricing.sale_price,
     showDiscountBadge: pricing.show_discount_badge === true,
     linkedOnly: pricing.linked_only === true,
+    international: presentInternationalPrice(pricing),
+    internationalAuto: pricing.international_price_auto !== false,
   };
 }
 

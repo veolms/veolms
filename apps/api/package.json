@@ -17,6 +17,7 @@
     "user:mfa-reset": "node --env-file-if-exists=../../.env src/cli/mfa-reset.ts",
     "encryption-key:rotate": "node --env-file-if-exists=../../.env src/cli/rotate-encryption-key.ts",
     "import:youtube": "node --env-file-if-exists=../../.env src/cli/import-youtube.ts",
+    "international-prices:fill": "node --env-file-if-exists=../../.env src/cli/fill-international-prices.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/**/*.test.ts\"",

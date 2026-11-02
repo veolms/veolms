@@ -1,6 +1,6 @@
 import type { Kysely } from "kysely";
 import { permissions, type Permission } from "@veolms/contracts";
-import type { Database } from "./schema/index.ts";
+import type { Database } from "../schema/index.ts";
 
 export const SYSTEM_ROLES = {
   admin: {

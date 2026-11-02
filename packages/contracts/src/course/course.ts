@@ -15,6 +15,15 @@ export interface CoursePricingSummary {
   salePrice: number | null;
   /** Show the discount as a badge ("20% off") on the course's cards. */
   showDiscountBadge?: boolean;
+  /**
+   * The price for buyers outside India, in minor units; null when the course
+   * is sold in rupees everywhere (see `internationalCoursePriceSchema`).
+   */
+  international?: {
+    currency: string;
+    priceMinor: number;
+    salePriceMinor: number;
+  } | null;
 }
 
 /** One responsive rendition of a course thumbnail, as used in `srcset`. */
@@ -67,12 +76,28 @@ export interface PublicCourse {
   description: string;
 }
 
+/**
+ * A course's price for buyers outside India (see `pricingRegionSchema`), in
+ * the currency's minor units: $43.99 is 4399. Unlike the rupee prices beside
+ * it, which are whole rupees. Every visitor is sent both; the page shows the
+ * one for the visitor's region and checkout charges it.
+ */
+export const internationalCoursePriceSchema = z.strictObject({
+  currency: z.string().length(3),
+  /** The marked price, struck through when above `salePriceMinor`. */
+  priceMinor: z.number().int().positive(),
+  /** What a buyer outside India pays. */
+  salePriceMinor: z.number().int().positive(),
+});
+
 export const coursePricingSummarySchema = z.strictObject({
   pricingType: z.enum(["free", "paid"]),
   price: z.number().int().nonnegative(),
   currency: z.string().min(3).max(3).default("INR"),
   salePrice: z.number().int().nonnegative().nullable().default(null),
   showDiscountBadge: z.boolean().default(false),
+  /** Null for a course sold in rupees everywhere. */
+  international: internationalCoursePriceSchema.nullable().default(null),
 });
 
 export const courseThumbnailVariantSchema = z.object({
@@ -248,7 +273,18 @@ export const coursePricingSchema = z.object({
    * out of the catalogue.
    */
   linkedOnly: z.boolean().optional(),
+  /** Null for a course sold in rupees everywhere. */
+  international: internationalCoursePriceSchema.nullable().optional(),
+  /**
+   * `international` is the automatic price: the rupee prices at the day's
+   * exchange rate, rounded up to .99, worked out again when they change.
+   * False once staff type a price, or remove it.
+   */
+  internationalAuto: z.boolean().optional(),
 });
+
+/** Below this a card payment in dollars is not worth taking ($1.00). */
+export const MIN_INTERNATIONAL_SALE_PRICE_MINOR = 100;
 
 /**
  * A course's price is always both numbers: `salePrice`, what a learner
@@ -277,6 +313,37 @@ export const updateCoursePricingRequestSchema = z
      * restricted; turning it off makes access open to everyone again.
      */
     linkedOnly: z.boolean().optional(),
+    /**
+     * True: the price for buyers outside India is worked out from the rupee
+     * prices at the day's exchange rate (rounded up to .99), now and when
+     * they change; `international` is ignored. False: `international` is
+     * the price as typed. Absent keeps the course's own setting (a course
+     * priced for the first time gets the automatic price).
+     */
+    internationalAuto: z.boolean().optional(),
+    /**
+     * The price for buyers outside India, in cents. Null removes it, so the
+     * course is sold in rupees everywhere; absent leaves it as it is. A
+     * linked-only course has none whatever was sent. Sending it turns the
+     * automatic price off unless `internationalAuto` is true.
+     */
+    international: z
+      .strictObject({
+        currency: z.literal("USD"),
+        priceMinor: z.number().int().positive(),
+        salePriceMinor: z
+          .number()
+          .int()
+          .min(MIN_INTERNATIONAL_SALE_PRICE_MINOR, {
+            message: "The international sale price must be at least 1.00",
+          }),
+      })
+      .refine((value) => value.salePriceMinor <= value.priceMinor, {
+        message: "The international sale price cannot exceed its price",
+        path: ["salePriceMinor"],
+      })
+      .nullable()
+      .optional(),
   })
   .refine((data) => data.salePrice <= data.price, {
     message: "salePrice cannot exceed price",
@@ -284,6 +351,9 @@ export const updateCoursePricingRequestSchema = z
   });
 
 export type CoursePricing = z.infer<typeof coursePricingSchema>;
+export type InternationalCoursePrice = z.infer<
+  typeof internationalCoursePriceSchema
+>;
 export type UpdateCoursePricingRequest = z.infer<
   typeof updateCoursePricingRequestSchema
 >;
@@ -941,6 +1011,7 @@ export const courseOverviewSchema = z.object({
       currency: true,
       salePrice: true,
       showDiscountBadge: true,
+      international: true,
     })
     .nullable()
     .optional(),
@@ -1022,6 +1093,14 @@ export const courseOverviewSchema = z.object({
             .object({
               amount: z.number().int().positive(),
               currency: z.string(),
+              /** Its sale price for buyers outside India, when it has one. */
+              international: z
+                .object({
+                  amountMinor: z.number().int().positive(),
+                  currency: z.string(),
+                })
+                .nullable()
+                .optional(),
             })
             .nullable(),
         }),

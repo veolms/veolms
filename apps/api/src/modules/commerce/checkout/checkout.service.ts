@@ -49,7 +49,8 @@ import {
 } from "../payments/captured-gateway-payment.ts";
 import { createExtraPaymentRefundService } from "../payments/extra-payment-refund.service.ts";
 import { courseSaleState } from "../pricing/purchasable.ts";
-import { toMinorUnits } from "../shared/currency.ts";
+import { pricingAmountToMinorUnits } from "../shared/currency.ts";
+import { pricingRegionForCountry } from "../shared/pricing-region.ts";
 import { toPaymentProvider } from "../payments/payment.mapper.ts";
 import {
   createPaymentReconciliationService,
@@ -70,6 +71,7 @@ export interface CheckoutService {
   previewCheckout(
     userId: string | undefined,
     request: CheckoutPreviewRequest,
+    context?: CheckoutContext,
   ): Promise<CheckoutPreviewResponse>;
   createOrder(
     user: {
@@ -91,7 +93,8 @@ export interface CheckoutService {
 export interface CheckoutContext {
   /**
    * The buyer's country (ISO 3166-1 alpha-2), when the request says: it
-   * picks the gateway a new payment is opened with.
+   * picks the gateway a new payment is opened with, and which of a course's
+   * prices is charged (`pricingRegionForCountry`).
    */
   country?: string | null;
 }
@@ -135,12 +138,14 @@ export function createCheckoutService({
   async function previewCheckout(
     userId: string | undefined,
     request: CheckoutPreviewRequest,
+    context: CheckoutContext = {},
   ): Promise<CheckoutPreviewResponse> {
     const { pricing, couponValidation } = await pricingService
       .calculatePricing({
         userId,
         items: request.items,
         couponCode: request.couponCode,
+        pricingRegion: pricingRegionForCountry(context.country),
       })
       .catch((error: unknown) => {
         // A visitor who is not signed in learns only that a code did not
@@ -164,6 +169,7 @@ export function createCheckoutService({
     // and the coupon's id are for order creation and stay here.
     return {
       pricing: {
+        amountUnit: pricing.amountUnit,
         subtotalAmount: pricing.subtotalAmount,
         discountAmount: pricing.discountAmount,
         totalAmount: pricing.totalAmount,
@@ -593,7 +599,11 @@ export function createCheckoutService({
           coveredByRequest: coverageCovers(wanted, held),
           sameTerms:
             openOrder.total_amount ===
-              toMinorUnits(pricing.totalAmount, pricing.currency) &&
+              pricingAmountToMinorUnits(
+                pricing.totalAmount,
+                pricing.currency,
+                pricing.amountUnit,
+              ) &&
             openOrder.currency === pricing.currency &&
             openOrder.coupon_id === (pricing.couponId ?? null),
           manualPaymentPending: Boolean(openOrder.manual_payment_pending),
@@ -706,6 +716,7 @@ export function createCheckoutService({
       userId: user.id,
       items,
       couponCode,
+      pricingRegion: pricingRegionForCountry(context.country),
     });
 
     const now = new Date();
@@ -830,18 +841,29 @@ export function createCheckoutService({
           user_id: user.id,
           status: "pending",
           currency: pricing.currency,
-          // The pricing is whole major units, as catalog prices are set;
-          // the order stores the money it transacts in minor units.
-          subtotal_amount: toMinorUnits(
+          // The pricing is whole major units, as catalog prices are set
+          // (cents for a price for buyers outside India); the order stores
+          // the money it transacts in minor units.
+          subtotal_amount: pricingAmountToMinorUnits(
             pricing.subtotalAmount,
             pricing.currency,
+            pricing.amountUnit,
           ),
-          discount_amount: toMinorUnits(
+          discount_amount: pricingAmountToMinorUnits(
             pricing.discountAmount,
             pricing.currency,
+            pricing.amountUnit,
           ),
-          tax_amount: toMinorUnits(pricing.taxAmount, pricing.currency),
-          total_amount: toMinorUnits(pricing.totalAmount, pricing.currency),
+          tax_amount: pricingAmountToMinorUnits(
+            pricing.taxAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
+          total_amount: pricingAmountToMinorUnits(
+            pricing.totalAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
           coupon_id: pricing.couponId ?? null,
           idempotency_key: idempotencyKey ?? null,
           expires_at: expiresAt,
@@ -857,10 +879,26 @@ export function createCheckoutService({
           bundle_id: it.itemType === "bundle" ? it.itemId : null,
           quiz_pricing_id: it.itemType === "quiz" ? it.itemId : null,
           title_snapshot: it.title,
-          unit_price: toMinorUnits(it.unitPrice, pricing.currency),
-          discount_amount: toMinorUnits(it.discountAmount, pricing.currency),
-          tax_amount: toMinorUnits(it.taxAmount, pricing.currency),
-          final_amount: toMinorUnits(it.finalAmount, pricing.currency),
+          unit_price: pricingAmountToMinorUnits(
+            it.unitPrice,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
+          discount_amount: pricingAmountToMinorUnits(
+            it.discountAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
+          tax_amount: pricingAmountToMinorUnits(
+            it.taxAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
+          final_amount: pricingAmountToMinorUnits(
+            it.finalAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
           created_at: now,
         }));
 
