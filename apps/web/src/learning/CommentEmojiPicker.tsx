@@ -90,6 +90,9 @@ export function CommentEmojiPicker({
             }
           >
             <EmojiPicker
+              // The device's own emoji, as the posted comment shows them.
+              // The default draws images fetched from a third-party CDN.
+              emojiStyle="native"
               colorScheme={colorScheme}
               height={320}
               width="min(20rem, calc(100vw - 2rem))"
