@@ -7,7 +7,7 @@ export const GENERIC_API_ERROR_MESSAGE =
  * place, and support found nothing in the server logs.
  */
 export const UNREACHABLE_API_ERROR_MESSAGE =
-  "Can't reach our server. Check your connection and try again.";
+  "Check your connection and try again.";
 
 export interface ApiError {
   status: number;
