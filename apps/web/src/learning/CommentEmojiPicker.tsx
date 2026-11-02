@@ -94,8 +94,14 @@ export function CommentEmojiPicker({
               // The default draws images fetched from a third-party CDN.
               emojiStyle="native"
               colorScheme={colorScheme}
-              height={320}
+              // No taller than the room the popover has (a phone on its
+              // side, or with its keyboard up): the popover clips what does
+              // not fit, which hid the bottom rows.
+              height="min(20rem, calc(var(--available-height, 20rem) - 2px))"
               width="min(20rem, calc(100vw - 2rem))"
+              // On a touch screen, focusing the search raised the keyboard
+              // over the emojis the visitor came for.
+              autoFocusSearch={!isTouchScreen()}
               lazyLoadEmojis
               suggestedEmojisMode="recent"
               suggestedEmojis={recentEmojis}
@@ -111,6 +117,13 @@ export function CommentEmojiPicker({
         </PopoverContent>
       )}
     </Popover>
+  );
+}
+
+function isTouchScreen(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(pointer: coarse)").matches
   );
 }
 
