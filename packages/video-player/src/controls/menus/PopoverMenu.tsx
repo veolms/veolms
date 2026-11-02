@@ -25,6 +25,8 @@ export type PopoverMenuMobilePresentation = "popover" | "sheet";
 
 export interface PopoverMenuRenderContext {
   close: () => void;
+  /** The menu is the bottom sheet, which draws its own title. */
+  sheet: boolean;
 }
 
 export interface PopoverMenuProps {
@@ -33,6 +35,15 @@ export interface PopoverMenuProps {
   trigger: ReactNode;
   children: ReactNode | ((context: PopoverMenuRenderContext) => ReactNode);
   menuLabel?: string;
+  /** What the sheet shows as its title (default: the menu label). */
+  sheetTitle?: ReactNode;
+  /**
+   * `side` fills the player's height along its right edge instead of
+   * opening beside the trigger; `corner` opens above the trigger's row but
+   * against the player's right edge, so it stays put wherever the trigger
+   * is (neither applies to the sheet).
+   */
+  placement?: "anchored" | "corner" | "side";
   mobilePresentation?: PopoverMenuMobilePresentation;
   /**
    * Uses the sheet outside the phone layout too (only with
@@ -177,6 +188,8 @@ export function PopoverMenu({
   onOpenChange,
   open: controlledOpen,
   panelClassName,
+  placement = "anchored",
+  sheetTitle,
   side = "top",
   trigger,
   triggerClassName,
@@ -491,18 +504,25 @@ export function PopoverMenu({
         isMobileSheet && mobileSheetExpanded ? "" : undefined
       }
       data-video-player-menu-panel=""
+      data-video-player-menu-placement={
+        !isMobileSheet && placement === "side" ? "side" : undefined
+      }
       data-player-theme={theme.id}
       style={{
         ...getPlayerThemeStyle(theme),
-        ...(panelLayout
-          ? {
-              top: panelLayout.top,
-              bottom: panelLayout.bottom,
-              left: panelLayout.left,
-              right: panelLayout.right,
-              maxHeight: panelLayout.maxHeight,
-            }
-          : {}),
+        ...(panelLayout && placement === "side"
+          ? { top: 0, bottom: 0, right: 0, left: "auto", maxHeight: "none" }
+          : panelLayout
+            ? {
+                top: panelLayout.top,
+                bottom: panelLayout.bottom,
+                left: placement === "corner" ? "auto" : panelLayout.left,
+                right: placement === "corner" ? 12 : panelLayout.right,
+                // A panel class may lift the panel off its trigger with a
+                // margin; it names that lift so the panel still fits.
+                maxHeight: `calc(${panelLayout.maxHeight}px - var(--video-player-menu-lift, 0px))`,
+              }
+            : {}),
         ...(isMobileSheet ? mobileSheetStyle : undefined),
         ...(isMobileSheet && mobileSheetExpanded
           ? { height: "100dvh", maxHeight: "100dvh" }
@@ -557,7 +577,7 @@ export function PopoverMenu({
             id={`${menuId}-title`}
             className="w-full text-left text-lg font-semibold tracking-[-0.01em] text-(--video-player-menu-text)"
           >
-            {resolvedMenuLabel}
+            {sheetTitle ?? resolvedMenuLabel}
           </div>
         </div>
       ) : null}
@@ -568,11 +588,11 @@ export function PopoverMenu({
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pt-18 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
         >
           {typeof children === "function"
-            ? children({ close: closeMenu })
+            ? children({ close: closeMenu, sheet: isMobileSheet })
             : children}
         </div>
       ) : typeof children === "function" ? (
-        children({ close: closeMenu })
+        children({ close: closeMenu, sheet: isMobileSheet })
       ) : (
         children
       )}

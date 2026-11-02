@@ -1,4 +1,5 @@
 @import "../themes/playerThemes.css";
+@import "../themes/playerThemeKit.css";
 
 @keyframes video-player-hud {
   0% {
