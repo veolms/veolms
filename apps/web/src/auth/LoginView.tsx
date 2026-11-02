@@ -623,7 +623,11 @@ export function LoginView({
                   Can&rsquo;t use your email?{" "}
                   <button
                     className={loginQuietLinkClasses}
-                    disabled={oneTapPending}
+                    disabled={
+                      oneTapPending ||
+                      flow.status === "sendingOtp" ||
+                      sendOtpMutation.isPending
+                    }
                     onClick={() => {
                       setIdentifierError(null);
                       setPhoneSignIn(true);
