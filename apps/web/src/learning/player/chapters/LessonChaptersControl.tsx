@@ -1,6 +1,10 @@
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { useState } from "react";
-import { PopoverMenu, usePlayerTheme } from "@veolms/video-player";
+import {
+  ChapterCountBadge,
+  PopoverMenu,
+  usePlayerTheme,
+} from "@veolms/video-player";
 import { cn } from "../../../lib/utils";
 import { LessonChapterRows } from "./LessonChapterRows";
 
@@ -43,6 +47,7 @@ export function LessonChaptersToggleButton({
         {compact ? null : (
           <>
             <span>Chapters</span>
+            <ChapterCountBadge />
             <CaretRight size={14} aria-hidden="true" />
           </>
         )}

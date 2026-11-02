@@ -96,6 +96,8 @@ export interface PlayerThemeIcons {
   retry: PlayerThemeIcon;
   /** The play button once the video has ended: play it again. */
   replay: PlayerThemeIcon;
+  /** The settings menu row that opens the theme choice (a palette if unset). */
+  theme?: PlayerThemeIcon;
 }
 
 export interface PlayerThemeTokens {
@@ -183,6 +185,66 @@ export interface PlayerThemeMotion {
   settingsOpenRotation?: number;
 }
 
+export interface PlayerThemeSettingsMenu {
+  /**
+   * How the settings menu shows its choices: `list` rows that open a
+   * submenu each (the default), `cards` in a two-column grid, `chips`
+   * for quality and speed right in the menu, or `panel`, a list down the
+   * side of the player with the label over its value.
+   */
+  layout?: "list" | "cards" | "chips" | "panel";
+  /** The header over the menu; none for no header. */
+  title?: string;
+  /** Before the title, e.g. a prompt (`> `). */
+  titlePrefix?: string;
+  /** A block cursor after the title. */
+  titleCursor?: boolean;
+  /** Small text before the close button (`esc close`). */
+  closeHint?: string;
+  /** List rows sit in one inset card, split by hairlines. */
+  grouped?: boolean;
+  /** List rows choose the speed in place from a few steps. */
+  inlineSpeed?: boolean;
+  /** A row's value in the accent colour. */
+  accentValues?: boolean;
+  /** Icons on a tinted tile. */
+  iconTiles?: boolean;
+  /** How on/off settings are drawn: a sliding switch, or OFF and ON boxes. */
+  switchStyle?: "switch" | "segmented";
+  /** How the picked item of a submenu is marked. */
+  selectedMark?: "check" | "square" | "dot";
+  /** Text that opens picture in picture in the chips layout. */
+  openLabel?: string;
+}
+
+/** Extra parts of the player that some themes draw. */
+export interface PlayerThemeChrome {
+  /**
+   * The lesson's name in the top left: its title, a file name
+   * (`setting-up-node.mp4`) or a session tag (`setting_up_node`).
+   */
+  topTitle?: "title" | "file" | "session";
+  /** On the Chapters button: how many chapters, or which of how many. */
+  chapterCount?: "total" | "position";
+  /**
+   * The chapter now playing, beside the time. Words in braces are filled
+   * in: `{title}`, `{n}` and `{total}`, or `{nn}` and `{tt}` padded to
+   * two digits. The title is drawn in its own span (`data-part="title"`).
+   */
+  chapterLabel?: string;
+  /** The volume as a percentage beside its slider. */
+  volumePercent?: boolean;
+}
+
+export interface PlayerThemeAutoplay {
+  /** Words before the switch (`AUTO`, `Autoplay`); none for the bare switch. */
+  label?: string;
+  /** A sliding switch, a small square, or an ON/OFF tag. */
+  style?: "switch" | "square" | "tag";
+  /** The knob on the coloured track when on (default: accent contrast). */
+  knob?: string;
+}
+
 export interface PlayerThemeDefinition {
   id: string;
   label: string;
@@ -198,6 +260,10 @@ export interface PlayerThemeDefinition {
   tokens: PlayerThemeTokens;
   icons: PlayerThemeIcons;
   motion: PlayerThemeMotion;
+  /** The settings menu's layout; YouTube's rows when left out. */
+  settingsMenu?: PlayerThemeSettingsMenu;
+  autoplay?: PlayerThemeAutoplay;
+  chrome?: PlayerThemeChrome;
 }
 
 export type PlayerTheme =
@@ -214,6 +280,9 @@ export interface CreatePlayerThemeOptions {
   tokens?: Partial<PlayerThemeTokens>;
   icons?: Partial<PlayerThemeIcons>;
   motion?: Partial<PlayerThemeMotion>;
+  settingsMenu?: PlayerThemeSettingsMenu;
+  autoplay?: PlayerThemeAutoplay;
+  chrome?: PlayerThemeChrome;
 }
 
 export type PlayerThemeStyle = CSSProperties &
@@ -436,6 +505,18 @@ export const BUILT_IN_PLAYER_THEMES: Record<
     },
     icons: coneIcons,
     motion: { settingsClosedRotation: 0, settingsOpenTurn: 0 },
+    settingsMenu: {
+      title: "Video settings",
+      accentValues: true,
+      iconTiles: true,
+    },
+    autoplay: { label: "Auto", knob: "#111111" },
+    chrome: {
+      topTitle: "title",
+      chapterCount: "total",
+      chapterLabel: "{title} Chapter {n} of {total}",
+      volumePercent: true,
+    },
   },
   frost: {
     id: "frost",
@@ -481,6 +562,8 @@ export const BUILT_IN_PLAYER_THEMES: Record<
     },
     icons: frostIcons,
     motion: { settingsClosedRotation: 0 },
+    settingsMenu: { title: "Video settings", grouped: true },
+    autoplay: { knob: "#0f1419" },
   },
   mono: {
     id: "mono",
@@ -525,6 +608,14 @@ export const BUILT_IN_PLAYER_THEMES: Record<
     },
     icons: monoIcons,
     motion: { settingsClosedRotation: 0, settingsOpenTurn: 0 },
+    settingsMenu: {
+      layout: "panel",
+      title: "Video settings",
+      switchStyle: "segmented",
+      selectedMark: "square",
+    },
+    autoplay: { label: "Autoplay", style: "square" },
+    chrome: { chapterCount: "total", chapterLabel: "{nn} {title}" },
   },
 };
 
@@ -630,6 +721,9 @@ export function createPlayerTheme({
   label,
   motion,
   order,
+  settingsMenu,
+  autoplay,
+  chrome,
   tokens,
   usesAppPalette,
 }: CreatePlayerThemeOptions): PlayerThemeDefinition {
@@ -646,6 +740,9 @@ export function createPlayerTheme({
     tokens: { ...resolvedBase.tokens, ...tokens },
     icons: { ...resolvedBase.icons, ...icons },
     motion: { ...resolvedBase.motion, ...motion },
+    settingsMenu: { ...resolvedBase.settingsMenu, ...settingsMenu },
+    autoplay: { ...resolvedBase.autoplay, ...autoplay },
+    chrome: { ...resolvedBase.chrome, ...chrome },
   };
 }
 
@@ -724,6 +821,9 @@ export function getPlayerThemeStyle(
   for (const [token, property] of OPTIONAL_TOKEN_PROPERTIES) {
     const value = tokens[token];
     if (value !== undefined) style[property] = value;
+  }
+  if (theme.autoplay?.knob) {
+    style["--video-player-switch-knob"] = theme.autoplay.knob;
   }
   return style;
 }

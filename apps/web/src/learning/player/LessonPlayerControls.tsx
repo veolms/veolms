@@ -1,4 +1,5 @@
 import {
+  ChapterNowLabel,
   isPlaybackStalled,
   FullscreenButton,
   PlayerIconButton,
@@ -16,6 +17,7 @@ import {
   usePlayerMobileInteraction,
   usePlayerState,
   usePlayerTheme,
+  type PlayerThemeAutoplay,
   type VideoQuality,
 } from "@veolms/video-player";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
@@ -54,6 +56,10 @@ import {
 import { LessonChaptersPanel } from "./chapters/LessonChaptersPanel";
 import { LessonVolumePill } from "./LessonVolumePill";
 import { updateLearningPreferences } from "../../settings/settingsPreferences";
+import {
+  previewPlayerTheme,
+  useCanChoosePlayerTheme,
+} from "./useLearningPlayerTheme";
 
 /**
  * The quality picked in the player is where every video starts from now on
@@ -63,6 +69,11 @@ function rememberQualityChoice(quality: VideoQuality | null): void {
   updateLearningPreferences({
     videoQuality: quality?.height ? String(quality.height) : "auto",
   });
+}
+
+/** The theme picked in the player's settings menu, as Settings stores it. */
+function rememberThemeChoice(videoPlayerTheme: string): void {
+  updateLearningPreferences({ videoPlayerTheme });
 }
 
 export const PLAYER_SURFACE_CLASS =
@@ -691,10 +702,20 @@ function AutoplayToggle({
   mobileInteraction: boolean;
   onEnabledChange: (enabled: boolean) => void;
 }) {
-  const { icons } = usePlayerTheme();
+  const { autoplay, icons, id: themeId } = usePlayerTheme();
   const shownEnabled = enabled;
   const OnIcon = icons.play;
   const OffIcon = icons.pause;
+  if (themeId !== "youtube") {
+    return (
+      <ThemedAutoplayToggle
+        autoplay={autoplay ?? {}}
+        enabled={shownEnabled}
+        mobileInteraction={mobileInteraction}
+        onEnabledChange={onEnabledChange}
+      />
+    );
+  }
   return (
     <button
       type="button"
@@ -743,6 +764,124 @@ function AutoplayToggle({
         </span>
       </span>
     </button>
+  );
+}
+
+/**
+ * The autoplay switch of the designed themes: the knob rides inside the
+ * track, so it always shows against the track's colour, with the theme's
+ * word before it; or a small square (Mono) or an ON/OFF tag (Phantom).
+ */
+function ThemedAutoplayToggle({
+  autoplay,
+  enabled,
+  mobileInteraction,
+  onEnabledChange,
+}: {
+  autoplay: PlayerThemeAutoplay;
+  enabled: boolean;
+  mobileInteraction: boolean;
+  onEnabledChange: (enabled: boolean) => void;
+}) {
+  const style = autoplay.style ?? "switch";
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label="Autoplay next lesson"
+      title={enabled ? "Autoplay is on" : "Autoplay is off"}
+      data-player-control=""
+      data-autoplay-style={style}
+      className={`group/autoplay relative inline-flex h-8 w-auto shrink-0 items-center justify-center gap-2 px-2 text-white !shadow-none drop-shadow-none sm:h-9 sm:px-2.5 ${PLAYER_INNER_CONTROL_CLASS} ${mobileInteraction ? "sm:!h-8 sm:!px-2" : ""}`}
+      onClick={() => onEnabledChange(!enabled)}
+    >
+      {autoplay.label ? (
+        <span
+          data-autoplay-label=""
+          className={`text-[0.6875rem] leading-none font-bold tracking-[0.06em] ${mobileInteraction ? "hidden" : "max-sm:hidden"}`}
+        >
+          {autoplay.label}
+        </span>
+      ) : null}
+      {style === "square" ? (
+        <span
+          aria-hidden="true"
+          data-autoplay-square=""
+          className={`block size-2 border border-current ${enabled ? "bg-current" : "bg-transparent"}`}
+        />
+      ) : style === "tag" ? (
+        <span
+          aria-hidden="true"
+          data-autoplay-tag=""
+          className={`px-1.5 py-[3px] text-[0.625rem] leading-none font-semibold ${
+            enabled
+              ? "bg-(--video-player-accent) text-(--video-player-accent-contrast)"
+              : "text-(--video-player-control-text-muted) ring-1 ring-current ring-inset"
+          }`}
+        >
+          {enabled ? "ON" : "OFF"}
+        </span>
+      ) : (
+        <span
+          aria-hidden="true"
+          data-autoplay-switch=""
+          className={`relative block h-4 w-7.5 shrink-0 rounded-full transition-colors duration-150 sm:h-[18px] sm:w-8 ${
+            enabled
+              ? "bg-(--video-player-accent)"
+              : "bg-[color-mix(in_srgb,var(--video-player-control-text,#fff)_24%,transparent)]"
+          }`}
+        >
+          <span
+            data-autoplay-switch-knob=""
+            className={`absolute top-0.5 size-3 rounded-full transition-[left,background-color] duration-150 sm:size-3.5 ${
+              enabled
+                ? "left-4 bg-(--video-player-switch-knob,var(--video-player-accent-contrast)) sm:left-4"
+                : "left-0.5 bg-[color-mix(in_srgb,var(--video-player-control-text,#fff)_80%,transparent)]"
+            }`}
+          />
+        </span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * The lesson's name in the top left, beside the minimize button, for the
+ * themes whose `chrome.topTitle` asks for it: the title, a file name
+ * (`setting-up-node.mp4`) or a session tag (`setting_up_node`).
+ */
+function LessonTopTitle({ title }: { title: string }) {
+  const variant = usePlayerTheme().chrome?.topTitle;
+  if (!variant) return null;
+  const words = title
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/gu, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+  const text =
+    variant === "file"
+      ? `${words.join("-")}.mp4`
+      : variant === "session"
+        ? words.join("_")
+        : title;
+  return (
+    <div
+      data-player-top-title={variant}
+      title={title}
+      className="pointer-events-none absolute top-2 left-13 hidden h-9.5 max-w-[min(28rem,calc(100%-22rem))] items-center gap-2 truncate rounded-(--video-player-control-radius) bg-(--video-player-control-surface) px-3 text-sm font-bold text-(--video-player-control-text) sm:inline-flex"
+    >
+      {variant === "title" ? null : (
+        <span
+          aria-hidden="true"
+          data-player-top-title-mark=""
+          className={`size-1.5 shrink-0 bg-(--video-player-accent) ${variant === "file" ? "rounded-full" : ""}`}
+        />
+      )}
+      <span className="truncate">{text}</span>
+    </div>
   );
 }
 
@@ -995,6 +1134,7 @@ export function LessonPlayerControls({
   onMinimize,
   onMobileLandscapeFullscreenChange,
 }: LessonPlayerControlsProps) {
+  const canChoosePlayerTheme = useCanChoosePlayerTheme();
   const chaptersPanelId = useId();
   const [chaptersRequested, setChaptersRequested] = useState(false);
   const hasChapters = useChapters().chapters.length > 0;
@@ -1270,6 +1410,7 @@ export function LessonPlayerControls({
           muteButtonClassName={`${PLAYER_INNER_CONTROL_CLASS} ${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-8.5`}
         />
         <LessonTimeControl />
+        <ChapterNowLabel className="ml-1 hidden max-w-64 text-(--video-player-control-text) lg:inline-flex" />
       </div>
     </div>
   );
@@ -1420,8 +1561,24 @@ export function LessonPlayerControls({
             />
           ) : undefined
         }
+        toggles={
+          showAmbientControl
+            ? [
+                {
+                  id: "ambient",
+                  label: "Ambient mode",
+                  description: "Glow around the player",
+                  icon: <AmbientModeIcon enabled={ambientEnabled} />,
+                  checked: ambientEnabled,
+                  onCheckedChange: onAmbientEnabledChange,
+                },
+              ]
+            : undefined
+        }
         side={inBottomRow ? "top" : "bottom"}
         onQualityChange={rememberQualityChoice}
+        onThemeChange={canChoosePlayerTheme ? rememberThemeChoice : undefined}
+        onThemePreview={canChoosePlayerTheme ? previewPlayerTheme : undefined}
       />
       {inBottomRow && !circularSettingsControl ? (
         <FullscreenButton
@@ -1659,6 +1816,9 @@ export function LessonPlayerControls({
           }
         >
           {!mobileFullscreen ? mobileVignettes : null}
+          {lessonTitle && !mobileInteraction ? (
+            <LessonTopTitle title={lessonTitle} />
+          ) : null}
 
           <div
             className={`pointer-events-auto absolute right-2 top-2 flex items-center gap-2 ${mobileFullscreen ? "!left-auto !right-3 sm:!left-auto sm:!right-3" : ""}`}

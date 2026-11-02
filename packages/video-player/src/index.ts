@@ -104,6 +104,11 @@ export { MuteButton } from "./controls/MuteButton";
 export { VolumeControl } from "./controls/VolumeControl";
 export { TimeDisplay } from "./controls/TimeDisplay";
 export { SettingsMenu } from "./controls/SettingsMenu";
+export {
+  ChapterCountBadge,
+  ChapterNowLabel,
+  useChapterPosition,
+} from "./controls/ChapterNow";
 export { FullscreenButton } from "./controls/FullscreenButton";
 export { PictureInPictureButton } from "./controls/PictureInPictureButton";
 export { TheaterButton } from "./controls/TheaterButton";
@@ -232,7 +237,10 @@ export type {
   PlayerThemeIcon,
   PlayerThemeIconProps,
   PlayerThemeIcons,
+  PlayerThemeAutoplay,
+  PlayerThemeChrome,
   PlayerThemeMotion,
+  PlayerThemeSettingsMenu,
   PlayerThemeStyle,
   PlayerThemeTokens,
 } from "./themes/playerThemes";
@@ -242,3 +250,8 @@ export {
   usePlayerThemes,
 } from "./themes/PlayerThemeContext";
 export type { PlayerThemeProviderProps } from "./themes/PlayerThemeContext";
+export type { SettingsMenuToggle } from "./controls/SettingsMenuLayouts";
+export {
+  PlayerThemeSwatch,
+  type PlayerThemeSwatchProps,
+} from "./themes/PlayerThemeSwatch";

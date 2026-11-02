@@ -30,6 +30,7 @@
 
 [data-player-theme]:not([data-player-theme="youtube"])
   :is(
+    [data-autoplay-label],
     [data-player-control-hit-area="course-lessons"],
     [data-player-control-hit-area="chapters"] button,
     [aria-controls][aria-label="Chapters"],
@@ -82,7 +83,12 @@
 
 [data-player-theme]:not([data-player-theme="youtube"])
   [data-player-control-hit-area]
-  .rounded-full:not([data-autoplay-track], [data-autoplay-knob]) {
+  .rounded-full:not(
+    [data-autoplay-track],
+    [data-autoplay-knob],
+    [data-autoplay-switch],
+    [data-autoplay-switch-knob]
+  ) {
   border-radius: var(--video-player-control-radius, 999px) !important;
 }
 
@@ -278,29 +284,6 @@
   box-sizing: border-box;
 }
 
-/* ---- Autoplay switch: the accent when on ---- */
-
-:root[data-player-autoplay="on"]
-  [data-player-theme]:not([data-player-theme="youtube"])
-  [data-autoplay-track] {
-  background: var(--video-player-accent) !important;
-}
-
-:root[data-player-autoplay="on"]
-  [data-player-theme]:not([data-player-theme="youtube"])
-  [data-autoplay-knob] {
-  background: var(--video-player-accent-contrast) !important;
-  color: var(--video-player-accent) !important;
-}
-
-[data-player-theme]:not([data-player-theme="youtube"])
-  :is([data-autoplay-track], [data-autoplay-knob]) {
-  border-radius: min(
-    var(--video-player-control-radius, 999px),
-    999px
-  ) !important;
-}
-
 /* ---- Menus ---- */
 
 [data-player-theme]:not(
@@ -316,11 +299,76 @@
 [data-player-theme]:not(
     [data-player-theme="youtube"]
   )[data-video-player-menu-panel]
-  [role^="menuitem"]:is([aria-checked="true"], :hover, :focus-visible) {
+  [role^="menuitem"]:not(
+    [data-settings-chip],
+    [data-settings-segment],
+    [data-settings-card],
+    [data-settings-chip-card],
+    [data-settings-row],
+    [data-settings-close],
+    [data-video-player-settings-back],
+    [data-video-player-theme-option]
+  ):is([aria-checked="true"], :hover, :focus-visible) {
   background: var(
     --video-player-menu-row-active,
     rgb(255 255 255 / 0.08)
   ) !important;
+}
+
+/* The designed menus (see `settingsMenu`): the side panel, the ambient
+   icon in the menu's own colour, and labels in the theme's case. */
+
+[data-player-theme][data-video-player-menu-placement="side"] {
+  border-left: 1px solid
+    color-mix(in srgb, var(--video-player-menu-text, #fff) 18%, transparent);
+  background: var(--video-player-menu-solid-surface) !important;
+  overflow-y: auto;
+}
+
+[data-player-theme][data-video-player-menu-panel]
+  [data-settings-icon]
+  [data-ambient-mode-icon] {
+  color: inherit;
+  box-shadow: none;
+}
+
+/* While the side panel is open the bottom-right buttons and the timeline
+   move clear of it. Only their position changes: the control frame keeps
+   its width, which the player measures to arrange its rows (narrowing it
+   moved the buttons between rows, closing and reopening the panel). */
+.video-shell:has(> [data-video-player-menu-placement="side"])
+  :is([data-player-desktop-end-controls], [data-player-timeline-layer]) {
+  right: calc(min(18rem, 100%) + 0.5rem) !important;
+}
+
+/* Lessons steps aside meanwhile, so the moved buttons never cover the time. */
+.video-shell:has(> [data-video-player-menu-placement="side"])
+  [data-player-desktop-end-controls]
+  [data-player-desktop-lessons] {
+  display: none !important;
+}
+
+/* The side panel's header: a small spaced-out title over a hairline. */
+[data-settings-layout="panel"] [data-settings-header] {
+  min-height: 2.75rem;
+  margin-bottom: 0.25rem;
+  padding-left: 0.125rem;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--video-player-menu-text, #fff) 18%, transparent);
+}
+
+[data-settings-layout="panel"] [data-settings-header] [data-settings-title] {
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+[data-settings-layout="panel"] [data-settings-close] {
+  background: transparent;
+}
+
+[data-player-theme][data-video-player-menu-panel] [data-settings-chip-label] {
+  text-transform: var(--video-player-label-transform, uppercase);
 }
 
 /* ================================================================
@@ -331,21 +379,10 @@
   border-radius: 1rem !important;
 }
 
+/* The switched-on row lights up. */
 [data-player-theme="cone"][data-video-player-menu-panel]
-  [role^="menuitem"]
-  > span:first-child {
-  box-sizing: content-box;
-  padding: 0.3125rem;
-  border-radius: 0.5rem;
-  background: rgb(255 122 26 / 0.12);
-  color: var(--video-player-accent) !important;
-}
-
-[data-player-theme="cone"][data-video-player-menu-panel]
-  [role^="menuitem"]
-  .tabular-nums {
-  color: var(--video-player-accent) !important;
-  font-weight: 700;
+  [data-settings-checked][data-settings-row] {
+  background: rgb(255 255 255 / 0.05);
 }
 
 [data-player-theme="cone"] [data-player-control-hit-area="course-lessons"],
@@ -414,21 +451,10 @@
   outline-offset: -1.5px;
 }
 
-[data-player-theme="mono"][data-video-player-menu-panel] {
+/* Values, times and choices in the monospaced face. */
+[data-player-theme="mono"][data-video-player-menu-panel]
+  :is([data-settings-value], [data-settings-option], [data-settings-hint]) {
   font-family: var(--video-player-numeric-font);
-}
-
-[data-player-theme="mono"][data-video-player-menu-panel]
-  [role^="menuitem"]:not(:last-child) {
-  box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.1);
-}
-
-[data-player-theme="mono"][data-video-player-menu-panel]
-  [role^="menuitem"]
-  .font-medium {
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
 }
 
 /* ================================================================
@@ -445,4 +471,51 @@
   :is([data-player-control], [data-player-control-hit-area])
   :is(svg, span) {
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+}
+
+/* Mono's submenus: no shading on the pick (the square says it), and HD as
+   plain text. */
+[data-settings-layout="panel"] [data-settings-option] {
+  background: transparent !important;
+}
+
+[data-player-theme="mono"][data-video-player-menu-panel] [data-settings-hd] {
+  padding: 0;
+  background: none;
+  color: var(--video-player-menu-text-muted);
+}
+
+/* ---- Extras some themes draw (see `chrome`) ---- */
+
+/* The open volume pill makes room for the percentage (a minimum width:
+   the pill's own width is an important utility in a layer, which an
+   unlayered important rule cannot beat). */
+[data-player-theme]:not([data-player-theme="youtube"])
+  .player-volume-group:has([data-volume-percent]):is(:hover, :focus-within) {
+  min-width: 10.125rem;
+}
+
+/* The lesson's name in the top bar sits on the controls' own surface,
+   outlined like them. */
+[data-player-theme]:not([data-player-theme="youtube"]) [data-player-top-title] {
+  box-shadow:
+    inset 0 0 0 1px var(--video-player-control-border, transparent),
+    var(--video-player-control-shadow, none);
+  backdrop-filter: var(--video-player-control-backdrop, none);
+  -webkit-backdrop-filter: var(--video-player-control-backdrop, none);
+}
+
+/* The chapter now playing sits on a pill like the time beside it. */
+[data-player-theme]:not([data-player-theme="youtube"]) [data-chapter-label] {
+  align-items: center;
+  height: 2.375rem;
+  padding-inline: 0.875rem;
+  border-radius: min(var(--video-player-control-radius, 999px), 999px);
+  background: var(
+    --video-player-deck-control-surface,
+    var(--video-player-control-surface)
+  );
+  box-shadow: inset 0 0 0 1px var(--video-player-control-border, transparent);
+  backdrop-filter: var(--video-player-control-backdrop, none);
+  -webkit-backdrop-filter: var(--video-player-control-backdrop, none);
 }
