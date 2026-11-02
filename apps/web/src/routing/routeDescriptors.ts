@@ -112,11 +112,14 @@ const notFoundRouteDescriptor = {
 export const notFoundDocumentTitle = `${notFoundRouteDescriptor.title} · ${productName}`;
 
 export const routeDescriptors = {
+  // The home page at "/" is what web filters and search engines read to
+  // decide what the site is, so its title and description name it plainly.
   "root-courses": {
     kind: "shell",
     page: "home",
-    title: "Home",
-    description: "Your ProCodrr home screen.",
+    title: "Online Programming Courses",
+    description:
+      "Learn programming online with video courses in JavaScript, TypeScript, Node.js, Next.js and more. Practical lessons, projects and progress tracking on ProCodrr.",
   },
   home: {
     kind: "shell",
