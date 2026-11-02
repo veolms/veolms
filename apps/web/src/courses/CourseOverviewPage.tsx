@@ -401,10 +401,15 @@ function appliedCouponFromPreview(
     inCents ? toMajorUnits(amount, currency) : amount;
   const discountAmount = toMajor(res.pricing.discountAmount);
   const totalAmount = toMajor(res.pricing.totalAmount);
+  const minimumCharge = res.pricing.minimumCharge
+    ? toMajor(res.pricing.minimumCharge)
+    : undefined;
   let discountLabel: string | undefined;
   // A fixed coupon's own value is rupees: in cents the amount it took off
-  // is what to name.
+  // is what to name. Raised to the smallest card payment, the coupon took
+  // off less than its percentage, so the amount is named then too.
   if (
+    minimumCharge === undefined &&
     res.couponValidation?.discountValue &&
     (!inCents || res.couponValidation.discountType === "percentage")
   ) {
@@ -422,6 +427,7 @@ function appliedCouponFromPreview(
     currency,
     discountLabel,
     pricedForAmount,
+    ...(minimumCharge !== undefined ? { minimumCharge } : {}),
   };
 }
 
@@ -733,6 +739,13 @@ function CoursePurchaseSection({
           }
         : undefined,
       total: displayPrice,
+      note:
+        appliedCoupon?.minimumCharge !== undefined
+          ? `The smallest card payment is ${formatPriceWithCurrency(
+              appliedCoupon.minimumCharge,
+              currency,
+            )}.`
+          : undefined,
     };
   })();
   const perksList = getCoursePurchasePerks({
