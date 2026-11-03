@@ -93,9 +93,18 @@ const popoverEdgePadPx = 8;
 const popoverMinHeightPx = 96;
 const popoverMaxHeightCapPx = 24 * 16;
 
+/** Gap between a `corner` panel and the right edge of the controls. */
+const popoverCornerInsetPx = 12;
+
 type PopoverPanelLayout = {
   host: HTMLElement;
   maxHeight: number;
+  /**
+   * Where a `corner` panel sits: against the right edge of the controls
+   * that hold the trigger, which in full screen with the lessons beside the
+   * video is the video's edge, not the host's.
+   */
+  cornerRight: number;
   top?: number;
   bottom?: number;
   left?: number;
@@ -128,6 +137,10 @@ function measurePopoverPanelLayout(
   const hostRect = playerRectOf(host);
   const playerRect = playerRectOf(player);
   const triggerRect = playerRectOf(trigger);
+  const controls =
+    trigger.closest<HTMLElement>("[data-player-control-frame]") ?? player;
+  const cornerRight =
+    hostRect.right - playerRectOf(controls).right + popoverCornerInsetPx;
   const horizontal =
     align === "start"
       ? { left: triggerRect.left - hostRect.left }
@@ -137,6 +150,7 @@ function measurePopoverPanelLayout(
     return {
       host,
       ...horizontal,
+      cornerRight,
       top: triggerRect.bottom - hostRect.top + popoverGapPx,
       maxHeight: Math.min(
         popoverMaxHeightCapPx,
@@ -154,6 +168,7 @@ function measurePopoverPanelLayout(
   return {
     host,
     ...horizontal,
+    cornerRight,
     bottom: hostRect.bottom - triggerRect.top + popoverGapPx,
     maxHeight: Math.min(
       popoverMaxHeightCapPx,
@@ -517,7 +532,10 @@ export function PopoverMenu({
                 top: panelLayout.top,
                 bottom: panelLayout.bottom,
                 left: placement === "corner" ? "auto" : panelLayout.left,
-                right: placement === "corner" ? 12 : panelLayout.right,
+                right:
+                  placement === "corner"
+                    ? panelLayout.cornerRight
+                    : panelLayout.right,
                 // A panel class may lift the panel off its trigger with a
                 // margin; it names that lift so the panel still fits.
                 maxHeight: `calc(${panelLayout.maxHeight}px - var(--video-player-menu-lift, 0px))`,
