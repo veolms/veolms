@@ -589,6 +589,7 @@ export function PopoverMenu({
         >
           <span
             aria-hidden="true"
+            data-video-player-sheet-grip=""
             className="h-1 w-12 rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_34%,transparent)]"
           />
           <div

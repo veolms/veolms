@@ -113,12 +113,12 @@ function useTimelineSpan(
  * Which parts of the lesson have their seek-preview pictures downloaded,
  * as a 2px bar along the top edge of the video, over the same span as the
  * timeline (with rounded ends on desktop; edge to edge on a phone), on a
- * faint dark backing: green where they are here, a fainter green where
- * they are on their way. Shown while the timeline is hovered or dragged,
- * fading out a moment after. A small triangle under the bar points up at
- * where the pointer is: green once that moment's picture is here, a
- * pulsing white while it is still coming, so the green can be seen
- * catching up with it.
+ * faint dark backing: the theme's accent where they are here, a fainter
+ * accent where they are on their way. Shown while the timeline is hovered
+ * or dragged, fading out a moment after. A small triangle under the bar
+ * points up at where the pointer is: the accent once that moment's picture
+ * is here, a pulsing white while it is still coming, so the accent can be
+ * seen catching up with it.
  *
  * Once the whole lesson is here the bar has nothing left to show: if that
  * happens in view, a glint runs along it once and it fades for good. It
@@ -203,7 +203,7 @@ export function PreviewLoadBar() {
         {availability.loading.map(([start, end]) => (
           <span
             key={`loading-${start}`}
-            className="absolute inset-y-0 bg-green-400/35"
+            className="absolute inset-y-0 bg-(--video-player-accent,#4ade80) opacity-35"
             style={{
               left: `${percent(start)}%`,
               width: `${percent(end - start)}%`,
@@ -213,7 +213,7 @@ export function PreviewLoadBar() {
         {availability.loaded.map(([start, end]) => (
           <span
             key={`loaded-${start}`}
-            className="absolute inset-y-0 bg-green-400"
+            className="absolute inset-y-0 bg-(--video-player-accent,#4ade80)"
             style={{
               left: `${percent(start)}%`,
               width: `${percent(end - start)}%`,
@@ -233,7 +233,7 @@ export function PreviewLoadBar() {
         <svg
           data-loaded={pointerLoaded ? "true" : "false"}
           viewBox="0 0 12 8"
-          className="absolute top-0.5 h-2 w-3 -translate-x-1/2 animate-[video-player-preview-marker-wait_0.9s_ease-in-out_infinite] overflow-visible fill-current stroke-current text-white drop-shadow-[0_1px_2px_rgb(0_0_0/0.6)] motion-reduce:animate-none data-[loaded=true]:animate-none data-[loaded=true]:text-green-300 data-[loaded=true]:drop-shadow-[0_0_4px_rgb(74_222_128/0.9)]"
+          className="absolute top-0.5 h-2 w-3 -translate-x-1/2 animate-[video-player-preview-marker-wait_0.9s_ease-in-out_infinite] overflow-visible fill-current stroke-current text-white drop-shadow-[0_1px_2px_rgb(0_0_0/0.6)] motion-reduce:animate-none data-[loaded=true]:animate-none data-[loaded=true]:text-(--video-player-accent,#86efac) data-[loaded=true]:drop-shadow-[0_0_4px_var(--video-player-accent,#4ade80)]"
           style={{ left: `${percent(previewTime)}%` }}
         >
           <path d="M6 1 11 7H1Z" strokeWidth={1.5} strokeLinejoin="round" />

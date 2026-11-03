@@ -2,9 +2,7 @@ import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
-import { ArrowsInIcon as ArrowsIn } from "@phosphor-icons/react/ArrowsIn";
 import { ArrowsInSimpleIcon as ArrowsInSimple } from "@phosphor-icons/react/ArrowsInSimple";
-import { ArrowsOutIcon as ArrowsOut } from "@phosphor-icons/react/ArrowsOut";
 import { ArrowsOutSimpleIcon as ArrowsOutSimple } from "@phosphor-icons/react/ArrowsOutSimple";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretDoubleLeftIcon as CaretDoubleLeft } from "@phosphor-icons/react/CaretDoubleLeft";
@@ -12,8 +10,6 @@ import { CaretDoubleRightIcon as CaretDoubleRight } from "@phosphor-icons/react/
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { ClosedCaptioningIcon as ClosedCaptioning } from "@phosphor-icons/react/ClosedCaptioning";
-import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
-import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { FastForwardIcon as FastForward } from "@phosphor-icons/react/FastForward";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
@@ -197,7 +193,7 @@ export interface PlayerThemeSettingsMenu {
   title?: string;
   /** Before the title, e.g. a prompt (`> `). */
   titlePrefix?: string;
-  /** A block cursor after the title. */
+  /** A steady block cursor after the title (it does not blink). */
   titleCursor?: boolean;
   /** Small text before the close button (`esc close`). */
   closeHint?: string;
@@ -232,6 +228,12 @@ export interface PlayerThemeChrome {
    * two digits. The title is drawn in its own span (`data-part="title"`).
    */
   chapterLabel?: string;
+  /**
+   * The lesson's place in the whole course (not its section), on a tag after
+   * the full-screen title (`topTitle`): `{n}` and `{total}`, or `{nn}` and
+   * `{tt}` padded to two digits, as in `chapterLabel`.
+   */
+  lessonLabel?: string;
   /** The volume as a percentage beside its slider. */
   volumePercent?: boolean;
 }
@@ -243,6 +245,12 @@ export interface PlayerThemeAutoplay {
   style?: "switch" | "square" | "tag";
   /** The knob on the coloured track when on (default: accent contrast). */
   knob?: string;
+  /**
+   * Where autoplay is switched: as a switch inside the settings menu, named
+   * in full (the default), or on its own beside the settings key (`bar`,
+   * YouTube).
+   */
+  placement?: "bar" | "settings";
 }
 
 export interface PlayerThemeDefinition {
@@ -255,7 +263,7 @@ export interface PlayerThemeDefinition {
    * Only the YouTube theme does; the others bring their own colours.
    */
   usesAppPalette?: boolean;
-  /** Where the theme sits in pickers: lower first (built-ins are 0-30). */
+  /** Where the theme sits in pickers: lower first (built-ins: YouTube 0, VLC 10, Mono 30, Frost 40). */
   order?: number;
   tokens: PlayerThemeTokens;
   icons: PlayerThemeIcons;
@@ -344,8 +352,8 @@ const coneIcons: PlayerThemeIcons = {
   ...youtubeIcons,
   captions: themedIcon(ClosedCaptioning, "bold", "fill"),
   settings: themedIcon(SlidersHorizontal, "bold"),
-  fullscreenEnter: themedIcon(CornersOut, "bold"),
-  fullscreenExit: themedIcon(CornersIn, "bold"),
+  fullscreenEnter: themedIcon(ArrowsOutSimple, "bold"),
+  fullscreenExit: themedIcon(ArrowsInSimple, "bold"),
   pictureInPicture: themedIcon(PictureInPicture, "bold", "fill"),
   theaterEnter: themedIcon(Rectangle, "bold"),
   theaterExit: themedIcon(RectangleDashed, "bold"),
@@ -371,8 +379,8 @@ const frostIcons: PlayerThemeIcons = {
   volumeHigh: themedIcon(SpeakerSimpleHigh, "regular"),
   captions: themedIcon(Subtitles, "regular", "fill"),
   settings: themedIcon(GearSix, "regular"),
-  fullscreenEnter: themedIcon(CornersOut, "regular"),
-  fullscreenExit: themedIcon(CornersIn, "regular"),
+  fullscreenEnter: themedIcon(ArrowsOutSimple, "regular"),
+  fullscreenExit: themedIcon(ArrowsInSimple, "regular"),
   pictureInPicture: themedIcon(PictureInPicture, "regular", "fill"),
   theaterEnter: themedIcon(Rectangle, "regular"),
   theaterExit: themedIcon(RectangleDashed, "regular"),
@@ -405,8 +413,8 @@ const monoIcons: PlayerThemeIcons = {
   volumeHigh: themedIcon(SpeakerSimpleHigh, "light"),
   captions: themedIcon(Subtitles, "light", "fill"),
   settings: themedIcon(SlidersHorizontal, "light"),
-  fullscreenEnter: themedIcon(ArrowsOut, "light"),
-  fullscreenExit: themedIcon(ArrowsIn, "light"),
+  fullscreenEnter: themedIcon(ArrowsOutSimple, "light"),
+  fullscreenExit: themedIcon(ArrowsInSimple, "light"),
   pictureInPicture: themedIcon(PictureInPicture, "light", "fill"),
   theaterEnter: themedIcon(Rectangle, "light"),
   theaterExit: themedIcon(RectangleDashed, "light"),
@@ -464,6 +472,14 @@ export const BUILT_IN_PLAYER_THEMES: Record<
     },
     icons: youtubeIcons,
     motion: { settingsClosedRotation: 30 },
+    // The one theme with autoplay beside the settings key, as on YouTube;
+    // every other theme switches it in the settings menu (the user's call),
+    // so a theme made from this one says where its own goes.
+    autoplay: { placement: "bar" },
+    // Every theme names the lesson and its place in the course at the top
+    // left in full screen (the user's call); themes made from this one
+    // keep it unless they word it their own way.
+    chrome: { topTitle: "title", lessonLabel: "Lesson {n} of {total}" },
   },
   cone: {
     id: "cone",
@@ -515,39 +531,50 @@ export const BUILT_IN_PLAYER_THEMES: Record<
       topTitle: "title",
       chapterCount: "total",
       chapterLabel: "{title} Chapter {n} of {total}",
+      lessonLabel: "Lesson {n}/{total}",
       volumePercent: true,
     },
   },
   frost: {
     id: "frost",
     label: "Frost",
-    description: "Frosted-glass pills that float over the picture.",
-    order: 20,
+    description: "Liquid glass that floats over the picture, with no edges.",
+    // After the cloud's Hacker (20) and Terminal (25) and Mono (30),
+    // before the cloud's Cyberpunk (50).
+    order: 40,
+    // Liquid glass, after the user's Origin OS 7 control panel: no outline
+    // anywhere, the picture lightly blurred so it still reads through the
+    // glass and its colours bleed in, soft light caught along the top and
+    // inside it instead of a border, and the picture dimmed (never washed
+    // white) under it, with a faint shade along the bottom, so white text
+    // stays readable over a bright frame or a face.
     tokens: {
-      accent: "#9be7ff",
-      accentContrast: "#06202a",
-      controlSurface: "rgb(255 255 255 / 0.12)",
-      controlSurfaceHover: "rgb(255 255 255 / 0.22)",
-      controlSurfaceActive: "rgb(255 255 255 / 0.3)",
+      accent: "#ffffff",
+      accentContrast: "#0b1622",
+      controlSurface: "rgb(12 18 28 / 0.16)",
+      controlSurfaceHover: "rgb(255 255 255 / 0.12)",
+      controlSurfaceActive: "rgb(255 255 255 / 0.2)",
       controlText: "#ffffff",
-      controlTextMuted: "rgb(255 255 255 / 0.7)",
-      controlBorder: "rgb(255 255 255 / 0.24)",
+      controlTextMuted: "rgb(255 255 255 / 0.72)",
+      controlBorder: "transparent",
       controlShadow:
-        "0 8px 28px rgb(4 12 24 / 0.32), inset 0 1px 0 rgb(255 255 255 / 0.18)",
+        "inset 0 1px 3px rgb(255 255 255 / 0.22), inset 0 0 12px rgb(255 255 255 / 0.05), 0 6px 20px rgb(4 12 24 / 0.18)",
       controlRadius: "999px",
-      menuSurface: "rgb(28 40 56 / 0.62)",
+      menuSurface: "rgb(14 20 32 / 0.4)",
       menuSolidSurface: "rgb(24 34 48)",
       menuText: "#ffffff",
-      menuTextMuted: "rgb(255 255 255 / 0.66)",
-      menuBorder: "rgb(255 255 255 / 0.22)",
+      menuTextMuted: "rgb(255 255 255 / 0.68)",
+      menuBorder: "transparent",
       menuShadow:
-        "0 24px 60px rgb(2 8 20 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.16)",
+        "inset 0 1px 3px rgb(255 255 255 / 0.18), inset 0 0 28px rgb(255 255 255 / 0.05), 0 24px 60px rgb(2 8 20 / 0.34)",
       menuRadius: "22px",
       timelineTrack: "rgb(255 255 255 / 0.26)",
       timelineBuffered: "rgb(255 255 255 / 0.42)",
       vignetteColor: "8 18 32",
-      controlBackdrop: "blur(18px) saturate(1.6)",
-      menuBackdrop: "blur(26px) saturate(1.6)",
+      bottomScrim:
+        "linear-gradient(to top, rgb(8 18 32 / 0.34), rgb(8 18 32 / 0.12) 55%, transparent)",
+      controlBackdrop: "blur(8px) saturate(1.5) brightness(0.84)",
+      menuBackdrop: "blur(22px) saturate(1.5) brightness(0.8)",
       playSurface: "#ffffff",
       playText: "#0b1622",
       timelineProgress: "#ffffff",
@@ -557,13 +584,14 @@ export const BUILT_IN_PLAYER_THEMES: Record<
       thumbHeight: "18px",
       thumbRadius: "2px",
       thumbShadow:
-        "0 0 0 1px rgb(0 0 0 / 0.12), 0 0 12px rgb(155 231 255 / 0.85)",
+        "0 0 0 1px rgb(0 0 0 / 0.12), 0 0 12px rgb(255 255 255 / 0.7)",
       menuRowActive: "rgb(255 255 255 / 0.12)",
     },
     icons: frostIcons,
     motion: { settingsClosedRotation: 0 },
     settingsMenu: { title: "Video settings", grouped: true },
     autoplay: { knob: "#0f1419" },
+    chrome: { topTitle: "title", lessonLabel: "Lesson {n} of {total}" },
   },
   mono: {
     id: "mono",
@@ -615,7 +643,12 @@ export const BUILT_IN_PLAYER_THEMES: Record<
       selectedMark: "square",
     },
     autoplay: { label: "Autoplay", style: "square" },
-    chrome: { chapterCount: "total", chapterLabel: "{nn} {title}" },
+    chrome: {
+      topTitle: "title",
+      chapterCount: "total",
+      chapterLabel: "{nn} {title}",
+      lessonLabel: "Lesson {nn}/{tt}",
+    },
   },
 };
 
@@ -653,10 +686,12 @@ function byOrder(left: PlayerThemeDefinition, right: PlayerThemeDefinition) {
 }
 
 function publish(registry: PlayerThemeRegistry): void {
+  // One list in picker order: a plugin's theme can sit between built-in
+  // ones (the sort keeps equal orders in place).
   registry.snapshot = [
     ...PLAYER_THEME_OPTIONS,
-    ...[...registry.themes.values()].sort(byOrder),
-  ];
+    ...registry.themes.values(),
+  ].sort(byOrder);
   for (const listener of registry.listeners) listener();
 }
 
@@ -679,7 +714,7 @@ export function registerPlayerTheme(theme: PlayerThemeDefinition): () => void {
   };
 }
 
-/** Every theme: the built-in ones first, then the registered ones. */
+/** Every theme, built in or registered, in picker order (`order`). */
 export function getPlayerThemes(): readonly PlayerThemeDefinition[] {
   return getRegistry().snapshot;
 }

@@ -122,7 +122,7 @@ export function SettingsTitle({ menu }: { menu: PlayerThemeSettingsMenu }) {
         <span
           aria-hidden="true"
           data-settings-title-cursor=""
-          className="ml-1.5 inline-block h-[1.05em] w-[0.55em] shrink-0 bg-(--video-player-accent) motion-safe:animate-[pulse_1.1s_steps(2,start)_infinite]"
+          className="ml-1.5 inline-block h-[1.05em] w-[0.55em] shrink-0 bg-(--video-player-accent)"
         />
       ) : null}
     </span>
@@ -474,18 +474,28 @@ export function SettingsChips({
   entries,
   groups,
   menu,
+  stacked = false,
 }: {
   disclosureIcon: ReactNode;
   /** Everything that is not a group: picture in picture, toggles, theme. */
   entries: SettingsEntry[];
   groups: SettingsChoiceGroup[];
   menu: PlayerThemeSettingsMenu;
+  /**
+   * For a narrow sheet: each row's label over its chips, which then have
+   * the whole width, and one card to a line.
+   */
+  stacked?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3 px-1">
       <div
         data-settings-chip-groups=""
-        className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3.5 gap-y-2.5 px-1"
+        className={
+          stacked
+            ? "grid grid-cols-1 gap-y-1.5 px-1 [&>[role=group]>span:last-child]:mb-2"
+            : "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3.5 gap-y-2.5 px-1"
+        }
       >
         {groups.map((group) => (
           <div
@@ -530,7 +540,10 @@ export function SettingsChips({
         aria-hidden="true"
         className="h-px bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_12%,transparent)]"
       />
-      <div data-settings-chip-cards="" className="grid grid-cols-2 gap-2">
+      <div
+        data-settings-chip-cards=""
+        className={`grid gap-2 ${stacked ? "grid-cols-1" : "grid-cols-2"}`}
+      >
         {entries.map((entry) => {
           const toggle = entry.kind === "toggle";
           return (
@@ -565,7 +578,7 @@ export function SettingsChips({
                 </span>
                 <span
                   data-settings-description=""
-                  className="truncate text-[0.6875rem] text-(--video-player-menu-text-muted)"
+                  className="line-clamp-2 text-[0.6875rem] leading-snug text-(--video-player-menu-text-muted)"
                 >
                   {entry.kind === "submenu"
                     ? entry.value

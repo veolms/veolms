@@ -2086,6 +2086,8 @@ export function LessonVideoPlayer({
             courseLessonsSidePanel={courseLessonsSidePanel}
             courseLessonsBottomSheet={courseLessonsBottomSheet}
             lessonTitle={lessonTitle}
+            lessonIndex={lessonIndex}
+            totalLessons={totalLessons}
             chaptersPanelHost={chaptersPanelHost}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}

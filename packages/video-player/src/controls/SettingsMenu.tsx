@@ -7,7 +7,7 @@ import {
 } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
-import type { VideoQuality } from "../core/types";
+import type { VideoQuality, VideoTextTrack } from "../core/types";
 import {
   formatPlaybackRate,
   playbackRatesMatch,
@@ -57,6 +57,24 @@ const isHdQuality = (quality: VideoQuality | undefined) => {
   const height =
     quality.height ?? Number(/(\d+)p/u.exec(quality.label)?.[1] ?? 0);
   return height >= HD_MIN_HEIGHT;
+};
+
+/**
+ * A caption track's name, told apart from another of the same name by its
+ * kind: a video can carry "English" subtitles and "English" captions.
+ */
+const captionTrackName = (
+  track: VideoTextTrack,
+  tracks: readonly VideoTextTrack[],
+) => {
+  const name = track.label || track.language || "Caption track";
+  const shared = tracks.some(
+    (other) =>
+      other.id !== track.id &&
+      (other.label || other.language || "Caption track") === name,
+  );
+  if (!shared) return name;
+  return track.kind === "captions" ? `${name} (CC)` : name;
 };
 
 /** The raised "HD" after a quality's name, in the theme's colour. */
@@ -513,7 +531,7 @@ export function SettingsMenu({
         },
         ...media.textTracks.map((track) => ({
           id: track.id,
-          label: track.label || track.language || "Caption track",
+          label: captionTrackName(track, media.textTracks),
           selected: track.id === activeTextTrack?.id,
           onSelect: () => controller.selectTextTrack(track.id),
         })),
@@ -559,6 +577,7 @@ export function SettingsMenu({
       ) : layout === "chips" ? (
         <SettingsChips
           disclosureIcon={disclosureIcon}
+          stacked={sheet}
           groups={chipGroups}
           entries={present([
             pictureInPictureEntry,
@@ -657,7 +676,7 @@ export function SettingsMenu({
               key={track.id}
               checkIcon={checkIcon}
               menu={menu}
-              label={track.label || track.language || "Caption track"}
+              label={captionTrackName(track, media.textTracks)}
               hint={track.label ? track.language : undefined}
               selected={track.id === activeTextTrack?.id}
               onSelect={() => controller.selectTextTrack(track.id)}

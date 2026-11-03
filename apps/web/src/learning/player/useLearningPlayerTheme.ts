@@ -77,8 +77,11 @@ export function useLearningPlayerTheme(): PlayerThemeDefinition {
   }, []);
 
   return useMemo(() => {
+    // A theme that is no longer offered (hidden, or its plugin is not
+    // installed) plays as the academy's default, then as YouTube.
     const base =
       themes.find((entry) => entry.id === theme) ??
+      themes.find((entry) => entry.id === academyTheme) ??
       resolvePlayerTheme(DEFAULT_PLAYER_THEME_ID);
     // Themes with a palette of their own keep it; only the default one is
     // recoloured with the app's accent and surfaces.
@@ -104,5 +107,5 @@ export function useLearningPlayerTheme(): PlayerThemeDefinition {
         timelineBuffered: "color-mix(in srgb, var(--text) 46%, transparent)",
       },
     });
-  }, [theme, themes]);
+  }, [academyTheme, theme, themes]);
 }
