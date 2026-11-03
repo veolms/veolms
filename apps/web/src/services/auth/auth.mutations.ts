@@ -82,6 +82,7 @@ function persistAuthenticatedSession(
     mobileVerified: data.user.mobileVerified,
     roles: data.user.roles,
     isTestAccount: data.user.isTestAccount,
+    localAnyCourseUnenroll: data.user.localAnyCourseUnenroll,
     mfaVerified: !data.mfaRequired,
     totpEnabled: data.totpEnabled,
     passkeyEnabled: data.passkeyEnabled,

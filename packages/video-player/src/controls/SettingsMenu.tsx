@@ -7,7 +7,7 @@ import {
 } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
-import type { VideoQuality } from "../core/types";
+import type { VideoQuality, VideoTextTrack } from "../core/types";
 import {
   formatPlaybackRate,
   playbackRatesMatch,
@@ -42,7 +42,9 @@ import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 const SETTINGS_OPEN_TURN_DEGREES = 30;
 /** The speeds a chips menu offers in place. */
-const CHIP_PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+const CHIP_PLAYBACK_RATES = [
+  0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3,
+] as const;
 /** The speeds a list row picks from in place (`inlineSpeed`). */
 const INLINE_PLAYBACK_RATES = [0.5, 1, 1.5, 2] as const;
 /** Columns of the theme grid, for moving up and down it with the keys. */
@@ -57,6 +59,37 @@ const isHdQuality = (quality: VideoQuality | undefined) => {
   const height =
     quality.height ?? Number(/(\d+)p/u.exec(quality.label)?.[1] ?? 0);
   return height >= HD_MIN_HEIGHT;
+};
+
+const baseCaptionName = (track: VideoTextTrack) =>
+  track.label || track.language || "Caption track";
+
+/** A track's name, with "(CC)" where another track has the same name. */
+const kindCaptionName = (
+  track: VideoTextTrack,
+  tracks: readonly VideoTextTrack[],
+) => {
+  const name = baseCaptionName(track);
+  const shared = tracks.some(
+    (other) => other.id !== track.id && baseCaptionName(other) === name,
+  );
+  return shared && track.kind === "captions" ? `${name} (CC)` : name;
+};
+
+/**
+ * A caption track's name, told apart from another of the same name by its
+ * kind (a video can carry "English" subtitles and "English" captions), and
+ * by its language where the names still match.
+ */
+const captionTrackName = (
+  track: VideoTextTrack,
+  tracks: readonly VideoTextTrack[],
+) => {
+  const name = kindCaptionName(track, tracks);
+  const stillShared = tracks.some(
+    (other) => other.id !== track.id && kindCaptionName(other, tracks) === name,
+  );
+  return stillShared && track.language ? `${name} · ${track.language}` : name;
 };
 
 /** The raised "HD" after a quality's name, in the theme's colour. */
@@ -376,6 +409,9 @@ export function SettingsMenu({
       selected: playbackRatesMatch(media.playbackRate, rate),
       onSelect: () => controller.setPlaybackRate(rate),
     }));
+  const customSpeed = !CHIP_PLAYBACK_RATES.some((rate) =>
+    playbackRatesMatch(media.playbackRate, rate),
+  );
   const showTheme = Boolean(onThemeChange) && themes.length > 1;
 
   const qualityEntry: SettingsEntry = {
@@ -497,7 +533,18 @@ export function SettingsMenu({
     {
       id: "speed",
       label: "Speed",
-      choices: speedChoices(CHIP_PLAYBACK_RATES),
+      // A quarter apart up to 3×, and one more that opens the slider (up to
+      // 16×) and shows a speed set there.
+      choices: [
+        ...speedChoices(CHIP_PLAYBACK_RATES),
+        {
+          id: "more",
+          label: customSpeed ? formatPlaybackRate(media.playbackRate) : "More",
+          selected: customSpeed,
+          onSelect: () => openView("playback-rate"),
+        },
+      ],
+      columns: { wide: 6, narrow: 4 },
     },
   ];
   if (media.textTracks.length > 0) {
@@ -513,7 +560,7 @@ export function SettingsMenu({
         },
         ...media.textTracks.map((track) => ({
           id: track.id,
-          label: track.label || track.language || "Caption track",
+          label: captionTrackName(track, media.textTracks),
           selected: track.id === activeTextTrack?.id,
           onSelect: () => controller.selectTextTrack(track.id),
         })),
@@ -559,6 +606,7 @@ export function SettingsMenu({
       ) : layout === "chips" ? (
         <SettingsChips
           disclosureIcon={disclosureIcon}
+          stacked={sheet}
           groups={chipGroups}
           entries={present([
             pictureInPictureEntry,
@@ -657,7 +705,7 @@ export function SettingsMenu({
               key={track.id}
               checkIcon={checkIcon}
               menu={menu}
-              label={track.label || track.language || "Caption track"}
+              label={captionTrackName(track, media.textTracks)}
               hint={track.label ? track.language : undefined}
               selected={track.id === activeTextTrack?.id}
               onSelect={() => controller.selectTextTrack(track.id)}
@@ -704,7 +752,7 @@ export function SettingsMenu({
       }
       panelClassName={
         view === "theme"
-          ? mobileInteraction
+          ? mobileInteraction || forceSheet
             ? undefined
             : "!mb-8 !w-[min(22rem,calc(100%-1.5rem))] !p-2 [--video-player-menu-lift:2rem]"
           : classNames(
@@ -715,8 +763,11 @@ export function SettingsMenu({
                   : side === "top"
                     ? "!mb-8 [--video-player-menu-lift:2rem]"
                     : "",
+              // A popover's width; a sheet takes the width it is given
+              // (its parent's), which these would cap.
               designed &&
                 !mobileInteraction &&
+                !forceSheet &&
                 (layout === "chips"
                   ? "!w-[min(36rem,calc(100vw-1.5rem))] !p-3"
                   : layout === "cards"

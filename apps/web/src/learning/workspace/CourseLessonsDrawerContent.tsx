@@ -20,6 +20,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import type { TouchEvent as ReactTouchEvent } from "react";
+import { useLessonListTheme } from "../player/useLearningPlayerTheme";
 
 export interface CourseLessonsDrawerContentProps {
   lessonDrawerSurfaceRef: RefObject<HTMLDivElement | null>;
@@ -133,9 +134,11 @@ export function CourseLessonsDrawerContent({
   setLessonDrawerSnapPoint,
   lessonDrawerHeroControlProps,
 }: CourseLessonsDrawerContentProps) {
+  const lessonTheme = useLessonListTheme();
   // prettier-ignore
   return (
     <DrawerContent
+      data-lesson-theme={lessonTheme}
       ref={lessonDrawerSurfaceRef}
       viewportClassName={DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS}
       aria-label="Course lessons"

@@ -124,7 +124,15 @@ export const LESSON_READING_SCROLL_ATTRIBUTE = "data-lesson-reading-scroll";
 
 const isExcludedTarget = (target: EventTarget | null) => {
   if (!(target instanceof Element)) return false;
-  if (target.closest("[data-video-player-mobile-sheet]")) return true;
+  // An open sheet and the dimmed page around it: a swipe there moves the
+  // sheet (its backdrop is rendered from inside the player).
+  if (
+    target.closest(
+      "[data-video-player-mobile-sheet], [data-video-player-mobile-sheet-backdrop]",
+    )
+  ) {
+    return true;
+  }
   const reading = target.closest<HTMLElement>(
     `[${LESSON_READING_SCROLL_ATTRIBUTE}]`,
   );

@@ -40,11 +40,28 @@
   letter-spacing: var(--video-player-label-letter-spacing, normal);
 }
 
+/* The Lessons button's word and caret are nudged for the app's own font
+   (YouTube); in a theme's font they sit on the button's centre line. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-player-control-hit-area="course-lessons"]
+  > span {
+  translate: none;
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-player-control-hit-area="course-lessons"]
+  svg {
+  margin-bottom: 0;
+}
+
 /* ---- Control surfaces: shape, outline, glass ---- */
 
 [data-player-theme]:not([data-player-theme="youtube"])
   [data-player-control-cluster] {
-  border-color: transparent !important;
+  /* The outline is the cluster's own border, on its outer edge. Drawn as an
+     inset shadow it sat inside the border, with the surface's colour
+     showing as a rim outside it (a black ring round Phantom's green). */
+  border-color: var(--video-player-control-border, transparent) !important;
 }
 
 [data-player-theme]:not([data-player-theme="youtube"])
@@ -59,6 +76,14 @@
     var(--video-player-control-shadow, none) !important;
   backdrop-filter: var(--video-player-control-backdrop, none);
   -webkit-backdrop-filter: var(--video-player-control-backdrop, none);
+}
+
+/* ...so a cluster's surface draws no inset copy of it. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-player-control-cluster][class*="bg-(--video-player-control-surface)"]:not(
+    [class*="before:bg-(--video-player-control-surface)"]
+  ) {
+  box-shadow: var(--video-player-control-shadow, none) !important;
 }
 
 /* The layers that hold the controls say `text-white`; a light theme's
@@ -107,6 +132,81 @@
     [aria-label="Minimize"][data-player-control] {
     border-radius: var(--video-player-control-radius, 999px) !important;
   }
+
+  /* Every cluster carries its outline as a 1px border, also the phone's
+     previous and next keys, whose markup says `!border-0` (a theme with a
+     clear outline colour shows nothing). The middle play key draws its own
+     ring (`playBorder`). */
+  [data-player-theme]:not([data-player-theme="youtube"])
+    [data-player-control-cluster]:not(
+      [data-player-control-cluster="mobile-play"]
+    ) {
+    border-width: 1px !important;
+    border-style: solid !important;
+  }
+
+  /* No inner padding (desktop): a cluster's buttons fill it edge to edge,
+     so a hover lights the whole pill, as it does on Chapters and Lessons,
+     not a smaller box inside it. Its corners follow the cluster's. */
+  @media (min-width: 40.0625rem) {
+    [data-player-theme]:not([data-player-theme="youtube"])
+      :is(
+        [data-player-desktop-start-controls],
+        [data-player-desktop-end-controls]
+      )
+      [data-player-control-cluster]:not(
+        [data-player-control-cluster="mobile-play"]
+      ) {
+      padding: 0 !important;
+    }
+
+    [data-player-theme]:not([data-player-theme="youtube"])
+      :is(
+        [data-player-desktop-start-controls],
+        [data-player-desktop-end-controls]
+      )
+      [data-player-control-cluster]:not(
+        [data-player-control-cluster="mobile-play"]
+      )
+      > [data-player-control],
+    [data-player-theme]:not([data-player-theme="youtube"])
+      :is(
+        [data-player-desktop-start-controls],
+        [data-player-desktop-end-controls]
+      )
+      [data-player-control-cluster]:not(
+        [data-player-control-cluster="mobile-play"]
+      )
+      > *
+      > [data-player-control] {
+      height: 100% !important;
+      min-height: 100% !important;
+      border-radius: max(
+        0px,
+        calc(var(--video-player-control-radius, 999px) - 1px)
+      ) !important;
+    }
+
+    [data-player-theme]:not([data-player-theme="youtube"])
+      :is(
+        [data-player-desktop-start-controls],
+        [data-player-desktop-end-controls]
+      )
+      [data-player-control-cluster]:not(
+        [data-player-control-cluster="mobile-play"]
+      )
+      > :not([data-player-control]):has(> [data-player-control]) {
+      height: 100%;
+    }
+  }
+
+  /* The lesson's name in the top bar is a button, which the app's own
+     control roundness (`data-control-radius`) would round: it takes the
+     theme's corners like the Chapters button beside it. */
+  [data-player-theme]:not([data-player-theme="youtube"])
+    [data-player-top-title] {
+    border-radius: var(--video-player-control-radius, 999px) !important;
+  }
 }
 
 /* ---- Play button: bottom row and the big one in the middle ---- */
@@ -129,9 +229,7 @@
     --video-player-play-radius,
     var(--video-player-control-radius, 999px)
   ) !important;
-  box-shadow:
-    inset 0 0 0 1px var(--video-player-control-border, transparent),
-    var(--video-player-control-shadow, none) !important;
+  box-shadow: var(--video-player-control-shadow, none) !important;
 }
 
 [data-player-theme]:not([data-player-theme="youtube"])
@@ -203,6 +301,24 @@
   }
 }
 
+/* A pill brightens on hover: the theme's hover tint is laid over its
+   surface, not put in its place (a faint tint alone left the pill almost
+   see-through, its text lost against the picture). Pills on a deck take
+   the deck's surface instead, below. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  [class*="hover:before:bg-(--video-player-control-surface-hover)"]:is(
+    :hover,
+    :focus-visible
+  )::before,
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-player-top-title]:is(:hover, :focus-visible) {
+  background-color: var(--video-player-control-surface) !important;
+  background-image: linear-gradient(
+    var(--video-player-control-surface-hover),
+    var(--video-player-control-surface-hover)
+  );
+}
+
 /* Pills on a deck take the deck's own surface (desktop only: phones have
    no deck, and their pills sit straight on the picture). */
 @media (min-width: 40.0625rem) and (pointer: fine) {
@@ -248,25 +364,17 @@
 }
 
 /* ---- What shows on the picture: play and pause, volume, seek, speed ----
- * The flash in the middle is the theme's play button; the level and the
- * speed sit on the theme's control surface, in its shape and type. */
+ * The flash in the middle stays see-through in every theme (the user's
+ * rule): the markup's dark glass and white icon, as in YouTube, only in the
+ * shape of the theme's play button. The level and the speed sit on the
+ * theme's control surface, in its shape and type. */
 
 [data-player-theme]:not([data-player-theme="youtube"])
   [data-playback-feedback-bezel] {
-  background: var(
-    --video-player-play-surface,
-    var(--video-player-control-surface)
-  );
-  color: var(--video-player-play-text, var(--video-player-control-text));
   border-radius: var(
     --video-player-play-radius,
     var(--video-player-control-radius, 999px)
   );
-  outline: var(--video-player-play-border, 0 none);
-  outline-offset: -1px;
-  box-shadow: var(--video-player-control-shadow, none);
-  backdrop-filter: var(--video-player-control-backdrop, none);
-  -webkit-backdrop-filter: var(--video-player-control-backdrop, none);
 }
 
 [data-player-theme]:not([data-player-theme="youtube"])
@@ -356,6 +464,100 @@
   box-sizing: border-box;
 }
 
+/* ---- The timeline's preview: the time pill and the picture ----
+ * The time (over the picture, alone while dragging, or with the chapter)
+ * sits on the theme's control surface, in its corners, outline and number
+ * face. The picture takes the menus' corners and edge. */
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is(
+    [data-video-player-preview-time],
+    [data-video-player-preview-mode="pill"]
+  ) {
+  border-radius: var(--video-player-control-radius, 999px);
+  background: var(--video-player-control-surface);
+  color: var(--video-player-control-text);
+  box-shadow:
+    inset 0 0 0 1px var(--video-player-control-border, transparent),
+    var(--video-player-control-shadow, none);
+  backdrop-filter: var(--video-player-control-backdrop, none);
+  -webkit-backdrop-filter: var(--video-player-control-backdrop, none);
+  font-family: var(
+    --video-player-numeric-font,
+    var(--video-player-font, inherit)
+  );
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-video-player-preview-frame] {
+  border-radius: min(var(--video-player-menu-radius, 16px), 16px);
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.45),
+    0 14px 32px rgb(0 0 0 / 0.5);
+}
+
+/* Its edge drawn inside it, over the picture, so a theme that cuts the
+   picture's corners keeps it. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-video-player-preview-frame]::after {
+  box-shadow: inset 0 0 0 1px
+    var(--video-player-menu-border, rgb(255 255 255 / 0.16));
+}
+
+/* The chapter's name over the picture keeps the markup's dark backing in
+   every theme (it must read over any picture), in the theme's corners and
+   outline. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-video-player-preview-mode="frame"]
+  > [data-video-player-preview-chapter] {
+  border-radius: var(--video-player-control-radius, 999px);
+  box-shadow: inset 0 0 0 1px var(--video-player-control-border, transparent);
+}
+
+/* What a pinch snapped to ("Zoomed to fill", "Original") is said on the
+   theme's own surface, in its corners, type and capitals. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-player-zoom-snap-label] {
+  border-radius: var(--video-player-control-radius, 999px);
+  background: var(--video-player-control-surface);
+  color: var(--video-player-control-text);
+  box-shadow:
+    inset 0 0 0 1px var(--video-player-control-border, transparent),
+    var(--video-player-control-shadow, none);
+  backdrop-filter: var(--video-player-control-backdrop, none);
+  -webkit-backdrop-filter: var(--video-player-control-backdrop, none);
+  text-transform: var(--video-player-label-transform, none);
+  letter-spacing: var(--video-player-label-letter-spacing, normal);
+}
+
+/* Mono has no surface under its controls: its time, the chapter, the zoom
+   and what a pinch snapped to sit on black, in a hairline, so they read
+   over a bright picture. */
+[data-player-theme="mono"]:not([data-player-theme="youtube"])
+  :is(
+    [data-video-player-preview-time],
+    [data-video-player-preview-mode="pill"],
+    [data-video-player-preview-mode="frame"]
+      > [data-video-player-preview-chapter],
+    [data-player-zoom-snap-label]
+  ) {
+  background: rgb(0 0 0 / 0.72);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.35);
+}
+
+/* `[class]` and !important: beat the kit's surface rule and Mono's own
+   "no boxes" rule for the controls. */
+[data-player-theme="mono"]:not([data-player-theme="youtube"])
+  [data-player-zoom-indicator][class] {
+  background: rgb(0 0 0 / 0.72);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.35) !important;
+}
+
+[data-player-theme="mono"]:not([data-player-theme="youtube"])
+  [data-player-zoom-indicator][class]:is(:hover, :focus-visible) {
+  background: rgb(0 0 0 / 0.86);
+}
+
 /* ---- Menus ---- */
 
 [data-player-theme]:not(
@@ -366,6 +568,54 @@
     var(--video-player-menu-shadow, none) !important;
   backdrop-filter: var(--video-player-menu-backdrop, none);
   -webkit-backdrop-filter: var(--video-player-menu-backdrop, none);
+}
+
+/* The bottom sheet keeps the theme's colour but not the floating menu's
+   outline round all four sides and its glow (a green haze down Hacker's
+   sides): one clear line along its top shows where it starts, and its
+   only shadow falls upwards onto the page. Its top corners are rounded in
+   every theme, square ones too (the user's call), on phones as on the
+   desktop's sheet. */
+[data-player-theme]:not(
+    [data-player-theme="youtube"]
+  )[data-video-player-menu-panel][data-video-player-mobile-sheet] {
+  border-top: 1px solid
+    var(
+      --video-player-sheet-edge,
+      var(--video-player-menu-border, rgb(255 255 255 / 0.16))
+    ) !important;
+  border-radius: 16px 16px 0 0 !important;
+  box-shadow: 0 -14px 36px rgb(0 0 0 / 0.5) !important;
+}
+
+/* Chapter stills in a themed menu or sheet take the theme's corners
+   (square in Hacker and Mono). */
+[data-player-theme]:not(
+    [data-player-theme="youtube"]
+  )[data-video-player-menu-panel]
+  [data-chapter-thumb] {
+  border-radius: min(var(--video-player-menu-radius, 8px), 8px);
+}
+
+/* The sheet's grip is a rounded bar in every theme, like its corners, in
+   the theme's grip colour where it names one. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-video-player-sheet-grip] {
+  border-radius: 999px;
+  background: var(
+    --video-player-sheet-grip,
+    color-mix(in srgb, var(--video-player-menu-text, #fff) 34%, transparent)
+  );
+}
+
+/* Where the theme's own line is too faint to mark the sheet's top. */
+[data-player-theme="mono"][data-video-player-mobile-sheet] {
+  --video-player-sheet-edge: rgb(255 255 255 / 0.42);
+  --video-player-sheet-grip: rgb(255 255 255 / 0.85);
+}
+
+[data-player-theme="cone"][data-video-player-mobile-sheet] {
+  --video-player-sheet-edge: rgb(255 255 255 / 0.2);
 }
 
 [data-player-theme]:not(
@@ -404,20 +654,37 @@
   box-shadow: none;
 }
 
-/* While the side panel is open the bottom-right buttons and the timeline
-   move clear of it. Only their position changes: the control frame keeps
-   its width, which the player measures to arrange its rows (narrowing it
-   moved the buttons between rows, closing and reopening the panel). */
+/* While the side panel is open the timeline ends where it begins, and the
+   bottom-right buttons (Lessons, autoplay, the gear, full screen) and the
+   top-right ones step out of sight: the panel has its own close button,
+   and in a small player there is no room for them beside it. They are
+   hidden, not removed, and nothing changes size: the player measures these
+   rows to arrange them (narrowing them moved buttons between rows, which
+   closed and reopened the panel over and over). */
 .video-shell:has(> [data-video-player-menu-placement="side"])
-  :is([data-player-desktop-end-controls], [data-player-timeline-layer]) {
+  [data-player-timeline-layer] {
   right: calc(min(18rem, 100%) + 0.5rem) !important;
 }
 
-/* Lessons steps aside meanwhile, so the moved buttons never cover the time. */
 .video-shell:has(> [data-video-player-menu-placement="side"])
-  [data-player-desktop-end-controls]
-  [data-player-desktop-lessons] {
-  display: none !important;
+  [data-player-desktop-end-controls] {
+  visibility: hidden;
+}
+
+/* An open settings menu can reach the top of a short player: the top-right
+   buttons (Chapters, or the chapter now playing) fade out from under it
+   meanwhile, in every theme, YouTube's too. */
+.video-shell:has(
+    > [data-video-player-menu-panel]:not([data-video-player-mobile-sheet])
+  )
+  [data-player-fullscreen-swipe-top-zone]:has(
+    [data-player-control-hit-area="chapters"]
+  ) {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 150ms ease-out,
+    visibility 0s 150ms;
 }
 
 /* The side panel's header: a small spaced-out title over a hairline. */
@@ -463,17 +730,265 @@
 }
 
 /* ================================================================
- * Frost: glass everywhere, a white play disc, a glowing line for a thumb.
+ * Frost: liquid glass everywhere (no outlines: light along the top edge
+ * and inside instead), a glass play disc, a glowing line for a thumb.
  * ================================================================ */
 
-[data-player-theme="frost"] [data-player-control-cluster="mobile-play"] {
-  background: rgb(255 255 255 / 0.16) !important;
+/* The phone's big play key is the same dark glass as the keys beside it,
+   not a white one: a white tint lit up a face behind it (the user's call,
+   after the phone's notification cards, which darken what they cover).
+   Doubled attribute: beats the play key's own surface in the kit. */
+[data-player-theme="frost"]:not([data-player-theme="youtube"])
+  [data-player-control-cluster="mobile-play"][data-player-control-cluster][class] {
+  background: var(--video-player-control-surface) !important;
   color: #fff !important;
-  backdrop-filter: blur(18px) saturate(1.6);
-  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: var(--video-player-control-shadow) !important;
+}
+
+/* Glass that is glass from its first frame. Chrome blurs only what is
+   inside a parent that is part-way through an opacity fade, so the keys
+   came up see-through and frosted only once their layer's fade ended. In
+   Frost the layers stay opaque and hand their fade down as a number; each
+   piece of glass (and what sits beside it) fades itself and keeps its blur
+   all the way. */
+@property --video-player-layer-fade {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --video-player-corner-fade {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+[data-player-theme="frost"]
+  :is(
+    [data-lesson-player-controls],
+    [data-lesson-central-controls],
+    [data-player-bottom-corner-controls-layer]
+  ),
+[data-player-theme="frost"] [data-mobile-player-corner] {
+  opacity: 1 !important;
+}
+
+[data-player-theme="frost"]
+  :is(
+    [data-lesson-player-controls],
+    [data-lesson-central-controls],
+    [data-player-bottom-corner-controls-layer]
+  )[aria-hidden="true"] {
+  --video-player-layer-fade: 0;
+}
+
+/* The phone's corner keys step aside while a preview is dragged. */
+@media (max-width: 39.999rem) {
+  [data-player-theme="frost"]
+    [data-mobile-player-corner][data-preview-obscured="true"] {
+    --video-player-corner-fade: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-player-theme="frost"]
+    :is(
+      [data-lesson-player-controls],
+      [data-lesson-central-controls],
+      [data-player-bottom-corner-controls-layer]
+    ):not(.transition-none) {
+    transition-property: --video-player-layer-fade, visibility;
+  }
+
+  [data-player-theme="frost"] [data-mobile-player-corner] {
+    transition-property: --video-player-corner-fade;
+  }
+}
+
+[data-player-theme="frost"]
+  :is(
+    [data-lesson-player-controls],
+    [data-lesson-central-controls],
+    [data-player-bottom-corner-controls-layer]
+  )
+  :is(
+    [class*="bg-(--video-player-control-surface)"]:not(
+      [class*="before:bg-(--video-player-control-surface)"]
+    ),
+    [data-player-control-cluster]:not(
+      [class*="before:bg-(--video-player-control-surface)"]
+    ),
+    [data-player-top-title],
+    [data-chapter-label],
+    [class*="before:bg-(--video-player-control-surface)"] > *,
+    [data-mobile-player-vignette]
+  ),
+[data-player-theme="frost"]
+  :is(
+    [data-lesson-player-controls],
+    [data-lesson-central-controls],
+    [data-player-bottom-corner-controls-layer]
+  )
+  [class*="before:bg-(--video-player-control-surface)"]::before {
+  opacity: calc(
+    var(--video-player-layer-fade) * var(--video-player-corner-fade)
+  );
+}
+
+/* A key that is off stays dimmed. */
+[data-player-theme="frost"]
+  :is(
+    [data-lesson-player-controls],
+    [data-lesson-central-controls],
+    [data-player-bottom-corner-controls-layer]
+  )
+  [class*="before:bg-(--video-player-control-surface)"]
+  > :disabled {
+  opacity: calc(
+    var(--video-player-layer-fade) * var(--video-player-corner-fade) * 0.45
+  );
+}
+
+/* The phone's top shade follows its layer, and still clears for a
+   preview (no fade of its own: it would lag behind the layer's). */
+[data-player-theme="frost"] [data-mobile-player-vignette] {
+  transition: none;
+}
+
+.video-shell:has([data-video-player-preview-bar][data-shown="true"])
+  [data-player-theme="frost"]
+  [data-mobile-player-vignette] {
+  opacity: 0;
+}
+
+/* A key under the pointer glows softly round its glass, as the control
+   panel's tiles do (the glass's own shadow, so every key takes it). */
+[data-player-theme="frost"]
+  :is(
+    [data-player-control-cluster],
+    [data-player-control-hit-area],
+    [data-player-top-title]
+  ):is(:hover, :focus-visible) {
+  --video-player-control-shadow:
+    inset 0 1px 3px rgb(255 255 255 / 0.3),
+    inset 0 0 18px rgb(255 255 255 / 0.12), 0 0 22px rgb(255 255 255 / 0.14),
+    0 8px 24px rgb(4 12 24 / 0.22);
+}
+
+/* Every icon gives off a little light, as the control panel's do; the
+   white play key glows round its disc instead (its icon is dark). */
+[data-player-theme="frost"]
+  :is(
+    [data-player-control],
+    [data-player-control-hit-area],
+    [data-player-top-title]
+  )
+  svg {
+  filter: drop-shadow(0 0 5px rgb(255 255 255 / 0.4));
+}
+
+[data-player-theme="frost"] [data-player-control-cluster="playback"] svg {
+  filter: none;
+}
+
+[data-player-theme="frost"]:not([data-player-theme="youtube"])
+  [data-player-control-cluster="playback"][data-player-control-cluster][class] {
   box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 0.32),
-    0 12px 32px rgb(4 12 24 / 0.35) !important;
+    inset 0 -1px 2px rgb(11 22 34 / 0.14),
+    0 0 18px rgb(255 255 255 / 0.3),
+    0 6px 18px rgb(4 12 24 / 0.22) !important;
+}
+
+/* A switch that is on glows white (Frost's accent is plain white). */
+:root[data-player-autoplay="on"]
+  [data-player-theme="frost"]
+  [data-autoplay-track],
+[data-player-theme="frost"]
+  [data-settings-switch="switch"][data-settings-switch-state="on"] {
+  box-shadow: 0 0 14px rgb(255 255 255 / 0.45);
+}
+
+/* The menu's glass is clearest at its edges, where the picture's colours
+   come through strongest, and a little deeper behind the words. */
+[data-player-theme="frost"]:not(
+    [data-player-theme="youtube"]
+  )[data-video-player-menu-panel] {
+  background-image: radial-gradient(
+    130% 100% at 50% 45%,
+    rgb(12 18 30 / 0.2),
+    rgb(12 18 30 / 0) 75%
+  ) !important;
+}
+
+/* Its rows are glass tiles of their own, a little apart, as the control
+   panel's are: no lines between them. */
+[data-player-theme="frost"][data-video-player-menu-panel]
+  [data-settings-group] {
+  display: grid;
+  gap: 0.25rem;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+}
+
+[data-player-theme="frost"][data-video-player-menu-panel]
+  [data-settings-group]
+  > * {
+  border-radius: 0.875rem;
+  background-color: rgb(255 255 255 / 0.06);
+  box-shadow:
+    inset 0 1px 2px rgb(255 255 255 / 0.08),
+    inset 0 0 12px rgb(255 255 255 / 0.03);
+}
+
+[data-player-theme="frost"][data-video-player-menu-panel]
+  [data-settings-group]
+  > :is(:hover, :focus-visible) {
+  background-color: var(--video-player-menu-row-active);
+}
+
+[data-player-theme="frost"][data-video-player-menu-panel] [data-settings-icon] {
+  color: var(--video-player-menu-text);
+  filter: drop-shadow(0 0 5px rgb(255 255 255 / 0.45));
+}
+
+[data-player-theme="frost"][data-video-player-menu-panel]
+  [data-settings-close] {
+  border-radius: 999px;
+  background-color: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 2px rgb(255 255 255 / 0.14);
+}
+
+[data-player-theme="frost"][data-video-player-menu-panel]
+  [data-settings-close]:is(:hover, :focus-visible) {
+  background-color: rgb(255 255 255 / 0.18);
+}
+
+/* The phone's sheet is glass too, over the page, with no line along its
+   top: light along the edge instead. */
+[data-player-theme="frost"]:not(
+    [data-player-theme="youtube"]
+  )[data-video-player-menu-panel][data-video-player-mobile-sheet] {
+  border-top-color: transparent !important;
+  background: var(--video-player-menu-surface) !important;
+  backdrop-filter: var(--video-player-menu-backdrop);
+  -webkit-backdrop-filter: var(--video-player-menu-backdrop);
+  box-shadow:
+    inset 0 1px 3px rgb(255 255 255 / 0.18),
+    inset 0 0 28px rgb(255 255 255 / 0.05),
+    0 -14px 36px rgb(0 0 0 / 0.32) !important;
+}
+
+/* Its grip strip, which the content scrolls under, stays clear glass: the
+   strip's own blur, no darker band or fade below it. */
+[data-player-theme="frost"][data-video-player-mobile-sheet]
+  > [data-video-player-mobile-sheet-drag-handle] {
+  background-color: transparent !important;
+}
+
+[data-player-theme="frost"][data-video-player-mobile-sheet]
+  > [data-video-player-mobile-sheet-drag-handle]::after {
+  display: none;
 }
 
 [data-player-theme="frost"] [data-timeline-thumb] {
@@ -518,9 +1033,40 @@
   }
 }
 
-[data-player-theme="mono"] [data-player-control-cluster="mobile-play"] {
+[data-player-theme="mono"]:not([data-player-theme="youtube"])
+  [data-player-control-cluster="mobile-play"] {
   outline: 1.5px solid rgb(255 255 255 / 0.9);
   outline-offset: -1.5px;
+}
+
+/* Mono's lesson title in full screen: bare words on the picture with the
+   small shadow its controls have, its lesson tag in spaced capitals. */
+[data-player-theme="mono"] [data-player-top-title] {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+}
+
+[data-player-theme="mono"] [data-player-top-title-lesson] {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Mono's phone sheet: the title in small spaced capitals, as in the side
+   panel, and the rows lined up with it. */
+[data-player-theme="mono"][data-video-player-mobile-sheet]
+  [data-settings-title] {
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+[data-player-theme="mono"][data-video-player-mobile-sheet]
+  [data-settings-layout="panel"]
+  :is(
+    [data-settings-row],
+    [data-settings-submenu-header],
+    [data-settings-option]
+  ) {
+  padding-inline: 0.75rem;
 }
 
 /* Values, times and choices in the monospaced face. */
@@ -577,6 +1123,19 @@
   -webkit-backdrop-filter: var(--video-player-control-backdrop, none);
 }
 
+/* In the Chapters button the label is the button's text: the button is
+   the pill, so the label draws none of its own. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-player-control-hit-area="chapters"]
+  [data-chapter-label] {
+  height: auto !important;
+  padding: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 /* The chapter label opens the chapters: it brightens like a pill. */
 [data-player-theme]:not([data-player-theme="youtube"])
   button[data-chapter-label]:is(:hover, :focus-visible) {
@@ -589,7 +1148,7 @@
 /* The chapter now playing sits on a pill like the time beside it. */
 [data-player-theme]:not([data-player-theme="youtube"]) [data-chapter-label] {
   align-items: center;
-  height: 2.375rem;
+  height: 2.625rem;
   padding-inline: 0.875rem;
   border-radius: min(var(--video-player-control-radius, 999px), 999px);
   background: var(

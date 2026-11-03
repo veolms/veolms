@@ -106,11 +106,13 @@ export function LearnerHome({
   onNavigatePage: NavigateTo;
 }) {
   const enrolledCourses = knownCourses ?? NO_COURSES;
-  // An admin in Student view, or a shared test account, can leave any
-  // course they enrolled in; doing so clears their progress in it.
+  // An admin in Student view, a shared test account, or anyone on a local
+  // server with LOCAL_ANY_COURSE_UNENROLL, can leave any course they
+  // enrolled in; doing so clears their progress in it.
   const currentUser = useCurrentUser().data;
   const leavesAnyCourse =
-    hasAdminRole(currentUser?.roles) || Boolean(currentUser?.isTestAccount);
+    hasAdminRole(currentUser?.roles) ||
+    Boolean(currentUser?.isTestAccount || currentUser?.localAnyCourseUnenroll);
   const [pendingUnenroll, setPendingUnenroll] = useState<EnrolledCourse | null>(
     null,
   );

@@ -36,6 +36,11 @@ export function PlayerThemeSwatch({
   const CaptionsIcon = theme.icons.captions;
   const SettingsIcon = theme.icons.settings;
   const { tokens } = theme;
+  // A theme that plays in the app's own colours (YouTube) shows them here
+  // too, not the stand-in accent it is defined with.
+  const accent = theme.usesAppPalette
+    ? `var(--accent, ${tokens.accent})`
+    : tokens.accent;
   const controlRadius = `min(${tokens.controlRadius}, 999px)`;
   const sizes = SWATCH_SIZES[size];
 
@@ -46,6 +51,7 @@ export function PlayerThemeSwatch({
       className={`relative block aspect-video overflow-hidden bg-[radial-gradient(120%_90%_at_30%_20%,#2b4d6e_0%,#1a3049_45%,#0e1b2b_100%)] ${sizes.frame} ${className ?? ""}`}
       style={{
         ...getPlayerThemeStyle(theme),
+        ["--video-player-accent" as string]: accent,
         fontFamily: tokens.fontFamily,
       }}
     >
@@ -83,7 +89,7 @@ export function PlayerThemeSwatch({
             className="block h-full w-2/5"
             style={{
               borderRadius: "inherit",
-              background: tokens.timelineProgress ?? tokens.accent,
+              background: tokens.timelineProgress ?? accent,
             }}
           />
           <span
@@ -97,7 +103,7 @@ export function PlayerThemeSwatch({
               border: tokens.thumbBorder,
               boxShadow: tokens.thumbShadow,
               background:
-                tokens.thumbColor ?? tokens.timelineProgress ?? tokens.accent,
+                tokens.thumbColor ?? tokens.timelineProgress ?? accent,
             }}
           />
         </span>
@@ -118,7 +124,7 @@ export function PlayerThemeSwatch({
         className="absolute right-[5%] bottom-[12%] h-[6%] w-[14%]"
         style={{
           borderRadius: tokens.controlRadius,
-          background: tokens.accent,
+          background: accent,
         }}
       />
     </span>

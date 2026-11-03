@@ -19,6 +19,7 @@ import { appBaseStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
+import { getPlayerThemeBootstrapScript } from "./learning/player/playerThemeEarlyState";
 import {
   applyLearningShellToDocument,
   getInitialLearningShellState,
@@ -290,7 +291,7 @@ export function Layout({ children }: LayoutProps) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getLessonMenuSectionBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getCoursePricesEarlyBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}${getLessonPageEarlyStateScript()}${getCurriculumEarlyScrollScript()}`,
+            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getLessonMenuSectionBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getCoursePricesEarlyBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}${getPlayerThemeBootstrapScript()}${getLessonPageEarlyStateScript()}${getCurriculumEarlyScrollScript()}`,
           }}
         />
         <Meta />

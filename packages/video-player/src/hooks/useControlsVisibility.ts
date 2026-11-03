@@ -8,6 +8,21 @@ const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
 type PlayerPointerMode = "mouse" | "touch";
 type PlayerInputMode = "keyboard" | "pointer";
 
+/**
+ * Whether focus that just arrived is the keyboard's: what the browser would
+ * draw a keyboard focus ring for. Focus set by the page after a tap or a
+ * click is not.
+ */
+function isKeyboardFocus(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  try {
+    return target.matches(":focus-visible");
+  } catch {
+    // A browser without `:focus-visible` keeps the old reading.
+    return true;
+  }
+}
+
 export interface UseControlsVisibilityOptions {
   rootRef: RefObject<HTMLElement | null>;
   idleDelay?: number;
@@ -288,7 +303,13 @@ export function useControlsVisibility({
     };
 
     const handleFocusIn = (event: FocusEvent) => {
-      if (!pointerFocusPendingRef.current) inputModeRef.current = "keyboard";
+      // Focus the page moves by itself (a menu that closes hands it back to
+      // its key) is not the keyboard's: only focus the browser would ring
+      // as keyboard focus counts. Taken as the keyboard's, a tap that closed
+      // the settings sheet kept the controls up for good.
+      if (!pointerFocusPendingRef.current && isKeyboardFocus(event.target)) {
+        inputModeRef.current = "keyboard";
+      }
       if (delaysControlsReveal(event.target)) {
         clearTimer();
         controller.setControlsVisible(false);

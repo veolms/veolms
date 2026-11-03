@@ -371,6 +371,16 @@ const serverConfigSchema = z.object({
     .optional(),
 
   /**
+   * Local development only: every account may leave any course it is
+   * enrolled in, bought ones included, as an admin or a shared test account
+   * may (no money is returned, the order is left as it is, and the course's
+   * progress is cleared), so a purchase can be tried again. Honoured only
+   * when `NODE_ENV` is `development`, and the API refuses to start in
+   * production with it set.
+   */
+  LOCAL_ANY_COURSE_UNENROLL: booleanEnvironmentValueSchema.default(false),
+
+  /**
    * Enables the `mock_<email>` OAuth short-circuit, which skips both the
    * provider round-trip and the state/CSRF check. Requires `NODE_ENV` to be
    * `development` as well, so it can never be switched on in a deployed
@@ -814,6 +824,19 @@ export function loadServerConfig(
   environment: Record<string, string | undefined>,
 ): ServerConfig {
   const parsed = serverConfigSchema.parse(environment);
+  // The development-only switches are honoured when NODE_ENV is
+  // `development`, which is also the schema's default: a deployment that
+  // forgot NODE_ENV would have them on. So they need it named outright.
+  const developmentOnly = [
+    parsed.LOCAL_FIXED_OTP ? "LOCAL_FIXED_OTP" : null,
+    parsed.LOCAL_ANY_COURSE_UNENROLL ? "LOCAL_ANY_COURSE_UNENROLL" : null,
+  ].filter((name): name is string => name !== null);
+  if (developmentOnly.length > 0 && !environment.NODE_ENV?.trim()) {
+    throw new Error(
+      `Refusing to start with ${developmentOnly.join(", ")} set and no NODE_ENV: ` +
+        "set NODE_ENV=development explicitly for these development-only switches.",
+    );
+  }
   const offenders = findInsecureDefaults(parsed);
   const missingRequired = findMissingRequiredInProduction(parsed);
 
@@ -821,6 +844,12 @@ export function loadServerConfig(
     if (parsed.LOCAL_FIXED_OTP) {
       throw new Error(
         "Refusing to start in production with LOCAL_FIXED_OTP set: it lets anyone sign in to any account. " +
+          "Remove it from the environment.",
+      );
+    }
+    if (parsed.LOCAL_ANY_COURSE_UNENROLL) {
+      throw new Error(
+        "Refusing to start in production with LOCAL_ANY_COURSE_UNENROLL set: it lets any student give up a paid course. " +
           "Remove it from the environment.",
       );
     }

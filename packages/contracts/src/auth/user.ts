@@ -181,6 +181,11 @@ export const authUserSchema = z.object({
    * is enrolled in, as an admin may.
    */
   isTestAccount: z.boolean().optional(),
+  /**
+   * A developer's machine with LOCAL_ANY_COURSE_UNENROLL: every account may
+   * leave any course it is enrolled in, as an admin may.
+   */
+  localAnyCourseUnenroll: z.boolean().optional(),
   ...avatarResponseFields,
   ...profileFieldSchemas,
 });
@@ -195,6 +200,7 @@ export const userProfileResponseSchema = z.object({
   mobileVerified: z.boolean(),
   roles: z.array(z.string().max(50)),
   isTestAccount: z.boolean().optional(),
+  localAnyCourseUnenroll: z.boolean().optional(),
   ...avatarResponseFields,
   ...profileFieldSchemas,
   mfaVerified: z.boolean(),

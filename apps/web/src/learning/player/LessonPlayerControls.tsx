@@ -1,5 +1,4 @@
 import {
-  ChapterNowLabel,
   isPlaybackStalled,
   FullscreenButton,
   PlayerIconButton,
@@ -22,7 +21,9 @@ import {
 } from "@veolms/video-player";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { FileVideoIcon as FileVideo } from "@phosphor-icons/react/FileVideo";
 import { QueueIcon as Queue } from "@phosphor-icons/react/Queue";
+import { TerminalWindowIcon as TerminalWindow } from "@phosphor-icons/react/TerminalWindow";
 import {
   startTransition,
   useEffect,
@@ -116,6 +117,16 @@ function useLandscapeOrientation(): boolean {
 const QUARTER_TURN_TIMELINE_CLASS =
   "[[data-player-quarter-turn]_&]:!bottom-11 [[data-player-quarter-turn]_&]:!translate-y-0";
 const QUARTER_TURN_CORNER_CLASS = "[[data-player-quarter-turn]_&]:!bottom-16";
+
+// Full screen on a phone: the controls reach out to the screen's sides, as
+// YouTube's do, wherever the picture is (zoomed to fill or not; they used to
+// keep to a 16:9 box in the middle and looked adrift once the picture
+// filled the screen). Kept clear of the rounded corners and a camera cut-out,
+// and of the notch of a page turned a quarter, whose sides are the phone's
+// top and bottom.
+const FULLSCREEN_EDGE_CLASS =
+  "[--player-fullscreen-edge:max(2rem,env(safe-area-inset-left),env(safe-area-inset-right),env(safe-area-inset-top),env(safe-area-inset-bottom))]";
+const MOBILE_FULLSCREEN_FRAME_CLASS = `inset-y-0 left-(--player-fullscreen-edge) right-(--player-fullscreen-edge) ${FULLSCREEN_EDGE_CLASS}`;
 
 // Matches Tailwind's `sm` breakpoint. Settings and autoplay are rendered in
 // exactly one place, so their desktop position is decided in JS, not CSS.
@@ -554,6 +565,13 @@ export interface LessonPlayerControlsProps {
   /** Shown as the heading of the chapters panel. */
   lessonTitle?: string;
   /**
+   * The lesson's place in the whole course, counted across its sections
+   * (1-based), and how many lessons the course has: the full-screen title
+   * shows them where the theme words them (`chrome.lessonLabel`).
+   */
+  lessonIndex?: number;
+  totalLessons?: number;
+  /**
    * Element covering the course content column. When present the chapters
    * panel slides over it; otherwise it slides over the video's right edge.
    */
@@ -628,7 +646,7 @@ export function CourseLessonsButton({
   const textClasses = textSize === "sm" ? "!text-sm" : "!text-xs";
   const sizeClasses =
     textSize === "sm"
-      ? "h-9.5 px-3.5 py-[3px] before:inset-0"
+      ? "h-10.5 px-3.5 py-[3px] before:inset-0"
       : "h-11 px-4 py-0 before:inset-x-0.5 before:inset-y-1.5";
   const labelRowClass =
     textSize === "sm"
@@ -796,7 +814,15 @@ function ThemedAutoplayToggle({
       {autoplay.label ? (
         <span
           data-autoplay-label=""
-          className={`text-[0.6875rem] leading-none font-bold tracking-[0.06em] ${mobileInteraction ? "hidden" : "max-sm:hidden"}`}
+          className={`text-[0.6875rem] leading-none font-bold tracking-[0.06em] ${
+            // A switch speaks for itself on a phone; a square or a tag
+            // means nothing without its word.
+            style === "switch"
+              ? mobileInteraction
+                ? "hidden"
+                : "max-sm:hidden"
+              : ""
+          }`}
         >
           {autoplay.label}
         </span>
@@ -848,17 +874,43 @@ function ThemedAutoplayToggle({
  * whose `chrome.topTitle` asks for it: the title as it is, a file name for
  * the terminal look (`setting-up-node.mp4`) or a session tag
  * (`setting_up_node`). Pressed, it opens the course lessons, as the title
- * under the video does.
+ * under the video does. After it, on a tag, the lesson's place in the whole
+ * course where the theme words it (`chrome.lessonLabel`, "L7/121"), as the
+ * Chapters button shows the chapter's.
  */
 function LessonTopTitle({
   title,
+  lessonIndex,
+  totalLessons,
   onOpenLessons,
 }: {
   title: string;
+  lessonIndex?: number;
+  totalLessons?: number;
   onOpenLessons: () => void;
 }) {
-  const variant = usePlayerTheme().chrome?.topTitle;
+  const chrome = usePlayerTheme().chrome;
+  const variant = chrome?.topTitle;
   if (!variant) return null;
+  const counted =
+    lessonIndex !== undefined &&
+    lessonIndex > 0 &&
+    totalLessons !== undefined &&
+    totalLessons >= lessonIndex;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const lessonLabel =
+    chrome.lessonLabel && counted
+      ? chrome.lessonLabel.replace(
+          /\{(\w+)\}/gu,
+          (token, name: string) =>
+            ({
+              n: String(lessonIndex),
+              total: String(totalLessons),
+              nn: pad(lessonIndex),
+              tt: pad(totalLessons),
+            })[name] ?? token,
+        )
+      : null;
   const words = title
     .toLowerCase()
     .normalize("NFKD")
@@ -877,18 +929,46 @@ function LessonTopTitle({
       type="button"
       data-player-top-title={variant}
       title={title}
-      aria-label={`Open course lessons for ${title}`}
-      className="pointer-events-auto absolute top-2 left-13 hidden h-9.5 max-w-[min(28rem,calc(100%-22rem))] cursor-pointer items-center gap-2 truncate rounded-(--video-player-control-radius) bg-(--video-player-control-surface) px-3 text-sm font-bold text-(--video-player-control-text) transition-colors duration-150 hover:bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) sm:inline-flex"
+      aria-label={`Open course lessons for ${title}${
+        counted ? `, lesson ${lessonIndex} of ${totalLessons}` : ""
+      }`}
+      className="pointer-events-auto absolute top-2 left-13 hidden h-9.5 max-w-[min(28rem,calc(100%-22rem))] cursor-pointer items-center gap-2 truncate !rounded-(--video-player-control-radius) bg-(--video-player-control-surface) px-3 text-sm font-bold text-(--video-player-control-text) transition-colors duration-150 hover:bg-(--video-player-control-surface-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) sm:inline-flex"
       onClick={onOpenLessons}
     >
-      {variant === "title" ? null : (
-        <span
+      {variant === "title" ? null : variant === "file" ? (
+        <FileVideo
           aria-hidden="true"
           data-player-top-title-mark=""
-          className={`size-1.5 shrink-0 bg-(--video-player-accent) ${variant === "file" ? "rounded-full" : ""}`}
+          size={17}
+          weight="bold"
+          className="shrink-0 text-(--video-player-accent)"
         />
+      ) : (
+        <>
+          <TerminalWindow
+            aria-hidden="true"
+            data-player-top-title-mark=""
+            size={17}
+            weight="bold"
+            className="shrink-0 text-(--video-player-accent)"
+          />
+          <span
+            data-player-top-title-prefix=""
+            className="shrink-0 tracking-[0.08em] text-(--video-player-accent)"
+          >
+            LESSON
+          </span>
+        </>
       )}
       <span className="truncate">{text}</span>
+      {lessonLabel ? (
+        <span
+          data-player-top-title-lesson=""
+          className="shrink-0 rounded-[min(var(--video-player-control-radius,6px),6px)] bg-(--video-player-accent) px-1.5 py-1 [font-family:var(--video-player-numeric-font,inherit)] text-[0.6875rem] leading-none font-bold text-(--video-player-accent-contrast) tabular-nums"
+        >
+          {lessonLabel}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -1038,11 +1118,11 @@ function LessonTimeControl({ mobile = false }: { mobile?: boolean }) {
     <PlayerControlSurface
       blurred
       cluster="time"
-      className="inline-flex h-9.5 items-center rounded-full p-[3px]"
+      className="inline-flex h-10.5 items-center rounded-full p-[3px]"
     >
       <TimeDisplay
         interactive
-        className={`${PLAYER_INNER_CONTROL_CLASS} !inline-flex !h-8 !items-center !px-3.5 !text-sm`}
+        className={`${PLAYER_INNER_CONTROL_CLASS} !inline-flex !h-9 !items-center !px-3.5 !text-sm`}
       />
     </PlayerControlSurface>
   );
@@ -1133,6 +1213,8 @@ export function LessonPlayerControls({
   courseLessonsSidePanel = false,
   courseLessonsBottomSheet = false,
   lessonTitle,
+  lessonIndex,
+  totalLessons,
   chaptersPanelHost,
   onAmbientEnabledChange,
   onAutoplayEnabledChange,
@@ -1175,6 +1257,12 @@ export function LessonPlayerControls({
     useState<HTMLDivElement | null>(null);
   const playerTheme = usePlayerTheme();
   const MinimizeIcon = playerTheme.icons.minimize;
+  // Autoplay is switched inside the settings menu, except in a theme that
+  // keeps it beside the settings key (`autoplay.placement`, YouTube).
+  const autoplayInSettings =
+    showAutoplayControl && playerTheme.autoplay?.placement !== "bar";
+  const autoplayInBar = showAutoplayControl && !autoplayInSettings;
+  const AutoplayIcon = playerTheme.icons.play;
   const mobileInteraction = usePlayerMobileInteraction();
   const {
     stalled,
@@ -1310,7 +1398,7 @@ export function LessonPlayerControls({
     <div
       data-player-timeline-wrap=""
       data-player-timeline-layer=""
-      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${EXPAND_MOTION_HIDDEN_CLASS} ${wideLessonsBeside ? "sm:!right-[calc(100%-var(--learning-fullscreen-video-width)+0.75rem)]" : ""} ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? `!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-11 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3 ${QUARTER_TURN_TIMELINE_CLASS}` : `!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-11 sm:!w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3 ${QUARTER_TURN_TIMELINE_CLASS}`) : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${EXPAND_MOTION_HIDDEN_CLASS} ${wideLessonsBeside ? "sm:!right-[calc(100%-var(--learning-fullscreen-video-width)+0.75rem)]" : ""} ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? `!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-11 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3 ${QUARTER_TURN_TIMELINE_CLASS}` : `!left-(--player-fullscreen-edge) !right-(--player-fullscreen-edge) !bottom-0 !z-170 !w-auto !max-w-none !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--player-fullscreen-edge) sm:!right-(--player-fullscreen-edge) sm:!bottom-11 sm:!w-auto sm:!translate-x-0 sm:!translate-y-0 sm:!px-3 ${FULLSCREEN_EDGE_CLASS} ${QUARTER_TURN_TIMELINE_CLASS}`) : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
     >
@@ -1417,10 +1505,6 @@ export function LessonPlayerControls({
           muteButtonClassName={`${PLAYER_INNER_CONTROL_CLASS} ${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-8.5`}
         />
         <LessonTimeControl />
-        <ChapterNowLabel
-          className="ml-1 hidden max-w-64 text-(--video-player-control-text) lg:inline-flex"
-          onOpen={() => setChaptersRequested(true)}
-        />
       </div>
     </div>
   );
@@ -1467,9 +1551,7 @@ export function LessonPlayerControls({
     <div
       data-player-bottom-corner-controls-layer=""
       className={`pointer-events-none absolute z-180 text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
-        mobileFullscreen
-          ? "inset-y-0 left-1/2 right-auto w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] max-w-full -translate-x-1/2"
-          : "inset-0"
+        mobileFullscreen ? MOBILE_FULLSCREEN_FRAME_CLASS : "inset-0"
       } ${
         visible
           ? "visible opacity-100"
@@ -1513,7 +1595,7 @@ export function LessonPlayerControls({
   const staticActionsPlacement =
     !hydrated &&
     !mobileInteraction &&
-    showAutoplayControl &&
+    autoplayInBar &&
     showLessonNavigation &&
     !circularSettingsControl &&
     Boolean(onCourseLessonsToggle);
@@ -1532,7 +1614,7 @@ export function LessonPlayerControls({
           buttonClassName={getPlayerIconPillClass(mobileInteraction)}
         />
       </span>
-      {showAutoplayControl ? (
+      {autoplayInBar ? (
         <AutoplayToggle
           enabled={autoplayEnabled}
           mobileInteraction={mobileInteraction}
@@ -1572,16 +1654,32 @@ export function LessonPlayerControls({
           ) : undefined
         }
         toggles={
-          showAmbientControl
+          autoplayInSettings || showAmbientControl
             ? [
-                {
-                  id: "ambient",
-                  label: "Ambient mode",
-                  description: "Glow around the player",
-                  icon: <AmbientModeIcon enabled={ambientEnabled} />,
-                  checked: ambientEnabled,
-                  onCheckedChange: onAmbientEnabledChange,
-                },
+                ...(autoplayInSettings
+                  ? [
+                      {
+                        id: "autoplay",
+                        label: "Autoplay",
+                        description: "Play the next lesson",
+                        icon: <AutoplayIcon size={20} active />,
+                        checked: autoplayEnabled,
+                        onCheckedChange: onAutoplayEnabledChange,
+                      },
+                    ]
+                  : []),
+                ...(showAmbientControl
+                  ? [
+                      {
+                        id: "ambient",
+                        label: "Ambient mode",
+                        description: "Glow around the player",
+                        icon: <AmbientModeIcon enabled={ambientEnabled} />,
+                        checked: ambientEnabled,
+                        onCheckedChange: onAmbientEnabledChange,
+                      },
+                    ]
+                  : []),
               ]
             : undefined
         }
@@ -1698,7 +1796,7 @@ export function LessonPlayerControls({
     desktopTopRowCompactLevel,
     volumeCrowdsLessons,
     hasChapters,
-    showAutoplayControl,
+    autoplayInBar,
     showLessonNavigation,
     timelineHost,
     hasLessonsButton,
@@ -1782,7 +1880,7 @@ export function LessonPlayerControls({
               mobileFullscreen
                 ? fullscreenCoursePanelVisible
                   ? "absolute inset-0"
-                  : "absolute inset-y-0 left-1/2 w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] max-w-full -translate-x-1/2"
+                  : `absolute ${MOBILE_FULLSCREEN_FRAME_CLASS}`
                 : "absolute inset-0"
             }
           >
@@ -1816,7 +1914,7 @@ export function LessonPlayerControls({
             mobileFullscreen
               ? fullscreenCoursePanelVisible
                 ? "absolute inset-0"
-                : "absolute inset-y-0 left-1/2 w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] max-w-full -translate-x-1/2"
+                : `absolute ${MOBILE_FULLSCREEN_FRAME_CLASS}`
               : "absolute inset-0"
           } ${staticActionsPlacement ? "@container/player-controls" : ""}`}
           ref={controlFrameRef}
@@ -1832,6 +1930,8 @@ export function LessonPlayerControls({
           onCourseLessonsToggle ? (
             <LessonTopTitle
               title={lessonTitle}
+              lessonIndex={lessonIndex}
+              totalLessons={totalLessons}
               onOpenLessons={() =>
                 onCourseLessonsToggle(
                   courseLessonsSidePanel ? "side" : "drawer",
@@ -1917,6 +2017,11 @@ export interface LessonCentralControlsProps {
   canGoPrevious: boolean;
   showLessonNavigation?: boolean;
   controlsSuppressed?: boolean;
+  /**
+   * The lesson's end screen is up: the controls stay with it, as the
+   * timeline and the bottom row do, for Replay and the next lesson.
+   */
+  endScreenOpen?: boolean;
   onGoNext: () => void;
   onGoPrevious: () => void;
 }
@@ -1926,6 +2031,7 @@ export function LessonCentralControls({
   canGoPrevious,
   showLessonNavigation = true,
   controlsSuppressed = false,
+  endScreenOpen = false,
   onGoNext,
   onGoPrevious,
 }: LessonCentralControlsProps) {
@@ -1953,7 +2059,10 @@ export function LessonCentralControls({
   // A drag on the timeline shows the moment over the whole picture; the
   // play and lesson buttons in its middle step aside for it.
   const visible =
-    !controlsSuppressed && !loading && controlsVisible && !scrubbing;
+    !controlsSuppressed &&
+    !loading &&
+    (controlsVisible || endScreenOpen) &&
+    !scrubbing;
 
   // Shown in the phone layout and on any device with a touch screen (a
   // tablet, a touch screen laptop), where a tap on the picture only brings
