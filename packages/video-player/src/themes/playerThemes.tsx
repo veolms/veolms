@@ -467,7 +467,7 @@ export const BUILT_IN_PLAYER_THEMES: Record<
   },
   cone: {
     id: "cone",
-    label: "Cone",
+    label: "VLC",
     description: "A solid deck with orange accents and square-cornered keys.",
     order: 10,
     tokens: {
