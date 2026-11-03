@@ -154,11 +154,13 @@ export function CourseCatalogue({
   );
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
   const [pendingUnenroll, setPendingUnenroll] = useState<Course | null>(null);
-  // An admin in Student view, or a shared test account, can leave any
-  // course they enrolled in, and doing so clears their progress in it.
+  // An admin in Student view, a shared test account, or anyone on a local
+  // server with LOCAL_ANY_COURSE_UNENROLL, can leave any course they
+  // enrolled in, and doing so clears their progress in it.
   const currentUser = useCurrentUser().data;
   const leavesAnyCourse =
-    hasAdminRole(currentUser?.roles) || Boolean(currentUser?.isTestAccount);
+    hasAdminRole(currentUser?.roles) ||
+    Boolean(currentUser?.isTestAccount || currentUser?.localAnyCourseUnenroll);
   const quickFilterTabsRef = useRef<HTMLDivElement>(null);
   const [hasQuickFilterOverflow, setHasQuickFilterOverflow] = useState(false);
   const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(
