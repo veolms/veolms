@@ -666,7 +666,7 @@ export function PopoverMenu({
               className={`${isContainedMobileSheet ? "absolute" : "fixed"} pointer-events-auto inset-0 z-170 touch-none bg-black/60 transition-opacity duration-200 ease-out motion-reduce:transition-none`}
               onPointerDown={(event) => {
                 event.stopPropagation();
-                handleMobileSheetDragStart(event);
+                if (event.button === 0) handleMobileSheetDragStart(event);
               }}
               onPointerMove={handleMobileSheetDragMove}
               onPointerUp={(event) => {

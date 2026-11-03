@@ -824,6 +824,19 @@ export function loadServerConfig(
   environment: Record<string, string | undefined>,
 ): ServerConfig {
   const parsed = serverConfigSchema.parse(environment);
+  // The development-only switches are honoured when NODE_ENV is
+  // `development`, which is also the schema's default: a deployment that
+  // forgot NODE_ENV would have them on. So they need it named outright.
+  const developmentOnly = [
+    parsed.LOCAL_FIXED_OTP ? "LOCAL_FIXED_OTP" : null,
+    parsed.LOCAL_ANY_COURSE_UNENROLL ? "LOCAL_ANY_COURSE_UNENROLL" : null,
+  ].filter((name): name is string => name !== null);
+  if (developmentOnly.length > 0 && !environment.NODE_ENV?.trim()) {
+    throw new Error(
+      `Refusing to start with ${developmentOnly.join(", ")} set and no NODE_ENV: ` +
+        "set NODE_ENV=development explicitly for these development-only switches.",
+    );
+  }
   const offenders = findInsecureDefaults(parsed);
   const missingRequired = findMissingRequiredInProduction(parsed);
 

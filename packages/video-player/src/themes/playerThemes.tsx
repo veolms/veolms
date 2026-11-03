@@ -655,7 +655,7 @@ export const BUILT_IN_PLAYER_THEMES: Record<
 /** The built-in themes, in picker order. */
 export const PLAYER_THEME_OPTIONS = BUILT_IN_PLAYER_THEME_IDS.map(
   (id) => BUILT_IN_PLAYER_THEMES[id],
-);
+).sort((left, right) => (left.order ?? 100) - (right.order ?? 100));
 
 /*
  * Themes added by plugins. Kept on `globalThis` so a plugin that ends up

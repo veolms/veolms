@@ -58,7 +58,10 @@ export function useAcademyPlayerTheme(): string {
 
 const subscribeToThemeChoice = (onChange: () => void) => {
   const onStorage = (event: StorageEvent) => {
-    if (event.key === LEARNING_PREFERENCES_KEY) onChange();
+    // No key: another tab cleared the storage.
+    if (event.key === null || event.key === LEARNING_PREFERENCES_KEY) {
+      onChange();
+    }
   };
   window.addEventListener(LEARNING_PREFERENCES_EVENT, onChange);
   window.addEventListener("storage", onStorage);

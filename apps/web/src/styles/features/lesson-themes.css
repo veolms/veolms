@@ -11,6 +11,11 @@
  *
  * Sizes and spacing are left alone: the sticky headings and the scroll
  * positions are measured from them.
+ *
+ * Plain CSS rather than utilities: every rule is keyed on an attribute the
+ * list's markup does not own (`data-lesson-theme` on a wrapper, the app's
+ * `data-theme` on <html>) and re-points custom properties for a whole
+ * subtree, which class names on the elements cannot express.
  */
 
 [data-lesson-theme] {

@@ -136,6 +136,19 @@ export function PlaybackRateSlider({
                 sliderPositionToPlaybackRate(event.currentTarget.valueAsNumber),
               )
             }
+            // A key moves one step of the speed, as - and + do: moved one
+            // slider position, the speed rounded back to where it was.
+            onKeyDown={(event) => {
+              const step =
+                event.key === "ArrowLeft" || event.key === "ArrowDown"
+                  ? slower
+                  : event.key === "ArrowRight" || event.key === "ArrowUp"
+                    ? faster
+                    : null;
+              if (step === null) return;
+              event.preventDefault();
+              change(step);
+            }}
           />
           <span
             aria-hidden="true"

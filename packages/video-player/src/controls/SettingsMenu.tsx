@@ -61,22 +61,35 @@ const isHdQuality = (quality: VideoQuality | undefined) => {
   return height >= HD_MIN_HEIGHT;
 };
 
+const baseCaptionName = (track: VideoTextTrack) =>
+  track.label || track.language || "Caption track";
+
+/** A track's name, with "(CC)" where another track has the same name. */
+const kindCaptionName = (
+  track: VideoTextTrack,
+  tracks: readonly VideoTextTrack[],
+) => {
+  const name = baseCaptionName(track);
+  const shared = tracks.some(
+    (other) => other.id !== track.id && baseCaptionName(other) === name,
+  );
+  return shared && track.kind === "captions" ? `${name} (CC)` : name;
+};
+
 /**
  * A caption track's name, told apart from another of the same name by its
- * kind: a video can carry "English" subtitles and "English" captions.
+ * kind (a video can carry "English" subtitles and "English" captions), and
+ * by its language where the names still match.
  */
 const captionTrackName = (
   track: VideoTextTrack,
   tracks: readonly VideoTextTrack[],
 ) => {
-  const name = track.label || track.language || "Caption track";
-  const shared = tracks.some(
-    (other) =>
-      other.id !== track.id &&
-      (other.label || other.language || "Caption track") === name,
+  const name = kindCaptionName(track, tracks);
+  const stillShared = tracks.some(
+    (other) => other.id !== track.id && kindCaptionName(other, tracks) === name,
   );
-  if (!shared) return name;
-  return track.kind === "captions" ? `${name} (CC)` : name;
+  return stillShared && track.language ? `${name} · ${track.language}` : name;
 };
 
 /** The raised "HD" after a quality's name, in the theme's colour. */
