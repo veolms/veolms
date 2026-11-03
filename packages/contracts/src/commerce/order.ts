@@ -318,6 +318,11 @@ export const pricingCalculationSchema = z.strictObject({
   discountAmount: z.number().int().nonnegative().default(0),
   taxAmount: z.number().int().nonnegative().default(0),
   totalAmount: z.number().int().nonnegative(),
+  /**
+   * Set when the discounts would have left less than the smallest card
+   * payment: `totalAmount` was raised to this amount (`minimumCardPayment`).
+   */
+  minimumCharge: z.number().int().positive().optional(),
   currency: z.string().length(3).default("INR"),
   couponCode: z.string().optional(),
   couponId: z.uuid().optional(),
@@ -681,6 +686,8 @@ export const checkoutPreviewResponseSchema = z.strictObject({
     subtotalAmount: z.number().int().nonnegative().optional(),
     discountAmount: z.number().int().nonnegative(),
     totalAmount: z.number().int().nonnegative(),
+    /** Set when `totalAmount` was raised to the smallest card payment. */
+    minimumCharge: z.number().int().positive().optional(),
     currency: z.string().length(3),
     /**
      * What already paid parts of a course take off its price (included in
