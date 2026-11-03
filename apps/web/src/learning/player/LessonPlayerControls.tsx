@@ -1417,7 +1417,10 @@ export function LessonPlayerControls({
           muteButtonClassName={`${PLAYER_INNER_CONTROL_CLASS} ${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-8.5`}
         />
         <LessonTimeControl />
-        <ChapterNowLabel className="ml-1 hidden max-w-64 text-(--video-player-control-text) lg:inline-flex" />
+        <ChapterNowLabel
+          className="ml-1 hidden max-w-64 text-(--video-player-control-text) lg:inline-flex"
+          onOpen={() => setChaptersRequested(true)}
+        />
       </div>
     </div>
   );
