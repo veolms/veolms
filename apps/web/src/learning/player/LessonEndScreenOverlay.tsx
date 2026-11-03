@@ -9,7 +9,7 @@ import {
 } from "react";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { ArrowElbowDownLeftIcon as ArrowElbowDownLeft } from "@phosphor-icons/react/ArrowElbowDownLeft";
-import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { usePlayerMobileInteraction } from "@veolms/video-player";
 
@@ -279,8 +279,8 @@ export function LessonEndScreenOverlay({
         }`}
       >
         <div className="flex w-full max-w-2xl min-w-0 flex-col items-center px-6 text-center @4xl:max-w-3xl">
-          <Brain
-            weight="fill"
+          <ListChecks
+            weight="bold"
             aria-hidden="true"
             className="mb-3 hidden size-11 text-(--accent) [@container_(min-height:15rem)]:block @4xl:size-16"
           />

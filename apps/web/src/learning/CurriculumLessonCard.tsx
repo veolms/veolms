@@ -1,5 +1,5 @@
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
-import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
@@ -225,7 +225,9 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
             // sidebar shadow token spreads too far for cards stacked in a
             // list, so only its widest layers are reined in here.
             "bg-(image:--sidebar-menu-active-background) shadow-[inset_0_1px_0_rgb(255_255_255/15%),inset_1px_0_0_rgb(255_255_255/7%),inset_0_-1px_0_rgb(0_0_0/28%),0_2px_5px_rgb(0_0_0/45%),0_7px_14px_rgb(0_0_0/36%)] [[data-theme=light]_&]:shadow-[inset_0_1px_0_rgb(255_255_255/96%),0_2px_5px_rgb(25_32_45/10%),0_7px_16px_rgb(25_32_45/14%)]"
-          : "bg-[color-mix(in_srgb,var(--text)_4%,transparent)] [&:not([data-unavailable])]:hover:bg-[color-mix(in_srgb,var(--text)_7.5%,transparent)]"
+          : // Fainter than a section's card, so the sections stand out
+            // as the headings and the lessons as the rows under them.
+            "bg-[color-mix(in_srgb,var(--text)_2.5%,transparent)] [&:not([data-unavailable])]:hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
       }`}
     >
       <button
@@ -264,7 +266,7 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
             paint (hydration's) snaps the text a pixel away from where the
             first paint had it. */}
           <span
-            className="line-clamp-2 text-[0.875rem]/5 font-semibold text-(--text) [[data-completed]:not([data-active])_&]:text-[color-mix(in_srgb,var(--text)_72%,transparent)]"
+            className="line-clamp-2 text-[0.875rem]/5 font-medium text-(--text) [[data-active]_&]:font-semibold [[data-completed]:not([data-active])_&]:text-[color-mix(in_srgb,var(--text)_72%,transparent)]"
             // A title longer than two lines is cut off; hovering shows all of it.
             title={isAvailable ? title : undefined}
           >
@@ -327,7 +329,10 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
         </span>
       </button>
       {hasActions ? (
-        <div className="absolute right-2 bottom-2.5 flex items-center gap-1.5 [[data-unavailable]_&]:hidden">
+        <div
+          data-lesson-card-actions=""
+          className="absolute right-2 bottom-2.5 flex items-center gap-1.5 [[data-unavailable]_&]:hidden"
+        >
           {/* Not a button: the card itself opens the lesson. It lets a
               click through to the card underneath. */}
           <span
@@ -350,7 +355,7 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
                 title={quizActive ? "Quiz is open" : "Open quiz"}
                 onClick={() => onOpenQuiz?.(number)}
               >
-                <Brain size={18} weight="fill" aria-hidden="true" />
+                <ListChecks size={18} weight="bold" aria-hidden="true" />
               </button>
             </span>
           ) : null}

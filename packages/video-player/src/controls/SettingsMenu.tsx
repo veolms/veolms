@@ -42,7 +42,9 @@ import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 const SETTINGS_OPEN_TURN_DEGREES = 30;
 /** The speeds a chips menu offers in place. */
-const CHIP_PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+const CHIP_PLAYBACK_RATES = [
+  0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3,
+] as const;
 /** The speeds a list row picks from in place (`inlineSpeed`). */
 const INLINE_PLAYBACK_RATES = [0.5, 1, 1.5, 2] as const;
 /** Columns of the theme grid, for moving up and down it with the keys. */
@@ -394,6 +396,9 @@ export function SettingsMenu({
       selected: playbackRatesMatch(media.playbackRate, rate),
       onSelect: () => controller.setPlaybackRate(rate),
     }));
+  const customSpeed = !CHIP_PLAYBACK_RATES.some((rate) =>
+    playbackRatesMatch(media.playbackRate, rate),
+  );
   const showTheme = Boolean(onThemeChange) && themes.length > 1;
 
   const qualityEntry: SettingsEntry = {
@@ -515,7 +520,18 @@ export function SettingsMenu({
     {
       id: "speed",
       label: "Speed",
-      choices: speedChoices(CHIP_PLAYBACK_RATES),
+      // A quarter apart up to 3×, and one more that opens the slider (up to
+      // 16×) and shows a speed set there.
+      choices: [
+        ...speedChoices(CHIP_PLAYBACK_RATES),
+        {
+          id: "more",
+          label: customSpeed ? formatPlaybackRate(media.playbackRate) : "More",
+          selected: customSpeed,
+          onSelect: () => openView("playback-rate"),
+        },
+      ],
+      columns: { wide: 6, narrow: 4 },
     },
   ];
   if (media.textTracks.length > 0) {
@@ -723,7 +739,7 @@ export function SettingsMenu({
       }
       panelClassName={
         view === "theme"
-          ? mobileInteraction
+          ? mobileInteraction || forceSheet
             ? undefined
             : "!mb-8 !w-[min(22rem,calc(100%-1.5rem))] !p-2 [--video-player-menu-lift:2rem]"
           : classNames(
@@ -734,8 +750,11 @@ export function SettingsMenu({
                   : side === "top"
                     ? "!mb-8 [--video-player-menu-lift:2rem]"
                     : "",
+              // A popover's width; a sheet takes the width it is given
+              // (its parent's), which these would cap.
               designed &&
                 !mobileInteraction &&
+                !forceSheet &&
                 (layout === "chips"
                   ? "!w-[min(36rem,calc(100vw-1.5rem))] !p-3"
                   : layout === "cards"

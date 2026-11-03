@@ -1487,7 +1487,7 @@ export const Curriculum = memo(function Curriculum({
                         : `learning-curriculum__section-toggle group/section relative flex w-full cursor-pointer items-center gap-3 border px-4 py-3.5 text-left text-(--text) transition-[background-color,border-color] duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent) ${
                             isOpen
                               ? `${OPEN_HEADING_FRAME_CLASS} bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_13%,var(--surface))] ${stickHeadings ? `sticky ${STUCK_HEADING_TOP_CLASS} z-2 ${STICK_SETTING_OFF_CLASS}` : ""}`
-                              : "overflow-hidden rounded-2xl border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--text)_2%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_3%,transparent)]"
+                              : "overflow-hidden rounded-2xl border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--text)_4.5%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
                           }`
                     }
                   >
@@ -1519,7 +1519,11 @@ export const Curriculum = memo(function Curriculum({
                               the sections stack too, and the count and
                               caret are centred against this column, so an
                               odd height would put them on a half pixel. */}
-                          <span className="line-clamp-2 text-[0.95rem]/[1.375rem] font-semibold tracking-[-0.01em]">
+                          {/* A section reads as a heading over its lessons:
+                              bold, a size above a lesson's title (16px over
+                              14px, the user's call; they were all but the
+                              same), in the case it was written in. */}
+                          <span className="line-clamp-2 text-base/6 font-bold tracking-[-0.01em]">
                             <span className="sr-only">
                               Section {section.id}:{" "}
                             </span>

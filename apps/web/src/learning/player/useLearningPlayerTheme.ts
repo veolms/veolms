@@ -44,6 +44,16 @@ export function useAcademyPlayerTheme(): string {
   return data?.appearance.defaultVideoPlayerTheme ?? cached;
 }
 
+/**
+ * The player theme the lessons list is drawn in (the page's column, the
+ * Lessons drawer, the full-screen panel), as `data-lesson-theme`: every
+ * theme but YouTube, which keeps the app's own look.
+ */
+export function useLessonListTheme(): string | undefined {
+  const { id } = useLearningPlayerTheme();
+  return id === DEFAULT_PLAYER_THEME_ID ? undefined : id;
+}
+
 export function useLearningPlayerTheme(): PlayerThemeDefinition {
   // Empty while this browser follows the academy's default.
   const [choice, setChoice] = useState("");

@@ -55,6 +55,12 @@ export interface SettingsChoiceGroup {
   id: string;
   label: string;
   choices: SettingsChoice[];
+  /**
+   * Chips in even columns instead of a wrapping line (the speeds), so many
+   * read as one tidy block: how many across in the menu, and in a narrow
+   * sheet.
+   */
+  columns?: { wide: number; narrow: number };
 }
 
 const rowFocusClass =
@@ -510,7 +516,18 @@ export function SettingsChips({
             >
               {group.label}
             </span>
-            <span className="flex flex-wrap gap-1.5">
+            <span
+              className={
+                group.columns ? "grid gap-1.5" : "flex flex-wrap gap-1.5"
+              }
+              style={
+                group.columns
+                  ? {
+                      gridTemplateColumns: `repeat(${stacked ? group.columns.narrow : group.columns.wide}, minmax(0, 1fr))`,
+                    }
+                  : undefined
+              }
+            >
               {group.choices.map((choice) => (
                 <button
                   key={choice.id}
@@ -522,6 +539,7 @@ export function SettingsChips({
                   data-settings-chip=""
                   className={classNames(
                     "h-8 rounded-full px-2.5 text-[0.8125rem] leading-none font-semibold whitespace-nowrap tabular-nums ring-1 transition-colors duration-150 ring-inset",
+                    group.columns && "min-w-0 !px-1",
                     rowFocusClass,
                     choice.selected
                       ? "bg-(--video-player-accent) text-(--video-player-accent-contrast) ring-(--video-player-accent)"

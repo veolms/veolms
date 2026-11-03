@@ -1,0 +1,434 @@
+/*
+ * The lessons list in the player theme's own look. The page's column, the
+ * Lessons drawer and the full-screen panel carry `data-lesson-theme` (see
+ * useLessonListTheme); YouTube has none and keeps the app's look. Each theme
+ * re-points the palette the list is built from, so every part of it
+ * follows, and names its own touches as `--lesson-*` values that the rules
+ * after it read. In the app's light mode a theme keeps its character in
+ * light colours (the user's call: a dark list on a light page looked
+ * wrong); only the player itself stays dark. The cloud's themes style
+ * theirs in their plugin, the same way.
+ *
+ * Sizes and spacing are left alone: the sticky headings and the scroll
+ * positions are measured from them.
+ */
+
+[data-lesson-theme] {
+  color-scheme: dark;
+  background-color: var(--surface);
+}
+
+:root[data-theme="light"] [data-lesson-theme] {
+  color-scheme: light;
+}
+
+/* ================================================================
+ * VLC: a solid playlist, orange for what is playing. Graphite in dark,
+ * VLC's light skin in light.
+ * ================================================================ */
+
+[data-lesson-theme="cone"] {
+  --canvas: #0f1012;
+  --surface: #18191c;
+  --surface-strong: #202226;
+  --app-shell: #131417;
+  --text: #f2f2f3;
+  --text-secondary: #c6c7cb;
+  --muted: #8f9198;
+  --border: rgb(255 255 255 / 0.08);
+  --accent: #ff7a1a;
+  --accent-hover: #ff8f40;
+  --accent-ink: #ff9a4d;
+  --on-accent: #121212;
+  --success: #ff7a1a;
+  --sidebar-menu-active-background: linear-gradient(
+    rgb(255 122 26 / 0.16),
+    rgb(255 122 26 / 0.16)
+  );
+  --lesson-section-bg: #222428;
+  --lesson-section-open-bg: #2a2420;
+  --lesson-row-hover: #222428;
+  --lesson-active-ring: rgb(255 122 26 / 0.5);
+  --lesson-action-bg: #2a2c31;
+  --lesson-action-fg: #e8e8ea;
+  --lesson-action-ring: transparent;
+  --lesson-action-hover-bg: rgb(255 122 26 / 0.22);
+}
+
+:root[data-theme="light"] [data-lesson-theme="cone"] {
+  --canvas: #ededef;
+  --surface: #f7f7f8;
+  --surface-strong: #ececee;
+  --app-shell: #f2f2f4;
+  --text: #1d1e21;
+  --text-secondary: #3e4046;
+  --muted: #696c74;
+  --border: rgb(0 0 0 / 0.09);
+  --accent: #ff7a1a;
+  --accent-hover: #f06a0a;
+  --accent-ink: #c4560a;
+  --on-accent: #ffffff;
+  --success: #e3680d;
+  --sidebar-menu-active-background: linear-gradient(
+    rgb(255 122 26 / 0.12),
+    rgb(255 122 26 / 0.12)
+  );
+  --lesson-section-bg: #ffffff;
+  --lesson-section-open-bg: #fff3ea;
+  --lesson-row-hover: #ffffff;
+  --lesson-active-ring: rgb(232 104 13 / 0.55);
+  --lesson-action-bg: #ffffff;
+  --lesson-action-fg: #2a2b2f;
+  --lesson-action-ring: rgb(0 0 0 / 0.1);
+  --lesson-action-hover-bg: rgb(255 122 26 / 0.16);
+}
+
+/* Folders of the playlist: solid plates, no outline. */
+[data-lesson-theme="cone"] .learning-curriculum__section-toggle {
+  border-color: transparent !important;
+  background-color: var(--lesson-section-bg);
+}
+
+[data-lesson-theme="cone"]
+  .learning-curriculum__section[data-expanded="true"]
+  > .learning-curriculum__section-toggle {
+  background-color: var(--lesson-section-open-bg);
+}
+
+/* Its items: flat rows, lit on hover, the playing one in orange. */
+[data-lesson-theme="cone"] [data-curriculum-lesson-card]:not([data-active]) {
+  background-color: transparent;
+}
+
+[data-lesson-theme="cone"]
+  [data-curriculum-lesson-card]:not([data-active]):not(
+    [data-unavailable]
+  ):hover {
+  background-color: var(--lesson-row-hover);
+}
+
+[data-lesson-theme="cone"] [data-curriculum-lesson-card][data-active] {
+  box-shadow: inset 0 0 0 1px var(--lesson-active-ring) !important;
+}
+
+[data-lesson-theme="cone"]
+  [data-curriculum-lesson-card][data-active]
+  .line-clamp-2 {
+  color: var(--accent-ink);
+}
+
+/* The lesson's actions as the player's keys, lit orange. */
+[data-lesson-theme="cone"] [data-lesson-card-actions] :is(button, a) {
+  background: var(--lesson-action-bg) !important;
+  color: var(--lesson-action-fg) !important;
+  box-shadow: inset 0 0 0 1px var(--lesson-action-ring);
+}
+
+[data-lesson-theme="cone"]
+  [data-lesson-card-actions]
+  :is(button, a):is(
+    :hover,
+    :focus-visible,
+    [aria-pressed="true"],
+    [aria-expanded="true"]
+  ) {
+  background: var(--lesson-action-hover-bg) !important;
+  color: var(--accent-ink) !important;
+}
+
+/* ================================================================
+ * Frost: liquid glass tiles, no outlines. Smoked glass with white light
+ * in dark; clear glass over a soft blue morning in light.
+ * ================================================================ */
+
+[data-lesson-theme="frost"] {
+  --canvas: #0b1018;
+  --surface: #111824;
+  --surface-strong: #172130;
+  --app-shell: #0e1520;
+  --text: #f4f8ff;
+  --text-secondary: rgb(255 255 255 / 0.8);
+  --muted: rgb(255 255 255 / 0.58);
+  --border: rgb(255 255 255 / 0.1);
+  --accent: #ffffff;
+  --accent-hover: #ffffff;
+  --accent-ink: #ffffff;
+  --on-accent: #0b1622;
+  --success: #ffffff;
+  --sidebar-menu-active-background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.16),
+    rgb(255 255 255 / 0.08)
+  );
+  --lesson-glow-a: rgb(120 160 255 / 0.1);
+  --lesson-glow-b: rgb(190 140 255 / 0.08);
+  --lesson-section-bg: rgb(255 255 255 / 0.05);
+  --lesson-section-sheen: rgb(255 255 255 / 0.06);
+  --lesson-section-open-bg: #1a2333;
+  --lesson-rim: rgb(255 255 255 / 0.14);
+  --lesson-drop: rgb(0 0 0 / 0.22);
+  --lesson-row-bg: rgb(255 255 255 / 0.035);
+  --lesson-row-rim: rgb(255 255 255 / 0.07);
+  --lesson-row-hover: rgb(255 255 255 / 0.07);
+  --lesson-active-rim: rgb(255 255 255 / 0.3);
+  --lesson-active-halo: rgb(255 255 255 / 0.1);
+  --lesson-icon-glow: drop-shadow(0 0 4px rgb(255 255 255 / 0.35));
+  --lesson-action-bg: rgb(255 255 255 / 0.08);
+  --lesson-action-fg: #ffffff;
+  --lesson-action-hover-bg: rgb(255 255 255 / 0.18);
+  background-image:
+    radial-gradient(120% 60% at 0% 0%, var(--lesson-glow-a), transparent 70%),
+    radial-gradient(90% 50% at 100% 100%, var(--lesson-glow-b), transparent 70%);
+}
+
+:root[data-theme="light"] [data-lesson-theme="frost"] {
+  --canvas: #e9eef6;
+  --surface: #eef2f8;
+  --surface-strong: #e4eaf4;
+  --app-shell: #eef2f8;
+  --text: #101828;
+  --text-secondary: #344054;
+  --muted: #5d6b82;
+  --border: rgb(16 24 40 / 0.08);
+  --accent: #1b2a41;
+  --accent-hover: #101828;
+  --accent-ink: #1b2a41;
+  --on-accent: #ffffff;
+  --success: #1b2a41;
+  --sidebar-menu-active-background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.95),
+    rgb(255 255 255 / 0.75)
+  );
+  --lesson-glow-a: rgb(120 160 255 / 0.18);
+  --lesson-glow-b: rgb(200 160 255 / 0.16);
+  --lesson-section-bg: rgb(255 255 255 / 0.55);
+  --lesson-section-sheen: rgb(255 255 255 / 0.5);
+  --lesson-section-open-bg: #f6f8fc;
+  --lesson-rim: rgb(255 255 255 / 0.9);
+  --lesson-drop: rgb(40 60 100 / 0.1);
+  --lesson-row-bg: rgb(255 255 255 / 0.4);
+  --lesson-row-rim: rgb(255 255 255 / 0.8);
+  --lesson-row-hover: rgb(255 255 255 / 0.7);
+  --lesson-active-rim: rgb(255 255 255 / 1);
+  --lesson-active-halo: rgb(120 160 255 / 0.18);
+  --lesson-icon-glow: none;
+  --lesson-action-bg: rgb(255 255 255 / 0.7);
+  --lesson-action-fg: #1b2a41;
+  --lesson-action-hover-bg: #ffffff;
+}
+
+/* Sections are panes of glass: light caught along the top, a soft shadow
+   under, no border. */
+[data-lesson-theme="frost"] .learning-curriculum__section-toggle {
+  border-color: transparent !important;
+  background-color: var(--lesson-section-bg);
+  background-image: linear-gradient(
+    180deg,
+    var(--lesson-section-sheen),
+    transparent
+  );
+  box-shadow:
+    inset 0 1px 2px var(--lesson-rim),
+    0 8px 22px var(--lesson-drop);
+}
+
+[data-lesson-theme="frost"]
+  .learning-curriculum__section[data-expanded="true"]
+  > .learning-curriculum__section-toggle {
+  /* Opaque: an open section's heading holds over its lessons as they
+     scroll under it. */
+  background-color: var(--lesson-section-open-bg);
+}
+
+/* Lessons are smaller, clearer tiles of the same glass. */
+[data-lesson-theme="frost"] [data-curriculum-lesson-card]:not([data-active]) {
+  background-color: var(--lesson-row-bg);
+  box-shadow: inset 0 1px 1px var(--lesson-row-rim);
+}
+
+[data-lesson-theme="frost"]
+  [data-curriculum-lesson-card]:not([data-active]):not(
+    [data-unavailable]
+  ):hover {
+  background-color: var(--lesson-row-hover);
+}
+
+/* The playing one is lit from inside. */
+[data-lesson-theme="frost"] [data-curriculum-lesson-card][data-active] {
+  box-shadow:
+    inset 0 1px 2px var(--lesson-active-rim),
+    inset 0 0 18px var(--lesson-active-halo),
+    0 0 22px var(--lesson-active-halo),
+    0 8px 20px var(--lesson-drop) !important;
+}
+
+[data-lesson-theme="frost"] [data-curriculum-lesson-card] svg {
+  filter: var(--lesson-icon-glow);
+}
+
+[data-lesson-theme="frost"] [data-lesson-card-actions] :is(button, a) {
+  background: var(--lesson-action-bg) !important;
+  color: var(--lesson-action-fg) !important;
+  box-shadow: inset 0 1px 1px var(--lesson-row-rim);
+}
+
+[data-lesson-theme="frost"]
+  [data-lesson-card-actions]
+  :is(button, a):is(
+    :hover,
+    :focus-visible,
+    [aria-pressed="true"],
+    [aria-expanded="true"]
+  ) {
+  background: var(--lesson-action-hover-bg) !important;
+}
+
+/* ================================================================
+ * Mono: an editorial index, type and hairlines; the lesson playing is
+ * printed in reverse. White on black in dark, black on paper in light.
+ * ================================================================ */
+
+[data-lesson-theme="mono"] {
+  --canvas: #0a0a0a;
+  --surface: #0a0a0a;
+  --surface-strong: #141414;
+  --app-shell: #0a0a0a;
+  --text: #ffffff;
+  --text-secondary: rgb(255 255 255 / 0.78);
+  --muted: rgb(255 255 255 / 0.5);
+  --border: rgb(255 255 255 / 0.16);
+  --accent: #ffffff;
+  --accent-hover: #ffffff;
+  --accent-ink: #ffffff;
+  --on-accent: #000000;
+  --success: #ffffff;
+  --sidebar-menu-active-background: linear-gradient(#ffffff, #ffffff);
+  --lesson-theme-display:
+    "Space Grotesk", var(--font-sans, system-ui), sans-serif;
+  --lesson-ink: #ffffff;
+  --lesson-paper: #0a0a0a;
+  --lesson-rule: rgb(255 255 255 / 0.22);
+  --lesson-row-rule: rgb(255 255 255 / 0.1);
+  --lesson-row-hover: rgb(255 255 255 / 0.06);
+  --lesson-action-ring: rgb(255 255 255 / 0.35);
+  --lesson-action-hover-bg: rgb(255 255 255 / 0.14);
+  --lesson-reverse-ring: rgb(0 0 0 / 0.5);
+}
+
+:root[data-theme="light"] [data-lesson-theme="mono"] {
+  --canvas: #ffffff;
+  --surface: #ffffff;
+  --surface-strong: #f2f2f2;
+  --app-shell: #ffffff;
+  --text: #0a0a0a;
+  --text-secondary: rgb(0 0 0 / 0.75);
+  --muted: rgb(0 0 0 / 0.52);
+  --border: rgb(0 0 0 / 0.16);
+  --accent: #0a0a0a;
+  --accent-hover: #0a0a0a;
+  --accent-ink: #0a0a0a;
+  --on-accent: #ffffff;
+  --success: #0a0a0a;
+  --sidebar-menu-active-background: linear-gradient(#0a0a0a, #0a0a0a);
+  --lesson-ink: #0a0a0a;
+  --lesson-paper: #ffffff;
+  --lesson-rule: rgb(0 0 0 / 0.25);
+  --lesson-row-rule: rgb(0 0 0 / 0.1);
+  --lesson-row-hover: rgb(0 0 0 / 0.05);
+  --lesson-action-ring: rgb(0 0 0 / 0.35);
+  --lesson-action-hover-bg: rgb(0 0 0 / 0.08);
+  --lesson-reverse-ring: rgb(255 255 255 / 0.5);
+}
+
+:root
+  [data-lesson-theme="mono"][data-lesson-theme]
+  :is(
+    .learning-curriculum__section-toggle,
+    .learning-curriculum__section,
+    .learning-curriculum__section-lessons,
+    [data-curriculum-lesson-card],
+    [data-curriculum-sticky-bar] button
+  ) {
+  border-radius: 0 !important;
+}
+
+[data-lesson-theme="mono"] .learning-curriculum__course-title {
+  font-family: var(--lesson-theme-display);
+  letter-spacing: -0.01em;
+}
+
+/* A section is a heading on a rule, not a card. */
+[data-lesson-theme="mono"] .learning-curriculum__section-toggle {
+  border-color: transparent !important;
+  border-bottom-color: var(--lesson-rule) !important;
+  background-color: var(--lesson-paper) !important;
+}
+
+[data-lesson-theme="mono"] .learning-curriculum__section-toggle .line-clamp-2 {
+  font-family: var(--lesson-theme-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Its facts in small capitals. */
+[data-lesson-theme="mono"]
+  .learning-curriculum__section-toggle
+  .line-clamp-2
+  + span {
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Lessons are lines of the index, split by hairlines. */
+[data-lesson-theme="mono"] [data-curriculum-lesson-card] {
+  box-shadow: inset 0 -1px 0 var(--lesson-row-rule) !important;
+}
+
+[data-lesson-theme="mono"] [data-curriculum-lesson-card]:not([data-active]) {
+  background-color: transparent;
+}
+
+[data-lesson-theme="mono"]
+  [data-curriculum-lesson-card]:not([data-active]):not(
+    [data-unavailable]
+  ):hover {
+  background-color: var(--lesson-row-hover);
+}
+
+/* The lesson playing, in reverse. */
+[data-lesson-theme="mono"] [data-curriculum-lesson-card][data-active] {
+  box-shadow: none !important;
+}
+
+[data-lesson-theme="mono"] [data-curriculum-lesson-card][data-active] * {
+  color: var(--lesson-paper) !important;
+}
+
+/* Actions as outlined boxes in the ink (on the reversed lesson, the
+   paper's). */
+[data-lesson-theme="mono"] [data-lesson-card-actions] :is(button, a) {
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--lesson-ink) !important;
+  box-shadow: inset 0 0 0 1px var(--lesson-action-ring);
+}
+
+[data-lesson-theme="mono"]
+  [data-lesson-card-actions]
+  :is(button, a):is(
+    :hover,
+    :focus-visible,
+    [aria-pressed="true"],
+    [aria-expanded="true"]
+  ) {
+  background: var(--lesson-action-hover-bg) !important;
+}
+
+[data-lesson-theme="mono"]
+  [data-curriculum-lesson-card][data-active]
+  [data-lesson-card-actions]
+  :is(button, a) {
+  box-shadow: inset 0 0 0 1px var(--lesson-reverse-ring);
+}
