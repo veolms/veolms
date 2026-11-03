@@ -263,8 +263,6 @@ export function LessonEndScreenOverlay({
         quiz={
           quiz ? { onAttempt: quiz.onAttempt, onSkip: skipQuiz } : undefined
         }
-        onGoNext={onGoNext}
-        onRestart={onRestart}
         onCancelAutoplay={onCancelAutoplay}
       />
     );
@@ -457,10 +455,12 @@ const sideButtonClass =
 /**
  * The end screen where the player's central controls are shown. Three
  * bands, the middle one theirs: the words above it in two short lines (no
- * details line, the title on one line), and Cancel and Next below it. A
- * player too short for that (a phone held upright, about 200px) puts the
- * words on one line and Cancel and Next either side of the central
- * controls.
+ * details line, the title on one line), and Cancel below it while the
+ * countdown runs. A player too short for that (a phone held upright, about
+ * 200px) puts the words on one line and Cancel beside the central controls.
+ * Replay and Next are not repeated here: the central controls are them
+ * (the play button turns into Replay at the end, and next is beside it).
+ * A quiz keeps its own two buttons.
  */
 function LessonEndScreenAroundCentralControls({
   screenProps,
@@ -470,8 +470,6 @@ function LessonEndScreenAroundCentralControls({
   isCountdownActive,
   secondsRemaining,
   quiz,
-  onGoNext,
-  onRestart,
   onCancelAutoplay,
 }: {
   screenProps: HTMLAttributes<HTMLDivElement>;
@@ -482,8 +480,6 @@ function LessonEndScreenAroundCentralControls({
   secondsRemaining: number;
   /** The lesson's quiz, offered in place of the next lesson. */
   quiz?: { onAttempt: () => void; onSkip: () => void };
-  onGoNext: () => void;
-  onRestart: () => void;
   onCancelAutoplay: () => void;
 }) {
   const label = quiz
@@ -504,16 +500,14 @@ function LessonEndScreenAroundCentralControls({
     ? { label: "Skip Quiz", onClick: quiz.onSkip }
     : isCountdownActive
       ? { label: "Cancel", onClick: onCancelAutoplay }
-      : { label: "Replay", onClick: onRestart };
+      : null;
   const secondAction = quiz
     ? {
         label: "Attempt Quiz",
         ariaLabel: "Attempt quiz",
         onClick: quiz.onAttempt,
       }
-    : nextLesson
-      ? { label: "Next", ariaLabel: "Next lesson", onClick: onGoNext }
-      : null;
+    : null;
 
   return (
     <div
@@ -534,13 +528,15 @@ function LessonEndScreenAroundCentralControls({
       </div>
       <div className="flex items-center justify-center gap-1.5">
         <div className="flex w-0 grow justify-end">
-          <button
-            type="button"
-            onClick={firstAction.onClick}
-            className={`${sideButtonClass} bg-white/12 text-white hover:bg-white/20 [@container_(min-height:16.5rem)]:hidden`}
-          >
-            {firstAction.label}
-          </button>
+          {firstAction ? (
+            <button
+              type="button"
+              onClick={firstAction.onClick}
+              className={`${sideButtonClass} bg-white/12 text-white hover:bg-white/20 [@container_(min-height:16.5rem)]:hidden`}
+            >
+              {firstAction.label}
+            </button>
+          ) : null}
         </div>
         <div aria-hidden="true" className={centralBandClass} />
         <div className="flex w-0 grow justify-start">
@@ -577,32 +573,6 @@ function LessonEndScreenAroundCentralControls({
               Esc
             </span>
             Cancel
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onRestart}
-            className={nextLesson ? secondaryButtonClass : primaryButtonClass}
-          >
-            <ArrowCounterClockwise weight="bold" className={buttonIconClass} />
-            Replay
-          </button>
-        )}
-        {nextLesson && !quiz ? (
-          <button
-            type="button"
-            onClick={onGoNext}
-            className={enterKeycapClass}
-            aria-label="Next lesson"
-            aria-keyshortcuts="Enter"
-            title="Next lesson (Enter)"
-          >
-            Next
-            <ArrowElbowDownLeft
-              weight="bold"
-              aria-hidden="true"
-              className={buttonIconClass}
-            />
           </button>
         ) : null}
       </div>

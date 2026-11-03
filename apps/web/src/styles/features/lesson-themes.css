@@ -22,6 +22,63 @@
   color-scheme: light;
 }
 
+/* A reloaded lesson page is prerendered with the stand-in player drawn as
+   YouTube. A viewer who plays in another theme (named on <html> by the head
+   script, see playerThemeEarlyState) sees the black frame and its spinner
+   until the controls are drawn in that theme, never YouTube's first. */
+:root[data-player-theme-early]:not([data-player-theme-early="youtube"])
+  [data-learning-player-chrome-placeholder][data-player-theme="youtube"]
+  [data-video-player-chrome-preview]
+  > :not([data-video-player-buffering-overlay]) {
+  opacity: 0;
+}
+
+/* The Lessons drawer that rises from the bottom of a phone has the top of
+   the player's settings sheet in the same theme: the theme's line along
+   its top (Frost: light along its glass instead) and its grip in the
+   theme's colour. The line is drawn over the list, which keeps its
+   measured sizes. Cyberpunk adds its stripe in the plugin. */
+.learning-course-content-drawer[data-lesson-theme][data-swipe-direction="down"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 31;
+  pointer-events: none;
+  border-top: 1px solid var(--lesson-sheet-edge, var(--border));
+  border-radius: inherit;
+  box-shadow: var(--lesson-sheet-light, none);
+}
+
+.learning-course-content-drawer[data-lesson-theme][data-swipe-direction="down"]
+  > [data-slot="drawer-swipe-handle"]::after {
+  background-color: var(
+    --lesson-sheet-grip,
+    color-mix(in srgb, var(--text) 34%, transparent)
+  );
+}
+
+[data-lesson-theme="cone"] {
+  --lesson-sheet-edge: color-mix(in srgb, var(--text) 20%, transparent);
+}
+
+[data-lesson-theme="frost"] {
+  --lesson-sheet-edge: transparent;
+  --lesson-sheet-light:
+    inset 0 1px 3px rgb(255 255 255 / 0.18),
+    inset 0 0 28px rgb(255 255 255 / 0.05);
+}
+
+:root[data-theme="light"] [data-lesson-theme="frost"] {
+  --lesson-sheet-light:
+    inset 0 1px 3px rgb(255 255 255 / 0.95),
+    inset 0 0 28px rgb(255 255 255 / 0.35);
+}
+
+[data-lesson-theme="mono"] {
+  --lesson-sheet-edge: color-mix(in srgb, var(--text) 42%, transparent);
+  --lesson-sheet-grip: color-mix(in srgb, var(--text) 85%, transparent);
+}
+
 /* ================================================================
  * VLC: a solid playlist, orange for what is playing. Graphite in dark,
  * VLC's light skin in light.
@@ -341,8 +398,11 @@
   --lesson-reverse-ring: rgb(255 255 255 / 0.5);
 }
 
-:root
-  [data-lesson-theme="mono"][data-lesson-theme]
+/* The theme's corners over the app's corner setting, which forces its own
+   on the lesson cards (`[data-learning-radius-surface]`, control-radius.css,
+   specificity 0,5,0): this rule stands at 0,6,0. */
+:root:root
+  [data-lesson-theme="mono"][data-lesson-theme][data-lesson-theme]
   :is(
     .learning-curriculum__section-toggle,
     .learning-curriculum__section,

@@ -902,9 +902,15 @@ export const Curriculum = memo(function Curriculum({
     [openLessonSearch, searchOpen, setSearchOpen],
   );
 
+  // The room under the list is the open lesson's: another lesson starts
+  // without it. The lesson the page opened with keeps what the head's script
+  // gave it (curriculumEarlyScroll.ts): taken away here, the list was pulled
+  // up for a frame before `revealAtTop` gave it back.
+  const revealSpaceLessonRef = useRef(selectedLesson);
   useEffect(() => {
     const lessonList = lessonListRef.current;
-    if (!lessonList) return;
+    if (!lessonList || revealSpaceLessonRef.current === selectedLesson) return;
+    revealSpaceLessonRef.current = selectedLesson;
     lessonList.dataset.revealSpace = "0";
     lessonList.style.setProperty("--curriculum-reveal-space", "0px");
   }, [selectedLesson]);

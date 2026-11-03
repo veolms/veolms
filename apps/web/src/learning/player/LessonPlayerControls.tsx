@@ -2017,6 +2017,11 @@ export interface LessonCentralControlsProps {
   canGoPrevious: boolean;
   showLessonNavigation?: boolean;
   controlsSuppressed?: boolean;
+  /**
+   * The lesson's end screen is up: the controls stay with it, as the
+   * timeline and the bottom row do, for Replay and the next lesson.
+   */
+  endScreenOpen?: boolean;
   onGoNext: () => void;
   onGoPrevious: () => void;
 }
@@ -2026,6 +2031,7 @@ export function LessonCentralControls({
   canGoPrevious,
   showLessonNavigation = true,
   controlsSuppressed = false,
+  endScreenOpen = false,
   onGoNext,
   onGoPrevious,
 }: LessonCentralControlsProps) {
@@ -2053,7 +2059,10 @@ export function LessonCentralControls({
   // A drag on the timeline shows the moment over the whole picture; the
   // play and lesson buttons in its middle step aside for it.
   const visible =
-    !controlsSuppressed && !loading && controlsVisible && !scrubbing;
+    !controlsSuppressed &&
+    !loading &&
+    (controlsVisible || endScreenOpen) &&
+    !scrubbing;
 
   // Shown in the phone layout and on any device with a touch screen (a
   // tablet, a touch screen laptop), where a tap on the picture only brings
