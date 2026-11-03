@@ -359,7 +359,7 @@ export async function markVideoJobProcessing(
   await database
     .updateTable("video_jobs")
     .set({
-      status: "processing",
+      status: sql<VideoJobStatus>`case when status = 'ready' then 'ready' else 'processing' end`,
       progress_percent: progressPercent,
       updated_at: new Date(),
     })
@@ -397,6 +397,19 @@ export async function findVideoJobStateById(
     .selectFrom("video_jobs")
     .select(VIDEO_JOB_STATE_COLUMNS)
     .where("id", "=", jobId)
+    .executeTakeFirst();
+}
+
+/** Serialize lifecycle changes from concurrent provider webhooks. */
+export async function lockVideoJobStateById(
+  database: Kysely<Database>,
+  jobId: string,
+) {
+  return await database
+    .selectFrom("video_jobs")
+    .select(VIDEO_JOB_STATE_COLUMNS)
+    .where("id", "=", jobId)
+    .forUpdate()
     .executeTakeFirst();
 }
 

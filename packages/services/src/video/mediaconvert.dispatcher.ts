@@ -167,6 +167,7 @@ export function createMediaConvertDispatcher(options: {
             AudioSelectors: {
               "Audio Selector 1": {
                 DefaultSelection: "DEFAULT",
+                Tracks: [1],
               },
             },
           },
@@ -296,6 +297,7 @@ export function createMediaConvertDispatcher(options: {
             AudioSelectors: {
               "Audio Selector 1": {
                 DefaultSelection: "DEFAULT",
+                Tracks: [1],
               },
             },
           },
@@ -422,6 +424,8 @@ export function createMediaConvertDispatcher(options: {
     if (config.DRM_MASTER_KEY && config.DRM_MASTER_KEY_VERSION) {
       userMetadata.drmKeySystem = "clearkey";
       userMetadata.drmMasterKeyVersion = config.DRM_MASTER_KEY_VERSION;
+      userMetadata.drmMasterKey = config.DRM_MASTER_KEY;
+      userMetadata.masterKey = config.DRM_MASTER_KEY;
     }
 
     const destination = outputPrefix.startsWith("s3://")

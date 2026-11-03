@@ -331,11 +331,13 @@ export function createMediaController({ service }: { service: MediaService }) {
     }
     reply.header(
       "Cache-Control",
-      result.isPublic
-        ? "public, max-age=60, s-maxage=60, stale-while-revalidate=300"
-        : result.isManifest
-          ? "private, no-store"
-          : "private, max-age=86400",
+      result.isChangingManifest
+        ? "no-store"
+        : result.isPublic
+          ? "public, max-age=60, s-maxage=60, stale-while-revalidate=300"
+          : result.isManifest
+            ? "private, no-store"
+            : "private, max-age=86400",
     );
     reply.header("X-Content-Type-Options", "nosniff");
     return reply.send(result.stream);

@@ -815,7 +815,8 @@ export const LessonVideoUpload = forwardRef<
       if (
         status.status === "queued" ||
         status.status === "provisioning" ||
-        status.status === "processing"
+        status.status === "processing" ||
+        status.status === "ready"
       ) {
         highestTranscodeProgressRef.current = status.progressPercent;
         setTranscodeProgress(status.progressPercent);
@@ -2220,6 +2221,8 @@ function getJobLabel(status?: string): string {
       return "Preparing transcoder";
     case "processing":
       return "Transcoding video";
+    case "ready":
+      return "Playable; more qualities processing";
     case "completed":
       return "Video ready";
     case "failed":
