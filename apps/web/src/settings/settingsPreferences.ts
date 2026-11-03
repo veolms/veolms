@@ -1,7 +1,4 @@
-import {
-  DEFAULT_PLAYER_THEME_ID,
-  isPlayerThemeId,
-} from "@veolms/video-player/theme-ids";
+import { isPlayerThemeId } from "@veolms/video-player/theme-ids";
 
 export const SIDEBAR_MAX_WIDTH_MIN = 200;
 export const SIDEBAR_MAX_WIDTH_DEFAULT = 300;
@@ -338,7 +335,13 @@ export interface LearningPreferences {
    * A built-in theme id or one a plugin registers; an id nobody provides
    * plays in the default theme (see `resolvePlayerTheme`).
    */
-  videoPlayerTheme: string;
+  /**
+   * The player theme this browser picked; empty while it follows the
+   * academy's default (Platform > Appearance). Kept under a new name: the
+   * old `videoPlayerTheme` was written as "youtube" for everyone, picked or
+   * not, so it cannot tell the two apart.
+   */
+  playerThemeChoice: string;
   playbackSpeed: string;
   seekIntervalSeconds: number;
   resumeFromLastPosition: boolean;
@@ -398,14 +401,12 @@ export const normalizeLearningSeekInterval = (value: unknown): number => {
 /** Themes that were taken out; a stored choice of one goes back to the default. */
 const RETIRED_PLAYER_THEME_IDS = new Set(["aurora", "minimal"]);
 
-export const normalizeVideoPlayerTheme = (value: unknown): string =>
-  isPlayerThemeId(value) && !RETIRED_PLAYER_THEME_IDS.has(value)
-    ? value
-    : DEFAULT_PLAYER_THEME_ID;
+export const normalizePlayerThemeChoice = (value: unknown): string =>
+  isPlayerThemeId(value) && !RETIRED_PLAYER_THEME_IDS.has(value) ? value : "";
 
 export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   videoQuality: "auto",
-  videoPlayerTheme: DEFAULT_PLAYER_THEME_ID,
+  playerThemeChoice: "",
   playbackSpeed: "1",
   seekIntervalSeconds: LEARNING_SEEK_INTERVAL_DEFAULT,
   resumeFromLastPosition: true,
@@ -783,14 +784,16 @@ export const readLearningPreferences = (): LearningPreferences => {
           : LEARNING_PREFERENCE_DEFAULTS.resumeFromLastPosition,
       continuousLessonNumbering:
         storedPreferences.continuousLessonNumbering === true,
-      videoPlayerTheme: normalizeVideoPlayerTheme(
-        storedPreferences.videoPlayerTheme,
+      playerThemeChoice: normalizePlayerThemeChoice(
+        storedPreferences.playerThemeChoice,
       ),
     };
     delete (preferences as Record<string, unknown>).autoplayNextLecture;
     // Goal/reminder fields moved to the server (learning goal settings
     // API); stale copies in old localStorage payloads are dropped.
     for (const staleKey of [
+      // Replaced by `playerThemeChoice` (see there).
+      "videoPlayerTheme",
       "weeklyGoal",
       "learningReminders",
       "reminderDays",

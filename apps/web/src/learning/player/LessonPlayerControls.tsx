@@ -56,10 +56,7 @@ import {
 import { LessonChaptersPanel } from "./chapters/LessonChaptersPanel";
 import { LessonVolumePill } from "./LessonVolumePill";
 import { updateLearningPreferences } from "../../settings/settingsPreferences";
-import {
-  previewPlayerTheme,
-  useCanChoosePlayerTheme,
-} from "./useLearningPlayerTheme";
+import { previewPlayerTheme } from "./useLearningPlayerTheme";
 
 /**
  * The quality picked in the player is where every video starts from now on
@@ -72,8 +69,8 @@ function rememberQualityChoice(quality: VideoQuality | null): void {
 }
 
 /** The theme picked in the player's settings menu, as Settings stores it. */
-function rememberThemeChoice(videoPlayerTheme: string): void {
-  updateLearningPreferences({ videoPlayerTheme });
+function rememberThemeChoice(playerThemeChoice: string): void {
+  updateLearningPreferences({ playerThemeChoice });
 }
 
 export const PLAYER_SURFACE_CLASS =
@@ -1145,7 +1142,6 @@ export function LessonPlayerControls({
   onMinimize,
   onMobileLandscapeFullscreenChange,
 }: LessonPlayerControlsProps) {
-  const canChoosePlayerTheme = useCanChoosePlayerTheme();
   const chaptersPanelId = useId();
   const [chaptersRequested, setChaptersRequested] = useState(false);
   const hasChapters = useChapters().chapters.length > 0;
@@ -1588,8 +1584,8 @@ export function LessonPlayerControls({
         }
         side={inBottomRow ? "top" : "bottom"}
         onQualityChange={rememberQualityChoice}
-        onThemeChange={canChoosePlayerTheme ? rememberThemeChoice : undefined}
-        onThemePreview={canChoosePlayerTheme ? previewPlayerTheme : undefined}
+        onThemeChange={rememberThemeChoice}
+        onThemePreview={previewPlayerTheme}
       />
       {inBottomRow && !circularSettingsControl ? (
         <FullscreenButton
