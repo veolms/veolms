@@ -8,9 +8,17 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 export interface PlayerThemePickerProps {
   value: string;
   onChange: (theme: string) => void;
+  /** The group's heading; the Platform page names it the default. */
+  legend?: string;
+  description?: string;
 }
 
-export function PlayerThemePicker({ onChange, value }: PlayerThemePickerProps) {
+export function PlayerThemePicker({
+  description = "Change only the lesson player’s controls, icons, and color treatment.",
+  legend = "Video player theme",
+  onChange,
+  value,
+}: PlayerThemePickerProps) {
   const themes = usePlayerThemes();
   // A stored theme whose plugin is not installed plays in the default one.
   const selectedId = themes.some((theme) => theme.id === value)
@@ -19,16 +27,14 @@ export function PlayerThemePicker({ onChange, value }: PlayerThemePickerProps) {
 
   return (
     <fieldset className="settings-learning-player-theme mb-1 border-b border-[color-mix(in_srgb,var(--text)_5%,transparent)] pb-4">
-      <legend className="text-sm font-semibold text-(--text)">
-        Video player theme
-      </legend>
+      <legend className="text-sm font-semibold text-(--text)">{legend}</legend>
       <p className="mt-1 text-xs leading-5 text-(--text-secondary)">
-        Change only the lesson player’s controls, icons, and color treatment.
+        {description}
       </p>
       <div
         className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3"
         role="radiogroup"
-        aria-label="Video player theme"
+        aria-label={legend}
       >
         {themes.map((theme) => {
           const selected = selectedId === theme.id;

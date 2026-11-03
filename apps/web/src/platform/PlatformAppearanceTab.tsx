@@ -1,4 +1,6 @@
+import { findPlayerTheme } from "@veolms/video-player";
 import { academyThemes, DEFAULT_ACADEMY_THEME } from "../themes";
+import { PlayerThemePicker } from "../settings/PlayerThemePicker";
 import { ChoiceCard, RadioGroup } from "../settings/SettingsControls";
 import {
   DISPLAY_MODES,
@@ -43,7 +45,8 @@ export function PlatformAppearanceTab({
     );
   }
 
-  const { defaultDisplayMode, defaultColorTheme } = settings.appearance;
+  const { defaultDisplayMode, defaultColorTheme, defaultVideoPlayerTheme } =
+    settings.appearance;
   // A theme this version does not have shows as its first one, as it does
   // for visitors.
   const selectedTheme = academyThemes.some(
@@ -143,6 +146,21 @@ export function PlatformAppearanceTab({
             />
           ))}
         </RadioGroup>
+      </section>
+
+      <section className="settings-section">
+        <PlayerThemePicker
+          legend="Default video player theme"
+          description="The lesson player's look for everyone who has not picked their own in the player's settings."
+          value={defaultVideoPlayerTheme}
+          onChange={(themeId) => {
+            if (themeId === defaultVideoPlayerTheme) return;
+            save(
+              { appearance: { defaultVideoPlayerTheme: themeId } },
+              `${findPlayerTheme(themeId)?.label ?? "That theme"} is now the default player theme.`,
+            );
+          }}
+        />
       </section>
     </div>
   );

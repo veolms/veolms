@@ -11,8 +11,8 @@ import {
   LEARNING_PREFERENCES_KEY,
   readLearningPreferences,
 } from "../../settings/settingsPreferences";
-import { useCurrentUser } from "../../services/auth";
-import { hasAdminRole } from "../../shell/workspaceRole";
+import { usePublicPlatformSettings } from "../../services/platform";
+import { readPlatformAppearance } from "../../store/appearanceDefaults";
 
 /** Fired with the theme shown for a moment (or null) while one is picked. */
 const PLAYER_THEME_PREVIEW_EVENT = "veolms:player-theme-preview";
@@ -30,27 +30,32 @@ export function previewPlayerTheme(themeId: string | null): void {
 }
 
 /**
- * Only admins choose a player theme for now (Settings and the player's own
- * settings menu offer it to them alone); everyone else plays in the default
- * one, whatever was chosen before the picker was taken away.
+ * The academy's player theme (Platform > Appearance), which everyone plays
+ * in until they pick their own. The first render uses YouTube, as the
+ * prerendered page does; then the default this browser last heard, then the
+ * API's.
  */
-export function useCanChoosePlayerTheme(): boolean {
-  const { data: currentUser } = useCurrentUser();
-  return hasAdminRole(currentUser?.roles);
+export function useAcademyPlayerTheme(): string {
+  const [cached, setCached] = useState<string>(DEFAULT_PLAYER_THEME_ID);
+  const { data } = usePublicPlatformSettings();
+  useEffect(() => {
+    setCached(readPlatformAppearance().defaultVideoPlayerTheme);
+  }, []);
+  return data?.appearance.defaultVideoPlayerTheme ?? cached;
 }
 
 export function useLearningPlayerTheme(): PlayerThemeDefinition {
-  const [storedTheme, setTheme] = useState<string>(DEFAULT_PLAYER_THEME_ID);
+  // Empty while this browser follows the academy's default.
+  const [choice, setChoice] = useState("");
   const [previewTheme, setPreviewTheme] = useState<string | null>(null);
+  const academyTheme = useAcademyPlayerTheme();
   // A plugin's themes can be registered after the player mounts.
   const themes = usePlayerThemes();
-  const theme = useCanChoosePlayerTheme()
-    ? (previewTheme ?? storedTheme)
-    : DEFAULT_PLAYER_THEME_ID;
+  const theme = previewTheme ?? (choice || academyTheme);
 
   useEffect(() => {
     const syncTheme = () => {
-      setTheme(readLearningPreferences().videoPlayerTheme);
+      setChoice(readLearningPreferences().playerThemeChoice);
       // A saved choice ends any preview.
       setPreviewTheme(null);
     };
