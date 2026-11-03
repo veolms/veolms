@@ -173,6 +173,9 @@ export function createCheckoutService({
         subtotalAmount: pricing.subtotalAmount,
         discountAmount: pricing.discountAmount,
         totalAmount: pricing.totalAmount,
+        ...(pricing.minimumCharge
+          ? { minimumCharge: pricing.minimumCharge }
+          : {}),
         currency: pricing.currency,
         ...(pricing.upgradeCredit
           ? { upgradeCredit: pricing.upgradeCredit }
