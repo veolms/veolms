@@ -577,6 +577,15 @@
   -webkit-backdrop-filter: var(--video-player-control-backdrop, none);
 }
 
+/* The chapter label opens the chapters: it brightens like a pill. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  button[data-chapter-label]:is(:hover, :focus-visible) {
+  background-image: linear-gradient(
+    var(--video-player-control-surface-hover),
+    var(--video-player-control-surface-hover)
+  );
+}
+
 /* The chapter now playing sits on a pill like the time beside it. */
 [data-player-theme]:not([data-player-theme="youtube"]) [data-chapter-label] {
   align-items: center;
