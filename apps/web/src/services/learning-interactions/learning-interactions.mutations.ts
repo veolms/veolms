@@ -4,7 +4,6 @@ import type {
   CreateLearningNoteRequest,
   CreateLearningReplyRequest,
   CreateLearningThreadRequest,
-  CreateReportRequest,
   LockThreadRequest,
   ToggleLikeRequest,
   UpdateLearningNoteRequest,
@@ -575,11 +574,5 @@ export function useDeleteNote(courseId?: string, lessonId?: string) {
         ),
       });
     },
-  });
-}
-
-export function useCreateReport() {
-  return useMutation<any, ApiError, CreateReportRequest>({
-    mutationFn: (payload) => learningInteractionsService.createReport(payload),
   });
 }

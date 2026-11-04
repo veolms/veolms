@@ -11,9 +11,10 @@ import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldChec
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { useEffect, useState, type ComponentType } from "react";
-import { Link } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { procodrrLogoSvg } from "../shell/academyShellConstants";
 import type { LegalDocument } from "./legalDocument";
+import { leaveLegalPages } from "./legalReturn";
 import {
   LEGAL_PAGES,
   LEGAL_SUPPORT_EMAIL,
@@ -86,13 +87,47 @@ function Logo() {
   return (
     <span className="inline-flex items-center gap-2.5">
       <span
-        className="inline-flex h-6 w-auto text-(--text) [&_svg]:h-full [&_svg]:w-auto"
+        className="inline-flex h-8 w-auto text-(--text) [&_svg]:h-full [&_svg]:w-auto"
         role="img"
         aria-label="ProCodrr"
         dangerouslySetInnerHTML={{ __html: procodrrLogoSvg }}
       />
-      <span className="text-sm font-medium text-(--muted)">Legal</span>
+      <span className="text-base font-medium text-(--muted)">Legal</span>
     </span>
+  );
+}
+
+/**
+ * Out of the legal pages, to the app page the reader opened them from,
+ * however many legal pages they read since; opened directly (a link from
+ * outside, a new tab), to the home page.
+ */
+function BackButton() {
+  const navigate = useNavigate();
+  const { key } = useLocation();
+  const cameFromApp = key !== "default";
+  const className = `inline-flex size-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-(--border-strong,var(--border)) bg-(--surface) text-sm font-semibold text-(--text) no-underline transition-colors hover:bg-(--hover) sm:w-auto sm:pr-4 sm:pl-3 ${FOCUS_RING}`;
+  const content = (
+    <>
+      <ArrowLeft className="size-4.5" weight="bold" />
+      <span className="hidden sm:inline">
+        {cameFromApp ? "Back" : "Back to ProCodrr"}
+      </span>
+    </>
+  );
+  return cameFromApp ? (
+    <button
+      type="button"
+      aria-label="Back"
+      onClick={() => leaveLegalPages(navigate)}
+      className={className}
+    >
+      {content}
+    </button>
+  ) : (
+    <Link to="/" aria-label="Back to ProCodrr" className={className}>
+      {content}
+    </Link>
   );
 }
 
@@ -113,6 +148,7 @@ function SideNavigation({ currentPath }: { currentPath: string }) {
             return (
               <Link
                 key={page.path}
+                replace
                 to={page.path}
                 aria-current={current ? "page" : undefined}
                 className={`flex h-11 items-center gap-3 rounded-[10px] border px-3 text-sm no-underline transition-colors ${FOCUS_RING} ${
@@ -145,6 +181,7 @@ function PageChips({ currentPath }: { currentPath: string }) {
         return (
           <Link
             key={page.path}
+            replace
             to={page.path}
             aria-current={current ? "page" : undefined}
             className={`inline-flex h-10 shrink-0 items-center rounded-full border px-4 text-[13px] whitespace-nowrap no-underline ${FOCUS_RING} ${
@@ -204,30 +241,23 @@ export function LegalPageLayout({
   return (
     <div className="flex min-h-dvh flex-col bg-(--canvas) text-(--text-secondary)">
       <header className="border-b border-(--border) bg-(--header,var(--surface))">
-        <div className="mx-auto flex h-15 w-full max-w-340 items-center gap-2 px-2 sm:h-auto sm:gap-4 sm:px-8 sm:py-3.5">
-          <Link
-            to="/"
-            aria-label="Back to ProCodrr"
-            className={`inline-flex size-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-(--border-strong,var(--border)) bg-(--surface) text-sm font-semibold text-(--text) no-underline transition-colors hover:bg-(--hover) sm:w-auto sm:pr-4 sm:pl-3 ${FOCUS_RING}`}
-          >
-            <ArrowLeft className="size-4.5" weight="bold" />
-            <span className="hidden sm:inline">Back to ProCodrr</span>
-          </Link>
+        {/* Laid out like the page below: on a wide screen the back button
+            takes the side menu's column, so the logo starts where the
+            content does. */}
+        <div className="mx-auto flex h-15 w-full max-w-340 items-center gap-2 px-2 sm:h-auto sm:gap-4 sm:px-8 sm:py-3.5 lg:justify-between lg:gap-14">
+          <div className="flex shrink-0 items-center lg:w-55">
+            <BackButton />
+          </div>
           <span
             aria-hidden="true"
-            className="hidden h-6 w-px bg-(--border) sm:block"
+            className="hidden h-6 w-px bg-(--border) sm:block lg:hidden"
           />
-          <span className="flex-1 pl-1.5 sm:pl-0">
+          <span className="flex-1 pl-1.5 sm:pl-0 lg:max-w-180">
             <Logo />
           </span>
-          <Link
-            to="/contact"
-            aria-label="Contact support"
-            className={`inline-flex size-11 shrink-0 items-center justify-center gap-2 rounded-xl text-sm font-medium text-(--text-secondary) no-underline transition-colors hover:bg-(--hover) hover:text-(--text) sm:w-auto sm:px-3.5 ${FOCUS_RING}`}
-          >
-            <EnvelopeSimple className="size-4.5 text-(--accent)" />
-            <span className="hidden sm:inline">Contact support</span>
-          </Link>
+          {/* The "On this page" column's room, so the logo sits over the
+              text column as the page spreads its columns apart. */}
+          <span aria-hidden="true" className="hidden w-55 shrink-0 xl:block" />
         </div>
       </header>
 
@@ -311,6 +341,7 @@ export function LegalPageLayout({
               </a>
             ) : (
               <Link
+                replace
                 to="/contact"
                 className={`inline-flex h-11.5 w-full items-center justify-center rounded-xl bg-(--accent) px-5 text-sm font-bold text-(--on-accent) no-underline transition-colors hover:bg-(--accent-hover,var(--accent)) sm:h-11 sm:w-auto ${FOCUS_RING}`}
               >
@@ -350,6 +381,7 @@ export function LegalPageLayout({
             {LEGAL_PAGES.map((link) => (
               <Link
                 key={link.path}
+                replace
                 to={link.path}
                 aria-current={link.path === page.path ? "page" : undefined}
                 className={`no-underline hover:text-(--text) ${FOCUS_RING} ${

@@ -158,6 +158,8 @@ interface CommentCardProps {
           targetId: string | number;
           authorName?: string;
           serverId?: string;
+          /** A reply's comment, which its link opens. */
+          parentThreadId?: string | number;
         }
       | (string | number),
   ) => void;
@@ -1158,6 +1160,7 @@ export const CommentCard = React.memo(function CommentCard({
                         targetId: reply.id,
                         authorName: reply.name,
                         serverId: getServerEntityId(reply),
+                        parentThreadId: comment.id,
                       })
                     }
                     onSeekToTimestamp={onSeekToTimestamp}
