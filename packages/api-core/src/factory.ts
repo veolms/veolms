@@ -11,6 +11,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 
 import { createCorsMatcher } from "./cors.ts";
 import { AppError, registerErrorHandler } from "./errors.ts";
+import { registerLoadShedding } from "./load-shedding.ts";
 import { registerOpenApi } from "./openapi.ts";
 import {
   configureCaches,
@@ -269,6 +270,8 @@ export async function createVeoLMSApi<
   // everything registered below depends on.
   await registerOpenApi(app, config);
   registerErrorHandler(app);
+  // Before any route: an overloaded process answers what can wait at once.
+  registerLoadShedding(app);
 
   app.addHook("preSerialization", async (request, reply, payload) => {
     if (
