@@ -59,7 +59,14 @@ export function adaptUnifiedDiscussionItem(
           currentUserId,
         );
 
-  return withSourceAwareIdentity(entry, item.sourceType, item.entityId);
+  const identified = withSourceAwareIdentity(
+    entry,
+    item.sourceType,
+    item.entityId,
+  );
+  return item.sourceType === "thread" && item.searchMatchedReplyIds?.length
+    ? { ...identified, searchMatchedReplyIds: item.searchMatchedReplyIds }
+    : identified;
 }
 
 export function getDiscussionSourceType(entry: Comment): "thread" | "note" {

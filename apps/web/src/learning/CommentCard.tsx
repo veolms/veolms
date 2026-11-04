@@ -38,6 +38,7 @@ import {
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
 import { copyTextToClipboard } from "../lib/clipboard";
+import { HighlightedText, useSearchHighlight } from "../lib/searchHighlight";
 import { UndoDeleteButton } from "./useUndoableDeletion";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
@@ -114,6 +115,11 @@ export interface Comment {
   replies?: number;
   thread?: CommentReply[];
   repliesExpanded?: boolean;
+  /**
+   * The replies a search found in this comment (by their words or their
+   * author's name): its replies open to show them while that search stands.
+   */
+  searchMatchedReplyIds?: readonly string[];
   isQuestion?: boolean;
   entryKind?: DiscussionEntryKind;
   attachment?: {
@@ -416,11 +422,29 @@ export const CommentCard = React.memo(function CommentCard({
   useEffect(() => {
     if (linkedReplyId) setRepliesOpen(true);
   }, [linkedReplyId]);
+  // A search that found replies in this comment opens them the same way, so
+  // each result shows what matched without opening anything. The words are
+  // highlighted in them like in the comment.
+  const searchQuery = useSearchHighlight().trim();
+  const searchMatchedReplyIds =
+    !isNote && searchQuery ? (comment.searchMatchedReplyIds ?? []) : [];
+  const searchMatchedRepliesKey = searchMatchedReplyIds.join(",");
+  useEffect(() => {
+    if (searchMatchedRepliesKey) setRepliesOpen(true);
+  }, [searchMatchedRepliesKey]);
+  const loadedReplyIds = new Set(
+    effectiveReplies.map((reply) => getServerEntityId(reply)),
+  );
+  const wantedRepliesMissing =
+    Boolean(linkedReplyId && !linkedReplyFound) ||
+    searchMatchedReplyIds.some((id) => !loadedReplyIds.has(id));
   const linkedReplyPagesRef = useRef(0);
   useEffect(() => {
+    linkedReplyPagesRef.current = 0;
+  }, [linkedReplyId, searchMatchedRepliesKey]);
+  useEffect(() => {
     if (
-      !linkedReplyId ||
-      linkedReplyFound ||
+      !wantedRepliesMissing ||
       !repliesOpen ||
       !hasNextPage ||
       isFetchingNextPage ||
@@ -436,9 +460,8 @@ export const CommentCard = React.memo(function CommentCard({
     hasNextPage,
     isFetchNextPageError,
     isFetchingNextPage,
-    linkedReplyFound,
-    linkedReplyId,
     repliesOpen,
+    wantedRepliesMissing,
   ]);
   const scrolledToLinkedReplyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -720,7 +743,8 @@ export const CommentCard = React.memo(function CommentCard({
                       username={comment.authorUsername}
                       variant="name"
                     >
-                      {comment.isOwn ? `${comment.name} (You)` : comment.name}
+                      <HighlightedText text={comment.name} />
+                      {comment.isOwn ? " (You)" : null}
                     </ProfileLink>
                   </h2>
                   {comment.role === "Instructor" && (
@@ -815,7 +839,10 @@ export const CommentCard = React.memo(function CommentCard({
                         username={comment.authorUsername}
                         variant="name"
                       >
-                        @{comment.authorUsername.replace(/^@+/, "")}
+                        @
+                        <HighlightedText
+                          text={comment.authorUsername.replace(/^@+/, "")}
+                        />
                       </ProfileLink>
                     </span>
                   )}
@@ -1299,7 +1326,8 @@ function ReplyCard({
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
                   <h3 className="text-[0.9375rem] font-bold text-(--text)">
                     <ProfileLink username={reply.authorUsername} variant="name">
-                      {reply.isOwn ? `${reply.name} (You)` : reply.name}
+                      <HighlightedText text={reply.name} />
+                      {reply.isOwn ? " (You)" : null}
                     </ProfileLink>
                   </h3>
                   {reply.role === "Instructor" && (
@@ -1325,7 +1353,10 @@ function ReplyCard({
                         username={reply.authorUsername}
                         variant="name"
                       >
-                        @{reply.authorUsername.replace(/^@+/, "")}
+                        @
+                        <HighlightedText
+                          text={reply.authorUsername.replace(/^@+/, "")}
+                        />
                       </ProfileLink>
                     </span>
                   )}

@@ -945,6 +945,14 @@ function DiscussionInner({
         .filter((item) => item.sourceType === "thread")
         .map((item) => item.identity),
     );
+    // The replies a search found, per thread, from the feed. A thread this
+    // page already holds is shown from its own copy, which does not have them.
+    const searchMatchedReplies = new Map<string, readonly string[]>();
+    for (const item of visibleUnifiedDiscussionItems) {
+      if (item.sourceType === "thread" && item.searchMatchedReplyIds?.length) {
+        searchMatchedReplies.set(item.entityId, item.searchMatchedReplyIds);
+      }
+    }
     const threads = legacyThreads
       .filter(isCommentOrQaThread)
       .filter((thread) => {
@@ -958,9 +966,12 @@ function DiscussionInner({
       .map((thread) => {
         const adapted = adaptLearningThreadToComment(thread);
         const serverId = getServerEntityId(thread);
-        return serverId
-          ? withSourceAwareIdentity(adapted, "thread", serverId)
-          : adapted;
+        if (!serverId) return adapted;
+        const identified = withSourceAwareIdentity(adapted, "thread", serverId);
+        const matchedReplyIds = searchMatchedReplies.get(serverId);
+        return matchedReplyIds
+          ? { ...identified, searchMatchedReplyIds: matchedReplyIds }
+          : identified;
       });
     const unifiedThreads = visibleUnifiedDiscussionItems
       .filter((item) => item.sourceType === "thread")
