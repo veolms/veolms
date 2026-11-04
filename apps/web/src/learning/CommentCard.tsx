@@ -190,6 +190,12 @@ interface CommentCardProps {
   canModerate?: boolean;
   courseId?: string;
   canParticipate?: boolean;
+  /**
+   * For a visitor who cannot take part here (not signed in, or without the
+   * course): likes are still shown, and liking asks them to log in or get
+   * access instead. Without it, likes show only to those who can like.
+   */
+  onParticipationRequired?: () => void;
   canEdit?: boolean;
   canDelete?: boolean;
   isDeepLinkTarget?: boolean;
@@ -250,6 +256,7 @@ export const CommentCard = React.memo(function CommentCard({
   canModerate = false,
   courseId,
   canParticipate = true,
+  onParticipationRequired,
   canEdit = true,
   canDelete = true,
   isDeepLinkTarget = false,
@@ -954,10 +961,15 @@ export const CommentCard = React.memo(function CommentCard({
                   data-comment-engagement
                   className="mt-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
                 >
-                  {canParticipate && (
+                  {(canParticipate || onParticipationRequired) && (
                     <button
                       type="button"
                       onClick={(event) => {
+                        if (!canParticipate) {
+                          event.stopPropagation();
+                          onParticipationRequired?.();
+                          return;
+                        }
                         if (!isCommentLiked) cheerLike(event.currentTarget);
                         if (!isBackendMode) {
                           setLocalLiked((current) => !current);
@@ -1123,6 +1135,7 @@ export const CommentCard = React.memo(function CommentCard({
                     isBackendMode={isBackendMode}
                     isQuestion={isQuestion}
                     canParticipate={canParticipate}
+                    onParticipationRequired={onParticipationRequired}
                     canAcceptAnswer={canAcceptAnswer}
                     onToggleAccept={(replyId, accepted) =>
                       onToggleAcceptReply?.(
@@ -1218,6 +1231,8 @@ interface ReplyCardProps {
   isBackendMode?: boolean;
   isQuestion?: boolean;
   canParticipate?: boolean;
+  /** See CommentCard's: liking asks a visitor to log in or get access. */
+  onParticipationRequired?: () => void;
   canAcceptAnswer?: boolean;
   onToggleAccept?: (
     replyId: string | number,
@@ -1248,6 +1263,7 @@ function ReplyCard({
   isBackendMode = false,
   isQuestion = false,
   canParticipate = true,
+  onParticipationRequired,
   canAcceptAnswer = false,
   onToggleAccept,
   onReply,
@@ -1438,10 +1454,15 @@ function ReplyCard({
                 data-reply-engagement
                 className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm"
               >
-                {canParticipate && (
+                {(canParticipate || onParticipationRequired) && (
                   <button
                     type="button"
                     onClick={(event) => {
+                      if (!canParticipate) {
+                        event.stopPropagation();
+                        onParticipationRequired?.();
+                        return;
+                      }
                       if (!isReplyLiked) cheerLike(event.currentTarget);
                       if (!isBackendMode) {
                         setLocalLiked((current) => !current);

@@ -715,6 +715,10 @@ export function ThreadSurface({
     onSeekToTimestamp,
     onCopyTextNotice,
     onThreadHighlightShown,
+    // Liking without access asks to log in (or get access), as the composer does.
+    onParticipationRequired: onParticipationAction
+      ? askToParticipate
+      : undefined,
   });
 
   const renderEntry = useCallback(
@@ -739,6 +743,9 @@ export function ThreadSurface({
         onCopyTextNotice={cardHandlers.onCopyTextNotice}
         courseId={courseId}
         canParticipate={canParticipate}
+        onParticipationRequired={
+          canParticipate ? undefined : cardHandlers.onParticipationRequired
+        }
         constrainToContainer
         canEdit={
           canParticipate &&
