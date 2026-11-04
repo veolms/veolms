@@ -126,6 +126,14 @@ function normalizeOutputPrefix(outputPrefix: string): string {
   return outputPrefix.replace(/^\/+|\/+$/g, "");
 }
 
+function splitManifestPath(path: string): {
+  key: string;
+  version: string | null;
+} {
+  const [key = "", query = ""] = path.split("?", 2);
+  return { key, version: new URLSearchParams(query).get("v") };
+}
+
 function isYoutubeImportMedia(metadata: unknown): boolean {
   return (
     typeof metadata === "object" &&
@@ -1506,9 +1514,11 @@ export function createMediaService({
       database,
       mediaId,
     );
-    const manifestKey = normalizeOutputPrefix(
+    const storedManifest = normalizeOutputPrefix(
       latestOutput?.master_playlist_path || `${outputPrefix}/master.m3u8`,
     );
+    const { key: manifestKey, version: manifestVersion } =
+      splitManifestPath(storedManifest);
     if (options.verifyManifest !== false) {
       const manifest = await services.storage.headObject(manifestKey);
       if (!manifest) {
@@ -1521,7 +1531,12 @@ export function createMediaService({
     }
 
     // A new transcode adds a new output row; its id tells the copies apart.
-    return { outputPrefix, manifestKey, outputVersion: latestOutput?.id ?? "" };
+    return {
+      outputPrefix,
+      manifestKey,
+      manifestVersion,
+      outputVersion: `${latestOutput?.id ?? ""}:${manifestVersion ?? ""}`,
+    };
   }
 
   function getDirectDelivery(storageKey: string) {
@@ -1905,12 +1920,15 @@ export function createMediaService({
     // The transcode worker only marks a job completed after publishing its
     // output. Avoid an extra storage HEAD round-trip on every first play;
     // the CDN manifest request itself remains the authoritative final check.
-    const { manifestKey, outputVersion } = await getReadyPlaybackOutput(
-      context.content_media_id!,
-      context,
-      { verifyManifest: false },
-    );
-    const manifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    const { manifestKey, manifestVersion, outputVersion } =
+      await getReadyPlaybackOutput(context.content_media_id!, context, {
+        verifyManifest: false,
+      });
+    const baseManifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    const manifestUrl =
+      baseManifestUrl && manifestVersion !== null
+        ? `${baseManifestUrl}?v=${encodeURIComponent(manifestVersion)}`
+        : baseManifestUrl;
     if (!manifestUrl) {
       throw new AppError(
         503,
@@ -2286,7 +2304,7 @@ export function createMediaService({
       // The fleet retries completion callbacks and may deliver them more
       // than once; video_outputs has no unique key, so re-processing would
       // insert a duplicate output row.
-      if (job.status === "completed" || (isReady && job.status === "ready")) {
+      if (job.status === "completed") {
         return { success: true, status: job.status, jobId: job.id };
       }
 
@@ -2335,24 +2353,46 @@ export function createMediaService({
           !locked ||
           locked.status === "cancelled" ||
           locked.status === "failed" ||
-          locked.status === "completed" ||
-          (isReady && locked.status === "ready")
+          locked.status === "completed"
         ) {
           return { status: locked?.status ?? "failed", outputId: null };
         }
-        const previousOutput =
-          locked.status === "ready"
-            ? await mediaRepo.findLatestVideoOutput(trx, locked.video_id)
-            : undefined;
-        const outputId =
-          previousOutput?.master_playlist_path === normalizedMaster
-            ? previousOutput.id
-            : crypto.randomUUID();
-        if (outputId !== previousOutput?.id)
+        const previousOutput = await mediaRepo.findLatestVideoOutput(
+          trx,
+          locked.video_id,
+        );
+        const previousManifest = previousOutput
+          ? splitManifestPath(previousOutput.master_playlist_path)
+          : undefined;
+        const samePath = previousManifest?.key === normalizedMaster;
+        const versionPrefix = `${locked.id}-`;
+        const previousRevision =
+          locked.status === "ready" &&
+          samePath &&
+          previousManifest?.version?.startsWith(versionPrefix)
+            ? previousManifest.version.slice(versionPrefix.length)
+            : "";
+        const revision = /^\d+$/u.test(previousRevision)
+          ? BigInt(previousRevision) + 1n
+          : 1n;
+        const version = `${versionPrefix}${revision}`;
+        const storedMaster = isReady
+          ? `${normalizedMaster}?v=${version}`
+          : normalizedMaster;
+        const reuseOutput =
+          locked.status === "ready" && samePath && previousOutput;
+        const outputId = reuseOutput ? reuseOutput.id : crypto.randomUUID();
+        if (reuseOutput)
+          await mediaRepo.updateVideoOutputManifest(
+            trx,
+            outputId,
+            storedMaster,
+          );
+        else
           await mediaRepo.insertVideoOutput(trx, {
             id: outputId,
             video_id: locked.video_id,
-            master_playlist_path: normalizedMaster,
+            master_playlist_path: storedMaster,
             created_at: new Date(),
           });
         await mediaRepo.updateVideoJobStatus(trx, locked.id, {
@@ -2494,7 +2534,7 @@ export function createMediaService({
     media: VideoAssetForPlayback,
     details: { mediaKey: string; title?: string | null },
   ): Promise<HeroVideoPlayback> {
-    const { manifestKey } = await getReadyPlaybackOutput(
+    const { manifestKey, manifestVersion } = await getReadyPlaybackOutput(
       media.id,
       {
         media_type: media.type,
@@ -2503,7 +2543,11 @@ export function createMediaService({
       },
       { verifyManifest: false },
     );
-    const manifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    const baseManifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    const manifestUrl =
+      baseManifestUrl && manifestVersion !== null
+        ? `${baseManifestUrl}?v=${encodeURIComponent(manifestVersion)}`
+        : baseManifestUrl;
     if (!manifestUrl) {
       throw new AppError(
         503,

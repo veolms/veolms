@@ -179,7 +179,7 @@ export function createMediaConvertDispatcher(options: {
             OutputGroupSettings: {
               Type: "DASH_ISO_GROUP_SETTINGS",
               DashIsoGroupSettings: {
-                Destination: opts.destination,
+                Destination: `${opts.destination.replace(/\/+$/, "")}/manifest`,
               },
             },
           },
