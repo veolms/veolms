@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { createMediaService } from "./media.service.ts";
 
-test("READY publishes output without completion and later events preserve it", async () => {
+void test("READY publishes output without completion and later events preserve it", async () => {
   const job = {
     id: "550e8400-e29b-41d4-a716-446655440000",
     video_id: "550e8400-e29b-41d4-a716-446655440001",
@@ -40,6 +40,8 @@ test("READY publishes output without completion and later events preserve it", a
           if (table === "video_jobs") {
             if (typeof values.status === "string") job.status = values.status;
           } else if (table === "media_assets") Object.assign(asset, values);
+          else if (table === "video_outputs")
+            Object.assign(outputs.at(-1)!, values);
         },
       };
       return query;
@@ -65,7 +67,10 @@ test("READY publishes output without completion and later events preserve it", a
   });
   const services = {
     config: { MEDIACONVERT_WEBHOOK_SECRET: "secret" },
-    storage: {},
+    storage: {
+      getCdnObjectUrl: (key: string) => `https://cdn.test/${key}`,
+      isCdnPublicKey: () => true,
+    },
   };
   const service = createMediaService({
     database: db as never,
@@ -93,14 +98,58 @@ test("READY publishes output without completion and later events preserve it", a
   assert.equal(job.status, "ready");
   assert.equal(asset.status, "ready");
   assert.equal(outputs.length, 1);
-  assert.equal(outputs[0]?.master_playlist_path, "protected/test/video.mpd");
+  assert.equal(
+    outputs[0]?.master_playlist_path,
+    `protected/test/video.mpd?v=${job.id}-1`,
+  );
   assert.equal((await deliver("READY")).status, "ready");
   assert.equal(outputs.length, 1);
+  assert.equal(
+    outputs[0]?.master_playlist_path,
+    `protected/test/video.mpd?v=${job.id}-2`,
+  );
+  const playback = await service.getVideoAssetPlayback(
+    {
+      id: job.video_id,
+      type: "video",
+      status: "ready",
+      storageKey: "protected/test",
+      durationSeconds: null,
+    },
+    { mediaKey: "test" },
+  );
+  assert.equal(
+    playback.manifestUrl,
+    `https://cdn.test/protected/test/video.mpd?v=${job.id}-2`,
+  );
   await deliver("PROGRESSING");
   assert.equal(job.status, "ready");
   assert.equal((await deliver("COMPLETE")).status, "completed");
   assert.equal(job.status, "completed");
   assert.equal(outputs.length, 1);
+  assert.equal(outputs[0]?.master_playlist_path, "protected/test/video.mpd");
+  const completedPlayback = await service.getVideoAssetPlayback(
+    {
+      id: job.video_id,
+      type: "video",
+      status: "ready",
+      storageKey: "protected/test",
+      durationSeconds: null,
+    },
+    { mediaKey: "test" },
+  );
+  assert.equal(
+    completedPlayback.manifestUrl,
+    "https://cdn.test/protected/test/video.mpd",
+  );
   await deliver("READY");
   assert.equal(job.status, "completed");
+  job.status = "processing";
+  job.id = "550e8400-e29b-41d4-a716-446655440002";
+  await deliver("READY");
+  assert.equal(outputs.length, 2);
+  assert.equal(
+    outputs.at(-1)?.master_playlist_path,
+    `protected/test/video.mpd?v=${job.id}-1`,
+  );
 });

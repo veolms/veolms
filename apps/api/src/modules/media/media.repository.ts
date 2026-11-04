@@ -681,3 +681,15 @@ export async function insertVideoOutput(
 ) {
   await database.insertInto("video_outputs").values(values).execute();
 }
+
+export async function updateVideoOutputManifest(
+  database: Kysely<Database>,
+  id: string,
+  path: string,
+) {
+  await database
+    .updateTable("video_outputs")
+    .set({ master_playlist_path: path })
+    .where("id", "=", id)
+    .execute();
+}
