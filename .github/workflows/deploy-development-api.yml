@@ -1,24 +1,14 @@
 name: Deploy development API
 
+# Manual only. Since 2026-10-31 dev.veolms.org runs the cloud app
+# (veolms-cloud-api, port 4100), which the downstream repository deploys
+# when notify-downstream.yml tells it `dev` moved. This workflow deploys the
+# core API (veolms-api, port 4000), which nginx no longer sends requests to,
+# and its boot check uses API_PORT + 100 = 4100, the live cloud app's port,
+# so on push it failed every time. To roll dev.veolms.org back to the core
+# API, see /etc/nginx/conf.d/veolms-dev-backend.conf on the server and move
+# the boot-check port off 4100 before running this.
 on:
-  push:
-    branches:
-      - dev
-    paths:
-      - "apps/api/**"
-      - "packages/api-core/**"
-      - "packages/services/**"
-      - "packages/plugin-sdk/**"
-      - "packages/video-player/**"
-      - "packages/contracts/**"
-      - "packages/database/**"
-      - "packages/config/**"
-      - "packages/storage/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "turbo.json"
-      - ".github/workflows/deploy-development-api.yml"
   workflow_dispatch:
 
 permissions:
