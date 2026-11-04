@@ -1,4 +1,6 @@
 import type { VideoPlayerEvent } from "@veolms/video-player";
+import { noteProgressActivity } from "./progressSyncSchedule";
+import { createTabOutboxStorage } from "./tabOutboxStorage";
 
 /**
  * Watch time: the seconds of video a learner has actually played, which is
@@ -13,20 +15,53 @@ import type { VideoPlayerEvent } from "@veolms/video-player";
  * let a drag of the timeline complete a day's goal.)
  *
  * The players add to a per-course tally here; whichever progress heartbeat
- * goes out next takes the tally with it.
+ * goes out next takes the tally with it. The tally is also kept in local
+ * storage (tabOutboxStorage), so seconds a closed or crashed tab never sent
+ * are sent by the next one.
  */
 const pendingSecondsByCourse = new Map<string, number>();
+const storedTally =
+  createTabOutboxStorage<Record<string, number>>("watch-time-outbox");
+let adopted = false;
+
+function readTally(): Record<string, number> | null {
+  const tally: Record<string, number> = {};
+  for (const [courseKey, seconds] of pendingSecondsByCourse) {
+    if (seconds >= 1) tally[courseKey] = seconds;
+  }
+  return Object.keys(tally).length > 0 ? tally : null;
+}
+
+/** Takes over, once, what tabs that are gone left unsent. */
+function adoptLeftTally() {
+  if (adopted) return;
+  adopted = true;
+  for (const tally of storedTally.adoptOrphans()) {
+    for (const [courseKey, seconds] of Object.entries(tally)) {
+      if (typeof seconds === "number" && seconds > 0) {
+        pendingSecondsByCourse.set(
+          courseKey,
+          (pendingSecondsByCourse.get(courseKey) ?? 0) + seconds,
+        );
+      }
+    }
+  }
+}
 
 export function addWatchedSeconds(courseKey: string, seconds: number): void {
   if (!(seconds > 0)) return;
+  adoptLeftTally();
   pendingSecondsByCourse.set(
     courseKey,
     (pendingSecondsByCourse.get(courseKey) ?? 0) + seconds,
   );
+  storedTally.saveSoon(readTally);
+  noteProgressActivity();
 }
 
 /** Watch time waiting to be reported for a course, without taking it. */
 export function peekWatchedSeconds(courseKey: string): number {
+  adoptLeftTally();
   return pendingSecondsByCourse.get(courseKey) ?? 0;
 }
 
@@ -36,10 +71,13 @@ export function peekWatchedSeconds(courseKey: string): number {
  * request that carried it failed.
  */
 export function takeWatchedSeconds(courseKey: string): number {
+  adoptLeftTally();
   const pending = pendingSecondsByCourse.get(courseKey) ?? 0;
   const whole = Math.floor(pending);
   if (whole <= 0) return 0;
   pendingSecondsByCourse.set(courseKey, pending - whole);
+  // Written at once: a copy left in storage would be sent again.
+  storedTally.save(readTally());
   return whole;
 }
 
@@ -47,7 +85,12 @@ export function restoreWatchedSeconds(
   courseKey: string,
   seconds: number,
 ): void {
-  addWatchedSeconds(courseKey, seconds);
+  if (!(seconds > 0)) return;
+  pendingSecondsByCourse.set(
+    courseKey,
+    (pendingSecondsByCourse.get(courseKey) ?? 0) + seconds,
+  );
+  storedTally.save(readTally());
 }
 
 /**

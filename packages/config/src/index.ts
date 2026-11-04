@@ -207,6 +207,19 @@ const serverConfigSchema = z.object({
     .max(60_000)
     .default(30_000),
   /**
+   * Seconds a page waits, while a video plays, between two lesson progress
+   * batches (pauses, a lesson's end and leaving the page send at once). The
+   * batches are the API's most frequent write; raising this during a load
+   * spike slows every open page down within one interval, with a reload
+   * of the API and no deploy.
+   */
+  LEARNING_PROGRESS_SYNC_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(15)
+    .max(600)
+    .default(60),
+  /**
    * TTL for the process-local cache of a course as every visitor sees it
    * (the signed-out overview, the public curriculum and its version), in
    * ms. A change made through the API clears that course at once in the
