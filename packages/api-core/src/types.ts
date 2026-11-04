@@ -8,6 +8,12 @@ import type { ApiPlugin } from "@veolms/plugin-sdk";
 declare module "fastify" {
   interface FastifyContextConfig {
     rawResponse?: boolean;
+    /**
+     * Answered 503 "try again shortly" while the server is overloaded
+     * (see load-shedding.ts). Only for requests the page sends again by
+     * itself and loses nothing by waiting: progress heartbeats, polls.
+     */
+    shedUnderLoad?: boolean;
   }
 }
 

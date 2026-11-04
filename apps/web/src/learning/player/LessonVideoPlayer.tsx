@@ -83,7 +83,10 @@ import {
   writeVolumePreference,
 } from "./lessonPlayerPersistence";
 import { createLearningLessonVideoSource } from "./lessonVideoSource";
-import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
+import {
+  MINI_PLAYER_THEME,
+  useLearningPlayerTheme,
+} from "./useLearningPlayerTheme";
 import { useLearningSeekInterval } from "./useLearningSeekInterval";
 import { MiniPlayerControls } from "./MiniPlayerControls";
 import {
@@ -541,7 +544,10 @@ export function LessonVideoPlayer({
     }
     goToNextLesson();
   }, [goToNextLesson, lessonQuizOffered, showEndScreen]);
-  const playerTheme = useLearningPlayerTheme();
+  const lessonPlayerTheme = useLearningPlayerTheme();
+  // The mini window wears no theme (see MINI_PLAYER_THEME).
+  const playerTheme =
+    presentation === "mini" ? MINI_PLAYER_THEME : lessonPlayerTheme;
   const mediaKey = resumePersistenceKey ?? media.fileName;
   const activeMediaKeyRef = useRef(mediaKey);
   const requestedMediaKeyRef = useRef(mediaKey);
@@ -1634,10 +1640,18 @@ export function LessonVideoPlayer({
             article={reading}
             minimizeControl={
               onMinimize ? (
-                <LessonPlayerMinimizeControl
-                  icon={<MinimizeIcon size={22} />}
-                  onMinimize={minimizeReadingFromControl}
-                />
+                // In the theme's shape, as over a video (see the controls
+                // row's `data-player-theme`).
+                <div
+                  className="contents"
+                  data-player-theme={playerTheme.id}
+                  style={getPlayerThemeStyle(playerTheme)}
+                >
+                  <LessonPlayerMinimizeControl
+                    icon={<MinimizeIcon size={22} />}
+                    onMinimize={minimizeReadingFromControl}
+                  />
+                </div>
               ) : undefined
             }
             clearBottom
@@ -2043,6 +2057,7 @@ export function LessonVideoPlayer({
             canGoNext={canGoNext}
             canGoPrevious={canGoPrevious}
             controlsSuppressed={chromeSuppressed}
+            endScreenOpen={endScreenVisible}
             onGoNext={onGoNext}
             onGoPrevious={onGoPrevious}
           />
@@ -2086,6 +2101,8 @@ export function LessonVideoPlayer({
             courseLessonsSidePanel={courseLessonsSidePanel}
             courseLessonsBottomSheet={courseLessonsBottomSheet}
             lessonTitle={lessonTitle}
+            lessonIndex={lessonIndex}
+            totalLessons={totalLessons}
             chaptersPanelHost={chaptersPanelHost}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}

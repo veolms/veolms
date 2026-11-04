@@ -53,6 +53,8 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/notifications/summary",
     {
+      // A poll: the badge asks again in a minute (load-shedding.ts).
+      config: { shedUnderLoad: true },
       preHandler: requireAuthenticated,
       schema: {
         operationId: "getMyNotificationSummary",

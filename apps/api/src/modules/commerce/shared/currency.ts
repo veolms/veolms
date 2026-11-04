@@ -10,6 +10,7 @@
  */
 export {
   formatMoney,
+  minimumCardPayment,
   minorUnitsPerMajor,
   pricingAmountToMinorUnits,
   toMajorUnits,

@@ -207,6 +207,19 @@ const serverConfigSchema = z.object({
     .max(60_000)
     .default(30_000),
   /**
+   * Seconds a page waits, while a video plays, between two lesson progress
+   * batches (pauses, a lesson's end and leaving the page send at once). The
+   * batches are the API's most frequent write; raising this during a load
+   * spike slows every open page down within one interval, with a reload
+   * of the API and no deploy.
+   */
+  LEARNING_PROGRESS_SYNC_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(15)
+    .max(600)
+    .default(60),
+  /**
    * TTL for the process-local cache of a course as every visitor sees it
    * (the signed-out overview, the public curriculum and its version), in
    * ms. A change made through the API clears that course at once in the
@@ -369,6 +382,16 @@ const serverConfigSchema = z.object({
     .string()
     .regex(/^\d{6}$/u, "Expected a six-digit code, such as 123456.")
     .optional(),
+
+  /**
+   * Local development only: every account may leave any course it is
+   * enrolled in, bought ones included, as an admin or a shared test account
+   * may (no money is returned, the order is left as it is, and the course's
+   * progress is cleared), so a purchase can be tried again. Honoured only
+   * when `NODE_ENV` is `development`, and the API refuses to start in
+   * production with it set.
+   */
+  LOCAL_ANY_COURSE_UNENROLL: booleanEnvironmentValueSchema.default(false),
 
   /**
    * Enables the `mock_<email>` OAuth short-circuit, which skips both the
@@ -818,6 +841,19 @@ export function loadServerConfig(
   environment: Record<string, string | undefined>,
 ): ServerConfig {
   const parsed = serverConfigSchema.parse(environment);
+  // The development-only switches are honoured when NODE_ENV is
+  // `development`, which is also the schema's default: a deployment that
+  // forgot NODE_ENV would have them on. So they need it named outright.
+  const developmentOnly = [
+    parsed.LOCAL_FIXED_OTP ? "LOCAL_FIXED_OTP" : null,
+    parsed.LOCAL_ANY_COURSE_UNENROLL ? "LOCAL_ANY_COURSE_UNENROLL" : null,
+  ].filter((name): name is string => name !== null);
+  if (developmentOnly.length > 0 && !environment.NODE_ENV?.trim()) {
+    throw new Error(
+      `Refusing to start with ${developmentOnly.join(", ")} set and no NODE_ENV: ` +
+        "set NODE_ENV=development explicitly for these development-only switches.",
+    );
+  }
   const offenders = findInsecureDefaults(parsed);
   const missingRequired = findMissingRequiredInProduction(parsed);
 
@@ -825,6 +861,12 @@ export function loadServerConfig(
     if (parsed.LOCAL_FIXED_OTP) {
       throw new Error(
         "Refusing to start in production with LOCAL_FIXED_OTP set: it lets anyone sign in to any account. " +
+          "Remove it from the environment.",
+      );
+    }
+    if (parsed.LOCAL_ANY_COURSE_UNENROLL) {
+      throw new Error(
+        "Refusing to start in production with LOCAL_ANY_COURSE_UNENROLL set: it lets any student give up a paid course. " +
           "Remove it from the environment.",
       );
     }
