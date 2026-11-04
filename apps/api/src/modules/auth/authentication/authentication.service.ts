@@ -875,45 +875,6 @@ export function createAuthService({
     return { email: updated.email ?? email, phoneNo: updated.phone_no };
   }
 
-  async function deactivateAccount(userId: string): Promise<void> {
-    if (!sessionService) {
-      throw new AppError(
-        500,
-        "CONFIG_ERROR",
-        "AuthService requires sessionService for account deactivation.",
-      );
-    }
-
-    await database.transaction().execute(async (transaction) => {
-      const user = await userRepository.deactivateUser(transaction, userId);
-      if (!user) {
-        throw new AppError(
-          404,
-          "USER_NOT_FOUND",
-          "User account was not found or is already deactivated.",
-        );
-      }
-
-      await sessionService.revokeAllSessions(userId, transaction);
-
-      // Keyed on this deactivation, not on the account. Keyed on the
-      // account alone, the notice went out the first time only: an account
-      // that had been deactivated and brought back was deactivated again
-      // with no email, because the event counted as already sent.
-      await outbox.publish(transaction, {
-        type: "auth.account_deactivated",
-        version: 1,
-        dedupeKey: `auth.account_deactivated:${userId}:${user.updated_at.toISOString()}`,
-        occurredAt: new Date(),
-        payload: { recipientUserId: userId },
-      });
-    });
-    // The sessions were dropped from the cache inside the transaction. A
-    // request arriving before the commit can have cached one again, so they
-    // are dropped once more now that the deactivation is saved.
-    forgetCachedAccount(userId);
-  }
-
   async function getUserRoles(userId: string): Promise<string[]> {
     return userRepository.listUserRoleNames(database, userId);
   }
@@ -1793,7 +1754,6 @@ export function createAuthService({
     createUser,
     requireUser,
     updateContactAsAdmin,
-    deactivateAccount,
   };
 }
 

@@ -314,6 +314,12 @@ export function renderNotificationTemplate(
         body: `Your report regarding a ${stringValue(data, "targetType")} has been ${stringValue(data, "status")}${data.actionTaken ? ` (action: ${stringValue(data, "actionTaken")})` : "."}`,
       };
       break;
+    case "support.reply_posted":
+      inApp = {
+        title: `Reply to your ${stringValue(data, "ticketKind") === "feedback" ? "feedback" : "report"} #${stringValue(data, "ticketNumber")}`,
+        body: stringValue(data, "replySnippet"),
+      };
+      break;
     case "quiz.attempt_passed":
       inApp = {
         title: "Quiz Passed! 🎉",

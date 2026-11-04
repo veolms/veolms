@@ -23,6 +23,7 @@ export type NotificationTemplateKey =
   | "moderation.user_suspended"
   | "moderation.user_unsuspended"
   | "moderation.report_resolved"
+  | "support.reply_posted"
   | "quiz.attempt_passed"
   | "quiz.attempt_failed_final"
   | "quiz.assigned"

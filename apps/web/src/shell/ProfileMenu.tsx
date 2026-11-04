@@ -1,21 +1,31 @@
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { ShellProfileAvatar } from "./ShellProfileAvatar";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
+import { flushSync } from "react-dom";
 import { useLocation } from "react-router";
 import type { AvatarImageVariant } from "@veolms/contracts";
 import { isValidPublicProfileUsername } from "@veolms/contracts/username-rules";
 import type { CourseRole } from "../courses/catalogue";
 import { getRoleDisplayName, hasAdminRole } from "./workspaceRole";
 import { useWebContributions } from "../lib/web-contributions";
+import { ProfileHelpScreen } from "./ProfileHelpScreen";
 
 export interface ProfileIdentityData {
   displayName: string;
@@ -147,6 +157,26 @@ interface ProfileMenuProps {
 /** How long the closing slide takes (`profile-menu-slide-shut`). */
 const PROFILE_MENU_SHUT_MS = 260;
 
+/** How long a screen of the menu takes to slide in (Help and feedback). */
+const PROFILE_MENU_SCREEN_MS = 300;
+const PROFILE_MENU_SCREEN_EASING = "cubic-bezier(0.32, 0.72, 0, 1)";
+
+/**
+ * Where a screen of the menu stands: the one shown is in the flow and gives
+ * the menu its height; the other lies over it, off to one side, and slides
+ * across as they swap (the help screen comes in from the right and the
+ * first screen goes out to the left, then back again).
+ *
+ * The transition is on only while they slide: left on, closing the menu
+ * hid its background at once while the screens, taking the menu's hidden
+ * state as a change of their own, kept their text and icons for the
+ * length of the slide.
+ */
+const screenClasses = (shown: boolean, offside: string, sliding: boolean) =>
+  `${sliding ? "transition-[translate,visibility] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none" : ""} ${
+    shown ? "relative" : `invisible absolute inset-x-0 top-0 ${offside}`
+  }`;
+
 /** The settings menu's mark for the page that is open (courses.css). */
 const currentPageItemClasses =
   "aria-[current=page]:text-(--text) aria-[current=page]:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))]! aria-[current=page]:hover:bg-[color-mix(in_srgb,var(--accent)_30%,var(--surface-strong))]!";
@@ -180,12 +210,53 @@ export function ProfileMenu({
   const { pathname } = useLocation();
   const isCurrentPage = (path: string) =>
     pathname === path || pathname.startsWith(`${path}/`);
+  // The menu's second screen (Help and feedback). The menu's height follows
+  // the screen shown, and while they slide the screens are clipped to it.
+  const [screen, setScreen] = useState<"main" | "help">("main");
+  const [sliding, setSliding] = useState(false);
+  const screensRef = useRef<HTMLDivElement>(null);
+  const helpRowRef = useRef<HTMLButtonElement>(null);
+  const helpBackRef = useRef<HTMLButtonElement>(null);
+  const showScreen = (next: "main" | "help") => {
+    const screens = screensRef.current;
+    const fromHeight = screens?.offsetHeight ?? 0;
+    flushSync(() => {
+      setSliding(true);
+      setScreen(next);
+    });
+    const toHeight = screens?.offsetHeight ?? 0;
+    if (
+      screens &&
+      fromHeight !== toHeight &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      screens.animate(
+        [{ height: `${fromHeight}px` }, { height: `${toHeight}px` }],
+        {
+          duration: PROFILE_MENU_SCREEN_MS,
+          easing: PROFILE_MENU_SCREEN_EASING,
+        },
+      );
+    }
+    (next === "help" ? helpBackRef : helpRowRef).current?.focus({
+      preventScroll: true,
+    });
+  };
+  useEffect(() => {
+    if (!sliding) return undefined;
+    const timer = window.setTimeout(
+      () => setSliding(false),
+      PROFILE_MENU_SCREEN_MS + 40,
+    );
+    return () => window.clearTimeout(timer);
+  }, [sliding, screen]);
+
   useEffect(() => {
     if (isOpen || !hasOpened) return undefined;
-    const timer = window.setTimeout(
-      () => setHasOpened(false),
-      PROFILE_MENU_SHUT_MS + 60,
-    );
+    const timer = window.setTimeout(() => {
+      setHasOpened(false);
+      setScreen("main");
+    }, PROFILE_MENU_SHUT_MS + 60);
     return () => window.clearTimeout(timer);
   }, [hasOpened, isOpen]);
   const selectRole = (nextRole: CourseRole) => {
@@ -245,202 +316,263 @@ export function ProfileMenu({
       // been opened must not (see `.profile-menu--animated` in courses.css).
       data-has-opened={hasOpened ? "" : undefined}
     >
-      {identity ? (
-        <ProfileMenuIdentity
-          {...identity}
-          unreadNotificationCount={unreadNotificationCount}
-          onNavigate={onNavigate}
-          onClose={onClose}
-        />
-      ) : null}
-      {canSwitchWorkspace ? (
-        <>
-          <div className="profile-menu__group profile-menu__group--roles">
-            <p className="profile-menu__section">View as</p>
-            <button
-              type="button"
-              className="profile-menu__item profile-menu__item--role"
-              role="menuitemradio"
-              aria-checked={role === "student"}
-              onClick={() => selectRole("student")}
-            >
-              <Student
-                className="profile-menu__role-icon profile-menu__role-icon--student"
-                size={23}
-                weight="duotone"
+      <div
+        ref={screensRef}
+        className={`relative ${sliding ? "overflow-hidden" : ""}`}
+      >
+        <div
+          className={screenClasses(
+            screen === "main",
+            "-translate-x-full",
+            sliding,
+          )}
+          aria-hidden={screen !== "main" ? true : undefined}
+          inert={screen !== "main" ? true : undefined}
+        >
+          {identity ? (
+            <ProfileMenuIdentity
+              {...identity}
+              unreadNotificationCount={unreadNotificationCount}
+              onNavigate={onNavigate}
+              onClose={onClose}
+            />
+          ) : null}
+          {canSwitchWorkspace ? (
+            <>
+              <div className="profile-menu__group profile-menu__group--roles">
+                <p className="profile-menu__section">View as</p>
+                <button
+                  type="button"
+                  className="profile-menu__item profile-menu__item--role"
+                  role="menuitemradio"
+                  aria-checked={role === "student"}
+                  onClick={() => selectRole("student")}
+                >
+                  <Student
+                    className="profile-menu__role-icon profile-menu__role-icon--student"
+                    size={23}
+                    weight="duotone"
+                  />
+                  <span>Student</span>
+                  {role === "student" ? (
+                    <Check
+                      className="profile-menu__check"
+                      size={18}
+                      weight="bold"
+                    />
+                  ) : (
+                    <span className="profile-menu__trail" aria-hidden="true" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="profile-menu__item profile-menu__item--role"
+                  role="menuitemradio"
+                  aria-checked={role === "creator"}
+                  onClick={() => selectRole("creator")}
+                >
+                  <AuthoringRoleIcon
+                    className={`profile-menu__role-icon ${authoringRoleLabel === "Admin" ? "profile-menu__role-icon--admin" : "profile-menu__role-icon--creator"}`}
+                    size={23}
+                    weight="duotone"
+                  />
+                  <span>{authoringRoleLabel}</span>
+                  {role === "creator" ? (
+                    <Check
+                      className="profile-menu__check"
+                      size={18}
+                      weight="bold"
+                    />
+                  ) : (
+                    <span className="profile-menu__trail" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+              <div
+                className="profile-menu__divider"
+                role="separator"
+                aria-orientation="horizontal"
               />
-              <span>Student</span>
-              {role === "student" ? (
-                <Check
-                  className="profile-menu__check"
-                  size={18}
-                  weight="bold"
-                />
-              ) : (
-                <span className="profile-menu__trail" aria-hidden="true" />
-              )}
-            </button>
-            <button
-              type="button"
-              className="profile-menu__item profile-menu__item--role"
-              role="menuitemradio"
-              aria-checked={role === "creator"}
-              onClick={() => selectRole("creator")}
+            </>
+          ) : null}
+
+          {beforeAccountContent}
+
+          <div className="profile-menu__group profile-menu__group--account">
+            <a
+              className={`profile-menu__item profile-menu__item--notifications ${currentPageItemClasses}${isCurrentPage("/notifications") ? " is-active" : ""}`}
+              role="menuitem"
+              href="/notifications"
+              aria-current={
+                isCurrentPage("/notifications") ? "page" : undefined
+              }
+              onClick={(event) => openDestination(event, "/notifications")}
             >
-              <AuthoringRoleIcon
-                className={`profile-menu__role-icon ${authoringRoleLabel === "Admin" ? "profile-menu__role-icon--admin" : "profile-menu__role-icon--creator"}`}
-                size={23}
-                weight="duotone"
+              <Bell
+                className="profile-menu__item-icon profile-menu__item-icon--notifications"
+                size={21}
+                weight={isCurrentPage("/notifications") ? "fill" : "regular"}
               />
-              <span>{authoringRoleLabel}</span>
-              {role === "creator" ? (
-                <Check
-                  className="profile-menu__check"
-                  size={18}
-                  weight="bold"
+              <span>Notifications</span>
+              {unreadNotificationCount > 0 ? (
+                <span
+                  className={
+                    unreadNotificationCount > 9
+                      ? "profile-menu__badge profile-menu__badge--overflow"
+                      : "profile-menu__badge"
+                  }
+                  aria-label={`${unreadNotificationCount} unread notifications`}
+                >
+                  {unreadNotificationCount > 9 ? (
+                    <>
+                      <span className="profile-menu__badge-count">9</span>
+                      <span
+                        className="profile-menu__badge-plus"
+                        aria-hidden="true"
+                      >
+                        +
+                      </span>
+                    </>
+                  ) : (
+                    unreadNotificationCount
+                  )}
+                </span>
+              ) : null}
+            </a>
+            <a
+              className={`profile-menu__item ${currentPageItemClasses}${isCurrentPage("/progress") ? " is-active" : ""}`}
+              role="menuitem"
+              href="/progress"
+              aria-current={isCurrentPage("/progress") ? "page" : undefined}
+              onClick={(event) => openDestination(event, "/progress")}
+            >
+              <ChartLineUp
+                className="profile-menu__item-icon text-[#fb923c]"
+                size={21}
+                weight={isCurrentPage("/progress") ? "fill" : "regular"}
+              />
+              <span>Progress</span>
+            </a>
+            {contributedLinks.map(
+              ({ id: linkId, label, href, icon: LinkIcon }) => (
+                <a
+                  key={linkId}
+                  className="profile-menu__item"
+                  role="menuitem"
+                  href={href}
+                  onClick={(event) => openDestination(event, href)}
+                >
+                  {LinkIcon ? (
+                    <LinkIcon className="profile-menu__item-icon" size={21} />
+                  ) : null}
+                  <span>{label}</span>
+                </a>
+              ),
+            )}
+            {role === "student" ? (
+              <a
+                className={`profile-menu__item profile-menu__item--orders ${currentPageItemClasses}${isCurrentPage("/purchase-history") ? " is-active" : ""}`}
+                role="menuitem"
+                href="/purchase-history"
+                aria-current={
+                  isCurrentPage("/purchase-history") ? "page" : undefined
+                }
+                onClick={(event) => openDestination(event, "/purchase-history")}
+              >
+                <Receipt
+                  className="profile-menu__item-icon profile-menu__item-icon--orders"
+                  size={21}
+                  weight={
+                    isCurrentPage("/purchase-history") ? "fill" : "regular"
+                  }
                 />
-              ) : (
-                <span className="profile-menu__trail" aria-hidden="true" />
-              )}
-            </button>
+                <span>Purchase History</span>
+              </a>
+            ) : null}
           </div>
           <div
             className="profile-menu__divider"
             role="separator"
             aria-orientation="horizontal"
           />
-        </>
-      ) : null}
 
-      {beforeAccountContent}
-
-      <div className="profile-menu__group profile-menu__group--account">
-        <a
-          className={`profile-menu__item profile-menu__item--notifications ${currentPageItemClasses}${isCurrentPage("/notifications") ? " is-active" : ""}`}
-          role="menuitem"
-          href="/notifications"
-          aria-current={isCurrentPage("/notifications") ? "page" : undefined}
-          onClick={(event) => openDestination(event, "/notifications")}
-        >
-          <Bell
-            className="profile-menu__item-icon profile-menu__item-icon--notifications"
-            size={21}
-            weight={isCurrentPage("/notifications") ? "fill" : "regular"}
-          />
-          <span>Notifications</span>
-          {unreadNotificationCount > 0 ? (
-            <span
-              className={
-                unreadNotificationCount > 9
-                  ? "profile-menu__badge profile-menu__badge--overflow"
-                  : "profile-menu__badge"
-              }
-              aria-label={`${unreadNotificationCount} unread notifications`}
-            >
-              {unreadNotificationCount > 9 ? (
-                <>
-                  <span className="profile-menu__badge-count">9</span>
-                  <span className="profile-menu__badge-plus" aria-hidden="true">
-                    +
-                  </span>
-                </>
-              ) : (
-                unreadNotificationCount
-              )}
-            </span>
+          {includeSidebarControl && onToggleSidebar ? (
+            <div className="profile-menu__group profile-menu__group--session">
+              <button
+                type="button"
+                className="profile-menu__item profile-menu__item--sidebar"
+                role="menuitem"
+                onClick={() => {
+                  onToggleSidebar();
+                  onClose();
+                }}
+              >
+                <EyeSlash
+                  className="profile-menu__item-icon profile-menu__item-icon--sidebar"
+                  size={21}
+                />
+                <span>
+                  {sidebarHidden ? "Keep sidebar visible" : "Hide sidebar"}
+                </span>
+              </button>
+            </div>
           ) : null}
-        </a>
-        <a
-          className={`profile-menu__item ${currentPageItemClasses}${isCurrentPage("/progress") ? " is-active" : ""}`}
-          role="menuitem"
-          href="/progress"
-          aria-current={isCurrentPage("/progress") ? "page" : undefined}
-          onClick={(event) => openDestination(event, "/progress")}
-        >
-          <ChartLineUp
-            className="profile-menu__item-icon text-[#fb923c]"
-            size={21}
-            weight={isCurrentPage("/progress") ? "fill" : "regular"}
-          />
-          <span>Progress</span>
-        </a>
-        {contributedLinks.map(({ id: linkId, label, href, icon: LinkIcon }) => (
-          <a
-            key={linkId}
-            className="profile-menu__item"
-            role="menuitem"
-            href={href}
-            onClick={(event) => openDestination(event, href)}
-          >
-            {LinkIcon ? (
-              <LinkIcon className="profile-menu__item-icon" size={21} />
-            ) : null}
-            <span>{label}</span>
-          </a>
-        ))}
-        {role === "student" ? (
-          <a
-            className={`profile-menu__item profile-menu__item--orders ${currentPageItemClasses}${isCurrentPage("/purchase-history") ? " is-active" : ""}`}
-            role="menuitem"
-            href="/purchase-history"
-            aria-current={
-              isCurrentPage("/purchase-history") ? "page" : undefined
-            }
-            onClick={(event) => openDestination(event, "/purchase-history")}
-          >
-            <Receipt
-              className="profile-menu__item-icon profile-menu__item-icon--orders"
-              size={21}
-              weight={isCurrentPage("/purchase-history") ? "fill" : "regular"}
-            />
-            <span>Purchase History</span>
-          </a>
-        ) : null}
-      </div>
-      <div
-        className="profile-menu__divider"
-        role="separator"
-        aria-orientation="horizontal"
-      />
 
-      {includeSidebarControl && onToggleSidebar ? (
-        <div className="profile-menu__group profile-menu__group--session">
-          <button
-            type="button"
-            className="profile-menu__item profile-menu__item--sidebar"
-            role="menuitem"
-            onClick={() => {
-              onToggleSidebar();
-              onClose();
-            }}
-          >
-            <EyeSlash
-              className="profile-menu__item-icon profile-menu__item-icon--sidebar"
-              size={21}
-            />
-            <span>
-              {sidebarHidden ? "Keep sidebar visible" : "Hide sidebar"}
-            </span>
-          </button>
+          <div className="profile-menu__group profile-menu__group--help">
+            <button
+              ref={helpRowRef}
+              type="button"
+              className="profile-menu__item"
+              role="menuitem"
+              aria-haspopup="menu"
+              onClick={() => showScreen("help")}
+            >
+              <Question
+                className="profile-menu__item-icon text-[#63c8d5]"
+                size={21}
+              />
+              <span>Help and feedback</span>
+              <CaretRight
+                className="profile-menu__trail text-(--muted)"
+                size={16}
+                weight="bold"
+              />
+            </button>
+          </div>
+
+          <div className="profile-menu__group profile-menu__group--logout">
+            <button
+              type="button"
+              className="profile-menu__item profile-menu__item--logout"
+              role="menuitem"
+              onClick={() => {
+                onClose();
+                onLogout();
+              }}
+            >
+              <SignOut
+                className="profile-menu__item-icon profile-menu__item-icon--logout"
+                size={21}
+              />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
-      ) : null}
-
-      <div className="profile-menu__group profile-menu__group--logout">
-        <button
-          type="button"
-          className="profile-menu__item profile-menu__item--logout"
-          role="menuitem"
-          onClick={() => {
-            onClose();
-            onLogout();
-          }}
+        <div
+          className={screenClasses(
+            screen === "help",
+            "translate-x-full",
+            sliding,
+          )}
+          aria-hidden={screen !== "help" ? true : undefined}
+          inert={screen !== "help" ? true : undefined}
         >
-          <SignOut
-            className="profile-menu__item-icon profile-menu__item-icon--logout"
-            size={21}
+          <ProfileHelpScreen
+            backRef={helpBackRef}
+            onBack={() => showScreen("main")}
+            onNavigate={openDestination}
           />
-          <span>Logout</span>
-        </button>
+        </div>
       </div>
     </div>
   );

@@ -152,10 +152,6 @@ export function discussionUploadStorageKey(fileName: string): string {
   return `${OBJECT_PREFIX}/${fileName}`;
 }
 
-function diskPath(fileName: string): string {
-  return join(UPLOAD_DIRECTORY, fileName);
-}
-
 function mimeFromFileName(
   fileName: string,
   fallback = "application/octet-stream",
@@ -169,27 +165,41 @@ function shouldUseObjectStorage(): boolean {
   );
 }
 
+export interface UploadStoreLocation {
+  /** Object storage folder, under `protected/` so files need a signed URL. */
+  objectPrefix: string;
+  /** Local folder used when object storage is not configured. */
+  diskDirectory: string;
+}
+
+/**
+ * The discussion store by default. Support keeps its files in a folder of
+ * its own with the same rules (names, types, streaming, clean-up).
+ */
 export function createDiscussionUploadStore(
   objectStorage: S3StorageService,
+  location: UploadStoreLocation = {
+    objectPrefix: OBJECT_PREFIX,
+    diskDirectory: UPLOAD_DIRECTORY,
+  },
 ): DiscussionUploadStore {
   const s3 = shouldUseObjectStorage() ? objectStorage : null;
+  const storageKey = (fileName: string) =>
+    `${location.objectPrefix}/${fileName}`;
+  const diskPath = (fileName: string) => join(location.diskDirectory, fileName);
 
   async function writeDiskFile(
     fileName: string,
     mimeType: string,
     writer: (filePath: string) => Promise<void>,
   ): Promise<StoredDiscussionUpload> {
-    await mkdir(UPLOAD_DIRECTORY, { recursive: true });
+    await mkdir(location.diskDirectory, { recursive: true });
     const filePath = diskPath(fileName);
     try {
       await writer(filePath);
       const fileStats = await stat(filePath);
       if (s3) {
-        await s3.uploadFile(
-          discussionUploadStorageKey(fileName),
-          filePath,
-          mimeType,
-        );
+        await s3.uploadFile(storageKey(fileName), filePath, mimeType);
       }
       return { fileName, mimeType, size: fileStats.size };
     } catch (error) {
@@ -215,7 +225,7 @@ export function createDiscussionUploadStore(
       }
 
       if (s3) {
-        const key = discussionUploadStorageKey(fileName);
+        const key = storageKey(fileName);
         try {
           const { bytes } = await s3.putObjectStream(key, stream, mimeType);
           return { fileName, mimeType, size: bytes };
@@ -238,7 +248,7 @@ export function createDiscussionUploadStore(
       if (!isSafeDiscussionUploadFileName(fileName)) return null;
 
       if (s3) {
-        const object = await s3.getObject(discussionUploadStorageKey(fileName));
+        const object = await s3.getObject(storageKey(fileName));
         if (object) {
           return {
             stream: object.body,
@@ -266,9 +276,7 @@ export function createDiscussionUploadStore(
       if (!isSafeDiscussionUploadFileName(fileName)) return;
       await unlink(diskPath(fileName)).catch(() => undefined);
       if (s3) {
-        await s3
-          .deleteObject(discussionUploadStorageKey(fileName))
-          .catch(() => undefined);
+        await s3.deleteObject(storageKey(fileName)).catch(() => undefined);
       }
     },
 
@@ -280,7 +288,7 @@ export function createDiscussionUploadStore(
         const code = (error as { code?: unknown } | null)?.code;
         if (code !== "ENOENT") throw error;
       });
-      if (s3) await s3.deleteObject(discussionUploadStorageKey(fileName));
+      if (s3) await s3.deleteObject(storageKey(fileName));
     },
   };
 }

@@ -18,6 +18,7 @@ export * from "./home-page.schema.ts";
 export * from "./quotes.schema.ts";
 export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
+export * from "./support.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
@@ -140,6 +141,11 @@ import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
+import type {
+  SupportAttachmentTable,
+  SupportMessageTable,
+  SupportTicketTable,
+} from "./support.schema.ts";
 
 export interface Database {
   // Auth & Roles
@@ -249,6 +255,11 @@ export interface Database {
   platform_settings: PlatformSettingsTable;
   quotes: QuoteTable;
   wishlist_items: WishlistItemTable;
+
+  // Support
+  support_tickets: SupportTicketTable;
+  support_messages: SupportMessageTable;
+  support_attachments: SupportAttachmentTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;

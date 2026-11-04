@@ -147,6 +147,15 @@ export const moderationReportResolvedEventSchema = z.strictObject({
   actionTaken: z.string().max(500).optional().nullable(),
 });
 
+/** Support staff answered a learner's report or feedback. */
+export const supportReplyPostedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  ticketId: z.uuid(),
+  ticketNumber: z.number().int(),
+  ticketKind: z.enum(["problem", "feedback"]),
+  replySnippet: z.string().max(300),
+});
+
 export const quizAttemptPassedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   courseId: z.uuid(),

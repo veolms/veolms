@@ -232,13 +232,23 @@ export function AccountForm({
 
           <p className="auth-account-form__legal">
             By creating an account, you agree to our{" "}
-            <button className="auth-account-form__legal-action" type="button">
+            <a
+              className="auth-account-form__legal-action"
+              href="/terms"
+              target="_blank"
+              rel="noopener"
+            >
               Terms of Service
-            </button>{" "}
+            </a>{" "}
             and{" "}
-            <button className="auth-account-form__legal-action" type="button">
+            <a
+              className="auth-account-form__legal-action"
+              href="/privacy"
+              target="_blank"
+              rel="noopener"
+            >
               Privacy Policy
-            </button>
+            </a>
             .
           </p>
         </form>
