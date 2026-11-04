@@ -62,7 +62,12 @@
     align-self: flex-start;
     width: var(--split-frame-target-width, 0px);
     height: calc(100dvh - 24px);
-    margin-left: min(16px, var(--split-frame-target-width, 0px));
+    /* The list's tabs, filters and selected row reach out over the page's
+       side gutter; the card starts 12px past where they end. */
+    margin-left: min(
+      calc(var(--application-page-inline-gutter, 0px) + 12px),
+      var(--split-frame-target-width, 0px)
+    );
     overflow: hidden;
     border-radius: 18px;
     background: color-mix(in srgb, var(--surface) 91%, var(--canvas));
