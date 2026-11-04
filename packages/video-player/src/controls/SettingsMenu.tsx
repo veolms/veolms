@@ -53,12 +53,16 @@ const THEME_GRID_COLUMNS = 3;
 const DefaultThemeIcon = createThemedIcon(Palette, "regular", "fill");
 /** From this height up a quality is marked HD, as YouTube marks it. */
 const HD_MIN_HEIGHT = 1080;
+/** And from this height up, 4K. */
+const UHD_MIN_HEIGHT = 2160;
 
-const isHdQuality = (quality: VideoQuality | undefined) => {
-  if (!quality) return false;
+/** The mark a quality carries: "4K", "HD" or none. */
+const qualityMark = (quality: VideoQuality | undefined) => {
+  if (!quality) return null;
   const height =
     quality.height ?? Number(/(\d+)p/u.exec(quality.label)?.[1] ?? 0);
-  return height >= HD_MIN_HEIGHT;
+  if (height >= UHD_MIN_HEIGHT) return "4K";
+  return height >= HD_MIN_HEIGHT ? "HD" : null;
 };
 
 const baseCaptionName = (track: VideoTextTrack) =>
@@ -92,21 +96,20 @@ const captionTrackName = (
   return stillShared && track.language ? `${name} · ${track.language}` : name;
 };
 
-/** The raised "HD" after a quality's name, in the theme's colour. */
-function HdMark() {
-  return (
-    <sup className="ml-0.5 text-[0.5625rem] font-bold leading-none text-(--video-player-accent)">
-      HD
-    </sup>
-  );
-}
-
-/** A quality's name, marked HD when it is. */
+/** A quality's name, its "HD" or "4K" raised at its top right corner. */
 function QualityName({ quality }: { quality: VideoQuality }) {
+  const mark = qualityMark(quality);
   return (
     <>
       {quality.label}
-      {isHdQuality(quality) ? <HdMark /> : null}
+      {mark ? (
+        <sup
+          data-settings-hd=""
+          className="ml-0.5 text-[0.5625rem] font-bold leading-none text-(--video-player-accent)"
+        >
+          {mark}
+        </sup>
+      ) : null}
     </>
   );
 }
@@ -214,7 +217,7 @@ export function SettingsMenu({
   );
   // The picture now playing is HD, picked or chosen by Auto: the gear says
   // so, as YouTube's does.
-  const playingHd = isHdQuality(activeQuality);
+  const playingMark = qualityMark(activeQuality);
   const audioLabel =
     media.audioTracks.find((item) => item.id === media.selectedAudioTrackId)
       ?.label ??
@@ -656,7 +659,11 @@ export function SettingsMenu({
             checkIcon={checkIcon}
             menu={menu}
             label="Auto"
-            hint={activeQuality?.label}
+            hint={
+              activeQuality ? (
+                <QualityName quality={activeQuality} />
+              ) : undefined
+            }
             selected={media.autoQuality}
             onSelect={() => pickQuality(null)}
           />
@@ -665,19 +672,11 @@ export function SettingsMenu({
               key={quality.id}
               checkIcon={checkIcon}
               menu={menu}
-              label={quality.label}
+              label={<QualityName quality={quality} />}
               hint={
-                isHdQuality(quality) ? (
-                  <span
-                    data-settings-hd=""
-                    className="rounded-[4px] bg-(--video-player-accent) px-1.5 py-0.5 text-[0.625rem] font-bold text-(--video-player-accent-contrast)"
-                  >
-                    HD
-                  </span>
-                ) : quality.id === lowestQualityId &&
-                  qualityOptions.length > 1 ? (
-                  "Data saver"
-                ) : undefined
+                quality.id === lowestQualityId && qualityOptions.length > 1
+                  ? "Data saver"
+                  : undefined
               }
               selected={isQualitySelected(quality)}
               onSelect={() => pickQuality(quality)}
@@ -795,12 +794,12 @@ export function SettingsMenu({
             }}
             active={settingsOpen}
           />
-          {playingHd ? (
+          {playingMark ? (
             <span
               className="pointer-events-none absolute -top-0.5 -right-1 rounded-[2px] bg-(--video-player-accent) px-[2px] text-[7px] font-bold leading-[9px] text-(--video-player-accent-contrast)"
               aria-hidden="true"
             >
-              HD
+              {playingMark}
             </span>
           ) : null}
         </span>

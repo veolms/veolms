@@ -617,7 +617,7 @@ export function PopoverMenu({
         // below so they fade out instead of being cut off in a line.
         <div
           data-video-player-mobile-sheet-drag-handle=""
-          className="relative z-10 -mb-16 flex h-16 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-2 bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] px-5 pb-3 pt-2 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-5 after:bg-linear-to-b after:from-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] after:to-transparent after:content-[''] active:cursor-grabbing"
+          className="relative z-10 -mb-11 flex h-11 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-1 bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] px-5 pb-1.5 pt-1 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-5 after:bg-linear-to-b after:from-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] after:to-transparent after:content-[''] active:cursor-grabbing"
           onPointerDown={handleMobileSheetDragStart}
           onPointerMove={handleMobileSheetDragMove}
           onPointerUp={finishMobileSheetDrag}
@@ -640,7 +640,7 @@ export function PopoverMenu({
         <div
           role="menu"
           aria-label={resolvedMenuLabel}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pt-18 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pt-[3.25rem] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
         >
           {typeof children === "function"
             ? children({ close: closeMenu, sheet: isMobileSheet })

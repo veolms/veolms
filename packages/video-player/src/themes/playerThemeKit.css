@@ -711,22 +711,64 @@
 }
 
 /* ================================================================
- * Cone: a solid deck, orange keys, values called out in the accent.
+ * VLC player (id cone), after a community redesign of VLC: boxed dark
+ * keys, small corners, an orange play key, a lime wedge for the volume.
  * ================================================================ */
 
 [data-player-theme="cone"] [data-player-control-cluster="mobile-play"] {
-  border-radius: 1rem !important;
+  border-radius: 12px !important;
 }
 
 /* The switched-on row lights up. */
 [data-player-theme="cone"][data-video-player-menu-panel]
   [data-settings-checked][data-settings-row] {
-  background: rgb(255 255 255 / 0.05);
+  background: rgb(255 255 255 / 0.04);
 }
 
+/* Words on the keys in the design's weight: medium, light grey. */
 [data-player-theme="cone"] [data-player-control-hit-area="course-lessons"],
 [data-player-theme="cone"] [data-player-control-cluster="time"] button {
-  font-weight: 700;
+  font-weight: 500;
+}
+
+/* VLC's volume: a wedge that fills in lime, no knob drawn (the whole wedge
+   still takes the drag). */
+[data-player-theme="cone"]
+  .player-volume-slider::-webkit-slider-runnable-track {
+  height: 0.625rem;
+  clip-path: polygon(0 100%, 100% 0, 100% 100%);
+  background: linear-gradient(
+    to right,
+    #8cc63f var(--video-player-volume, 100%),
+    #2a2a2a var(--video-player-volume, 100%)
+  );
+}
+
+[data-player-theme="cone"] .player-volume-slider::-moz-range-track {
+  height: 0.625rem;
+  clip-path: polygon(0 100%, 100% 0, 100% 100%);
+  background: linear-gradient(
+    to right,
+    #8cc63f var(--video-player-volume, 100%),
+    #2a2a2a var(--video-player-volume, 100%)
+  );
+}
+
+[data-player-theme="cone"] .player-volume-slider::-webkit-slider-thumb {
+  width: 0.25rem;
+  height: 0.625rem;
+  margin-top: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-player-theme="cone"] .player-volume-slider::-moz-range-thumb {
+  width: 0.25rem;
+  height: 0.625rem;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* ================================================================
@@ -971,24 +1013,44 @@
   )[data-video-player-menu-panel][data-video-player-mobile-sheet] {
   border-top-color: transparent !important;
   background: var(--video-player-menu-surface) !important;
-  backdrop-filter: var(--video-player-menu-backdrop);
-  -webkit-backdrop-filter: var(--video-player-menu-backdrop);
+  /* Its glass is a layer behind its content, not the sheet's own
+     backdrop-filter: that made the sheet the backdrop of everything in it,
+     and its frosted header (below) could not blur the rows scrolling under
+     it; they showed through sharp. */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   box-shadow:
     inset 0 1px 3px rgb(255 255 255 / 0.18),
     inset 0 0 28px rgb(255 255 255 / 0.05),
     0 -14px 36px rgb(0 0 0 / 0.32) !important;
 }
 
-/* Its grip strip, which the content scrolls under, stays clear glass: the
-   strip's own blur, no darker band or fade below it. */
+[data-player-theme="frost"]:not(
+    [data-player-theme="youtube"]
+  )[data-video-player-menu-panel][data-video-player-mobile-sheet]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  backdrop-filter: var(--video-player-menu-backdrop);
+  -webkit-backdrop-filter: var(--video-player-menu-backdrop);
+}
+
+/* Its grip strip, which the content scrolls under, is frosted glass of its
+   own: clear, rows passing under it showed through as they were (the
+   user's call). A faint tint and a strong blur, fading out below. */
 [data-player-theme="frost"][data-video-player-mobile-sheet]
   > [data-video-player-mobile-sheet-drag-handle] {
-  background-color: transparent !important;
+  background-color: rgb(14 20 32 / 0.42) !important;
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
 }
 
 [data-player-theme="frost"][data-video-player-mobile-sheet]
   > [data-video-player-mobile-sheet-drag-handle]::after {
-  display: none;
+  background-image: linear-gradient(rgb(14 20 32 / 0.3), transparent);
 }
 
 [data-player-theme="frost"] [data-timeline-thumb] {
