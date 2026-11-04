@@ -776,7 +776,7 @@ function DiscussionWorkspaceIdentity({
   return (
     <div className="discussion-thread__author discussion-thread__selectable-text">
       <span className="discussion-thread__author-name">
-        {thread.isOwn ? "You" : thread.author}
+        {thread.isOwn ? "You" : <HighlightedText text={thread.author} />}
       </span>
       {thread.authorUsername && (
         <>
@@ -787,7 +787,8 @@ function DiscussionWorkspaceIdentity({
             ·
           </span>
           <span className="discussion-thread__author-username">
-            @{thread.authorUsername.replace(/^@+/, "")}
+            @
+            <HighlightedText text={thread.authorUsername.replace(/^@+/, "")} />
           </span>
         </>
       )}

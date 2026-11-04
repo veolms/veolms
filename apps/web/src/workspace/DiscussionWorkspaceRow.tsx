@@ -27,6 +27,7 @@ import {
 import { renderContentWithMentions } from "../learning/discussion-editor/MentionLink";
 import { requestDiscussionReplyFocus } from "./discussionReplyFocus";
 import { cn } from "../lib/utils";
+import { HighlightedText } from "../lib/searchHighlight";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 // Drawn with the row, not loaded after it: a post first shown as plain
 // text and then redrawn as Markdown jumps in front of the learner.
@@ -229,7 +230,10 @@ export function DiscussionWorkspaceRow({
                 card.isOwn ? "you" : card.author
               }`}
             >
-              {card.isOwn ? `${card.author || "You"} (You)` : card.author}
+              <HighlightedText
+                text={card.isOwn ? card.author || "You" : card.author}
+              />
+              {card.isOwn ? " (You)" : null}
             </button>
             <span
               className="text-[0.8125rem] text-(--muted)"
@@ -250,7 +254,7 @@ export function DiscussionWorkspaceRow({
           </div>
           {username && (
             <span className="truncate text-[0.8125rem] text-(--muted)">
-              @{username}
+              @<HighlightedText text={username} />
             </span>
           )}
         </div>
