@@ -33,14 +33,10 @@ function withOrigin(path: string): string {
   return `${path}&${params.toString()}`;
 }
 
+// Three groups: help from the team, the policies, then the company (as the
+// legal pages group them). Each row has a colour of its own.
 const HELP_GROUPS: readonly (readonly HelpLink[])[] = [
   [
-    {
-      title: "Contact us",
-      href: "/contact",
-      icon: EnvelopeSimple,
-      iconClassName: "text-[#5da9ff]",
-    },
     {
       title: "Report a problem",
       href: "/support/new?type=problem",
@@ -87,6 +83,12 @@ const HELP_GROUPS: readonly (readonly HelpLink[])[] = [
       icon: Info,
       iconClassName: "text-[#63c8d5]",
     },
+    {
+      title: "Contact us",
+      href: "/contact",
+      icon: EnvelopeSimple,
+      iconClassName: "text-[#5da9ff]",
+    },
   ],
 ];
 
@@ -118,7 +120,7 @@ export function ProfileHelpScreen({
         >
           <ArrowLeft size={19} weight="bold" />
         </button>
-        <p className="m-0 text-[0.92rem] font-semibold text-(--text)">
+        <p className="m-0 min-w-0 flex-1 truncate text-[0.92rem] font-semibold text-(--text)">
           Help and feedback
         </p>
       </div>
@@ -148,7 +150,7 @@ export function ProfileHelpScreen({
                   className={`profile-menu__item-icon ${iconClassName}`}
                   size={21}
                 />
-                <span>{title}</span>
+                <span className="truncate">{title}</span>
               </a>
             ))}
           </div>

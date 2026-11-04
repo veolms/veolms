@@ -1,5 +1,6 @@
 import { BookOpenTextIcon as BookOpenText } from "@phosphor-icons/react/BookOpenText";
 import { BugIcon as Bug } from "@phosphor-icons/react/Bug";
+import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/CreditCard";
 import { DotsThreeCircleIcon as DotsThreeCircle } from "@phosphor-icons/react/DotsThreeCircle";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
@@ -72,6 +73,14 @@ export const SUPPORT_CATEGORIES: Record<
     color: "#a7b0c5",
     placeholder: "Tell us what's wrong and we'll look into it.",
   },
+  post: {
+    label: "A post or comment",
+    short: "Post",
+    icon: ChatCircleDots,
+    color: "#f87171",
+    placeholder:
+      "Why should the team look at this post? Spam, abuse, wrong information…",
+  },
   idea: {
     label: "Idea or suggestion",
     short: "Idea",
@@ -109,6 +118,7 @@ export const PROBLEM_CATEGORY_ORDER = [
   "account",
   "bug",
   "other",
+  "post",
 ] as const satisfies readonly SupportTicketCategory[];
 
 export const FEEDBACK_CATEGORY_ORDER = [

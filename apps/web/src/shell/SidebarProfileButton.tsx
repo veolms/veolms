@@ -53,6 +53,16 @@ export function SidebarProfileButton({
   authIdentityHint,
   onNavigatePage,
 }: SidebarProfileButtonProps) {
+  // A guest's button (and the one shown before the session is known)
+  // opens the menu instead of the login pop-up.
+  const toggleGuestMenu = () => {
+    if (!profileMenuSurfaceMounted) {
+      setProfileMenuSurfaceMounted(true);
+      setPendingProfileMenuOpen(true);
+      return;
+    }
+    setProfileMenu((current) => !current);
+  };
   // prettier-ignore
   return (
     <>
@@ -131,13 +141,19 @@ export function SidebarProfileButton({
         <EarlyProfileButtons
           className={SIDEBAR_PROFILE_BUTTON_CLASS}
           arrowSize={16}
-          onLogin={() => onNavigatePage("/login")}
+          opensMenu
+          menuExpanded={profileMenu}
+          onLogin={toggleGuestMenu}
         />
       ) : (
+        // A guest's button opens a small menu: Log in or sign up first,
+        // then Help and feedback, which a guest has no other way to reach.
         <LoginProfileButton
           className={SIDEBAR_PROFILE_BUTTON_CLASS}
           arrowSize={16}
-          onLogin={() => onNavigatePage("/login")}
+          opensMenu
+          menuExpanded={profileMenu}
+          onLogin={toggleGuestMenu}
         />
       )}
     </>

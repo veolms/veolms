@@ -9,6 +9,7 @@ export type SupportTicketCategory =
   | "account"
   | "bug"
   | "other"
+  | "post"
   | "idea"
   | "like"
   | "confusing"

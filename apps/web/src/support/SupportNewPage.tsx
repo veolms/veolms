@@ -59,8 +59,14 @@ export function SupportNewPage() {
   const create = useCreateSupportTicket();
   const draft = useSupportDraft();
 
+  // Reported from a comment, reply or question: the post is what the
+  // report is about, so its category is set and its link always goes.
+  const reportingPost =
+    kind === "problem" && params.get("category") === "post" && Boolean(origin);
   const [problemCategory, setProblemCategory] =
-    useState<SupportTicketCategory | null>(null);
+    useState<SupportTicketCategory | null>(() =>
+      reportingPost ? "post" : null,
+    );
   const [feedbackCategory, setFeedbackCategory] =
     useState<SupportTicketCategory>("idea");
   const [rating, setRating] = useState<number | null>(null);
@@ -129,7 +135,10 @@ export function SupportNewPage() {
             : origin && linkPage
               ? origin.courseId
               : null,
-        technical: kind === "problem" && includeTechnical ? technical : null,
+        technical:
+          kind === "problem" && includeTechnical && !reportingPost
+            ? technical
+            : null,
         contactAllowed: kind === "feedback" ? contactAllowed : true,
         attachmentIds: draft.attachmentIds,
       },
@@ -179,33 +188,37 @@ export function SupportNewPage() {
         className="flex flex-col gap-7"
       >
         {isProblem ? (
-          <fieldset className="m-0 border-0 p-0">
-            <legend className={supportFieldLabelClasses}>
-              What&apos;s the problem about?
-            </legend>
-            <div
-              role="radiogroup"
-              aria-label="What's the problem about?"
-              className="grid grid-cols-2 gap-2.5 sm:grid-cols-3"
-            >
-              {PROBLEM_CATEGORY_ORDER.map((value) => (
-                <CategoryTile
-                  key={value}
-                  category={value}
-                  selected={problemCategory === value}
-                  onSelect={() => setProblemCategory(value)}
-                />
-              ))}
-            </div>
-            {triedSubmit && missingCategory ? (
-              <p
-                role="alert"
-                className="mt-2 mb-0 text-xs font-medium text-rose-500"
+          reportingPost ? null : (
+            <fieldset className="m-0 border-0 p-0">
+              <legend className={supportFieldLabelClasses}>
+                What&apos;s the problem about?
+              </legend>
+              <div
+                role="radiogroup"
+                aria-label="What's the problem about?"
+                className="grid grid-cols-2 gap-2.5 sm:grid-cols-3"
               >
-                Choose what the problem is about.
-              </p>
-            ) : null}
-          </fieldset>
+                {PROBLEM_CATEGORY_ORDER.filter((value) => value !== "post").map(
+                  (value) => (
+                    <CategoryTile
+                      key={value}
+                      category={value}
+                      selected={problemCategory === value}
+                      onSelect={() => setProblemCategory(value)}
+                    />
+                  ),
+                )}
+              </div>
+              {triedSubmit && missingCategory ? (
+                <p
+                  role="alert"
+                  className="mt-2 mb-0 text-xs font-medium text-rose-500"
+                >
+                  Choose what the problem is about.
+                </p>
+              ) : null}
+            </fieldset>
+          )
         ) : (
           <>
             <fieldset className="m-0 border-0 p-0">
@@ -305,7 +318,11 @@ export function SupportNewPage() {
         {origin ? (
           <div>
             <span className={supportFieldLabelClasses}>
-              {isProblem ? "Where did it happen?" : "Which page is it about?"}
+              {reportingPost
+                ? "The post you're reporting"
+                : isProblem
+                  ? "Where did it happen?"
+                  : "Which page is it about?"}
             </span>
             <div
               className={`flex items-center gap-3 rounded-xl px-3.5 py-3 ring-1 ring-[color-mix(in_srgb,var(--text)_8%,transparent)] ring-inset ${linkPage ? "bg-(--surface-strong)" : "bg-transparent"}`}
@@ -327,70 +344,85 @@ export function SupportNewPage() {
                   {origin.label}
                 </div>
                 <div className="mt-0.5 text-xs text-(--muted)">
-                  {linkPage
-                    ? "Added from the page you were on"
-                    : "Not sent with your message"}
+                  {reportingPost
+                    ? "A link to it goes with your report"
+                    : linkPage
+                      ? "Added from the page you were on"
+                      : "Not sent with your message"}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setLinkPage((value) => !value)}
-                className="h-9 shrink-0 rounded-lg px-3 text-[0.8rem] font-semibold text-(--accent) hover:bg-(--hover)"
-              >
-                {linkPage ? "Remove" : "Add back"}
-              </button>
+              {reportingPost ? (
+                <a
+                  href={origin.path}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-9 shrink-0 content-center rounded-lg px-3 text-[0.8rem] font-semibold text-(--accent) hover:bg-(--hover)"
+                >
+                  View
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setLinkPage((value) => !value)}
+                  className="h-9 shrink-0 rounded-lg px-3 text-[0.8rem] font-semibold text-(--accent) hover:bg-(--hover)"
+                >
+                  {linkPage ? "Remove" : "Add back"}
+                </button>
+              )}
             </div>
           </div>
         ) : null}
 
         {isProblem ? (
-          <div className="rounded-xl bg-(--surface-strong) px-3.5 py-3">
-            <div className="flex items-center gap-3.5">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-(--text)">
-                  Include technical details
+          reportingPost ? null : (
+            <div className="rounded-xl bg-(--surface-strong) px-3.5 py-3">
+              <div className="flex items-center gap-3.5">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-(--text)">
+                    Include technical details
+                  </div>
+                  <div className="mt-0.5 text-xs text-(--muted)">
+                    Your browser, system and screen size.{" "}
+                    <button
+                      type="button"
+                      onClick={() => setShowTechnical((value) => !value)}
+                      aria-expanded={showTechnical}
+                      className="font-semibold text-(--accent) hover:underline"
+                    >
+                      {showTechnical ? "Hide" : "See what's sent"}
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-0.5 text-xs text-(--muted)">
-                  Your browser, system and screen size.{" "}
-                  <button
-                    type="button"
-                    onClick={() => setShowTechnical((value) => !value)}
-                    aria-expanded={showTechnical}
-                    className="font-semibold text-(--accent) hover:underline"
-                  >
-                    {showTechnical ? "Hide" : "See what's sent"}
-                  </button>
-                </div>
+                <Switch
+                  checked={includeTechnical}
+                  onChange={setIncludeTechnical}
+                  label="Include technical details"
+                />
               </div>
-              <Switch
-                checked={includeTechnical}
-                onChange={setIncludeTechnical}
-                label="Include technical details"
-              />
+              {showTechnical ? (
+                <dl className="mt-3 mb-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3 text-xs">
+                  {(
+                    [
+                      ["Browser", technical.browser],
+                      ["System", technical.os],
+                      ["Screen", technical.screen],
+                      ["Page", origin?.path],
+                      ["User agent", technical.userAgent],
+                    ] as const
+                  ).map(([term, value]) =>
+                    value ? (
+                      <div key={term} className="contents">
+                        <dt className="text-(--muted)">{term}</dt>
+                        <dd className="m-0 truncate text-(--text-secondary)">
+                          {value}
+                        </dd>
+                      </div>
+                    ) : null,
+                  )}
+                </dl>
+              ) : null}
             </div>
-            {showTechnical ? (
-              <dl className="mt-3 mb-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3 text-xs">
-                {(
-                  [
-                    ["Browser", technical.browser],
-                    ["System", technical.os],
-                    ["Screen", technical.screen],
-                    ["Page", origin?.path],
-                    ["User agent", technical.userAgent],
-                  ] as const
-                ).map(([term, value]) =>
-                  value ? (
-                    <div key={term} className="contents">
-                      <dt className="text-(--muted)">{term}</dt>
-                      <dd className="m-0 truncate text-(--text-secondary)">
-                        {value}
-                      </dd>
-                    </div>
-                  ) : null,
-                )}
-              </dl>
-            ) : null}
-          </div>
+          )
         ) : (
           <Checkbox
             checked={contactAllowed}

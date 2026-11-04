@@ -16,6 +16,8 @@ export const supportProblemCategories = [
   "account",
   "bug",
   "other",
+  // A comment, reply or question someone reported from Discussions.
+  "post",
 ] as const;
 export const supportFeedbackCategories = [
   "idea",

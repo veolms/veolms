@@ -19,6 +19,7 @@ import {
 } from "../services/accountSessionCopies";
 import {
   useInRouterContext,
+  useNavigate,
   useRouteLoaderData,
   useSearchParams,
 } from "react-router";
@@ -118,7 +119,6 @@ import { useCapabilities } from "../services/authorization";
 import {
   useCreateLessonThread,
   useCreateNote,
-  useCreateReport,
   useDeleteNote,
   useDeleteThread,
   useLessonInteractionCounts,
@@ -163,11 +163,7 @@ import {
   type LearningNoteCacheItem,
   type LearningThreadEntity,
 } from "../services/learning-interactions/interaction-entities";
-import {
-  DiscussionReportDialog,
-  type ReportTarget,
-  type ReportSubmissionPayload,
-} from "./DiscussionReportDialog";
+import { discussionCommentPath, reportPostPath } from "./discussionLinks";
 import { adaptLearningNoteToComment } from "./learning-notes.adapter";
 import {
   adaptLearningThreadToComment,
@@ -184,6 +180,8 @@ interface DiscussionInnerProps extends DiscussionProps {
   setSearchParams: SetURLSearchParams;
   /** What the document was built with, when it is a lesson page. */
   builtLessonPage?: LessonPageSeed;
+  /** Opens another page of the app (the report form). */
+  navigate: (path: string) => void;
 }
 
 function DiscussionInner({
@@ -212,6 +210,7 @@ function DiscussionInner({
   searchParams,
   setSearchParams,
   builtLessonPage,
+  navigate,
 }: DiscussionInnerProps) {
   const capabilities = interactionCapabilities ?? DEFAULT_CAPABILITIES;
   const hasNoteDeepLink = Boolean(noteDeepLinkId);
@@ -521,7 +520,6 @@ function DiscussionInner({
   );
   const updateThreadMutation = useUpdateThread();
   const deleteThreadMutation = useDeleteThread(courseId, lessonId);
-  const createReportMutation = useCreateReport();
 
   // Who may lock any thread here and accept any answer, as the API decides
   // it: the course's creator, or a role that moderates every course.
@@ -1116,10 +1114,6 @@ function DiscussionInner({
   const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(
     null,
   );
-  const [reportingTarget, setReportingTarget] = useState<ReportTarget | null>(
-    null,
-  );
-  const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [creationToast, setCreationToast] = useState<ToastMessage | null>(null);
   const activeDraft = editingEntry?.draft ?? draft;
@@ -2509,6 +2503,8 @@ function DiscussionInner({
     }
   };
 
+  // "Report" opens the Report a problem form about this post, with a link
+  // to it, so the report reaches the team's Support page.
   const handleOpenReport = (
     target:
       | {
@@ -2516,70 +2512,37 @@ function DiscussionInner({
           targetId: string | number;
           authorName?: string;
           serverId?: string;
+          parentThreadId?: string | number;
         }
       | (string | number),
   ) => {
-    if (typeof target === "object") {
-      const targetId =
-        target.targetType === "thread"
-          ? getServerEntityId(
-              combinedEntries.find(
-                (entry) => getClientEntityId(entry) === String(target.targetId),
-              ) ?? { id: target.targetId },
-            )
-          : target.serverId;
-      if (!targetId || isClientEntityId(targetId)) return;
-      setReportingTarget({
-        targetType: target.targetType,
-        targetId,
-        authorName: target.authorName,
-      });
-    } else {
+    const serverThreadId = (clientId: string | number) => {
       const entry = combinedEntries.find(
-        (candidate) => getClientEntityId(candidate) === String(target),
+        (candidate) => getClientEntityId(candidate) === String(clientId),
       );
-      const targetId = entry ? getServerEntityId(entry) : String(target);
-      if (!targetId || targetId.startsWith("client-thread-")) return;
-      setReportingTarget({
-        targetType: "thread",
-        targetId,
-      });
-    }
-    setReportDialogOpen(true);
-  };
-
-  const handleCloseReport = () => {
-    if (!createReportMutation.isPending) {
-      setReportDialogOpen(false);
-      setReportingTarget(null);
-    }
-  };
-
-  const handleSubmitReport = async (
-    payload: ReportSubmissionPayload,
-  ): Promise<boolean> => {
-    if (isBackendMode) {
-      try {
-        await createReportMutation.mutateAsync({
-          targetType: payload.targetType,
-          targetId: payload.targetId,
-          courseId: courseId || undefined,
-          reason: payload.reason,
-          details: payload.details,
-        });
-        setReportDialogOpen(false);
-        setReportingTarget(null);
-        setNotice("Report received. Our moderation team will review it.");
-        return true;
-      } catch (err: any) {
-        throw err;
-      }
-    } else {
-      setReportDialogOpen(false);
-      setReportingTarget(null);
-      setNotice("Report received. Our moderation team will review it.");
-      return true;
-    }
+      return entry ? getServerEntityId(entry) : String(clientId);
+    };
+    const isReply = typeof target === "object" && target.targetType === "reply";
+    const threadId =
+      typeof target !== "object"
+        ? serverThreadId(target)
+        : isReply
+          ? target.parentThreadId !== undefined
+            ? serverThreadId(target.parentThreadId)
+            : null
+          : serverThreadId(target.targetId);
+    const postId =
+      isReply && typeof target === "object" ? target.serverId : threadId;
+    if (!courseId || !threadId || !postId || isClientEntityId(threadId)) return;
+    if (isClientEntityId(postId)) return;
+    navigate(
+      reportPostPath({
+        postPath: discussionCommentPath({ courseId, lessonId, threadId }),
+        kind: isReply ? "reply" : "comment",
+        authorName: typeof target === "object" ? target.authorName : null,
+        courseId,
+      }),
+    );
   };
 
   return (
@@ -2849,14 +2812,6 @@ function DiscussionInner({
             />
           </Suspense>
         ) : null}
-        <DiscussionReportDialog
-          open={reportDialogOpen}
-          target={reportingTarget}
-          courseId={courseId}
-          onClose={handleCloseReport}
-          onSubmit={handleSubmitReport}
-          isSubmitting={Boolean(createReportMutation?.isPending)}
-        />
       </section>
     </TimeAgoBuiltAt>
   );
@@ -2864,6 +2819,7 @@ function DiscussionInner({
 
 function DiscussionRouterBridge(props: DiscussionProps) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const pageData = useRouteLoaderData("root") as
     AcademyStaticPageData | null | undefined;
   return (
@@ -2872,6 +2828,7 @@ function DiscussionRouterBridge(props: DiscussionProps) {
       searchParams={searchParams}
       setSearchParams={setSearchParams}
       builtLessonPage={pageData?.lessonPage}
+      navigate={(path) => void navigate(path)}
     />
   );
 }
@@ -2891,6 +2848,7 @@ function DiscussionFallbackBridge(props: DiscussionProps) {
       {...props}
       searchParams={searchParams}
       setSearchParams={updateParams}
+      navigate={(path) => window.location.assign(path)}
     />
   );
 }

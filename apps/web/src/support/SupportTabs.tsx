@@ -34,7 +34,7 @@ function tabHref(id: SupportTab, search: string): string {
   if (id === "mine") return "/support";
   const params = new URLSearchParams(search);
   const next = new URLSearchParams({ type: id });
-  for (const key of ["from", "fromLabel", "courseId"]) {
+  for (const key of ["from", "fromLabel", "courseId", "category"]) {
     const value = params.get(key);
     if (value) next.set(key, value);
   }
