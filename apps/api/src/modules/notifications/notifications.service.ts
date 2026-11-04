@@ -23,7 +23,26 @@ import {
   NOTIFICATION_BODY_MAX,
   NOTIFICATION_TITLE_MAX,
   renderNotificationTemplate,
+  type NotificationEmailBrand,
 } from "./notifications.templates.ts";
+
+/**
+ * The academy's name and logo for the emails (cached by the brand service).
+ * Loaded lazily: the brand service reaches into the auth module, which this
+ * module must not import at load time. Without it the emails use the
+ * configured name.
+ */
+async function loadEmailBrand(
+  database: Kysely<Database>,
+): Promise<NotificationEmailBrand | undefined> {
+  try {
+    const { createAcademyBrandService } =
+      await import("../academy/academy-brand.service.ts");
+    return await createAcademyBrandService({ database }).getBrand();
+  } catch {
+    return undefined;
+  }
+}
 import type {
   NotificationIntent,
   NotificationRecipientDirectory,
@@ -307,6 +326,7 @@ export function createNotificationService({
     // skips what already exists. markProcessed runs once at the end,
     // fenced by the claim lease.
     const CHUNK_SIZE = 200;
+    const emailBrand = await loadEmailBrand(database);
     let created = 0;
     let skipped = 0;
 
@@ -366,6 +386,7 @@ export function createNotificationService({
               intent.templateKey,
               intent.templateData,
               intent.deepLink,
+              emailBrand,
             );
             const notificationId =
               await notificationRepository.createNotification(transaction, {

@@ -200,8 +200,29 @@ interface CommentCardProps {
    * to its edges, while the entry's content stays in line with the others.
    */
   showHighlightedLabel?: boolean;
+  /**
+   * The link that led here, while its highlight stands: a reply in this
+   * comment to show and highlight as well, and whether it came from an
+   * email (the card then says so, with a Clear button).
+   */
+  linkedHighlight?: LinkedCommentHighlight | null;
   constrainToContainer?: boolean;
 }
+
+export interface LinkedCommentHighlight {
+  /** A reply in the comment that the link points at, if any. */
+  replyId: string | null;
+  viaEmail: boolean;
+  /** Takes the highlights off the comment and the reply. */
+  onClear: () => void;
+}
+
+/**
+ * How many pages of replies are fetched looking for the reply a link points
+ * at. One the server no longer returns (deleted, or hidden by staff) stops
+ * the search here: the comment stays highlighted on its own.
+ */
+const LINKED_REPLY_PAGE_LIMIT = 20;
 
 export const CommentCard = React.memo(function CommentCard({
   comment,
@@ -229,6 +250,7 @@ export const CommentCard = React.memo(function CommentCard({
   isHighlighted = false,
   onHighlightShown,
   showHighlightedLabel = false,
+  linkedHighlight = null,
   constrainToContainer = false,
 }: CommentCardProps) {
   const articleRef = useRef<HTMLElement>(null);
@@ -381,6 +403,67 @@ export const CommentCard = React.memo(function CommentCard({
     if (!hasReplies) return;
     setRepliesOpen((open) => !open);
   };
+
+  // A link to a reply in this comment opens its replies, fetches pages of
+  // them until that reply is in, and brings it into view once.
+  const linkedReplyId = isNote ? null : (linkedHighlight?.replyId ?? null);
+  const linkedReplyFound = Boolean(
+    linkedReplyId &&
+    effectiveReplies.some(
+      (reply) => getServerEntityId(reply) === linkedReplyId,
+    ),
+  );
+  useEffect(() => {
+    if (linkedReplyId) setRepliesOpen(true);
+  }, [linkedReplyId]);
+  const linkedReplyPagesRef = useRef(0);
+  useEffect(() => {
+    if (
+      !linkedReplyId ||
+      linkedReplyFound ||
+      !repliesOpen ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      isFetchNextPageError ||
+      linkedReplyPagesRef.current >= LINKED_REPLY_PAGE_LIMIT
+    ) {
+      return;
+    }
+    linkedReplyPagesRef.current += 1;
+    void fetchNextPage();
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchNextPageError,
+    isFetchingNextPage,
+    linkedReplyFound,
+    linkedReplyId,
+    repliesOpen,
+  ]);
+  const scrolledToLinkedReplyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !linkedReplyId ||
+      !linkedReplyFound ||
+      scrolledToLinkedReplyRef.current === linkedReplyId
+    ) {
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(
+        `discussion-entry-${linkedReplyId}`,
+      );
+      if (!target) return;
+      scrolledToLinkedReplyRef.current = linkedReplyId;
+      target.scrollIntoView({
+        block: "center",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [linkedReplyFound, linkedReplyId]);
 
   useEffect(() => {
     if (!isBackendMode) {
@@ -587,6 +670,25 @@ export const CommentCard = React.memo(function CommentCard({
         toggleReplies();
       }}
     >
+      {linkedHighlight?.viaEmail && (
+        <p
+          className="mb-2.5 flex items-center gap-1.5 text-xs font-medium text-(--muted)"
+          data-testid="discussion-opened-from-email"
+        >
+          <span>Opened from your email</span>
+          <span aria-hidden="true">·</span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              linkedHighlight.onClear();
+            }}
+            className="rounded font-semibold text-(--accent-ink,var(--accent)) underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          >
+            Clear
+          </button>
+        </p>
+      )}
       <div
         inert={deletion.hidden ? true : undefined}
         className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.hidden ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
@@ -1022,6 +1124,10 @@ export const CommentCard = React.memo(function CommentCard({
                     onCopyTextNotice={onCopyTextNotice}
                     parentThreadId={comment.id}
                     courseId={courseId}
+                    isLinked={Boolean(
+                      linkedReplyId &&
+                      getServerEntityId(reply) === linkedReplyId,
+                    )}
                   />
                 ))
               ) : (
@@ -1102,6 +1208,11 @@ interface ReplyCardProps {
   onSeekToTimestamp?: (seconds: number) => void;
   onCopyTextNotice?: (message: string) => void;
   courseId?: string;
+  /**
+   * The reply a link points at: highlighted more strongly than the comment
+   * around it, which carries the link's own highlight.
+   */
+  isLinked?: boolean;
 }
 
 function ReplyCard({
@@ -1120,6 +1231,7 @@ function ReplyCard({
   onSeekToTimestamp,
   onCopyTextNotice,
   courseId,
+  isLinked = false,
 }: ReplyCardProps) {
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState<DiscussionDraft>(
@@ -1155,7 +1267,9 @@ function ReplyCard({
     <article
       id={`discussion-entry-${reply.id}`}
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-10" : ""}`}
+      data-linked-reply={isLinked || undefined}
+      aria-current={isLinked ? "location" : undefined}
+      className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-10" : ""} ${isLinked ? "rounded-xl bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] py-2 pr-2 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--accent)_70%,transparent)]" : ""}`}
     >
       <div
         inert={deletion.hidden ? true : undefined}

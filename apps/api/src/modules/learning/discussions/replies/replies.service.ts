@@ -230,6 +230,7 @@ export function createRepliesService({
           courseId: thread.courseId,
           threadId: input.threadId,
           plainText,
+          replyToReplyId: targetReplyId,
         });
 
         // Attach any verified, still-unattached attachments owned by the caller
@@ -411,6 +412,7 @@ export function createRepliesService({
             courseId: thread.courseId,
             threadId: reply.threadId,
             plainText,
+            replyToReplyId: reply.replyToReplyId,
           });
         }
 
