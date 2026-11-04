@@ -93,6 +93,11 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
     }),
     [kind, sort, status, category, rating, search],
   );
+  // What is open and listed now, for a page that finishes loading later.
+  const latestView = useRef({ selectedId, filters });
+  useEffect(() => {
+    latestView.current = { selectedId, filters };
+  });
   const list = useStaffSupportTickets(filters);
   const tickets = list.data?.pages.flatMap((page) => page.tickets) ?? [];
   const total = list.data?.pages[0]?.totalCount ?? 0;
@@ -359,7 +364,15 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
           }
           // The last one loaded: bring the next page and open its first.
           if (!list.hasNextPage || list.isFetchingNextPage) return;
+          const requested = { selectedId, filters };
           void list.fetchNextPage().then((result) => {
+            // Another one opened, or the filters changed, while it loaded.
+            const current = latestView.current;
+            if (
+              current.selectedId !== requested.selectedId ||
+              current.filters !== requested.filters
+            )
+              return;
             const first = result.data?.pages.at(-1)?.tickets[0];
             if (first) select(first.id);
           });

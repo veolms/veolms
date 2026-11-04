@@ -7,6 +7,7 @@ import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
+import { useLocation } from "react-router";
 import type { ComponentType, MouseEvent, Ref } from "react";
 
 interface HelpLink {
@@ -104,6 +105,9 @@ export function ProfileHelpScreen({
   onBack: () => void;
   onNavigate: (event: MouseEvent<HTMLAnchorElement>, path: string) => void;
 }) {
+  // Drawn again when the page changes, so each link names the page it is
+  // opened from, a new tab or a copied link included.
+  useLocation();
   return (
     <>
       <div className="flex items-center gap-1.5 px-1.5 pb-1.5">
@@ -135,7 +139,7 @@ export function ProfileHelpScreen({
                 key={href}
                 className="profile-menu__item"
                 role="menuitem"
-                href={href}
+                href={withOrigin(href)}
                 onClick={
                   href.startsWith("/")
                     ? (event) => onNavigate(event, withOrigin(href))

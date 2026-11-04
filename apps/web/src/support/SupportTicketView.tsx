@@ -43,11 +43,13 @@ export function SupportTicketView({
   ticket,
   headingLevel = 1,
   staffControls,
+  canReply = true,
 }: {
   ticket: SupportTicketDetail;
   headingLevel?: 1 | 2;
   /** The team's status buttons, shown under the heading. */
   staffControls?: ReactNode;
+  canReply?: boolean;
 }) {
   const category = SUPPORT_CATEGORIES[ticket.category];
   const rating = SUPPORT_RATINGS.find((item) => item.value === ticket.rating);
@@ -218,7 +220,7 @@ export function SupportTicketView({
         />
       </section>
 
-      <SupportReplyBox ticket={ticket} />
+      <SupportReplyBox ticket={ticket} canReply={canReply} />
     </div>
   );
 }

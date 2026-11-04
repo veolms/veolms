@@ -161,7 +161,14 @@ const quietButtonClasses =
  * Where a reply is written: the learner answers the team; staff answer the
  * learner, or leave an internal note only staff see.
  */
-export function SupportReplyBox({ ticket }: { ticket: SupportTicketDetail }) {
+export function SupportReplyBox({
+  ticket,
+  canReply = true,
+}: {
+  ticket: SupportTicketDetail;
+  /** False for staff who may read reports but not answer them. */
+  canReply?: boolean;
+}) {
   const draft = useSupportDraft();
   const post = usePostSupportMessage(ticket.id, ticket.viewerIsStaff);
   const [mode, setMode] = useState<"reply" | "note">("reply");
@@ -183,6 +190,15 @@ export function SupportReplyBox({ ticket }: { ticket: SupportTicketDetail }) {
       { onSuccess: () => draft.reset() },
     );
   };
+
+  if (staff && !canReply) {
+    return (
+      <p className="m-0 rounded-xl bg-(--surface-strong) px-4 py-3 text-sm text-(--muted)">
+        You can read reports and feedback, but your role does not include
+        answering them.
+      </p>
+    );
+  }
 
   return (
     <section

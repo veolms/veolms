@@ -100,8 +100,10 @@ export function createSupportController({
         mimetype: file.mimetype,
         stream: file.file,
         isTruncated: () => file.file.truncated,
-        width: multipartNumber(file.fields.width),
-        height: multipartNumber(file.fields.height),
+        dimensions: () => ({
+          width: multipartNumber(file.fields.width),
+          height: multipartNumber(file.fields.height),
+        }),
       });
       await reply.status(201).send(attachment);
     } catch (error) {
@@ -119,16 +121,19 @@ export function createSupportController({
       request.user!.id,
       request.params.attachmentId,
     );
-    return reply
-      .header("Content-Type", file.mimeType)
-      .header("Content-Length", file.size)
-      .header(
-        "Content-Disposition",
-        getDiscussionAttachmentDisposition(file.mimeType, file.fileName),
-      )
-      .header("X-Content-Type-Options", "nosniff")
-      .header("Cache-Control", "private, max-age=3600")
-      .send(file.stream);
+    return (
+      reply
+        .header("Content-Type", file.mimeType)
+        .header("Content-Length", file.size)
+        .header(
+          "Content-Disposition",
+          getDiscussionAttachmentDisposition(file.mimeType, file.fileName),
+        )
+        .header("X-Content-Type-Options", "nosniff")
+        // Never kept by the browser: access is checked on every request.
+        .header("Cache-Control", "private, no-store")
+        .send(file.stream)
+    );
   }
 
   return {

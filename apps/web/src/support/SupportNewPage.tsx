@@ -6,7 +6,7 @@ import type {
   SupportTicketCategory,
   SupportTicketKind,
 } from "@veolms/contracts/support";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { Checkbox } from "../components/Checkbox";
@@ -100,8 +100,12 @@ export function SupportNewPage() {
     setParams(nextParams, { replace: true });
   };
   // A tab or link switched the form: what was said about the other one goes.
+  // A send still under way is left alone: resetting it would let the form
+  // send the same report twice.
+  const sendingRef = useRef(false);
   const resetCreate = create.reset;
   useEffect(() => {
+    if (sendingRef.current) return;
     setTriedSubmit(false);
     resetCreate();
   }, [kind, resetCreate]);
@@ -113,7 +117,8 @@ export function SupportNewPage() {
 
   const submit = () => {
     setTriedSubmit(true);
-    if (!canSubmit || !category) return;
+    if (!canSubmit || !category || sendingRef.current) return;
+    sendingRef.current = true;
     create.mutate(
       {
         kind,
@@ -141,6 +146,9 @@ export function SupportNewPage() {
         onSuccess: (created) => {
           setSent(created);
           draft.reset();
+        },
+        onSettled: () => {
+          sendingRef.current = false;
         },
       },
     );
@@ -399,6 +407,7 @@ export function SupportNewPage() {
                       ["System", technical.os],
                       ["Screen", technical.screen],
                       ["Page", origin?.path],
+                      ["User agent", technical.userAgent],
                     ] as const
                   ).map(([term, value]) =>
                     value ? (

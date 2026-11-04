@@ -2,18 +2,20 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateSupportMessageRequest,
   CreateSupportTicketRequest,
+  CreateSupportTicketResponse,
   SupportTicketDetail,
   SupportTicketStatus,
 } from "@veolms/contracts";
 
 import type { ApiError } from "../../lib/api-error";
+import { useAuthStore } from "../../store/auth.store";
 import { supportKeys } from "./support.keys";
 import { supportService } from "./support.service";
 
 export function useCreateSupportTicket() {
   const queryClient = useQueryClient();
   return useMutation<
-    { id: string; number: number },
+    CreateSupportTicketResponse,
     ApiError,
     CreateSupportTicketRequest
   >({
@@ -27,9 +29,10 @@ export function useCreateSupportTicket() {
 /** After a reply or a status change: the ticket as the server now has it. */
 function useStoreTicket() {
   const queryClient = useQueryClient();
+  const account = useAuthStore((state) => state.user?.id) ?? "";
   return (ticket: SupportTicketDetail) => {
     queryClient.setQueryData(
-      supportKeys.ticket(ticket.id, ticket.viewerIsStaff),
+      [...supportKeys.ticket(ticket.id, ticket.viewerIsStaff), account],
       ticket,
     );
     void queryClient.invalidateQueries({ queryKey: supportKeys.mine() });

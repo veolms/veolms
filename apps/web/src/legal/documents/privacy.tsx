@@ -100,8 +100,10 @@ export const privacyDocument: LegalDocument = {
             <strong>Mobile number:</strong> before your first purchase or
             enrolment we ask you to verify a mobile number with a code sent by
             SMS. We use the country calling code of that number to determine
-            your country for pricing, tax, and invoicing. We do not use your
-            number to sign you in and we do not collect your precise location.
+            your country for pricing, tax, and invoicing. A verified number can
+            also receive a one-time code to sign you in; if your account has an
+            email address, an unverified number is never used to sign you in. We
+            do not collect your precise location.
           </li>
           <li>
             <strong>Purchase details:</strong> the courses you order, the amount
@@ -387,6 +389,15 @@ export const privacyDocument: LegalDocument = {
                 </td>
                 <td>Course video files only; no learner data</td>
               </tr>
+              <tr>
+                <td>DiceBear</td>
+                <td>Drawing default profile pictures</td>
+                <td>
+                  Your display name, or your account ID when no name is set,
+                  used to draw the picture; the IP address and browser details
+                  of the request that loads it
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -394,8 +405,9 @@ export const privacyDocument: LegalDocument = {
           <strong>Other learners:</strong> your name, profile photo, and
           anything you post in a course discussion are visible to other learners
           enrolled in that course and to our instructors and moderators. Your
-          email, mobile number, and purchase history are never shown to other
-          learners.
+          email and mobile number are shown to other learners only if you verify
+          them and choose to show them on your public profile. Your purchase
+          history is never shown to other learners.
         </p>
         <p>
           <strong>Legal and safety reasons:</strong> we may disclose information

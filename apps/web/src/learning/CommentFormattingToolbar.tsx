@@ -167,6 +167,9 @@ export function CommentFormattingToolbar({
           className="absolute bottom-[calc(100%+0.75rem)] left-0 z-30 flex w-[min(22rem,calc(100vw-2rem))] items-center gap-1.5 rounded-xl bg-(--surface-elevated,var(--surface)) p-2 shadow-[0_16px_44px_rgba(0,0,0,0.34),0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]"
           onSubmit={(event) => {
             event.preventDefault();
+            // Inside a form of its own (Help and feedback), the submit
+            // would otherwise send that form too.
+            event.stopPropagation();
             applyLink();
           }}
           onKeyDown={(event) => {
