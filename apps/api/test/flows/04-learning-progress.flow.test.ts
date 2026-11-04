@@ -22,6 +22,8 @@ interface ProgressItem {
   lessonId: string;
   progressPercent: number;
   positionSeconds?: number;
+  /** How long ago, on the sending device, the learner was there. */
+  positionAgeSeconds?: number;
 }
 
 /** The player's periodic progress report. */
@@ -44,6 +46,7 @@ async function progressOf(client: FlowClient, course: FlowCourse) {
       lessonId: string;
       lessonNumber: number;
       progressPercent: number;
+      positionSeconds?: number;
     }[];
     lastPlayed?: { lessonNumber: number; positionSeconds: number } | null;
   }>(`/v1/learning-progress/${course.slug}`);
@@ -179,6 +182,109 @@ await test("the player resumes where the learner stopped, on another device too"
   const progress = await progressOf(laptop, course);
   assert.equal(progress.lastPlayed?.lessonNumber, 2);
   assert.equal(progress.lastPlayed?.positionSeconds, 245);
+});
+
+await test("a position another device sends late does not move the learner back, and its progress still counts", async () => {
+  const course = await createCourse(flow, { pricing: "free" });
+  const { client } = await enrolledLearner(course);
+  const [first, second] = [course.lessons[0]!.id, course.lessons[1]!.id];
+  const positionIn = async (lessonId: string) =>
+    (await progressOf(client, course)).lessons.find(
+      (lesson) => lesson.lessonId === lessonId,
+    );
+
+  // The laptop, playing now: lesson 1 at 5:00.
+  await report(client, course, [
+    {
+      lessonId: first,
+      progressPercent: 40,
+      positionSeconds: 300,
+      positionAgeSeconds: 0,
+    },
+  ]);
+  // A tablet back online sends what it held: 1:40, noted ten minutes ago,
+  // and further through the lesson than the laptop has been.
+  await report(client, course, [
+    {
+      lessonId: first,
+      progressPercent: 70,
+      positionSeconds: 100,
+      positionAgeSeconds: 600,
+    },
+  ]);
+  let lesson = await positionIn(first);
+  assert.equal(lesson?.positionSeconds, 300, "the newer position stays");
+  assert.equal(lesson?.progressPercent, 70, "the higher progress is kept");
+
+  // The phone, now: a newer position replaces it. So does one from a page
+  // that does not say how old its position is (an older page: "now").
+  await report(client, course, [
+    {
+      lessonId: first,
+      progressPercent: 70,
+      positionSeconds: 420,
+      positionAgeSeconds: 0,
+    },
+  ]);
+  assert.equal((await positionIn(first))?.positionSeconds, 420);
+  await report(client, course, [
+    { lessonId: first, progressPercent: 70, positionSeconds: 450 },
+  ]);
+  assert.equal((await positionIn(first))?.positionSeconds, 450);
+
+  // Lesson 2 played now, then lesson 1's held-back position arrives: the
+  // course carries on with lesson 2, where the learner was last.
+  await report(client, course, [
+    {
+      lessonId: second,
+      progressPercent: 5,
+      positionSeconds: 30,
+      positionAgeSeconds: 0,
+    },
+  ]);
+  await report(client, course, [
+    {
+      lessonId: first,
+      progressPercent: 70,
+      positionSeconds: 500,
+      positionAgeSeconds: 900,
+    },
+  ]);
+  const progress = await progressOf(client, course);
+  assert.equal(progress.lastPlayed?.lessonNumber, 2);
+  assert.equal(progress.lastPlayed?.positionSeconds, 30);
+  lesson = progress.lessons.find((l) => l.lessonId === first);
+  assert.equal(lesson?.positionSeconds, 450);
+});
+
+await test("each save tells the page how long to wait before the next one", async () => {
+  const course = await createCourse(flow, { pricing: "free" });
+  const { client } = await enrolledLearner(course);
+
+  const saved = await client.post<{ synced: true; nextSyncSeconds?: number }>(
+    `/v1/learning-progress/${course.slug}/batch`,
+    {
+      items: [
+        {
+          lessonId: course.lessons[0]!.id,
+          progressPercent: 10,
+          positionSeconds: 60,
+        },
+      ],
+      watchedSeconds: 30,
+      timeZone: "Asia/Kolkata",
+    },
+  );
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.data?.nextSyncSeconds, 60);
+
+  // Nothing new to save: the answer still names the interval.
+  const empty = await client.post<{ synced: true; nextSyncSeconds?: number }>(
+    `/v1/learning-progress/${course.slug}/batch`,
+    { items: [], watchedSeconds: 0, timeZone: "Asia/Kolkata" },
+  );
+  assert.equal(empty.status, 200);
+  assert.equal(empty.body.data?.nextSyncSeconds, 60);
 });
 
 await test("one learner's progress is never shown to another", async () => {
