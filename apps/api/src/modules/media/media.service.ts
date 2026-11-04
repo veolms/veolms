@@ -1275,12 +1275,29 @@ export function createMediaService({
       throw error;
     }
 
-    // In serverful/local mode the fleet manager watches the database directly;
-    // in serverless mode the cancellation event above performs this update.
-    await mediaRepo.updateVideoJobStatus(database, job.id, {
-      status: "cancelled",
+    // Recheck after the provider call: a completion may have committed meanwhile.
+    const cancelled = await database.transaction().execute(async (trx) => {
+      const locked = await mediaRepo.lockVideoJobStateById(trx, job.id);
+      if (
+        !locked ||
+        !["queued", "provisioning", "processing", "ready"].includes(
+          locked.status,
+        )
+      )
+        return false;
+      await mediaRepo.updateVideoJobStatus(trx, job.id, {
+        status: "cancelled",
+      });
+      await mediaRepo.updateMediaAssetStatus(trx, mediaId, "failed");
+      return true;
     });
-    await mediaRepo.updateMediaAssetStatus(database, mediaId, "failed");
+
+    if (!cancelled)
+      throw new AppError(
+        409,
+        "MEDIA_NOT_CANCELLABLE",
+        "This video is no longer being transcoded.",
+      );
 
     return { cancelled: true, jobId: job.id };
   }
@@ -1385,22 +1402,17 @@ export function createMediaService({
       );
     }
 
-    let status = progress.job_status;
-    let progressPercent = Number(progress.progress_percent ?? 0);
+    const status = progress.job_status;
+    const progressPercent = Number(progress.progress_percent ?? 0);
 
     if (status === "completed" && progress.media_status !== "ready") {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "ready");
-    } else if (status === "failed" && progress.media_status !== "failed") {
+    } else if (
+      status === "failed" &&
+      progress.media_status !== "failed" &&
+      progress.media_status !== "ready"
+    ) {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "failed");
-    } else if (progress.media_status === "ready" && status !== "completed") {
-      status = "completed";
-      progressPercent = 100;
-      await mediaRepo
-        .updateVideoJobStatus(database, progress.job_id, {
-          status: "completed",
-          progress_percent: 100,
-        })
-        .catch(() => {});
     }
 
     return {
@@ -2340,7 +2352,17 @@ export function createMediaService({
         normalizedMaster =
           slashIdx !== -1 ? withoutS3.slice(slashIdx + 1) : withoutS3;
       }
-      normalizedMaster = normalizeOutputPrefix(normalizedMaster);
+      normalizedMaster = splitManifestPath(
+        normalizeOutputPrefix(normalizedMaster),
+      ).key;
+
+      if (isReady && !(await services.storage.headObject(normalizedMaster))) {
+        throw new AppError(
+          409,
+          "MEDIA_NOT_READY",
+          "The video manifest is not available yet.",
+        );
+      }
 
       const durationMs = firstOutput?.outputDetails?.[0]?.durationInMs;
       const durationSeconds =
@@ -2364,6 +2386,12 @@ export function createMediaService({
         const previousManifest = previousOutput
           ? splitManifestPath(previousOutput.master_playlist_path)
           : undefined;
+        if (
+          !suppliedMasterPath &&
+          previousManifest &&
+          locked.status === "ready"
+        )
+          normalizedMaster = previousManifest.key;
         const samePath = previousManifest?.key === normalizedMaster;
         const versionPrefix = `${locked.id}-`;
         const previousRevision =
@@ -2376,9 +2404,7 @@ export function createMediaService({
           ? BigInt(previousRevision) + 1n
           : 1n;
         const version = `${versionPrefix}${revision}`;
-        const storedMaster = isReady
-          ? `${normalizedMaster}?v=${version}`
-          : normalizedMaster;
+        const storedMaster = `${normalizedMaster}?v=${version}`;
         const reuseOutput =
           locked.status === "ready" && samePath && previousOutput;
         const outputId = reuseOutput ? reuseOutput.id : crypto.randomUUID();
@@ -2407,17 +2433,22 @@ export function createMediaService({
             locked.video_id,
             durationSeconds,
           );
-        return { status: isReady ? "ready" : "completed", outputId };
+        return {
+          status: isReady ? "ready" : "completed",
+          outputId,
+          firstReady: locked.status !== "ready",
+        };
       });
-      if (publication.outputId === null || isReady)
+      if (publication.outputId === null || (isReady && !publication.firstReady))
         return { success: true, status: publication.status, jobId: job.id };
       const outputId = publication.outputId;
-      services.analyticsEvents?.emit("media.video.ready", {
-        mediaId: job.video_id,
-        manifestKey: normalizedMaster,
-        outputId,
-        at: new Date(),
-      });
+      if (publication.firstReady)
+        services.analyticsEvents?.emit("media.video.ready", {
+          mediaId: job.video_id,
+          manifestKey: normalizedMaster,
+          outputId,
+          at: new Date(),
+        });
 
       // The duration is only reliable now, so chapters authored before the
       // upload finished are derived (and their frames requested) here.
@@ -2457,7 +2488,7 @@ export function createMediaService({
         },
         "[mediaconvert-webhook] Video job successfully marked as completed",
       );
-      return { success: true, status: "completed", jobId: job.id };
+      return { success: true, status: publication.status, jobId: job.id };
     }
 
     if (

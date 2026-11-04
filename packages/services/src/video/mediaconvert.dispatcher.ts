@@ -424,8 +424,6 @@ export function createMediaConvertDispatcher(options: {
     if (config.DRM_MASTER_KEY && config.DRM_MASTER_KEY_VERSION) {
       userMetadata.drmKeySystem = "clearkey";
       userMetadata.drmMasterKeyVersion = config.DRM_MASTER_KEY_VERSION;
-      userMetadata.drmMasterKey = config.DRM_MASTER_KEY;
-      userMetadata.masterKey = config.DRM_MASTER_KEY;
     }
 
     const destination = outputPrefix.startsWith("s3://")
@@ -445,6 +443,11 @@ export function createMediaConvertDispatcher(options: {
     let jobInput: CreateJobCommandInput;
 
     if (jobTemplate) {
+      if (payload.thumbnailDestination) {
+        logger.warn(
+          "[video-dispatch:mediaconvert] Template mode requires the template to generate thumbnails; the template also controls the quality ladder",
+        );
+      }
       logger.info(
         {
           jobId: payload.jobId,
