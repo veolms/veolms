@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { PrefetchPageLinks } from "react-router";
 import type { CSSProperties, ReactNode, Ref } from "react";
 import type {
@@ -920,6 +920,7 @@ export function CoursesPage({
       activateSidebarGesture,
       startSidebarScreenSwipe,
     });
+  const [logoMenuOpen, setLogoMenuOpen] = useState(false);
   const {
     handleSidebarResizeKeyDown,
     toggleSidebarWidth,
@@ -931,11 +932,9 @@ export function CoursesPage({
     mobileMoreNavigation,
     mobileMoreActive,
   } = useSidebarControls({
-    onLogoPress: () =>
-      selectNavigation(
-        "Home",
-        navigation.find(([label]) => label === "Home"),
-      ),
+    // The logo opens its menu (help, the legal pages, About); Home is in
+    // the navigation under it.
+    onLogoPress: () => setLogoMenuOpen(true),
     setSidebarMode,
     sidebarWidth,
     compactNavigation,
@@ -1192,6 +1191,8 @@ export function CoursesPage({
               sidebarVisuallyCollapsed={sidebarVisuallyCollapsed}
               sidebarPresentedAsOverlay={sidebarPresentedAsOverlay}
               sidebarDraggedToCollapsedWidth={sidebarDraggedToCollapsedWidth}
+              logoMenuOpen={logoMenuOpen}
+              onLogoMenuOpenChange={setLogoMenuOpen}
             />
 
             <SidebarNavigation

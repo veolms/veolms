@@ -68,6 +68,7 @@ function DropdownMenuContent({
   className,
   align = "end",
   alignOffset = 0,
+  anchor,
   portalContainer,
   side = "bottom",
   sideOffset = 6,
@@ -75,7 +76,7 @@ function DropdownMenuContent({
 }: MenuPrimitive.Popup.Props &
   Pick<
     MenuPrimitive.Positioner.Props,
-    "align" | "alignOffset" | "side" | "sideOffset"
+    "align" | "alignOffset" | "anchor" | "side" | "sideOffset"
   > & {
     portalContainer?: MenuPrimitive.Portal.Props["container"];
   }) {
@@ -95,6 +96,7 @@ function DropdownMenuContent({
         className="isolate z-220 outline-none"
         align={align}
         alignOffset={alignOffset}
+        anchor={anchor}
         side={side}
         sideOffset={sideOffset}
       >

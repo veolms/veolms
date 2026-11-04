@@ -1,8 +1,14 @@
-import type { MouseEventHandler, PointerEventHandler } from "react";
+import {
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEventHandler,
+  type PointerEventHandler,
+} from "react";
 import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
+import { LogoMenu } from "./LogoMenu";
 import { SidebarToggleIcon } from "./SidebarToggleIcon";
 import { procodrrLogoSvg } from "./academyShellConstants";
 import {
@@ -54,6 +60,8 @@ export interface SidebarBrandProps {
   sidebarVisuallyCollapsed: boolean;
   sidebarPresentedAsOverlay: boolean;
   sidebarDraggedToCollapsedWidth: boolean;
+  logoMenuOpen: boolean;
+  onLogoMenuOpenChange: (open: boolean) => void;
 }
 
 export function SidebarBrand({
@@ -71,7 +79,17 @@ export function SidebarBrand({
   sidebarVisuallyCollapsed,
   sidebarPresentedAsOverlay,
   sidebarDraggedToCollapsedWidth,
+  logoMenuOpen,
+  onLogoMenuOpenChange,
 }: SidebarBrandProps) {
+  const logoRef = useRef<HTMLSpanElement>(null);
+  const openLogoMenuFromKeyboard = (
+    event: ReactKeyboardEvent<HTMLSpanElement>,
+  ) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onLogoMenuOpenChange(true);
+  };
   // prettier-ignore
   return (
     <div
@@ -82,16 +100,26 @@ export function SidebarBrand({
       onPointerUp={handleSidebarBrandPress}
     >
       <span
-        className="courses-logo-clip"
+        ref={logoRef}
+        className="courses-logo-clip cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
         data-sidebar-resize-reader=""
-        role="img"
-        aria-label="ProCodrr"
-        title="Home. Click, then hold to float the sidebar"
+        role="button"
+        tabIndex={0}
+        aria-label="ProCodrr menu"
+        aria-haspopup="menu"
+        aria-expanded={logoMenuOpen}
+        title="Help and legal pages. Click, then hold to float the sidebar"
+        onKeyDown={openLogoMenuFromKeyboard}
         data-second-press-holding={
           sidebarLogoGesture.isSecondPressHolding || undefined
         }
         {...sidebarLogoGesture.handlers}
         dangerouslySetInnerHTML={{ __html: procodrrLogoSvg }}
+      />
+      <LogoMenu
+        open={logoMenuOpen}
+        onOpenChange={onLogoMenuOpenChange}
+        anchor={logoRef}
       />
       <button
         key={sidebarControlKey}
