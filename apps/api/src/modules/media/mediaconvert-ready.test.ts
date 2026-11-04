@@ -65,9 +65,15 @@ void test("READY publishes output without completion and later events preserve i
       execute: async (fn: (trx: typeof db) => Promise<unknown>) => fn(db),
     }),
   });
+  let manifestExists = false;
+  const checkedKeys: string[] = [];
   const services = {
     config: { MEDIACONVERT_WEBHOOK_SECRET: "secret" },
     storage: {
+      headObject: async (key: string) => {
+        checkedKeys.push(key);
+        return manifestExists ? {} : null;
+      },
       getCdnObjectUrl: (key: string) => `https://cdn.test/${key}`,
       isCdnPublicKey: () => true,
     },
@@ -94,6 +100,11 @@ void test("READY publishes output without completion and later events preserve i
       body,
     });
   }
+  await assert.rejects(deliver("READY"), /manifest is not available/i);
+  assert.equal(job.status, "processing");
+  assert.equal(outputs.length, 0);
+  assert.deepEqual(checkedKeys, ["protected/test/video.mpd"]);
+  manifestExists = true;
   assert.equal((await deliver("READY")).status, "ready");
   assert.equal(job.status, "ready");
   assert.equal(asset.status, "ready");
@@ -127,7 +138,10 @@ void test("READY publishes output without completion and later events preserve i
   assert.equal((await deliver("COMPLETE")).status, "completed");
   assert.equal(job.status, "completed");
   assert.equal(outputs.length, 1);
-  assert.equal(outputs[0]?.master_playlist_path, "protected/test/video.mpd");
+  assert.equal(
+    outputs[0]?.master_playlist_path,
+    `protected/test/video.mpd?v=${job.id}-3`,
+  );
   const completedPlayback = await service.getVideoAssetPlayback(
     {
       id: job.video_id,
@@ -140,7 +154,7 @@ void test("READY publishes output without completion and later events preserve i
   );
   assert.equal(
     completedPlayback.manifestUrl,
-    "https://cdn.test/protected/test/video.mpd",
+    `https://cdn.test/protected/test/video.mpd?v=${job.id}-3`,
   );
   await deliver("READY");
   assert.equal(job.status, "completed");
