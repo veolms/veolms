@@ -769,10 +769,14 @@ export function createLearningProgressService({
       if (!existing) {
         const timeZone = await resolveSupportedTimeZone(deviceTimeZone);
         if (!timeZone) return;
-        await learningProgressRepository.seedUserTimeZone(
-          database,
-          userId,
-          timeZone,
+        // Part of the heartbeat, and only a default the learner can change:
+        // it need not wait for the replica either (`withLocalCommit`).
+        await withLocalCommit(database, (executor) =>
+          learningProgressRepository.seedUserTimeZone(
+            executor,
+            userId,
+            timeZone,
+          ),
         );
       }
       if (usersWithSettings.size >= 20_000) usersWithSettings.clear();
