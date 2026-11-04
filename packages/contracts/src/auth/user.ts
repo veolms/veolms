@@ -176,6 +176,16 @@ export const authUserSchema = z.object({
   emailVerified: z.boolean().default(false),
   mobileVerified: z.boolean().default(false),
   roles: z.array(z.string().max(50)).default([]),
+  /**
+   * A shared test account (TEST_LOGIN_ACCOUNTS): it may leave any course it
+   * is enrolled in, as an admin may.
+   */
+  isTestAccount: z.boolean().optional(),
+  /**
+   * A developer's machine with LOCAL_ANY_COURSE_UNENROLL: every account may
+   * leave any course it is enrolled in, as an admin may.
+   */
+  localAnyCourseUnenroll: z.boolean().optional(),
   ...avatarResponseFields,
   ...profileFieldSchemas,
 });
@@ -189,6 +199,8 @@ export const userProfileResponseSchema = z.object({
   emailVerified: z.boolean(),
   mobileVerified: z.boolean(),
   roles: z.array(z.string().max(50)),
+  isTestAccount: z.boolean().optional(),
+  localAnyCourseUnenroll: z.boolean().optional(),
   ...avatarResponseFields,
   ...profileFieldSchemas,
   mfaVerified: z.boolean(),

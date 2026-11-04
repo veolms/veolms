@@ -184,6 +184,8 @@ export class PlayerController {
   #destroyed = false;
   #loadGeneration = 0;
   #playRequestGeneration = 0;
+  /** Settles once the last `stop` is done; a load waits for it. */
+  #stopping: Promise<void> = Promise.resolve();
   #hudId = 0;
   #standbyMedia: HTMLVideoElement | null = null;
   // The newest drag position still waiting for the seek in flight to finish.
@@ -211,6 +213,7 @@ export class PlayerController {
   // last finished seek landed.
   #scrubLessonTime: number | null = null;
   readonly #activeMediaListeners = new Set<ActiveMediaListener>();
+  readonly #controlsRevealListeners = new Set<() => void>();
 
   constructor(engine: VideoEngine) {
     this.engine = engine;
@@ -435,12 +438,45 @@ export class PlayerController {
     this.resetZoom();
     this.#clearScrubFrame();
     const generation = ++this.#loadGeneration;
+    // A pause asked for while the video loads holds: it used to be dropped
+    // (nothing is ready to pause yet) and the load's autoplay started the
+    // video anyway, a lesson being left among them.
+    const playRequest = this.#playRequestGeneration;
+    await this.#stopping;
     await this.waitForMedia();
     if (generation !== this.#loadGeneration || this.#destroyed) return;
     await this.engine.load(source, options);
-    if (generation !== this.#loadGeneration || this.#destroyed || !autoPlay)
+    if (
+      generation !== this.#loadGeneration ||
+      this.#destroyed ||
+      !autoPlay ||
+      playRequest !== this.#playRequestGeneration
+    )
       return;
     await this.engine.play();
+  }
+
+  /**
+   * Stops the video outright (see `VideoEngine.stop`): paused at once, a
+   * load on its way not played when it is in, the source taken off and the
+   * engine's streaming player destroyed. The next `load` starts afresh.
+   */
+  async stop(): Promise<void> {
+    this.assertActive();
+    this.#playRequestGeneration += 1;
+    this.#loadGeneration += 1;
+    this.#media?.pause();
+    const engine = this.engine;
+    const stopping = (async () => {
+      try {
+        engine.pause();
+      } catch {
+        // Nothing loaded to pause.
+      }
+      await (engine.stop ? engine.stop() : engine.unload());
+    })().catch(() => undefined);
+    this.#stopping = stopping;
+    await stopping;
   }
 
   async play(): Promise<void> {
@@ -883,6 +919,21 @@ export class PlayerController {
     });
   }
 
+  /**
+   * Shows the controls, and the pointer with them, as a mouse moving over
+   * the player does, to hide again after the same idle delay: a keyboard
+   * shortcut (a seek, the volume) acted on the player.
+   * `useControlsVisibility` does the showing and the timing.
+   */
+  revealControls(): void {
+    for (const listener of this.#controlsRevealListeners) listener();
+  }
+
+  onControlsReveal(listener: () => void): () => void {
+    this.#controlsRevealListeners.add(listener);
+    return () => this.#controlsRevealListeners.delete(listener);
+  }
+
   setControlsLocked(controlsLocked: boolean): void {
     this.updateUi({ controlsLocked });
   }
@@ -953,7 +1004,8 @@ export class PlayerController {
       zoom.panY === current.panY &&
       zoom.gestureActive === current.gestureActive &&
       zoom.feedbackVisible === current.feedbackVisible &&
-      zoom.transitioning === current.transitioning
+      zoom.transitioning === current.transitioning &&
+      zoom.snap === current.snap
     ) {
       return;
     }
@@ -973,6 +1025,19 @@ export class PlayerController {
   showHud(text: string, options: PlayerHudOptions = {}): void {
     this.#hudId += 1;
     this.updateUi({ hud: { ...options, id: this.#hudId, text } });
+  }
+
+  /**
+   * Says the volume at the top of the player, with the speaker: a slider,
+   * the wheel over it or the Up and Down keys changed it.
+   */
+  showVolume(volume: number, direction?: -1 | 1): void {
+    const level = Math.min(1, Math.max(0, volume));
+    this.showHud(`${Math.round(level * 100)}%`, {
+      direction,
+      level,
+      variant: "volume",
+    });
   }
 
   clearHud(id?: number): void {
@@ -1178,6 +1243,7 @@ export class PlayerController {
     this.deactivate();
     this.#listeners.clear();
     this.#eventListeners.clear();
+    this.#controlsRevealListeners.clear();
     await this.#mediaTransition;
     this.unlistenMedia(this.#media);
     this.#media = null;

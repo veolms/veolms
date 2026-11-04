@@ -166,7 +166,11 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
     area: "quizzes",
     label: "Quizzes",
     entries: [
-      entry("quiz.read", "View quizzes", "See quizzes and their questions."),
+      // The quiz screens list quizzes by course, so viewing them needs the
+      // courses too.
+      entry("quiz.read", "View quizzes", "See quizzes and their questions.", [
+        "course.read",
+      ]),
       entry("quiz.create", "Create quizzes", "Add new quizzes.", ["quiz.read"]),
       entry(
         "quiz.settings.update",
@@ -191,6 +195,7 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "submission.read",
         "View quiz results",
         "See learners' quiz attempts, answers and quiz analytics.",
+        ["quiz.read"],
       ),
     ],
   },
@@ -202,6 +207,12 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "student.read",
         "View students",
         "Open the Students list and each student's details.",
+      ),
+      entry(
+        "student.create",
+        "Add students",
+        "Create a student account by name and email; they sign in with a code.",
+        ["student.read"],
       ),
       entry(
         "student.contact.update",
@@ -229,12 +240,12 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
       entry(
         "discussion.read",
         "View discussions",
-        "Read every discussion, hidden posts included.",
+        "Read every course's discussions, everyone's threads included.",
       ),
       entry(
         "discussion.moderate",
         "Moderate discussions",
-        "Hide, restore and delete posts, and handle reports.",
+        "See hidden posts; hide, restore and delete posts; handle reports.",
         ["discussion.read"],
       ),
     ],

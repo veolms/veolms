@@ -58,14 +58,6 @@ const DEFAULT_PICTURE_POSITION =
   "object-[62%_center] sm:object-[72%_center] xl:object-center";
 
 /**
- * The fade that runs a band of the picture into the hero at its top and
- * bottom edges, for a hero that shows the picture as a band of its own
- * between its content rather than behind it.
- */
-export const heroPictureBandFade =
-  "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:bg-[linear-gradient(to_bottom,#050915_0,rgb(5_9_21/0.55)_14%,transparent_34%,transparent_76%,#050915_100%)] [:root[data-theme=light]_&]:before:bg-[linear-gradient(to_bottom,#f4ecdf_0,rgb(244_236_223/0.6)_14%,transparent_34%,transparent_76%,#f4ecdf_100%)]";
-
-/**
  * The laptop's screen and its power, laid onto the laptop in the picture.
  *
  * Where the laptop is has to be measured, and is measured again on every
@@ -84,7 +76,10 @@ function HeroLaptop({
   const laptopPower = useHeroLaptopPower();
   return (
     <>
-      <HeroLaptopScreen transform={laptop.transform}>
+      <HeroLaptopScreen
+        transform={laptop.transform}
+        drawnScale={laptop.drawnScale}
+      >
         <HeroLaptopPower
           power={laptopPower.power}
           onSwitchOn={laptopPower.switchOn}
@@ -189,6 +184,9 @@ export function HeroDesk({
   picturePosition = DEFAULT_PICTURE_POSITION,
   laptopScreen,
   lampCornerOnPhone = false,
+  deskLayersClassName = "",
+  lampSwitchClassName,
+  picturesWhenShown = false,
   children,
 }: {
   /** The id of the hero's title. */
@@ -214,6 +212,24 @@ export function HeroDesk({
    * itself by `data-lamp` as the picture does.
    */
   lampCornerOnPhone?: boolean;
+  /**
+   * For a hero that leaves the picture out at some sizes (by not drawing
+   * the box it places the pictures in): hides what belongs to the picture
+   * there as well, the laptop's screen, the lamp's switch and the fade.
+   */
+  deskLayersClassName?: string;
+  /**
+   * With `lampCornerOnPhone` and `deskLayersClassName`: where the lamp's
+   * switch is hidden instead, since on a phone it is the hero's corner
+   * even where the picture is left out.
+   */
+  lampSwitchClassName?: string;
+  /**
+   * With `deskLayersClassName`: the pictures are fetched only where they
+   * are drawn (see `whenShown` on `HeroPicture`), so a screen shown no
+   * picture downloads none.
+   */
+  picturesWhenShown?: boolean;
   children: (pictures: ReactNode) => ReactNode;
 }) {
   const [lampOverride, setLampOverride] = useState<LampOverride>();
@@ -299,7 +315,13 @@ export function HeroDesk({
     const nightTheme = document.documentElement.dataset.theme !== "light";
     const isOn = lampOverride ? lampOverride === "on" : nightTheme;
     const showsOtherPicture = nightTheme ? isOn : !isOn;
-    if (showsOtherPicture && !warmPictureRef.current?.complete) {
+    // A hero that draws no picture (a phone's) has none to wait for.
+    const pictureDrawn = litPictureRef.current?.checkVisibility() ?? false;
+    if (
+      pictureDrawn &&
+      showsOtherPicture &&
+      !warmPictureRef.current?.complete
+    ) {
       // The switch, its sound with it, waits for the picture it brings.
       pendingSwitchRef.current = true;
       setWarmPictures(true);
@@ -411,6 +433,7 @@ export function HeroDesk({
             key={themeLampIsOn ? "night" : "day"}
             picture={otherPicture}
             position={picturePosition}
+            whenShown={picturesWhenShown}
             className=""
             warmUp
             imageRef={warmPictureRef}
@@ -427,6 +450,7 @@ export function HeroDesk({
       <HeroPicture
         picture={guestHeroImage}
         position={picturePosition}
+        whenShown={picturesWhenShown}
         priority
         imageRef={litPictureRef}
         // Its phone crop sits a little to the left of the lamp-off one;
@@ -449,49 +473,61 @@ export function HeroDesk({
       <HeroPicture
         picture={guestHeroLampOffImage}
         position={picturePosition}
+        whenShown={picturesWhenShown}
         className="-z-30 hidden motion-reduce:transition-none [:root:not([data-theme=light])_[data-lamp]_&]:block [[data-lamp]_&]:transition-opacity [[data-lamp]_&]:duration-300 [[data-lamp=off]_&]:starting:opacity-0 [[data-lamp=on]_&]:opacity-0"
       />
       <HeroPicture
         picture={guestHeroDayImage}
         position={picturePosition}
+        whenShown={picturesWhenShown}
         className="-z-20 hidden [:root[data-theme=light]_&]:block [[data-lamp=on]_&]:invisible [[data-lamp=on]_&]:transition-[visibility] [[data-lamp=on]_&]:delay-300"
       />
       <HeroPicture
         picture={guestHeroDayLampOnImage}
         position={picturePosition}
+        whenShown={picturesWhenShown}
         className="-z-15 hidden motion-reduce:transition-none [:root[data-theme=light]_[data-lamp]_&]:block [[data-lamp]_&]:transition-opacity [[data-lamp]_&]:duration-300 [[data-lamp=off]_&]:opacity-0 [[data-lamp=on]_&]:starting:opacity-0"
       />
     </>
   );
 
+  const lampSwitch = (
+    <HeroLampSwitch
+      pictureRef={litPictureRef}
+      phoneCorner={lampCornerOnPhone}
+      action={lampAction}
+      onToggle={toggleLamp}
+      onShowSoundToggle={showSoundToggle}
+      soundToggle={{
+        visible: soundToggleVisible,
+        muted: soundMuted,
+        onToggle: toggleSoundMuted,
+        onHold: holdSoundToggle,
+        onRelease: releaseSoundToggle,
+      }}
+    />
+  );
   return (
     <section
       aria-labelledby={labelledBy}
       data-lamp={lampOverride}
       className={`${heroSceneClasses} ${heroBottomFadeClasses} ${className}`}
     >
-      {laptopScreen ? (
-        <HeroLaptop pictureRef={litPictureRef}>{laptopScreen}</HeroLaptop>
-      ) : null}
-      <HeroLampSwitch
-        pictureRef={litPictureRef}
-        phoneCorner={lampCornerOnPhone}
-        action={lampAction}
-        onToggle={toggleLamp}
-        onShowSoundToggle={showSoundToggle}
-        soundToggle={{
-          visible: soundToggleVisible,
-          muted: soundMuted,
-          onToggle: toggleSoundMuted,
-          onHold: holdSoundToggle,
-          onRelease: releaseSoundToggle,
-        }}
-      />
+      <div className={`contents ${deskLayersClassName}`}>
+        {laptopScreen ? (
+          <HeroLaptop pictureRef={litPictureRef}>{laptopScreen}</HeroLaptop>
+        ) : null}
 
-      <div
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 -z-10 ${fadeClassName} ${heroThemeTintClasses}`}
-      />
+        {lampSwitchClassName === undefined ? lampSwitch : null}
+
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-0 -z-10 ${fadeClassName} ${heroThemeTintClasses}`}
+        />
+      </div>
+      {lampSwitchClassName === undefined ? null : (
+        <div className={`contents ${lampSwitchClassName}`}>{lampSwitch}</div>
+      )}
 
       {children(pictures)}
     </section>

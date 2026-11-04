@@ -14,6 +14,7 @@ import {
   mediaImageVariantManifestSchema,
   mediaUploadCompleteResponseSchema,
   videoJobProgressResponseSchema,
+  mediaSourceResponseSchema,
   videoPlaybackBootstrapQuerySchema,
   videoPlaybackBootstrapSchema,
   videoPlaybackTokenSchema,
@@ -325,6 +326,25 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       preHandler: requireMediaAuthor,
     },
     controller.confirmMediaUpload,
+  );
+
+  app.get(
+    "/media/:mediaId/source",
+    {
+      schema: {
+        operationId: "getMediaSource",
+        tags: ["Media"],
+        summary:
+          "Where a video came from (the YouTube video it was imported from)",
+        params: z.object({ mediaId: z.uuid() }),
+        response: {
+          200: jsonResponse("The video's source", mediaSourceResponseSchema),
+          404: errorResponse("Media not found"),
+        },
+      },
+      preHandler: requireMediaAuthor,
+    },
+    controller.getMediaSource,
   );
 
   app.get(

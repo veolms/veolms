@@ -122,10 +122,10 @@ export function adaptDiscussionWorkspaceItem(
     isBookmarked: item.isBookmarked,
     isLiked: item.isLiked,
     isFollowing: item.isFollowing,
-    activityAt: isFollowing ? item.updatedAt : item.updatedAt || item.createdAt,
-    activity: formatRelativeTime(
-      isFollowing ? item.updatedAt : item.updatedAt || item.createdAt,
-    ),
+    // When the post was written, as its lesson shows it; only Following
+    // shows the last activity on what is followed.
+    activityAt: isFollowing ? item.updatedAt : item.createdAt,
+    activity: formatRelativeTime(isFollowing ? item.updatedAt : item.createdAt),
     mentionedAt: item.mentionedAt,
     mentionActivity: item.mentionedAt
       ? formatRelativeTime(item.mentionedAt)

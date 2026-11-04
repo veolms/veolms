@@ -2,6 +2,7 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type {
   GuestHomePageResponse,
   HomeDiscoveryResponse,
+  HomePageDiscussionListResponse,
   HomePageLessonVideoOptionsResponse,
   HomePageOptionsResponse,
   HomePageSettingsResponse,
@@ -107,6 +108,19 @@ export function useHomePageSettingsOptions() {
   return useQuery<HomePageOptionsResponse, ApiError>({
     queryKey: homeKeys.pageSettingsOptions(),
     queryFn: () => homeService.getPageSettingsOptions(),
+    staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * Which comments the home page lists and hides, for "Add to home page" on
+ * a comment. Only for those who can change the home page.
+ */
+export function useHomePageDiscussionList(options?: { enabled?: boolean }) {
+  return useQuery<HomePageDiscussionListResponse, ApiError>({
+    queryKey: homeKeys.discussionList(),
+    queryFn: () => homeService.getDiscussionList(),
+    enabled: options?.enabled ?? true,
     staleTime: 60 * 1000,
   });
 }

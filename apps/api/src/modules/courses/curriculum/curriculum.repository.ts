@@ -299,6 +299,7 @@ export async function findLiveLessonDescription(
     )
     .select([
       "course_lessons.id",
+      "course_lessons.section_id",
       "course_lessons.description",
       "course_lessons.is_published",
       "course_lessons.is_preview",

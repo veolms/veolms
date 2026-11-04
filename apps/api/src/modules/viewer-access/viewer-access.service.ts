@@ -1,6 +1,7 @@
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type {
+  CourseAccessEnrollment,
   CourseAccessListResponse,
   CourseAccessProgress,
   CourseAccessResponse,
@@ -9,18 +10,28 @@ import type {
 } from "@veolms/contracts";
 
 import { AppError } from "../../lib/errors.ts";
-import { createAccessService, type AccessService } from "../access/index.ts";
+import {
+  createAccessService,
+  type AccessService,
+  type CourseAccessScope,
+} from "../access/index.ts";
 import { hasAcademyPermission } from "../authorization/index.ts";
 import type { EnrollmentService } from "../commerce/index.ts";
+import { toOrderPaymentMethod } from "../commerce/orders/order.mapper.ts";
 import {
   resolveOverviewVisibility,
   type CourseAccessFacts,
   type CourseService,
 } from "../courses/index.ts";
 import type { LearningProgressService } from "../learning-progress/learning-progress.service.ts";
+import { decidePace, PACE_WINDOW_DAYS } from "./viewer-access.pace.ts";
+import {
+  findCourseActivity,
+  findEnrollmentOrder,
+  findLinkingCourseOrder,
+} from "./viewer-access.repository.ts";
 import {
   decideCourseAccess,
-  isGrantInForce,
   type AccessViewer,
 } from "./viewer-access.rules.ts";
 
@@ -72,7 +83,7 @@ export function createViewerAccessService({
   learningProgressService: Pick<LearningProgressService, "getResumeContext">;
   accessService?: Pick<
     AccessService,
-    "hasActiveAccess" | "isCourseOpenToLearner" | "listUserGrants"
+    "getAccessScope" | "isCourseOpenToLearner" | "listAccessScopes"
   >;
 }): ViewerAccessService {
   async function toAccessViewer(
@@ -118,18 +129,24 @@ export function createViewerAccessService({
   function summarize(
     course: CourseAccessFacts,
     viewer: AccessViewer | undefined,
-    holdsGrant: boolean,
+    scope: CourseAccessScope | null,
     progress: CourseAccessProgress | undefined,
   ): CourseAccessSummary {
     return {
       courseId: course.id,
       slug: course.slug,
-      ...decideCourseAccess({ course, viewer, holdsGrant }),
+      ...decideCourseAccess({
+        course,
+        viewer,
+        holdsGrant: scope !== null,
+        grantSectionIds: scope?.sectionIds,
+      }),
       enrolled: progress !== undefined,
       canSelfEnroll: course.canSelfEnroll,
       pricing: {
         ...course.pricing,
         showDiscountBadge: course.pricing.showDiscountBadge === true,
+        international: course.pricing.international ?? null,
       },
       progress: progress ?? null,
     };
@@ -138,24 +155,20 @@ export function createViewerAccessService({
   async function listCourseAccess(
     user: ViewerAccessUser | undefined,
   ): Promise<CourseAccessListResponse> {
-    const [courses, viewer, grants, progressByCourse] = await Promise.all([
+    const [courses, viewer, scopes, progressByCourse] = await Promise.all([
       courseService.listCourseAccessFacts({ published: true }),
       toAccessViewer(user),
-      user ? accessService.listUserGrants(database, user.id) : [],
+      user
+        ? accessService.listAccessScopes(database, user.id)
+        : new Map<string, CourseAccessScope>(),
       listProgressByCourse(user),
     ]);
-    const now = new Date();
-    const heldCourseIds = new Set(
-      grants
-        .filter((grant) => isGrantInForce(grant, now))
-        .map((grant) => grant.courseId),
-    );
     return {
       courses: courses.map((course) =>
         summarize(
           course,
           viewer,
-          heldCourseIds.has(course.id),
+          scopes.get(course.id) ?? null,
           progressByCourse.get(course.id)?.progress,
         ),
       ),
@@ -181,6 +194,48 @@ export function createViewerAccessService({
       if (error instanceof AppError) return null;
       throw error;
     }
+  }
+
+  /**
+   * The learner's enrolment for the course page: when it began, the order
+   * that gave it, and their pace. Undefined when they hold no active one.
+   */
+  async function getEnrollment(
+    user: ViewerAccessUser,
+    courseId: string,
+    lessonsLeft: number,
+  ): Promise<CourseAccessEnrollment | undefined> {
+    const now = new Date();
+    const since = new Date(now.getTime() - PACE_WINDOW_DAYS * 86_400_000);
+    const [enrolment, activity] = await Promise.all([
+      findEnrollmentOrder(database, user.id, courseId),
+      findCourseActivity(database, user.id, courseId, since),
+    ]);
+    if (!enrolment) return undefined;
+    // A course that came with another is told by that course's purchase.
+    const parent =
+      enrolment.source === "linked_course"
+        ? await findLinkingCourseOrder(database, user.id, courseId)
+        : undefined;
+    const row = parent ?? enrolment;
+    const startedAt = parent ? parent.valid_from : enrolment.access_starts_at;
+    return {
+      enrolledAt: (row.paid_at ?? startedAt).toISOString(),
+      order:
+        row.order_id && row.order_number && row.currency
+          ? {
+              id: row.order_id,
+              orderNumber: row.order_number,
+              totalAmount: row.total_amount ?? 0,
+              currency: row.currency,
+              paymentMethod:
+                toOrderPaymentMethod(row.payment_method)?.method ?? null,
+              hasInvoice: row.invoice_number !== null,
+            }
+          : null,
+      ...(parent ? { includedWith: parent.course_title } : {}),
+      pace: decidePace({ now, ...activity, lessonsLeft }),
+    };
   }
 
   /**
@@ -219,12 +274,12 @@ export function createViewerAccessService({
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
     }
 
-    const [[facts], holdsGrant, progressByCourse, curriculumVersion] =
+    const [[facts], scope, progressByCourse, curriculumVersion] =
       await Promise.all([
         courseService.listCourseAccessFacts({ courseIds: [course.id] }),
         user
-          ? accessService.hasActiveAccess(database, user.id, course.id)
-          : false,
+          ? accessService.getAccessScope(database, user.id, course.id)
+          : null,
         listProgressByCourse(user),
         courseService.getPublicCurriculumVersion(course.id),
       ]);
@@ -233,19 +288,29 @@ export function createViewerAccessService({
     }
 
     const enrollment = progressByCourse.get(course.id);
-    const summary = summarize(facts, viewer, holdsGrant, enrollment?.progress);
+    const summary = summarize(facts, viewer, scope, enrollment?.progress);
     const [resume, mayJoinDiscussions] = await Promise.all([
-      user && summary.access === "full"
+      user && (summary.access === "full" || summary.openSectionIds)
         ? getResume(user, course.id)
         : Promise.resolve(null),
-      mayJoinCourseDiscussions(user, course.creator_id, holdsGrant),
+      mayJoinCourseDiscussions(user, course.creator_id, scope !== null),
     ]);
+
+    const enrollmentDetails =
+      user && enrollment
+        ? await getEnrollment(
+            user,
+            course.id,
+            resume ? resume.totalLessons - resume.completedLessons : 0,
+          )
+        : undefined;
 
     return {
       ...summary,
       mayJoinDiscussions,
       resume,
       accessExpiresAt: enrollment?.accessExpiresAt?.toISOString() ?? null,
+      enrollment: enrollmentDetails ?? null,
       curriculumVersion: curriculumVersion ?? NO_PUBLIC_CURRICULUM,
     };
   }

@@ -2,11 +2,13 @@ import type {
   GuestHomePageResponse,
   HeroVideoPlayback,
   HomeDiscoveryResponse,
+  HomePageDiscussionListResponse,
   HomePageLessonVideoOptionsResponse,
   HomePageOptionsResponse,
   HomePageSettings,
   HomePageSettingsResponse,
   LearnerHomeResponse,
+  UpdateHomePageDiscussionRequest,
   VideoPlaybackToken,
 } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
@@ -46,6 +48,21 @@ export const homeService = {
   },
   getHeroVideoPlaybackToken(): Promise<VideoPlaybackToken> {
     return api.get<VideoPlaybackToken>("/home/hero-video/playback-token");
+  },
+  getDiscussionList(): Promise<HomePageDiscussionListResponse> {
+    return api.get<HomePageDiscussionListResponse>(
+      "/home/page-settings/discussions",
+    );
+  },
+  /** Adds a comment to the home page, or hides or removes it; saved at once. */
+  updateDiscussion(
+    threadId: string,
+    action: UpdateHomePageDiscussionRequest["action"],
+  ): Promise<HomePageDiscussionListResponse> {
+    return api.post<HomePageDiscussionListResponse>(
+      `/home/page-settings/discussions/${encodeURIComponent(threadId)}`,
+      { action },
+    );
   },
   updatePageSettings(
     settings: HomePageSettings,

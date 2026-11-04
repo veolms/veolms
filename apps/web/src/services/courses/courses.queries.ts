@@ -16,6 +16,9 @@ import type {
   DeletedCoursesQuery,
   LessonDescriptionResponse,
   LinkedCoursesListResponse,
+  PartialAccessListResponse,
+  PartialAccessOffer,
+  PartialAccessOptionsResponse,
   MyCoursesListResponse,
   PublicCourse,
 } from "@veolms/contracts";
@@ -24,6 +27,7 @@ import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 import { withOfflineFallback } from "../../lib/offline-data";
 import { readSessionCache, writeSessionCache } from "../../lib/session-cache";
+import { readAccountCopy } from "../accountSessionCopies";
 
 /**
  * The published courses as last fetched in this tab, for a page that is
@@ -118,14 +122,29 @@ export function useCourseOverview(
  */
 export function useCourseAccess(
   idOrSlug: string | null | undefined,
-  options?: { enabled?: boolean },
+  options?: {
+    enabled?: boolean;
+    /**
+     * Start from this tab's copy of the answer for the remembered account
+     * (see `readAccountCopy`), for a page whose document was drawn from
+     * that copy before its scripts ran: the lesson page. A copy older than
+     * the query's `staleTime` is asked again in the background.
+     */
+    fromTabCopy?: boolean;
+  },
 ) {
+  const queryKey = idOrSlug
+    ? courseKeys.access(idOrSlug)
+    : (["courses", "overview", null, "access"] as const);
+  const copy = options?.fromTabCopy
+    ? () => readAccountCopy<CourseAccessResponse>(queryKey)
+    : undefined;
   return useQuery<CourseAccessResponse, ApiError>({
-    queryKey: idOrSlug
-      ? courseKeys.access(idOrSlug)
-      : ["courses", "overview", null, "access"],
+    queryKey,
     queryFn: () => coursesService.getAccess(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
+    initialData: copy ? () => copy()?.value : undefined,
+    initialDataUpdatedAt: copy ? () => copy()?.savedAt : undefined,
     staleTime: 60 * 1000,
     retry: false,
   });
@@ -216,6 +235,41 @@ export function useLinkedCourses(courseId: string | null) {
   return useQuery<LinkedCoursesListResponse, ApiError>({
     queryKey: courseKeys.linkedCourses(courseId ?? ""),
     queryFn: () => coursesService.listLinkedCourses(courseId!),
+    enabled: Boolean(courseId),
+  });
+}
+
+/**
+ * The part of a course a partial access link sells (`?access=` on the
+ * course page): its price and sections. Read live, never from a copy.
+ */
+export function usePartialAccessOffer(
+  idOrSlug: string | null | undefined,
+  offerSlug: string | null | undefined,
+) {
+  return useQuery<PartialAccessOffer, ApiError>({
+    queryKey: courseKeys.offer(idOrSlug ?? "", offerSlug ?? ""),
+    queryFn: () => coursesService.getPartialAccessOffer(idOrSlug!, offerSlug!),
+    enabled: Boolean(idOrSlug && offerSlug),
+    retry: (failureCount, error) =>
+      failureCount < 2 && !(error.status >= 400 && error.status < 500),
+  });
+}
+
+/** Every partial access, for limiting a coupon to one (coupon builder). */
+export function usePartialAccessOptions() {
+  return useQuery<PartialAccessOptionsResponse, ApiError>({
+    queryKey: courseKeys.partialAccessOptions(),
+    queryFn: () => coursesService.listPartialAccessOptions(),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** The parts of a course sold on their own (editor only). */
+export function usePartialAccess(courseId: string | null) {
+  return useQuery<PartialAccessListResponse, ApiError>({
+    queryKey: courseKeys.partialAccess(courseId ?? ""),
+    queryFn: () => coursesService.listPartialAccess(courseId!),
     enabled: Boolean(courseId),
   });
 }

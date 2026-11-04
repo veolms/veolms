@@ -17,6 +17,7 @@ import {
 } from "./videoPlaybackBootstrap";
 import { prefersReducedData } from "../lib/reduced-data";
 import { installSegmentCache } from "./player/segmentCache";
+import { prepareCachedStartHeight } from "./player/segmentCacheStart";
 
 // Before this module loads the player's runtime (see segmentCache.ts).
 installSegmentCache();
@@ -126,7 +127,11 @@ export async function startEarlyHlsPreload(
   const requestKey = getRequestKey(bootstrap, requestMetadata);
   if (requestKey) latestRequestKey = requestKey;
 
-  if (bootstrap) return startPreloadForBootstrap(bootstrap, false);
+  if (bootstrap) {
+    // The quality kept on this device, for the preload to start at.
+    await prepareCachedStartHeight(bootstrap.manifestUrl);
+    return startPreloadForBootstrap(bootstrap, false);
+  }
 
   if (!requestMetadata) {
     // A lesson page without meta tags (the SPA fallback): only ask for its

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { PaymentGateway } from "@veolms/contracts";
+import type { GatewayWebhookHeaders, PaymentGateways } from "@veolms/contracts";
 import type { Json } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
@@ -9,34 +9,37 @@ import type { PaymentEventQueue } from "./payment-event.queue.ts";
 
 export interface WebhookService {
   processGatewayWebhook(
+    provider: string,
     rawBody: string | Uint8Array | undefined,
-    signature: string | undefined,
+    headers: GatewayWebhookHeaders,
     parsedPayload: unknown,
-    eventId?: string,
   ): Promise<{ received: boolean; eventId: string }>;
 }
 
 export function createWebhookService({
   database,
-  paymentGateway,
+  paymentGateways,
   eventQueue,
 }: {
   database: Executor;
-  paymentGateway: PaymentGateway;
+  paymentGateways: PaymentGateways;
   eventQueue: PaymentEventQueue;
 }): WebhookService {
   async function processGatewayWebhook(
+    provider: string,
     rawBody: string | Uint8Array | undefined,
-    signature: string | undefined,
+    headers: GatewayWebhookHeaders,
     parsedPayload: unknown,
-    eventId?: string,
   ) {
-    if (!signature || !rawBody) {
+    // A gateway that is not set up has no secret to check a delivery with;
+    // it is answered as any delivery that is not signed.
+    const paymentGateway = paymentGateways.get(provider);
+    if (!paymentGateway || !rawBody) {
       throw CommerceErrors.WEBHOOK_SIGNATURE_INVALID();
     }
 
     // 1. Verify webhook signature via PaymentGateway adapter
-    const isValid = paymentGateway.verifyWebhookSignature(rawBody, signature);
+    const isValid = paymentGateway.verifyWebhookSignature(rawBody, headers);
     if (!isValid) {
       throw CommerceErrors.WEBHOOK_SIGNATURE_INVALID();
     }
@@ -44,7 +47,7 @@ export function createWebhookService({
     // 2. Normalize provider payload to gateway-independent domain event (using header eventId if present)
     const normalizedEvent = paymentGateway.normalizeWebhookEvent(
       parsedPayload,
-      eventId,
+      paymentGateway.webhookEventId(headers),
     );
 
     // 3. Idempotently deduplicate by event_id in database
@@ -74,12 +77,12 @@ export function createWebhookService({
       });
     } catch (err: unknown) {
       if (isUniqueViolation(err)) {
-        // Another concurrent delivery of the same event (Razorpay retrying
+        // Another concurrent delivery of the same event (the gateway retrying
         // a slow-200) won the race between our dedup check (step 3) and
         // this insert. Look up the row it created and respond idempotently
         // — the same shape as the step-3 dedup hit above — instead of
         // letting an unhandled constraint-violation error surface as a 500,
-        // which Razorpay would log as a failed delivery and retry forever.
+        // which the gateway would log as a failed delivery and retry forever.
         const winner = await webhookRepo.findWebhookEvent(
           database,
           paymentGateway.providerName,

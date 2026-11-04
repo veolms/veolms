@@ -74,7 +74,7 @@ export function createLearningLessonVideoSource(options: {
       duration: options.media.duration,
       // Editable lesson titles belong to the UI, not the media load request.
     },
-    streaming: streaming ? learningHlsStreaming() : undefined,
+    streaming: streaming ? learningHlsStreaming(options.media.src) : undefined,
     inlinedManifest: streaming ? options.inlinedMasterManifest : undefined,
     networking: streaming
       ? {

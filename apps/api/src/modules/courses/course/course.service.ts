@@ -49,6 +49,10 @@ import {
 import { hasAcademyPermission } from "../../authorization/index.ts";
 import * as courseRepo from "./course.repository.ts";
 import {
+  presentInternationalPrice,
+  type StoredInternationalPrice,
+} from "../shared/international-price.ts";
+import {
   createCategoryService,
   type CategoryService,
 } from "../category/category.service.ts";
@@ -68,12 +72,19 @@ import {
   createAccessService,
   isOpenFreeCourse,
   isRestrictedFreeCourse,
+  scopeOpensSection,
+  type CourseAccessScope,
 } from "../../access/index.ts";
 import { resolveCoursePricing } from "../../commerce/index.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
 import { resolveAliasedBasicsUpdate } from "./basics-aliased-field.ts";
 import { resolveBasicsCategoryUpdate } from "./basics-category.ts";
 import { resolveDetailsLevelUpdate } from "./details-level.ts";
+import {
+  createLinksService,
+  type LinksService,
+} from "../links/links.service.ts";
+import { seedDefaultIncludes } from "../includes/includes.service.ts";
 import {
   isLessonListedInOverview,
   resolveOverviewVisibility,
@@ -187,7 +198,7 @@ export interface CourseAccessFacts {
   canSelfEnroll: boolean;
 }
 
-interface StoredPricingFacts {
+interface StoredPricingFacts extends StoredInternationalPrice {
   pricing_type: string | null;
   price: number | string | null;
   currency: string | null;
@@ -207,6 +218,7 @@ function presentPricingSummary(row: StoredPricingFacts): CoursePricingSummary {
             ? Number(row.sale_price)
             : null,
         showDiscountBadge: row.show_discount_badge === true,
+        international: presentInternationalPrice(row),
       }
     : {
         pricingType: "free",
@@ -214,6 +226,7 @@ function presentPricingSummary(row: StoredPricingFacts): CoursePricingSummary {
         currency: "INR",
         salePrice: null,
         showDiscountBadge: false,
+        international: null,
       };
 }
 
@@ -414,6 +427,7 @@ export interface CourseServiceOptions {
   includesService?: IncludesService;
   mediaService?: MediaService;
   deletionService?: CourseDeletionService;
+  linksService?: LinksService;
   /** See `COURSE_OVERVIEW_LESSON_DESCRIPTIONS`. */
   overviewLessonDescriptions?: boolean;
 }
@@ -427,6 +441,7 @@ export function createCourseService({
   configurationService = createConfigurationService({ database }),
   includesService = createIncludesService({ database }),
   mediaService = createMediaService({ database, services }),
+  linksService = createLinksService({ database }),
   deletionService = createCourseDeletionService({
     database,
     storage: services.storage,
@@ -470,7 +485,50 @@ export function createCourseService({
       pricing,
       certificateEnabled: Boolean(row.certificate_enabled ?? false),
       canSelfEnroll: courseOffersSelfEnrollment(row, pricing),
+      // A linked-only course is shown as free with the courses that give
+      // it; few courses are, so they are looked up one by one.
+      ...(row.linked_only === true
+        ? { includedWith: await linksService.listCoursesIncluding(row.id) }
+        : {}),
     } satisfies CourseSummary;
+  }
+
+  /**
+   * The published courses linked to a course, in link order, as the
+   * catalogue's summaries.
+   */
+  async function listIncludedCourseSummaries(courseId: string) {
+    const ids = await linksService.listPublishedLinkedCourseIds(courseId);
+    if (ids.length === 0) return [];
+    const rows = await courseRepo.listHomeDiscoveryCourses(database, {
+      limit: ids.length,
+      order: "recent",
+      courseIds: ids,
+    });
+    const summaries = await Promise.all(rows.map(toPublicCourseSummary));
+    const order = new Map(ids.map((id, index) => [id, index]));
+    return summaries
+      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+      .map((summary) => ({
+        id: summary.id,
+        slug: summary.slug,
+        title: summary.title,
+        thumbnailUrl: summary.thumbnailUrl,
+        thumbnailSrcSet: summary.thumbnailSrcSet,
+        worth:
+          !summary.includedWith && summary.pricing.pricingType === "paid"
+            ? {
+                amount: summary.pricing.salePrice ?? summary.pricing.price,
+                currency: summary.pricing.currency,
+                international: summary.pricing.international
+                  ? {
+                      amountMinor: summary.pricing.international.salePriceMinor,
+                      currency: summary.pricing.international.currency,
+                    }
+                  : null,
+              }
+            : null,
+      }));
   }
 
   /**
@@ -847,6 +905,8 @@ export function createCourseService({
       created_at: now,
       updated_at: now,
     });
+    // Every course starts with the standard "This course includes" lines.
+    await seedDefaultIncludes(database, courseId);
 
     return {
       id: courseId,
@@ -1233,20 +1293,22 @@ export function createCourseService({
   }
 
   /**
-   * Whether a signed-in viewer who does not manage the course has it: the
-   * course is free and unrestricted, or the viewer holds access.
+   * What a signed-in viewer who does not manage the course has of it: all of
+   * it when the course is free and unrestricted, otherwise what their grant
+   * opens (`getAccessScope`), null for nothing.
    */
-  async function viewerHasCourse(
+  async function viewerCourseScope(
     userId: string,
     courseId: string,
     pricingType: string | null | undefined,
     accessType: string | null | undefined,
-  ): Promise<boolean> {
+  ): Promise<CourseAccessScope | null> {
     const isOpen = isOpenFreeCourse({
       pricing_type: pricingType,
       access_type: accessType,
     });
-    return isOpen || accessService.hasActiveAccess(database, userId, courseId);
+    if (isOpen) return { sectionIds: null };
+    return accessService.getAccessScope(database, userId, courseId);
   }
 
   /**
@@ -1393,6 +1455,14 @@ export function createCourseService({
       settings,
       includes,
     } = content;
+    // A linked-only course is had through the courses that link it: its
+    // page sends a visitor to them instead of offering enrolment.
+    const includedWith =
+      pricing?.linked_only === true
+        ? await linksService.listCoursesIncluding(courseId)
+        : undefined;
+    // The courses that come free with this one, as cards would show them.
+    const includedCourses = await listIncludedCourseSummaries(courseId);
 
     // Learners get published lessons only, and only the sections that still
     // have one: an unpublished section's title is not theirs to see. Lesson
@@ -1413,25 +1483,45 @@ export function createCourseService({
     // What a lesson's files are called and how large they are is shown to
     // viewers who may download them, by the same rule the download applies:
     // whoever manages the course, a signed-in learner on a free unrestricted
-    // course, or a learner who holds access. Everyone else sees that a
-    // lesson has resources and how many, nothing about the files.
+    // course, or a learner who holds access (to the lesson's section, when
+    // they hold only part of the course). Everyone else sees that a lesson
+    // has resources and how many, nothing about the files.
     // Asked once, by whichever of the two rules below needs it first.
-    let viewerHoldsCourse: Promise<boolean> | undefined;
-    const holdsCourse = () =>
-      (viewerHoldsCourse ??= user
-        ? viewerHasCourse(
+    let viewerScope: Promise<CourseAccessScope | null> | undefined;
+    const accessScope = () =>
+      (viewerScope ??= user
+        ? viewerCourseScope(
             user.id,
             courseId,
             pricing?.pricing_type,
             accessRule?.access_type,
           )
-        : Promise.resolve(false));
-    const viewerMayDownloadResources =
-      viewerManagesCourse ||
-      (user !== undefined && resources.length > 0 && (await holdsCourse()));
-    const visibleResources = viewerMayDownloadResources
-      ? resources
-      : redactLockedResources(resources);
+        : Promise.resolve(null));
+    const sectionByLessonId = new Map(
+      lessons.map((lesson) => [lesson.id, lesson.section_id]),
+    );
+    const scope =
+      viewerManagesCourse || user === undefined || resources.length === 0
+        ? null
+        : await accessScope();
+    const lockedResources = viewerManagesCourse
+      ? []
+      : resources.filter(
+          (resource) =>
+            !scopeOpensSection(
+              scope,
+              sectionByLessonId.get(resource.lesson_id),
+            ),
+        );
+    const lockedResourceIds = new Set(
+      lockedResources.map((resource) => resource.id),
+    );
+    // A lesson's resources all share its section, so each lesson's are
+    // either all shown or all redacted, and their order is kept.
+    const visibleResources = [
+      ...resources.filter((resource) => !lockedResourceIds.has(resource.id)),
+      ...redactLockedResources(lockedResources),
+    ];
 
     // A reading lesson's description is the lesson, so one the viewer may
     // not open goes out without it, by the rule a video is played by. The
@@ -1443,7 +1533,7 @@ export function createCourseService({
       course,
       pricingType: pricing?.pricing_type,
       accessType: accessRule?.access_type,
-      holdsCourse,
+      accessScope,
     });
     const firstLessonId = findFirstPublishedLessonId(sections, lessons);
     const withheldDescriptionLessonIds = new Set<string>();
@@ -1452,6 +1542,7 @@ export function createCourseService({
       const access = await lessonContentAccess({
         is_preview: lesson.is_preview,
         isFirstLesson: lesson.id === firstLessonId,
+        section_id: lesson.section_id,
       });
       if (access !== "open") withheldDescriptionLessonIds.add(lesson.id);
     }
@@ -1503,7 +1594,7 @@ export function createCourseService({
         mediaById,
         // The map also holds every lesson's own media, and a resource can
         // point at one of those.
-        omitResourceMedia: !viewerMayDownloadResources,
+        withheldResourceIds: lockedResourceIds,
         // The public curriculum (a visitor's overview) always carries them:
         // lesson pages are built from it.
         omitLessonDescriptions: !overviewLessonDescriptions && Boolean(user),
@@ -1517,6 +1608,7 @@ export function createCourseService({
             salePrice: pricing.sale_price,
             // Absent until the migration that adds the column has run.
             showDiscountBadge: pricing.show_discount_badge === true,
+            international: presentInternationalPrice(pricing),
           }
         : null,
       settings: settings
@@ -1529,7 +1621,16 @@ export function createCourseService({
             estimatedDuration: settings.estimated_duration,
           }
         : null,
-      includes: includes.map(({ text, position }) => ({ text, position })),
+      includes: includes.map(
+        ({ text, position, detail, icon, color, kind }) => ({
+          text,
+          position,
+          detail,
+          icon,
+          color,
+          kind,
+        }),
+      ),
       // Asked of the rule checkout applies before it prices the course, so
       // the page offers enrolment exactly when checkout would allow it.
       // Whether the course is free is read as checkout reads it too: a
@@ -1539,6 +1640,8 @@ export function createCourseService({
         pricing_type: resolveCoursePricing(pricing).pricingType,
         access_type: accessRule?.access_type,
       }),
+      ...(includedWith ? { includedWith } : {}),
+      ...(includedCourses.length > 0 ? { includedCourses } : {}),
       accessValidity: accessRule
         ? {
             durationType: accessRule.duration_type,
@@ -1688,18 +1791,19 @@ export function createCourseService({
       course,
       pricingType: pricing?.pricing_type,
       accessType: accessRule?.access_type,
-      holdsCourse: () =>
+      accessScope: () =>
         user
-          ? viewerHasCourse(
+          ? viewerCourseScope(
               user.id,
               course.id,
               pricing?.pricing_type,
               accessRule?.access_type,
             )
-          : Promise.resolve(false),
+          : Promise.resolve(null),
     });
     const access = await lessonContentAccess({
       is_preview: lesson.is_preview,
+      section_id: lesson.section_id,
       // Only a visitor on an open free course is let in by this, so the
       // course's lessons are read for nobody else.
       isFirstLesson:

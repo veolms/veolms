@@ -39,6 +39,7 @@ export function createYoutubeImportTools(
   logger: FastifyBaseLogger,
 ): YoutubeImportTools {
   let ytdlp: { value: Promise<YtDlp>; at: number } | null = null;
+  let recheck: Promise<unknown> | null = null;
   let ffmpeg: Promise<string> | null = null;
   let scratch: Promise<string> | null = null;
   const log = (level: "info" | "warn", message: string) =>
@@ -46,18 +47,32 @@ export function createYoutubeImportTools(
 
   return {
     getYtDlp() {
-      if (!ytdlp || Date.now() - ytdlp.at > YTDLP_RECHECK_MS) {
-        const value = ensureYtDlpBinary(config.YTDLP_PATH, { log }).then(
-          (binary) => ({
-            path: binary.path,
-            supportsJsRuntimes: binary.supportsJsRuntimes,
-            cookies: resolveCookiesPath(config.YTDLP_COOKIES_FILE),
-          }),
-        );
+      const resolve = () =>
+        ensureYtDlpBinary(config.YTDLP_PATH, { log }).then((binary) => ({
+          path: binary.path,
+          supportsJsRuntimes: binary.supportsJsRuntimes,
+          cookies: resolveCookiesPath(config.YTDLP_COOKIES_FILE),
+        }));
+      if (!ytdlp) {
+        const value = resolve();
         ytdlp = { value, at: Date.now() };
         value.catch(() => {
           ytdlp = null;
         });
+      } else if (!recheck && Date.now() - ytdlp.at > YTDLP_RECHECK_MS) {
+        // The daily check (and self-update, which can take half a minute)
+        // runs behind the scenes; meanwhile the yt-dlp in hand is used.
+        const value = resolve();
+        recheck = value
+          .then(() => {
+            ytdlp = { value, at: Date.now() };
+          })
+          .catch(() => {
+            if (ytdlp) ytdlp.at = Date.now();
+          })
+          .finally(() => {
+            recheck = null;
+          });
       }
       return ytdlp.value;
     },

@@ -37,7 +37,7 @@ export function findOutstandingOtp(
 ) {
   return database
     .selectFrom("otp_codes")
-    .select(["id", "attempts"])
+    .select(["id", "attempts", "code_hash"])
     .where("identifier", "=", input.identifier)
     .where("identifier_type", "=", input.identifierType)
     .where("purpose", "=", input.purpose)

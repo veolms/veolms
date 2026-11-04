@@ -89,7 +89,13 @@ export function useLearningCourse(
   const knownVersion =
     seed?.curriculum.version ?? coursePage?.curriculum.version ?? null;
 
-  const accessQuery = useCourseAccess(courseSlug, { enabled });
+  // From this tab's copy while the server's answer is on its way: the
+  // lesson page is drawn from that copy before its scripts run (see
+  // lessonPageEarlyState.ts), and its first render must agree with it.
+  const accessQuery = useCourseAccess(courseSlug, {
+    enabled,
+    fromTabCopy: true,
+  });
   const access = accessQuery.data;
   const isManager = access?.viewer === "manager";
   const builtBeforeChange = Boolean(

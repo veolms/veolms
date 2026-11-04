@@ -80,3 +80,38 @@ export function isCourseOpenForEnrolment(
 ): boolean {
   return learnerCourseGate(status) === "open";
 }
+
+/**
+ * The sections a learner's live grant opens: `null` for every section.
+ * Only a grant given by a link (`linked_course`) can open part of a
+ * course; one of any other source opens all of it, whatever its
+ * `section_ids` still hold from a link it replaced.
+ */
+export function grantSectionIds(grant: {
+  source: string;
+  section_ids?: readonly string[] | null;
+}): readonly string[] | null {
+  if (grant.source !== "linked_course") return null;
+  return grant.section_ids && grant.section_ids.length > 0
+    ? grant.section_ids
+    : null;
+}
+
+/**
+ * What a learner holds of a course: `sectionIds` null when every section
+ * opens to them, otherwise the ones that do. A learner who holds nothing
+ * has no scope at all (`null` where one is asked for).
+ */
+export interface CourseAccessScope {
+  sectionIds: readonly string[] | null;
+}
+
+/** Whether a scope opens a lesson of the given section. */
+export function scopeOpensSection(
+  scope: CourseAccessScope | null,
+  sectionId: string | null | undefined,
+): boolean {
+  if (!scope) return false;
+  if (scope.sectionIds === null) return true;
+  return Boolean(sectionId) && scope.sectionIds.includes(sectionId!);
+}

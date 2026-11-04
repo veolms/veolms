@@ -7,6 +7,10 @@ import type {
   CourseSection,
   CourseSettings,
 } from "@veolms/contracts";
+import {
+  presentInternationalPrice,
+  type StoredInternationalPrice,
+} from "./international-price.ts";
 
 /**
  * The single place course rows become API objects. A response schema strips
@@ -140,6 +144,7 @@ export function presentCurriculum({
   resources,
   mediaById,
   omitResourceMedia = false,
+  withheldResourceIds,
   omitLessonDescriptions = false,
   withheldDescriptionLessonIds,
 }: {
@@ -149,6 +154,8 @@ export function presentCurriculum({
   mediaById: ReadonlyMap<string, MediaRow>;
   /** Leaves every resource's file details out, whatever `mediaById` holds. */
   omitResourceMedia?: boolean;
+  /** Leaves these resources' file details out: the viewer may not download them. */
+  withheldResourceIds?: ReadonlySet<string>;
   /**
    * Sends every lesson's description as null. The key stays: a web build
    * that still reads it from here must go on parsing the response.
@@ -182,9 +189,10 @@ export function presentCurriculum({
         resources: resources
           .filter((resource) => resource.lesson_id === lesson.id)
           .map((resource) => {
-            const media = omitResourceMedia
-              ? undefined
-              : mediaById.get(resource.media_asset_id);
+            const media =
+              omitResourceMedia || withheldResourceIds?.has(resource.id)
+                ? undefined
+                : mediaById.get(resource.media_asset_id);
             return {
               id: resource.id,
               mediaAssetId: resource.media_asset_id,
@@ -224,7 +232,10 @@ export function presentPricing(
   > & {
     // Absent until the migration that adds the column has run.
     show_discount_badge?: boolean | null;
-  },
+    linked_only?: boolean | null;
+  } & StoredInternationalPrice & {
+      international_price_auto?: boolean | null;
+    },
 ): CoursePricing {
   return {
     id: pricing.id,
@@ -233,6 +244,9 @@ export function presentPricing(
     currency: pricing.currency,
     salePrice: pricing.sale_price,
     showDiscountBadge: pricing.show_discount_badge === true,
+    linkedOnly: pricing.linked_only === true,
+    international: presentInternationalPrice(pricing),
+    internationalAuto: pricing.international_price_auto !== false,
   };
 }
 

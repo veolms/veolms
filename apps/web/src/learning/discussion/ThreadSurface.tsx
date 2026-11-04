@@ -47,6 +47,7 @@ import {
   MobileCompactComposerPortal,
   CompactComposer,
 } from "./CompactComposer";
+import { useStableHandlers } from "./useStableHandlers";
 import {
   type ComposerMode,
   DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT,
@@ -93,6 +94,12 @@ interface ThreadSurfaceProps {
   highlightedThreadId?: string | null;
   onThreadHighlightShown?: () => void;
   discussionCount?: number;
+  /**
+   * Where the count comes from, "<course id>:<lesson id>:<field>", for the
+   * script that fills the number in from the browser's copy before the
+   * page is drawn (lessonPageEarlyState.ts).
+   */
+  discussionCountSource?: string;
   draftIsTooLong: boolean;
   draftAttachmentCount: number;
   canSubmitDraft: boolean;
@@ -281,6 +288,7 @@ export function ThreadSurface({
   highlightedThreadId = null,
   onThreadHighlightShown,
   discussionCount,
+  discussionCountSource,
   draftIsTooLong,
   draftAttachmentCount,
   canSubmitDraft,
@@ -559,9 +567,13 @@ export function ThreadSurface({
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
+      // The emoji picker opens in a layer outside the composer; a press on
+      // an emoji closed the composer before the emoji could be inserted.
       if (
         target instanceof Element &&
-        target.closest("[data-comment-composer-container]")
+        target.closest(
+          "[data-comment-composer-container], [data-comment-emoji-picker]",
+        )
       ) {
         return;
       }
@@ -679,26 +691,45 @@ export function ThreadSurface({
     onNoteDeepLinkHandled?.(noteDeepLinkTargetId);
   }, [entryFilter, noteDeepLinkTargetId, onNoteDeepLinkHandled]);
 
+  // The cards are memoized; handlers that kept changing identity rendered
+  // every card again on every render of the discussion.
+  const cardHandlers = useStableHandlers({
+    onLike,
+    onEdit,
+    onDelete,
+    onReplyEditFailure,
+    onDeleteFailure,
+    onReport,
+    onOpenThread,
+    onToggleAcceptReply,
+    onToggleLockThread,
+    onToggleBookmark,
+    onToggleFollow,
+    onSeekToTimestamp,
+    onCopyTextNotice,
+    onThreadHighlightShown,
+  });
+
   const renderEntry = useCallback(
     (entry: Comment) => (
       <CommentCard
         comment={entry}
-        onLike={onLike}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onEditFailure={onReplyEditFailure}
-        onDeleteFailure={onDeleteFailure}
-        onReport={onReport}
-        onOpenThread={onOpenThread}
+        onLike={cardHandlers.onLike}
+        onEdit={cardHandlers.onEdit}
+        onDelete={cardHandlers.onDelete}
+        onEditFailure={cardHandlers.onReplyEditFailure}
+        onDeleteFailure={cardHandlers.onDeleteFailure}
+        onReport={cardHandlers.onReport}
+        onOpenThread={cardHandlers.onOpenThread}
         isBackendMode={isBackendMode}
         currentUserId={currentUserId}
         canModerate={canModerate}
-        onToggleAcceptReply={onToggleAcceptReply}
-        onToggleLockThread={onToggleLockThread}
-        onToggleBookmark={onToggleBookmark}
-        onToggleFollow={onToggleFollow}
-        onSeekToTimestamp={onSeekToTimestamp}
-        onCopyTextNotice={onCopyTextNotice}
+        onToggleAcceptReply={cardHandlers.onToggleAcceptReply}
+        onToggleLockThread={cardHandlers.onToggleLockThread}
+        onToggleBookmark={cardHandlers.onToggleBookmark}
+        onToggleFollow={cardHandlers.onToggleFollow}
+        onSeekToTimestamp={cardHandlers.onSeekToTimestamp}
+        onCopyTextNotice={cardHandlers.onCopyTextNotice}
         courseId={courseId}
         canParticipate={canParticipate}
         constrainToContainer
@@ -725,32 +756,19 @@ export function ThreadSurface({
           entry.entryKind !== "note" &&
           getServerEntityId(entry) === highlightedThreadId,
         )}
-        onHighlightShown={onThreadHighlightShown}
+        onHighlightShown={cardHandlers.onThreadHighlightShown}
       />
     ),
     [
+      cardHandlers,
       courseId,
       currentUserId,
       isBackendMode,
-      onDelete,
-      onDeleteFailure,
-      onEdit,
-      onLike,
-      onOpenThread,
-      onReplyEditFailure,
-      onReport,
-      onToggleAcceptReply,
-      onToggleBookmark,
-      onToggleFollow,
-      onSeekToTimestamp,
-      onCopyTextNotice,
-      onToggleLockThread,
       capabilities.allowNotes,
       canParticipate,
       noteDeepLinkTargetId,
       linkedThreadId,
       highlightedThreadId,
-      onThreadHighlightShown,
       canModerate,
     ],
   );
@@ -945,18 +963,29 @@ export function ThreadSurface({
                 it move when it arrives. A single figure stands in its
                 middle, and the words follow closer than a space would put
                 them, so a short number does not stand apart from them. */}
-            <span className="mr-[0.22em] inline-block min-w-[2ch] text-center tabular-nums">
-              {discussionCount === undefined ? (
-                // Two unseen figures hold the line at the height the number
-                // will give it; the shimmer is laid over them, a little
-                // taller, without taking any room of its own.
-                <span aria-hidden="true" className="relative">
-                  <span className="invisible">00</span>
-                  <span className="absolute -inset-x-[0.06em] -inset-y-[0.1em] animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_14%,transparent)] motion-reduce:animate-none" />
-                </span>
-              ) : (
-                discussionCount
-              )}
+            {/* The number and its shimmer are both in the markup, the
+                slot's attribute choosing: a page drawn before its scripts
+                run fills the number in from the browser's copy and takes
+                the attribute off (lessonPageEarlyState.ts), and the first
+                render then agrees with it. */}
+            <span
+              className="mr-[0.22em] inline-block min-w-[2ch] text-center tabular-nums"
+              data-discussion-count={discussionCountSource ?? ""}
+              data-count-pending={discussionCount === undefined || undefined}
+            >
+              <span className="[[data-count-pending]_&]:hidden">
+                {discussionCount === undefined ? "" : discussionCount}
+              </span>
+              {/* Two unseen figures hold the line at the height the number
+                  will give it; the shimmer is laid over them, a little
+                  taller, without taking any room of its own. */}
+              <span
+                aria-hidden="true"
+                className="relative hidden [[data-count-pending]_&]:inline"
+              >
+                <span className="invisible">00</span>
+                <span className="absolute -inset-x-[0.06em] -inset-y-[0.1em] animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_14%,transparent)] motion-reduce:animate-none" />
+              </span>
             </span>
             Discussions
           </>

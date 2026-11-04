@@ -42,6 +42,8 @@ import {
 } from "./discussions-feed.repository.ts";
 
 const feedRepo = createDiscussionsFeedRepository();
+/** How many pinned comments open a lesson's discussion at most. */
+const MAX_PINNED_SHOWN = 10;
 
 interface FeedCapabilities {
   allowComments: boolean;
@@ -204,8 +206,10 @@ async function listCandidates(
   search: string | undefined,
   cursor: ReturnType<typeof decodeFeedCursor>,
   limit: number,
+  pinned?: "exclude" | "only",
 ): Promise<FeedCandidate[]> {
   return feedRepo.listCandidates(db, {
+    pinned,
     academyId,
     courseId: context.courseId,
     lessonId: context.lessonId,
@@ -285,16 +289,38 @@ export function createLearningDiscussionsFeedService(options?: {
 
       const cursor = decodeFeedCursor(query.cursor, context);
       const academyId = await resolveAcademyId(db);
-      const rows = await listCandidates(
-        db,
-        actor,
-        academyId,
-        context,
-        query.search || undefined,
-        cursor,
-        query.limit,
-      );
-      const { page, hasMore } = takePage(rows, query.limit);
+      // Pinned comments open the lesson's discussion, whatever the order. A
+      // search or "mine" lists them in their usual place instead. The pinned
+      // ones come with the first page and are kept out of every page, so
+      // the cursor never meets them.
+      const pinnedFirst = !query.search && !context.mine;
+      const [rows, pinnedRows] = await Promise.all([
+        listCandidates(
+          db,
+          actor,
+          academyId,
+          context,
+          query.search || undefined,
+          cursor,
+          query.limit,
+          pinnedFirst ? "exclude" : undefined,
+        ),
+        pinnedFirst && !cursor
+          ? listCandidates(
+              db,
+              actor,
+              academyId,
+              context,
+              undefined,
+              undefined,
+              MAX_PINNED_SHOWN,
+              "only",
+            )
+          : [],
+      ]);
+      const taken = takePage(rows, query.limit);
+      const hasMore = taken.hasMore;
+      const page = [...pinnedRows, ...taken.page];
 
       const threadIds = page
         .filter((row) => row.sourceType === "thread")
@@ -368,7 +394,7 @@ export function createLearningDiscussionsFeedService(options?: {
         }
       }
 
-      const last = page.at(-1);
+      const last = taken.page.at(-1);
       return {
         items,
         nextCursor: hasMore && last ? encodeFeedCursor(last, context) : null,

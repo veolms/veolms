@@ -13,6 +13,8 @@ interface ShakaRuntimeHookState {
   hooks: Set<ShakaRuntimeHook>;
   /** Run before the others (see `onShakaRuntimeLoaded`). */
   firstHooks?: Set<ShakaRuntimeHook>;
+  /** Told of a hook added after the runtime was loaded (see `onShakaRuntimeHookAdded`). */
+  lateHookListeners?: Set<() => void>;
   loaded: boolean;
   runtimeModule: unknown;
 }
@@ -55,9 +57,34 @@ export function onShakaRuntimeLoaded(
   const state = hookState();
   const hooks = options.first ? (state.firstHooks ??= new Set()) : state.hooks;
   hooks.add(hook);
-  if (state.loaded) runHook(hook, state.runtimeModule);
+  if (state.loaded) {
+    runHook(hook, state.runtimeModule);
+    for (const listener of state.lateHookListeners ?? []) {
+      try {
+        listener();
+      } catch {
+        // A listener's failure is its own.
+      }
+    }
+  }
   return () => {
     hooks.delete(hook);
+  };
+}
+
+/**
+ * Calls `listener` each time a hook is added after the runtime has loaded:
+ * an extension that arrived late (the app's extensions load after the
+ * document head has started the first lesson's preload) has just changed the
+ * runtime, and a player made before that may need configuring again.
+ * Returns an unsubscribe function.
+ */
+export function onShakaRuntimeHookAdded(listener: () => void): () => void {
+  const state = hookState();
+  const listeners = (state.lateHookListeners ??= new Set());
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
   };
 }
 

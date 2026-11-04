@@ -13,11 +13,11 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import type { UpdateCoursePricingRequest } from "@veolms/contracts";
 import type { CourseInclude } from "../../CourseOverviewPage";
 import {
-  formatDuration,
+  formatCourseDuration,
   resolveCourseDurationSeconds,
 } from "../../courseAdapter";
 import type { CurriculumSectionItem } from "../curriculumItems";
-import type { PricingControlKey } from "../statusIndicators";
+import type { PricingControlKey, PricingPriceField } from "../statusIndicators";
 import {
   type PricingFormState,
   normalizePricingState,
@@ -25,8 +25,10 @@ import {
   isPricingEqual,
   validatePricing,
   buildPricingPayload,
+  toDollarInput,
 } from "../pricingState";
 import type { ApiError } from "../../../lib/api-error";
+import type { IncludeDraftItem } from "../editorLocalTypes";
 
 export interface UsePricingHandlersArgs {
   currentCourseId: string | null;
@@ -114,6 +116,7 @@ export interface UsePricingHandlersArgs {
               currency: string;
               salePrice?: number | null | undefined;
               showDiscountBadge?: boolean | undefined;
+              linkedOnly?: boolean | undefined;
             }
           | null
           | undefined;
@@ -131,7 +134,17 @@ export interface UsePricingHandlersArgs {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       }
     | undefined;
   upsertPricingMutation: UseMutationResult<
@@ -142,6 +155,7 @@ export interface UsePricingHandlersArgs {
       currency: string;
       salePrice?: number | null | undefined;
       showDiscountBadge?: boolean | undefined;
+      linkedOnly?: boolean | undefined;
     },
     ApiError,
     { courseId: string; payload: UpdateCoursePricingRequest },
@@ -164,16 +178,12 @@ export interface UsePricingHandlersArgs {
   pricingDebounceTimerRef: RefObject<NodeJS.Timeout | null>;
   inFlightPricingPromiseRef: RefObject<Promise<unknown> | null>;
   markPricingControlSaving: (controlKey: string, isSaving: boolean) => void;
-  lastEditedPricingFieldRef: RefObject<"sellingPrice" | "originalPrice" | null>;
+  lastEditedPricingFieldRef: RefObject<PricingPriceField | null>;
   clearPricingControlStatus: (controlKey: PricingControlKey) => void;
   markPricingControlSaved: (controlKey: PricingControlKey) => void;
   markPricingControlFailed: (controlKey: PricingControlKey) => void;
   setToastMessage: Dispatch<SetStateAction<string | null>>;
-  manualIncludesDraft: {
-    id: string;
-    text: string;
-    isPendingCreation?: boolean;
-  }[];
+  manualIncludesDraft: IncludeDraftItem[];
 }
 
 export interface UsePricingHandlersResult {
@@ -186,7 +196,13 @@ export interface UsePricingHandlersResult {
   flushPricingPersistence: () => Promise<void>;
   handleSellingPriceChange: (val: string) => void;
   handleShowDiscountBadgeChange: (checked: boolean) => void;
+  handleLinkedOnlyChange: (checked: boolean) => void;
   handleOriginalPriceChange: (val: string) => void;
+  handleInternationalPriceChange: (
+    field: "internationalSellingPrice" | "internationalOriginalPrice",
+    val: string,
+  ) => void;
+  handleInternationalAutoChange: (checked: boolean) => void;
   handleCurrencyChange: (val: string) => Promise<void>;
 }
 
@@ -228,7 +244,7 @@ export function usePricingHandlers({
     editorData?.course?.totalDurationSeconds,
     editorData?.settings?.estimatedDuration,
   );
-  const computedDuration = formatDuration(courseDurationSeconds);
+  const computedDuration = formatCourseDuration(courseDurationSeconds);
 
   const previewInclusions: string[] = useMemo(() => {
     return manualIncludesDraft
@@ -309,6 +325,19 @@ export function usePricingHandlers({
         const newBaseline: PricingFormState = pricingFormFromServer(res);
         setServerPricing(newBaseline);
         serverPricingRef.current = newBaseline;
+        // An automatic international price is the server's: the form shows
+        // what it worked out.
+        if (
+          pricingDraftRef.current.internationalAuto &&
+          newBaseline.internationalAuto
+        ) {
+          const synced = {
+            internationalSellingPrice: newBaseline.internationalSellingPrice,
+            internationalOriginalPrice: newBaseline.internationalOriginalPrice,
+          };
+          pricingDraftRef.current = { ...pricingDraftRef.current, ...synced };
+          setPricingDraft((prev) => ({ ...prev, ...synced }));
+        }
 
         if (controlKey === "pricingDetails") {
           const field = lastEditedPricingFieldRef.current;
@@ -355,12 +384,24 @@ export function usePricingHandlers({
               sellingPrice: previousSnapshot.sellingPrice,
               originalPrice: previousSnapshot.originalPrice,
               showDiscountBadge: previousSnapshot.showDiscountBadge,
+              linkedOnly: previousSnapshot.linkedOnly,
+              internationalSellingPrice:
+                previousSnapshot.internationalSellingPrice,
+              internationalOriginalPrice:
+                previousSnapshot.internationalOriginalPrice,
+              internationalAuto: previousSnapshot.internationalAuto,
             };
             setPricingDraft((prev) => ({
               ...prev,
               sellingPrice: previousSnapshot.sellingPrice,
               originalPrice: previousSnapshot.originalPrice,
               showDiscountBadge: previousSnapshot.showDiscountBadge,
+              linkedOnly: previousSnapshot.linkedOnly,
+              internationalSellingPrice:
+                previousSnapshot.internationalSellingPrice,
+              internationalOriginalPrice:
+                previousSnapshot.internationalOriginalPrice,
+              internationalAuto: previousSnapshot.internationalAuto,
             }));
             const field = lastEditedPricingFieldRef.current;
             if (field) {
@@ -472,6 +513,24 @@ export function usePricingHandlers({
     void persistPricingDetails();
   };
 
+  // Linked-only is one click too. Turning it off saves nothing until a
+  // price is entered: the course stays linked-only until then.
+  const handleLinkedOnlyChange = (checked: boolean) => {
+    lastEditedPricingFieldRef.current = null;
+    clearPricingControlStatus("pricingDetails");
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      linkedOnly: checked,
+    };
+    setPricingDraft((prev) => ({ ...prev, linkedOnly: checked }));
+    if (pricingValidationError) setPricingValidationError(null);
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+      pricingDebounceTimerRef.current = null;
+    }
+    void persistPricingDetails();
+  };
+
   const handleOriginalPriceChange = (val: string) => {
     lastEditedPricingFieldRef.current = "originalPrice";
     clearPricingControlStatus("originalPrice");
@@ -491,6 +550,57 @@ export function usePricingHandlers({
       pricingDebounceTimerRef.current = null;
       void persistPricingDetails();
     }, 400);
+  };
+
+  // The price for buyers outside India, in dollars and cents: saved like
+  // the rupee prices, a moment after typing stops.
+  const handleInternationalPriceChange = (
+    field: "internationalSellingPrice" | "internationalOriginalPrice",
+    val: string,
+  ) => {
+    lastEditedPricingFieldRef.current = field;
+    clearPricingControlStatus(field);
+    clearPricingControlStatus("pricingDetails");
+    const amount = toDollarInput(val);
+    // A typed price is kept as typed: no longer the automatic one.
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      [field]: amount,
+      internationalAuto: false,
+    };
+    setPricingDraft((prev) => ({
+      ...prev,
+      [field]: amount,
+      internationalAuto: false,
+    }));
+    if (pricingValidationError) setPricingValidationError(null);
+
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+    }
+    pricingDebounceTimerRef.current = setTimeout(() => {
+      pricingDebounceTimerRef.current = null;
+      void persistPricingDetails();
+    }, 400);
+  };
+
+  // The automatic international price is one click: on, the server works
+  // it out from today's rate at once; off, the price shown is kept as typed.
+  const handleInternationalAutoChange = (checked: boolean) => {
+    lastEditedPricingFieldRef.current = "internationalSellingPrice";
+    clearPricingControlStatus("internationalSellingPrice");
+    clearPricingControlStatus("pricingDetails");
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      internationalAuto: checked,
+    };
+    setPricingDraft((prev) => ({ ...prev, internationalAuto: checked }));
+    if (pricingValidationError) setPricingValidationError(null);
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+      pricingDebounceTimerRef.current = null;
+    }
+    void persistPricingDetails();
   };
 
   const handleCurrencyChange = async (val: string) => {
@@ -539,7 +649,10 @@ export function usePricingHandlers({
     flushPricingPersistence,
     handleSellingPriceChange,
     handleShowDiscountBadgeChange,
+    handleLinkedOnlyChange,
     handleOriginalPriceChange,
+    handleInternationalPriceChange,
+    handleInternationalAutoChange,
     handleCurrencyChange,
   };
 }

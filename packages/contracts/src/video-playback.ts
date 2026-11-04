@@ -97,6 +97,8 @@ export const heroVideoPlaybackSchema = z.strictObject({
   segmentTokenExpiresAt: z.number().int().positive().optional(),
   duration: z.number().nonnegative().optional(),
   title: z.string().min(1).optional(),
+  /** The video's seek-preview storyboard index, when one has been made. */
+  storyboardUrl: z.string().min(1).optional(),
 });
 
 /** The minimal response used to renew a protected HLS segment token. */

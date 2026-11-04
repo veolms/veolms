@@ -398,8 +398,10 @@ export function RoleEditorPanel({
           </span>
         ) : canDelete ? (
           <Button
-            variant="danger"
+            elevation="flat"
             motion="static"
+            variant="danger"
+
             onClick={() => setConfirmingDelete(true)}
           >
             <Trash size={15} weight="bold" />
@@ -416,11 +418,20 @@ export function RoleEditorPanel({
         <div className="flex shrink-0 gap-2">
           {readOnly ? (
             <>
-              <Button variant="quiet" motion="static" onClick={onClose}>
+              <Button
+                elevation="flat"
+                motion="static"
+                variant="quiet"
+                onClick={onClose}
+              >
                 Close
               </Button>
               {canDuplicate && existing ? (
-                <Button onClick={() => onDuplicate(existing)}>
+                <Button
+                  elevation="flat"
+                  motion="static"
+                  onClick={() => onDuplicate(existing)}
+                >
                   <Copy size={15} weight="bold" />
                   Duplicate &amp; edit
                 </Button>
@@ -428,10 +439,17 @@ export function RoleEditorPanel({
             </>
           ) : (
             <>
-              <Button variant="quiet" motion="static" onClick={onClose}>
+              <Button
+                elevation="flat"
+                motion="static"
+                variant="quiet"
+                onClick={onClose}
+              >
                 Cancel
               </Button>
               <Button
+                elevation="flat"
+                motion="static"
                 disabled={
                   pending || name.trim().length === 0 || selected.size === 0
                 }

@@ -317,11 +317,14 @@ export async function listStaleRefunds(
   const cutoff = new Date(Date.now() - olderThanMinutes * 60 * 1000);
   return await database
     .selectFrom("refunds")
-    .selectAll()
-    .where("status", "=", "pending")
-    .where("gateway_refund_id", "is not", null)
-    .where("created_at", "<", cutoff)
-    .orderBy("created_at", "asc")
+    .innerJoin("payments", "payments.id", "refunds.payment_id")
+    .selectAll("refunds")
+    // The gateway the refund was made through is the payment's.
+    .select("payments.gateway_provider")
+    .where("refunds.status", "=", "pending")
+    .where("refunds.gateway_refund_id", "is not", null)
+    .where("refunds.created_at", "<", cutoff)
+    .orderBy("refunds.created_at", "asc")
     .limit(limit)
     .execute();
 }
@@ -361,7 +364,7 @@ export async function findAutoRefundForPayment(
  */
 export async function listDueAutoRefunds(
   database: Executor,
-  input: { now: Date; gatewayProvider: string; limit?: number },
+  input: { now: Date; gatewayProviders: readonly string[]; limit?: number },
 ) {
   const minWaitSeconds = AUTO_REFUND_RETRY_MIN_MS / 1000;
   return await database
@@ -373,7 +376,7 @@ export async function listDueAutoRefunds(
     .where("r.idempotency_key", "like", `${autoRefundKey("")}%`)
     .where("p.error_code", "=", SURPLUS_CAPTURE_ERROR_CODE)
     .where("p.status", "in", ["captured", "refunded"])
-    .where("p.gateway_provider", "=", input.gatewayProvider)
+    .where("p.gateway_provider", "in", [...input.gatewayProviders])
     .where("p.gateway_payment_id", "is not", null)
     .where(
       sql<boolean>`(

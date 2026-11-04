@@ -4,6 +4,7 @@ import type {
   CreateRefundRequest,
   GatewayRefundOutput,
   PaymentGateway,
+  PaymentGateways,
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
@@ -56,13 +57,30 @@ function outsideRefundAlreadyRecorded(): AppError {
 
 export function createRefundService({
   database,
-  paymentGateway,
+  paymentGateways,
 }: {
   database: Kysely<Database>;
-  paymentGateway: PaymentGateway;
+  paymentGateways: PaymentGateways;
 }): RefundService {
   const courseAccessService = createCourseAccessService();
   const outbox = createOutboxService();
+
+  /**
+   * The gateway a payment is refunded through: the one it was made with.
+   * One that is no longer set up refuses the refund outright (a definite
+   * refusal: nothing was sent), as the gateway itself would.
+   */
+  function gatewayFor(provider: string): PaymentGateway {
+    const gateway = paymentGateways.get(provider);
+    if (!gateway) {
+      throw new AppError(
+        422,
+        "PAYMENT_GATEWAY_ERROR",
+        `The payment gateway this payment was made through (${provider}) is not set up.`,
+      );
+    }
+    return gateway;
+  }
 
   /**
    * Processes a refund (full or partial) via PaymentGateway and tracks refund status idempotently.
@@ -337,7 +355,7 @@ export function createRefundService({
             currency: payment.currency,
             status: "processed",
           }
-        : await paymentGateway.refundPayment({
+        : await gatewayFor(payment.gateway_provider).refundPayment({
             gatewayPaymentId: payment.gateway_payment_id!,
             amount: requestedAmount,
             currency: payment.currency,

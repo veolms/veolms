@@ -25,6 +25,7 @@ import {
 } from "../extrasState";
 import type { ExtrasState } from "../editorLocalTypes";
 import type { ApiError } from "../../../lib/api-error";
+import type { IncludeDraftItem } from "../editorLocalTypes";
 
 export interface UseExtrasStateArgs {
   isBasicsDirty: boolean;
@@ -55,24 +56,12 @@ export interface UseExtrasStateResult {
   setServerIncludes: Dispatch<
     SetStateAction<{ id: string; text: string; position: number }[]>
   >;
-  manualIncludesDraft: {
-    id: string;
-    text: string;
-    isPendingCreation?: boolean;
-  }[];
-  setManualIncludesDraft: Dispatch<
-    SetStateAction<{ id: string; text: string; isPendingCreation?: boolean }[]>
-  >;
-  manualIncludesDraftRef: RefObject<
-    { id: string; text: string; isPendingCreation?: boolean }[]
-  >;
+  manualIncludesDraft: IncludeDraftItem[];
+  setManualIncludesDraft: Dispatch<SetStateAction<IncludeDraftItem[]>>;
+  manualIncludesDraftRef: RefObject<IncludeDraftItem[]>;
   dragInitialIncludesStateRef: RefObject<{
     includeIds: string[];
-    previousIncludes: Array<{
-      id: string;
-      text: string;
-      isPendingCreation?: boolean;
-    }>;
+    previousIncludes: Array<IncludeDraftItem>;
   } | null>;
   deletingIncludeIdsRef: RefObject<Set<string>>;
   deletingIncludeIds: Set<string>;
@@ -120,17 +109,13 @@ export function useExtrasState({
     useState<ExtrasFormState>(initialExtrasState);
   const [serverIncludes, setServerIncludes] = useState<CourseIncludeItem[]>([]);
   const [manualIncludesDraft, setManualIncludesDraft] = useState<
-    Array<{ id: string; text: string; isPendingCreation?: boolean }>
+    Array<IncludeDraftItem>
   >([]);
   const manualIncludesDraftRef = useRef(manualIncludesDraft);
   manualIncludesDraftRef.current = manualIncludesDraft;
   const dragInitialIncludesStateRef = useRef<{
     includeIds: string[];
-    previousIncludes: Array<{
-      id: string;
-      text: string;
-      isPendingCreation?: boolean;
-    }>;
+    previousIncludes: Array<IncludeDraftItem>;
   } | null>(null);
   const deletingIncludeIdsRef = useRef<Set<string>>(new Set());
   const [deletingIncludeIds, setDeletingIncludeIds] = useState<Set<string>>(

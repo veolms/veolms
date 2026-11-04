@@ -4,7 +4,11 @@ import {
   canPlayCourseLesson,
   getPublicPreviewLessonNumbers,
 } from "../../coursePlayerAccess";
-import { useAuthStore } from "../../../store/auth.store";
+import {
+  useAuthStore,
+  useRememberedAccount,
+  type AuthIdentityHint,
+} from "../../../store/auth.store";
 import { useCourseAccess } from "../../../services/courses";
 import { useLearningCourse } from "../../useLearningCourse";
 import { useCurrentUser } from "../../../services/auth";
@@ -20,6 +24,12 @@ export interface UseLearningCourseDataResult {
   isAuthenticated: boolean;
   resolvedAuthUser: AuthUser | null;
   isAuthResolutionPending: boolean;
+  /**
+   * The account this tab remembers while the session check is on its way
+   * (null once it has answered otherwise). The page is drawn for it from
+   * the tab's copies before the check answers; for display only.
+   */
+  rememberedAccount: AuthIdentityHint | null;
   /**
    * What the viewer may do with the course, decided by the server by the
    * rule playback applies: which lessons open, and whether they manage it.
@@ -50,9 +60,16 @@ export function useLearningCourseData({
   const resolvedAuthUser =
     currentUser === undefined ? storedAuthUser : currentUser;
   const isAuthResolutionPending = !isCurrentUserFetched && !storedAuthUser;
+  const rememberedAccount = useRememberedAccount();
+  // The lessons are shown open to a learner this tab remembers while the
+  // session check is on its way, as a page drawn before its scripts ran
+  // shows them (lessonPageEarlyState.ts): a card's lock and greying only.
+  // What plays is still decided by the server, lesson by lesson.
+  const viewerSignedIn = isAuthenticated || rememberedAccount !== null;
   const isApiRoute = Boolean(courseSlug);
   const courseAccessQuery = useCourseAccess(courseSlug, {
     enabled: isApiRoute,
+    fromTabCopy: true,
   });
   const {
     data: courseOverview,
@@ -90,17 +107,18 @@ export function useLearningCourseData({
     (lessonNumber: number) =>
       canPlayCourseLesson({
         allowGuestLearning: ALLOW_GUEST_LEARNING,
-        isAuthenticated,
+        isAuthenticated: viewerSignedIn,
         lessonNumber,
         publicPreviewLessonNumbers: publicPreviewLessonSet,
       }),
-    [isAuthenticated, publicPreviewLessonSet],
+    [publicPreviewLessonSet, viewerSignedIn],
   );
   const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
   return {
     isAuthenticated,
     resolvedAuthUser,
     isAuthResolutionPending,
+    rememberedAccount,
     courseAccessQuery,
     isApiRoute,
     courseOverview,

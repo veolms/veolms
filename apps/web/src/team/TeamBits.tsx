@@ -285,7 +285,12 @@ export function LoadError({
   return (
     <EmptyState icon={icon} title={title}>
       <p>{message || "Try again in a moment."}</p>
-      <Button className="mt-4" onClick={onRetry}>
+      <Button
+        elevation="flat"
+        motion="static"
+        className="mt-4"
+        onClick={onRetry}
+      >
         Retry
       </Button>
     </EmptyState>

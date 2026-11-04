@@ -6,6 +6,7 @@ import {
   type CreateCheckoutOrderRequest,
   type CreateCheckoutOrderResponse,
   type PaymentGateway,
+  type PaymentGateways,
   type PricingCalculation,
   type ReleaseCheckoutOrderResponse,
 } from "@veolms/contracts";
@@ -48,7 +49,9 @@ import {
 } from "../payments/captured-gateway-payment.ts";
 import { createExtraPaymentRefundService } from "../payments/extra-payment-refund.service.ts";
 import { courseSaleState } from "../pricing/purchasable.ts";
-import { toMinorUnits } from "../shared/currency.ts";
+import { pricingAmountToMinorUnits } from "../shared/currency.ts";
+import { pricingRegionForCountry } from "../shared/pricing-region.ts";
+import { toPaymentProvider } from "../payments/payment.mapper.ts";
 import {
   createPaymentReconciliationService,
   type PaymentReconciliationService,
@@ -68,6 +71,7 @@ export interface CheckoutService {
   previewCheckout(
     userId: string | undefined,
     request: CheckoutPreviewRequest,
+    context?: CheckoutContext,
   ): Promise<CheckoutPreviewResponse>;
   createOrder(
     user: {
@@ -77,6 +81,7 @@ export interface CheckoutService {
       phone?: string | null;
     },
     request: CreateCheckoutOrderRequest,
+    context?: CheckoutContext,
   ): Promise<CreateCheckoutOrderResponse>;
   releaseCheckoutOrder(
     userId: string,
@@ -84,9 +89,19 @@ export interface CheckoutService {
   ): Promise<ReleaseCheckoutOrderResponse>;
 }
 
+/** What is known about where a checkout comes from. */
+export interface CheckoutContext {
+  /**
+   * The buyer's country (ISO 3166-1 alpha-2), when the request says: it
+   * picks the gateway a new payment is opened with, and which of a course's
+   * prices is charged (`pricingRegionForCountry`).
+   */
+  country?: string | null;
+}
+
 export interface CheckoutServiceOptions {
   database: Kysely<Database>;
-  paymentGateway: PaymentGateway;
+  paymentGateways: PaymentGateways;
   pricingService?: PricingService;
   paymentService?: PaymentService;
   reconciliationService?: PaymentReconciliationService;
@@ -98,13 +113,13 @@ export interface CheckoutServiceOptions {
 
 export function createCheckoutService({
   database,
-  paymentGateway,
+  paymentGateways,
   autoRefundExtraPayments = config.AUTO_REFUND_EXTRA_PAYMENTS,
   manualPaymentBlockDays = config.MANUAL_PAYMENT_BLOCK_DAYS,
   pricingService = createPricingService({ database }),
   paymentService = createPaymentService({
     database,
-    paymentGateway,
+    paymentGateways,
     autoRefundExtraPayments,
     manualPaymentBlockDays,
   }),
@@ -115,7 +130,7 @@ export function createCheckoutService({
 }: CheckoutServiceOptions): CheckoutService {
   const extraPaymentRefunds = createExtraPaymentRefundService({
     database,
-    paymentGateway,
+    paymentGateways,
   });
   /**
    * Generates a preview of checkout calculation with live item pricing and optional coupon.
@@ -123,12 +138,14 @@ export function createCheckoutService({
   async function previewCheckout(
     userId: string | undefined,
     request: CheckoutPreviewRequest,
+    context: CheckoutContext = {},
   ): Promise<CheckoutPreviewResponse> {
     const { pricing, couponValidation } = await pricingService
       .calculatePricing({
         userId,
         items: request.items,
         couponCode: request.couponCode,
+        pricingRegion: pricingRegionForCountry(context.country),
       })
       .catch((error: unknown) => {
         // A visitor who is not signed in learns only that a code did not
@@ -152,9 +169,17 @@ export function createCheckoutService({
     // and the coupon's id are for order creation and stay here.
     return {
       pricing: {
+        amountUnit: pricing.amountUnit,
+        subtotalAmount: pricing.subtotalAmount,
         discountAmount: pricing.discountAmount,
         totalAmount: pricing.totalAmount,
+        ...(pricing.minimumCharge
+          ? { minimumCharge: pricing.minimumCharge }
+          : {}),
         currency: pricing.currency,
+        ...(pricing.upgradeCredit
+          ? { upgradeCredit: pricing.upgradeCredit }
+          : {}),
       },
       couponValidation: couponValidation && {
         valid: couponValidation.valid,
@@ -353,7 +378,8 @@ export function createCheckoutService({
   ): Promise<boolean> {
     if (existingOrder.status !== "pending") return false;
     if (payment.status === "captured") return false;
-    if (payment.gateway_provider !== paymentGateway.providerName) return false;
+    const paymentGateway = paymentGateways.get(payment.gateway_provider);
+    if (!paymentGateway) return false;
     if (payment.amount === 0 || !payment.gateway_order_id) return false;
 
     let capture: Awaited<ReturnType<typeof findGatewayCapture>>;
@@ -396,6 +422,7 @@ export function createCheckoutService({
   async function resumeExistingOrder(
     existingOrder: OrderRow,
     user: CheckoutUser,
+    context: CheckoutContext,
     handedOut?: PaymentRow,
   ): Promise<CreateCheckoutOrderResponse> {
     const payment =
@@ -449,8 +476,12 @@ export function createCheckoutService({
           gateway: isFreeOrder
             ? null
             : {
+                provider: toPaymentProvider(payment.gateway_provider),
                 gatewayOrderId: payment.gateway_order_id,
                 keyId: payment.gateway_key_id ?? undefined,
+                checkoutUrl: paymentGateways
+                  .get(payment.gateway_provider)
+                  ?.checkoutUrl(payment.gateway_order_id),
                 amount: payment.amount,
                 currency: payment.currency,
               },
@@ -473,13 +504,16 @@ export function createCheckoutService({
     const { gatewayOrder } = await paymentService.initializePayment({
       orderId: existingOrder.id,
       customer: user,
+      country: context.country,
     });
 
     return {
       order,
       gateway: {
+        provider: gatewayOrder.provider,
         gatewayOrderId: gatewayOrder.gatewayOrderId,
         keyId: gatewayOrder.keyId,
+        checkoutUrl: gatewayOrder.checkoutUrl,
         amount: gatewayOrder.amount,
         currency: gatewayOrder.currency,
       },
@@ -568,7 +602,11 @@ export function createCheckoutService({
           coveredByRequest: coverageCovers(wanted, held),
           sameTerms:
             openOrder.total_amount ===
-              toMinorUnits(pricing.totalAmount, pricing.currency) &&
+              pricingAmountToMinorUnits(
+                pricing.totalAmount,
+                pricing.currency,
+                pricing.amountUnit,
+              ) &&
             openOrder.currency === pricing.currency &&
             openOrder.coupon_id === (pricing.couponId ?? null),
           manualPaymentPending: Boolean(openOrder.manual_payment_pending),
@@ -619,6 +657,7 @@ export function createCheckoutService({
       phone?: string | null;
     },
     request: CreateCheckoutOrderRequest,
+    context: CheckoutContext = {},
   ): Promise<CreateCheckoutOrderResponse> {
     const { items, couponCode, idempotencyKey } = request;
 
@@ -640,7 +679,7 @@ export function createCheckoutService({
         // already ended. It gives up the key and this request starts afresh,
         // at today's price.
         if (existingOrder.status === "paid") {
-          return await resumeExistingOrder(existingOrder, user);
+          return await resumeExistingOrder(existingOrder, user, context);
         }
         if (isOrderOpen(existingOrder, new Date())) {
           // Read again under the buyer's lock: another checkout of theirs
@@ -666,6 +705,7 @@ export function createCheckoutService({
             return await resumeExistingOrder(
               claimed.order,
               user,
+              context,
               claimed.handedOut,
             );
           }
@@ -679,6 +719,7 @@ export function createCheckoutService({
       userId: user.id,
       items,
       couponCode,
+      pricingRegion: pricingRegionForCountry(context.country),
     });
 
     const now = new Date();
@@ -732,7 +773,7 @@ export function createCheckoutService({
           "idempotency",
         )
       ) {
-        return await createOrder(user, request);
+        return await createOrder(user, request, context);
       }
       throw err;
     }
@@ -803,18 +844,29 @@ export function createCheckoutService({
           user_id: user.id,
           status: "pending",
           currency: pricing.currency,
-          // The pricing is whole major units, as catalog prices are set;
-          // the order stores the money it transacts in minor units.
-          subtotal_amount: toMinorUnits(
+          // The pricing is whole major units, as catalog prices are set
+          // (cents for a price for buyers outside India); the order stores
+          // the money it transacts in minor units.
+          subtotal_amount: pricingAmountToMinorUnits(
             pricing.subtotalAmount,
             pricing.currency,
+            pricing.amountUnit,
           ),
-          discount_amount: toMinorUnits(
+          discount_amount: pricingAmountToMinorUnits(
             pricing.discountAmount,
             pricing.currency,
+            pricing.amountUnit,
           ),
-          tax_amount: toMinorUnits(pricing.taxAmount, pricing.currency),
-          total_amount: toMinorUnits(pricing.totalAmount, pricing.currency),
+          tax_amount: pricingAmountToMinorUnits(
+            pricing.taxAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
+          total_amount: pricingAmountToMinorUnits(
+            pricing.totalAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
           coupon_id: pricing.couponId ?? null,
           idempotency_key: idempotencyKey ?? null,
           expires_at: expiresAt,
@@ -830,10 +882,26 @@ export function createCheckoutService({
           bundle_id: it.itemType === "bundle" ? it.itemId : null,
           quiz_pricing_id: it.itemType === "quiz" ? it.itemId : null,
           title_snapshot: it.title,
-          unit_price: toMinorUnits(it.unitPrice, pricing.currency),
-          discount_amount: toMinorUnits(it.discountAmount, pricing.currency),
-          tax_amount: toMinorUnits(it.taxAmount, pricing.currency),
-          final_amount: toMinorUnits(it.finalAmount, pricing.currency),
+          unit_price: pricingAmountToMinorUnits(
+            it.unitPrice,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
+          discount_amount: pricingAmountToMinorUnits(
+            it.discountAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
+          tax_amount: pricingAmountToMinorUnits(
+            it.taxAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
+          final_amount: pricingAmountToMinorUnits(
+            it.finalAmount,
+            pricing.currency,
+            pricing.amountUnit,
+          ),
           created_at: now,
         }));
 
@@ -879,6 +947,7 @@ export function createCheckoutService({
       return await resumeExistingOrder(
         outcome.resumableOrder,
         user,
+        context,
         outcome.handedOut,
       ).catch(refuseForClosedOrder);
     }
@@ -907,6 +976,7 @@ export function createCheckoutService({
         // Inserted by this request a moment ago, so there is nothing to re-read.
         order: createdOrder,
         customer: user,
+        country: context.country,
       })
       .catch(async (error: unknown) => {
         // The gateway did not give this order anything to pay with, and the
@@ -928,8 +998,10 @@ export function createCheckoutService({
     return {
       order: { id: createdOrder.id, status: createdOrder.status },
       gateway: {
+        provider: gatewayOrder.provider,
         gatewayOrderId: gatewayOrder.gatewayOrderId,
         keyId: gatewayOrder.keyId,
+        checkoutUrl: gatewayOrder.checkoutUrl,
         amount: gatewayOrder.amount,
         currency: gatewayOrder.currency,
       },
@@ -947,6 +1019,9 @@ export function createCheckoutService({
    * reported, or a gateway that cannot be reached is left as it is. The
    * window refusal then still protects the buyer from paying twice, and the
    * recovery cycle settles a captured payment as before.
+   *
+   * A gateway whose orders can be ended (Cashfree) is then told to end
+   * this one, so that it cannot be paid later; best effort.
    *
    * The payment row is left open on purpose: the recovery worker goes on
    * checking it, so a capture that still arrives (it should not: the window
@@ -975,6 +1050,9 @@ export function createCheckoutService({
       orderId,
     );
     const payment = await paymentRepo.findPaymentByOrderId(database, orderId);
+    /** The gateway order to end once our order is cancelled. */
+    let gatewayOrder:
+      { gateway: PaymentGateway; gatewayOrderId: string } | undefined;
     if (payment && payment.amount > 0 && payment.gateway_provider !== "free") {
       if (payment.status === "captured") {
         return { released: false, status: order.status };
@@ -982,19 +1060,30 @@ export function createCheckoutService({
       if (payment.gateway_provider === "manual" || !payment.gateway_order_id) {
         return { released: false, status: order.status };
       }
+      // A gateway that is no longer set up cannot be asked: the order is
+      // left as it is, as when the gateway cannot be reached.
+      const paymentGateway = paymentGateways.get(payment.gateway_provider);
       let noLivePayment = false;
       try {
-        noLivePayment = await gatewayOrderHasNoLivePayment(
-          paymentGateway,
-          payment.gateway_order_id,
-        );
+        noLivePayment = paymentGateway
+          ? await gatewayOrderHasNoLivePayment(
+              paymentGateway,
+              payment.gateway_order_id,
+            )
+          : false;
       } catch {
         noLivePayment = false;
       }
       if (!noLivePayment) return { released: false, status: order.status };
+      if (paymentGateway) {
+        gatewayOrder = {
+          gateway: paymentGateway,
+          gatewayOrderId: payment.gateway_order_id,
+        };
+      }
     }
 
-    return await database.transaction().execute(async (trx) => {
+    const result = await database.transaction().execute(async (trx) => {
       await orderRepo.lockBuyerCheckout(trx, userId);
       const current = await orderRepo.findOrderByIdForUpdate(trx, orderId);
       if (!current || current.status !== "pending") {
@@ -1023,6 +1112,15 @@ export function createCheckoutService({
       await orderRepo.cancelUnpaidOrders(trx, [orderId], new Date());
       return { released: true, status: "cancelled" as const };
     });
+
+    if (result.released && gatewayOrder?.gateway.cancelOrder) {
+      // Left payable, it would only lead to an extra payment to send back
+      // (see above), which the recovery cycle still finds if one is made.
+      await gatewayOrder.gateway
+        .cancelOrder(gatewayOrder.gatewayOrderId)
+        .catch(() => undefined);
+    }
+    return result;
   }
 
   return {

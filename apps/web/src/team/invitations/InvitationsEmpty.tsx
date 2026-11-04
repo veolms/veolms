@@ -50,7 +50,9 @@ export function InvitationsEmpty({
 
       {canInvite ? (
         <div className="mt-8">
-          <Button onClick={onInvite}>Invite people</Button>
+          <Button elevation="flat" motion="static" onClick={onInvite}>
+            Invite people
+          </Button>
         </div>
       ) : null}
     </div>

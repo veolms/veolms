@@ -228,3 +228,29 @@ export class PreviewChunkCache {
     writeMeta(meta);
   }
 }
+
+/** What the seek previews kept on this device take up. */
+export function getPreviewChunkCacheUsage(): { bytes: number; videos: number } {
+  const runs = Object.values(readMeta());
+  return {
+    bytes: runs.reduce((sum, entry) => sum + (entry.bytes || 0), 0),
+    videos: runs.length,
+  };
+}
+
+/**
+ * Empties the seek-preview cache. A preview open in another tab finds its
+ * chunks gone and downloads them again.
+ */
+export async function clearPreviewChunkCache(): Promise<void> {
+  try {
+    localStorage.removeItem(META_KEY);
+  } catch {
+    // The list is read again, and found wrong, chunk by chunk.
+  }
+  try {
+    if (typeof caches !== "undefined") await caches.delete(CACHE_NAME);
+  } catch {
+    // Left for the browser to clear.
+  }
+}

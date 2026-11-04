@@ -40,6 +40,7 @@ import {
   buildPricingPayload,
 } from "../pricingState";
 import type { ApiError } from "../../../lib/api-error";
+import type { IncludeDraftItem } from "../editorLocalTypes";
 
 export interface UseStepSavesAndNavigationArgs {
   activeStep: CourseWizardStepId;
@@ -129,6 +130,7 @@ export interface UseStepSavesAndNavigationArgs {
       currency: string;
       salePrice?: number | null | undefined;
       showDiscountBadge?: boolean | undefined;
+      linkedOnly?: boolean | undefined;
     },
     ApiError,
     { courseId: string; payload: UpdateCoursePricingRequest },
@@ -224,14 +226,8 @@ export interface UseStepSavesAndNavigationArgs {
   setServerIncludes: Dispatch<
     SetStateAction<{ id: string; text: string; position: number }[]>
   >;
-  manualIncludesDraft: {
-    id: string;
-    text: string;
-    isPendingCreation?: boolean;
-  }[];
-  setManualIncludesDraft: Dispatch<
-    SetStateAction<{ id: string; text: string; isPendingCreation?: boolean }[]>
-  >;
+  manualIncludesDraft: IncludeDraftItem[];
+  setManualIncludesDraft: Dispatch<SetStateAction<IncludeDraftItem[]>>;
   setExtrasSaveFailed: Dispatch<SetStateAction<boolean>>;
   triggerExtrasSavedBriefly: () => void;
   isManualIncludesDirty: boolean;
@@ -725,7 +721,14 @@ export function useStepSavesAndNavigation({
         const listRes = await coursesService.listIncludes(targetCourseId!);
         setServerIncludes(listRes.items);
         setManualIncludesDraft(
-          listRes.items.map((inc) => ({ id: inc.id, text: inc.text })),
+          listRes.items.map((inc) => ({
+            id: inc.id,
+            text: inc.text,
+            detail: inc.detail,
+            icon: inc.icon,
+            color: inc.color,
+            kind: inc.kind,
+          })),
         );
       }
 

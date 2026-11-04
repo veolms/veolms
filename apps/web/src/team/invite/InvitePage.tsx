@@ -77,7 +77,11 @@ export function InvitePage({
         icon={CheckCircle}
         title="You're on the team"
         actions={
-          <Button onClick={() => onNavigatePage?.("/")}>
+          <Button
+            elevation="flat"
+            motion="static"
+            onClick={() => onNavigatePage?.("/")}
+          >
             Open the academy
           </Button>
         }
@@ -109,7 +113,11 @@ export function InvitePage({
           used ? "This invitation was already used" : "This link does not work"
         }
         actions={
-          <Button onClick={() => onNavigatePage?.("/")}>
+          <Button
+            elevation="flat"
+            motion="static"
+            onClick={() => onNavigatePage?.("/")}
+          >
             Go to the academy
           </Button>
         }
@@ -131,6 +139,8 @@ export function InvitePage({
         title="Signed in with another email"
         actions={
           <Button
+            elevation="flat"
+            motion="static"
             disabled={signingOut}
             onClick={() => {
               void signOut().then(signIn);
@@ -164,6 +174,8 @@ export function InvitePage({
               Not now
             </button>
             <Button
+              elevation="flat"
+              motion="static"
               disabled={accept.isPending}
               onClick={() =>
                 void accept
@@ -178,7 +190,9 @@ export function InvitePage({
             </Button>
           </>
         ) : (
-          <Button onClick={signIn}>Sign in to accept</Button>
+          <Button elevation="flat" motion="static" onClick={signIn}>
+            Sign in to accept
+          </Button>
         )
       }
     >

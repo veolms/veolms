@@ -5,11 +5,25 @@ import type { StoryboardFrame } from "../storyboard/storyboardTypes";
 import type { TimelineMarker } from "../timeline/timelineMath";
 
 export type PlayerSettingsView =
-  "closed" | "main" | "quality" | "playback-rate" | "captions" | "audio";
+  | "closed"
+  | "main"
+  | "quality"
+  | "playback-rate"
+  | "captions"
+  | "audio"
+  | "theme";
 
 export interface PlayerHudOptions {
   direction?: -1 | 1;
-  variant?: "default" | "mobile-seek" | "playback-rate" | "temporary-speed";
+  /** The volume shown by the `volume` variant, from 0 to 1. */
+  level?: number;
+  variant?:
+    | "default"
+    | "keyboard-seek"
+    | "mobile-seek"
+    | "playback-rate"
+    | "temporary-speed"
+    | "volume";
 }
 
 export interface PlayerHudMessage extends PlayerHudOptions {
@@ -24,6 +38,12 @@ export interface PlayerZoomState {
   gestureActive: boolean;
   feedbackVisible: boolean;
   transitioning: boolean;
+  /**
+   * Where the last gesture snapped the picture: to fill the player, or back
+   * to its original size. Said over the picture while the zoom feedback is
+   * shown.
+   */
+  snap: "fill" | "original" | null;
 }
 
 export interface PlayerUiState {
@@ -81,5 +101,6 @@ export function createInitialPlayerZoomState(): PlayerZoomState {
     gestureActive: false,
     feedbackVisible: false,
     transitioning: false,
+    snap: null,
   };
 }

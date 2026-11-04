@@ -120,6 +120,13 @@ export const ElasticScroller = forwardRef<
             : "invisible -translate-y-1.5 opacity-0",
         "motion-reduce:transition-none",
         className,
+        // In use (pulled, or scrolling by itself), it is drawn over the
+        // phone's bottom menu (z-index 140, mobile-navigation.css): its
+        // socket, sent down as it is pulled up, would otherwise pass under
+        // it. At rest it stays under the menu, so the menu stays pressable.
+        // After `className` and marked important, so a layer a page sets
+        // (the shell's page scroller is `z-45!`) does not keep it under.
+        control.mode === "idle" ? undefined : "z-[145]!",
       )}
       data-direction={control.direction}
       data-appearance={preferences.appearance}

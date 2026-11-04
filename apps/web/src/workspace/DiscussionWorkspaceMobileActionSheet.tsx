@@ -8,6 +8,9 @@ import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
+import { HouseIcon as House } from "@phosphor-icons/react/House";
+import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import {
   Drawer,
@@ -230,6 +233,67 @@ export function DiscussionWorkspaceMobileActionSheet({
               >
                 <Flag size={19} weight="regular" aria-hidden="true" />
                 <span>{actions.reportLabel}</span>
+              </button>
+            )}
+            {actions.staff.canMark && (
+              <button
+                type="button"
+                className="flex min-h-12 w-full items-center gap-3 border-t border-(--border) px-4 text-left text-sm font-medium text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+                onClick={() =>
+                  runAndClose(() =>
+                    actions.staff.setHeart(!card.workspaceItem.creatorHeart),
+                  )
+                }
+              >
+                <Heart
+                  size={19}
+                  weight={card.workspaceItem.creatorHeart ? "fill" : "regular"}
+                  className={
+                    card.workspaceItem.creatorHeart ? "text-[#ff3b5c]" : ""
+                  }
+                  aria-hidden="true"
+                />
+                <span>
+                  {card.workspaceItem.creatorHeart
+                    ? "Remove creator heart"
+                    : "Give creator heart"}
+                </span>
+              </button>
+            )}
+            {actions.staff.canPin && (
+              <button
+                type="button"
+                className="flex min-h-12 w-full items-center gap-3 border-t border-(--border) px-4 text-left text-sm font-medium text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+                onClick={() => runAndClose(actions.staff.togglePin)}
+              >
+                <PushPin
+                  size={19}
+                  weight={actions.staff.isPinned ? "fill" : "regular"}
+                  aria-hidden="true"
+                />
+                <span>
+                  {actions.staff.isPinned
+                    ? "Unpin from lesson"
+                    : "Pin to lesson"}
+                </span>
+              </button>
+            )}
+            {actions.staff.canFeature && (
+              <button
+                type="button"
+                className="flex min-h-12 w-full items-center gap-3 border-t border-(--border) px-4 text-left text-sm font-medium text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+                onClick={() => runAndClose(actions.staff.toggleHomePage)}
+              >
+                <House
+                  size={19}
+                  weight={actions.staff.onHomePage ? "fill" : "regular"}
+                  aria-hidden="true"
+                />
+                <span>
+                  {actions.staff.onHomePage
+                    ? "Remove from home page"
+                    : "Add to home page"}
+                </span>
               </button>
             )}
             {actions.canHide && (

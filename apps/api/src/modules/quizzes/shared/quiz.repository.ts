@@ -58,7 +58,7 @@ export async function listLessonsByIds(
   if (lessonIds.length === 0) return [];
   return await database
     .selectFrom("course_lessons")
-    .select(["id", "course_id", "title", "is_published"])
+    .select(["id", "course_id", "section_id", "title", "is_published"])
     .where("id", "in", lessonIds)
     .where("deleted_at", "is", null)
     .execute();

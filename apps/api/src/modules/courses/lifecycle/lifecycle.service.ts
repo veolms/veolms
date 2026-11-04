@@ -173,7 +173,12 @@ export function createLifecycleService({
         "Course access rules have not been configured.",
       );
     } else {
-      if (accessRules.access_type !== "everyone") {
+      // A linked-only course is restricted on purpose: only the link's
+      // grants let a learner in (see configuration.service.ts).
+      if (
+        accessRules.access_type !== "everyone" &&
+        pricing?.linked_only !== true
+      ) {
         report(accessRulesErrors, "Restricted access is not yet supported.");
       }
       if (

@@ -1,7 +1,16 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import {
   BUILT_IN_PLAYER_THEMES,
+  PLAYER_THEME_OPTIONS,
+  getPlayerThemes,
   resolvePlayerTheme,
+  subscribePlayerThemes,
   type PlayerTheme,
   type PlayerThemeDefinition,
 } from "./playerThemes";
@@ -29,4 +38,18 @@ export function PlayerThemeProvider({
 
 export function usePlayerTheme(): PlayerThemeDefinition {
   return useContext(PlayerThemeContext);
+}
+
+const getBuiltInPlayerThemes = () => PLAYER_THEME_OPTIONS;
+
+/**
+ * Every theme a picker can offer: the built-in ones, then those plugins
+ * registered. Updates when a plugin registers one later.
+ */
+export function usePlayerThemes(): readonly PlayerThemeDefinition[] {
+  return useSyncExternalStore(
+    subscribePlayerThemes,
+    getPlayerThemes,
+    getBuiltInPlayerThemes,
+  );
 }

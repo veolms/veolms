@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type {
-  PaymentGateway,
+  PaymentGateways,
   PaymentProvider,
   VerifyPaymentRequest,
   VerifyPaymentResponse,
@@ -26,6 +26,7 @@ import { createExtraPaymentRefundService } from "./extra-payment-refund.service.
 import { config } from "../../../config.ts";
 import { toPaymentProvider } from "./payment.mapper.ts";
 import { reportDuplicatePurchases } from "./duplicate-purchase.ts";
+import { findGatewayCapture } from "./captured-gateway-payment.ts";
 
 /**
  * What the gateway is asked to charge for an order. Order totals are stored
@@ -63,6 +64,11 @@ export interface PaymentService {
       email?: string | null;
       phone?: string | null;
     };
+    /**
+     * The buyer's country (ISO 3166-1 alpha-2), when known: it picks the
+     * gateway of an order's first payment (see PaymentGateways.forCountry).
+     */
+    country?: string | null;
   }): Promise<{
     gatewayOrder: {
       provider: PaymentProvider;
@@ -70,6 +76,7 @@ export interface PaymentService {
       amount: number;
       currency: string;
       keyId?: string;
+      checkoutUrl?: string;
     };
   }>;
   /**
@@ -88,7 +95,7 @@ export interface PaymentService {
 
 export interface PaymentServiceOptions {
   database: Kysely<Database>;
-  paymentGateway: PaymentGateway;
+  paymentGateways: PaymentGateways;
   /** Where a duplicate purchase found on verification is reported. */
   logger?: FastifyBaseLogger;
   /** See `AUTO_REFUND_EXTRA_PAYMENTS`. */
@@ -99,7 +106,7 @@ export interface PaymentServiceOptions {
 
 export function createPaymentService({
   database,
-  paymentGateway,
+  paymentGateways,
   logger,
   autoRefundExtraPayments = config.AUTO_REFUND_EXTRA_PAYMENTS,
   manualPaymentBlockDays = config.MANUAL_PAYMENT_BLOCK_DAYS,
@@ -110,16 +117,18 @@ export function createPaymentService({
   });
   const extraPaymentRefunds = createExtraPaymentRefundService({
     database,
-    paymentGateway,
+    paymentGateways,
     logger,
   });
   /**
-   * Initializes a payment for an internal pending order through the injected PaymentGateway.
+   * Initializes a payment for an internal pending order through the gateway
+   * for the buyer's country, or the one its payment was started with.
    */
   async function initializePayment({
     orderId,
     order: knownOrder,
     customer,
+    country,
   }: {
     orderId: string;
     order?: PaymentOrderRow;
@@ -129,6 +138,7 @@ export function createPaymentService({
       email?: string | null;
       phone?: string | null;
     };
+    country?: string | null;
   }) {
     const order =
       knownOrder ?? (await orderRepo.findOrderById(database, orderId));
@@ -168,6 +178,13 @@ export function createPaymentService({
 
     const gatewayAmount = toGatewayAmount(order.total_amount, order.currency);
 
+    // A payment keeps the gateway it was started with: the gateway order it
+    // has there may still be paid, which only that gateway would tell us.
+    // An order's first payment goes to the gateway for the buyer's country.
+    const paymentGateway =
+      (payment && paymentGateways.get(payment.gateway_provider)) ??
+      paymentGateways.forCountry(country);
+
     // 2. Reuse an in-flight gateway order when nothing changed. Every
     //    re-initialization used to create a FRESH gateway order and
     //    overwrite gateway_order_id — but the old gateway order stays
@@ -202,6 +219,7 @@ export function createPaymentService({
       amount: number;
       currency: string;
       keyId?: string;
+      checkoutUrl?: string;
     }) =>
       database.transaction().execute(async (trx) => {
         await orderRepo.lockBuyerCheckout(trx, order.user_id);
@@ -226,6 +244,7 @@ export function createPaymentService({
               amount: row.amount,
               currency: row.currency,
               keyId: row.gateway_key_id ?? undefined,
+              checkoutUrl: paymentGateway.checkoutUrl(row.gateway_order_id),
             },
           };
         }
@@ -238,6 +257,9 @@ export function createPaymentService({
         // captured money.
         const written = row
           ? await paymentRepo.reinitializePaymentIfNotFinal(trx, row.id, {
+              // The same gateway as before, unless that one is no longer
+              // set up (see paymentGateway above).
+              gateway_provider: fresh.provider,
               gateway_order_id: fresh.gatewayOrderId,
               gateway_key_id: fresh.keyId ?? null,
               amount: fresh.amount,
@@ -268,8 +290,9 @@ export function createPaymentService({
       if (reused) return reused;
     }
 
-    // 3. Create upstream order via the gateway abstraction (Razorpay, Stripe, etc.).
+    // 3. Create upstream order via the gateway abstraction (Razorpay, Dodo Payments).
     // The gateway receives minor units, as the order total is stored.
+    const items = await orderRepo.listOrderItems(database, order.id);
     const gatewayOrder = await paymentGateway
       .createOrder({
         orderId: order.id,
@@ -278,6 +301,7 @@ export function createPaymentService({
         currency: order.currency,
         receipt: order.order_number,
         customer,
+        description: items.map((item) => item.title_snapshot).join(", "),
         notes: {
           orderId: order.id,
           userId: order.user_id,
@@ -293,6 +317,7 @@ export function createPaymentService({
       amount: gatewayOrder.amount,
       currency: gatewayOrder.currency,
       keyId: gatewayOrder.keyId,
+      checkoutUrl: gatewayOrder.checkoutUrl,
     };
     const handedOut = await handOut(fresh).catch((err: unknown) => {
       // payments_active_order_unique: a live row for this order was written
@@ -325,16 +350,15 @@ export function createPaymentService({
   }
 
   /**
-   * Verifies client payment signature and transitions order to PAID and fulfills enrollments.
+   * Verifies what the payment widget reported and transitions order to PAID and fulfills enrollments.
    * Delegates concurrency-safe fulfillment to the PaymentReconciliationService so that
-   * concurrent calls from /payments/verify and the Razorpay webhook cannot double-fulfill.
+   * concurrent calls from /payments/verify and the gateway webhook cannot double-fulfill.
    */
   async function verifyPayment(
     userId: string,
     input: VerifyPaymentRequest,
   ): Promise<VerifyPaymentResponse> {
-    const { orderId, gatewayOrderId, gatewayPaymentId, gatewaySignature } =
-      input;
+    const { orderId, gatewayOrderId, gatewaySignature } = input;
 
     const order = await orderRepo.findOrderById(database, orderId);
     if (!order || order.user_id !== userId) {
@@ -356,7 +380,31 @@ export function createPaymentService({
       return { verified: true, orderStatus: "paid" };
     }
 
-    // 1. Verify signature via Gateway Abstraction
+    // The gateway the payment was made with.
+    const paymentGateway = paymentGateways.get(payment.gateway_provider);
+    if (!paymentGateway) {
+      throw CommerceErrors.PAYMENT_NOT_FOUND(gatewayOrderId);
+    }
+
+    // 1. Find the payment. A hosted checkout (Dodo Payments) does not
+    //    always tell the page which payment was made: the gateway is asked,
+    //    as the recovery cycle would ask it, which payment of this gateway
+    //    order was captured.
+    let gatewayPaymentId = input.gatewayPaymentId;
+    if (!gatewayPaymentId) {
+      const capture = await findGatewayCapture(paymentGateway, payment).catch(
+        (err: unknown) => {
+          throw toClientGatewayError(err);
+        },
+      );
+      if (capture.state !== "captured") {
+        throw CommerceErrors.PAYMENT_NOT_CAPTURED();
+      }
+      gatewayPaymentId = capture.gatewayPaymentId;
+    }
+
+    //    A payment the page named is only taken with its signature, from a
+    //    gateway whose widget signs what it reports.
     const isValid = paymentGateway.verifyPaymentSignature({
       gatewayOrderId,
       gatewayPaymentId,
@@ -438,6 +486,19 @@ export function createPaymentService({
           }
         : null,
     });
+    // A payment in another currency: what it settles for, for the revenue
+    // reports. Whichever path saw the capture first records it.
+    if (
+      (result.outcome === "finalized" ||
+        result.outcome === "already_captured") &&
+      typeof paymentDetails.settlementAmount === "number" &&
+      paymentDetails.settlementCurrency
+    ) {
+      await orderRepo.recordOrderSettlement(database, order.id, {
+        amount: paymentDetails.settlementAmount,
+        currency: paymentDetails.settlementCurrency,
+      });
+    }
 
     if (
       result.outcome === "recorded_as_surplus" ||

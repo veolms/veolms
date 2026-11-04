@@ -9,6 +9,7 @@ import {
 } from "@veolms/contracts";
 import { cacheTags, createCache } from "@veolms/api-core";
 import { AppError } from "../../../lib/errors.ts";
+import { scopeOpensSection } from "../../access/index.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
 import { resolveQuizCharge } from "../../commerce/pricing/quiz-pricing.amount.ts";
@@ -178,9 +179,10 @@ export function createAttemptService(options: QuizServiceOptions) {
 
   /**
    * Course access and, for paid quizzes, the quiz pass. A quiz on a
-   * free-preview lesson needs neither. A paid course quiz needs the
-   * student's quiz pass for the course; one purchase unlocks every quiz in
-   * it. Course owners and admins skip both checks.
+   * free-preview lesson needs neither. Part of a course opens only the
+   * quizzes of its sections, as it opens only their lessons. A paid course
+   * quiz needs the student's quiz pass for the course; one purchase unlocks
+   * every quiz in it. Course owners and admins skip both checks.
    */
   async function assertAssignmentAccess(
     assignment: AssignmentRow,
@@ -191,15 +193,21 @@ export function createAttemptService(options: QuizServiceOptions) {
   ) {
     if (placement.lesson?.is_preview) return;
     if (isCourseManager(placement, userId, roles)) return;
-    if (
-      !(await repo.isPublishedFreeCourse(database, assignment.course_id)) &&
-      !(await accessService.hasActiveAccess(
+    if (!(await repo.isPublishedFreeCourse(database, assignment.course_id))) {
+      const scope = await accessService.getAccessScope(
         database,
         userId,
         assignment.course_id,
-      ))
-    )
-      throw new AppError(403, "COURSE_ACCESS_REQUIRED", accessMessage);
+      );
+      if (!scope)
+        throw new AppError(403, "COURSE_ACCESS_REQUIRED", accessMessage);
+      if (!scopeOpensSection(scope, placement.lesson?.section_id))
+        throw new AppError(
+          403,
+          "LESSON_ACCESS_DENIED",
+          "This quiz is not part of your access to the course.",
+        );
+    }
     const charge = resolveQuizCharge(
       await pricingRepo.findPricing(database, assignment.course_id),
     );
@@ -731,24 +739,15 @@ export function createAttemptService(options: QuizServiceOptions) {
   }
 
   async function listAssignments(userId: string) {
-    const grants = await accessService.listUserGrants(database, userId);
-    const accessibleCourseIds = grants
-      .filter(
-        (grant) =>
-          grant.status === "active" &&
-          (!grant.validUntil || grant.validUntil > new Date()),
-      )
-      .map((grant) => grant.courseId);
-    const courseIds = [
-      ...new Set([
-        ...accessibleCourseIds,
-        ...(await publishedFreeCourseIds.fetch(
-          "all",
-          () => repo.listPublishedFreeCourseIds(database),
-          { tags: [cacheTags.catalog, cacheTags.site] },
-        )),
-      ]),
-    ];
+    const scopes = await accessService.listAccessScopes(database, userId);
+    const freeCourseIds = new Set(
+      await publishedFreeCourseIds.fetch(
+        "all",
+        () => repo.listPublishedFreeCourseIds(database),
+        { tags: [cacheTags.catalog, cacheTags.site] },
+      ),
+    );
+    const courseIds = [...new Set([...scopes.keys(), ...freeCourseIds])];
     const assignments = await repo.listAssignmentsForCourses(
       database,
       courseIds,
@@ -797,7 +796,13 @@ export function createAttemptService(options: QuizServiceOptions) {
         !lesson ||
         lesson.course_id !== assignment.course_id ||
         !lesson.is_published ||
-        courseTitle === undefined
+        courseTitle === undefined ||
+        // Part of a course lists only its sections' quizzes.
+        (!freeCourseIds.has(assignment.course_id) &&
+          !scopeOpensSection(
+            scopes.get(assignment.course_id) ?? null,
+            lesson.section_id,
+          ))
       )
         continue;
       const attempts = attemptsByAssignment.get(assignment.id) ?? [];

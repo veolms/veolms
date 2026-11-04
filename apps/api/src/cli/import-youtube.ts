@@ -22,6 +22,7 @@ import {
 } from "../modules/auth/shared/auth.constants.ts";
 import { slugify } from "../modules/courses/shared/courses.utils.ts";
 import * as courseRepo from "../modules/courses/course/course.repository.ts";
+import { seedDefaultIncludes } from "../modules/courses/includes/includes.service.ts";
 import * as configRepo from "../modules/courses/configuration/configuration.repository.ts";
 import * as mediaRepo from "../modules/media/media.repository.ts";
 import {
@@ -44,6 +45,7 @@ import {
   assertEnoughDiskSpace,
   resolveImportScratchRoot,
 } from "../lib/media-tools/disk.ts";
+import { readAvc1CodecString, toFfmpegPath } from "../lib/media-tools/fmp4.ts";
 
 // ANSI colors
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
@@ -650,22 +652,8 @@ async function probeMediaStreamInfo(
   };
 }
 
-// The master playlist's CODECS attribute, read from what ffmpeg actually
-// wrote rather than guessed from the encode settings: Safari picks a
-// rendition by it and iOS wants every rendition identified up front. H.264
-// is "avc1." + the profile, constraint and level bytes of the init
-// segment's avcC box; AAC is "mp4a.40." + the audio object type.
-async function readAvc1CodecString(
-  initSegmentPath: string,
-): Promise<string | null> {
-  const bytes = await fsp.readFile(initSegmentPath);
-  const at = bytes.indexOf("avcC", 0, "latin1");
-  // Box type, then AVCDecoderConfigurationRecord version 1.
-  if (at === -1 || bytes[at + 4] !== 1) return null;
-  const hex = (b: number | undefined) => (b ?? 0).toString(16).padStart(2, "0");
-  return `avc1.${hex(bytes[at + 5])}${hex(bytes[at + 6])}${hex(bytes[at + 7])}`;
-}
-
+// The master playlist's AAC codec: "mp4a.40." + the audio object type (the
+// H.264 one is read from the init segment, see `readAvc1CodecString`).
 const AAC_AUDIO_OBJECT_TYPES: Record<string, number> = {
   Main: 1,
   LC: 2,
@@ -678,11 +666,6 @@ const AAC_AUDIO_OBJECT_TYPES: Record<string, number> = {
 function aacCodecString(profile: string | null): string {
   const objectType = (profile && AAC_AUDIO_OBJECT_TYPES[profile]) || 2;
   return `mp4a.40.${objectType}`;
-}
-
-/** A local path as ffmpeg takes it on every platform (forward slashes). */
-function toFfmpegPath(filePath: string): string {
-  return filePath.split(path.sep).join("/");
 }
 
 // ffmpeg names these differently from yt-dlp/common usage; normalize to
@@ -1896,6 +1879,7 @@ ${bold("Examples:")}
         created_at: now,
         updated_at: now,
       });
+      await seedDefaultIncludes(database, courseId);
 
       // If requested published, update status and published_at
       if (cliArgs.status === "published") {

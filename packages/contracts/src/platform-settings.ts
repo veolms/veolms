@@ -1,4 +1,7 @@
 import { z } from "zod";
+
+/** The form of a player theme id (see `@veolms/video-player`). */
+const PLAYER_THEME_ID_PATTERN = /^[a-z][a-z0-9-]{0,39}$/;
 import {
   DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
   MAX_MAX_DEVICES_PER_STUDENT,
@@ -23,6 +26,13 @@ export const platformAppearanceSettingsSchema = z.strictObject({
     .regex(/^[a-z][a-z0-9-]{0,39}$/, "Choose one of the colour themes")
     .default(DEFAULT_PLATFORM_APPEARANCE_SETTINGS.defaultColorTheme)
     .meta({ example: "ocean" }),
+  // Player themes come from the web app and its plugins; the API only
+  // checks the id's form.
+  defaultVideoPlayerTheme: z
+    .string()
+    .regex(PLAYER_THEME_ID_PATTERN, "Choose one of the player themes")
+    .default(DEFAULT_PLATFORM_APPEARANCE_SETTINGS.defaultVideoPlayerTheme)
+    .meta({ example: "youtube" }),
 }) satisfies z.ZodType<PlatformAppearanceSettings>;
 
 export const platformSecuritySettingsSchema = z.strictObject({
@@ -96,6 +106,9 @@ export const updatePlatformSettingsRequestSchema = z
         defaultColorTheme: z
           .string()
           .regex(/^[a-z][a-z0-9-]{0,39}$/, "Choose one of the colour themes"),
+        defaultVideoPlayerTheme: z
+          .string()
+          .regex(PLAYER_THEME_ID_PATTERN, "Choose one of the player themes"),
       })
       .partial()
       .optional(),
@@ -122,3 +135,20 @@ export const publicPlatformSettingsResponseSchema = platformSettingsSchema.omit(
   { invoice: true },
 ) satisfies z.ZodType<PublicPlatformSettings>;
 export type PublicPlatformSettingsResponse = PublicPlatformSettings;
+
+/**
+ * The last "Rebuild all public pages" of the API process that answers: every
+ * course page, lesson page and the home page built again and deployed.
+ */
+export const staticSiteRebuildStatusSchema = z.strictObject({
+  status: z.enum(["idle", "queued", "running", "succeeded", "failed"]),
+  message: z.string().nullable(),
+  updatedAt: z.string(),
+  runUrl: z.string().url().nullable(),
+});
+export type StaticSiteRebuildStatus = z.infer<
+  typeof staticSiteRebuildStatusSchema
+>;
+z.globalRegistry.add(staticSiteRebuildStatusSchema, {
+  id: "StaticSiteRebuildStatus",
+});

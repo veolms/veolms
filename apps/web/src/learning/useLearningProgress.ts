@@ -12,9 +12,11 @@ import {
   getLearningProgressMap,
   getLearningProgressStorageKey,
   getPendingLearningProgress,
+  hasStoredLearningProgress,
   markLearningProgressSynced,
   mergeServerLearningProgress,
   mergeLocalLearningProgress,
+  parseLearningProgress,
   readLearningProgress,
   recordLearningProgress,
   writeLearningProgress,
@@ -26,14 +28,21 @@ import {
   takeWatchedSeconds,
 } from "./learningWatchTime";
 import {
+  handleRefusedLessonPositions,
   hasLessonPositions,
-  refuseLessonPositions,
   restoreLessonPositions,
   takeLessonPositions,
   withLessonPositions,
 } from "./lessonPositionOutbox";
+import {
+  adoptProgressSyncInterval,
+  getProgressSyncIntervalMs,
+  noteProgressActivity,
+  subscribeProgressIdle,
+} from "./progressSyncSchedule";
 import { getApiError } from "../lib/api-client";
 import { markCourseResumeStale } from "./courseResumeCache";
+import { readEarlyProgressCopy } from "../store/lessonEarlyState";
 import {
   adoptServerLearningProgress,
   snapshotAnswersSyncedProgress,
@@ -62,9 +71,36 @@ export function useLearningProgress({
   const syncEnabled = Boolean(enabled && courseKey && userId);
   const storageIdentity =
     userId && courseKey ? `${userId}\u0000${courseKey}` : null;
-  const [localState, setLocalState] = useState<LocalLearningProgressState>(() =>
-    readLearningProgress(userId, courseKey),
+  // Read in the first render, a built page's hydration included: that page
+  // is drawn with the kept progress before its scripts run (see
+  // lessonPageEarlyState.ts), so the first render has to show the same
+  // ("42% complete" on a lesson card) or React throws the whole page away
+  // and draws it again. Whether a copy is held at all is what tells the
+  // page the progress is known (`progressKnown`): an empty copy says the
+  // learner had made none when it was written.
+  // The copy as the document's head read it, when the head drew the page
+  // from one (store/lessonEarlyState.ts): storage may have moved on since.
+  const [localState, setLocalState] = useState<LocalLearningProgressState>(
+    () => {
+      const early = readEarlyProgressCopy(userId, courseKey);
+      return early === undefined
+        ? readLearningProgress(userId, courseKey)
+        : parseLearningProgress(early);
+    },
   );
+  const heldInBrowser = useMemo(
+    () => {
+      const early = readEarlyProgressCopy(userId, courseKey);
+      return early === undefined
+        ? hasStoredLearningProgress(userId, courseKey)
+        : early !== null;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- storageIdentity stands for the pair
+    [storageIdentity],
+  );
+  // The identity the first render read storage for: the effect below need
+  // not read it again for the same one.
+  const readForIdentityRef = useRef<string | null | undefined>(storageIdentity);
   const localStateRef = useRef(localState);
   const lessonIdsByNumberRef = useRef(lessonIdsByNumber);
   useEffect(() => {
@@ -95,6 +131,11 @@ export function useLearningProgress({
 
   useEffect(() => {
     syncedProgressKnownAtRef.current = Date.now();
+    if (readForIdentityRef.current === storageIdentity) {
+      readForIdentityRef.current = undefined;
+      return;
+    }
+    readForIdentityRef.current = undefined;
     setLocalState(
       storageIdentity
         ? readLearningProgress(userId, courseKey)
@@ -197,6 +238,9 @@ export function useLearningProgress({
         }
         return result;
       });
+      // A finished lesson (a text or quiz one has no player reporting
+      // activity) is sent within moments, not at the next interval.
+      if (progressPercent >= 100) noteProgressActivity();
     },
     [lessonIdsByNumber],
   );
@@ -262,6 +306,7 @@ export function useLearningProgress({
       isFlushingRef.current = true;
       try {
         const response = await learningProgressService.sync(courseKey, payload);
+        adoptProgressSyncInterval(response.nextSyncSeconds);
         if (response.synced) {
           syncedProgressKnownAtRef.current = Date.now();
           setLocalState((current) =>
@@ -279,13 +324,13 @@ export function useLearningProgress({
         retryAtRef.current = 0;
       } catch (error) {
         restoreWatchedSeconds(courseKey, watchedSeconds);
-        // An API from before positions were kept turns the whole batch
-        // down: it goes again without them.
+        // An API from before positions (or their age) were kept turns the
+        // whole batch down: it goes again without them.
         if (
           getApiError(error).status === 400 &&
           items.some((item) => item.positionSeconds !== undefined)
         ) {
-          refuseLessonPositions();
+          handleRefusedLessonPositions(courseKey, positions);
         } else {
           restoreLessonPositions(courseKey, positions);
         }
@@ -314,12 +359,23 @@ export function useLearningProgress({
       void flushProgress({ keepalive: true });
     };
 
-    const interval = window.setInterval(flush, 15_000);
+    // While a video plays, once per interval (the server names it, see
+    // progressSyncSchedule); a pause or a lesson's end sends at once.
+    let timer: number | undefined;
+    const scheduleNext = () => {
+      timer = window.setTimeout(() => {
+        flush();
+        scheduleNext();
+      }, getProgressSyncIntervalMs());
+    };
+    scheduleNext();
+    const unsubscribeIdle = subscribeProgressIdle(flush);
     window.addEventListener("online", flush);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", handlePageHide);
     return () => {
-      window.clearInterval(interval);
+      window.clearTimeout(timer);
+      unsubscribeIdle();
       window.removeEventListener("online", flush);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
@@ -341,6 +397,7 @@ export function useLearningProgress({
   // is not in) or failed: there is nothing more to show then.
   const progressKnown =
     !syncEnabled ||
+    heldInBrowser ||
     localState.items.length > 0 ||
     serverProgress !== undefined ||
     isSnapshotError;

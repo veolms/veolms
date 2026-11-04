@@ -124,7 +124,8 @@ export async function findCourseAccessByIdOrSlug(
 
 /**
  * Id and slug of the published courses among those named, each by its id or
- * its slug. Drafts, archived courses and courses in the bin are left out.
+ * its slug. Drafts, archived courses, unlisted ones and courses in the bin
+ * are left out.
  */
 export async function findPublishedCourseRefs(
   database: DatabaseExecutor,
@@ -143,6 +144,7 @@ export async function findPublishedCourseRefs(
     .select(["id", "slug"])
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
+    .where("unlisted", "=", false)
     .where((eb) =>
       eb.or([
         ...(courseIds.length > 0 ? [eb("id", "in", courseIds)] : []),
@@ -196,6 +198,9 @@ export async function listCourseAccessFacts(
       "course_pricing.price",
       "course_pricing.currency",
       "course_pricing.sale_price",
+      "course_pricing.international_currency",
+      "course_pricing.international_price_minor",
+      "course_pricing.international_sale_price_minor",
       discountBadgeColumn(showDiscountBadge),
     ])
     .where("courses.deleted_at", "is", null);
@@ -203,7 +208,9 @@ export async function listCourseAccessFacts(
     if (filter.courseIds.length === 0) return [];
     query = query.where("courses.id", "in", [...filter.courseIds]);
   } else {
-    query = query.where("courses.status", "=", "published");
+    query = query
+      .where("courses.status", "=", "published")
+      .where("courses.unlisted", "=", false);
   }
   return await query
     .orderBy("courses.created_at", "asc")
@@ -253,6 +260,10 @@ export async function listPublishedCourses(
       "course_pricing.price",
       "course_pricing.currency",
       "course_pricing.sale_price",
+      "course_pricing.international_currency",
+      "course_pricing.international_price_minor",
+      "course_pricing.international_sale_price_minor",
+      "course_pricing.linked_only",
       discountBadgeColumn(showDiscountBadge),
       "course_settings.certificate_enabled",
       "course_settings.estimated_duration",
@@ -302,6 +313,8 @@ export async function listPublishedCourses(
         .as("lesson_duration_seconds"),
     ])
     .where("courses.status", "=", "published")
+    // Bought from its own link only, never listed.
+    .where("courses.unlisted", "=", false)
     .where("courses.deleted_at", "is", null);
 
   if (filters?.creatorId) {
@@ -396,6 +409,10 @@ export async function listHomeDiscoveryCourses(
       "course_pricing.price",
       "course_pricing.currency",
       "course_pricing.sale_price",
+      "course_pricing.international_currency",
+      "course_pricing.international_price_minor",
+      "course_pricing.international_sale_price_minor",
+      "course_pricing.linked_only",
       discountBadgeColumn(showDiscountBadge),
       "course_settings.certificate_enabled",
       "course_settings.estimated_duration",
@@ -444,12 +461,17 @@ export async function listHomeDiscoveryCourses(
         .as("lesson_duration_seconds"),
     ])
     .where("courses.status", "=", "published")
+    .where("courses.unlisted", "=", false)
     .where("courses.deleted_at", "is", null);
 
   if (options.freeOnly) {
-    query = query.where(
-      sql<boolean>`coalesce(course_pricing.pricing_type, 'free') = 'free'`,
-    );
+    // A linked-only course costs nothing but is had only with the course
+    // it comes with, so it is not one anyone can start for free.
+    query = query
+      .where(
+        sql<boolean>`coalesce(course_pricing.pricing_type, 'free') = 'free'`,
+      )
+      .where(sql<boolean>`coalesce(course_pricing.linked_only, false) = false`);
   }
 
   if (options.courseIds) {
@@ -485,6 +507,7 @@ export async function listPublishedCourseOptions(database: Kysely<Database>) {
     .select(["id", "title"])
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
+    .where("unlisted", "=", false)
     .orderBy("created_at", "asc")
     .orderBy("id", "asc")
     .execute();
@@ -584,7 +607,9 @@ export async function listManagedCourses(
         .where("course_lessons.deleted_at", "is", null)
         .as("lesson_duration_seconds"),
     ])
-    .where("courses.deleted_at", "is", null);
+    .where("courses.deleted_at", "is", null)
+    // Managed from the course it unlocks ("Partial access"), not listed.
+    .where("courses.unlisted", "=", false);
 
   if (creatorId) {
     query = query.where("courses.creator_id", "=", creatorId);
@@ -616,6 +641,7 @@ export async function listAvailableCoursesByCreator(
     .where("creator_id", "=", creatorId)
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
+    .where("unlisted", "=", false)
     .orderBy("created_at", "desc")
     .execute();
 }

@@ -102,7 +102,21 @@ export const reportsListResponseSchema = z.object({
 export type ReportsListResponse = z.infer<typeof reportsListResponseSchema>;
 
 export const moderateThreadRequestSchema = z.object({
-  action: z.enum(["hide", "unhide", "lock", "unlock", "delete"]),
+  /**
+   * `pin` puts a comment or question at the top of its lesson's discussion;
+   * `heart` gives it the creator's heart.
+   */
+  action: z.enum([
+    "hide",
+    "unhide",
+    "lock",
+    "unlock",
+    "delete",
+    "pin",
+    "unpin",
+    "heart",
+    "unheart",
+  ]),
   reason: z.string().max(500).optional(),
 });
 export type ModerateThreadRequest = z.infer<typeof moderateThreadRequestSchema>;

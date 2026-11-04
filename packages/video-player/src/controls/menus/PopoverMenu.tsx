@@ -25,6 +25,8 @@ export type PopoverMenuMobilePresentation = "popover" | "sheet";
 
 export interface PopoverMenuRenderContext {
   close: () => void;
+  /** The menu is the bottom sheet, which draws its own title. */
+  sheet: boolean;
 }
 
 export interface PopoverMenuProps {
@@ -33,6 +35,15 @@ export interface PopoverMenuProps {
   trigger: ReactNode;
   children: ReactNode | ((context: PopoverMenuRenderContext) => ReactNode);
   menuLabel?: string;
+  /** What the sheet shows as its title (default: the menu label). */
+  sheetTitle?: ReactNode;
+  /**
+   * `side` fills the player's height along its right edge instead of
+   * opening beside the trigger; `corner` opens above the trigger's row but
+   * against the player's right edge, so it stays put wherever the trigger
+   * is (neither applies to the sheet).
+   */
+  placement?: "anchored" | "corner" | "side";
   mobilePresentation?: PopoverMenuMobilePresentation;
   /**
    * Uses the sheet outside the phone layout too (only with
@@ -82,9 +93,18 @@ const popoverEdgePadPx = 8;
 const popoverMinHeightPx = 96;
 const popoverMaxHeightCapPx = 24 * 16;
 
+/** Gap between a `corner` panel and the right edge of the controls. */
+const popoverCornerInsetPx = 12;
+
 type PopoverPanelLayout = {
   host: HTMLElement;
   maxHeight: number;
+  /**
+   * Where a `corner` panel sits: against the right edge of the controls
+   * that hold the trigger, which in full screen with the lessons beside the
+   * video is the video's edge, not the host's.
+   */
+  cornerRight: number;
   top?: number;
   bottom?: number;
   left?: number;
@@ -117,6 +137,10 @@ function measurePopoverPanelLayout(
   const hostRect = playerRectOf(host);
   const playerRect = playerRectOf(player);
   const triggerRect = playerRectOf(trigger);
+  const controls =
+    trigger.closest<HTMLElement>("[data-player-control-frame]") ?? player;
+  const cornerRight =
+    hostRect.right - playerRectOf(controls).right + popoverCornerInsetPx;
   const horizontal =
     align === "start"
       ? { left: triggerRect.left - hostRect.left }
@@ -126,6 +150,7 @@ function measurePopoverPanelLayout(
     return {
       host,
       ...horizontal,
+      cornerRight,
       top: triggerRect.bottom - hostRect.top + popoverGapPx,
       maxHeight: Math.min(
         popoverMaxHeightCapPx,
@@ -143,6 +168,7 @@ function measurePopoverPanelLayout(
   return {
     host,
     ...horizontal,
+    cornerRight,
     bottom: hostRect.bottom - triggerRect.top + popoverGapPx,
     maxHeight: Math.min(
       popoverMaxHeightCapPx,
@@ -158,6 +184,10 @@ const mobileSheetPanelClass =
   "pointer-events-auto inset-x-0 bottom-0 z-180 flex max-h-[min(82dvh,36rem)] w-full flex-col overflow-hidden rounded-t-2xl border-0 text-(--video-player-menu-text) shadow-[0_-18px_48px_rgba(0,0,0,0.38)] transition-[transform,height,border-radius] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus:outline-none motion-reduce:transition-none";
 
 const mobileSheetDismissDistance = 72;
+/** A finger that moved less than this was a tap, not a drag. */
+const mobileSheetTapSlop = 6;
+/** Leaving at this speed (px/ms) closes or steps the sheet however short the drag. */
+const mobileSheetFlickSpeed = 0.45;
 
 export function PopoverMenu({
   align = "end",
@@ -177,6 +207,8 @@ export function PopoverMenu({
   onOpenChange,
   open: controlledOpen,
   panelClassName,
+  placement = "anchored",
+  sheetTitle,
   side = "top",
   trigger,
   triggerClassName,
@@ -192,6 +224,13 @@ export function PopoverMenu({
   const mobileSheetDragRef = useRef<{
     pointerId: number;
     startY: number;
+    /** The last two points, for the speed the finger leaves at. */
+    lastY: number;
+    lastTime: number;
+    previousY: number;
+    previousTime: number;
+    /** Gone past a tap's slop. */
+    moved: boolean;
   } | null>(null);
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const [mobileSheetDragOffset, setMobileSheetDragOffset] = useState(0);
@@ -385,9 +424,15 @@ export function PopoverMenu({
   const handleMobileSheetDragStart = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    const y = sheetDragY(event);
     mobileSheetDragRef.current = {
       pointerId: event.pointerId,
-      startY: sheetDragY(event),
+      startY: y,
+      lastY: y,
+      lastTime: event.timeStamp,
+      previousY: y,
+      previousTime: event.timeStamp,
+      moved: false,
     };
     setMobileSheetDragStartHeight(
       panelRef.current ? playerRectOf(panelRef.current).height : null,
@@ -401,7 +446,13 @@ export function PopoverMenu({
   ) => {
     const drag = mobileSheetDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const dragDelta = sheetDragY(event) - drag.startY;
+    const y = sheetDragY(event);
+    const dragDelta = y - drag.startY;
+    drag.previousY = drag.lastY;
+    drag.previousTime = drag.lastTime;
+    drag.lastY = y;
+    drag.lastTime = event.timeStamp;
+    if (Math.abs(dragDelta) > mobileSheetTapSlop) drag.moved = true;
     // Dragging up only means something on an expandable sheet that is not
     // already filling the screen.
     setMobileSheetDragOffset(
@@ -423,8 +474,21 @@ export function PopoverMenu({
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     }
     const dragDelta = sheetDragY(event) - drag.startY;
+    // A finger that stopped before it let go leaves at no speed.
+    const speed =
+      event.timeStamp - drag.lastTime > 100
+        ? 0
+        : (drag.lastY - drag.previousY) /
+          Math.max(1, drag.lastTime - drag.previousTime);
+    // Far enough, or flicked: a quick short drag counts as a long one.
+    const wentDown =
+      dragDelta >= mobileSheetDismissDistance ||
+      (dragDelta > mobileSheetTapSlop && speed >= mobileSheetFlickSpeed);
+    const wentUp =
+      dragDelta <= -mobileSheetDismissDistance ||
+      (dragDelta < -mobileSheetTapSlop && speed <= -mobileSheetFlickSpeed);
     if (!cancelled && expandableSheet) {
-      if (!mobileSheetExpanded && dragDelta <= -mobileSheetDismissDistance) {
+      if (!mobileSheetExpanded && wentUp) {
         setMobileSheetExpanded(true);
         setMobileSheetDragOffset(0);
         return;
@@ -432,14 +496,14 @@ export function PopoverMenu({
       if (mobileSheetExpanded) {
         // One drag is one step, like the lessons drawer: the expanded sheet
         // settles back to its resting height, never straight to closed.
-        if (dragDelta >= mobileSheetDismissDistance) {
+        if (wentDown) {
           setMobileSheetExpanded(false);
         }
         setMobileSheetDragOffset(0);
         return;
       }
     }
-    if (!cancelled && Math.max(0, dragDelta) >= mobileSheetDismissDistance) {
+    if (!cancelled && wentDown) {
       closeAndRestoreFocus();
       return;
     }
@@ -491,18 +555,28 @@ export function PopoverMenu({
         isMobileSheet && mobileSheetExpanded ? "" : undefined
       }
       data-video-player-menu-panel=""
+      data-video-player-menu-placement={
+        !isMobileSheet && placement === "side" ? "side" : undefined
+      }
       data-player-theme={theme.id}
       style={{
         ...getPlayerThemeStyle(theme),
-        ...(panelLayout
-          ? {
-              top: panelLayout.top,
-              bottom: panelLayout.bottom,
-              left: panelLayout.left,
-              right: panelLayout.right,
-              maxHeight: panelLayout.maxHeight,
-            }
-          : {}),
+        ...(panelLayout && placement === "side"
+          ? { top: 0, bottom: 0, right: 0, left: "auto", maxHeight: "none" }
+          : panelLayout
+            ? {
+                top: panelLayout.top,
+                bottom: panelLayout.bottom,
+                left: placement === "corner" ? "auto" : panelLayout.left,
+                right:
+                  placement === "corner"
+                    ? panelLayout.cornerRight
+                    : panelLayout.right,
+                // A panel class may lift the panel off its trigger with a
+                // margin; it names that lift so the panel still fits.
+                maxHeight: `calc(${panelLayout.maxHeight}px - var(--video-player-menu-lift, 0px))`,
+              }
+            : {}),
         ...(isMobileSheet ? mobileSheetStyle : undefined),
         ...(isMobileSheet && mobileSheetExpanded
           ? { height: "100dvh", maxHeight: "100dvh" }
@@ -551,13 +625,14 @@ export function PopoverMenu({
         >
           <span
             aria-hidden="true"
+            data-video-player-sheet-grip=""
             className="h-1 w-12 rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_34%,transparent)]"
           />
           <div
             id={`${menuId}-title`}
             className="w-full text-left text-lg font-semibold tracking-[-0.01em] text-(--video-player-menu-text)"
           >
-            {resolvedMenuLabel}
+            {sheetTitle ?? resolvedMenuLabel}
           </div>
         </div>
       ) : null}
@@ -568,11 +643,11 @@ export function PopoverMenu({
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pt-18 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
         >
           {typeof children === "function"
-            ? children({ close: closeMenu })
+            ? children({ close: closeMenu, sheet: isMobileSheet })
             : children}
         </div>
       ) : typeof children === "function" ? (
-        children({ close: closeMenu })
+        children({ close: closeMenu, sheet: isMobileSheet })
       ) : (
         children
       )}
@@ -582,15 +657,29 @@ export function PopoverMenu({
     isOpen && isMobileSheet && typeof document !== "undefined"
       ? createPortal(
           <>
+            {/* A tap on the dimmed page closes the sheet; a swipe on it
+                moves the sheet as its grip does (a flick closes it), and
+                never the page or the player under it. */}
             <div
               aria-hidden="true"
               data-video-player-mobile-sheet-backdrop=""
-              className={`${isContainedMobileSheet ? "absolute" : "fixed"} pointer-events-auto inset-0 z-170 bg-black/60 transition-opacity duration-200 ease-out motion-reduce:transition-none`}
-              onPointerDown={(event) => event.stopPropagation()}
+              className={`${isContainedMobileSheet ? "absolute" : "fixed"} pointer-events-auto inset-0 z-170 touch-none bg-black/60 transition-opacity duration-200 ease-out motion-reduce:transition-none`}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                if (event.button === 0) handleMobileSheetDragStart(event);
+              }}
+              onPointerMove={handleMobileSheetDragMove}
+              onPointerUp={(event) => {
+                const tapped =
+                  mobileSheetDragRef.current?.pointerId === event.pointerId &&
+                  !mobileSheetDragRef.current.moved;
+                finishMobileSheetDrag(event);
+                if (tapped) closeAndRestoreFocus();
+              }}
+              onPointerCancel={(event) => finishMobileSheetDrag(event, true)}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                closeAndRestoreFocus();
               }}
             />
             {panel}

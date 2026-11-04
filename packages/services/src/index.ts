@@ -1,5 +1,5 @@
 import type { ServerConfig } from "@veolms/config";
-import type { PaymentGateway } from "@veolms/contracts";
+import type { PaymentGateways } from "@veolms/contracts";
 import { S3StorageService } from "@veolms/storage";
 import type { FastifyBaseLogger } from "fastify";
 
@@ -21,7 +21,7 @@ import {
   createAnalyticsEventBus,
   type AnalyticsEventBus,
 } from "./analytics-events.ts";
-import { createPaymentGateway } from "./payment/index.ts";
+import { createPaymentGateways } from "./payment/index.ts";
 import {
   createMediaImportRegistry,
   type MediaImportRegistry,
@@ -47,7 +47,8 @@ export interface AppServices {
   sms: SmsService;
   storage: S3StorageService;
   videoDispatch: VideoDispatchService;
-  paymentGateway: PaymentGateway;
+  /** Every payment gateway that is set up (see payment/gateway.factory.ts). */
+  paymentGateways: PaymentGateways;
   config: ServerConfig;
   courseStaticPages?: CourseStaticPageRefreshService;
   /** Facts the API announces as they happen, for plugins to listen to. */
@@ -156,7 +157,7 @@ export function createServices({
       lambdaName: config.PROBE_LAMBDA_NAME || config.FLEET_MANAGER_LAMBDA_NAME,
     }),
     config,
-    paymentGateway: createPaymentGateway(config),
+    paymentGateways: createPaymentGateways(config),
     courseStaticPages: createCourseStaticPageRefreshService({
       githubToken: config.COURSE_STATIC_REFRESH_GITHUB_TOKEN,
       repository: config.COURSE_STATIC_REFRESH_REPOSITORY,

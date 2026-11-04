@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { Play } from "@phosphor-icons/react/Play";
+import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
 import { Button } from "../../components/Button";
 import { getCoursePlayerPath } from "../../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../../routing/navigation";
@@ -7,7 +9,13 @@ import {
   formatCourseProgress,
   roundCourseProgress,
 } from "../../learning/courseProgressFormat";
-import type { CourseAccessResume } from "@veolms/contracts";
+import type {
+  CourseAccessEnrollment,
+  CourseAccessResume,
+} from "@veolms/contracts";
+import { CourseEnrolmentDetails } from "./CourseEnrolmentDetails";
+import { describeEnrolmentWords } from "./enrolmentDetails";
+import { useKeptEnrolmentWords } from "./enrolmentWordsCopy";
 import { useLearningProgressResumeContext } from "../../services/learning-progress";
 import { useCurriculumIntent } from "./curriculumIntent";
 import {
@@ -37,6 +45,14 @@ interface CourseLearnerProgressBarProps {
    * access answer carries it). Asked for here otherwise.
    */
   resume?: CourseAccessResume | null;
+  /**
+   * The learner's enrolment from the access answer: when their access ends
+   * and the order it came with. The details stay hidden until it arrives.
+   */
+  enrolment?: {
+    accessExpiresAt: string | null;
+    enrollment?: CourseAccessEnrollment | null;
+  } | null;
   onNavigatePage?: NavigateTo;
   /**
    * The lesson to carry on with, readied ahead of the press and opened
@@ -44,6 +60,16 @@ interface CourseLearnerProgressBarProps {
    */
   openIntent?: LessonOpenIntent;
 }
+
+/**
+ * The "Up next" line under the button, but for its display (flex), which
+ * its early copy takes from the head's style.
+ */
+export const upNextClasses =
+  "min-w-0 items-center gap-1.5 text-[0.8rem] text-(--muted)";
+/** The column of the button and the line under it. */
+export const progressActionColumnClasses =
+  "flex min-w-0 flex-col gap-2 @2xl/price:w-auto @2xl/price:min-w-60";
 
 const placeholder =
   "animate-pulse rounded-md bg-[color-mix(in_srgb,var(--text)_10%,transparent)]";
@@ -64,6 +90,7 @@ export function CourseLearnerProgressBar({
   started = false,
   totalLessons,
   resume,
+  enrolment,
   onNavigatePage,
   openIntent,
 }: CourseLearnerProgressBarProps) {
@@ -72,6 +99,15 @@ export function CourseLearnerProgressBar({
   });
   const place = resume ?? resumeQuery.data;
   const curriculumIntent = useCurriculumIntent();
+  // Kept for the next load's first paint (see `enrolmentWordsCopy`).
+  const enrollment = enrolment?.enrollment ?? null;
+  const accessExpiresAt = enrolment?.accessExpiresAt ?? null;
+  const enrolmentWords = useMemo(
+    () =>
+      enrollment ? describeEnrolmentWords(enrollment, accessExpiresAt) : null,
+    [enrollment, accessExpiresAt],
+  );
+  useKeptEnrolmentWords(courseKey, enrolmentWords);
   const percent = roundCourseProgress(progress);
   const lessonCount = place?.totalLessons ?? totalLessons;
   const isComplete = percent >= 100;
@@ -172,22 +208,42 @@ export function CourseLearnerProgressBar({
           </span>
         </div>
 
-        {/* The way on, as wide as its words need. */}
-        <Button
-          motion="static"
-          className={`${priceBarActionClasses} w-full @2xl/price:w-auto @2xl/price:min-w-60`}
-          {...mergeIntentHandlers(curriculumIntent, openIntent?.handlers)}
-          onClick={openCourse}
-        >
-          <Play
-            size="1.15em"
-            weight="fill"
-            className="shrink-0"
-            aria-hidden="true"
-          />
-          <span className="truncate">{actionLabel}</span>
-        </Button>
+        {/* The way on, as wide as its words need, and the lesson it
+            opens under it. */}
+        <div className={progressActionColumnClasses}>
+          <Button
+            motion="static"
+            className={`${priceBarActionClasses} w-full`}
+            {...mergeIntentHandlers(curriculumIntent, openIntent?.handlers)}
+            onClick={openCourse}
+          >
+            <Play
+              size="1.15em"
+              weight="fill"
+              className="shrink-0"
+              aria-hidden="true"
+            />
+            <span className="truncate">{actionLabel}</span>
+          </Button>
+          {lesson && hasStarted ? (
+            <p className={`flex ${upNextClasses}`}>
+              <PlayCircle size={14} className="shrink-0" aria-hidden="true" />
+              <span className="shrink-0">Up next</span>
+              <span className="truncate font-medium text-(--text)">
+                Lesson {lesson.lessonNumber} · {lesson.title}
+              </span>
+            </p>
+          ) : null}
+        </div>
       </div>
+      {enrolment?.enrollment ? (
+        <div className={`${priceBarPaddingClasses} pt-0!`}>
+          <CourseEnrolmentDetails
+            enrollment={enrolment.enrollment}
+            accessExpiresAt={enrolment.accessExpiresAt}
+          />
+        </div>
+      ) : null}
     </section>
   );
 }

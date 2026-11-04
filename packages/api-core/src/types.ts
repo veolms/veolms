@@ -8,6 +8,12 @@ import type { ApiPlugin } from "@veolms/plugin-sdk";
 declare module "fastify" {
   interface FastifyContextConfig {
     rawResponse?: boolean;
+    /**
+     * Answered 503 "try again shortly" while the server is overloaded
+     * (see load-shedding.ts). Only for requests the page sends again by
+     * itself and loses nothing by waiting: progress heartbeats, polls.
+     */
+    shedUnderLoad?: boolean;
   }
 }
 
@@ -47,6 +53,14 @@ export interface CreateVeoLMSApiOptions<
    * Pre-built services or a factory function receiving the created FastifyInstance.
    */
   services?: TServices | ((app: FastifyInstance) => TServices);
+  /**
+   * Adds hooks that must apply to every route, before any route is
+   * registered: core's are loaded with `loadCoreAppHooks()`. An app that
+   * composes the factory itself and leaves this out runs core's routes
+   * without them (the cloud API once did, and a student at the device limit
+   * was never given the cookie that lets them choose a device to sign out).
+   */
+  registerHooks?: (app: FastifyInstance) => void;
   /**
    * Absolute path to the `modules/` directory containing route plugins.
    * Pass `fileURLToPath(new URL("./modules", import.meta.url))` from the

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { courseSummarySchema, type CourseSummary } from "./course/course.ts";
 import {
+  DEFAULT_HOME_PAGE_SETTINGS,
   HOME_PAGE_HIGHLIGHT_COUNT,
   HOME_PAGE_MAX_HIDDEN_DISCUSSIONS,
   HOME_PAGE_MAX_PINNED_DISCUSSIONS,
@@ -38,6 +39,12 @@ export type HomeDiscoveryResponse = {
 // ---------------------------------------------------------------------------
 
 export const homePageHeroSchema = z.strictObject({
+  // Settings saved before the line existed get the default one.
+  eyebrow: z
+    .string()
+    .trim()
+    .max(40)
+    .default(DEFAULT_HOME_PAGE_SETTINGS.hero.eyebrow),
   headline: z.string().trim().min(1).max(60),
   highlightedHeadline: z.string().trim().max(60),
   description: z.string().trim().max(240),
@@ -131,6 +138,32 @@ export const homePageOptionsResponseSchema = z.strictObject({
 });
 export type HomePageOptionsResponse = z.infer<
   typeof homePageOptionsResponseSchema
+>;
+
+/**
+ * The comments on the home page's "What students say", as the lesson and
+ * Discussions pages need them to offer "Add to home page" on a comment.
+ */
+export const homePageDiscussionListResponseSchema = z.strictObject({
+  /** On the home page's list, in its order (hidden ones included). */
+  pinnedThreadIds: z.array(z.uuid()),
+  /** Kept off the home page, listed or not. */
+  hiddenThreadIds: z.array(z.uuid()),
+});
+export type HomePageDiscussionListResponse = z.infer<
+  typeof homePageDiscussionListResponseSchema
+>;
+
+/**
+ * One change to that list, saved at once: `add` puts the comment first on
+ * the list (and shows it), `remove` takes it off, `hide` keeps it on the
+ * list but off the home page, `show` undoes `hide`.
+ */
+export const updateHomePageDiscussionRequestSchema = z.strictObject({
+  action: z.enum(["add", "remove", "hide", "show"]),
+});
+export type UpdateHomePageDiscussionRequest = z.infer<
+  typeof updateHomePageDiscussionRequestSchema
 >;
 
 /** A lesson with a video, as the hero video picker lists a course's lessons. */

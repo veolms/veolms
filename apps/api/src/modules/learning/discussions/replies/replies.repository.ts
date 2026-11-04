@@ -211,10 +211,10 @@ export function createRepliesRepository(): RepliesRepository {
             (
               r.is_accepted = ${accepted}
               and (
-                r.created_at < ${createdAt}
+                r.created_at > ${createdAt}
                 or (
                   r.created_at = ${createdAt}
-                  and r.id < ${cursor.id}::uuid
+                  and r.id > ${cursor.id}::uuid
                 )
               )
             )
@@ -223,10 +223,12 @@ export function createRepliesRepository(): RepliesRepository {
         );
       }
 
+      // The accepted answer first, then the conversation as it happened:
+      // the oldest reply first, the newest last.
       const rows = await query
         .orderBy("r.is_accepted", "desc")
-        .orderBy("r.created_at", "desc")
-        .orderBy("r.id", "desc")
+        .orderBy("r.created_at", "asc")
+        .orderBy("r.id", "asc")
         .limit(options.limit + 1)
         .execute();
 
@@ -294,7 +296,6 @@ export function createRepliesRepository(): RepliesRepository {
         .updateTable("learning_replies")
         .set({
           is_accepted: isAccepted,
-          updated_at: new Date(),
         })
         .where("id", "=", replyId)
         .execute();
@@ -305,7 +306,6 @@ export function createRepliesRepository(): RepliesRepository {
         .updateTable("learning_replies")
         .set((eb) => ({
           likes_count: sql`GREATEST(0, ${eb.ref("likes_count")} + ${delta})`,
-          updated_at: new Date(),
         }))
         .where("id", "=", replyId)
         .execute();

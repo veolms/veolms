@@ -1,6 +1,9 @@
 import crypto from "node:crypto";
 
-import type { NormalizedPaymentEvent, PaymentGateway } from "@veolms/contracts";
+import type {
+  NormalizedPaymentEvent,
+  PaymentGateways,
+} from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
@@ -36,7 +39,7 @@ export interface PaymentWorkerOptions {
    * the payment has been recorded. Without it the refund is only reserved
    * here, and the scheduled pass sends it within a few minutes.
    */
-  paymentGateway?: PaymentGateway;
+  paymentGateways?: PaymentGateways;
   /** See `AUTO_REFUND_EXTRA_PAYMENTS`. */
   autoRefundExtraPayments?: boolean;
 }
@@ -54,7 +57,7 @@ export function createPaymentWorker({
   database,
   accessService = createAccessService(),
   logger,
-  paymentGateway,
+  paymentGateways,
   autoRefundExtraPayments = config.AUTO_REFUND_EXTRA_PAYMENTS,
 }: PaymentWorkerOptions): PaymentWorker {
   const reconciliation = createPaymentReconciliationService({
@@ -62,8 +65,8 @@ export function createPaymentWorker({
     accessService,
     autoRefundExtraPayments,
   });
-  const extraPaymentRefunds = paymentGateway
-    ? createExtraPaymentRefundService({ database, paymentGateway, logger })
+  const extraPaymentRefunds = paymentGateways
+    ? createExtraPaymentRefundService({ database, paymentGateways, logger })
     : undefined;
   const courseAccessService = createCourseAccessService({ accessService });
   const outbox = createOutboxService();
@@ -134,6 +137,19 @@ export function createPaymentWorker({
       gatewayPaymentId: event.gatewayPaymentId,
       paymentMethod: event.paymentMethod ?? null,
     });
+    // A payment in another currency: what it settles for, for the revenue
+    // reports. Whichever path saw the capture first records it.
+    if (
+      (result.outcome === "finalized" ||
+        result.outcome === "already_captured") &&
+      event.settlementAmount !== undefined &&
+      event.settlementCurrency
+    ) {
+      await orderRepository.recordOrderSettlement(database, payment.order_id, {
+        amount: event.settlementAmount,
+        currency: event.settlementCurrency,
+      });
+    }
 
     await webhookRepository.markWebhookEventProcessed(database, event.eventId);
     if (

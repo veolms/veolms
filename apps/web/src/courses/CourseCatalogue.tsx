@@ -154,9 +154,13 @@ export function CourseCatalogue({
   );
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
   const [pendingUnenroll, setPendingUnenroll] = useState<Course | null>(null);
-  // An admin in Student view can leave any course they enrolled in, and
-  // doing so clears their progress in it.
-  const accountIsAdmin = hasAdminRole(useCurrentUser().data?.roles);
+  // An admin in Student view, a shared test account, or anyone on a local
+  // server with LOCAL_ANY_COURSE_UNENROLL, can leave any course they
+  // enrolled in, and doing so clears their progress in it.
+  const currentUser = useCurrentUser().data;
+  const leavesAnyCourse =
+    hasAdminRole(currentUser?.roles) ||
+    Boolean(currentUser?.isTestAccount || currentUser?.localAnyCourseUnenroll);
   const quickFilterTabsRef = useRef<HTMLDivElement>(null);
   const [hasQuickFilterOverflow, setHasQuickFilterOverflow] = useState(false);
   const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(
@@ -321,7 +325,7 @@ export function CourseCatalogue({
       onDeleteRequested={setPendingDelete}
       onRestoreRequested={onRestoreCourse}
       onUnenrollRequested={role === "student" ? setPendingUnenroll : undefined}
-      canUnenrollFromAnyCourse={accountIsAdmin}
+      canUnenrollFromAnyCourse={leavesAnyCourse}
       onNavigatePage={onNavigatePage}
       menuOpen={courseMenu === course.id}
       setMenuOpen={setCourseMenu}
@@ -587,7 +591,7 @@ export function CourseCatalogue({
         <Suspense fallback={null}>
           <UnenrollCourseModal
             course={pendingUnenroll}
-            resetsProgress={accountIsAdmin}
+            resetsProgress={leavesAnyCourse}
             onClose={() => setPendingUnenroll(null)}
             setNotice={setNotice}
           />

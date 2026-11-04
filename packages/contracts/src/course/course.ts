@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { mediaAssetStatusSchema } from "../media.ts";
+import {
+  COURSE_INCLUDE_DETAIL_MAX,
+  COURSE_INCLUDE_TEXT_MAX,
+  courseIncludeColorSchema,
+  courseIncludeIconSchema,
+  courseIncludeKindSchema,
+} from "./course-includes.ts";
 
 export interface CoursePricingSummary {
   pricingType: "free" | "paid";
@@ -8,6 +15,15 @@ export interface CoursePricingSummary {
   salePrice: number | null;
   /** Show the discount as a badge ("20% off") on the course's cards. */
   showDiscountBadge?: boolean;
+  /**
+   * The price for buyers outside India, in minor units; null when the course
+   * is sold in rupees everywhere (see `internationalCoursePriceSchema`).
+   */
+  international?: {
+    currency: string;
+    priceMinor: number;
+    salePriceMinor: number;
+  } | null;
 }
 
 /** One responsive rendition of a course thumbnail, as used in `srcset`. */
@@ -38,6 +54,18 @@ export interface CourseSummary {
    * before the field existed; read that as true.
    */
   canSelfEnroll?: boolean;
+  /**
+   * For a linked-only course, the published courses it comes free with
+   * (see `courseOverviewSchema.includedWith`). Absent for any other course.
+   */
+  includedWith?: readonly IncludedWithCourse[];
+}
+
+/** A published course that gives a linked-only course to whoever holds it. */
+export interface IncludedWithCourse {
+  id: string;
+  slug: string;
+  title: string;
 }
 
 export interface PublicCourse {
@@ -48,12 +76,28 @@ export interface PublicCourse {
   description: string;
 }
 
+/**
+ * A course's price for buyers outside India (see `pricingRegionSchema`), in
+ * the currency's minor units: $43.99 is 4399. Unlike the rupee prices beside
+ * it, which are whole rupees. Every visitor is sent both; the page shows the
+ * one for the visitor's region and checkout charges it.
+ */
+export const internationalCoursePriceSchema = z.strictObject({
+  currency: z.string().length(3),
+  /** The marked price, struck through when above `salePriceMinor`. */
+  priceMinor: z.number().int().positive(),
+  /** What a buyer outside India pays. */
+  salePriceMinor: z.number().int().positive(),
+});
+
 export const coursePricingSummarySchema = z.strictObject({
   pricingType: z.enum(["free", "paid"]),
   price: z.number().int().nonnegative(),
   currency: z.string().min(3).max(3).default("INR"),
   salePrice: z.number().int().nonnegative().nullable().default(null),
   showDiscountBadge: z.boolean().default(false),
+  /** Null for a course sold in rupees everywhere. */
+  international: internationalCoursePriceSchema.nullable().default(null),
 });
 
 export const courseThumbnailVariantSchema = z.object({
@@ -82,6 +126,9 @@ const courseSummaryObjectSchema = z.strictObject({
   pricing: coursePricingSummarySchema,
   certificateEnabled: z.boolean().default(false),
   canSelfEnroll: z.boolean().optional(),
+  includedWith: z
+    .array(z.object({ id: z.uuid(), slug: z.string(), title: z.string() }))
+    .optional(),
 });
 
 export const courseSummarySchema: z.ZodType<CourseSummary> =
@@ -221,7 +268,23 @@ export const coursePricingSchema = z.object({
   currency: z.string().min(3).max(3).default("INR"),
   salePrice: z.number().int().nonnegative().nullable().optional(),
   showDiscountBadge: z.boolean().optional(),
+  /**
+   * Had only through another course's link: no price, not sold, and left
+   * out of the catalogue.
+   */
+  linkedOnly: z.boolean().optional(),
+  /** Null for a course sold in rupees everywhere. */
+  international: internationalCoursePriceSchema.nullable().optional(),
+  /**
+   * `international` is the automatic price: the rupee prices at the day's
+   * exchange rate, rounded up to .99, worked out again when they change.
+   * False once staff type a price, or remove it.
+   */
+  internationalAuto: z.boolean().optional(),
 });
+
+/** Below this a card payment in dollars is not worth taking ($1.00). */
+export const MIN_INTERNATIONAL_SALE_PRICE_MINOR = 100;
 
 /**
  * A course's price is always both numbers: `salePrice`, what a learner
@@ -244,6 +307,43 @@ export const updateCoursePricingRequestSchema = z
     salePrice: z.number().int().nonnegative(),
     /** Show the discount as a badge on the course's cards. Off by default. */
     showDiscountBadge: z.boolean().optional(),
+    /**
+     * Had only through another course's link. When on, both prices are
+     * stored as zero whatever was sent, and the course's access becomes
+     * restricted; turning it off makes access open to everyone again.
+     */
+    linkedOnly: z.boolean().optional(),
+    /**
+     * True: the price for buyers outside India is worked out from the rupee
+     * prices at the day's exchange rate (rounded up to .99), now and when
+     * they change; `international` is ignored. False: `international` is
+     * the price as typed. Absent keeps the course's own setting (a course
+     * priced for the first time gets the automatic price).
+     */
+    internationalAuto: z.boolean().optional(),
+    /**
+     * The price for buyers outside India, in cents. Null removes it, so the
+     * course is sold in rupees everywhere; absent leaves it as it is. A
+     * linked-only course has none whatever was sent. Sending it turns the
+     * automatic price off unless `internationalAuto` is true.
+     */
+    international: z
+      .strictObject({
+        currency: z.literal("USD"),
+        priceMinor: z.number().int().positive(),
+        salePriceMinor: z
+          .number()
+          .int()
+          .min(MIN_INTERNATIONAL_SALE_PRICE_MINOR, {
+            message: "The international sale price must be at least 1.00",
+          }),
+      })
+      .refine((value) => value.salePriceMinor <= value.priceMinor, {
+        message: "The international sale price cannot exceed its price",
+        path: ["salePriceMinor"],
+      })
+      .nullable()
+      .optional(),
   })
   .refine((data) => data.salePrice <= data.price, {
     message: "salePrice cannot exceed price",
@@ -251,6 +351,9 @@ export const updateCoursePricingRequestSchema = z
   });
 
 export type CoursePricing = z.infer<typeof coursePricingSchema>;
+export type InternationalCoursePrice = z.infer<
+  typeof internationalCoursePriceSchema
+>;
 export type UpdateCoursePricingRequest = z.infer<
   typeof updateCoursePricingRequestSchema
 >;
@@ -283,21 +386,46 @@ export type UpdateCourseSettingsRequest = z.infer<
   typeof updateCourseSettingsRequestSchema
 >;
 
+/**
+ * One line of a course's "This course includes" card (see
+ * course-includes.ts): its title (`text`), a quieter line under it, an icon
+ * and its colour. A line saved before icons and colours existed has none;
+ * the card then draws a check mark in teal.
+ */
 export const courseIncludeItemSchema = z.object({
   id: z.uuid(),
   text: z.string().min(1).max(255),
   position: z.number().int().nonnegative(),
+  detail: z.string().max(255).nullable().optional(),
+  icon: z.string().max(100).nullable().optional(),
+  color: z.string().max(16).nullable().optional(),
+  kind: courseIncludeKindSchema.optional(),
 });
 
 export const createCourseIncludeRequestSchema = z.object({
-  text: z.string().min(1).max(255),
-  icon: z.string().max(100).nullable().optional(),
+  text: z.string().trim().min(1).max(COURSE_INCLUDE_TEXT_MAX),
+  detail: z
+    .string()
+    .trim()
+    .max(COURSE_INCLUDE_DETAIL_MAX)
+    .nullable()
+    .optional(),
+  icon: courseIncludeIconSchema.nullable().optional(),
+  color: courseIncludeColorSchema.nullable().optional(),
+  kind: courseIncludeKindSchema.optional(),
   position: z.number().int().nonnegative().optional(),
 });
 
 export const updateCourseIncludeRequestSchema = z.object({
-  text: z.string().min(1).max(255).optional(),
-  icon: z.string().max(100).nullable().optional(),
+  text: z.string().trim().min(1).max(COURSE_INCLUDE_TEXT_MAX).optional(),
+  detail: z
+    .string()
+    .trim()
+    .max(COURSE_INCLUDE_DETAIL_MAX)
+    .nullable()
+    .optional(),
+  icon: courseIncludeIconSchema.nullable().optional(),
+  color: courseIncludeColorSchema.nullable().optional(),
   position: z.number().int().nonnegative().optional(),
 });
 
@@ -345,6 +473,118 @@ export type LinkedCoursesListResponse = z.infer<
 >;
 export type AddLinkedCourseRequest = z.infer<
   typeof addLinkedCourseRequestSchema
+>;
+
+/**
+ * Part of a course, sold on its own: an unlisted course that opens only the
+ * chosen sections of the course it belongs to, to whoever buys it or is
+ * given it. It is kept off every list (the catalogue, the admin's course
+ * list, My Courses); its learners see the course it belongs to, with the
+ * other sections locked. Its orders and invoices name it. Prices are in
+ * major units, as course pricing is.
+ */
+export const partialAccessCourseSchema = z.object({
+  courseId: z.uuid(),
+  title: z.string(),
+  slug: z.string(),
+  status: z.string(),
+  /**
+   * What the whole course sells for now: the part's price is shown against
+   * it, struck through, with the difference as its discount.
+   */
+  price: z.number().nonnegative(),
+  /** What a learner pays for the part. */
+  salePrice: z.number().nonnegative(),
+  currency: z.string(),
+  /** The sections of the course it opens, in the course's order. */
+  sectionIds: z.array(z.uuid()),
+  /** Sold from its link (its page is `offerPath`); a draft is not. */
+  onSale: z.boolean(),
+  /**
+   * Where it is sold: the course's page, showing which sections it opens.
+   * Relative to the site.
+   */
+  offerPath: z.string(),
+  /** Learners who hold it now. */
+  learnerCount: z.number().int().nonnegative(),
+  /** Orders that name it, of any status: it is kept while any exist. */
+  orderCount: z.number().int().nonnegative(),
+});
+
+export const partialAccessListResponseSchema = z.object({
+  items: z.array(partialAccessCourseSchema),
+  /** What the whole course sells for now, and in what currency. */
+  coursePrice: z.number().nonnegative(),
+  courseCurrency: z.string(),
+  /** The course's sections, in order, to choose from. */
+  sections: z.array(z.object({ id: z.uuid(), title: z.string() })),
+});
+
+/**
+ * Only the part's own selling price is set: what it is shown against is
+ * the whole course's price.
+ */
+export const createPartialAccessRequestSchema = z.strictObject({
+  title: z.string().trim().min(1).max(200),
+  salePrice: z.number().int().nonnegative(),
+  /** At least one section of the course. */
+  sectionIds: z.array(z.uuid()).min(1),
+  /** Sell it from its link straight away. */
+  onSale: z.boolean().optional(),
+});
+
+/** The same fields; what is left out stays as it is. */
+export const updatePartialAccessRequestSchema = z.strictObject({
+  title: z.string().trim().min(1).max(200).optional(),
+  salePrice: z.number().int().nonnegative().optional(),
+  sectionIds: z.array(z.uuid()).min(1).optional(),
+  onSale: z.boolean().optional(),
+});
+
+/**
+ * `GET /course-offers/:idOrSlug/:offerSlug`: a part of a course as its
+ * link's page shows it to anyone. `courseId` is what checkout sells.
+ */
+export const partialAccessOfferSchema = z.object({
+  courseId: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  /** What the whole course sells for now, struck through beside `salePrice`. */
+  price: z.number().nonnegative(),
+  salePrice: z.number().nonnegative(),
+  currency: z.string(),
+  /** The sections of the course it opens; the others stay locked. */
+  sectionIds: z.array(z.uuid()),
+  /** Whether it can be bought now. */
+  onSale: z.boolean(),
+});
+
+export type PartialAccessOffer = z.infer<typeof partialAccessOfferSchema>;
+
+/** `GET /course-offers`: every partial access, for choosing in a coupon. */
+export const partialAccessOptionsResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      /** The partial access (an unlisted course): what a coupon names. */
+      courseId: z.uuid(),
+      title: z.string(),
+      /** The course it opens part of. */
+      courseTitle: z.string(),
+    }),
+  ),
+});
+export type PartialAccessOptionsResponse = z.infer<
+  typeof partialAccessOptionsResponseSchema
+>;
+export type PartialAccessCourse = z.infer<typeof partialAccessCourseSchema>;
+export type PartialAccessListResponse = z.infer<
+  typeof partialAccessListResponseSchema
+>;
+export type CreatePartialAccessRequest = z.infer<
+  typeof createPartialAccessRequestSchema
+>;
+export type UpdatePartialAccessRequest = z.infer<
+  typeof updatePartialAccessRequestSchema
 >;
 
 export const createLessonResourceRequestSchema = z.object({
@@ -771,6 +1011,7 @@ export const courseOverviewSchema = z.object({
       currency: true,
       salePrice: true,
       showDiscountBadge: true,
+      international: true,
     })
     .nullable()
     .optional(),
@@ -786,7 +1027,16 @@ export const courseOverviewSchema = z.object({
     .nullable()
     .optional(),
   includes: z
-    .array(courseIncludeItemSchema.pick({ text: true, position: true }))
+    .array(
+      courseIncludeItemSchema.pick({
+        text: true,
+        position: true,
+        detail: true,
+        icon: true,
+        color: true,
+        kind: true,
+      }),
+    )
     .optional(),
   /**
    * Whether someone may take this course for themselves: enrol in it when it
@@ -802,6 +1052,60 @@ export const courseOverviewSchema = z.object({
    * built before the field existed; read that as true.
    */
   canSelfEnroll: z.boolean().optional(),
+  /**
+   * For a linked-only course, the published courses that include it: it is
+   * not sold or enrolled in on its own, and whoever holds one of these
+   * holds it too. Present only for a linked-only course (possibly empty
+   * when nothing published links it yet). Like `canSelfEnroll` it describes
+   * the course, not the viewer.
+   */
+  includedWith: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        slug: z.string(),
+        title: z.string(),
+      }),
+    )
+    .optional(),
+  /**
+   * The published courses that come free with this one (its linked
+   * courses), in the order they were linked, as the course list shows
+   * them. Absent when there are none. Like `canSelfEnroll` it describes the
+   * course, not the viewer.
+   */
+  includedCourses: z
+    .array(
+      courseSummaryObjectSchema
+        .pick({
+          id: true,
+          slug: true,
+          title: true,
+          thumbnailUrl: true,
+          thumbnailSrcSet: true,
+        })
+        .extend({
+          /**
+           * What the course sells for on its own, for a course that is also
+           * sold separately. Null for a linked-only course and a free one.
+           */
+          worth: z
+            .object({
+              amount: z.number().int().positive(),
+              currency: z.string(),
+              /** Its sale price for buyers outside India, when it has one. */
+              international: z
+                .object({
+                  amountMinor: z.number().int().positive(),
+                  currency: z.string(),
+                })
+                .nullable()
+                .optional(),
+            })
+            .nullable(),
+        }),
+    )
+    .optional(),
   /**
    * How long a learner keeps the course once they have it: for life, for a
    * number of days from enrolling, or until a date set for each learner.

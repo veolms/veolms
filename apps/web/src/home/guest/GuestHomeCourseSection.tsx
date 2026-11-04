@@ -9,6 +9,11 @@ import {
   type CourseOpenOptions,
 } from "../../courses/catalogue";
 import { adaptCourseSummaryToCatalogueCourse } from "../../courses/courseAdapter";
+import {
+  cardPriceStatus,
+  coursePriceState,
+  useCoursePrices,
+} from "../../courses/liveCoursePrices";
 import type { ViewerCourseState } from "../../courses/viewerCourseState";
 import type { NavigateTo } from "../../routing/navigation";
 import { GUEST_HOME_COURSES_PER_SECTION } from "../guestHomeLimits";
@@ -37,7 +42,7 @@ const guestHomeCardFacts = ["sections", "lectures"] as const;
 
 /**
  * One row of cards, sized by the room the section actually has (the sidebar
- * changes it): a phone stacks two cards, then the row holds two or three
+ * changes it): a phone stacks three cards, then the row holds two or three
  * across. Laptop screens stay at three; only a large monitor (a section
  * 100rem or wider) shows four. Cards that do not fit are left out rather
  * than wrapped, so a section never grows a second row.
@@ -45,7 +50,7 @@ const guestHomeCardFacts = ["sections", "lectures"] as const;
 const courseRowClasses = [
   "grid grid-cols-1 gap-4",
   guestHomeCourseRowBleed,
-  "@max-lg/courses:[&>*:nth-child(n+3)]:hidden",
+  "@max-lg/courses:[&>*:nth-child(n+4)]:hidden",
   "@lg/courses:grid-cols-2 @lg/courses:@max-2xl/courses:[&>*:nth-child(n+3)]:hidden",
   "@2xl/courses:grid-cols-3 @2xl/courses:gap-5 @2xl/courses:@max-[100rem]/courses:[&>*:nth-child(n+4)]:hidden",
   "@[100rem]/courses:grid-cols-4",
@@ -83,6 +88,11 @@ export function GuestHomeCourseSection({
   viewerState?: ViewerCourseState;
 }) {
   const headingId = `${id}-title`;
+  // The prices in force: never the ones the list was built with (see
+  // liveCoursePrices.ts).
+  const coursePrices = useCoursePrices();
+  // A row without the viewer's state is the learner home's: signed in.
+  const signedIn = viewerState ? viewerState.signedIn : true;
 
   return (
     <section
@@ -129,13 +139,19 @@ export function GuestHomeCourseSection({
                 (_, index) => <CourseCardSkeleton key={index} />,
               )
             : courses.map((summary) => {
+                const price = coursePriceState(coursePrices, summary.id);
+                const priceStatus = cardPriceStatus(price, signedIn);
                 const course = {
                   ...adaptCourseSummaryToCatalogueCourse(
-                    summary,
+                    price.status === "known"
+                      ? { ...summary, pricing: price.pricing }
+                      : summary,
                     viewerState?.enrolled,
                     viewerState?.progress,
                   ),
                   viewerStatePending: viewerState?.pending ?? false,
+                  viewerStateFailed: viewerState?.failed ?? false,
+                  ...(priceStatus ? { priceStatus } : {}),
                 };
                 // The same card, wired the same way, as the Courses page
                 // shows a visitor: the thumbnail plays the free preview.

@@ -7,6 +7,7 @@ import type { Database, MediaAssetStatus } from "@veolms/database";
 import type {
   LessonResourceDownloadResponse,
   MediaImageVariantManifest,
+  MediaSourceResponse,
   MultipartUploadPartUrlsRequest,
   MultipartUploadPartUrlsResponse,
   MultipartUploadStartResponse,
@@ -20,7 +21,11 @@ import type {
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
 import { ADMIN_ROLE } from "../auth/index.ts";
-import { createAccessService, isOpenFreeCourse } from "../access/index.ts";
+import {
+  createAccessService,
+  isOpenFreeCourse,
+  scopeOpensSection,
+} from "../access/index.ts";
 import type { LessonPositionReader } from "../learning-progress/index.ts";
 import { listLessonChaptersForPlayback } from "../courses/chapters/chapters.playback.service.ts";
 import { createChapterSyncService } from "../courses/chapters/chapters.service.ts";
@@ -1371,6 +1376,38 @@ export function createMediaService({
   }
 
   /**
+   * Where a video came from (the YouTube video it was imported from), for
+   * whoever may manage it: its owner, or staff who manage every course.
+   */
+  async function getMediaSource(
+    mediaId: string,
+    ownerId: string,
+    userRoles?: readonly string[],
+  ): Promise<MediaSourceResponse> {
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
+    const media = await mediaRepo.findMediaAssetById(
+      database,
+      mediaId,
+      isAdmin ? undefined : ownerId,
+    );
+    if (!media) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+    const source = await mediaRepo.findMediaSource(database, mediaId);
+    return {
+      source: source
+        ? {
+            provider: source.provider,
+            externalId: source.external_id,
+            url: source.source_url,
+            title: source.title,
+            channel: source.channel,
+          }
+        : null,
+    };
+  }
+
+  /**
    * Fetches transcoding progress for a video asset.
    */
   async function getVideoJobProgress(
@@ -1439,6 +1476,8 @@ export function createMediaService({
       is_published?: boolean;
       /** The course's first published lesson. */
       is_first_lesson?: boolean;
+      /** The lesson's section: a learner holding part of a course opens only theirs. */
+      section_id: string;
     },
     user?: PlaybackUser,
   ): Promise<void> {
@@ -1482,16 +1521,23 @@ export function createMediaService({
       );
     }
 
-    const hasAccess = await accessService.hasActiveAccess(
+    const scope = await accessService.getAccessScope(
       database,
       user.id,
       context.course_id,
     );
-    if (!hasAccess) {
+    if (!scope) {
       throw new AppError(
         403,
         "COURSE_ACCESS_DENIED",
         "You do not have access to this course.",
+      );
+    }
+    if (!scopeOpensSection(scope, context.section_id)) {
+      throw new AppError(
+        403,
+        "LESSON_ACCESS_DENIED",
+        "This lesson is not part of your access to the course.",
       );
     }
   }
@@ -1633,6 +1679,7 @@ export function createMediaService({
       course_creator_id: string | null;
       pricing_type: string | null;
       access_type: string | null;
+      section_id: string;
     },
     user?: PlaybackUser,
   ): Promise<void> {
@@ -1651,12 +1698,14 @@ export function createMediaService({
 
     if (isOpenFreeCourse(context)) return;
 
-    const hasAccess = await accessService.hasActiveAccess(
+    // A preview lesson plays for anyone, so the playback check alone would
+    // hand its files to a learner holding a part of the course without it.
+    const scope = await accessService.getAccessScope(
       database,
       user.id,
       context.course_id,
     );
-    if (!hasAccess) {
+    if (!scopeOpensSection(scope, context.section_id)) {
       throw new AppError(
         403,
         "COURSE_ACCESS_DENIED",
@@ -2565,15 +2614,16 @@ export function createMediaService({
     media: VideoAssetForPlayback,
     details: { mediaKey: string; title?: string | null },
   ): Promise<HeroVideoPlayback> {
-    const { manifestKey, manifestVersion } = await getReadyPlaybackOutput(
-      media.id,
-      {
-        media_type: media.type,
-        media_status: media.status,
-        media_storage_key: media.storageKey,
-      },
-      { verifyManifest: false },
-    );
+    const { manifestKey, manifestVersion, outputVersion } =
+      await getReadyPlaybackOutput(
+        media.id,
+        {
+          media_type: media.type,
+          media_status: media.status,
+          media_storage_key: media.storageKey,
+        },
+        { verifyManifest: false },
+      );
     const baseManifestUrl = services.storage.getCdnObjectUrl(manifestKey);
     const manifestUrl =
       baseManifestUrl && manifestVersion !== null
@@ -2587,6 +2637,8 @@ export function createMediaService({
       );
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
+    // The seek previews, as a lesson's (read from a cache, never failing).
+    const storyboardUrl = await readStoryboardUrl(manifestKey, outputVersion);
     return {
       mediaKey: details.mediaKey,
       manifestUrl,
@@ -2600,6 +2652,7 @@ export function createMediaService({
         ? { duration: Number(media.durationSeconds) }
         : {}),
       ...(details.title ? { title: details.title } : {}),
+      ...(storyboardUrl ? { storyboardUrl } : {}),
     };
   }
 
@@ -2642,6 +2695,7 @@ export function createMediaService({
     getMediaAsset,
     getMediaAssets,
     getImageVariantManifest,
+    getMediaSource,
     getVideoJobProgress,
     getPlaybackBootstrap,
     getPlaybackToken,

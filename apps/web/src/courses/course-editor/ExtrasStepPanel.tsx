@@ -1,19 +1,20 @@
 import type { ReactNode } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
-import { DotsSixVerticalIcon as DotsSixVertical } from "@phosphor-icons/react/DotsSixVertical";
-import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
-import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
-import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ThemedSelect } from "../../ThemedSelect";
 import { SettingsToggle } from "../../settings/SettingsControls";
 import type { UseMutationResult } from "@tanstack/react-query";
-import type { ReorderCourseIncludesRequest } from "@veolms/contracts";
+import type {
+  CourseIncludeIcon,
+  CourseIncludePreset,
+  ReorderCourseIncludesRequest,
+} from "@veolms/contracts";
+import { videoIncludeWords } from "../overview/coursePurchasePerks";
+import { CourseIncludesEditor } from "./CourseIncludesEditor";
 import { ExtrasControlStatusIndicator } from "./statusIndicators";
 import type { ApiError } from "../../lib/api-error";
 import type { ExtrasState } from "./editorLocalTypes";
+import type { IncludeDraftItem } from "./editorLocalTypes";
 
 export interface ExtrasStepPanelProps {
   getExtrasControlDisplayStatus: (
@@ -35,11 +36,7 @@ export interface ExtrasStepPanelProps {
     unknown
   >;
   extrasControlStatus: Record<string, "saved" | "failed" | null>;
-  manualIncludesDraft: {
-    id: string;
-    text: string;
-    isPendingCreation?: boolean;
-  }[];
+  manualIncludesDraft: IncludeDraftItem[];
   isExtrasSaving: boolean;
   deletingIncludeIds: Set<string>;
   savingIncludeIds: Set<string>;
@@ -52,13 +49,17 @@ export interface ExtrasStepPanelProps {
   handleInclusionDragOver: (e: React.DragEvent, index: number) => void;
   handleInclusionDragEnd: () => Promise<void>;
   setDragEnabledInclusionId: Dispatch<SetStateAction<string | null>>;
-  setFocusedInclusionId: Dispatch<SetStateAction<string | null>>;
   handleManualInclusionBlur: (id: string) => Promise<void>;
   handleUpdateManualInclusionText: (id: string, text: string) => void;
-  focusedInclusionId: string | null;
+  handleUpdateManualInclusionDetail: (id: string, detail: string) => void;
+  handleSetInclusionStyle: (
+    id: string,
+    style: { icon?: CourseIncludeIcon; color?: string },
+  ) => Promise<void>;
   handleDeleteManualInclusion: (id: string) => Promise<void>;
-  suggestedInclusions: string[];
-  handleAddManualInclusion: (customText?: string) => Promise<void>;
+  handleAddManualInclusion: (
+    preset?: Partial<Omit<CourseIncludePreset, "color">>,
+  ) => Promise<void>;
   /** Sections plugins added to this step (PluginCourseEditorSections). */
   children?: ReactNode;
 }
@@ -85,12 +86,11 @@ export function ExtrasStepPanel({
   handleInclusionDragOver,
   handleInclusionDragEnd,
   setDragEnabledInclusionId,
-  setFocusedInclusionId,
   handleManualInclusionBlur,
   handleUpdateManualInclusionText,
-  focusedInclusionId,
+  handleUpdateManualInclusionDetail,
+  handleSetInclusionStyle,
   handleDeleteManualInclusion,
-  suggestedInclusions,
   handleAddManualInclusion,
   children,
 }: ExtrasStepPanelProps) {
@@ -348,336 +348,57 @@ export function ExtrasStepPanel({
           </div>
         </div>
 
-        {/* Card 2: This course includes */}
+        {/* Card 2: This course includes, edited as learners see it */}
         <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-          <div className="mb-4.5">
-            <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-              2. This course includes
-            </h3>
-            <p className="m-0 text-(--muted) text-[0.83rem]">
-              These details are calculated from your curriculum.
-            </p>
-          </div>
-
-          {/* Derived Live Stats Summary Grid */}
-          <div className="grid grid-cols-1 min-[1024px]:grid-cols-3 gap-3 mb-6 max-[768px]:gap-2.5">
-            <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-              <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
-                <BookOpen size={20} weight="fill" />
-              </div>
-              <div className="flex flex-col">
-                <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
-                  {totalSections}
-                </strong>
-                <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
-                  Sections
-                </span>
-              </div>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                2. This course includes
+              </h3>
+              <p className="m-0 text-(--muted) text-[0.83rem]">
+                Learners see this list on the course page, as shown here.
+                Click a line to change its words, icon or colour.
+              </p>
             </div>
-
-            <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-              <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
-                <PlayCircle size={20} weight="fill" />
-              </div>
-              <div className="flex flex-col">
-                <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
-                  {totalLessons}
-                </strong>
-                <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
-                  Lessons
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-              <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
-                <Clock size={20} weight="bold" />
-              </div>
-              <div className="flex flex-col">
-                <strong
-                  className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]"
-                  data-testid="course-extra-duration"
-                >
-                  {computedDuration}
-                </strong>
-                <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
-                  Content length
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Divider between Stats & Inclusions */}
-          <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] my-4.5" />
-
-          {/* Additional Inclusions Section */}
-          <div className="flex flex-col gap-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
-                  Course inclusions
-                </h4>
-                {isReorderingIncludes ||
-                reorderIncludesMutation.isPending ? (
-                  <span className="inline-flex items-center gap-1 text-(--accent) text-[0.72rem] font-bold px-2.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                    <CircleNotch
-                      size={12}
-                      className="animate-spin text-(--accent)"
-                    />
-                    <span>Saving inclusion order...</span>
-                  </span>
-                ) : (
-                  <ExtrasControlStatusIndicator
-                    status={
-                      extrasControlStatus["inclusions"] ?? null
-                    }
-                    testId="extras-field-status-inclusions"
-                  />
-                )}
-              </div>
-              <span
-                className={`inline-flex items-center px-2.5 py-0.75 rounded-full text-[0.72rem] font-bold tracking-wide border ${
-                  manualIncludesDraft.length >= 6
-                    ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
-                    : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
-                }`}
-              >
-                {manualIncludesDraft.length} / 6
+            {isReorderingIncludes || reorderIncludesMutation.isPending ? (
+              <span className="inline-flex shrink-0 items-center gap-1 text-(--accent) text-[0.72rem] font-bold">
+                <CircleNotch size={12} className="animate-spin" />
+                Saving order…
               </span>
-            </div>
-            <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
-              Perks and benefits your learners will receive upon
-              enrolling (max 6 items). Click suggestions below or
-              add custom inclusions.
-            </p>
-
-            {/* Active Inclusions List */}
-            <div className="flex flex-col gap-2.5">
-              {manualIncludesDraft.length === 0 ? (
-                <div className="border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-5 text-center text-(--muted) text-[0.82rem] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))]">
-                  No inclusions added yet. Choose from the suggested
-                  perks below or add a custom benefit.
-                </div>
-              ) : (
-                manualIncludesDraft.map((item, index) => (
-                  <div
-                    key={item.id}
-                    draggable={
-                      !isReorderingIncludes &&
-                      !reorderIncludesMutation.isPending &&
-                      !isExtrasSaving &&
-                      !item.isPendingCreation &&
-                      !deletingIncludeIds.has(item.id) &&
-                      !savingIncludeIds.has(item.id) &&
-                      dragEnabledInclusionId === item.id
-                    }
-                    onDragStart={(e) =>
-                      handleInclusionDragStart(e, index, item.text)
-                    }
-                    onDragOver={(e) =>
-                      handleInclusionDragOver(e, index)
-                    }
-                    onDragEnd={handleInclusionDragEnd}
-                    className={`flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] transition-all ${
-                      item.isPendingCreation ||
-                      deletingIncludeIds.has(item.id) ||
-                      savingIncludeIds.has(item.id)
-                        ? "opacity-75 border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
-                        : isReorderingIncludes || isExtrasSaving
-                          ? "opacity-60"
-                          : "hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-xs"
-                    }`}
-                  >
-                    {item.isPendingCreation ? (
-                      <span
-                        className="flex items-center justify-center p-1 rounded-md shrink-0 text-(--accent)"
-                        title="Adding inclusion..."
-                      >
-                        <CircleNotch
-                          size={18}
-                          className="animate-spin text-(--accent)"
-                        />
-                      </span>
-                    ) : (
-                      <span
-                        className={`flex items-center justify-center p-1 rounded-md shrink-0 transition-colors ${
-                          isReorderingIncludes ||
-                          reorderIncludesMutation.isPending ||
-                          isExtrasSaving ||
-                          deletingIncludeIds.has(item.id) ||
-                          savingIncludeIds.has(item.id)
-                            ? "opacity-30 cursor-not-allowed pointer-events-none"
-                            : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] select-none cursor-grab active:cursor-grabbing"
-                        }`}
-                        onMouseEnter={() => {
-                          if (
-                            !isReorderingIncludes &&
-                            !reorderIncludesMutation.isPending &&
-                            !isExtrasSaving &&
-                            !deletingIncludeIds.has(item.id) &&
-                            !savingIncludeIds.has(item.id)
-                          ) {
-                            setDragEnabledInclusionId(item.id);
-                          }
-                        }}
-                        onMouseLeave={() =>
-                          setDragEnabledInclusionId(null)
-                        }
-                        title={
-                          isReorderingIncludes
-                            ? "Saving order..."
-                            : deletingIncludeIds.has(item.id)
-                              ? "Deleting..."
-                              : savingIncludeIds.has(item.id)
-                                ? "Saving..."
-                                : "Drag to reorder"
-                        }
-                      >
-                        <DotsSixVertical size={18} />
-                      </span>
-                    )}
-                    <input
-                      type="text"
-                      disabled={
-                        isReorderingIncludes ||
-                        reorderIncludesMutation.isPending ||
-                        isExtrasSaving ||
-                        item.isPendingCreation ||
-                        deletingIncludeIds.has(item.id) ||
-                        savingIncludeIds.has(item.id)
-                      }
-                      className="flex-1 min-w-0 border-none text-(--text) bg-transparent text-[0.88rem] font-medium outline-none placeholder:text-(--muted) disabled:opacity-60 disabled:cursor-not-allowed"
-                      value={item.text}
-                      onFocus={() => setFocusedInclusionId(item.id)}
-                      onBlur={() => {
-                        void handleManualInclusionBlur(item.id);
-                      }}
-                      onChange={(e) =>
-                        handleUpdateManualInclusionText(
-                          item.id,
-                          e.target.value.slice(0, 25),
-                        )
-                      }
-                      placeholder="e.g. Personal guidance"
-                      maxLength={25}
-                    />
-                    {getExtrasControlDisplayStatus(item.id) ? (
-                      <ExtrasControlStatusIndicator
-                        status={getExtrasControlDisplayStatus(
-                          item.id,
-                        )}
-                        testId={`extras-field-status-inclusion-${item.id}`}
-                      />
-                    ) : focusedInclusionId === item.id ? (
-                      <span className="text-(--muted) text-[0.74rem] font-medium shrink-0 select-none px-1">
-                        {item.text.length} / 25
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={
-                        isReorderingIncludes ||
-                        reorderIncludesMutation.isPending ||
-                        isExtrasSaving ||
-                        item.isPendingCreation ||
-                        deletingIncludeIds.has(item.id) ||
-                        savingIncludeIds.has(item.id)
-                      }
-                      onClick={() =>
-                        handleDeleteManualInclusion(item.id)
-                      }
-                      className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all bg-transparent cursor-pointer p-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none shrink-0"
-                      aria-label={
-                        deletingIncludeIds.has(item.id)
-                          ? "Deleting inclusion..."
-                          : "Remove inclusion"
-                      }
-                      title={
-                        deletingIncludeIds.has(item.id)
-                          ? "Deleting..."
-                          : "Remove inclusion"
-                      }
-                    >
-                      {deletingIncludeIds.has(item.id) ? (
-                        <CircleNotch
-                          size={14}
-                          className="animate-spin text-red-500"
-                        />
-                      ) : (
-                        <Trash size={15} />
-                      )}
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Suggested quick-add chips */}
-            {manualIncludesDraft.length < 6 &&
-              suggestedInclusions.length > 0 && (
-                <div className="flex flex-col gap-2 mt-1">
-                  <span className="text-(--muted) text-[0.74rem] font-bold uppercase tracking-wider">
-                    Suggested perks (click to add)
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestedInclusions
-                      .slice(0, 6 - manualIncludesDraft.length)
-                      .map((suggestion) => (
-                        <button
-                          key={suggestion}
-                          type="button"
-                          disabled={
-                            isReorderingIncludes ||
-                            reorderIncludesMutation.isPending ||
-                            isExtrasSaving ||
-                            manualIncludesDraft.length >= 6
-                          }
-                          onClick={() =>
-                            handleAddManualInclusion(suggestion)
-                          }
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.78rem] font-semibold border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] text-(--text-secondary) hover:text-(--text) hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                        >
-                          <Plus size={13} weight="bold" />
-                          <span>{suggestion}</span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-            {/* Add inclusion button */}
-            <button
-              type="button"
-              disabled={
-                isReorderingIncludes ||
-                reorderIncludesMutation.isPending ||
-                isExtrasSaving ||
-                manualIncludesDraft.length >= 6
-              }
-              onClick={() => handleAddManualInclusion()}
-              className={`inline-flex items-center justify-center gap-2 h-9 w-full border border-dashed rounded-xl text-[0.84rem] font-bold mt-1 transition-all ${
-                manualIncludesDraft.length >= 6 ||
-                isReorderingIncludes ||
-                isExtrasSaving
-                  ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) opacity-50 cursor-not-allowed"
-                  : "border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] hover:border-(--accent) cursor-pointer"
-              }`}
-              title={
-                isReorderingIncludes
-                  ? "Saving inclusion order..."
-                  : manualIncludesDraft.length >= 6
-                    ? "Maximum 6 inclusions reached"
-                    : "Add custom inclusion"
-              }
-            >
-              <Plus size={15} weight="bold" />
-              <span>
-                {manualIncludesDraft.length >= 6
-                  ? "Maximum 6 inclusions reached"
-                  : "Add custom inclusion"}
-              </span>
-            </button>
+            ) : (
+              <ExtrasControlStatusIndicator
+                status={extrasControlStatus["inclusions"] ?? null}
+                testId="extras-field-status-inclusions"
+              />
+            )}
           </div>
+          <CourseIncludesEditor
+            items={manualIncludesDraft}
+            videoWords={videoIncludeWords({
+              duration: computedDuration,
+              lessons: totalLessons,
+              sections: totalSections,
+            })}
+            busy={
+              isReorderingIncludes ||
+              reorderIncludesMutation.isPending ||
+              isExtrasSaving
+            }
+            isSaving={(id) => savingIncludeIds.has(id)}
+            isDeleting={(id) => deletingIncludeIds.has(id)}
+            statusOf={getExtrasControlDisplayStatus}
+            dragEnabledId={dragEnabledInclusionId}
+            setDragEnabledId={setDragEnabledInclusionId}
+            onAdd={(preset) => void handleAddManualInclusion(preset)}
+            onTextChange={handleUpdateManualInclusionText}
+            onDetailChange={handleUpdateManualInclusionDetail}
+            onCommit={(id) => void handleManualInclusionBlur(id)}
+            onStyle={(id, style) => void handleSetInclusionStyle(id, style)}
+            onDelete={(id) => void handleDeleteManualInclusion(id)}
+            onDragStart={handleInclusionDragStart}
+            onDragOver={handleInclusionDragOver}
+            onDragEnd={() => void handleInclusionDragEnd()}
+          />
         </div>
       </div>
       {children}

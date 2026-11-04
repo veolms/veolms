@@ -21,7 +21,7 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
   const service = createPaymentService({
     database: options.database,
-    paymentGateway: options.services.paymentGateway,
+    paymentGateways: options.services.paymentGateways,
     logger: app.log,
   });
   const controller = createPaymentController({ service });

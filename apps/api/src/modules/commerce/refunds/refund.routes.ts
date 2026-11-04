@@ -21,7 +21,7 @@ const refundRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
   const service = createRefundService({
     database: options.database,
-    paymentGateway: options.services.paymentGateway,
+    paymentGateways: options.services.paymentGateways,
   });
   const controller = createRefundController({ service });
 

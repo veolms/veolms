@@ -13,11 +13,13 @@ import {
 } from "react-router";
 import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
+import { registerSegmentCacheReclaimer } from "./learning/player/segmentCacheReclaimer";
 import { useTruncatedTextTitles } from "./shell/useTruncatedTextTitles";
 import { appBaseStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
+import { getPlayerThemeBootstrapScript } from "./learning/player/playerThemeEarlyState";
 import {
   applyLearningShellToDocument,
   getInitialLearningShellState,
@@ -37,12 +39,19 @@ import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getSessionPresenceBootstrapScript } from "./store/sessionPresence";
 import { getProfileHintBootstrapScript } from "./shell/profileHintEarlyState";
+import { getOutdatedBrowserScript } from "./shell/outdatedBrowser";
+import { getLegacyBrowserSupportScript } from "./shell/legacyBrowserSupport";
 import { getNavigationOriginBootstrapScript } from "./routing/navigationOriginEarlyState";
+import { getLessonMenuSectionBootstrapScript } from "./shell/lessonMenuEarlyState";
 import { getCourseCardsEarlyStateBootstrapScript } from "./courses/courseCardEarlyState";
+import { getCoursePricesEarlyBootstrapScript } from "./courses/coursePricesEarlyState";
 import { getLearnerStartedBootstrapScript } from "./home/learner/learnerCoursesSubtitle";
 import { getHomeHintBootstrapScript } from "./store/homeHint";
 import { getLearnerHomeSnapshotBootstrapScript } from "./home/learner/learnerHomeSnapshot";
 import { getPlaybackBootstrapHeadStartScript } from "./learning/playbackBootstrapHeadStart";
+import { getPriceRegionBootstrapScript } from "./courses/priceRegion";
+import { getCurriculumEarlyScrollScript } from "./learning/curriculumEarlyScroll";
+import { getLessonPageEarlyStateScript } from "./learning/lessonPageEarlyState";
 import { getApiBaseUrl } from "./lib/api-client";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
@@ -64,7 +73,6 @@ import {
 } from "./shell/academyPaletteStyles";
 import { AuthPageFrame } from "./auth/AuthPageFrame";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
-import { DeviceLimitHost } from "./auth/DeviceLimitHost";
 import { AnalyticsPageViews } from "./lib/AnalyticsPageViews";
 import { AnalyticsIdentity } from "./lib/AnalyticsIdentity";
 import {
@@ -249,6 +257,15 @@ export function Layout({ children }: LayoutProps) {
           name="viewport"
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
+        {/* First, before any stylesheet or script: a browser the app cannot
+            run in is shown an update page instead (outdatedBrowser.ts), and
+            older browsers get their fallbacks (legacyBrowserSupport.ts). */}
+        <script
+          dangerouslySetInnerHTML={{ __html: getOutdatedBrowserScript() }}
+        />
+        <script
+          dangerouslySetInnerHTML={{ __html: getLegacyBrowserSupportScript() }}
+        />
         <meta name="theme-color" content="#151718" />
         {/* Lets the app be installed and opened with no browser bars, with
             the status bar kept and the back button left to navigate. */}
@@ -268,18 +285,19 @@ export function Layout({ children }: LayoutProps) {
           rel="preload"
           href={manropeFontUrl}
           as="font"
+          fetchPriority="high"
           type="font/woff2"
           crossOrigin="anonymous"
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
+            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getLessonMenuSectionBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getCoursePricesEarlyBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}${getPlayerThemeBootstrapScript()}${getLessonPageEarlyStateScript()}${getCurriculumEarlyScrollScript()}`,
           }}
         />
         <Meta />
         <script
           dangerouslySetInnerHTML={{
-            __html: getPlaybackBootstrapHeadStartScript(getApiBaseUrl()),
+            __html: `${getPlaybackBootstrapHeadStartScript(getApiBaseUrl())}${getPriceRegionBootstrapScript(getApiBaseUrl())}`,
           }}
         />
         <script
@@ -410,6 +428,7 @@ function HydrationMarker() {
     root.dataset.appHydrated = "true";
     const removeTabFocusListeners = installTabFocusVisibility(root);
     const removeChunkReloadHandler = installChunkReloadHandler();
+    registerSegmentCacheReclaimer();
 
     return () => {
       removeChunkReloadHandler();
@@ -485,7 +504,6 @@ export default function Root() {
       <HydrationMarker />
       <SessionInitializer>
         <GlobalGoogleOneTap />
-        <DeviceLimitHost />
         <AnalyticsPageViews />
         <AnalyticsIdentity />
         <Outlet />

@@ -33,6 +33,8 @@ export type PaymentAttemptStatus = z.infer<typeof paymentAttemptStatusSchema>;
 
 export const paymentProviderSchema = z.enum([
   "razorpay",
+  "dodo",
+  "cashfree",
   "stripe",
   "mock",
   "free",
@@ -44,6 +46,7 @@ export const gatewayOrderDetailsSchema = z.strictObject({
   provider: paymentProviderSchema,
   gatewayOrderId: z.string(),
   keyId: z.string().optional(),
+  checkoutUrl: z.url().optional(),
   amount: z.number().int().nonnegative(),
   currency: z.string().length(3),
   notes: z.record(z.string(), z.string()).optional(),
@@ -53,7 +56,9 @@ export type GatewayOrderDetails = z.infer<typeof gatewayOrderDetailsSchema>;
 /**
  * `gateway` is what the payment widget is opened with; it is null when there
  * is nothing to pay (a free course, a 100% coupon) and the order is already
- * complete.
+ * complete. `provider` says which gateway's widget: Razorpay opens with
+ * `keyId` and the gateway order, a hosted checkout (Dodo Payments) with its
+ * `checkoutUrl`.
  */
 export const createCheckoutOrderResponseSchema = z.strictObject({
   order: z.strictObject({
@@ -62,8 +67,10 @@ export const createCheckoutOrderResponseSchema = z.strictObject({
   }),
   gateway: z
     .strictObject({
+      provider: paymentProviderSchema,
       gatewayOrderId: z.string(),
       keyId: z.string().optional(),
+      checkoutUrl: z.url().optional(),
       amount: z.number().int().nonnegative(),
       currency: z.string().length(3),
     })
@@ -132,11 +139,18 @@ export const paymentSchema = z.strictObject({
 });
 export type Payment = z.infer<typeof paymentSchema>;
 
+/**
+ * What the payment widget reported when the buyer paid. Razorpay's widget
+ * hands over the payment and a signature of it, and both are required for
+ * it. A hosted checkout (Dodo Payments) gives the page no signature and not
+ * always the payment: the server then asks the gateway which payment was
+ * made for `gatewayOrderId`.
+ */
 export const verifyPaymentRequestSchema = z.strictObject({
   orderId: z.uuid(),
   gatewayOrderId: z.string().min(1),
-  gatewayPaymentId: z.string().min(1),
-  gatewaySignature: z.string().min(1),
+  gatewayPaymentId: z.string().min(1).optional(),
+  gatewaySignature: z.string().min(1).optional(),
 });
 export type VerifyPaymentRequest = z.infer<typeof verifyPaymentRequestSchema>;
 export const verifyPurchaseRequestSchema = verifyPaymentRequestSchema;
@@ -247,6 +261,8 @@ export interface CreateGatewayOrderInput {
   currency: string;
   receipt: string;
   customer: GatewayCustomerInfo;
+  /** What is being bought, as the buyer knows it ("Complete Node.js"). */
+  description?: string;
   notes?: Record<string, string>;
 }
 
@@ -255,21 +271,38 @@ export interface GatewayOrderOutput {
   gatewayOrderId: string;
   amount: number;
   currency: string;
+  /**
+   * What the gateway's own window is opened with, besides the order: the
+   * Razorpay key id, or a Cashfree payment session (see the Cashfree
+   * gateway for its form). Kept on the payment row and handed out again.
+   */
   keyId?: string;
+  /** Where a hosted checkout is opened (Dodo Payments). */
+  checkoutUrl?: string;
   notes?: Record<string, string>;
 }
 
 export interface VerifyGatewayPaymentInput {
   gatewayOrderId: string;
   gatewayPaymentId: string;
-  gatewaySignature: string;
+  gatewaySignature?: string;
 }
+
+/** A webhook delivery's request headers, names in lower case. */
+export type GatewayWebhookHeaders = Record<string, string | undefined>;
 
 export interface GatewayPaymentDetails {
   gatewayPaymentId: string;
   gatewayOrderId: string;
   amount: number;
   currency: string;
+  /**
+   * For a payment in another currency than the gateway settles in: what it
+   * settles for, in that currency's minor units (Razorpay's `base_amount`
+   * in rupees). Absent otherwise.
+   */
+  settlementAmount?: number | null;
+  settlementCurrency?: string | null;
   status: PaymentStatus;
   captured?: boolean;
   amountRefunded?: number;
@@ -295,23 +328,71 @@ export interface GatewayOrderStatus {
   status: "created" | "attempted" | "paid";
 }
 
+/**
+ * One payment gateway (Razorpay, Dodo Payments). "Gateway order" is the
+ * gateway's own record of what is to be paid: a Razorpay order, a Dodo
+ * checkout session. Every amount is in the order's currency and its smallest
+ * unit, as orders store them.
+ */
 export interface PaymentGateway {
   readonly providerName: PaymentProvider;
   createOrder(input: CreateGatewayOrderInput): Promise<GatewayOrderOutput>;
+  /**
+   * Where the buyer pays a gateway order of this gateway's, for one whose
+   * checkout is a page of its own (Dodo Payments); undefined for one whose
+   * widget is opened with the order's id (Razorpay).
+   */
+  checkoutUrl(gatewayOrderId: string): string | undefined;
   fetchOrder(gatewayOrderId: string): Promise<GatewayOrderStatus>;
+  /**
+   * Ends a gateway order that is not to be paid (the buyer closed its window
+   * and our order was cancelled), so that nobody can pay it later. For a
+   * gateway whose orders can be ended (Cashfree); one whose orders cannot
+   * leaves this out. A payment already begun may still complete.
+   */
+  cancelOrder?(gatewayOrderId: string): Promise<void>;
   fetchOrderPayments(gatewayOrderId: string): Promise<GatewayPaymentDetails[]>;
+  /**
+   * Whether what the widget reported can be trusted as far as it goes. A
+   * gateway whose widget signs its report checks the signature; one whose
+   * widget gives none answers true, and the payment is then only taken as
+   * proven by asking the gateway for it (`getPayment`), as it always is.
+   */
   verifyPaymentSignature(input: VerifyGatewayPaymentInput): boolean;
   getPayment(gatewayPaymentId: string): Promise<GatewayPaymentDetails>;
   refundPayment(input: CreateGatewayRefundInput): Promise<GatewayRefundOutput>;
   fetchRefund(gatewayRefundId: string): Promise<GatewayRefundDetails>;
+  /** Whether a webhook delivery was signed by the gateway. */
   verifyWebhookSignature(
     rawBody: string | Uint8Array,
-    signature: string,
+    headers: GatewayWebhookHeaders,
   ): boolean;
+  /** The gateway's own id for a webhook delivery, from its headers. */
+  webhookEventId(headers: GatewayWebhookHeaders): string | undefined;
   normalizeWebhookEvent(
     rawPayload: unknown,
     eventId?: string,
   ): NormalizedPaymentEvent;
+}
+
+/**
+ * Every gateway the server takes payments through. A payment row names the
+ * one it was made with (`gateway_provider`), and whatever is done with it
+ * later (asking about it, refunding it, its webhooks) goes to that one. A new
+ * checkout gets the gateway for the buyer's country.
+ */
+export interface PaymentGateways {
+  /** The gateway a checkout gets when its buyer's country is not known. */
+  readonly primary: PaymentGateway;
+  /** Every gateway, the primary first. */
+  readonly all: readonly PaymentGateway[];
+  /** The gateway payments recorded under `provider` were made with. */
+  get(provider: string): PaymentGateway | undefined;
+  /**
+   * The gateway a new checkout opens for a buyer in `country` (ISO 3166-1
+   * alpha-2), or the primary one when the country is not known.
+   */
+  forCountry(country: string | null | undefined): PaymentGateway;
 }
 
 export const webhookEventStatusSchema = z.enum([
@@ -324,7 +405,7 @@ export type WebhookEventStatus = z.infer<typeof webhookEventStatusSchema>;
 
 export const webhookEventRecordSchema = z.strictObject({
   id: z.uuid(),
-  provider: z.enum(["razorpay", "stripe", "mock", "free", "manual"]),
+  provider: paymentProviderSchema,
   eventId: z.string(),
   eventType: z.string(),
   payload: z.unknown(),
@@ -355,6 +436,13 @@ export const normalizedPaymentEventSchema = z.strictObject({
   gatewayRefundId: z.string().optional(),
   amount: z.number().int().nonnegative().optional(),
   currency: z.string().length(3).optional(),
+  /**
+   * For a payment in another currency than the gateway settles in: what it
+   * settles for, in that currency's minor units (Razorpay's `base_amount`
+   * in rupees). Absent otherwise.
+   */
+  settlementAmount: z.number().int().nonnegative().optional(),
+  settlementCurrency: z.string().length(3).optional(),
   paymentMethod: paymentMethodDetailsSchema.optional(),
   errorCode: z.string().optional(),
   errorDescription: z.string().optional(),

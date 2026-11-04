@@ -13,7 +13,7 @@ import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { ThemedSelect } from "../ThemedSelect";
 import { ThemedDateTimePicker } from "../ThemedDateTimePicker";
-import { useMyCourses } from "../services/courses";
+import { useMyCourses, usePartialAccessOptions } from "../services/courses";
 import {
   useCouponById,
   useCreateCoupon,
@@ -137,7 +137,20 @@ export function CouponBuilderPage({
     isEditMode ? couponId : null,
   );
   const { data: myCourses } = useMyCourses();
-  const courses = useMemo(() => myCourses?.courses ?? [], [myCourses?.courses]);
+  const { data: partialAccess } = usePartialAccessOptions();
+  // The courses a coupon can be limited to, partial access links among
+  // them (each an unlisted course of its own, named with the course it is
+  // part of).
+  const courses = useMemo(
+    () => [
+      ...(myCourses?.courses ?? []).map(({ id, title }) => ({ id, title })),
+      ...(partialAccess?.items ?? []).map((option) => ({
+        id: option.courseId,
+        title: `${option.title} (partial access to ${option.courseTitle})`,
+      })),
+    ],
+    [myCourses?.courses, partialAccess?.items],
+  );
   const createMutation = useCreateCoupon();
   const updateMutation = useUpdateCoupon();
 
@@ -519,6 +532,12 @@ export function CouponBuilderPage({
                   {discountType === "percentage" ? "%" : "₹"}
                 </span>
               </div>
+              {discountType === "fixed" ? (
+                <p className="m-0 mt-1.5 text-xs text-(--muted)">
+                  On a course sold in dollars outside India, it takes off the
+                  same share of the price.
+                </p>
+              ) : null}
             </div>
           </div>
 

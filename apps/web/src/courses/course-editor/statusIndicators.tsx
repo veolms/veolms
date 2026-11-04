@@ -136,7 +136,16 @@ export type PricingControlKey =
   | "currency"
   | "sellingPrice"
   | "originalPrice"
+  | "internationalSellingPrice"
+  | "internationalOriginalPrice"
   | "pricingDetails";
+
+/** A price field of the form: the one whose save state a status shows. */
+export type PricingPriceField =
+  | "sellingPrice"
+  | "originalPrice"
+  | "internationalSellingPrice"
+  | "internationalOriginalPrice";
 
 export const PricingControlStatusIndicator = ({
   status,

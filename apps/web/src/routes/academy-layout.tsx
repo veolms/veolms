@@ -98,6 +98,7 @@ import { ProfilePreviewHost } from "../profiles/ProfilePreviewHost";
 import {
   buildLoginDialogPath,
   buildLoginPath,
+  differOnlyByLoginDialog,
   isPublicProfilePath,
   LOGIN_PATH,
   readLoginPurpose,
@@ -140,6 +141,11 @@ import { useHydrated } from "../courses/viewerCourseState";
 import { rememberNavigationOrigin } from "../routing/navigationOriginEarlyState";
 import { NO_VIDEO_NOTICE } from "../learning/lessonWithoutVideo";
 import { videoPlaybackFailureNotice } from "../learning/videoPlaybackFailure";
+import {
+  beginLessonOpening,
+  endLessonOpening,
+} from "../learning/lessonOpeningState";
+import { LessonOpeningOverlay } from "../learning/LessonOpeningOverlay";
 import {
   getDestinationPath,
   getMatchedRouteDescriptor,
@@ -624,11 +630,14 @@ export default function AcademyLayout() {
     const previousPath = renderedLocationPathRef.current;
     const pending = pendingScrollPositionRef.current;
     if (previousPath === currentLocationPath && !pending) return;
-    // The page only tidied its own address: the reader stays where they are.
+    // The page only tidied its own address, or the login pop-up came up over
+    // it or went away (however it was opened or closed, Back included): the
+    // reader stays where they are.
     if (
       previousPath !== currentLocationPath &&
       !pending &&
-      asksToKeepScroll(location.state)
+      (asksToKeepScroll(location.state) ||
+        differOnlyByLoginDialog(previousPath, currentLocationPath))
     ) {
       renderedLocationPathRef.current = currentLocationPath;
       return;
@@ -708,9 +717,22 @@ export default function AcademyLayout() {
   // then stays where it was, and the recorded address must follow it, or
   // every later request for the same page would look like "already there"
   // and do nothing.
+  // Whichever page the app lands on next takes over from a lesson's loading
+  // state (see LessonOpeningOverlay): the lesson page, or wherever it went
+  // instead (a sign-in, a course it cannot open). In the same commit, so
+  // nothing shows in between.
+  useLayoutEffect(() => {
+    endLessonOpening();
+  }, [location.key]);
+
   const followNavigation = useCallback(
     (path: string, navigation: void | Promise<void>) => {
       void Promise.resolve(navigation).then(() => {
+        // A lesson asked for and then cancelled on the way leaves this page
+        // up: it must not stay covered by the lesson's loading state.
+        if (!isLearningRoutePath(window.location.pathname)) {
+          endLessonOpening();
+        }
         if (locationPathRef.current !== path) return;
         const { pathname, search, hash } = window.location;
         locationPathRef.current = `${pathname}${search}${hash}`;
@@ -965,6 +987,14 @@ export default function AcademyLayout() {
         );
       };
 
+      // From another page, the lesson page's loading state goes up now:
+      // the route waits for the lesson page's code before it changes.
+      if (
+        isLearningRoutePath(requestedPathname) &&
+        !isLearningRoutePath(locationPathRef.current)
+      ) {
+        beginLessonOpening();
+      }
       void autosyncManager.flushAll().then(performNavigation);
     },
     [
@@ -2105,6 +2135,13 @@ export default function AcademyLayout() {
             />
           </Suspense>
         ) : null}
+        <LessonOpeningOverlay
+          suppressed={
+            onLearningRoute ||
+            Boolean(persistentPlayer) ||
+            Boolean(learningMiniPlayer)
+          }
+        />
         <LoginDialogHost />
         <ProfilePreviewHost />
       </ProfileNavigationProvider>

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type {
   PlatformSettingsResponse,
   PublicPlatformSettingsResponse,
+  StaticSiteRebuildStatus,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { platformKeys } from "./platform.keys";
@@ -30,5 +31,22 @@ export function usePublicPlatformSettings({ enabled = true } = {}) {
     refetchOnWindowFocus: false,
     retry: 1,
     enabled,
+  });
+}
+
+/**
+ * The last "Rebuild all public pages", checked every few seconds while one
+ * is queued or running.
+ */
+export function useStaticSiteRebuildStatus({ enabled = true } = {}) {
+  return useQuery<StaticSiteRebuildStatus, ApiError>({
+    enabled,
+    queryKey: platformKeys.staticSiteRebuild(),
+    queryFn: () => platformService.getStaticSiteRebuildStatus(),
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running" ? 5_000 : false;
+    },
   });
 }

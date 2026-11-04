@@ -1,6 +1,14 @@
 export const GENERIC_API_ERROR_MESSAGE =
   "Something went wrong on our end. Please try again later.";
 
+/**
+ * A request that got no answer at all. It may never have left the device,
+ * so blaming the server ("on our end") sent students looking in the wrong
+ * place, and support found nothing in the server logs.
+ */
+export const UNREACHABLE_API_ERROR_MESSAGE =
+  "Can't reach our server. Check your connection and try again.";
+
 export interface ApiError {
   status: number;
   code: string;
@@ -87,7 +95,10 @@ export function getApiError(error: unknown): ApiError {
     return {
       status,
       code,
-      message: getSafeApiMessage(status, code, message),
+      message:
+        !error.response && code === "ERR_NETWORK"
+          ? UNREACHABLE_API_ERROR_MESSAGE
+          : getSafeApiMessage(status, code, message),
       details: data,
     };
   }

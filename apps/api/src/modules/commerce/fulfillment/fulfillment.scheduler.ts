@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from "fastify";
 import { sql, type Kysely } from "kysely";
 import type { Database } from "@veolms/database";
-import type { PaymentGateway } from "@veolms/contracts";
+import type { PaymentGateways } from "@veolms/contracts";
 import { createOrderExpirationWorker } from "./order-expiration.worker.ts";
 import { createPaymentRecoveryWorker } from "./payment-recovery.worker.ts";
 import { createRefundReconciliationWorker } from "./refund-reconciliation.worker.ts";
@@ -14,7 +14,7 @@ import { config } from "../../../config.ts";
 
 export interface FulfillmentSchedulerOptions {
   database: Kysely<Database>;
-  paymentGateway: PaymentGateway;
+  paymentGateways: PaymentGateways;
   logger?: FastifyBaseLogger;
   /** Interval in milliseconds between reconciliation cycles. Default: 5 minutes */
   intervalMs?: number;
@@ -59,21 +59,21 @@ export class CommerceFulfillmentScheduler {
     });
     this.refundReconciliationWorker = createRefundReconciliationWorker({
       database: options.database,
-      paymentGateway: options.paymentGateway,
+      paymentGateways: options.paymentGateways,
       logger: options.logger,
     });
     const autoRefundExtraPayments =
       options.autoRefundExtraPayments ?? config.AUTO_REFUND_EXTRA_PAYMENTS;
     this.paymentRecoveryWorker = createPaymentRecoveryWorker({
       database: options.database,
-      paymentGateway: options.paymentGateway,
+      paymentGateways: options.paymentGateways,
       logger: options.logger,
       autoRefundExtraPayments,
     });
     if (autoRefundExtraPayments) {
       this.extraPaymentRefunds = createExtraPaymentRefundService({
         database: options.database,
-        paymentGateway: options.paymentGateway,
+        paymentGateways: options.paymentGateways,
         logger: options.logger,
       });
     }

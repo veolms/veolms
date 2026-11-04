@@ -27,6 +27,7 @@ import {
   defaultShakaRuntimeLoader,
   getShakaStartupBandwidthEstimate,
   isShakaAutoQuality,
+  noteAssumedShakaBandwidthEstimate,
   normalizeShakaAudioTrack,
   PREFERRED_QUALITY_START_BANDWIDTH,
   normalizeShakaQuality,
@@ -36,16 +37,22 @@ import {
   resolveShakaLoadMimeType,
   resolveShakaRuntime,
   shakaDrmServers,
+  shakaHeldVideoHeight,
   shakaPreferredVideoHeight,
+  shakaStartVideoHeight,
   unregisterShakaNetworkingFilters,
   withoutPreferredVideoHeight,
+  withoutStartVideoHeight,
 } from "./shaka-internal";
 import type {
   ShakaAudioTrackLike,
   ShakaErrorLike,
   ShakaEventLike,
+  ShakaNetworkResponseLike,
   ShakaPlayerLike,
   ShakaPreloadManagerLike,
+  ShakaRequestContextLike,
+  ShakaResponseFilterLike,
   ShakaRuntimeLike,
   ShakaRuntimeLoader,
   ShakaTextTrackLike,
@@ -100,6 +107,23 @@ const STANDBY_READY_WAIT_MS = 1_500;
 const STANDBY_FIRST_FRAME_TIMEOUT_MS = 8_000;
 /** `HTMLMediaElement.HAVE_CURRENT_DATA`: a frame is decoded and showable. */
 const HAVE_CURRENT_DATA = 2;
+/**
+ * A segment that still could not be downloaded after its own retries (the
+ * CDN answering 500, or nothing arriving for a while) stops that stream for
+ * good in Shaka on a video that is not live: it then switches to another
+ * quality, but only with automatic quality on and another stream to switch
+ * to. A chosen quality, and the one audio stream of a DASH lesson, have
+ * none, so the error was final: "Something went wrong" on HLS lessons, and
+ * on DASH lessons a picture that froze once what was buffered ran out. It
+ * showed at the very end because that is where the last segments are
+ * fetched on a slow link, beside the next lesson preloading. The stream is
+ * now asked for again, this many times in a row before the error stands...
+ */
+const STREAMING_RETRY_LIMIT = 8;
+/** ...this long after the first failure, twice as long after each next one... */
+const STREAMING_RETRY_FIRST_DELAY_SECONDS = 1;
+/** ...and never longer than this. */
+const STREAMING_RETRY_MAX_DELAY_SECONDS = 8;
 
 /** Resolves true once `media` has a decoded frame to show, false on timeout. */
 function waitForFirstFrame(
@@ -151,6 +175,21 @@ function markPlayback(name: string, detail?: Record<string, unknown>): void {
   } catch {
     // Marks are diagnostics.
   }
+}
+
+/**
+ * The player's subtitle layer (see `SubtitleLayer`): subtitles drawn there
+ * stay out of the picture's zoom and can be moved and resized on their own.
+ * Without one Shaka draws them in the media element. Shaka makes its
+ * subtitle renderer as media is attached, so it is handed over before every
+ * attach.
+ */
+function subtitleLayerFor(media: HTMLMediaElement): HTMLElement | null {
+  return (
+    media
+      .closest("[data-video-player-root]")
+      ?.querySelector<HTMLElement>("[data-video-player-subtitles]") ?? null
+  );
 }
 
 function preloadSessionMatchesSource(
@@ -372,12 +411,21 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #standbyMedia: HTMLMediaElement | null = null;
   /** Settles once the player last playing in the standby element is gone. */
   #standbyReleased: Promise<void> = Promise.resolve();
+  /** Streaming failures retried in a row (see `STREAMING_RETRY_LIMIT`). */
+  #streamingRetries = 0;
   #stopWatchingSpeculativePreloads: (() => void) | null = null;
   /** Drops a source's streaming settings still waiting for its first frame. */
   #cancelDeferredStreaming: (() => void) | null = null;
   #autoQuality = true;
   /** The quality the viewer picked since the current load, if any. */
   #qualityChoice: "auto" | "manual" | null = null;
+  /**
+   * The height the current source holds at while its video segments come
+   * from the device (see `holdVideoHeight`); null once released.
+   */
+  #heldHeight: number | null = null;
+  /** Watches the responses for the first video segment from the network. */
+  #holdReleaseFilter: ShakaResponseFilterLike | null = null;
   /** The element whose picture `hideOutgoingVideo` hid, until revealed. */
   #hiddenMedia: HTMLMediaElement | null = null;
   #selectedTextTrackId: string | null = null;
@@ -423,12 +471,20 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     let player = this.requirePlayer();
     const runtime = this.requireRuntime();
     const generation = this.beginOperation();
+    this.#streamingRetries = 0;
     this.hideOutgoingVideo(media);
     this.startLoading(source);
     this.#selectedTextTrackId = null;
     this.#autoQuality = isShakaAutoQuality(source);
     this.#qualityChoice = null;
     this.#cancelDeferredStreaming?.();
+    this.stopWatchingForHoldRelease();
+    // Watched for release once the networking filters are in (they are
+    // cleared and set again on the way, see installNetworkingFilters).
+    this.#heldHeight = shakaHeldVideoHeight(source);
+    if (this.#heldHeight !== null) {
+      markPlayback("cached-height-held", { height: this.#heldHeight });
+    }
     // What the previous video measured sets where this one starts.
     rememberShakaBandwidthEstimate(player);
     markPlayback("shaka-load", { id: source.id });
@@ -529,6 +585,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
           });
         }
         const stopPreferring = this.startAtPreferredQuality(player, source);
+        // A start height caps the first variant until the first frame.
+        if (shakaStartVideoHeight(source) !== null) {
+          this.applyStreamingAfterFirstFrame(player, source, runtime);
+        }
         try {
           await player.load(asset, startTime, mimeType);
         } finally {
@@ -557,6 +617,48 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       }
       throw normalized;
     }
+  }
+
+  /**
+   * See `VideoEngine.stop`. The Shaka player that played the video is
+   * destroyed, which takes its MediaSource, its downloads and its licences
+   * with it, and a new one is attached to the same element for the next
+   * load. A load on its way is given up (`beginOperation`). The hidden
+   * standby and what is prepared in it are left alone: they are for the
+   * next video.
+   */
+  async stop(): Promise<void> {
+    const media = this.mediaElement;
+    const runtime = this.#runtime;
+    const previous = this.#player;
+    this.beginOperation();
+    media?.pause();
+    if (!media || !runtime || !previous) return;
+    this.updateSnapshot({ lifecycle: "unloading" });
+    this.#cancelDeferredStreaming?.();
+    rememberShakaBandwidthEstimate(previous);
+    this.clearNetworkingFilters();
+    this.unbindShakaEvents(previous);
+    const adoptedSession = this.#adoptedPreloadSession;
+    this.#adoptedPreloadSession = null;
+    if (adoptedSession && !adoptedSession.consumed) {
+      consumeEarlyShakaPreloadSession(adoptedSession);
+      await discardEarlyShakaPreloadManager(adoptedSession);
+    }
+    // In place before the old one is gone, so nothing finds no player.
+    const next = new runtime.Player();
+    this.#player = next;
+    this.bindShakaEvents(next);
+    await previous.destroy().catch(() => undefined);
+    if (media.currentSrc || media.hasAttribute("src")) {
+      media.removeAttribute("src");
+      media.load();
+    }
+    next.setVideoContainer?.(subtitleLayerFor(media));
+    await next.attach(media);
+    this.revealVideo();
+    this.clearTrackMaps();
+    this.finishUnloading();
   }
 
   async unload(): Promise<void> {
@@ -607,6 +709,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
 
     player.configure({ abr: { enabled: false } });
     this.#qualityChoice = "manual";
+    this.#heldHeight = null;
+    this.stopWatchingForHoldRelease();
     this.switchQualitySmoothly(player, track, { upAtOnce: true });
     this.#autoQuality = false;
     this.refreshTracks(false);
@@ -633,6 +737,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const runtime = this.#runtime;
     const source = this.getSnapshot().source;
     this.#qualityChoice = "auto";
+    this.#heldHeight = null;
+    this.stopWatchingForHoldRelease();
     player.configure({
       abr:
         runtime && source
@@ -746,6 +852,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#player = new runtime.Player();
       this.bindShakaEvents(this.#player);
     }
+    this.#player.setVideoContainer?.(subtitleLayerFor(media));
     await this.#player.attach(media);
   }
 
@@ -820,9 +927,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const apply = (): void => {
       cancel();
       if (this.#player !== player) return;
+      const abr = this.abrConfiguration(source, runtime);
       player.configure({
         streaming: createShakaConfiguration(source, runtime).streaming,
-        abr: this.abrConfiguration(source, runtime),
+        abr: { ...abr, ...this.startHeightBandwidthFloor(player, source, abr) },
       });
       this.keepPreferredQuality(player, source);
     };
@@ -841,6 +949,42 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   }
 
   /**
+   * Once a start height's cap is lifted, ABR has measured nothing (segments
+   * from the device cache are not counted) and would step down to its
+   * default estimate, fetching from the network what was kept. It starts
+   * from at least the variant playing instead, and moves once it measures.
+   */
+  private startHeightBandwidthFloor(
+    player: ShakaPlayerLike,
+    source: VideoSource,
+    abr: Record<string, unknown>,
+  ): { defaultBandwidthEstimate?: number } {
+    if (
+      (shakaStartVideoHeight(source) === null &&
+        shakaHeldVideoHeight(source) === null) ||
+      abr.enabled === false
+    ) {
+      return {};
+    }
+    const active = player.getVariantTracks().find((track) => track.active);
+    const bandwidth = active?.bandwidth;
+    if (typeof bandwidth !== "number" || !(bandwidth > 0)) return {};
+    const downgradeTarget =
+      typeof abr.bandwidthDowngradeTarget === "number" &&
+      abr.bandwidthDowngradeTarget > 0
+        ? abr.bandwidthDowngradeTarget
+        : 0.95;
+    const floor = Math.ceil((bandwidth / downgradeTarget) * 1.01);
+    const current =
+      typeof abr.defaultBandwidthEstimate === "number"
+        ? abr.defaultBandwidthEstimate
+        : 0;
+    if (floor <= current) return {};
+    noteAssumedShakaBandwidthEstimate(player, floor);
+    return { defaultBandwidthEstimate: floor };
+  }
+
+  /**
    * The ABR settings for `source` as the viewer has it now: auto quality
    * when they picked it since the load (or the source has no chosen
    * quality), the chosen quality's otherwise.
@@ -853,11 +997,82 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#qualityChoice === null
         ? isShakaAutoQuality(source)
         : this.#qualityChoice === "auto";
+    // A hold still on (nothing from the network yet, no choice made): ABR
+    // stays off at the held height.
+    if (this.#qualityChoice === null && this.#heldHeight !== null) {
+      return createShakaConfiguration(source, runtime).abr as Record<
+        string,
+        unknown
+      >;
+    }
+    // A start height only caps the first variant (see `startVideoHeight`).
     const abr = createShakaConfiguration(
-      auto ? withoutPreferredVideoHeight(source) : source,
+      withoutStartVideoHeight(
+        auto ? withoutPreferredVideoHeight(source) : source,
+      ),
       runtime,
     ).abr as Record<string, unknown>;
     return { ...abr, enabled: auto };
+  }
+
+  /** The height the source is to play at: chosen, or held while on auto. */
+  private targetVideoHeight(source: VideoSource): number | null {
+    const chosen = shakaPreferredVideoHeight(source);
+    if (chosen !== null) return chosen;
+    return this.#qualityChoice === null ? this.#heldHeight : null;
+  }
+
+  /**
+   * Releases a held height (see `holdVideoHeight`) the moment a video
+   * segment comes from the network: the device no longer has what plays
+   * next, so ABR chooses from here on, from at least the held variant.
+   */
+  private watchForHoldRelease(
+    player: ShakaPlayerLike,
+    source: VideoSource,
+    runtime: ShakaRuntimeLike,
+  ): void {
+    const networkingEngine = player.getNetworkingEngine();
+    const segmentType = runtime.net?.NetworkingEngine?.RequestType?.SEGMENT;
+    if (!networkingEngine || typeof segmentType !== "number") return;
+    const filter = (
+      type: number,
+      response: ShakaNetworkResponseLike,
+      context?: ShakaRequestContextLike,
+    ): void => {
+      if (this.#holdReleaseFilter !== filter) return;
+      if (type !== segmentType || response.fromCache) return;
+      const streamType =
+        context?.stream?.type ?? response.originalRequest?.contentType;
+      if (streamType === "audio" || streamType === "text") return;
+      this.releaseHold(player, source, runtime);
+    };
+    networkingEngine.registerResponseFilter(filter);
+    this.#holdReleaseFilter = filter;
+  }
+
+  private stopWatchingForHoldRelease(): void {
+    const filter = this.#holdReleaseFilter;
+    if (!filter) return;
+    this.#holdReleaseFilter = null;
+    this.#player?.getNetworkingEngine()?.unregisterResponseFilter(filter);
+  }
+
+  private releaseHold(
+    player: ShakaPlayerLike,
+    source: VideoSource,
+    runtime: ShakaRuntimeLike,
+  ): void {
+    const height = this.#heldHeight;
+    this.stopWatchingForHoldRelease();
+    if (height === null || this.#player !== player) return;
+    this.#heldHeight = null;
+    markPlayback("cached-height-released", { height });
+    if (this.#qualityChoice !== null) return;
+    const abr = this.abrConfiguration(source, runtime);
+    player.configure({
+      abr: { ...abr, ...this.startHeightBandwidthFloor(player, source, abr) },
+    });
   }
 
   /** The variant to play for the height chosen for `source`, if any. */
@@ -865,7 +1080,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     player: ShakaPlayerLike,
     source: VideoSource,
   ): ShakaVariantTrackLike | null {
-    const height = shakaPreferredVideoHeight(source);
+    const height = this.targetVideoHeight(source);
     if (height === null) return null;
     return variantForHeight(
       variantsForSelectedAudio(
@@ -887,7 +1102,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     player: ShakaPlayerLike,
     source: VideoSource,
   ): () => void {
-    if (shakaPreferredVideoHeight(source) === null) return () => undefined;
+    if (this.targetVideoHeight(source) === null) return () => undefined;
     const onStreaming = (): void => {
       const variant = this.preferredVariant(player, source);
       if (variant) player.selectVariantTrack(variant);
@@ -1157,6 +1372,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         streaming: { bufferingGoal: STANDBY_BUFFERING_GOAL_SECONDS },
       });
       standby.muted = true;
+      player.setVideoContainer?.(subtitleLayerFor(standby));
       await player.attach(standby);
       await player.load(manager, session.startTime ?? 0);
       if (!this.isStandbyCurrent(session, standby)) {
@@ -1311,6 +1527,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       streaming: createShakaConfiguration(source, runtime).streaming,
     });
     this.keepPreferredQuality(player, source);
+    if (shakaStartVideoHeight(source) !== null) {
+      this.applyStreamingAfterFirstFrame(player, source, runtime);
+    }
 
     // The learner's place moved since the standby was made: go there.
     const startTime = options.startTime ?? source.startTime;
@@ -1381,6 +1600,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
     this.bindShakaEvents(preloadedPlayer);
     try {
+      preloadedPlayer.setVideoContainer?.(subtitleLayerFor(media));
       await preloadedPlayer.attach(media);
     } catch (error) {
       await discardEarlyShakaPreloadManager(session);
@@ -1447,7 +1667,19 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         "SHAKA_ERROR",
         "UNKNOWN",
       );
-      this.emitError(error, error.fatal);
+      if (this.retryFailedStreaming(player, error)) return;
+      // One Shaka got over by itself (another quality took over) is told to
+      // whoever listens, but is not the player's error: shown as one, the
+      // video played on under "Something went wrong" until it was paused.
+      if (!error.fatal) {
+        this.emit("error", { error });
+        return;
+      }
+      this.emitError(error);
+    });
+    // A segment in again: the streams are healthy.
+    listen("segmentappended", () => {
+      this.#streamingRetries = 0;
     });
     listen("buffering", (event) => {
       this.setBuffering(Boolean(event.buffering));
@@ -1480,6 +1712,40 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.refreshTracks(true);
       this.emit("manifestupdated", undefined);
     });
+  }
+
+  /**
+   * Asks Shaka to stream again after a segment could not be downloaded
+   * (see `STREAMING_RETRY_LIMIT`), waiting longer each time. True when it
+   * will: the error is then not the player's, and the loader shows while
+   * playback waits for the segment.
+   */
+  private retryFailedStreaming(
+    player: ShakaPlayerLike,
+    error: VideoEngineError,
+  ): boolean {
+    if (
+      !error.fatal ||
+      error.category !== "NETWORK" ||
+      this.#player !== player ||
+      this.getSnapshot().lifecycle !== "ready" ||
+      this.#streamingRetries >= STREAMING_RETRY_LIMIT ||
+      !player.retryStreaming
+    ) {
+      return false;
+    }
+    const delay = Math.min(
+      STREAMING_RETRY_MAX_DELAY_SECONDS,
+      STREAMING_RETRY_FIRST_DELAY_SECONDS * 2 ** this.#streamingRetries,
+    );
+    if (!player.retryStreaming(delay)) return false;
+    this.#streamingRetries += 1;
+    markPlayback("streaming-retry", {
+      attempt: this.#streamingRetries,
+      delay,
+      code: error.code,
+    });
+    return true;
   }
 
   private unbindShakaEvents(player: ShakaPlayerLike): void {
@@ -1574,9 +1840,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     registerShakaNetworkingFilters(player, filters);
     this.#requestFilter = filters.requestFilter;
     this.#responseFilter = filters.responseFilter;
+    if (this.#heldHeight !== null && this.#qualityChoice === null) {
+      this.watchForHoldRelease(player, source, runtime);
+    }
   }
 
   private clearNetworkingFilters(): void {
+    this.stopWatchingForHoldRelease();
     unregisterShakaNetworkingFilters(this.#player, {
       requestFilter: this.#requestFilter,
       responseFilter: this.#responseFilter,

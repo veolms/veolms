@@ -1,12 +1,18 @@
 /** The price of a paid course said in full; see `CoursePriceBreakdown`. */
 export interface CoursePriceBreakdownData {
-  /** On a sale: the marked price, the sale's amount off and its share. */
-  sale?: { marked: string; discount: string; label: string };
+  /**
+   * On a sale: the marked price, the sale's amount off and its share, and
+   * what the discount is called when it is not a sale ("Partial access
+   * discount").
+   */
+  sale?: { marked: string; discount: string; label: string; name?: string };
   /** The price the coupon is taken off (the sale price on a sale). */
   beforeCoupon: string;
   /** The coupon in use: its code and its amount off ("₹500"). */
   coupon?: { code: string; discount: string };
   total: string;
+  /** A line under the total: why it is more than the coupon leaves. */
+  note?: string;
   /** Text size for the total; long amounts take a smaller one. */
   totalSizeClassName: string;
 }
@@ -29,7 +35,8 @@ export function CoursePriceBreakdown({
 }: {
   breakdown: CoursePriceBreakdownData;
 }) {
-  const { sale, beforeCoupon, coupon, total, totalSizeClassName } = breakdown;
+  const { sale, beforeCoupon, coupon, total, note, totalSizeClassName } =
+    breakdown;
   const hasLines = Boolean(sale || coupon);
 
   return (
@@ -43,7 +50,7 @@ export function CoursePriceBreakdown({
           {sale ? (
             <>
               <dt className="min-w-0 truncate text-(--muted)">
-                Sale discount ({sale.label})
+                {sale.name ?? "Sale discount"} ({sale.label})
               </dt>
               <dd className={discountClasses}>−{sale.discount}</dd>
             </>
@@ -74,6 +81,11 @@ export function CoursePriceBreakdown({
           {total}
         </span>
       </div>
+      {note ? (
+        <p className="m-0 -mt-1 text-[0.8rem] leading-snug text-(--muted)">
+          {note}
+        </p>
+      ) : null}
     </div>
   );
 }

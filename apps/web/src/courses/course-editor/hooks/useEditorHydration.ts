@@ -29,6 +29,7 @@ import {
 } from "../pricingState";
 import { type ExtrasFormState, normalizeExtrasState } from "../extrasState";
 import type { ExtrasState } from "../editorLocalTypes";
+import type { IncludeDraftItem } from "../editorLocalTypes";
 
 export interface UseEditorHydrationArgs {
   setServerBasics: Dispatch<SetStateAction<BasicsFormState>>;
@@ -130,6 +131,7 @@ export interface UseEditorHydrationArgs {
               currency: string;
               salePrice?: number | null | undefined;
               showDiscountBadge?: boolean | undefined;
+              linkedOnly?: boolean | undefined;
             }
           | null
           | undefined;
@@ -147,7 +149,17 @@ export interface UseEditorHydrationArgs {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       }
     | undefined;
   setSections: Dispatch<SetStateAction<CurriculumSectionItem[]>>;
@@ -169,9 +181,7 @@ export interface UseEditorHydrationArgs {
   setServerIncludes: Dispatch<
     SetStateAction<{ id: string; text: string; position: number }[]>
   >;
-  setManualIncludesDraft: Dispatch<
-    SetStateAction<{ id: string; text: string; isPendingCreation?: boolean }[]>
-  >;
+  setManualIncludesDraft: Dispatch<SetStateAction<IncludeDraftItem[]>>;
   setExtras: Dispatch<SetStateAction<ExtrasState>>;
   isExtrasDirtyRef: RefObject<boolean>;
 }
@@ -428,6 +438,10 @@ export function useEditorHydration({
           const serverItems = editorData.includes.map((inc) => ({
             id: inc.id,
             text: inc.text,
+            detail: inc.detail,
+            icon: inc.icon,
+            color: inc.color,
+            kind: inc.kind,
           }));
           setManualIncludesDraft((prev) => {
             const pendingItems = prev.filter((p) => p.isPendingCreation);

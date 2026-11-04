@@ -20,20 +20,30 @@ export const FUZZY_SEARCH_THRESHOLD = 0.55;
 /** Searches shorter than this match as typed only: "js" is not near "jsx". */
 export const FUZZY_SEARCH_MIN_LENGTH = 4;
 
+/**
+ * The search as it is compared: trimmed, in lower case and without dots.
+ * Dots are left out of the text it is compared with too, so "nodejs" finds
+ * "Node.js" (and "Next.js", "React.js", "Vue.js"…), and "node.js" finds
+ * "NodeJS", as the search boxes in the browser do (fuzzySearch.ts).
+ */
+export function fuzzySearchTerm(term: string): string {
+  return term.trim().toLowerCase().replace(/\./g, "");
+}
+
 /** Whether a search is long enough to be matched loosely. */
 export function isFuzzySearchTerm(term: string): boolean {
-  return term.trim().length >= FUZZY_SEARCH_MIN_LENGTH;
+  return fuzzySearchTerm(term).length >= FUZZY_SEARCH_MIN_LENGTH;
 }
 
 /**
- * True where `text` is close to `term` (see above). `text` is any SQL
- * expression; a null one never matches.
+ * True where `text` is close to `term` (see above), dots left out of both.
+ * `text` is any SQL expression; a null one never matches.
  */
 export function fuzzyMatches(
   term: string,
   text: RawBuilder<unknown> | ReturnType<typeof sql.ref>,
 ): RawBuilder<boolean> {
-  return sql<boolean>`coalesce(word_similarity(${term.trim().toLowerCase()}, ${text}) >= ${FUZZY_SEARCH_THRESHOLD}, false)`;
+  return sql<boolean>`coalesce(word_similarity(${fuzzySearchTerm(term)}, replace(${text}, '.', '')) >= ${FUZZY_SEARCH_THRESHOLD}, false)`;
 }
 
 /**

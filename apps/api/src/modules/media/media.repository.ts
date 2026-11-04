@@ -208,6 +208,17 @@ export async function insertMediaSource(
     .execute();
 }
 
+export async function findMediaSource(
+  database: DatabaseExecutor,
+  mediaId: string,
+) {
+  return await database
+    .selectFrom("media_sources")
+    .select(["provider", "external_id", "source_url", "title", "channel"])
+    .where("media_id", "=", mediaId)
+    .executeTakeFirst();
+}
+
 /**
  * Fills in the title and channel once they are known (an import learns
  * them only when its worker reads the video), keeping any already set.
@@ -549,6 +560,7 @@ export async function findPlaybackLessonContext(
       "course_access_rules.access_type as access_type",
       "course_lessons.id as lesson_id",
       "course_lessons.title as lesson_title",
+      "course_lessons.section_id as section_id",
       "course_lessons.content_media_id as content_media_id",
       "course_lessons.is_preview as is_preview",
       "course_lessons.is_published as is_published",
@@ -609,6 +621,7 @@ export async function findPlaybackMediaContext(
       "courses.creator_id as course_creator_id",
       "course_pricing.pricing_type as pricing_type",
       "course_access_rules.access_type as access_type",
+      "course_lessons.section_id as section_id",
       "course_lessons.is_preview as is_preview",
       "course_lessons.is_published as is_published",
       // Whether this is the course's first published lesson, in the same

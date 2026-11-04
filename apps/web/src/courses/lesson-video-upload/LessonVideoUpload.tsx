@@ -40,7 +40,7 @@ import {
   VideoSourceTabs,
   YoutubeImportPanel,
   type VideoSource,
-} from "./YoutubeImportPanel";
+} from "../../components/youtube-import/YoutubeImportPanel";
 import type { YoutubeImportTarget } from "./youtube-import-target";
 
 export interface LessonVideoUploadProps {

@@ -416,6 +416,8 @@ export function AddMemberPanel({
             Cancel
           </button>
           <Button
+            elevation="flat"
+            motion="static"
             disabled={!target || roleIds.length === 0 || pending}
             onClick={() => void save()}
           >

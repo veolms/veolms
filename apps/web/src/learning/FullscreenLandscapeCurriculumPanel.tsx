@@ -7,6 +7,7 @@ import type {
   TransitionEvent as ReactTransitionEvent,
 } from "react";
 import { claimPointerGesture } from "../gestures/pointerGestureOwnership";
+import { useLessonListTheme } from "./player/useLearningPlayerTheme";
 
 export const FULLSCREEN_VIDEO_WIDTH_MIN_PERCENT = 50;
 export const FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT = 60;
@@ -94,6 +95,7 @@ export function FullscreenLandscapeCurriculumPanel({
   onVideoWidthPreviewChange,
   videoWidthPercent,
 }: FullscreenLandscapeCurriculumPanelProps) {
+  const lessonTheme = useLessonListTheme();
   const [motionMode, setMotionMode] = useState<PanelMotionMode>("idle");
   const dismissPendingRef = useRef(false);
   const motionTimerRef = useRef<number | null>(null);
@@ -389,6 +391,7 @@ export function FullscreenLandscapeCurriculumPanel({
 
   return (
     <div
+      data-lesson-theme={lessonTheme}
       className={`relative z-20 h-full min-w-0 flex-1 touch-pan-y overflow-hidden border-l border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] text-(--text) shadow-[-18px_0_40px_rgba(0,0,0,0.2)] will-change-transform [&_.learning-curriculum]:h-full [&_.learning-curriculum]:rounded-none [&_.learning-curriculum]:bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] [&_.learning-curriculum]:shadow-none ${motionMode === "settling" || motionMode === "dismissing" ? "transition-transform duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none" : "transition-none"}`}
       style={{
         transform:

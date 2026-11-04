@@ -15,6 +15,7 @@ import {
   formatFullPlacedDate,
   getCourseBrandBadge,
   getOrderStatusStyle,
+  orderItemLabel,
 } from "./orderHelpers";
 import { StudentAvatar } from "./StudentAvatar";
 
@@ -255,7 +256,11 @@ export function OrderDetailsContent({
           <Section title={order.items.length > 1 ? "Courses" : "Course"}>
             <ul className="m-0 -mx-2 list-none p-0">
               {order.items.map((item, index) => {
-                const brand = getCourseBrandBadge(item.titleSnapshot);
+                // Part of a course is named by the course, with a note.
+                const label = orderItemLabel(item);
+                // An unlisted course has no page: the course it opens.
+                const openCourseId = item.opensCourseId ?? item.courseId;
+                const brand = getCourseBrandBadge(label.title);
                 const badge = (
                   <span
                     className="grid size-8 shrink-0 place-items-center rounded-lg text-[0.625rem] font-extrabold tracking-tight"
@@ -269,18 +274,25 @@ export function OrderDetailsContent({
                   </span>
                 );
                 const title = (
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-(--text)">
-                    {item.titleSnapshot}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-(--text)">
+                      {label.title}
+                    </span>
+                    {label.note && (
+                      <span className="block truncate text-xs text-(--muted)">
+                        {label.note}
+                      </span>
+                    )}
                   </span>
                 );
                 return (
                   <li key={`${item.courseId ?? "item"}-${index}`}>
-                    {item.courseId ? (
+                    {openCourseId ? (
                       <button
                         type="button"
                         onClick={() =>
                           onOpenPage(
-                            `/courses/${encodeURIComponent(item.courseId!)}`,
+                            `/courses/${encodeURIComponent(openCourseId)}`,
                           )
                         }
                         title="Open course"

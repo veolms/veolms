@@ -18,6 +18,7 @@ import {
 } from "../../player/liveLessonProgress";
 import { seedResumePositionFromProgress } from "../../player/lessonPlayerPersistence";
 import { LESSON_PROGRESS_COMPLETE_THRESHOLD } from "../workspaceConstants";
+import { isPlaceholderLesson } from "../../staticLessonPage";
 import type { useCourseOverview } from "../../../services/courses";
 
 export interface UseLessonProgressStateArgs {
@@ -76,13 +77,20 @@ export function useLessonProgressState({
       curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
     [curriculumSections],
   );
+  // Without the stand-ins a page built for one lesson numbers the other
+  // sections with (`isPlaceholderLesson`): they have no lesson's id, and
+  // matched against the kept progress they had every item of those
+  // sections dropped until the curriculum file was in (a change on screen
+  // after the first paint, and progress not sent yet lost with it).
   const lessonIdsByNumber = useMemo<ReadonlyMap<number, string> | undefined>(
     () =>
       adaptedCurriculum
         ? new Map(
-            [...adaptedCurriculum.lessonsByNumber.entries()].map(
-              ([lessonNumber, lesson]) => [lessonNumber, lesson.id] as const,
-            ),
+            [...adaptedCurriculum.lessonsByNumber.entries()]
+              .filter(([, lesson]) => !isPlaceholderLesson(lesson))
+              .map(
+                ([lessonNumber, lesson]) => [lessonNumber, lesson.id] as const,
+              ),
           )
         : undefined,
     [adaptedCurriculum],

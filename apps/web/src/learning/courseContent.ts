@@ -21,6 +21,8 @@ export type Lesson = [
 
 export interface CourseSection {
   id: number;
+  /** The section's id from the API, when the list was built from it. */
+  sectionId?: string;
   title: string;
   progress: string;
   lessons: Lesson[];

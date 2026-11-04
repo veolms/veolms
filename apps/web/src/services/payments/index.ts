@@ -3,4 +3,4 @@ export * from "./payment.service";
 export * from "./payment.mutations";
 export * from "./checkoutError";
 export * from "./paymentConfirmation";
-export * from "./checkoutWindowLoad";
+export * from "./gateways/gatewayCheckout";

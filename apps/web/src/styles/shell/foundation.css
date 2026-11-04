@@ -369,13 +369,30 @@
   display: block;
 }
 
+/* The sidebar's collapse icon: the theme's accent, bright enough to find at
+   a glance, and brighter still (more of the accent, never white) under the
+   pointer. By day the page is near white, so it takes more of the accent. */
 :root {
   --sidebar-toggle-surface: color-mix(
     in srgb,
-    var(--accent) 28%,
+    var(--accent) 50%,
+    var(--surface)
+  );
+  --sidebar-toggle-surface-hover: color-mix(
+    in srgb,
+    var(--accent) 80%,
     var(--surface)
   );
   --sidebar-toggle-ink: color-mix(in srgb, var(--accent) 22%, var(--text));
+}
+
+:root[data-theme="light"] {
+  --sidebar-toggle-surface: color-mix(
+    in srgb,
+    var(--accent) 66%,
+    var(--surface)
+  );
+  --sidebar-toggle-surface-hover: var(--accent);
 }
 
 .sidebar-collapse {

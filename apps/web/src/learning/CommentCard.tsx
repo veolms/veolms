@@ -8,11 +8,14 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { HouseIcon as House } from "@phosphor-icons/react/House";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
 import { MarkdownLogoIcon as MarkdownLogo } from "@phosphor-icons/react/MarkdownLogo";
 import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
+import { PushPinSlashIcon as PushPinSlash } from "@phosphor-icons/react/PushPinSlash";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
@@ -66,6 +69,9 @@ import {
   getReplyTotalCount,
 } from "../services/learning-interactions/reply-pagination";
 import { TimeAgo } from "../components/TimeAgo";
+import type { CreatorHeart } from "@veolms/contracts";
+import { CreatorHeartButton, PinnedLabel } from "./CreatorHeartButton";
+import { useThreadStaffActions } from "./useThreadStaffActions";
 import { cheerLike } from "../components/likeFeedback";
 
 export interface CommentReply {
@@ -124,6 +130,11 @@ export interface Comment {
   isLocked?: boolean;
   isBookmarked?: boolean;
   isFollowing?: boolean;
+  courseId?: string;
+  lessonId?: string | null;
+  /** Set while staff keep it at the top of its lesson's discussion. */
+  pinnedAt?: string | null;
+  creatorHeart?: CreatorHeart | null;
 }
 
 interface CommentCardProps {
@@ -317,6 +328,18 @@ export const CommentCard = React.memo(function CommentCard({
     canParticipate && !isNote && (Boolean(comment.isOwn) || canModerate);
   const canAcceptAnswer =
     canParticipate && isQuestion && (Boolean(comment.isOwn) || canModerate);
+  const staff = useThreadStaffActions({
+    thread: {
+      id: isNote ? undefined : serverId,
+      courseId: comment.courseId ?? courseId,
+      lessonId: comment.lessonId,
+      isPublic: (comment.visibility ?? "public") === "public",
+      pinnedAt: comment.pinnedAt,
+      creatorHeart: comment.creatorHeart,
+    },
+    canModerate,
+    onNotice: onCopyTextNotice,
+  });
 
   const {
     data: repliesData,
@@ -582,6 +605,9 @@ export const CommentCard = React.memo(function CommentCard({
             </ProfileLink>
 
             <div className="min-w-0 flex-1">
+              {!isNote && comment.pinnedAt ? (
+                <PinnedLabel className="mb-1" />
+              ) : null}
               <div
                 data-comment-meta
                 className="relative flex items-start gap-2 pr-9"
@@ -709,6 +735,9 @@ export const CommentCard = React.memo(function CommentCard({
                     (!isBackendMode || (Boolean(serverId) && !isEditing))
                   }
                   onEdit={() => onEdit(comment)}
+                  staffActions={
+                    <ThreadStaffMenuItems staff={staff} kind={entryKind} />
+                  }
                   onShare={() =>
                     serverId
                       ? shareDiscussionEntry(
@@ -882,6 +911,14 @@ export const CommentCard = React.memo(function CommentCard({
                         />
                       </button>
                     )}
+
+                  {!isNote && (
+                    <CreatorHeartButton
+                      heart={comment.creatorHeart}
+                      canGive={staff.canMark}
+                      onToggle={staff.setHeart}
+                    />
+                  )}
                 </div>
               )}
 
@@ -1385,6 +1422,8 @@ export function InlineEditForm({
 
 interface CommentActionMenuProps {
   name: string;
+  /** Pin, home page: staff items shown after the copy items. */
+  staffActions?: React.ReactNode;
   kind: DiscussionEntryKind | "reply";
   isOwn: boolean;
   canEdit?: boolean;
@@ -1444,6 +1483,7 @@ export function CommentActionMenu({
   onShare,
   onDelete,
   onReport,
+  staffActions,
   className,
 }: CommentActionMenuProps) {
   const [open, setOpen] = useState(false);
@@ -1613,6 +1653,7 @@ export function CommentActionMenu({
           )}
           {shareAction}
           {copyTextAction}
+          {staffActions}
           {canLock && onToggleLock && (
             <MenuAction
               Icon={isLocked ? LockOpen : Lock}
@@ -1655,6 +1696,7 @@ export function CommentActionMenu({
           )}
           {shareAction}
           {copyTextAction}
+          {staffActions}
           {canLock && onToggleLock && (
             <MenuAction
               Icon={isLocked ? LockOpen : Lock}
@@ -1678,6 +1720,37 @@ export function CommentActionMenu({
         </>
       )}
     </CourseActionMenu>
+  );
+}
+
+/** "Pin to lesson" and "Add to home page", for staff, in a post's menu. */
+function ThreadStaffMenuItems({
+  staff,
+  kind,
+}: {
+  staff: ReturnType<typeof useThreadStaffActions>;
+  kind: DiscussionEntryKind;
+}) {
+  const noun = kind === "question" ? "Q&A" : "comment";
+  return (
+    <>
+      {staff.canPin && (
+        <MenuAction
+          Icon={staff.isPinned ? PushPinSlash : PushPin}
+          label={staff.isPinned ? "Unpin from lesson" : `Pin ${noun} to lesson`}
+          onClick={staff.togglePin}
+        />
+      )}
+      {staff.canFeature && (
+        <MenuAction
+          Icon={House}
+          label={
+            staff.onHomePage ? "Remove from home page" : "Add to home page"
+          }
+          onClick={staff.toggleHomePage}
+        />
+      )}
+    </>
   );
 }
 

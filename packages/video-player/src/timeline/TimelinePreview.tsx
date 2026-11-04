@@ -120,14 +120,12 @@ function previewCardLeft(position: number): string {
 }
 
 /**
- * The time pill: see-through, fully rounded, a lighter grey than the
- * frame's shadow with a lighter shadow of its own, so it does not run into
- * the dark shadow under the frame it sits on. Its grey takes the hue of
- * the theme's accent colour, faintly, at the grey's own darkness (what
- * shows through it is blurred to black and white).
+ * The time pill: a little dark and see-through, fully rounded, with no blur
+ * behind it (the user's call: only Frost's glass blurs). Other themes draw
+ * it in their own surface, outline and corners (see the theme kit).
  */
 const PREVIEW_TIME_PILL_CLASS =
-  "rounded-full bg-[rgb(48_48_48/0.8)] supports-[color:oklch(from_red_l_c_h)]:bg-[oklch(from_var(--video-player-accent,#ff7a1a)_0.31_calc(c*0.4)_h/0.8)] px-3.5 py-1 text-sm leading-5 tabular-nums text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.26),0_1px_3px_rgb(0_0_0/0.22),0_4px_10px_rgb(0_0_0/0.16)] backdrop-blur-md backdrop-grayscale";
+  "rounded-full bg-black/50 px-3.5 py-1 text-sm leading-5 tabular-nums text-white shadow-[0_1px_3px_rgb(0_0_0/0.22),0_4px_10px_rgb(0_0_0/0.16)]";
 
 /** The timeline thumb's size (`size-3`), which stays inside the track. */
 const TIMELINE_THUMB_SIZE_PX = 12;
@@ -137,14 +135,22 @@ const TIMELINE_THUMB_SIZE_PX = 12;
  * the player's edges).
  */
 const SCRUB_PILL_OVERHANG_PX = 6;
+/**
+ * Where the drag pill holding a chapter starts: 0.5rem in from the left,
+ * level with the phone's time box in the bottom-left corner (`left-2`).
+ */
+const STEADY_PILL_LEFT = "0.5rem";
 
 /**
  * While the timeline is dragged: the hover card's time pill alone, at the
  * same height (astride where the card's bottom edge would be), the picture
  * being shown over the whole video instead. It stays centred over the
  * thumb right to either end, only stopping where it would run off the
- * player. Over a video with chapters, the name of the chapter at that
- * moment stands above it, in the middle of the player.
+ * player. Over a video with chapters (on the phone layout) the pill holds
+ * the name of the chapter at that moment after the time, and stands still
+ * instead: its left edge fixed, as wide as its words, so the time never
+ * moves however long the name is (the user's call), and a name too long
+ * for the player is cut short.
  */
 function ScrubTimePill({
   chapterTitle,
@@ -155,34 +161,51 @@ function ScrubTimePill({
   chapterTitle: string | null;
   position: number;
   previewTime: number;
-  /** A finger drag: the pill rises clear of the thumb on the timeline. */
+  /**
+   * A finger drag: the pill rises clear of the fingertip on the thumb, a
+   * little above it (higher, it read as apart from the thumb).
+   */
   touch: boolean;
 }) {
   // The thumb's centre, as the thumb itself is placed (see `Timeline`).
   const thumbX = `(${position / 100} * (100cqw - ${TIMELINE_THUMB_SIZE_PX}px) + ${TIMELINE_THUMB_SIZE_PX / 2}px)`;
   return (
     <div
-      className={`pointer-events-none absolute inset-x-0 bottom-full z-30 h-0 @container ${touch ? "mb-12.5" : "mb-5"}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-full z-30 h-0 @container ${touch ? "mb-8" : "mb-5"}`}
       data-video-player-preview=""
       data-video-player-preview-mode="time"
     >
       <span
-        className={`absolute bottom-0 ${PREVIEW_TIME_PILL_CLASS}`}
-        style={{
-          left: `calc${thumbX}`,
-          translate: `clamp(calc(-1 * ${thumbX} - ${SCRUB_PILL_OVERHANG_PX}px), -50%, calc(100cqw + ${SCRUB_PILL_OVERHANG_PX}px - ${thumbX} - 100%)) 50%`,
-        }}
+        data-video-player-preview-time=""
+        className={`absolute bottom-0 flex items-center gap-2 whitespace-nowrap ${
+          chapterTitle ? "translate-y-1/2 justify-start" : ""
+        } ${PREVIEW_TIME_PILL_CLASS}`}
+        style={
+          chapterTitle
+            ? // Its left edge stays put and it grows to the right with the
+              // name, so the time never moves while the pill fits its words.
+              {
+                left: STEADY_PILL_LEFT,
+                maxWidth: `calc(100cqw - ${STEADY_PILL_LEFT} - 0.5rem)`,
+              }
+            : {
+                left: `calc${thumbX}`,
+                translate: `clamp(calc(-1 * ${thumbX} - ${SCRUB_PILL_OVERHANG_PX}px), -50%, calc(100cqw + ${SCRUB_PILL_OVERHANG_PX}px - ${thumbX} - 100%)) 50%`,
+              }
+        }
       >
-        {formatMediaTime(previewTime)}
+        <span className="shrink-0 tabular-nums">
+          {formatMediaTime(previewTime)}
+        </span>
+        {chapterTitle ? (
+          <span
+            data-video-player-preview-chapter=""
+            className="min-w-0 truncate font-medium opacity-85"
+          >
+            {chapterTitle}
+          </span>
+        ) : null}
       </span>
-      {chapterTitle ? (
-        <p
-          data-video-player-preview-chapter=""
-          className="absolute bottom-7 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate text-center text-sm font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]"
-        >
-          {chapterTitle}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -222,7 +245,12 @@ function FramePreviewCard({
       data-video-player-preview-mode="frame"
     >
       {chapterTitle ? (
-        <p className="mb-1.5 truncate text-center text-sm font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
+        // On a dark see-through backing of its own, so it reads over any
+        // picture (themes draw it as one of their pills).
+        <p
+          data-video-player-preview-chapter=""
+          className="mx-auto mb-1.5 w-fit max-w-full truncate rounded-full bg-black/60 px-2.5 py-0.5 text-center text-sm font-semibold text-white"
+        >
           {chapterTitle}
         </p>
       ) : null}
@@ -231,16 +259,20 @@ function FramePreviewCard({
             app's side menu (its dark `--surface-depth-shadow`): a lit top
             and left edge and a darker bottom edge drawn over the picture
             (the ::after layer, edges only: the picture itself stays
-            clean), and soft layered shadows beneath. */}
+            clean), and soft layered shadows beneath; other themes edge it
+            in their own outline and corners (the theme kit). Isolated, so the
+            loading sweep over a picture not downloaded yet (z-1) stays
+            under the time pill that overlaps the frame's bottom edge. */}
         <div
           data-video-player-preview-frame=""
-          className="relative overflow-hidden rounded-2xl bg-black shadow-[0_2px_6px_rgb(0_0_0/0.45),0_14px_32px_rgb(0_0_0/0.5),0_28px_56px_rgb(0_0_0/0.28)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_1px_0_rgb(255_255_255/0.28),inset_1px_0_0_rgb(255_255_255/0.1),inset_-1px_0_0_rgb(255_255_255/0.05),inset_0_-1px_0_rgb(0_0_0/0.35),inset_0_0_0_1px_rgb(255_255_255/0.07)] after:content-['']"
+          className="relative isolate overflow-hidden rounded-2xl bg-black shadow-[0_2px_6px_rgb(0_0_0/0.45),0_14px_32px_rgb(0_0_0/0.5),0_28px_56px_rgb(0_0_0/0.28)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_1px_0_rgb(255_255_255/0.28),inset_1px_0_0_rgb(255_255_255/0.1),inset_-1px_0_0_rgb(255_255_255/0.05),inset_0_-1px_0_rgb(0_0_0/0.35),inset_0_0_0_1px_rgb(255_255_255/0.07)] after:content-['']"
         >
           <StoryboardImage frame={frame} onDrawn={() => setDrawn(true)} />
         </div>
         {/* Half below the frame; the card's bottom margin keeps it clear of
             the timeline. A see-through pill, raised the same way. */}
         <span
+          data-video-player-preview-time=""
           className={`absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 ${PREVIEW_TIME_PILL_CLASS}`}
         >
           {formatMediaTime(previewTime)}

@@ -32,6 +32,8 @@ function runShortcutAction(
     seekForward: () => invoke(() => actions.seekBy?.(5)),
     seekBackwardLarge: () => invoke(() => actions.seekBy?.(-10)),
     seekForwardLarge: () => invoke(() => actions.seekBy?.(10)),
+    volumeUp: () => invoke(() => actions.adjustVolume?.(1)),
+    volumeDown: () => invoke(() => actions.adjustVolume?.(-1)),
     toggleMute: () => invoke(actions.toggleMute),
     toggleCaptions: () => invoke(actions.toggleCaptions),
     toggleFullscreen: () => invoke(actions.toggleFullscreen),

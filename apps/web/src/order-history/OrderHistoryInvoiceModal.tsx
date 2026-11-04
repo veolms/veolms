@@ -82,6 +82,11 @@ export function OrderHistoryInvoiceModal({
             <h3 className="truncate font-bold text-sm text-(--text)">
               {order.courseTitle}
             </h3>
+            {order.purchaseNote && (
+              <p className="mt-0.5 text-xs text-(--text-secondary)">
+                {order.purchaseNote}
+              </p>
+            )}
             <p className="text-xs text-(--muted) mt-0.5 font-mono">
               Order ID: {order.orderNumber}
             </p>
@@ -136,6 +141,18 @@ export function OrderHistoryInvoiceModal({
               })}
             </span>
           </div>
+          {order.discount ? (
+            <div className="flex justify-between py-1 text-(--text-secondary)">
+              <span>Discount</span>
+              <span>
+                −
+                {formatMoney(order.discount, {
+                  currency: order.currency,
+                  unit: "major",
+                })}
+              </span>
+            </div>
+          ) : null}
           <div className="flex justify-between py-1 text-(--muted)">
             <span>Taxes</span>
             <span>

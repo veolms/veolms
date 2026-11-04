@@ -33,6 +33,7 @@ import { PlayerBehaviorBridge } from "./PlayerBehaviorBridge";
 import type { PlayerMediaProps } from "./PlayerMedia";
 import { PlayerMetadataBridge } from "./PlayerMetadataBridge";
 import { PlayerRoot, type VideoPlayerHandle } from "./PlayerRoot";
+import { SubtitleLayer } from "./SubtitleLayer";
 import {
   PlayerZoomMedia,
   type PlayerZoomOverflowBoundary,
@@ -132,6 +133,8 @@ export interface VideoPlayerProps extends Omit<
   lockLandscapeOnFullscreen?: boolean;
   /** Enables pinch-to-zoom and panning of the video content. */
   zoomEnabled?: boolean;
+  /** See `PlayerRootProps.fullscreenSwipe`. */
+  fullscreenSwipe?: boolean;
   /** Chooses whether zoom remains clipped to the player or may fill its shell. */
   zoomOverflowBoundary?: PlayerZoomOverflowBoundary;
   /** Overrides the width-based responsive interaction model when needed. */
@@ -212,6 +215,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       theaterMode = false,
       theme = "youtube",
       zoomEnabled = true,
+      fullscreenSwipe = true,
       zoomOverflowBoundary = "player",
       ...outerProps
     },
@@ -381,6 +385,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           theme={theme}
           interactionMode={interactionMode}
           zoomEnabled={zoomEnabled}
+          fullscreenSwipe={fullscreenSwipe}
           data-player-zoom-overflow-boundary={zoomOverflowBoundary}
           style={playerThemeStyle}
           role="region"
@@ -443,6 +448,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             emptyTapBehavior={emptyTapBehavior}
             seekIntervalSeconds={seekIntervalSeconds}
           />
+          <SubtitleLayer />
           {zoomEnabled ? <ZoomLevelIndicator variant="feedback" /> : null}
           {overlays}
           {centralControl === false

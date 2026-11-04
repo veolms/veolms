@@ -11,9 +11,12 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { AppError } from "../../lib/errors.ts";
+import { createAccessService } from "../access/index.ts";
 import { createAuthService, type AuthService } from "../auth/index.ts";
 import { hasAcademyPermission } from "../authorization/index.ts";
 import * as studentsRepo from "./students.repository.ts";
+
+const accessService = createAccessService();
 
 export interface StudentsServiceOptions {
   database: Kysely<Database>;
@@ -420,7 +423,66 @@ export function createStudentsService({
       ],
     );
 
-    const courseIds = enrolledCourses.map((c) => c.course_id);
+    // Part of a course sold on its own (a partial access) is an unlisted
+    // course, kept for its order. Staff see the course it opens instead,
+    // as partial access, with the part's order behind it (to refund it),
+    // and the progress counted over the sections it opens.
+    // A part is left out only where the course it opens is listed in its
+    // place; otherwise it stays, with its order.
+    const parts = enrolledCourses.filter((c) => c.course_unlisted);
+    const shownCourseIds = new Set(
+      enrolledCourses.filter((c) => !c.course_unlisted).map((c) => c.course_id),
+    );
+    const partByCourse = new Map<string, (typeof parts)[number]>();
+    for (const target of await studentsRepo.listPartialAccessTargets(
+      database,
+      parts.map((c) => c.course_id),
+    )) {
+      const part = parts.find((c) => c.course_id === target.course_id);
+      if (
+        part &&
+        shownCourseIds.has(target.linked_course_id) &&
+        !partByCourse.has(target.linked_course_id)
+      ) {
+        partByCourse.set(target.linked_course_id, part);
+      }
+    }
+    const replacedPartIds = new Set(
+      [...partByCourse.values()].map((part) => part.course_id),
+    );
+    const listedCourses = enrolledCourses.filter(
+      (c) => !replacedPartIds.has(c.course_id),
+    );
+    const partialCourses = listedCourses.filter(
+      (c) =>
+        c.enrollment_source === "linked_course" &&
+        partByCourse.has(c.course_id),
+    );
+    const scopes =
+      partialCourses.length > 0
+        ? await accessService.listAccessScopes(database, user.id)
+        : new Map<string, { sectionIds: readonly string[] | null }>();
+    const scopedProgress = new Map(
+      await Promise.all(
+        partialCourses.flatMap((c) => {
+          const sectionIds = scopes.get(c.course_id)?.sectionIds;
+          return sectionIds
+            ? [
+                studentsRepo
+                  .getSectionScopedProgress(
+                    database,
+                    user.id,
+                    c.course_id,
+                    sectionIds,
+                  )
+                  .then((scoped) => [c.course_id, scoped] as const),
+              ]
+            : [];
+        }),
+      ),
+    );
+
+    const courseIds = listedCourses.map((c) => c.course_id);
     const lessonCounts = await studentsRepo.listCourseLessonCounts(
       database,
       courseIds,
@@ -430,7 +492,12 @@ export function createStudentsService({
       progressSummaries.map((summary) => [summary.course_id, summary]),
     );
     const totalLessonsCompleted = progressSummaries.reduce(
-      (sum, summary) => sum + summary.completed_lessons,
+      (sum, summary) =>
+        replacedPartIds.has(summary.course_id)
+          ? sum
+          : sum +
+            (scopedProgress.get(summary.course_id)?.completed_lessons ??
+              summary.completed_lessons),
       0,
     );
 
@@ -439,9 +506,19 @@ export function createStudentsService({
     let totalProgressSum = 0;
 
     const now = new Date();
-    const courses: StudentCourseDetail[] = enrolledCourses.map((c) => {
-      const totalLessonsCount = lessonCounts.get(c.course_id) ?? 0;
-      const summary = progressByCourse.get(c.course_id);
+    const courses: StudentCourseDetail[] = listedCourses.map((c) => {
+      const scoped = scopedProgress.get(c.course_id);
+      const part = scoped ? partByCourse.get(c.course_id) : undefined;
+      const totalLessonsCount = scoped
+        ? scoped.total_lessons
+        : (lessonCounts.get(c.course_id) ?? 0);
+      const summary = scoped
+        ? scoped.last_activity_at
+          ? { ...scoped, last_activity_at: scoped.last_activity_at }
+          : undefined
+        : progressByCourse.get(c.course_id);
+      // The order behind the place: the part's, for a partial access.
+      const order = part ?? c;
       const progressPercent = resolveCourseProgressPercent(
         totalLessonsCount,
         summary,
@@ -463,7 +540,7 @@ export function createStudentsService({
         courseThumbnailUrl: c.course_thumbnail_url,
         difficulty: c.difficulty,
         enrolledAt: c.enrolled_at.toISOString(),
-        enrollmentSource: c.enrollment_source,
+        enrollmentSource: part ? "partial_access" : c.enrollment_source,
         accessStatus:
           c.enrollment_status === "active" &&
           c.access_expires_at &&
@@ -472,12 +549,12 @@ export function createStudentsService({
             : c.enrollment_status,
         // Refunds are an admin's job; an instructor is not told which order
         // paid for a place in their course.
-        orderId: creatorId ? null : c.order_id,
+        orderId: creatorId ? null : order.order_id,
         refundable:
           !creatorId &&
-          (c.order_status === "paid" ||
-            c.order_status === "partially_refunded") &&
-          (c.order_total_amount ?? 0) > 0,
+          (order.order_status === "paid" ||
+            order.order_status === "partially_refunded") &&
+          (order.order_total_amount ?? 0) > 0,
         progressPercent,
         completedLessonsCount: summary?.completed_lessons ?? 0,
         totalLessonsCount,

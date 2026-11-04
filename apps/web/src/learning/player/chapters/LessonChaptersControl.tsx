@@ -1,6 +1,11 @@
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { useState } from "react";
-import { PopoverMenu, usePlayerTheme } from "@veolms/video-player";
+import {
+  ChapterCountBadge,
+  ChapterNowLabel,
+  PopoverMenu,
+  usePlayerTheme,
+} from "@veolms/video-player";
 import { cn } from "../../../lib/utils";
 import { LessonChapterRows } from "./LessonChapterRows";
 
@@ -19,7 +24,11 @@ export function LessonChaptersToggleButton({
   open: boolean;
   panelId: string;
 }) {
-  const ChaptersIcon = usePlayerTheme().icons.chapters;
+  const { chrome, icons } = usePlayerTheme();
+  const ChaptersIcon = icons.chapters;
+  // Themes with a chapter label say which chapter is playing here, in their
+  // words ("> CH_07 MODULES 07/09"), instead of the word Chapters.
+  const showsChapterNow = Boolean(chrome?.chapterLabel);
 
   return (
     <button
@@ -42,7 +51,14 @@ export function LessonChaptersToggleButton({
         <ChaptersIcon size={17} active={open} />
         {compact ? null : (
           <>
-            <span>Chapters</span>
+            {showsChapterNow ? (
+              <ChapterNowLabel className="max-w-72" />
+            ) : (
+              <>
+                <span>Chapters</span>
+                <ChapterCountBadge />
+              </>
+            )}
             <CaretRight size={14} aria-hidden="true" />
           </>
         )}

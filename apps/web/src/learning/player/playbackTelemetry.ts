@@ -1,6 +1,7 @@
 import type { VideoPlayerEvent } from "@veolms/video-player";
 import type { PlaybackSummary } from "@veolms/web-core";
 import { trackPlayback } from "../../lib/analytics-track";
+import { getSegmentCacheStats, type SegmentCacheStats } from "./segmentCache";
 
 export interface PlaybackTelemetryContext {
   courseKey: string | null;
@@ -28,6 +29,26 @@ interface OpenPlayback {
   watchedSeconds: number;
   currentHeight: number | null;
   secondsByHeight: Map<number, number>;
+  /** The segment cache's counts when the load started. */
+  segmentCacheAtStart: SegmentCacheStats;
+}
+
+/** What the segment cache did between two readings of its counts. */
+function segmentCacheSince(
+  start: SegmentCacheStats,
+): PlaybackSummary["segmentCache"] {
+  const now = getSegmentCacheStats();
+  const delta = {
+    hits: now.hits - start.hits,
+    misses: now.misses - start.misses,
+    bytesFromCache: now.bytesFromCache - start.bytesFromCache,
+    bytesFromNetwork: now.bytesFromNetwork - start.bytesFromNetwork,
+    skippedForReserve: now.skippedForReserve - start.skippedForReserve,
+    lessonsEvicted: now.lessonsEvicted - start.lessonsEvicted,
+  };
+  return delta.hits || delta.misses || delta.bytesFromNetwork
+    ? delta
+    : undefined;
 }
 
 /** A gap between two time updates larger than this is a seek, not play. */
@@ -90,6 +111,8 @@ export function createPlaybackTelemetry(
         .map(([height, seconds]) => ({ height, seconds: Math.round(seconds) }))
         .filter((entry) => entry.seconds > 0),
     };
+    const segmentCache = segmentCacheSince(playback.segmentCacheAtStart);
+    if (segmentCache) summary.segmentCache = segmentCache;
     // A load that was abandoned before anything happened says nothing.
     if (
       summary.startupMs === null &&
@@ -124,6 +147,7 @@ export function createPlaybackTelemetry(
           watchedSeconds: 0,
           currentHeight: null,
           secondsByHeight: new Map(),
+          segmentCacheAtStart: getSegmentCacheStats(),
         };
         return;
       }

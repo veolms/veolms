@@ -45,10 +45,8 @@ function normalizeAppearance(
   value: unknown,
 ): PlatformAppearanceSettings | null {
   if (!value || typeof value !== "object") return null;
-  const { defaultDisplayMode, defaultColorTheme } = value as Record<
-    string,
-    unknown
-  >;
+  const { defaultDisplayMode, defaultColorTheme, defaultVideoPlayerTheme } =
+    value as Record<string, unknown>;
   return {
     defaultDisplayMode: isDisplayMode(defaultDisplayMode)
       ? defaultDisplayMode
@@ -56,6 +54,10 @@ function normalizeAppearance(
     defaultColorTheme: isThemeId(defaultColorTheme)
       ? defaultColorTheme
       : DEFAULT_PLATFORM_APPEARANCE_SETTINGS.defaultColorTheme,
+    // Player theme ids have the same form as colour theme ids.
+    defaultVideoPlayerTheme: isThemeId(defaultVideoPlayerTheme)
+      ? defaultVideoPlayerTheme
+      : DEFAULT_PLATFORM_APPEARANCE_SETTINGS.defaultVideoPlayerTheme,
   };
 }
 

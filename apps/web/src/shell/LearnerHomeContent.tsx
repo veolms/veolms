@@ -77,18 +77,21 @@ export function LearnerHomeContent({
         <link key={href} rel="modulepreload" href={href} />
       ))}
       <ChunkStylesheets hrefs={GUEST_HOME_CSS_URLS} />
-      {[guestHeroImage.phone, guestHeroImage.wide].map((source) => (
-        <link
-          key={source.media}
-          rel="preload"
-          as="image"
-          media={source.media}
-          href={source.src}
-          imageSrcSet={source.srcSet}
-          imageSizes={source.sizes}
-          fetchPriority="high"
-        />
-      ))}
+      {/* The hero picture, where a visitor's home draws it: on a page of
+              50rem and wider, which beside the sidebar's 88px rail is a
+              window from about 888px (see GuestHomeHero; narrower, the
+              visitor is shown no picture). A signed-in learner's hero is
+              drawn after the session has answered, by when a preload is
+              no earlier than the picture itself. */}
+      <link
+        rel="preload"
+        as="image"
+        media="(min-width: 888px)"
+        href={guestHeroImage.wide.src}
+        imageSrcSet={guestHeroImage.wide.srcSet}
+        imageSizes={guestHeroImage.wide.sizes}
+        fetchPriority="high"
+      />
       {showGuestHomePreview ? (
         // Paint the seeded guest home while the session check runs so
         // the prerendered document carries real content (and the LCP
@@ -133,7 +136,7 @@ export function LearnerHomeContent({
                   dangerouslySetInnerHTML={{ __html: "" }}
                 />
                 <div data-learner-home-shell="" className="contents">
-                  <LearnerHomeShell />
+                  <LearnerHomeShell pictureWhenShown />
                 </div>
               </div>
               <div className={dashboardHomePendingClasses}>

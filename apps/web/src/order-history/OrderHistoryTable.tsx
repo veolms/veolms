@@ -13,7 +13,6 @@ import {
   MenuDivider,
 } from "../courses/CourseActionMenu";
 import type { NavigateTo } from "../routing/navigation";
-import { useBackDismiss } from "../navigation/useBackDismiss";
 import type { OrderSortOrder } from "@veolms/contracts";
 import {
   formatOrderHistoryPayment,
@@ -146,6 +145,44 @@ function OrderActions({
   );
 }
 
+/**
+ * The course's picture, small and in its own 16:9 shape; the lettered badge
+ * only for a course with no picture.
+ */
+function OrderCourseImage({ order }: { order: OrderHistoryItem }) {
+  if (order.thumbnail) {
+    return (
+      <img
+        src={order.thumbnail.url}
+        srcSet={order.thumbnail.srcSet || undefined}
+        sizes="64px"
+        alt=""
+        width={64}
+        height={36}
+        loading="lazy"
+        decoding="async"
+        className="h-9 w-16 shrink-0 rounded-md object-cover shadow-xs"
+      />
+    );
+  }
+  const brand = getCourseBrandBadge(order.courseTitle);
+  return (
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-extrabold tracking-tight shadow-xs"
+      style={{
+        backgroundColor: brand.bgColor,
+        color: brand.textColor,
+        border: brand.borderColor
+          ? `1px solid ${brand.borderColor}`
+          : undefined,
+      }}
+      aria-hidden="true"
+    >
+      {brand.label}
+    </span>
+  );
+}
+
 function OrderStatusBadge({ order }: { order: OrderHistoryItem }) {
   const statusStyle = getOrderStatusStyle(order.status);
   return (
@@ -167,12 +204,10 @@ export function OrderHistoryTable({
   onNavigatePage,
   setNotice,
 }: OrderHistoryTableProps) {
+  // Each menu closes on Back by itself (CourseActionMenu). A second layer
+  // here for the same menu meant two history steps on every choice, and the
+  // second cancelled the page change "View course" had just started.
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-
-  useBackDismiss({
-    open: openMenuId !== null,
-    onDismiss: () => setOpenMenuId(null),
-  });
 
   return (
     <ElevatedCard
@@ -231,7 +266,6 @@ export function OrderHistoryTable({
           </thead>
           <tbody className="divide-y divide-[color-mix(in_srgb,var(--text)_6%,transparent)] text-sm text-(--text)">
             {orders.map((order) => {
-              const brand = getCourseBrandBadge(order.courseTitle);
               return (
                 <tr
                   key={order.id}
@@ -239,25 +273,13 @@ export function OrderHistoryTable({
                 >
                   <td className="px-5 py-3.5">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-extrabold tracking-tight shadow-xs"
-                        style={{
-                          backgroundColor: brand.bgColor,
-                          color: brand.textColor,
-                          border: brand.borderColor
-                            ? `1px solid ${brand.borderColor}`
-                            : undefined,
-                        }}
-                        aria-hidden="true"
-                      >
-                        {brand.label}
-                      </span>
+                      <OrderCourseImage order={order} />
                       <div className="min-w-0">
                         <span className="block truncate font-semibold text-sm text-(--text)">
                           {order.courseTitle}
                         </span>
                         <span className="mt-0.5 block truncate text-xs text-(--muted)">
-                          {order.itemCount}
+                          {order.purchaseNote ?? order.itemCount}
                         </span>
                       </div>
                     </div>
@@ -309,32 +331,19 @@ export function OrderHistoryTable({
       {/* Mobile Card Feed View */}
       <div className="divide-y divide-[color-mix(in_srgb,var(--text)_6%,transparent)] @3xl/history:hidden">
         {orders.map((order) => {
-          const brand = getCourseBrandBadge(order.courseTitle);
           return (
             <article
               key={order.id}
               className="p-4 transition-colors hover:bg-(--hover)"
             >
               <div className="flex min-w-0 items-start gap-3">
-                <span
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-extrabold tracking-tight shadow-xs"
-                  style={{
-                    backgroundColor: brand.bgColor,
-                    color: brand.textColor,
-                    border: brand.borderColor
-                      ? `1px solid ${brand.borderColor}`
-                      : undefined,
-                  }}
-                  aria-hidden="true"
-                >
-                  {brand.label}
-                </span>
+                <OrderCourseImage order={order} />
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate font-semibold text-sm text-(--text)">
                     {order.courseTitle}
                   </h2>
                   <p className="mt-0.5 text-xs text-(--muted)">
-                    {order.itemCount}
+                    {order.purchaseNote ?? order.itemCount}
                   </p>
                 </div>
                 <OrderActions

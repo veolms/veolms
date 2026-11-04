@@ -50,6 +50,11 @@ export interface MiniPlayerControlsProps {
   onRestore: () => void;
   /** What the player was asked to play, for a retry after it failed. */
   source?: VideoSource;
+  /**
+   * The lesson's end screen ("Up next") is over the picture: it has its own
+   * buttons, so only the window's close and expand stay, above it.
+   */
+  endScreenOpen?: boolean;
 }
 
 export function MiniPlayerRestoreControl({
@@ -204,6 +209,7 @@ export function MiniPlayerControls({
   onClose,
   onRestore,
   source,
+  endScreenOpen = false,
 }: MiniPlayerControlsProps) {
   const controller = usePlayerController();
   const ready = usePlayerState(({ media }) => media.lifecycle === "ready");
@@ -262,6 +268,25 @@ export function MiniPlayerControls({
             <VideoLoadingSpinner className="text-white" />
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (endScreenOpen) {
+    // Above the end screen (z-50, earlier in the player). On a phone the
+    // whole window is not a button to expand it here, as the end screen's
+    // buttons fill it; close stays in its corner.
+    return (
+      <div
+        className="pointer-events-none absolute inset-0 z-60 [[data-learning-player-restore-phase=expanding]_&]:invisible! [[data-learning-player-window-motion]_&]:invisible!"
+        data-learning-mini-player-controls-ready={ready ? "true" : "false"}
+      >
+        <div className="pointer-events-auto absolute right-1 top-1 min-[641px]:hidden">
+          <MiniPlayerCloseControl mobile onClose={onClose} />
+        </div>
+        <div className="hidden min-[641px]:block">
+          <MiniPlayerTopBar onClose={onClose} onRestore={onRestore} />
+        </div>
       </div>
     );
   }

@@ -113,6 +113,9 @@ export const permissions = [
   "analytics.delivery.read",
   "analytics.storage.read",
   "analytics.video_quality.read",
+
+  // Adding a student by name and email.
+  "student.create",
 ] as const;
 
 /** Every key that opens a section of the Analytics page. */

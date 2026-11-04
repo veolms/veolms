@@ -43,7 +43,7 @@ import { CenteredLoadingSpinner } from "../../components/LoadingSpinner";
 import { useAuthStore } from "../../store/auth.store";
 import { useLearningMiniPlayerGestures } from "./useLearningMiniPlayerGestures";
 import { useMiniPlayerSwipeVolume } from "./useMiniPlayerSwipeVolume";
-import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
+import { MINI_PLAYER_THEME } from "./useLearningPlayerTheme";
 import {
   MiniPlayerControls,
   MiniPlayerWindowControls,
@@ -97,7 +97,6 @@ export function LearningMiniPlayer({
 }: LearningMiniPlayerProps) {
   const playerRef = useRef<VideoPlayerHandle>(null);
   const miniPlayerRef = useRef<HTMLElement>(null);
-  const playerTheme = useLearningPlayerTheme();
   // Where to start. A session handed over by the lesson page carries the
   // live position. One read back from storage after a reload only knows
   // where the video was when it was minimized (or 0 for a lesson picked
@@ -189,7 +188,7 @@ export function LearningMiniPlayer({
   // swiped away, it fades out with the player instead of stopping at once.
   useMiniPlayerSwipeVolume(
     playerRef,
-    miniPlayerGestures.outsideFraction,
+    miniPlayerGestures.subscribeOutsideFraction,
     miniPlayerGestures.mode === "dismissing",
   );
 
@@ -649,7 +648,7 @@ export function LearningMiniPlayer({
             article={reading.article}
             frame={{ width: reading.frameWidth, scrollTop: reading.scrollTop }}
           />
-          <PlayerThemeProvider theme={playerTheme}>
+          <PlayerThemeProvider theme={MINI_PLAYER_THEME}>
             <MiniPlayerWindowControls
               onClose={handleClose}
               onRestore={handleRestore}
@@ -668,7 +667,7 @@ export function LearningMiniPlayer({
         <VideoPlayer
           ref={playerRef}
           source={playerSource}
-          theme={playerTheme}
+          theme={MINI_PLAYER_THEME}
           engine="shaka"
           autoPlay={preparing ? false : session.playing}
           keyboardEnabled={false}

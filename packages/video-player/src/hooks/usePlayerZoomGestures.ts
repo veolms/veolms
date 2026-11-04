@@ -16,8 +16,13 @@ import {
 } from "./playerZoomMath";
 
 const PAN_START_DISTANCE_PX = 6;
-const QUICK_FILL_DURATION_MS = 400;
-const QUICK_FILL_SCALE_DELTA = 0.08;
+/** A pinch let go this close to the fill zoom snaps to it. */
+const FILL_SNAP_DISTANCE = 0.06;
+/** A pinch counts as one once the fingers have changed the zoom this much. */
+const PINCH_SCALE_DELTA = 0.02;
+/** A tick as the pinch passes the fill zoom, and a firmer one as it snaps. */
+const FILL_PASS_VIBRATION_MS = 25;
+const SNAP_VIBRATION_MS = 45;
 const ZOOM_FEEDBACK_DURATION_MS = 1_800;
 const ZOOM_TRANSITION_DURATION_MS = 220;
 const POINTER_TOUCH_DEDUPE_MS = 90;
@@ -50,6 +55,8 @@ interface PinchGesture {
   contentX: number;
   contentY: number;
   fillScale: number;
+  /** The pinch has passed the fill zoom (its tick was given). */
+  passedFill: boolean;
   geometry: PlayerZoomGeometry;
   maxScale: number;
   startedAt: number;
@@ -216,6 +223,7 @@ export function usePlayerZoomGestures(
     controller.setZoomState({
       feedbackVisible: true,
       gestureActive: true,
+      snap: null,
       transitioning: false,
     });
   }, [clearFeedbackTimer, clearTransitionTimer, controller]);
@@ -272,6 +280,7 @@ export function usePlayerZoomGestures(
           (localCenter.y - geometry.containerHeight / 2 - zoom.panY) /
           zoom.scale,
         fillScale: getPlayerFillZoom(geometry),
+        passedFill: false,
         geometry,
         maxScale: zoom.scale,
         startedAt: Date.now(),
@@ -308,6 +317,15 @@ export function usePlayerZoomGestures(
         pinch.geometry,
       );
       pinch.maxScale = Math.max(pinch.maxScale, scale);
+      if (
+        !pinch.passedFill &&
+        pinch.fillScale > 1.01 &&
+        pinch.startScale < pinch.fillScale - 0.01 &&
+        scale >= pinch.fillScale
+      ) {
+        pinch.passedFill = true;
+        navigator.vibrate?.(FILL_PASS_VIBRATION_MS);
+      }
       controller.setZoomState({
         feedbackVisible: true,
         gestureActive: true,
@@ -328,24 +346,42 @@ export function usePlayerZoomGestures(
     let panX = zoom.panX;
     let panY = zoom.panY;
     let transitioning = false;
+    let snap: "fill" | "original" | null = null;
 
-    if (
+    // As YouTube's app does: a pinch out from below the fill zoom snaps the
+    // picture to fill the player, centred, however far or fast it went; a
+    // pinch from there zooms on freely. A pinch in below the fill zoom
+    // snaps back to the original size. One let go close to the fill zoom
+    // snaps to it.
+    const fill = pinch && pinch.fillScale > 1.01 ? pinch.fillScale : null;
+    const pinchedOut =
+      pinch !== null && scale >= pinch.startScale + PINCH_SCALE_DELTA;
+    const pinchedIn =
+      pinch !== null && scale <= pinch.startScale - PINCH_SCALE_DELTA;
+    if (pinch && fill && pinchedOut && pinch.startScale < fill - 0.01) {
+      snap = "fill";
+    } else if (
       pinch &&
-      Date.now() - pinch.startedAt <= QUICK_FILL_DURATION_MS &&
-      pinch.maxScale - pinch.startScale >= QUICK_FILL_SCALE_DELTA &&
-      pinch.startScale < pinch.fillScale - 0.01 &&
-      scale < pinch.fillScale
+      fill &&
+      (pinchedOut || pinchedIn) &&
+      Math.abs(scale - fill) <= FILL_SNAP_DISTANCE
     ) {
-      scale = pinch.fillScale;
-      const pan = clampPlayerPan({ x: panX, y: panY }, scale, pinch.geometry);
-      panX = pan.x;
-      panY = pan.y;
-      transitioning = true;
+      snap = "fill";
+    } else if (pinch && fill && pinchedIn && scale < fill) {
+      snap = "original";
     } else if (scale <= 1.01) {
+      if (pinch && pinch.startScale > 1.01) snap = "original";
       scale = 1;
       panX = 0;
       panY = 0;
       transitioning = zoom.scale !== 1 || zoom.panX !== 0 || zoom.panY !== 0;
+    }
+    if (snap) {
+      scale = snap === "fill" && fill ? fill : 1;
+      panX = 0;
+      panY = 0;
+      transitioning = true;
+      navigator.vibrate?.(SNAP_VIBRATION_MS);
     }
 
     pinchRef.current = null;
@@ -353,6 +389,7 @@ export function usePlayerZoomGestures(
     controller.setZoomState({
       feedbackVisible: true,
       gestureActive: false,
+      snap,
       panX,
       panY,
       scale,

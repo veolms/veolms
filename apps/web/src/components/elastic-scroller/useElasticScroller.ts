@@ -62,6 +62,8 @@ export function useElasticScroller({
   const [mode, setMode] = useState<ElasticScrollMode>("idle");
   const [dragOffset, setDragOffset] = useState(0);
   const [dragRoom, setDragRoom] = useState<ElasticScrollDragRoom | null>(null);
+  // The room the control is drawn with, read when a gesture starts.
+  const dragRoomRef = useRef<ElasticScrollDragRoom | null>(null);
   const [dragInlineOffset, setDragInlineOffset] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
@@ -529,22 +531,33 @@ export function useElasticScroller({
         : 0;
       // How far the ends may go before they would leave what can be seen
       // of the scrollport (and of the window), from where the control
-      // rests: a locked control is drawn already pulled.
+      // rests: a locked control is drawn already pulled. It is drawn where
+      // its ends were kept in sight, not at the offset it was locked at:
+      // locked against an edge, the button stands nearer the middle than
+      // that offset, and taking the offset for its place misread where the
+      // control rests by the difference, so pulling it again ran its ends
+      // off the screen.
+      const drawnButtonOffset = startedLocked
+        ? getElasticScrollEndPositions(
+            lockedOffsetRef.current,
+            dragRoomRef.current,
+          ).button
+        : 0;
       const restingCenterY =
-        controlBounds.top +
-        controlBounds.height / 2 -
-        (startedLocked ? lockedOffsetRef.current : 0);
+        controlBounds.top + controlBounds.height / 2 - drawnButtonOffset;
       const scrollportBounds = scrollportRef.current?.getBoundingClientRect();
       const visibleTop = Math.max(0, scrollportBounds?.top ?? 0);
       const visibleBottom = Math.min(
         window.innerHeight,
         scrollportBounds?.bottom ?? window.innerHeight,
       );
-      setDragRoom({
+      const nextDragRoom = {
         above: restingCenterY - visibleTop - ELASTIC_SCROLL_CONTROL_EDGE_INSET,
         below:
           visibleBottom - restingCenterY - ELASTIC_SCROLL_CONTROL_EDGE_INSET,
-      });
+      };
+      dragRoomRef.current = nextDragRoom;
+      setDragRoom(nextDragRoom);
       dragPointerOffsetRef.current = dragPointerBaseOffsetRef.current;
       setScrollOffset(dragPointerBaseOffsetRef.current);
 

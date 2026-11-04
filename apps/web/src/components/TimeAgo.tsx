@@ -1,9 +1,12 @@
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
@@ -15,6 +18,16 @@ import { formatExactTime, formatTimeAgo } from "../lib/timeAgo";
 const TAP_TOOLTIP_MS = 3000;
 /** The tooltip's distance from the viewport's edges. */
 const EDGE = 8;
+
+/**
+ * The moment a prerendered page was built. Its times say how long ago
+ * things were then, in the build's time zone; while the page hydrates the
+ * browser has to write the same, or React throws the page away and draws it
+ * again. Right after, the times are worked out afresh for the reader.
+ */
+export const TimeAgoBuiltAt = createContext<number | undefined>(undefined);
+
+const subscribeToNothing = () => () => {};
 
 interface TimeAgoProps {
   /** When it happened. Nothing is drawn without a readable time. */
@@ -34,13 +47,28 @@ export function TimeAgo({ value, label, className = "" }: TimeAgoProps) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLTimeElement>(null);
   const lastPointerRef = useRef<string>("mouse");
+  const builtAt = useContext(TimeAgoBuiltAt);
+  const hydrated = useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
 
   if (value === undefined || value === null || value === "") {
     return label ? <span className={className}>{label}</span> : null;
   }
-  const exact = formatExactTime(value);
-  const text = label ?? formatTimeAgo(value);
-  const dateTime = exact ? new Date(value).toISOString() : undefined;
+  // In the built page, and while it hydrates: the time as of the build,
+  // with no exact moment (that depends on the time zone), so the first
+  // render after hydration writes the reader's own.
+  const asBuilt = !hydrated && builtAt !== undefined;
+  const exact = asBuilt ? "" : formatExactTime(value);
+  const text = asBuilt
+    ? formatTimeAgo(value, builtAt)
+    : (label ?? formatTimeAgo(value));
+  const date = new Date(value);
+  const dateTime = Number.isNaN(date.getTime())
+    ? undefined
+    : date.toISOString();
 
   const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     lastPointerRef.current = event.pointerType;

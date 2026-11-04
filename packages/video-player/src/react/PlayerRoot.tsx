@@ -5,6 +5,7 @@ import {
   useImperativeHandle,
   useLayoutEffect,
   useRef,
+  useSyncExternalStore,
   type HTMLAttributes,
   type Ref,
   type RefObject,
@@ -46,6 +47,8 @@ export interface VideoPlayerHandle {
   pause(): void;
   togglePlayback(): Promise<void>;
   reload(): Promise<void>;
+  /** Stops the video outright; see `PlayerController.stop`. */
+  stop(): Promise<void>;
   seekTo(time: number): void;
   seekBy(delta: number): void;
   setVolume(volume: number): void;
@@ -91,6 +94,11 @@ export interface PlayerRootProps extends Omit<
   theme?: PlayerTheme;
   /** Enables pinch-to-zoom and one-finger panning of the video content. */
   zoomEnabled?: boolean;
+  /**
+   * A vertical swipe on the picture enters full screen (up) and leaves it
+   * (down), on any touch screen. Needs `zoomEnabled`. Defaults to true.
+   */
+  fullscreenSwipe?: boolean;
   /** Selects controls by windowed width and keeps that choice stable in fullscreen. */
   interactionMode?: PlayerInteractionMode;
 }
@@ -101,6 +109,24 @@ function assignRef<Value>(
 ): void {
   if (typeof ref === "function") ref(value);
   else if (ref) ref.current = value;
+}
+
+const TOUCH_SCREEN_QUERY = "(any-pointer: coarse)";
+
+function readTouchScreen(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(TOUCH_SCREEN_QUERY).matches
+  );
+}
+
+function subscribeToTouchScreen(onChange: () => void): () => void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function")
+    return () => undefined;
+  const query = window.matchMedia(TOUCH_SCREEN_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
 }
 
 export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
@@ -130,6 +156,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       theaterMode = false,
       theme = "youtube",
       zoomEnabled = true,
+      fullscreenSwipe: fullscreenSwipeEnabled = true,
       className,
       style,
       ...containerProps
@@ -153,9 +180,18 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
     const controller = controllerRef.current;
     const mobileInteraction =
       useResolvedPlayerMobileInteraction(interactionMode);
+    const touchScreen = useSyncExternalStore(
+      subscribeToTouchScreen,
+      readTouchScreen,
+      () => false,
+    );
     const fullscreenSwipe = usePlayerFullscreenSwipe(
       controller,
-      mobileInteraction && zoomEnabled,
+      zoomEnabled &&
+        fullscreenSwipeEnabled &&
+        // The phone layout, or any touch screen (a tablet in the desktop
+        // layout).
+        (mobileInteraction || touchScreen),
     );
     const zoomGestures = usePlayerZoomGestures(controller);
     const controlsHiddenAtPointerDownRef = useRef(false);
@@ -226,6 +262,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
         pause: () => controller.pause(),
         togglePlayback: () => controller.togglePlayback(),
         reload: () => controller.reload(),
+        stop: () => controller.stop(),
         seekTo: (time) => controller.seekTo(time),
         seekBy: (delta) => controller.seekBy(delta),
         setVolume: (volume) => controller.setVolume(volume),
@@ -301,6 +338,11 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
               className={classNames(
                 resolvedTheme.className,
                 mobileInteraction ? "touch-none" : "touch-pan-y",
+                // A touch screen in full screen (a tablet's, laid out as a
+                // desktop) has nothing to scroll: every touch is the
+                // player's. Allowed to pan, the browser took a pinch over as
+                // soon as a finger was on a button, and the zoom stopped.
+                "[@media(any-pointer:coarse)]:[:fullscreen_&]:touch-none! [@media(any-pointer:coarse)]:[[data-player-page-fullscreen]_&]:touch-none!",
                 className,
               )}
               style={themeStyle}

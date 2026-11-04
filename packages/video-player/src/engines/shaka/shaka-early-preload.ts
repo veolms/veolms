@@ -13,6 +13,7 @@ import {
   type ShakaPreloadManagerLike,
   type ShakaRuntimeLike,
 } from "./shaka-internal";
+import { onShakaRuntimeHookAdded } from "./shaka-runtime-hooks";
 
 export const EARLY_SHAKA_PRELOAD_GLOBAL_KEY = "__VEO_SHAKA_PRELOAD__";
 const EARLY_SHAKA_PRELOAD_SETTLE_KEY = "__VEO_SHAKA_PRELOAD_SETTLE__";
@@ -34,6 +35,8 @@ export interface EarlyShakaPreloadSession {
   startTime?: number;
   /** The licence servers the preload was made with (`shakaDrmServers`). */
   drmServers?: string;
+  /** Stops following late extensions (see `followLateExtensions`). */
+  unfollowExtensions?: () => void;
   /**
    * Set when a playing engine loaded this preload into its hidden standby
    * element: `ready` settles true once the first frame is decoded there,
@@ -145,6 +148,7 @@ export async function abandonEarlyShakaPreloadSession(
   }
 
   session.consumed = true;
+  session.unfollowExtensions?.();
   const player = session.player;
   const filters = session.networkingFilters ?? {
     requestFilter: null,
@@ -180,6 +184,7 @@ export function consumeEarlyShakaPreloadSession(
   session: EarlyShakaPreloadSession,
 ): void {
   session.consumed = true;
+  session.unfollowExtensions?.();
   const store = preloadGlobal();
   if (store[EARLY_SHAKA_PRELOAD_GLOBAL_KEY] === session) {
     delete store[EARLY_SHAKA_PRELOAD_GLOBAL_KEY];
@@ -243,6 +248,54 @@ function startPreload(
     source.startTime ?? 0,
     resolveShakaLoadMimeType(source) ?? null,
   );
+}
+
+/** A `veo:` performance mark; diagnostic only. */
+function markPreload(name: string): void {
+  try {
+    performance.mark(`veo:${name}`);
+  } catch {
+    // Marks are never in the way of a preload.
+  }
+}
+
+/**
+ * A preload keeps the configuration it was started with. The page's first
+ * lesson is preloaded from the document head, and when Shaka comes from the
+ * browser's cache that is before the app's extensions have loaded; the DRM
+ * one then adds its licence server to every configuration made from that
+ * moment on. The player given such a preload found its licence servers
+ * differed, dropped it, and loaded the lesson afresh, licence and segments
+ * included, at the moment it was attached (`ShakaVideoEngine`,
+ * "preload-drm-mismatch"). So the preload is configured again as each late
+ * extension arrives, and started again when its licence servers changed:
+ * a second or so into the page, while it is still mounting, and what the
+ * first run fetched comes back from the browser's cache.
+ */
+function followLateExtensions(
+  session: EarlyShakaPreloadSession,
+  player: ShakaPlayerLike,
+  source: VideoSource,
+  runtime: ShakaRuntimeLike,
+): () => void {
+  return onShakaRuntimeHookAdded(() => {
+    if (
+      session.consumed ||
+      session.standby ||
+      getEarlyShakaPreloadSession() !== session
+    ) {
+      return;
+    }
+    if (!configureShakaPlayer(player, source, runtime)) return;
+    const drmServers = shakaDrmServers(player);
+    if (drmServers === session.drmServers) return;
+    session.drmServers = drmServers;
+    markPreload("preload-restarted-for-extension");
+    const previous = session.preloadPromise;
+    session.preloadPromise = destroyPreloadManager(previous)
+      .then(() => startPreload(player, source))
+      .catch(() => null);
+  });
 }
 
 export async function startEarlyShakaPreload(
@@ -340,6 +393,13 @@ export async function startEarlyShakaPreload(
     // Read just before the preload copies the configuration it will keep.
     session.drmServers = shakaDrmServers(player);
     session.preloadPromise = startPreload(player, source).catch(() => null);
+    session.unfollowExtensions?.();
+    session.unfollowExtensions = followLateExtensions(
+      session,
+      player,
+      source,
+      runtime,
+    );
     settleEarlySession();
     if (session.speculative) {
       for (const listener of speculativePreloadListeners) listener(session);

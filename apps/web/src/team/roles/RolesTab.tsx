@@ -195,6 +195,8 @@ export function RolesTab({
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
+              elevation="flat"
+              motion="static"
               variant={editable ? "primary" : "quiet"}
               onClick={() => setEditor({ mode: "edit", role: selected })}
             >
@@ -209,6 +211,8 @@ export function RolesTab({
             </Button>
             {canCreate ? (
               <Button
+                elevation="flat"
+                motion="static"
                 variant="quiet"
                 onClick={() => setEditor({ mode: "create", from: selected })}
               >

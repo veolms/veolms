@@ -157,8 +157,10 @@ with the old key.
 | `COURSE_CACHE_TTL_MS`                  | 30000   | Public course content cache (signed-out overview, curriculum, version); `0` disables, max 30000. Course writes evict in-process; other instances within the TTL.                                  |
 | `CACHE_ENABLED`                        | true    | Every process-local cache; `false` sends every read to the database. See docs/caching.md.                                                                                                         |
 | `CACHE_BUS_ENABLED`                    | true    | Cross-process cache invalidation over Postgres LISTEN/NOTIFY (one connection per process).                                                                                                        |
+| `LEARNING_PROGRESS_SYNC_SECONDS`       | 60      | Seconds between lesson progress batches while a video plays (15–600); pauses, a lesson's end and leaving the page send at once. Raise it in a load spike: pages follow after an API reload.       |
 | `NOTIFICATION_INLINE_WORKER`           | true    | See above.                                                                                                                                                                                        |
 | `NOTIFICATION_INLINE_INTERVAL_SECONDS` | 5       | Inline processor cycle.                                                                                                                                                                           |
+| `NOTIFICATION_COURSE_WIDE_EMAIL`       | true    | `false` keeps course-wide notifications (course published, quiz assigned) in-app only, so they send no bulk email. Sign-in codes and account/payment emails are unaffected.                       |
 | `OPS_HEARTBEAT_SECONDS`                | 60      | Ops gauge interval; `0` disables.                                                                                                                                                                 |
 
 ## Migration notes

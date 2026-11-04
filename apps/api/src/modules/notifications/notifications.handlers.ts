@@ -44,6 +44,14 @@ type NotificationHandler = (
 
 const commonChannels = ["in_app", "email"] as const;
 
+// Notifications sent to everyone in a course can be kept off email
+// (NOTIFICATION_COURSE_WIDE_EMAIL), so one event cannot mail thousands at once.
+function courseWideChannels(dependencies: NotificationHandlerDependencies) {
+  return dependencies.courseWideEmail === false
+    ? (["in_app"] as const)
+    : commonChannels;
+}
+
 const notificationHandlers: Record<string, NotificationHandler> = {
   "course.published": async (payload, dependencies) => {
     const event = coursePublishedEventSchema.parse(payload);
@@ -55,7 +63,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       category: "learning",
       templateKey: "course.published",
       templateData: { courseTitle: event.courseTitle },
-      channels: commonChannels,
+      channels: courseWideChannels(dependencies),
       mandatory: false,
       deepLink: `/courses/${event.courseSlug}`,
     }));
@@ -406,7 +414,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         quizTitle: event.quizTitle,
         lessonTitle: event.lessonTitle,
       },
-      channels: commonChannels,
+      channels: courseWideChannels(dependencies),
       mandatory: false,
       deepLink: event.deepLink,
     }));

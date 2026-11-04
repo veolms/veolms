@@ -51,6 +51,9 @@ export interface VeoBootstrapState {
     playbackRate: number;
     volume: number;
   };
+  /** See `getPlayerThemeBootstrapScript`. */
+  playerTheme?: string;
+  lessonListTheme?: string;
 }
 
 declare global {

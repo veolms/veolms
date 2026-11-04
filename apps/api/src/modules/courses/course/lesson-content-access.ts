@@ -1,5 +1,9 @@
 import { ADMIN_ROLE } from "../../auth/index.ts";
-import { isOpenFreeCourse } from "../../access/index.ts";
+import {
+  isOpenFreeCourse,
+  scopeOpensSection,
+  type CourseAccessScope,
+} from "../../access/index.ts";
 import type { OverviewViewer } from "./overview-visibility.ts";
 
 /**
@@ -13,7 +17,8 @@ import type { OverviewViewer } from "./overview-visibility.ts";
  * - anyone, signed in or not, for a preview lesson;
  * - anyone signed in on a free course that is not restricted, and a visitor
  *   who is not on that course's first lesson;
- * - anyone else only while they hold access to the course.
+ * - anyone else only while they hold access to the course, and to the
+ *   lesson's section when they hold only part of it.
  *
  * `open` when the content may be shown, `login` when a visitor who signs in
  * might be shown it, `access` when the viewer is signed in and would have to
@@ -27,10 +32,11 @@ export interface LessonContentViewer {
   pricingType: string | null | undefined;
   accessType: string | null | undefined;
   /**
-   * Whether the viewer holds access to the course. Asked only when nothing
-   * else opens the lesson, so the lookup is skipped where it cannot matter.
+   * What the viewer holds of the course (`getAccessScope`), null for
+   * nothing. Asked only when nothing else opens the lesson, so the lookup
+   * is skipped where it cannot matter.
    */
-  holdsCourse: () => Promise<boolean>;
+  accessScope: () => Promise<CourseAccessScope | null>;
 }
 
 /**
@@ -67,25 +73,27 @@ export function createLessonContentAccess({
   course,
   pricingType,
   accessType,
-  holdsCourse,
+  accessScope,
 }: LessonContentViewer) {
   const isStaff = viewerIsCourseStaff(course, viewer);
   const openFree = isOpenFreeCourse({
     pricing_type: pricingType,
     access_type: accessType,
   });
-  let held: Promise<boolean> | undefined;
+  let held: Promise<CourseAccessScope | null> | undefined;
 
   return async function lessonContentAccess(lesson: {
     is_preview: boolean;
     /** The course's first published lesson, in the order learners meet it. */
     isFirstLesson: boolean;
+    /** Opens to a learner holding part of the course only when it is theirs. */
+    section_id?: string;
   }): Promise<LessonContentAccess> {
     if (isStaff || lesson.is_preview) return "open";
     if (openFree && (viewer || lesson.isFirstLesson)) return "open";
     if (!viewer) return "login";
-    held ??= holdsCourse();
-    return (await held) ? "open" : "access";
+    held ??= accessScope();
+    return scopeOpensSection(await held, lesson.section_id) ? "open" : "access";
   };
 }
 

@@ -68,9 +68,22 @@ export async function listEnrolledCoursesForUser(
   database: Executor,
   userId: string,
 ) {
+  // A learner holding part of a course (a link that opens some of its
+  // sections) is measured against those sections only.
+  const inScope = (sectionColumn: string) =>
+    sql<boolean>`(
+      g.source is distinct from 'linked_course'
+      or g.section_ids is null
+      or ${sql.ref(sectionColumn)} = any(g.section_ids)
+    )`;
   return await database
     .selectFrom("enrollments as e")
     .innerJoin("courses as c", "c.id", "e.course_id")
+    .leftJoin("access_grants as g", (join) =>
+      join
+        .onRef("g.course_id", "=", "e.course_id")
+        .on("g.user_id", "=", userId),
+    )
     .select([
       "c.id as course_id",
       "c.creator_id as course_creator_id",
@@ -100,6 +113,7 @@ export async function listEnrolledCoursesForUser(
         .whereRef("progress_lesson.course_id", "=", "c.id")
         .where("progress_lesson.is_published", "=", true)
         .where("progress_lesson.deleted_at", "is", null)
+        .where(inScope("progress_lesson.section_id"))
         .as("progress_percent"),
     )
     .select((eb) =>
@@ -124,6 +138,7 @@ export async function listEnrolledCoursesForUser(
         .select((sub) => sub.fn.count("cs.id").as("cnt"))
         .whereRef("cs.course_id", "=", "c.id")
         .where("cs.deleted_at", "is", null)
+        .where(inScope("cs.id"))
         .as("total_sections"),
     )
     // Subquery counts for lessons
@@ -134,6 +149,7 @@ export async function listEnrolledCoursesForUser(
         .whereRef("cl.course_id", "=", "c.id")
         .where("cl.is_published", "=", true)
         .where("cl.deleted_at", "is", null)
+        .where(inScope("cl.section_id"))
         .as("total_lessons"),
     )
     // Subquery sum for total duration
@@ -156,6 +172,7 @@ export async function listEnrolledCoursesForUser(
         .whereRef("cl2.course_id", "=", "c.id")
         .where("cl2.is_published", "=", true)
         .where("cl2.deleted_at", "is", null)
+        .where(inScope("cl2.section_id"))
         .as("total_duration_seconds"),
     )
     .where("e.user_id", "=", userId)
@@ -168,8 +185,10 @@ export async function listEnrolledCoursesForUser(
       ]),
     )
     // A learner keeps a course that was archived after they got it; a draft
-    // stays out of the student view.
+    // stays out of the student view. So does an unlisted course: what it
+    // unlocks is the course they see.
     .where("c.status", "in", ["published", "archived"])
+    .where("c.unlisted", "=", false)
     .where("c.deleted_at", "is", null)
     .orderBy("e.created_at", "desc")
     .execute();
@@ -199,15 +218,25 @@ export async function listUserEnrolledCourseIds(
   userId: string,
 ) {
   const rows = await database
-    .selectFrom("enrollments")
-    .select("course_id")
-    .where("user_id", "=", userId)
-    .where("status", "=", "active")
+    .selectFrom("enrollments as e")
+    .leftJoin("access_grants as g", (join) =>
+      join
+        .onRef("g.user_id", "=", "e.user_id")
+        .onRef("g.course_id", "=", "e.course_id"),
+    )
+    .select("e.course_id")
+    .where("e.user_id", "=", userId)
+    .where("e.status", "=", "active")
     .where((eb) =>
       eb.or([
-        eb("access_expires_at", "is", null),
-        eb("access_expires_at", ">", new Date()),
+        eb("e.access_expires_at", "is", null),
+        eb("e.access_expires_at", ">", new Date()),
       ]),
+    )
+    // Part of a course (a link that opens only some of its sections) is
+    // not the course: the whole of it can still be bought, as an upgrade.
+    .where(
+      sql<boolean>`not coalesce(g.source = 'linked_course' and g.section_ids is not null, false)`,
     )
     .execute();
 

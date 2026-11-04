@@ -225,6 +225,10 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   inset: 1%;
   width: 98%;
   height: 98%;
+  /* With the lessons beside the video (LessonVideoPlayer sets these), the
+     glow is behind the video's own pane, not the whole screen. */
+  left: var(--learning-fullscreen-video-offset-x, 1%);
+  width: var(--learning-fullscreen-video-width, 98%);
 }
 
 @media (max-width: 640px) {
@@ -441,7 +445,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   gap: 16px;
   margin-top: 8px;
   margin-inline: calc(-1 * var(--learning-lesson-content-inset));
-  padding: 10px var(--learning-lesson-content-inset);
+  padding: 0;
   border: 0;
   border-radius: var(--control-radius-learning-panel, 8px)
     var(--control-radius-learning-panel, 8px) 0 0;
@@ -450,10 +454,19 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  /* The title is selected and copied like any text; a click that only
+     selected some of it does not open the lessons (useLessonHeader). */
+  -webkit-user-select: text;
+  user-select: text;
   transition:
     background-color 150ms ease,
     color 150ms ease,
     box-shadow 150ms ease;
+}
+
+/* The button's padding, on the title inside it (useLessonHeader). */
+.learning-workspace__lesson-title {
+  padding: 10px var(--learning-lesson-content-inset);
 }
 
 .learning-workspace__lesson-heading p {
@@ -481,6 +494,10 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 .learning-workspace__lesson-header[data-lesson-edit]
   .learning-workspace__lesson-heading {
   margin-inline-end: 0;
+}
+
+.learning-workspace__lesson-header[data-lesson-edit]
+  .learning-workspace__lesson-title {
   padding-inline-end: 0;
 }
 
@@ -623,6 +640,20 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   border-radius: 0 !important;
 }
 
+/*
+ * The course title's size follows the panel's width (a clamp over cqi), so
+ * its line box would be a fraction of a pixel tall and put the whole list
+ * under it on fractional positions, where a later paint snaps text a pixel
+ * away from the first paint's (the lesson card says more). Rounded to an
+ * even number of pixels where the browser can (the title and the line under
+ * it are centred against the course picture, so an odd height would put
+ * them on a half pixel); the plain ratio elsewhere.
+ */
+.learning-curriculum__course-title {
+  line-height: 1.375;
+  line-height: round(1.375em, 2px);
+}
+
 :root:not([data-scrollbar-style="default"]) .learning-curriculum {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -643,6 +674,15 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   min-height: 0;
   flex: 0 0 auto;
   overflow: visible;
+  /* Painted as a unit of its own, from a whole-pixel origin. Without this
+     the list's texts are rasterised as part of the panel's paint, and on a
+     screen at 125% a later repaint (hydration's, with the learner's
+     progress) put every other lesson's title and time one device pixel
+     lower than the first paint had them (the list stands on fractions of
+     a pixel there: a 1px border is 0.8px, a scroll position a multiple of
+     it). Seen in Chrome 156, not in Chrome 152; the list clips nothing it
+     did not already keep inside. */
+  contain: paint;
   padding: 0 0 calc(16px + var(--curriculum-reveal-space, 0px));
 }
 
@@ -691,28 +731,6 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     transform: translateX(300%) scaleX(1.8);
   }
 }
-/* The sheet's grab thumb, which lies over the seam, is jolted sideways by
-   the same collision (LearningWorkspace, the lessons sheet's swipe handle):
-   a short shake that dies away, left and right only. */
-@keyframes curriculum-seam-thumb-shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  15% {
-    transform: translateX(-3px);
-  }
-  35% {
-    transform: translateX(2.5px);
-  }
-  55% {
-    transform: translateX(-1.5px);
-  }
-  75% {
-    transform: translateX(0.75px);
-  }
-}
-
 /* The mini player's playlist: plain sections with dense single-line
    headings. The full panel's sections are blocks styled in Curriculum.tsx. */
 .learning-curriculum--compact .learning-curriculum__section {
@@ -1223,7 +1241,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     display: none;
   }
 
-  .learning-workspace__lesson-heading {
+  .learning-workspace__lesson-title {
     padding-block: 10px;
     padding-top: 6px;
   }
@@ -1299,9 +1317,18 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     border-radius: 0;
   }
 
+  /* The title is pressed anywhere between the description and a little
+     below the video (the 10px its header stands below it, the discussion
+     area's top padding or the header's own until the page knows it is on
+     a phone, keep it clear of the timeline), out to the screen's edges,
+     and lights up all of that, with as much room above the title as
+     below it. */
   .learning-workspace__lesson-heading {
+    margin-top: 0;
+  }
+
+  .learning-workspace__lesson-title {
     padding-block: 16px;
-    padding-top: 4px;
   }
 
   .learning-workspace__lesson-heading h1 {

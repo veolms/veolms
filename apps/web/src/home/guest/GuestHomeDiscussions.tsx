@@ -1,69 +1,15 @@
 import type { PublicPopularDiscussion } from "@veolms/contracts";
 import { HOME_PAGE_DISCUSSIONS_PER_PAGE } from "@veolms/contracts/home-page-defaults";
 import { useState } from "react";
-import { ResponsiveAvatar } from "../../components/ResponsiveAvatar";
-import { getCoursePlayerPath } from "../../learning/coursePlayerNavigation";
-import { markdownToPlainText } from "../../learning/discussion-editor/types";
 import type { NavigateTo } from "../../routing/navigation";
+import {
+  GuestHomeCommentCardContent,
+  getGuestHomeCommentDestination,
+  guestHomeCommentCardClass,
+} from "./GuestHomeCommentCard";
 import { GuestHomeLink } from "./GuestHomeLink";
 import { GuestHomeSectionHeader } from "./GuestHomeSectionHeader";
 import { guestHomeCommentGridBleed } from "./guestHomeSpacing";
-
-function getInitials(name: string) {
-  const words = name.split(/\s+/u).filter(Boolean);
-  const first = words[0]?.[0] ?? "";
-  const last = words.length > 1 ? (words[words.length - 1]?.[0] ?? "") : "";
-  return (first + last).toUpperCase() || "?";
-}
-
-const avatarFrame =
-  "size-11 shrink-0 rounded-full bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]";
-
-/** The author's profile picture, or their initials when there is none. */
-function DiscussionAvatar({
-  author,
-  name,
-}: {
-  author: PublicPopularDiscussion["author"];
-  name: string;
-}) {
-  const [failed, setFailed] = useState(false);
-
-  if (!author.avatarUrl || failed) {
-    return (
-      <span
-        aria-hidden="true"
-        className={`grid place-items-center text-sm font-bold tracking-wide text-(--text) ${avatarFrame}`}
-      >
-        {getInitials(name)}
-      </span>
-    );
-  }
-  return (
-    <ResponsiveAvatar
-      src={author.avatarUrl}
-      srcSet={author.avatarSrcSet}
-      sizes="44px"
-      width={44}
-      height={44}
-      alt=""
-      onError={() => setFailed(true)}
-      className={`object-cover ${avatarFrame}`}
-    />
-  );
-}
-
-function getDiscussionDestination(discussion: PublicPopularDiscussion) {
-  // The lesson shows the comment at the top of its discussion and highlights
-  // it, rather than opening it as a thread.
-  const [pathname, query = ""] = getCoursePlayerPath(discussion.courseId, 1, {
-    threadId: discussion.id,
-    threadFocus: "comment",
-  }).split("?", 2);
-  const search = new URLSearchParams(query);
-  search.set("lessonId", discussion.lessonId);
-  return `${pathname}?${search.toString()}`;
-}
 
 /**
  * The guest home's student comments: one card per student, each a link into
@@ -76,8 +22,7 @@ function getDiscussionDestination(discussion: PublicPopularDiscussion) {
  * built carries only the first page of them; the rest arrive with the home
  * page's own request once the browser is idle, and the button appears then.
  */
-const commentCard =
-  "rounded-2xl bg-(--card-surface,var(--surface)) bg-(image:--raised-surface-image) p-5 shadow-(--raised-surface-shadow)";
+const commentCard = guestHomeCommentCardClass;
 
 const commentGrid = `mt-5 grid grid-cols-1 gap-4 @xl/comments:grid-cols-2 @4xl/comments:grid-cols-3 @4xl/comments:gap-5 ${guestHomeCommentGridBleed}`;
 
@@ -135,41 +80,15 @@ export function GuestHomeDiscussions({
         <>
           <ul className={commentGrid}>
             {shown.map((discussion) => {
-              const author =
-                discussion.author.displayName.trim() || "Anonymous Learner";
-              // A snippet can be the start of a Markdown note; it is shown as
-              // the text it reads as, without its `#` and `**` marks.
-              const comment =
-                discussion.title?.trim() ||
-                markdownToPlainText(discussion.snippet);
-
               return (
                 <li key={discussion.id} className="min-w-0">
                   <GuestHomeLink
-                    href={getDiscussionDestination(discussion)}
+                    href={getGuestHomeCommentDestination(discussion)}
                     onNavigatePage={onNavigatePage}
                     navigationOptions={{ exact: true }}
                     className={`flex h-full flex-col gap-4 transition-shadow duration-150 hover:shadow-(--card-hover-shadow,var(--raised-surface-shadow)) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) motion-reduce:transition-none ${commentCard}`}
                   >
-                    <span className="flex min-w-0 items-center gap-3">
-                      <DiscussionAvatar
-                        author={discussion.author}
-                        name={author}
-                      />
-                      <span className="grid min-w-0 gap-0.5">
-                        <span className="truncate text-[0.9375rem] leading-snug font-bold text-(--text)">
-                          {author}
-                        </span>
-                        {discussion.author.username ? (
-                          <span className="truncate text-[0.8125rem] leading-snug text-(--muted)">
-                            @{discussion.author.username}
-                          </span>
-                        ) : null}
-                      </span>
-                    </span>
-                    <span className="line-clamp-6 text-[0.9375rem] leading-relaxed wrap-anywhere text-(--text-secondary,var(--text))">
-                      {comment}
-                    </span>
+                    <GuestHomeCommentCardContent discussion={discussion} />
                   </GuestHomeLink>
                 </li>
               );

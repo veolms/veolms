@@ -1,8 +1,15 @@
 import type {
   CartItemInput,
+  PricingAmountUnit,
   PricingCalculation,
+  PricingRegion,
   CouponValidationResult,
 } from "@veolms/contracts";
+import {
+  formatMoney,
+  minimumCardPayment,
+  minorUnitsPerMajor,
+} from "../shared/currency.ts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import { isRestrictedFreeCourse } from "../../access/index.ts";
@@ -15,15 +22,31 @@ import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
 import {
   computeCouponDiscount,
+  raiseToMinimumCharge,
   resolveCourseCharge,
 } from "./pricing.amount.ts";
 import { resolveQuizCharge } from "./quiz-pricing.amount.ts";
-import { courseSaleState, resolveCoursePricing } from "./purchasable.ts";
+import {
+  courseSaleState,
+  resolveCoursePricing,
+  resolveInternationalCharge,
+} from "./purchasable.ts";
+import {
+  listCoursesOpenedBy,
+  listPartialHoldings,
+  type PartialHolding,
+} from "./upgrade-credit.ts";
 
 export interface CalculatePricingParams {
   userId?: string | null;
   items: CartItemInput[];
   couponCode?: string | null;
+  /**
+   * Where the buyer is (`pricingRegionForCountry`). In the international
+   * region a course that has a price for buyers outside India is charged
+   * that price, in cents. Rupees when absent.
+   */
+  pricingRegion?: PricingRegion;
   /** Optional date override for deterministic testing */
   now?: Date;
 }
@@ -131,11 +154,12 @@ export function createPricingService({
 
   /**
    * Deterministically calculates live pricing for courses/bundles/quizzes, checks enrollment eligibility,
-   * validates coupon restrictions and applies discounts in whole major currency units.
+   * validates coupon restrictions and applies discounts in whole major currency units, or in cents
+   * for a course charged its price for buyers outside India (`amountUnit`).
    */
   async function calculatePricing(params: CalculatePricingParams) {
     const now = params.now ?? new Date();
-    const { userId, items, couponCode } = params;
+    const { userId, items, couponCode, pricingRegion = "domestic" } = params;
 
     if (!items || items.length === 0) {
       throw CommerceErrors.EMPTY_CHECKOUT_ITEMS();
@@ -156,12 +180,18 @@ export function createPricingService({
       seenItems.add(key);
     }
 
-    // 1. Fetch user enrollments if authenticated to prevent duplicate ownership
-    const enrolledCourseIds = userId
-      ? new Set(
-          await enrollmentRepo.listUserEnrolledCourseIds(database, userId),
-        )
-      : new Set<string>();
+    // 1. Fetch user enrollments if authenticated to prevent duplicate
+    // ownership, and the courses they hold only part of, whose whole is an
+    // upgrade with what they paid for the parts taken off.
+    const [enrolledCourseIds, partialHoldings] = userId
+      ? await Promise.all([
+          enrollmentRepo
+            .listUserEnrolledCourseIds(database, userId)
+            .then((ids) => new Set(ids)),
+          listPartialHoldings(database, userId),
+        ])
+      : [new Set<string>(), new Map<string, PartialHolding>()];
+    let upgradeCredit: { amount: number; from: string[] } | undefined;
 
     const calculatedItems: Array<{
       itemType: "course" | "bundle" | "quiz";
@@ -170,10 +200,18 @@ export function createPricingService({
       unitPrice: number;
       /** Catalog amount coupons may discount. Excludes voluntary tips. */
       couponBase: number;
+      /**
+       * `couponBase` in whole rupees. Coupon amounts (a fixed discount, a
+       * cap, a minimum order) are set in rupees, and an item priced in
+       * cents is measured against them through it. Otherwise the same as
+       * `couponBase`.
+       */
+      domesticCouponBase: number;
       discountAmount: number;
       taxAmount: number;
       finalAmount: number;
     }> = [];
+    let amountUnit: PricingAmountUnit = "major";
 
     let subtotalAmount = 0;
     const itemCourseMap = new Map<string, string[]>(); // itemId -> included course IDs
@@ -240,6 +278,22 @@ export function createPricingService({
     }
     const quizzesByPricingId = new Map(quizRows.map((q) => [q.pricing_id, q]));
 
+    // One currency for the whole order. Outside India it is the price for
+    // buyers there when every paid item has one; an order with anything
+    // sold in rupees only (a bundle, a quiz pass, a course without that
+    // price, a voluntary amount) is charged in rupees throughout, as before.
+    const chargeInternationally =
+      pricingRegion === "international" &&
+      items.every((it) => {
+        if (it.itemType !== "course") return false;
+        const pricing = pricingByCourseId.get(it.courseId!);
+        if (resolveCoursePricing(pricing).pricingType !== "paid") return true;
+        return (
+          (it.customAmount === undefined || it.customAmount === null) &&
+          resolveInternationalCharge(pricing) !== null
+        );
+      });
+
     for (const item of items) {
       if (item.itemType === "course") {
         const courseId = item.courseId!;
@@ -260,6 +314,17 @@ export function createPricingService({
         }
         if (enrolledCourseIds.has(courseId)) {
           throw CommerceErrors.COURSE_ALREADY_OWNED(course.title);
+        }
+        // Part of a course (an unlisted course, sold from its link) is no
+        // use to someone who has the whole course already.
+        if (course.unlisted && userId) {
+          const opened = await listCoursesOpenedBy(database, courseId);
+          if (
+            opened.length > 0 &&
+            opened.every((whole) => enrolledCourseIds.has(whole.id))
+          ) {
+            throw CommerceErrors.COURSE_ALREADY_OWNED(opened[0]!.title);
+          }
         }
 
         const pricing = pricingByCourseId.get(courseId);
@@ -285,21 +350,78 @@ export function createPricingService({
           throw CommerceErrors.COURSE_ACCESS_RESTRICTED(course.title);
         }
         const isPaidCourse = pricingType === "paid";
-        const itemCurrency = pricing?.currency ?? "INR";
-        const { unitPrice, couponBase } = resolveCourseCharge({
-          isPaidCourse,
-          catalogPrice,
-          customAmount: item.customAmount,
-          currency: itemCurrency,
-        });
+        // Outside India, a course that has a price for buyers there is sold
+        // at it, in cents, when the whole order can be (see
+        // `chargeInternationally`).
+        const international =
+          chargeInternationally && isPaidCourse
+            ? resolveInternationalCharge(pricing)
+            : null;
+        const domesticCurrency = pricing?.currency ?? "INR";
+        const itemCurrency = international?.currency ?? domesticCurrency;
+        const itemUnit: PricingAmountUnit = international ? "minor" : "major";
+        const { unitPrice, couponBase } = international
+          ? {
+              unitPrice: international.salePriceMinor,
+              couponBase: international.salePriceMinor,
+            }
+          : resolveCourseCharge({
+              isPaidCourse,
+              catalogPrice,
+              customAmount: item.customAmount,
+              currency: itemCurrency,
+            });
 
         if (!currencyInitialized) {
           detectedCurrency = itemCurrency;
+          amountUnit = itemUnit;
           currencyInitialized = true;
-        } else if (itemCurrency !== detectedCurrency && unitPrice > 0) {
+        } else if (
+          (itemCurrency !== detectedCurrency || itemUnit !== amountUnit) &&
+          unitPrice > 0
+        ) {
           throw CommerceErrors.PRICE_CALCULATION_FAILED(
             `Cart contains items with mixed currencies (${detectedCurrency} and ${itemCurrency}).`,
           );
+        }
+
+        // An upgrade from part of the course: what was paid for the part
+        // comes off, never below nothing, and no coupon is taken on top.
+        // Paid in rupees and bought now in cents, it is taken at the
+        // course's own rate (its price in cents against its rupee price).
+        const holding = partialHoldings.get(courseId);
+        if (holding && isPaidCourse) {
+          let held = 0;
+          if (holding.currency === itemCurrency) {
+            held = international ? holding.creditMinor : holding.credit;
+          } else if (
+            international &&
+            holding.currency === domesticCurrency &&
+            catalogPrice > 0
+          ) {
+            held = Math.floor(
+              (holding.credit * international.salePriceMinor) / catalogPrice,
+            );
+          }
+          const credit = Math.min(unitPrice, held);
+          calculatedItems.push({
+            itemType: "course",
+            itemId: courseId,
+            title: `${course.title} (upgrade from ${holding.fromTitles.join(", ")})`,
+            unitPrice,
+            couponBase: 0,
+            domesticCouponBase: 0,
+            discountAmount: credit,
+            taxAmount: 0,
+            finalAmount: unitPrice - credit,
+          });
+          subtotalAmount += unitPrice;
+          itemCourseMap.set(courseId, [courseId]);
+          upgradeCredit = {
+            amount: (upgradeCredit?.amount ?? 0) + credit,
+            from: [...(upgradeCredit?.from ?? []), ...holding.fromTitles],
+          };
+          continue;
         }
 
         calculatedItems.push({
@@ -308,6 +430,7 @@ export function createPricingService({
           title: course.title,
           unitPrice,
           couponBase,
+          domesticCouponBase: international ? catalogPrice : couponBase,
           discountAmount: 0,
           taxAmount: 0,
           finalAmount: unitPrice,
@@ -372,6 +495,7 @@ export function createPricingService({
           title: bundle.title,
           unitPrice,
           couponBase: unitPrice,
+          domesticCouponBase: unitPrice,
           discountAmount: 0,
           taxAmount: 0,
           finalAmount: unitPrice,
@@ -429,6 +553,7 @@ export function createPricingService({
           title: passTitle,
           unitPrice: charge.effectivePrice,
           couponBase: 0, // quizzes are not coupon-eligible
+          domesticCouponBase: 0,
           discountAmount: 0,
           taxAmount: 0,
           finalAmount: charge.effectivePrice,
@@ -482,8 +607,9 @@ export function createPricingService({
       if (new Date(coupon.expires_at) < now) {
         throw CommerceErrors.COUPON_EXPIRED(codeUpper);
       }
+      // The minimum order is set in rupees, so it is measured in rupees.
       const catalogSubtotal = calculatedItems.reduce(
-        (sum, it) => sum + it.couponBase,
+        (sum, it) => sum + it.domesticCouponBase,
         0,
       );
       if (catalogSubtotal < coupon.min_order_amount) {
@@ -521,6 +647,7 @@ export function createPricingService({
 
       // Check item restrictions (course/bundle eligibility)
       let eligibleSubtotal = 0;
+      let eligibleDomesticSubtotal = 0;
       const eligibleItems: typeof calculatedItems = [];
 
       for (const item of calculatedItems) {
@@ -578,6 +705,7 @@ export function createPricingService({
 
         if (isEligible) {
           eligibleSubtotal += item.couponBase;
+          eligibleDomesticSubtotal += item.domesticCouponBase;
           eligibleItems.push(item);
         }
       }
@@ -586,10 +714,23 @@ export function createPricingService({
         throw CommerceErrors.COUPON_NOT_APPLICABLE(codeUpper);
       }
 
+      // A coupon's amounts are set in rupees. Against items priced in cents
+      // they are taken at those items' own rate (what they sell for in
+      // cents against their rupee price), rounded down to a cent. A
+      // percentage needs no converting.
+      const toChargeUnits = (rupees: number) =>
+        amountUnit === "minor" && eligibleDomesticSubtotal > 0
+          ? Math.floor((rupees * eligibleSubtotal) / eligibleDomesticSubtotal)
+          : rupees;
       totalDiscount = computeCouponDiscount({
         discountType: coupon.discount_type,
-        discountValue: coupon.discount_value,
-        maxDiscountAmount: coupon.max_discount_amount,
+        discountValue:
+          coupon.discount_type === "fixed"
+            ? toChargeUnits(coupon.discount_value)
+            : coupon.discount_value,
+        maxDiscountAmount: coupon.max_discount_amount
+          ? toChargeUnits(coupon.max_discount_amount)
+          : coupon.max_discount_amount,
         eligibleCatalogSubtotal: eligibleSubtotal,
       });
 
@@ -617,18 +758,70 @@ export function createPricingService({
         discountType: coupon.discount_type,
         discountValue: coupon.discount_value,
         discountAmount: totalDiscount,
-        message: `${coupon.discount_type === "percentage" ? `${coupon.discount_value}%` : `₹${coupon.discount_value}`} discount applied.`,
+        message: `${
+          coupon.discount_type === "percentage"
+            ? `${coupon.discount_value}%`
+            : amountUnit === "minor"
+              ? formatMoney(totalDiscount, {
+                  currency: detectedCurrency,
+                  unit: "minor",
+                })
+              : `₹${coupon.discount_value}`
+        } discount applied.`,
       };
     }
 
+    // An upgrade's credit comes off with any coupon on the other items.
+    totalDiscount += upgradeCredit?.amount ?? 0;
     const totalTax = 0; // Configurable tax if needed in future
-    const totalAmount = Math.max(0, subtotalAmount - totalDiscount + totalTax);
+    let totalAmount = Math.max(0, subtotalAmount - totalDiscount + totalTax);
+
+    // A card payment has a floor ($1 on Razorpay): a total the discounts
+    // bring under it is charged at the floor, the discounts taking less.
+    const minimumMinor = minimumCardPayment(detectedCurrency);
+    const minimumCharge =
+      amountUnit === "minor"
+        ? minimumMinor
+        : Math.ceil(minimumMinor / minorUnitsPerMajor(detectedCurrency));
+    const raisedBy = raiseToMinimumCharge({
+      totalAmount,
+      discountAmount: totalDiscount,
+      minimum: minimumCharge,
+      items: calculatedItems,
+    });
+    if (raisedBy > 0) {
+      totalDiscount -= raisedBy;
+      totalAmount += raisedBy;
+      const fromCoupon = Math.min(
+        raisedBy,
+        couponValidation?.discountAmount ?? 0,
+      );
+      if (couponValidation) {
+        couponValidation = {
+          ...couponValidation,
+          discountAmount: couponValidation.discountAmount - fromCoupon,
+          message: `Discount applied. The smallest card payment is ${formatMoney(
+            minimumCharge,
+            { currency: detectedCurrency, unit: amountUnit },
+          )}.`,
+        };
+      }
+      if (upgradeCredit && raisedBy > fromCoupon) {
+        upgradeCredit = {
+          ...upgradeCredit,
+          amount: upgradeCredit.amount - (raisedBy - fromCoupon),
+        };
+      }
+    }
 
     const pricing: PricingCalculation = {
+      amountUnit,
       subtotalAmount,
       discountAmount: totalDiscount,
+      ...(upgradeCredit ? { upgradeCredit } : {}),
       taxAmount: totalTax,
       totalAmount,
+      ...(raisedBy > 0 ? { minimumCharge } : {}),
       currency: detectedCurrency,
       couponCode: couponValidation?.code,
       couponId,
