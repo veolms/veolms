@@ -250,7 +250,10 @@ export {
   usePlayerThemes,
 } from "./themes/PlayerThemeContext";
 export type { PlayerThemeProviderProps } from "./themes/PlayerThemeContext";
-export type { SettingsMenuToggle } from "./controls/SettingsMenuLayouts";
+export type {
+  SettingsMenuSection,
+  SettingsMenuToggle,
+} from "./controls/SettingsMenuLayouts";
 export {
   PlayerThemeSwatch,
   type PlayerThemeSwatchProps,

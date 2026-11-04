@@ -247,8 +247,8 @@ export interface PlayerThemeAutoplay {
   knob?: string;
   /**
    * Where autoplay is switched: as a switch inside the settings menu, named
-   * in full (the default), or on its own beside the settings key (`bar`,
-   * YouTube).
+   * in full (the default, every theme now), or on its own beside the
+   * settings key (`bar`).
    */
   placement?: "bar" | "settings";
 }
@@ -347,24 +347,29 @@ const youtubeIcons: PlayerThemeIcons = {
   replay: themedIcon(ArrowCounterClockwise, "bold"),
 };
 
-/** Cone: solid, chunky, bold strokes; sliders for settings. */
+/**
+ * VLC player, after a community redesign of VLC: thin grey line icons, and
+ * the transport keys (play, pause, previous, next) filled.
+ */
 const coneIcons: PlayerThemeIcons = {
   ...youtubeIcons,
-  captions: themedIcon(ClosedCaptioning, "bold", "fill"),
-  settings: themedIcon(SlidersHorizontal, "bold"),
-  fullscreenEnter: themedIcon(ArrowsOutSimple, "bold"),
-  fullscreenExit: themedIcon(ArrowsInSimple, "bold"),
-  pictureInPicture: themedIcon(PictureInPicture, "bold", "fill"),
-  theaterEnter: themedIcon(Rectangle, "bold"),
-  theaterExit: themedIcon(RectangleDashed, "bold"),
-  quality: themedIcon(SlidersHorizontal, "bold"),
-  playbackRate: themedIcon(Speedometer, "bold"),
-  audio: themedIcon(SpeakerHigh, "bold"),
-  chapters: themedIcon(ListBullets, "bold"),
-  ambient: themedIcon(MonitorPlay, "bold", "fill"),
-  back: themedIcon(ArrowLeft, "bold"),
-  disclosure: themedIcon(CaretRight, "bold"),
-  warning: themedIcon(WarningCircle, "bold", "fill"),
+  volumeMuted: themedIcon(SpeakerSimpleX, "regular"),
+  volumeQuiet: themedIcon(SpeakerSimpleNone, "regular"),
+  volumeMedium: themedIcon(SpeakerSimpleLow, "regular"),
+  volumeHigh: themedIcon(SpeakerSimpleHigh, "regular"),
+  captions: themedIcon(Subtitles, "regular"),
+  settings: themedIcon(GearSix, "regular"),
+  fullscreenEnter: themedIcon(ArrowsOutSimple, "regular"),
+  fullscreenExit: themedIcon(ArrowsInSimple, "regular"),
+  pictureInPicture: themedIcon(PictureInPicture, "regular"),
+  minimize: themedIcon(CaretDown, "regular"),
+  quality: themedIcon(SlidersHorizontal, "regular"),
+  playbackRate: themedIcon(Speedometer, "regular"),
+  audio: themedIcon(SpeakerSimpleHigh, "regular"),
+  chapters: themedIcon(ListBullets, "regular"),
+  ambient: themedIcon(MonitorPlay, "regular"),
+  back: themedIcon(ArrowLeft, "regular"),
+  disclosure: themedIcon(CaretRight, "regular"),
 };
 
 /** Frost: light strokes that sit quietly on glass. */
@@ -472,10 +477,10 @@ export const BUILT_IN_PLAYER_THEMES: Record<
     },
     icons: youtubeIcons,
     motion: { settingsClosedRotation: 30 },
-    // The one theme with autoplay beside the settings key, as on YouTube;
-    // every other theme switches it in the settings menu (the user's call),
-    // so a theme made from this one says where its own goes.
-    autoplay: { placement: "bar" },
+    // Autoplay is switched in the settings menu here too, as in every theme
+    // (the user's call: a cleaner bar); `bar` is still there for a theme
+    // that wants the switch beside the settings key.
+    autoplay: { placement: "settings" },
     // Every theme names the lesson and its place in the course at the top
     // left in full screen (the user's call); themes made from this one
     // keep it unless they word it their own way.
@@ -483,50 +488,61 @@ export const BUILT_IN_PLAYER_THEMES: Record<
   },
   cone: {
     id: "cone",
-    label: "VLC",
-    description: "A solid deck with orange accents and square-cornered keys.",
+    label: "VLC player",
+    // After a community redesign of VLC (Figma, "VLC Redesign"): its dark
+    // greys (#0e0e0e to #222) with the app's own brighter VLC orange
+    // (#ff7a1a, not the design's #d37918), a wide orange play key with
+    // small corners, a thick seek bar filled in dim orange with an orange
+    // pill for a thumb, and thin grey line icons.
+    description: "Boxed dark keys, an orange play key and a thick seek bar.",
     order: 10,
     tokens: {
       accent: "#ff7a1a",
-      accentContrast: "#121212",
-      controlSurface: "rgb(16 17 20 / 0.86)",
-      controlSurfaceHover: "rgb(255 255 255 / 0.1)",
-      controlSurfaceActive: "rgb(255 122 26 / 0.18)",
-      controlText: "#ffffff",
-      controlTextMuted: "rgb(255 255 255 / 0.62)",
-      controlBorder: "rgb(255 255 255 / 0.12)",
-      controlShadow: "0 6px 18px rgb(0 0 0 / 0.3)",
-      controlRadius: "10px",
-      menuSurface: "rgb(26 27 31 / 0.98)",
-      menuSolidSurface: "rgb(26 27 31)",
-      menuText: "#ffffff",
-      menuTextMuted: "rgb(255 255 255 / 0.58)",
-      menuBorder: "rgb(255 255 255 / 0.1)",
-      menuShadow: "0 20px 50px rgb(0 0 0 / 0.55)",
-      menuRadius: "12px",
-      timelineTrack: "rgb(255 255 255 / 0.2)",
-      timelineBuffered: "rgb(255 255 255 / 0.38)",
-      vignetteColor: "14 15 18",
+      accentContrast: "#161616",
+      controlSurface: "rgb(14 14 14 / 0.86)",
+      controlSurfaceHover: "rgb(255 255 255 / 0.08)",
+      controlSurfaceActive: "rgb(255 122 26 / 0.22)",
+      controlText: "#c6c6c6",
+      controlTextMuted: "#969696",
+      controlBorder: "#222222",
+      controlShadow: "none",
+      controlRadius: "8px",
+      menuSurface: "rgb(14 14 14 / 0.96)",
+      menuSolidSurface: "#0e0e0e",
+      menuText: "#eaeaea",
+      menuTextMuted: "#969696",
+      menuBorder: "#373737",
+      menuShadow: "0 24px 60px rgb(0 0 0 / 0.6)",
+      menuRadius: "6px",
+      timelineTrack: "#090909",
+      timelineBuffered: "#555555",
+      timelineProgress: "#a8500f",
+      timelineHeight: "8px",
+      timelineRadius: "2px",
+      thumbColor: "#ff7a1a",
+      thumbWidth: "4px",
+      thumbHeight: "16px",
+      thumbRadius: "2px",
+      thumbBorder: "none",
+      thumbShadow: "none",
+      vignetteColor: "14 14 14",
       playSurface: "#ff7a1a",
-      playText: "#121212",
-      playRadius: "12px",
-      timelineHeight: "6px",
-      timelineRadius: "3px",
-      thumbWidth: "14px",
-      thumbHeight: "14px",
-      thumbRadius: "4px",
-      thumbBorder: "2px solid #111",
-      thumbShadow: "0 2px 6px rgb(0 0 0 / 0.45)",
-      menuRowActive: "rgb(255 122 26 / 0.12)",
+      playText: "#161616",
+      playRadius: "8px",
+      // No solid strip under the keys (the design's): only the faint shade
+      // the phone layout has, so the picture shows through on desktop too.
+      deckControlSurface: "#151515",
+      menuRowActive: "#222222",
     },
     icons: coneIcons,
     motion: { settingsClosedRotation: 0, settingsOpenTurn: 0 },
     settingsMenu: {
       title: "Video settings",
       accentValues: true,
-      iconTiles: true,
+      switchStyle: "segmented",
+      selectedMark: "square",
     },
-    autoplay: { label: "Auto", knob: "#111111" },
+    autoplay: { label: "Auto", knob: "#161616" },
     chrome: {
       topTitle: "title",
       chapterCount: "total",

@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { FadersHorizontalIcon as FadersHorizontal } from "@phosphor-icons/react/FadersHorizontal";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import type { VideoQuality, VideoTextTrack } from "../core/types";
 import {
@@ -32,9 +33,11 @@ import {
   SettingsOption,
   SettingsRows,
   SettingsSubmenuHeader,
+  SettingsSwitch,
   SettingsTitle,
   type SettingsChoiceGroup,
   type SettingsEntry,
+  type SettingsMenuSection,
   type SettingsMenuToggle,
 } from "./SettingsMenuLayouts";
 import { classNames } from "../utils/classNames";
@@ -51,14 +54,20 @@ const INLINE_PLAYBACK_RATES = [0.5, 1, 1.5, 2] as const;
 const THEME_GRID_COLUMNS = 3;
 /** The Theme row's icon for themes that do not bring one. */
 const DefaultThemeIcon = createThemedIcon(Palette, "regular", "fill");
+/** The Advanced row's icon. */
+const AdvancedIcon = createThemedIcon(FadersHorizontal, "regular", "fill");
 /** From this height up a quality is marked HD, as YouTube marks it. */
 const HD_MIN_HEIGHT = 1080;
+/** And from this height up, 4K. */
+const UHD_MIN_HEIGHT = 2160;
 
-const isHdQuality = (quality: VideoQuality | undefined) => {
-  if (!quality) return false;
+/** The mark a quality carries: "4K", "HD" or none. */
+const qualityMark = (quality: VideoQuality | undefined) => {
+  if (!quality) return null;
   const height =
     quality.height ?? Number(/(\d+)p/u.exec(quality.label)?.[1] ?? 0);
-  return height >= HD_MIN_HEIGHT;
+  if (height >= UHD_MIN_HEIGHT) return "4K";
+  return height >= HD_MIN_HEIGHT ? "HD" : null;
 };
 
 const baseCaptionName = (track: VideoTextTrack) =>
@@ -92,21 +101,20 @@ const captionTrackName = (
   return stillShared && track.language ? `${name} · ${track.language}` : name;
 };
 
-/** The raised "HD" after a quality's name, in the theme's colour. */
-function HdMark() {
-  return (
-    <sup className="ml-0.5 text-[0.5625rem] font-bold leading-none text-(--video-player-accent)">
-      HD
-    </sup>
-  );
-}
-
-/** A quality's name, marked HD when it is. */
+/** A quality's name, its "HD" or "4K" raised at its top right corner. */
 function QualityName({ quality }: { quality: VideoQuality }) {
+  const mark = qualityMark(quality);
   return (
     <>
       {quality.label}
-      {isHdQuality(quality) ? <HdMark /> : null}
+      {mark ? (
+        <sup
+          data-settings-hd=""
+          className="ml-0.5 text-[0.5625rem] font-bold leading-none text-(--video-player-accent)"
+        >
+          {mark}
+        </sup>
+      ) : null}
     </>
   );
 }
@@ -127,6 +135,11 @@ export interface SettingsMenuProps {
    * switches in their own way); YouTube's menu shows `extraMainItems`.
    */
   toggles?: readonly SettingsMenuToggle[];
+  /**
+   * The app's less used switches, in an Advanced view of their own: a
+   * heading for each group. No view (and no row for it) when empty.
+   */
+  advanced?: readonly SettingsMenuSection[];
   triggerClassName?: string;
   side?: PopoverMenuSide;
   /** Called with the quality the viewer picks, or null for Auto. */
@@ -145,6 +158,7 @@ export interface SettingsMenuProps {
 }
 
 export function SettingsMenu({
+  advanced = [],
   extraMainItems,
   forceSheet = false,
   includePictureInPicture = false,
@@ -214,7 +228,7 @@ export function SettingsMenu({
   );
   // The picture now playing is HD, picked or chosen by Auto: the gear says
   // so, as YouTube's does.
-  const playingHd = isHdQuality(activeQuality);
+  const playingMark = qualityMark(activeQuality);
   const audioLabel =
     media.audioTracks.find((item) => item.id === media.selectedAudioTrackId)
       ?.label ??
@@ -462,6 +476,17 @@ export function SettingsMenu({
         onOpen: () => openView("theme"),
       }
     : null;
+  const advancedEntry: SettingsEntry | null =
+    advanced.length > 0
+      ? {
+          kind: "submenu",
+          id: "advanced",
+          label: "Advanced",
+          value: "",
+          icon: <AdvancedIcon size={17} />,
+          onOpen: () => openView("advanced"),
+        }
+      : null;
   const pictureInPictureEntry: SettingsEntry | null =
     includePictureInPicture && pictureInPictureAvailable
       ? {
@@ -600,6 +625,7 @@ export function SettingsMenu({
             pictureInPictureEntry,
             ...toggleEntries,
             themeEntry,
+            advancedEntry,
           ])}
           menu={menu}
         />
@@ -612,6 +638,7 @@ export function SettingsMenu({
             pictureInPictureEntry,
             ...toggleEntries,
             themeEntry,
+            advancedEntry,
           ])}
           menu={menu}
         />
@@ -626,6 +653,7 @@ export function SettingsMenu({
             themeEntry,
             pictureInPictureEntry,
             ...toggleEntries,
+            advancedEntry,
           ])}
           inlineSpeed={
             menu.inlineSpeed
@@ -656,7 +684,11 @@ export function SettingsMenu({
             checkIcon={checkIcon}
             menu={menu}
             label="Auto"
-            hint={activeQuality?.label}
+            hint={
+              activeQuality ? (
+                <QualityName quality={activeQuality} />
+              ) : undefined
+            }
             selected={media.autoQuality}
             onSelect={() => pickQuality(null)}
           />
@@ -665,19 +697,11 @@ export function SettingsMenu({
               key={quality.id}
               checkIcon={checkIcon}
               menu={menu}
-              label={quality.label}
+              label={<QualityName quality={quality} />}
               hint={
-                isHdQuality(quality) ? (
-                  <span
-                    data-settings-hd=""
-                    className="rounded-[4px] bg-(--video-player-accent) px-1.5 py-0.5 text-[0.625rem] font-bold text-(--video-player-accent-contrast)"
-                  >
-                    HD
-                  </span>
-                ) : quality.id === lowestQualityId &&
-                  qualityOptions.length > 1 ? (
-                  "Data saver"
-                ) : undefined
+                quality.id === lowestQualityId && qualityOptions.length > 1
+                  ? "Data saver"
+                  : undefined
               }
               selected={isQualitySelected(quality)}
               onSelect={() => pickQuality(quality)}
@@ -765,7 +789,12 @@ export function SettingsMenu({
                     : "",
               // A popover's width; a sheet takes the width it is given
               // (its parent's), which these would cap.
+              view === "advanced" &&
+                !mobileInteraction &&
+                !forceSheet &&
+                "!w-[min(22rem,calc(100vw-1.5rem))] !p-2",
               designed &&
+                view !== "advanced" &&
                 !mobileInteraction &&
                 !forceSheet &&
                 (layout === "chips"
@@ -795,12 +824,12 @@ export function SettingsMenu({
             }}
             active={settingsOpen}
           />
-          {playingHd ? (
+          {playingMark ? (
             <span
               className="pointer-events-none absolute -top-0.5 -right-1 rounded-[2px] bg-(--video-player-accent) px-[2px] text-[7px] font-bold leading-[9px] text-(--video-player-accent-contrast)"
               aria-hidden="true"
             >
-              HD
+              {playingMark}
             </span>
           ) : null}
         </span>
@@ -819,6 +848,40 @@ export function SettingsMenu({
               onBack={() => openView("main")}
             />
             {themeGrid}
+          </div>
+        ) : view === "advanced" ? (
+          // One look in every theme, as the theme view; the switches are
+          // drawn the theme's way.
+          <div data-settings-layout="advanced" className="p-0.5">
+            <SettingsSubmenuHeader
+              backIcon={<BackIcon size={16} />}
+              menu={{}}
+              title="Advanced"
+              onBack={() => openView("main")}
+            />
+            {advanced.map((section) => (
+              <div
+                key={section.id}
+                role="group"
+                aria-label={section.label}
+                data-settings-section={section.id}
+              >
+                <div
+                  data-settings-section-label=""
+                  className="px-2.5 pt-2.5 pb-1 text-[0.6875rem] font-semibold tracking-[0.08em] text-(--video-player-menu-text-muted) uppercase"
+                >
+                  {section.label}
+                </div>
+                <SettingsRows
+                  disclosureIcon={disclosureIcon}
+                  entries={section.toggles.map((toggle) => ({
+                    kind: "toggle",
+                    ...toggle,
+                  }))}
+                  menu={{ switchStyle: menu.switchStyle }}
+                />
+              </div>
+            ))}
           </div>
         ) : designed ? (
           <div
@@ -939,7 +1002,30 @@ export function SettingsMenu({
                     }}
                   />
                 ) : null}
+                {toggles.map((toggle) => (
+                  <PlayerMenuItem
+                    key={toggle.id}
+                    data-menu-keep-open=""
+                    label={toggle.label}
+                    checked={toggle.checked}
+                    highlightChecked={false}
+                    leading={toggle.icon}
+                    trailing={
+                      <SettingsSwitch checked={toggle.checked} menu={{}} />
+                    }
+                    onClick={() => toggle.onCheckedChange(!toggle.checked)}
+                  />
+                ))}
                 {extraMainItems}
+                {advanced.length > 0 ? (
+                  <PlayerMenuItem
+                    data-menu-keep-open=""
+                    label="Advanced"
+                    leading={<AdvancedIcon size={19} />}
+                    trailing={<DisclosureIcon size={17} />}
+                    onClick={() => openView("advanced")}
+                  />
+                ) : null}
               </>
             ) : null}
 

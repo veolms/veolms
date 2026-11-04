@@ -117,6 +117,16 @@ function mediaErrorToVideoEngineError(
   });
 }
 
+/**
+ * How long a load may go on before it is reported as failed. A load that
+ * never finished (a request that hung, a step that never came back) left
+ * the player on its spinner for good, with no error and nothing to retry:
+ * only a reload of the page got it going. It fails instead, and the error
+ * screen offers to try again. A load that does finish after this still
+ * plays (`finishLoading` clears the error).
+ */
+const LOAD_TIMEOUT_MS = 45_000;
+
 export abstract class MediaElementEngineBase implements VideoEngine {
   abstract readonly name: VideoEngineName;
 
@@ -125,6 +135,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
   #media: HTMLMediaElement | null = null;
   #snapshot = createInitialVideoEngineSnapshot();
   #operationGeneration = 0;
+  #loadTimeout: ReturnType<typeof setTimeout> | null = null;
 
   async attach(media: HTMLMediaElement): Promise<void> {
     this.assertNotDestroyed();
@@ -497,6 +508,9 @@ export abstract class MediaElementEngineBase implements VideoEngine {
   }
 
   protected startLoading(source: VideoSource): void {
+    // A new load gets the whole time again.
+    if (this.#loadTimeout !== null) clearTimeout(this.#loadTimeout);
+    this.#loadTimeout = null;
     this.updateSnapshot({
       lifecycle: "loading",
       source,
@@ -606,7 +620,31 @@ export abstract class MediaElementEngineBase implements VideoEngine {
   ): Promise<void> {}
 
   private emitSnapshot(): void {
+    this.watchLoadTime();
     this.#events.emit("snapshotchange", this.getSnapshot());
+  }
+
+  /** Times a load from its start (see LOAD_TIMEOUT_MS). */
+  private watchLoadTime(): void {
+    if (this.#snapshot.lifecycle !== "loading") {
+      if (this.#loadTimeout !== null) clearTimeout(this.#loadTimeout);
+      this.#loadTimeout = null;
+      return;
+    }
+    if (this.#loadTimeout !== null) return;
+    this.#loadTimeout = setTimeout(() => {
+      this.#loadTimeout = null;
+      if (this.#snapshot.lifecycle !== "loading") return;
+      this.emitError(
+        new VideoEngineError({
+          category: "NETWORK",
+          code: "LOAD_TIMEOUT",
+          message: "The video took too long to load.",
+          fatal: true,
+          recoverable: true,
+        }),
+      );
+    }, LOAD_TIMEOUT_MS);
   }
 
   private normalizeNativeTextTrack(

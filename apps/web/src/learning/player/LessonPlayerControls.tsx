@@ -2,7 +2,6 @@ import {
   isPlaybackStalled,
   FullscreenButton,
   PlayerIconButton,
-  PlayerMenuItem,
   PlayButton,
   SettingsMenu,
   TimeDisplay,
@@ -17,6 +16,8 @@ import {
   usePlayerState,
   usePlayerTheme,
   type PlayerThemeAutoplay,
+  type SettingsMenuSection,
+  type SettingsMenuToggle,
   type VideoQuality,
 } from "@veolms/video-player";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
@@ -42,7 +43,12 @@ import {
   LEARNING_PLAYER_MINIMIZE_SHORTCUT,
   LEARNING_PLAYER_MINIMIZE_TITLE,
 } from "./learningPlayerShortcuts";
-import { COURSE_CONTENT_SHORTCUT_ARIA } from "../../keyboardShortcuts";
+import {
+  COURSE_CONTENT_SHORTCUT_ARIA,
+  getRightPanelShortcutLabel,
+  isEditingShortcutTarget,
+} from "../../keyboardShortcuts";
+import { useShortcutPlatform } from "../../useShortcutPlatform";
 import {
   layoutQuery,
   layoutQueryMatches,
@@ -56,8 +62,17 @@ import {
 } from "./chapters/LessonChaptersControl";
 import { LessonChaptersPanel } from "./chapters/LessonChaptersPanel";
 import { LessonVolumePill } from "./LessonVolumePill";
-import { updateLearningPreferences } from "../../settings/settingsPreferences";
-import { previewPlayerTheme } from "./useLearningPlayerTheme";
+import {
+  updateLearningPreferences,
+  type HideablePlayerControl,
+  type LearningPreferences,
+} from "../../settings/settingsPreferences";
+import {
+  MINI_PLAYER_THEME,
+  previewPlayerTheme,
+  usePlayerLayoutPreferences,
+  type PlayerLayoutPreferences,
+} from "./useLearningPlayerTheme";
 
 /**
  * The quality picked in the player is where every video starts from now on
@@ -1128,24 +1143,133 @@ function LessonTimeControl({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
-function AmbientSettingsItem({
-  enabled,
-  onEnabledChange,
+/** Shift+C, for the chapters. */
+const CHAPTERS_SHORTCUT_CODE = "KeyC";
+
+type ListThemePreference = keyof Pick<
+  LearningPreferences,
+  | "lessonListThemeInPage"
+  | "lessonListThemeInFullscreen"
+  | "lessonListThemeInDrawer"
+  | "chaptersThemeInFullscreen"
+  | "chaptersThemeInSheet"
+>;
+
+/**
+ * Settings > Advanced: which keys the player shows (each hidden one says
+ * the shortcut that still does its job), and where the lessons list and the
+ * chapters take the player theme's look.
+ */
+function getAdvancedSettings({
+  hasChapters,
+  hasLessonNavigation,
+  hasLessons,
+  icons,
+  lessonsShortcut,
+  preferences,
+  themed,
 }: {
-  enabled: boolean;
-  onEnabledChange: (enabled: boolean) => void;
-}) {
-  return (
-    <PlayerMenuItem
-      data-menu-keep-open=""
-      label="Ambient mode"
-      checked={enabled}
-      highlightChecked={false}
-      leading={<AmbientModeIcon enabled={enabled} />}
-      trailing={<MenuToggle checked={enabled} />}
-      onClick={() => onEnabledChange(!enabled)}
-    />
-  );
+  hasChapters: boolean;
+  hasLessonNavigation: boolean;
+  hasLessons: boolean;
+  icons: ReturnType<typeof usePlayerTheme>["icons"];
+  lessonsShortcut: string;
+  preferences: PlayerLayoutPreferences;
+  themed: boolean;
+}): SettingsMenuSection[] {
+  const hidden = preferences.hiddenPlayerControls;
+  const keyToggle = (
+    control: HideablePlayerControl,
+    label: string,
+    shortcut: string,
+    icon: ReactNode,
+  ): SettingsMenuToggle => {
+    const shown = !hidden.includes(control);
+    return {
+      id: `player-key-${control}`,
+      label,
+      description: shown ? `Shortcut: ${shortcut}` : `Hidden. Use ${shortcut}`,
+      icon,
+      checked: shown,
+      onCheckedChange: (checked) =>
+        updateLearningPreferences({
+          hiddenPlayerControls: checked
+            ? hidden.filter((entry) => entry !== control)
+            : [...hidden, control],
+        }),
+    };
+  };
+  const ChaptersIcon = icons.chapters;
+  const VolumeIcon = icons.volumeHigh;
+  const NextIcon = icons.next;
+  const keys: SettingsMenuToggle[] = [
+    ...(hasLessons
+      ? [
+          keyToggle(
+            "lessons",
+            "Lessons",
+            lessonsShortcut,
+            <Queue size={17} aria-hidden="true" />,
+          ),
+        ]
+      : []),
+    ...(hasChapters
+      ? [
+          keyToggle(
+            "chapters",
+            "Chapters",
+            "Shift+C",
+            <ChaptersIcon size={17} />,
+          ),
+        ]
+      : []),
+    keyToggle("volume", "Volume", "M, ↑ and ↓", <VolumeIcon size={17} />),
+    ...(hasLessonNavigation
+      ? [
+          keyToggle(
+            "lesson-navigation",
+            "Previous and next",
+            "Shift+P and Shift+N",
+            <NextIcon size={17} />,
+          ),
+        ]
+      : []),
+  ];
+  const themeToggle = (
+    key: ListThemePreference,
+    label: string,
+  ): SettingsMenuToggle => ({
+    id: key,
+    label,
+    checked: preferences[key],
+    onCheckedChange: (checked) => updateLearningPreferences({ [key]: checked }),
+  });
+
+  return [
+    { id: "player-keys", label: "Keys on the player", toggles: keys },
+    // YouTube keeps the app's own look everywhere: nothing to choose.
+    ...(themed
+      ? [
+          {
+            id: "lessons-theme",
+            label: "Lessons follow the video theme",
+            toggles: [
+              themeToggle("lessonListThemeInPage", "Beside the video"),
+              themeToggle("lessonListThemeInFullscreen", "In full screen"),
+              themeToggle("lessonListThemeInDrawer", "Phone drawer"),
+            ],
+          },
+          {
+            id: "chapters-theme",
+            label: "Chapters follow the video theme",
+            toggles: [
+              themeToggle("chaptersThemeInFullscreen", "Over the video"),
+              themeToggle("chaptersThemeInSheet", "Phone sheet"),
+            ],
+          },
+        ]
+      : []),
+  ];
 }
 
 function AmbientModeIcon({ enabled }: { enabled: boolean }) {
@@ -1158,27 +1282,6 @@ function AmbientModeIcon({ enabled }: { enabled: boolean }) {
         enabled ? "shadow-[0_0_10.5px_rgba(255,255,255,0.72)]" : "shadow-none"
       }`}
     />
-  );
-}
-
-function MenuToggle({ checked }: { checked: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      data-player-menu-toggle=""
-      data-player-menu-toggle-state={checked ? "on" : "off"}
-      className={`relative inline-flex h-5 w-9 rounded-full transition-colors duration-150 ${
-        checked
-          ? "bg-[color-mix(in_srgb,var(--video-player-accent)_78%,var(--video-player-menu-surface))]"
-          : "bg-[color-mix(in_srgb,var(--video-player-menu-text)_22%,transparent)]"
-      }`}
-    >
-      <span
-        className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-(--video-player-menu-text) shadow-[0_1px_4px_rgba(0,0,0,0.32)] transition-transform duration-150 motion-reduce:transition-none ${
-          checked ? "translate-x-4" : "translate-x-0"
-        }`}
-      />
-    </span>
   );
 }
 
@@ -1199,7 +1302,7 @@ export function LessonPlayerControls({
   autoplayEnabled,
   showAutoplayControl = true,
   circularSettingsControl = false,
-  showLessonNavigation = true,
+  showLessonNavigation: lessonNavigationOffered = true,
   canGoNext,
   canGoPrevious,
   controlsSuppressed = false,
@@ -1228,6 +1331,42 @@ export function LessonPlayerControls({
   const [chaptersRequested, setChaptersRequested] = useState(false);
   const hasChapters = useChapters().chapters.length > 0;
   const chaptersOpen = chaptersRequested && hasChapters;
+  // Keys the learner took off the player (settings > Advanced); each still
+  // works from its shortcut.
+  const layoutPreferences = usePlayerLayoutPreferences();
+  const hiddenControls = layoutPreferences.hiddenPlayerControls;
+  const showLessonNavigation =
+    lessonNavigationOffered && !hiddenControls.includes("lesson-navigation");
+  const lessonsKeyShown =
+    Boolean(onCourseLessonsToggle) && !hiddenControls.includes("lessons");
+  const chaptersKeyShown = hasChapters && !hiddenControls.includes("chapters");
+  const volumeKeyShown = !hiddenControls.includes("volume");
+  const shortcutPlatform = useShortcutPlatform();
+
+  // Shift+C opens and closes the chapters, the way their key does (C alone
+  // switches captions).
+  useEffect(() => {
+    if (!hasChapters) return undefined;
+    const toggleChapters = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing ||
+        !event.shiftKey ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.code !== CHAPTERS_SHORTCUT_CODE ||
+        isEditingShortcutTarget(event.target)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setChaptersRequested((requested) => !requested);
+    };
+    window.addEventListener("keydown", toggleChapters);
+    return () => window.removeEventListener("keydown", toggleChapters);
+  }, [hasChapters]);
   const wideViewport = useSyncExternalStore(
     subscribeToWideViewport,
     getWideViewportSnapshot,
@@ -1422,7 +1561,7 @@ export function LessonPlayerControls({
   // On a phone the chapters button sits in the bottom-left corner, right
   // after the time.
   const mobileChaptersButton =
-    hasChapters && mobileInteraction ? (
+    chaptersKeyShown && mobileInteraction ? (
       <LessonChaptersSheetMenu
         // On the lesson page the sheet snaps like the course content
         // drawer: edge to edge, its top just above the video's bottom.
@@ -1446,6 +1585,10 @@ export function LessonPlayerControls({
         }
         mobileSheetPanelClassName={mobileSheetPanelClassName}
         mobileSheetPortalTarget={mobileSheetPortalTarget}
+        // The app's own look unless the learner wants the theme's here.
+        sheetTheme={
+          layoutPreferences.chaptersThemeInSheet ? undefined : MINI_PLAYER_THEME
+        }
         // A 32px circle, like the fullscreen button in the opposite corner.
         triggerClassName={getPlayerIconPillClass(mobileInteraction)
           .replace("!w-auto", "!w-8")
@@ -1499,11 +1642,13 @@ export function LessonPlayerControls({
             onGoPrevious={onGoPrevious}
           />
         ) : null}
-        <VolumeControl
-          collapsible
-          className={`${PLAYER_SURFACE_CLASS} relative isolate h-10.5 !w-10.5 shrink-0 rounded-full p-1 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-transparent before:transition-colors before:duration-150 before:ease-out before:content-[''] ${volumeOpenWidthClass} hover:before:bg-(--video-player-control-surface-hover) focus-within:before:bg-(--video-player-control-surface-hover) [&>*]:relative [&>*]:z-10 [&_.player-volume-slider]:!h-8.5`}
-          muteButtonClassName={`${PLAYER_INNER_CONTROL_CLASS} ${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-8.5`}
-        />
+        {volumeKeyShown ? (
+          <VolumeControl
+            collapsible
+            className={`${PLAYER_SURFACE_CLASS} relative isolate h-10.5 !w-10.5 shrink-0 rounded-full p-1 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-transparent before:transition-colors before:duration-150 before:ease-out before:content-[''] ${volumeOpenWidthClass} hover:before:bg-(--video-player-control-surface-hover) focus-within:before:bg-(--video-player-control-surface-hover) [&>*]:relative [&>*]:z-10 [&_.player-volume-slider]:!h-8.5`}
+            muteButtonClassName={`${PLAYER_INNER_CONTROL_CLASS} ${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-8.5`}
+          />
+        ) : null}
         <LessonTimeControl />
       </div>
     </div>
@@ -1524,7 +1669,7 @@ export function LessonPlayerControls({
       }`}
     >
       <div className="inline-flex items-center gap-1.5">
-        {onCourseLessonsToggle ? (
+        {lessonsKeyShown && onCourseLessonsToggle ? (
           <CourseLessonsButton
             open={
               mobileLandscapeFullscreen
@@ -1606,14 +1751,16 @@ export function LessonPlayerControls({
     >
       {/* First in the corner: tapped, it opens into a pill with the
           volume slider that grows to the left. */}
-      <span
-        className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
-        data-mobile-volume-control=""
-      >
-        <LessonVolumePill
-          buttonClassName={getPlayerIconPillClass(mobileInteraction)}
-        />
-      </span>
+      {volumeKeyShown ? (
+        <span
+          className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
+          data-mobile-volume-control=""
+        >
+          <LessonVolumePill
+            buttonClassName={getPlayerIconPillClass(mobileInteraction)}
+          />
+        </span>
+      ) : null}
       {autoplayInBar ? (
         <AutoplayToggle
           enabled={autoplayEnabled}
@@ -1645,14 +1792,15 @@ export function LessonPlayerControls({
           circularSettingsControl &&
             "!inline-flex !size-9 !w-9 !items-center !justify-center !p-0 !rounded-full !leading-none [&>svg]:!block [&>svg]:!shrink-0",
         )}
-        extraMainItems={
-          showAmbientControl ? (
-            <AmbientSettingsItem
-              enabled={ambientEnabled}
-              onEnabledChange={onAmbientEnabledChange}
-            />
-          ) : undefined
-        }
+        advanced={getAdvancedSettings({
+          preferences: layoutPreferences,
+          themed: playerTheme.id !== "youtube",
+          lessonsShortcut: getRightPanelShortcutLabel(shortcutPlatform),
+          hasLessons: Boolean(onCourseLessonsToggle),
+          hasChapters,
+          hasLessonNavigation: lessonNavigationOffered,
+          icons: playerTheme.icons,
+        })}
         toggles={
           autoplayInSettings || showAmbientControl
             ? [
@@ -1697,45 +1845,46 @@ export function LessonPlayerControls({
     </PlayerControlSurface>
   );
 
-  const desktopLessonsButton = onCourseLessonsToggle ? (
-    <div
-      // Where the open volume slider would run the time into this button,
-      // the button fades away while the slider is out (hovered, or focused
-      // from the keyboard) and fades back when it closes.
-      className={`relative isolate z-10 shrink-0 transition-opacity duration-200 ease-out motion-reduce:transition-none ${
-        volumeCrowdsLessons && !lessonsAtTop
-          ? "[.video-shell:has(.player-volume-group:is(:hover,:focus-within))_&]:pointer-events-none [.video-shell:has(.player-volume-group:is(:hover,:focus-within))_&]:opacity-0"
-          : ""
-      }`}
-      data-player-desktop-lessons=""
-    >
-      <CourseLessonsButton
-        open={
-          courseLessonsSidePanel ? courseLessonsOpen : courseLessonsDrawerOpen
-        }
-        onToggle={() =>
-          onCourseLessonsToggle(courseLessonsSidePanel ? "side" : "drawer")
-        }
-        // The page's lesson column answers the second press and hold; in
-        // full screen the lessons open beside the video instead, by a press.
-        secondPressHold={
-          fullscreenLessonsBeside ? undefined : courseLessonsSecondPressHold
-        }
-        shortcutLabel={courseLessonsShortcutLabel}
-        sidePanel={courseLessonsSidePanel}
-        opensFromBottom={!courseLessonsSidePanel && courseLessonsBottomSheet}
-        compact={lessonsAtTop && desktopTopRowCompactLevel >= 2}
-        textSize="sm"
-        scrollportId={
-          courseLessonsSidePanel
-            ? "learning-course-curriculum-scrollport"
-            : "lesson-drawer-curriculum-scrollport"
-        }
-      />
-    </div>
-  ) : null;
+  const desktopLessonsButton =
+    lessonsKeyShown && onCourseLessonsToggle ? (
+      <div
+        // Where the open volume slider would run the time into this button,
+        // the button fades away while the slider is out (hovered, or focused
+        // from the keyboard) and fades back when it closes.
+        className={`relative isolate z-10 shrink-0 transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+          volumeCrowdsLessons && !lessonsAtTop
+            ? "[.video-shell:has(.player-volume-group:is(:hover,:focus-within))_&]:pointer-events-none [.video-shell:has(.player-volume-group:is(:hover,:focus-within))_&]:opacity-0"
+            : ""
+        }`}
+        data-player-desktop-lessons=""
+      >
+        <CourseLessonsButton
+          open={
+            courseLessonsSidePanel ? courseLessonsOpen : courseLessonsDrawerOpen
+          }
+          onToggle={() =>
+            onCourseLessonsToggle(courseLessonsSidePanel ? "side" : "drawer")
+          }
+          // The page's lesson column answers the second press and hold; in
+          // full screen the lessons open beside the video instead, by a press.
+          secondPressHold={
+            fullscreenLessonsBeside ? undefined : courseLessonsSecondPressHold
+          }
+          shortcutLabel={courseLessonsShortcutLabel}
+          sidePanel={courseLessonsSidePanel}
+          opensFromBottom={!courseLessonsSidePanel && courseLessonsBottomSheet}
+          compact={lessonsAtTop && desktopTopRowCompactLevel >= 2}
+          textSize="sm"
+          scrollportId={
+            courseLessonsSidePanel
+              ? "learning-course-curriculum-scrollport"
+              : "lesson-drawer-curriculum-scrollport"
+          }
+        />
+      </div>
+    ) : null;
 
-  const hasLessonsButton = Boolean(onCourseLessonsToggle);
+  const hasLessonsButton = lessonsKeyShown;
   // Re-measured whenever the player or the pills beside the time change
   // width: dragging the sidebar or the course content, a longer time, a
   // lesson with or without the Lessons button.
@@ -1796,6 +1945,8 @@ export function LessonPlayerControls({
     desktopTopRowCompactLevel,
     volumeCrowdsLessons,
     hasChapters,
+    chaptersKeyShown,
+    volumeKeyShown,
     autoplayInBar,
     showLessonNavigation,
     timelineHost,
@@ -1948,7 +2099,7 @@ export function LessonPlayerControls({
                 video's top right corner, and first in the row when other
                 controls are up there with it. */}
             <ZoomLevelIndicator />
-            {hasChapters && !mobileInteraction ? (
+            {chaptersKeyShown && !mobileInteraction ? (
               <LessonChaptersToggleButton
                 open={chaptersOpen}
                 panelId={chaptersPanelId}
@@ -2052,6 +2203,9 @@ export function LessonCentralControls({
         left.scrubbing === right.scrubbing,
     );
   const mobileInteraction = usePlayerMobileInteraction();
+  const { hiddenPlayerControls } = usePlayerLayoutPreferences();
+  const lessonNavigationShown =
+    showLessonNavigation && !hiddenPlayerControls.includes("lesson-navigation");
   // A paused video is not waiting for anything the learner can see; its play
   // button stays. While playing, only a playhead with nothing buffered under
   // it counts (Safari on iPhone reports buffering with plenty buffered).
@@ -2083,7 +2237,7 @@ export function LessonCentralControls({
       data-player-loading={loading ? "true" : undefined}
     >
       <div className="pointer-events-auto flex items-center gap-6">
-        {showLessonNavigation ? (
+        {lessonNavigationShown ? (
           <CentralLessonNavigationButton
             direction="previous"
             disabled={!canGoPrevious}
@@ -2100,7 +2254,7 @@ export function LessonCentralControls({
             iconSize={29}
           />
         </PlayerControlSurface>
-        {showLessonNavigation ? (
+        {lessonNavigationShown ? (
           <CentralLessonNavigationButton
             direction="next"
             disabled={!canGoNext}
