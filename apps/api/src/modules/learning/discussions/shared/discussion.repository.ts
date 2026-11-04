@@ -208,11 +208,6 @@ export interface DiscussionRepository {
     },
   ): Promise<{ id: string } | undefined>;
 
-  findThreadTitleAndAuthor(
-    db: DatabaseExecutor,
-    threadId: string,
-  ): Promise<{ title: string | null; user_id: string } | undefined>;
-
   listThreadFollowerIds(
     db: DatabaseExecutor,
     threadId: string,
@@ -446,14 +441,6 @@ export function createDiscussionRepository(): DiscussionRepository {
             .doNothing(),
         )
         .returning("id")
-        .executeTakeFirst();
-    },
-
-    async findThreadTitleAndAuthor(db, threadId) {
-      return db
-        .selectFrom("learning_threads")
-        .select(["title", "user_id"])
-        .where("id", "=", threadId)
         .executeTakeFirst();
     },
 

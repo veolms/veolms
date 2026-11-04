@@ -9,12 +9,19 @@ import {
 import { extractPlainText } from "./discussion.utils.ts";
 import { DISCUSSION_CONSTANTS } from "./discussion.constants.ts";
 import { createDiscussionRepository } from "./discussion.repository.ts";
+import {
+  commentDeepLink,
+  findReplyAuthorAndText,
+  findThreadNotificationContext,
+  type ThreadNotificationContext,
+} from "./discussion-notification.context.ts";
 
 export { isCourseParticipant } from "./discussion.repository.ts";
 
 const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})/g;
 const MAX_ACTOR_NAME = 255;
 const MAX_CONTEXT = 1000;
+const MAX_TITLE = 255;
 
 const discussionRepo = createDiscussionRepository();
 
@@ -67,6 +74,30 @@ function mentionContext(plainText: string): string {
   return clamp(snippet, MAX_CONTEXT);
 }
 
+/** A comment's text on one line, clamped, or null when it has none. */
+function snippetOf(plainText: string, max: number): string | null {
+  const snippet = plainText.trim().replace(/\s+/g, " ");
+  return snippet ? clamp(snippet, max) : null;
+}
+
+/**
+ * The lecture and course a comment is under, and when it was posted, for
+ * the emails. Keys without a value are left out: the event payload is JSON.
+ */
+function emailContextOf(
+  thread: ThreadNotificationContext | undefined,
+  occurredAt: Date,
+): Record<string, string> {
+  const context: Record<string, string> = {
+    occurredAt: occurredAt.toISOString(),
+  };
+  const lessonTitle = thread?.lessonTitle?.trim();
+  const courseTitle = thread?.courseTitle?.trim();
+  if (lessonTitle) context.lessonTitle = clamp(lessonTitle, MAX_TITLE);
+  if (courseTitle) context.courseTitle = clamp(courseTitle, MAX_TITLE);
+  return context;
+}
+
 export async function resolveDeepLink(
   db: DatabaseExecutor,
   courseId: string,
@@ -111,6 +142,8 @@ export async function syncMentionsAndNotify(
         courseId: string;
         threadId: string;
         plainText?: string;
+        /** For a reply to a reply: the reply it answers. */
+        replyToReplyId?: string | null;
       }
     | {
         sourceType: "note";
@@ -167,14 +200,30 @@ export async function syncMentionsAndNotify(
   const context = mentionContext(
     input.plainText ?? extractPlainText(input.content),
   );
-  const deepLink = await resolveDeepLink(
-    db,
-    input.courseId,
+  // A comment or reply links to the lecture with the comment highlighted
+  // (and the reply on top of it); a note to the note, as before.
+  const thread =
     input.sourceType === "note"
-      ? { type: "note", noteId: input.sourceId, lessonId: input.lessonId }
-      : input.threadId,
-  );
+      ? undefined
+      : await findThreadNotificationContext(db, input.threadId);
+  const deepLink =
+    input.sourceType === "note"
+      ? await resolveDeepLink(db, input.courseId, {
+          type: "note",
+          noteId: input.sourceId,
+          lessonId: input.lessonId,
+        })
+      : thread
+        ? commentDeepLink({
+            courseSlug: thread.courseSlug,
+            threadId: input.threadId,
+            lessonId: thread.lessonId,
+            replyId: input.sourceType === "reply" ? input.sourceId : null,
+          })
+        : await resolveDeepLink(db, input.courseId, input.threadId);
   const occurredAt = new Date();
+  const emailContext =
+    input.sourceType === "note" ? {} : emailContextOf(thread, occurredAt);
 
   // 1. Notify newly @mentioned users
   for (const mentionedUserId of addedIds) {
@@ -197,22 +246,26 @@ export async function syncMentionsAndNotify(
         actorName,
         context,
         deepLink,
+        ...emailContext,
+        ...(input.sourceType === "reply" ? { inReply: true } : {}),
       },
     });
   }
 
   // 2. If this is a new reply, notify thread author and followers
   if (input.sourceType === "reply") {
-    const [thread, followers] = await Promise.all([
-      discussionRepo.findThreadTitleAndAuthor(db, input.threadId),
+    const [followers, repliedTo] = await Promise.all([
       discussionRepo.listThreadFollowerIds(db, input.threadId),
+      input.replyToReplyId
+        ? findReplyAuthorAndText(db, input.replyToReplyId)
+        : Promise.resolve(undefined),
     ]);
 
     const subscriberIds = new Set<string>();
 
     // Add thread author
-    if (thread?.user_id && thread.user_id !== input.actorUserId) {
-      subscriberIds.add(thread.user_id);
+    if (thread?.authorId && thread.authorId !== input.actorUserId) {
+      subscriberIds.add(thread.authorId);
     }
 
     // Add thread followers
@@ -234,8 +287,29 @@ export async function syncMentionsAndNotify(
       subscriberIds.delete(mentionedId);
     }
 
-    const threadTitle = thread?.title || "Discussion Thread";
+    // Comments have no title. The old "Discussion Thread" stand-in ended up
+    // in subjects ("New reply on Discussion Thread"); the comment's own
+    // words say which one it is.
+    const commentSnippet = thread ? snippetOf(thread.plainText, 1000) : null;
+    const threadTitle = clamp(
+      thread?.title?.trim() || commentSnippet || "a discussion",
+      MAX_TITLE,
+    );
+    const repliedToSnippet = repliedTo
+      ? snippetOf(repliedTo.plainText, 1000)
+      : null;
     for (const subscriberUserId of subscriberIds) {
+      // The reply is under the comment, answering it or a reply in it. The
+      // comment's author, and whoever wrote the reply answered, are told it
+      // was theirs and shown it. Anyone else follows the discussion, and is
+      // shown the comment.
+      const ownsAnswered =
+        repliedTo?.authorId === subscriberUserId ||
+        thread?.authorId === subscriberUserId;
+      const originalSnippet =
+        repliedTo && repliedTo.authorId === subscriberUserId
+          ? repliedToSnippet
+          : commentSnippet;
       await outbox.publish(db, {
         type: "discussion.reply_created",
         version: 1,
@@ -247,6 +321,9 @@ export async function syncMentionsAndNotify(
           threadTitle,
           replySnippet: context,
           deepLink,
+          ...emailContext,
+          recipientRole: ownsAnswered ? "author" : "follower",
+          ...(originalSnippet ? { originalSnippet } : {}),
         },
       });
     }

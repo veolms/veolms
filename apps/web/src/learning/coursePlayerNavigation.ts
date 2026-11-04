@@ -89,12 +89,14 @@ const parseCoursePlayerSessionCandidate = (
     const lessonId = resolveLessonIdentifier(pathParts[2]);
     if (
       lessonId === null ||
-      pathUrl.searchParams.size > 5 ||
+      pathUrl.searchParams.size > 7 ||
       [...pathUrl.searchParams.keys()].some(
         (key) =>
           !LEGACY_LAUNCH_CONTEXT_PARAMS.some((legacy) => legacy === key) &&
           key !== "thread" &&
           key !== "focus" &&
+          key !== "reply" &&
+          key !== "via" &&
           key !== "noteId" &&
           key !== "view",
       )
@@ -111,7 +113,7 @@ const parseCoursePlayerSessionCandidate = (
       lessonId,
       path: getCoursePlayerPath(candidate.courseId, lessonId, {
         threadId,
-        threadFocus: getCoursePlayerThreadFocus(pathUrl.search),
+        ...getCoursePlayerThreadLink(pathUrl.search),
         noteId,
         view,
       }),
@@ -262,6 +264,31 @@ export function getCoursePlayerThreadFocus(
     : undefined;
 }
 
+/**
+ * What a `focus=comment` link adds: a reply in the comment to highlight on
+ * top of it (`reply`), and whether the link came from an email (`via`), in
+ * which case the page says so and offers to clear the highlight.
+ */
+export interface CoursePlayerThreadLink {
+  threadFocus?: CoursePlayerThreadFocus;
+  threadReply?: string;
+  threadVia?: "email";
+}
+
+export function getCoursePlayerThreadLink(
+  search: string,
+): CoursePlayerThreadLink {
+  const params = new URLSearchParams(search);
+  const threadFocus = getCoursePlayerThreadFocus(search);
+  if (!threadFocus) return {};
+  const reply = params.get("reply")?.trim();
+  return {
+    threadFocus,
+    ...(reply && !reply.startsWith("client-") ? { threadReply: reply } : {}),
+    ...(params.get("via") === "email" ? { threadVia: "email" as const } : {}),
+  };
+}
+
 export function getCoursePlayerNote(search: string): string | null {
   const note = new URLSearchParams(search).get("noteId");
   const normalized = note?.trim();
@@ -276,10 +303,9 @@ export function getCoursePlayerView(
     : undefined;
 }
 
-export interface CoursePlayerPathOptions {
+export interface CoursePlayerPathOptions extends CoursePlayerThreadLink {
+  /** `threadFocus`, `threadReply` and `threadVia` are read only with it. */
   threadId?: string | null;
-  /** Only read together with `threadId`. */
-  threadFocus?: CoursePlayerThreadFocus;
   noteId?: string | null;
   view?: "video" | "quiz";
 }
@@ -302,7 +328,11 @@ export function getCoursePlayerPath(
     search.set("noteId", noteId);
   } else if (threadId && !threadId.startsWith("client-")) {
     search.set("thread", threadId);
-    if (options?.threadFocus === "comment") search.set("focus", "comment");
+    if (options?.threadFocus === "comment") {
+      if (options.threadReply) search.set("reply", options.threadReply);
+      search.set("focus", "comment");
+      if (options.threadVia === "email") search.set("via", "email");
+    }
   }
   if (options?.view === "quiz") search.set("view", "quiz");
   const query = search.toString();
@@ -376,7 +406,7 @@ export function migrateCoursePlayerSessionKey(
     courseId: nextCourseId,
     path: getCoursePlayerPath(nextCourseId, previousSession.lessonId, {
       threadId: getCoursePlayerThread(previousSearch),
-      threadFocus: getCoursePlayerThreadFocus(previousSearch),
+      ...getCoursePlayerThreadLink(previousSearch),
       noteId: getCoursePlayerNote(previousSearch),
       view: getCoursePlayerView(previousSearch),
     }),
@@ -407,7 +437,7 @@ export function upsertCoursePlayerSessionFromRoute(
   const view = getCoursePlayerView(search);
   const path = getCoursePlayerPath(courseId, lessonId, {
     threadId,
-    threadFocus: getCoursePlayerThreadFocus(search),
+    ...getCoursePlayerThreadLink(search),
     noteId,
     view,
   });

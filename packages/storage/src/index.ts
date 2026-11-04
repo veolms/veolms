@@ -35,9 +35,15 @@ function createFastHmacSignatureHex(secret: string, value: string): string {
     .slice(0, 32);
 }
 
-function normalizeCdnTokenTtlSeconds(value: number | undefined): number {
-  return Math.max(60, Math.min(86_400, Math.floor(value ?? 900)));
+function normalizeCdnTokenTtlSeconds(
+  value: number | undefined,
+  fallback = 900,
+): number {
+  return Math.max(60, Math.min(86_400, Math.floor(value ?? fallback)));
 }
+
+/** See `CDN_HLS_TOKEN_TTL_SECONDS` in the config: short, as it is not revocable. */
+const DEFAULT_CDN_HLS_TOKEN_TTL_SECONDS = 300;
 
 export interface StorageOptions extends Partial<S3ClientConfig> {
   bucket: string;
@@ -134,6 +140,7 @@ export class S3StorageService {
     );
     this.cdnHlsTokenTtlSeconds = normalizeCdnTokenTtlSeconds(
       options.cdnHlsTokenTtlSeconds,
+      DEFAULT_CDN_HLS_TOKEN_TTL_SECONDS,
     );
     this.requireVisibilityPrefix = options.requireVisibilityPrefix ?? false;
     this.cdnPublicFolders = (

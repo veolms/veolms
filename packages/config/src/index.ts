@@ -207,6 +207,19 @@ const serverConfigSchema = z.object({
     .max(60_000)
     .default(30_000),
   /**
+   * Seconds a page waits, while a video plays, between two lesson progress
+   * batches (pauses, a lesson's end and leaving the page send at once). The
+   * batches are the API's most frequent write; raising this during a load
+   * spike slows every open page down within one interval, with a reload
+   * of the API and no deploy.
+   */
+  LEARNING_PROGRESS_SYNC_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(15)
+    .max(600)
+    .default(60),
+  /**
    * TTL for the process-local cache of a course as every visitor sees it
    * (the signed-out overview, the public curriculum and its version), in
    * ms. A change made through the API clears that course at once in the
@@ -489,12 +502,16 @@ const serverConfigSchema = z.object({
     .min(60)
     .max(86_400)
     .default(900),
+  // A segment token cannot be revoked (it is an expiry signed with the
+  // folder), so it is kept short: after a sign-out, or losing the course,
+  // the rest of a paid video stops loading within this. The player renews
+  // it while it plays, which needs a session that may still watch.
   CDN_HLS_TOKEN_TTL_SECONDS: z.coerce
     .number()
     .int()
     .min(60)
     .max(86_400)
-    .default(900),
+    .default(300),
   CDN_PUBLIC_FOLDERS: folderListSchema(
     "public,thumbnails,course-hls,course-videos",
   ),

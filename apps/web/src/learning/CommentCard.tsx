@@ -38,6 +38,7 @@ import {
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
 import { copyTextToClipboard } from "../lib/clipboard";
+import { HighlightedText, useSearchHighlight } from "../lib/searchHighlight";
 import { UndoDeleteButton } from "./useUndoableDeletion";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
@@ -114,6 +115,11 @@ export interface Comment {
   replies?: number;
   thread?: CommentReply[];
   repliesExpanded?: boolean;
+  /**
+   * The replies a search found in this comment (by their words or their
+   * author's name): its replies open to show them while that search stands.
+   */
+  searchMatchedReplyIds?: readonly string[];
   isQuestion?: boolean;
   entryKind?: DiscussionEntryKind;
   attachment?: {
@@ -184,6 +190,12 @@ interface CommentCardProps {
   canModerate?: boolean;
   courseId?: string;
   canParticipate?: boolean;
+  /**
+   * For a visitor who cannot take part here (not signed in, or without the
+   * course): likes are still shown, and liking asks them to log in or get
+   * access instead. Without it, likes show only to those who can like.
+   */
+  onParticipationRequired?: () => void;
   canEdit?: boolean;
   canDelete?: boolean;
   isDeepLinkTarget?: boolean;
@@ -200,8 +212,29 @@ interface CommentCardProps {
    * to its edges, while the entry's content stays in line with the others.
    */
   showHighlightedLabel?: boolean;
+  /**
+   * The link that led here, while its highlight stands: a reply in this
+   * comment to show and highlight as well, and whether it came from an
+   * email (the card then says so, with a Clear button).
+   */
+  linkedHighlight?: LinkedCommentHighlight | null;
   constrainToContainer?: boolean;
 }
+
+export interface LinkedCommentHighlight {
+  /** A reply in the comment that the link points at, if any. */
+  replyId: string | null;
+  viaEmail: boolean;
+  /** Takes the highlights off the comment and the reply. */
+  onClear: () => void;
+}
+
+/**
+ * How many pages of replies are fetched looking for the reply a link points
+ * at. One the server no longer returns (deleted, or hidden by staff) stops
+ * the search here: the comment stays highlighted on its own.
+ */
+const LINKED_REPLY_PAGE_LIMIT = 20;
 
 export const CommentCard = React.memo(function CommentCard({
   comment,
@@ -223,12 +256,14 @@ export const CommentCard = React.memo(function CommentCard({
   canModerate = false,
   courseId,
   canParticipate = true,
+  onParticipationRequired,
   canEdit = true,
   canDelete = true,
   isDeepLinkTarget = false,
   isHighlighted = false,
   onHighlightShown,
   showHighlightedLabel = false,
+  linkedHighlight = null,
   constrainToContainer = false,
 }: CommentCardProps) {
   const articleRef = useRef<HTMLElement>(null);
@@ -381,6 +416,84 @@ export const CommentCard = React.memo(function CommentCard({
     if (!hasReplies) return;
     setRepliesOpen((open) => !open);
   };
+
+  // A link to a reply in this comment opens its replies, fetches pages of
+  // them until that reply is in, and brings it into view once.
+  const linkedReplyId = isNote ? null : (linkedHighlight?.replyId ?? null);
+  const linkedReplyFound = Boolean(
+    linkedReplyId &&
+    effectiveReplies.some(
+      (reply) => getServerEntityId(reply) === linkedReplyId,
+    ),
+  );
+  useEffect(() => {
+    if (linkedReplyId) setRepliesOpen(true);
+  }, [linkedReplyId]);
+  // A search that found replies in this comment opens them the same way, so
+  // each result shows what matched without opening anything. The words are
+  // highlighted in them like in the comment.
+  const searchQuery = useSearchHighlight().trim();
+  const searchMatchedReplyIds =
+    !isNote && searchQuery ? (comment.searchMatchedReplyIds ?? []) : [];
+  const searchMatchedRepliesKey = searchMatchedReplyIds.join(",");
+  useEffect(() => {
+    if (searchMatchedRepliesKey) setRepliesOpen(true);
+  }, [searchMatchedRepliesKey]);
+  const loadedReplyIds = new Set(
+    effectiveReplies.map((reply) => getServerEntityId(reply)),
+  );
+  const wantedRepliesMissing =
+    Boolean(linkedReplyId && !linkedReplyFound) ||
+    searchMatchedReplyIds.some((id) => !loadedReplyIds.has(id));
+  const linkedReplyPagesRef = useRef(0);
+  useEffect(() => {
+    linkedReplyPagesRef.current = 0;
+  }, [linkedReplyId, searchMatchedRepliesKey]);
+  useEffect(() => {
+    if (
+      !wantedRepliesMissing ||
+      !repliesOpen ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      isFetchNextPageError ||
+      linkedReplyPagesRef.current >= LINKED_REPLY_PAGE_LIMIT
+    ) {
+      return;
+    }
+    linkedReplyPagesRef.current += 1;
+    void fetchNextPage();
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchNextPageError,
+    isFetchingNextPage,
+    repliesOpen,
+    wantedRepliesMissing,
+  ]);
+  const scrolledToLinkedReplyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !linkedReplyId ||
+      !linkedReplyFound ||
+      scrolledToLinkedReplyRef.current === linkedReplyId
+    ) {
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(
+        `discussion-entry-${linkedReplyId}`,
+      );
+      if (!target) return;
+      scrolledToLinkedReplyRef.current = linkedReplyId;
+      target.scrollIntoView({
+        block: "center",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [linkedReplyFound, linkedReplyId]);
 
   useEffect(() => {
     if (!isBackendMode) {
@@ -587,6 +700,25 @@ export const CommentCard = React.memo(function CommentCard({
         toggleReplies();
       }}
     >
+      {linkedHighlight?.viaEmail && (
+        <p
+          className="mb-2.5 flex items-center gap-1.5 text-xs font-medium text-(--muted)"
+          data-testid="discussion-opened-from-email"
+        >
+          <span>Opened from your email</span>
+          <span aria-hidden="true">·</span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              linkedHighlight.onClear();
+            }}
+            className="rounded font-semibold text-(--accent-ink,var(--accent)) underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          >
+            Clear
+          </button>
+        </p>
+      )}
       <div
         inert={deletion.hidden ? true : undefined}
         className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.hidden ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
@@ -618,7 +750,8 @@ export const CommentCard = React.memo(function CommentCard({
                       username={comment.authorUsername}
                       variant="name"
                     >
-                      {comment.isOwn ? `${comment.name} (You)` : comment.name}
+                      <HighlightedText text={comment.name} />
+                      {comment.isOwn ? " (You)" : null}
                     </ProfileLink>
                   </h2>
                   {comment.role === "Instructor" && (
@@ -713,7 +846,10 @@ export const CommentCard = React.memo(function CommentCard({
                         username={comment.authorUsername}
                         variant="name"
                       >
-                        @{comment.authorUsername.replace(/^@+/, "")}
+                        @
+                        <HighlightedText
+                          text={comment.authorUsername.replace(/^@+/, "")}
+                        />
                       </ProfileLink>
                     </span>
                   )}
@@ -825,10 +961,15 @@ export const CommentCard = React.memo(function CommentCard({
                   data-comment-engagement
                   className="mt-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
                 >
-                  {canParticipate && (
+                  {(canParticipate || onParticipationRequired) && (
                     <button
                       type="button"
                       onClick={(event) => {
+                        if (!canParticipate) {
+                          event.stopPropagation();
+                          onParticipationRequired?.();
+                          return;
+                        }
                         if (!isCommentLiked) cheerLike(event.currentTarget);
                         if (!isBackendMode) {
                           setLocalLiked((current) => !current);
@@ -994,6 +1135,7 @@ export const CommentCard = React.memo(function CommentCard({
                     isBackendMode={isBackendMode}
                     isQuestion={isQuestion}
                     canParticipate={canParticipate}
+                    onParticipationRequired={onParticipationRequired}
                     canAcceptAnswer={canAcceptAnswer}
                     onToggleAccept={(replyId, accepted) =>
                       onToggleAcceptReply?.(
@@ -1022,6 +1164,10 @@ export const CommentCard = React.memo(function CommentCard({
                     onCopyTextNotice={onCopyTextNotice}
                     parentThreadId={comment.id}
                     courseId={courseId}
+                    isLinked={Boolean(
+                      linkedReplyId &&
+                      getServerEntityId(reply) === linkedReplyId,
+                    )}
                   />
                 ))
               ) : (
@@ -1085,6 +1231,8 @@ interface ReplyCardProps {
   isBackendMode?: boolean;
   isQuestion?: boolean;
   canParticipate?: boolean;
+  /** See CommentCard's: liking asks a visitor to log in or get access. */
+  onParticipationRequired?: () => void;
   canAcceptAnswer?: boolean;
   onToggleAccept?: (
     replyId: string | number,
@@ -1102,6 +1250,11 @@ interface ReplyCardProps {
   onSeekToTimestamp?: (seconds: number) => void;
   onCopyTextNotice?: (message: string) => void;
   courseId?: string;
+  /**
+   * The reply a link points at: highlighted more strongly than the comment
+   * around it, which carries the link's own highlight.
+   */
+  isLinked?: boolean;
 }
 
 function ReplyCard({
@@ -1110,6 +1263,7 @@ function ReplyCard({
   isBackendMode = false,
   isQuestion = false,
   canParticipate = true,
+  onParticipationRequired,
   canAcceptAnswer = false,
   onToggleAccept,
   onReply,
@@ -1120,6 +1274,7 @@ function ReplyCard({
   onSeekToTimestamp,
   onCopyTextNotice,
   courseId,
+  isLinked = false,
 }: ReplyCardProps) {
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState<DiscussionDraft>(
@@ -1155,7 +1310,9 @@ function ReplyCard({
     <article
       id={`discussion-entry-${reply.id}`}
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-10" : ""}`}
+      data-linked-reply={isLinked || undefined}
+      aria-current={isLinked ? "location" : undefined}
+      className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-10" : ""} ${isLinked ? "rounded-xl bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] py-2 pr-2 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--accent)_70%,transparent)]" : ""}`}
     >
       <div
         inert={deletion.hidden ? true : undefined}
@@ -1185,7 +1342,8 @@ function ReplyCard({
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
                   <h3 className="text-[0.9375rem] font-bold text-(--text)">
                     <ProfileLink username={reply.authorUsername} variant="name">
-                      {reply.isOwn ? `${reply.name} (You)` : reply.name}
+                      <HighlightedText text={reply.name} />
+                      {reply.isOwn ? " (You)" : null}
                     </ProfileLink>
                   </h3>
                   {reply.role === "Instructor" && (
@@ -1211,7 +1369,10 @@ function ReplyCard({
                         username={reply.authorUsername}
                         variant="name"
                       >
-                        @{reply.authorUsername.replace(/^@+/, "")}
+                        @
+                        <HighlightedText
+                          text={reply.authorUsername.replace(/^@+/, "")}
+                        />
                       </ProfileLink>
                     </span>
                   )}
@@ -1293,10 +1454,15 @@ function ReplyCard({
                 data-reply-engagement
                 className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm"
               >
-                {canParticipate && (
+                {(canParticipate || onParticipationRequired) && (
                   <button
                     type="button"
                     onClick={(event) => {
+                      if (!canParticipate) {
+                        event.stopPropagation();
+                        onParticipationRequired?.();
+                        return;
+                      }
                       if (!isReplyLiked) cheerLike(event.currentTarget);
                       if (!isBackendMode) {
                         setLocalLiked((current) => !current);

@@ -169,7 +169,10 @@ domain. `.m3u8` files are public, while non-manifest objects in
 `CDN_PUBLIC_FOLDERS` are served without a token and
 `CDN_PRIVATE_FOLDERS` require the short-lived `veo_token` issued by the API.
 `CDN_TOKEN_TTL_SECONDS` controls normal protected-media URLs and
-`CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs.
+`CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs (default 300).
+A segment token cannot be revoked, so keep it short: it is how long the rest
+of a paid video can still load after a sign-out. The player renews it while
+it plays.
 New direct uploads use `public/...` or `protected/...` keys. Course thumbnail
 assets use a flat per-asset layout:
 

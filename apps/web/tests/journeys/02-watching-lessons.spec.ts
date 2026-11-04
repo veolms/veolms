@@ -121,6 +121,42 @@ test("a learner who has the course watches its locked lessons, and nothing shows
   await expectVideoToPlay(page);
 });
 
+test("signing out while a locked lesson plays stops it and locks it, also after coming back to it", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse();
+  const learner = await academy.signedInLearner("signing_out_mid_lesson");
+  await academy.giveCourse(learner, course);
+  await openLesson(page, course, 2);
+  await expectVideoToPlay(page);
+
+  await page
+    .getByRole("button", {
+      name: new RegExp(`^${learner.displayName}, .*Open profile menu$`, "u"),
+    })
+    .click();
+  await page.getByRole("menuitem", { name: "Logout" }).click();
+  await page
+    .getByRole("dialog", { name: "Sign out?" })
+    .getByRole("button", { name: "Sign out" })
+    .click();
+
+  const loginLock = page
+    .getByRole("alert")
+    .getByRole("heading", { name: "Log in to dive in" });
+  await expect(loginLock).toBeVisible();
+  await expectNoVideo(page);
+
+  // Another lesson, then back to the one that was playing: still the lock,
+  // not the loader or "Something went wrong".
+  await lessonInList(page, 3).click();
+  await expect(loginLock).toBeVisible();
+  await lessonInList(page, 2).click();
+  await expect(loginLock).toBeVisible();
+  await expectNoVideo(page);
+});
+
 test("when staff take the course away, its lessons lock again for that learner", async ({
   page,
   academy,

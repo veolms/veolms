@@ -44,6 +44,8 @@ export interface DiscussionWorkspaceCard {
   updatedAt: string;
   bookmarkedAt?: string;
   bookmarkActivity?: string;
+  /** With a search: the reply it was found by, shown on the row. */
+  searchMatchedReply?: WorkspaceDiscussionItem["searchMatchedReply"];
 }
 
 function formatRelativeTime(dateValue: string): string {
@@ -139,5 +141,8 @@ export function adaptDiscussionWorkspaceItem(
     kind: item.kind,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
+    ...(item.searchMatchedReply
+      ? { searchMatchedReply: item.searchMatchedReply }
+      : {}),
   };
 }

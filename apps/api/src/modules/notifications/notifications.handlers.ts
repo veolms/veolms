@@ -52,6 +52,22 @@ function courseWideChannels(dependencies: NotificationHandlerDependencies) {
     : commonChannels;
 }
 
+/**
+ * The lecture, course and time a discussion email shows, where the event
+ * has them (events from before they were added do not).
+ */
+function discussionEmailData(event: {
+  lessonTitle?: string | undefined;
+  courseTitle?: string | undefined;
+  occurredAt?: string | undefined;
+}): Record<string, string> {
+  const data: Record<string, string> = {};
+  if (event.lessonTitle) data.lessonTitle = event.lessonTitle;
+  if (event.courseTitle) data.courseTitle = event.courseTitle;
+  if (event.occurredAt) data.occurredAt = event.occurredAt;
+  return data;
+}
+
 const notificationHandlers: Record<string, NotificationHandler> = {
   "course.published": async (payload, dependencies) => {
     const event = coursePublishedEventSchema.parse(payload);
@@ -228,7 +244,12 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         type: "user.mentioned",
         category: "social",
         templateKey: "user.mentioned",
-        templateData: { actorName: event.actorName, context: event.context },
+        templateData: {
+          actorName: event.actorName,
+          context: event.context,
+          ...discussionEmailData(event),
+          ...(event.inReply ? { inReply: "true" } : {}),
+        },
         channels: commonChannels,
         mandatory: false,
         deepLink: event.deepLink,
@@ -262,6 +283,13 @@ const notificationHandlers: Record<string, NotificationHandler> = {
           actorName: event.actorName,
           threadTitle: event.threadTitle,
           replySnippet: event.replySnippet,
+          ...discussionEmailData(event),
+          ...(event.recipientRole
+            ? { recipientRole: event.recipientRole }
+            : {}),
+          ...(event.originalSnippet
+            ? { originalSnippet: event.originalSnippet }
+            : {}),
         },
         channels: commonChannels,
         mandatory: false,

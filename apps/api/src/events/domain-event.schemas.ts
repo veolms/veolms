@@ -59,6 +59,17 @@ export const authAccountDeactivatedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
 });
 
+/**
+ * Where a discussion comment is, for the mention and reply emails. Optional:
+ * events written before they were added are still delivered, as before.
+ */
+const discussionEmailContext = {
+  lessonTitle: z.string().min(1).max(255).optional(),
+  courseTitle: z.string().min(1).max(255).optional(),
+  /** When the comment or reply was posted (ISO 8601). */
+  occurredAt: z.string().min(1).max(40).optional(),
+};
+
 export const userMentionedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   actorName: z.string().min(1).max(255),
@@ -68,6 +79,9 @@ export const userMentionedEventSchema = z.strictObject({
     .min(1)
     .max(1000)
     .regex(/^\/(?!\/)/u, "Deep links must be internal application paths."),
+  ...discussionEmailContext,
+  /** The mention is in a reply, not in the comment itself. */
+  inReply: z.boolean().optional(),
 });
 
 export const certificateGeneratedEventSchema = z.strictObject({
@@ -86,6 +100,14 @@ export const discussionReplyCreatedEventSchema = z.strictObject({
     .min(1)
     .max(1000)
     .regex(/^\/(?!\/)/u, "Deep links must be internal application paths."),
+  ...discussionEmailContext,
+  /**
+   * Whose comment was replied to: the recipient's own ("author"), or one
+   * they follow ("follower").
+   */
+  recipientRole: z.enum(["author", "follower"]).optional(),
+  /** The comment that was replied to, as the recipient will recognise it. */
+  originalSnippet: z.string().min(1).max(1000).optional(),
 });
 
 export const discussionAnswerAcceptedEventSchema = z.strictObject({

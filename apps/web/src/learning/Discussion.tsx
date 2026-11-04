@@ -856,9 +856,47 @@ function DiscussionInner({
   const [spotlightThreadId, setSpotlightThreadId] = useState<string | null>(
     spotlightIdFromUrl,
   );
+  // A link may also name a reply in the comment (a reply's email): the
+  // comment's replies are expanded and that reply highlighted on top of the
+  // comment. And a link from an email says so above the comment, with a way
+  // to clear both highlights. Kept with the comment for the same reason.
+  const spotlightReplyFromUrl = spotlightIdFromUrl
+    ? searchParams.get("reply")?.trim() || null
+    : null;
+  const spotlightViaEmailFromUrl = Boolean(
+    spotlightIdFromUrl && searchParams.get("via") === "email",
+  );
+  const [spotlightLink, setSpotlightLink] = useState<{
+    threadId: string | null;
+    replyId: string | null;
+    viaEmail: boolean;
+    cleared: boolean;
+  }>(() => ({
+    threadId: spotlightIdFromUrl,
+    replyId: spotlightReplyFromUrl,
+    viaEmail: spotlightViaEmailFromUrl,
+    cleared: false,
+  }));
   if (spotlightIdFromUrl && spotlightIdFromUrl !== spotlightThreadId) {
     setSpotlightThreadId(spotlightIdFromUrl);
   }
+  if (
+    spotlightIdFromUrl &&
+    (spotlightLink.threadId !== spotlightIdFromUrl ||
+      spotlightLink.replyId !== spotlightReplyFromUrl ||
+      spotlightLink.viaEmail !== spotlightViaEmailFromUrl)
+  ) {
+    setSpotlightLink({
+      threadId: spotlightIdFromUrl,
+      replyId: spotlightReplyFromUrl,
+      viaEmail: spotlightViaEmailFromUrl,
+      cleared: false,
+    });
+  }
+  const clearSpotlightHighlight = useCallback(
+    () => setSpotlightLink((link) => ({ ...link, cleared: true })),
+    [],
+  );
   const threadIdFromUrl = spotlightIdFromUrl ? null : linkedThreadId;
   const directThreadId = threadIdFromUrl ?? spotlightThreadId;
   const initialThreadDeepLinkId = useState<string | null>(
@@ -907,6 +945,14 @@ function DiscussionInner({
         .filter((item) => item.sourceType === "thread")
         .map((item) => item.identity),
     );
+    // The replies a search found, per thread, from the feed. A thread this
+    // page already holds is shown from its own copy, which does not have them.
+    const searchMatchedReplies = new Map<string, readonly string[]>();
+    for (const item of visibleUnifiedDiscussionItems) {
+      if (item.sourceType === "thread" && item.searchMatchedReplyIds?.length) {
+        searchMatchedReplies.set(item.entityId, item.searchMatchedReplyIds);
+      }
+    }
     const threads = legacyThreads
       .filter(isCommentOrQaThread)
       .filter((thread) => {
@@ -920,9 +966,12 @@ function DiscussionInner({
       .map((thread) => {
         const adapted = adaptLearningThreadToComment(thread);
         const serverId = getServerEntityId(thread);
-        return serverId
-          ? withSourceAwareIdentity(adapted, "thread", serverId)
-          : adapted;
+        if (!serverId) return adapted;
+        const identified = withSourceAwareIdentity(adapted, "thread", serverId);
+        const matchedReplyIds = searchMatchedReplies.get(serverId);
+        return matchedReplyIds
+          ? { ...identified, searchMatchedReplyIds: matchedReplyIds }
+          : identified;
       });
     const unifiedThreads = visibleUnifiedDiscussionItems
       .filter((item) => item.sourceType === "thread")
@@ -1254,6 +1303,14 @@ function DiscussionInner({
   const spotlightEntryClientId = spotlightEntry
     ? getClientEntityId(spotlightEntry)
     : null;
+  // The hold keeps the reply a link points at in view, once it has loaded
+  // inside the comment, rather than the comment around it.
+  const spotlightReplyElementId =
+    spotlightLink.replyId &&
+    !spotlightLink.cleared &&
+    spotlightLink.threadId === spotlightThreadId
+      ? `discussion-entry-${spotlightLink.replyId}`
+      : null;
   const spotlitThreadRef = useRef<string | null>(null);
   const spotlightScrollRef = useRef<ReturnType<
     typeof keepEntryCentered
@@ -1295,7 +1352,11 @@ function DiscussionInner({
 
     spotlitThreadRef.current = spotlightThreadId;
     spotlightScrollRef.current?.stop();
-    spotlightScrollRef.current = keepEntryCentered(target.id, 100);
+    spotlightScrollRef.current = keepEntryCentered(
+      target.id,
+      100,
+      spotlightReplyElementId,
+    );
     // The card shows the highlight itself once it is on screen: the list is
     // virtualized, so the element found here may be replaced on the way.
     setHighlightedThreadId(spotlightThreadId);
@@ -1304,6 +1365,7 @@ function DiscussionInner({
     isAllInitialLoading,
     isThreadsLoading,
     spotlightEntryClientId,
+    spotlightReplyElementId,
     spotlightThreadId,
   ]);
   // Once the lesson and the whole list are in, the hold is wound down. It
@@ -1331,9 +1393,15 @@ function DiscussionInner({
       spotlightScrollRef.current = keepEntryCentered(
         `discussion-entry-${spotlightEntryClientId}`,
         8,
+        spotlightReplyElementId,
       );
     }
-  }, [isSpotlightPageReady, spotlightEntryClientId, spotlightThreadId]);
+  }, [
+    isSpotlightPageReady,
+    spotlightEntryClientId,
+    spotlightReplyElementId,
+    spotlightThreadId,
+  ]);
   // The link has done its work once the lesson route has found the lesson
   // (it reads these parameters to do so): a reload or a resumed session
   // should open the lesson normally, not highlight the comment again. The
@@ -1346,6 +1414,8 @@ function DiscussionInner({
         const next = new URLSearchParams(prev);
         next.delete("thread");
         next.delete("focus");
+        next.delete("reply");
+        next.delete("via");
         return next;
       },
       { replace: true, state: withKeepScroll(window.history.state?.usr) },
@@ -2545,6 +2615,17 @@ function DiscussionInner({
             }
             onNoteDeepLinkHandled={consumeNoteDeepLink}
             linkedThreadId={spotlightEntry ? spotlightThreadId : null}
+            linkedHighlight={
+              spotlightEntry &&
+              spotlightLink.threadId === spotlightThreadId &&
+              !spotlightLink.cleared
+                ? {
+                    replyId: spotlightLink.replyId,
+                    viaEmail: spotlightLink.viaEmail,
+                    onClear: clearSpotlightHighlight,
+                  }
+                : null
+            }
             highlightedThreadId={highlightedThreadId}
             onThreadHighlightShown={clearHighlightedThread}
             discussionCount={discussionCount}

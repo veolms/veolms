@@ -39,6 +39,9 @@ const healthRoutes: RoutePlugin = async (app, { database }) => {
   app.get(
     "/health",
     {
+      // Polled several times a second by load balancers and probes: its
+      // requests are not logged (a failing one still is, as an error).
+      logLevel: "warn",
       schema: {
         operationId: "getHealth",
         tags: ["Health"],
@@ -60,6 +63,9 @@ const healthRoutes: RoutePlugin = async (app, { database }) => {
   app.get(
     "/ready",
     {
+      // Polled several times a second by load balancers and probes: its
+      // requests are not logged (a failing one still is, as an error).
+      logLevel: "warn",
       schema: {
         operationId: "getReadiness",
         tags: ["Health"],

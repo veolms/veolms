@@ -15,7 +15,7 @@ import {
   DEFAULT_DAILY_GOAL_MINUTES,
   LEARNING_REMINDER_DAY_IDS,
 } from "@veolms/contracts";
-import type { Database } from "@veolms/database";
+import { withLocalCommit, type Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { ADMIN_ROLE } from "../auth/index.ts";
@@ -25,6 +25,7 @@ import {
   scopeOpensSection,
   type AccessService,
 } from "../access/index.ts";
+import { config } from "../../config.ts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
 import {
@@ -617,12 +618,16 @@ export function createLearningProgressService({
     // the course's last played lesson is the right one when one batch
     // carries two (a lesson left for the next).
     const positionByLessonId = new Map<string, number>();
+    // How long ago each position was, by the page's own clock (0 from an
+    // older page): what orders it against the learner's other devices.
+    const positionAgeByLessonId = new Map<string, number>();
 
     for (const item of input.items) {
       if (!availableLessonIds.has(item.lessonId)) continue;
       if (item.positionSeconds !== undefined) {
         positionByLessonId.delete(item.lessonId);
         positionByLessonId.set(item.lessonId, item.positionSeconds);
+        positionAgeByLessonId.set(item.lessonId, item.positionAgeSeconds ?? 0);
       }
       if (
         quizLessonIds.has(item.lessonId) &&
@@ -666,9 +671,17 @@ export function createLearningProgressService({
         lesson_id: lessonId,
         progress_percent: progressPercent,
         position_seconds: positionSeconds ?? null,
+        // When the learner was there: now, less the age the page reports,
+        // so a position that waited on the device is not taken as newer
+        // than one another device saved since (see the repository). The
+        // millisecond per played lesson keeps the order the page listed.
         position_updated_at:
           positionSeconds !== undefined
-            ? new Date(now.getTime() + (playedOrder.get(lessonId) ?? 0))
+            ? new Date(
+                now.getTime() -
+                  (positionAgeByLessonId.get(lessonId) ?? 0) * 1000 +
+                  (playedOrder.get(lessonId) ?? 0),
+              )
             : null,
         created_at: now,
         updated_at: now,
@@ -678,8 +691,12 @@ export function createLearningProgressService({
     // Undefined from an older page, which is credited from progress instead.
     const watchedSeconds = input.watchedSeconds;
 
+    // Read per request, so an API reloaded with a new value reaches every
+    // open page within one interval.
+    const nextSyncSeconds = config.LEARNING_PROGRESS_SYNC_SECONDS;
+
     if (rowsToUpsert.length === 0 && !(watchedSeconds && watchedSeconds >= 1)) {
-      return { synced: true };
+      return { synced: true, nextSyncSeconds };
     }
 
     // Daily-activity accrual: one atomic statement upserts progress and
@@ -692,15 +709,18 @@ export function createLearningProgressService({
 
     // One statement: progress, the day's activity, and — when this batch
     // takes the day across the learner's goal — the goal-completed event.
-    const accrual =
-      await learningProgressRepository.upsertProgressAndAccrueActivity(
-        database,
+    // A heartbeat, so it does not wait for the replica (`withLocalCommit`):
+    // the page keeps what it sent until this answers, and sends it again.
+    const accrual = await withLocalCommit(database, (executor) =>
+      learningProgressRepository.upsertProgressAndAccrueActivity(
+        executor,
         user.id,
         course.id,
         DEFAULT_DAILY_GOAL_MINUTES,
         rowsToUpsert,
         watchedSeconds,
-      );
+      ),
+    );
 
     if (accrual) {
       // A failed notification must never fail the heartbeat. A milestone
@@ -726,7 +746,7 @@ export function createLearningProgressService({
       // See above.
     }
 
-    return { synced: true };
+    return { synced: true, nextSyncSeconds };
   }
 
   /**
@@ -749,10 +769,14 @@ export function createLearningProgressService({
       if (!existing) {
         const timeZone = await resolveSupportedTimeZone(deviceTimeZone);
         if (!timeZone) return;
-        await learningProgressRepository.seedUserTimeZone(
-          database,
-          userId,
-          timeZone,
+        // Part of the heartbeat, and only a default the learner can change:
+        // it need not wait for the replica either (`withLocalCommit`).
+        await withLocalCommit(database, (executor) =>
+          learningProgressRepository.seedUserTimeZone(
+            executor,
+            userId,
+            timeZone,
+          ),
         );
       }
       if (usersWithSettings.size >= 20_000) usersWithSettings.clear();

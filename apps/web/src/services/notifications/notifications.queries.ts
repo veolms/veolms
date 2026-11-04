@@ -27,8 +27,12 @@ export function useNotificationSummary(options?: { enabled?: boolean }) {
     queryKey: notificationKeys.summary(),
     queryFn: notificationsService.summary,
     enabled: options?.enabled ?? true,
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    // Every open tab of every signed-in learner asks, so the interval is
+    // most of this route's load (8% of all API requests at 30 s). A tab
+    // in the background does not poll at all, and coming back to one asks
+    // at once (focus), so a new badge still shows when it is looked at.
+    staleTime: 60_000,
+    refetchInterval: 120_000,
     refetchOnWindowFocus: true,
   });
 }
