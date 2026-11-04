@@ -46,6 +46,40 @@
   --student-surface-block-start: var(--application-page-block-start, 0px);
 }
 
+/* The discussion panel beside the list is a split-frame pane, styled only
+   in the framed layout (components/split-frame-pane.css), where it is a
+   card fixed beside the frame. Edge-to-edge it was left a plain box in the
+   page's row: even closed it kept its contents' width and pushed the list
+   to one side. Here it is a card held in view beside the list, as wide as
+   the panel's width (0 while closed, so the list takes the whole page). */
+@media (min-width: 64rem) {
+  :root:not([data-content-layout="framed"])
+    .discussion-hub
+    ~ [data-split-frame-pane] {
+    position: sticky;
+    top: 12px;
+    flex: none;
+    align-self: flex-start;
+    width: var(--split-frame-target-width, 0px);
+    height: calc(100dvh - 24px);
+    margin-left: min(16px, var(--split-frame-target-width, 0px));
+    overflow: hidden;
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--surface) 91%, var(--canvas));
+    transition:
+      width 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      margin-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Its resize gutter is laid out for the framed card's edge. */
+  :root:not([data-content-layout="framed"])
+    .discussion-hub
+    ~ [data-split-frame-pane]
+    > [data-split-frame-gutter] {
+    display: none;
+  }
+}
+
 /* Graphite Studio keeps discussion copy readable on the same raised neutral
    surfaces used by the student home cards. Accent color is reserved for
    selection, actions, and status-not the message-card fill. */
