@@ -31,3 +31,4 @@ export * from "./team.ts";
 export * from "./student.ts";
 export * from "./analytics.ts";
 export * from "./dashboard.ts";
+export * from "./support.ts";

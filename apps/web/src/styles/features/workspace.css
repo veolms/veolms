@@ -151,6 +151,10 @@
   box-shadow: var(--card-shadow);
 }
 
+.settings-account-plan + .settings-account-plan {
+  margin-top: 10px;
+}
+
 .settings-account-plan > div {
   display: grid;
   min-width: 0;
@@ -191,7 +195,6 @@
 .settings-action:hover,
 .workspace-button:hover {
   background: var(--accent-hover);
-  transform: translateY(-1px);
 }
 
 .settings-action:focus-visible,
@@ -224,14 +227,15 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 17%, transparent);
 }
 
-.settings-action--danger {
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+/* Solid red in every theme: white text on it stays readable. */
+.settings-action--delete {
+  color: #fff;
+  background: #dc2626;
   box-shadow: none;
 }
 
-.settings-action--danger:hover {
-  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+.settings-action--delete:hover {
+  background: #b91c1c;
 }
 
 .settings-danger-note {

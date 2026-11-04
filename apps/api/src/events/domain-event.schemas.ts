@@ -147,6 +147,17 @@ export const moderationReportResolvedEventSchema = z.strictObject({
   actionTaken: z.string().max(500).optional().nullable(),
 });
 
+/** Support staff answered a learner's report or feedback. */
+export const supportReplyPostedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  ticketId: z.uuid(),
+  ticketNumber: z.number().int(),
+  ticketKind: z.enum(["problem", "feedback"]),
+  replySnippet: z.string().max(300),
+  /** False for feedback sent with "don't contact me": in the app only. */
+  emailAllowed: z.boolean().optional(),
+});
+
 export const quizAttemptPassedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   courseId: z.uuid(),

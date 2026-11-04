@@ -522,23 +522,6 @@ export function useLogout() {
   });
 }
 
-export function useDeactivateAccount() {
-  const queryClient = useQueryClient();
-
-  return useMutation<AuthMessageResponse, ApiError, void>({
-    mutationFn: () => authService.deactivateAccount(),
-    onSettled: () => {
-      authStore.clearAuth();
-      resetRegisteredInteractionState();
-      clearCoursePlayerSessions();
-
-      // A deactivated account must not leave protected data in the client
-      // cache, especially if another account signs in in the same tab.
-      queryClient.clear();
-    },
-  });
-}
-
 let signedOutHere = false;
 
 /**

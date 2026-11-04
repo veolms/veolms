@@ -116,6 +116,10 @@ export const permissions = [
 
   // Adding a student by name and email.
   "student.create",
+
+  // Problem reports and feedback from "Help and feedback".
+  "support.read",
+  "support.manage",
 ] as const;
 
 /** Every key that opens a section of the Analytics page. */

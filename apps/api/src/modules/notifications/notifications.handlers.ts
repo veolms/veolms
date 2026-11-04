@@ -12,6 +12,7 @@ import {
   learningStreakMilestoneEventSchema,
   moderationContentModeratedEventSchema,
   moderationReportResolvedEventSchema,
+  supportReplyPostedEventSchema,
   moderationUserSuspendedEventSchema,
   moderationUserUnsuspendedEventSchema,
   paymentCompletedEventSchema,
@@ -386,6 +387,27 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         channels: commonChannels,
         mandatory: false,
         deepLink: "/discussions",
+      },
+    ];
+  },
+  "support.reply_posted": async (payload) => {
+    const event = supportReplyPostedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "support.reply_posted",
+        category: "transactional",
+        templateKey: "support.reply_posted",
+        templateData: {
+          ticketNumber: String(event.ticketNumber),
+          ticketKind: event.ticketKind,
+          replySnippet: event.replySnippet,
+        },
+        channels:
+          event.emailAllowed === false ? (["in_app"] as const) : commonChannels,
+        // An answer to something the learner asked us; not a preference.
+        mandatory: true,
+        deepLink: `/support/${event.ticketId}`,
       },
     ];
   },
