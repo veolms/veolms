@@ -4,6 +4,7 @@ import {
   SUPPORT_ATTACHMENT_MAX_BYTES,
   createSupportMessageRequestSchema,
   createSupportTicketRequestSchema,
+  createSupportTicketResponseSchema,
   supportAdminListQuerySchema,
   supportAdminListResponseSchema,
   supportAdminStatsResponseSchema,
@@ -17,7 +18,6 @@ import {
   updateSupportTicketRequestSchema,
 } from "@veolms/contracts";
 import type { FastifyRequest } from "fastify";
-import { z } from "zod";
 
 import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
@@ -65,7 +65,7 @@ const supportRoutes: RoutePlugin = async (app, options) => {
         response: {
           201: jsonResponse(
             "The new report or feedback.",
-            z.object({ id: z.uuid(), number: z.number().int() }),
+            createSupportTicketResponseSchema,
           ),
           400: errorResponse("Invalid message or files"),
           401: errorResponse("Authentication required"),

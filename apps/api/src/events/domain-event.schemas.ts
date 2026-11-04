@@ -154,6 +154,8 @@ export const supportReplyPostedEventSchema = z.strictObject({
   ticketNumber: z.number().int(),
   ticketKind: z.enum(["problem", "feedback"]),
   replySnippet: z.string().max(300),
+  /** False for feedback sent with "don't contact me": in the app only. */
+  emailAllowed: z.boolean().optional(),
 });
 
 export const quizAttemptPassedEventSchema = z.strictObject({

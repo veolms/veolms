@@ -103,6 +103,15 @@ export type CreateSupportTicketRequest = z.input<
   typeof createSupportTicketRequestSchema
 >;
 
+/** The report or feedback just created: where to open it, and its number. */
+export const createSupportTicketResponseSchema = z.strictObject({
+  id: z.uuid(),
+  number: z.number().int(),
+});
+export type CreateSupportTicketResponse = z.infer<
+  typeof createSupportTicketResponseSchema
+>;
+
 export const createSupportMessageRequestSchema = z.strictObject({
   content: z.string().trim().min(1).max(SUPPORT_MESSAGE_MAX_LENGTH),
   attachmentIds: attachmentIdsSchema,

@@ -115,8 +115,11 @@ export async function updateTicket(
       ...(patch.staffUnread !== undefined
         ? { staff_unread: patch.staffUnread }
         : {}),
+      // Never moved back: of two replies saved together, the later stays.
       ...(patch.lastMessageAt !== undefined
-        ? { last_message_at: patch.lastMessageAt }
+        ? {
+            last_message_at: sql<Date>`greatest(last_message_at, ${patch.lastMessageAt})`,
+          }
         : {}),
       updated_at: new Date(),
     })
@@ -301,15 +304,32 @@ export async function listAbandonedAttachments(
     .execute();
 }
 
-export async function deleteAttachments(
+/** Deletes the uploads still not sent with anything; returns those deleted. */
+export async function deleteUnclaimedAttachments(
   database: DatabaseExecutor,
   attachmentIds: readonly string[],
 ) {
-  if (attachmentIds.length === 0) return;
-  await database
+  if (attachmentIds.length === 0) return [];
+  return await database
     .deleteFrom("support_attachments")
     .where("id", "in", attachmentIds)
+    .where("ticket_id", "is", null)
+    .returning(["id", "storage_key"])
     .execute();
+}
+
+/** The ticket's status, its row locked until the transaction ends. */
+export async function lockTicketStatus(
+  database: DatabaseExecutor,
+  ticketId: string,
+) {
+  const row = await database
+    .selectFrom("support_tickets")
+    .select("status")
+    .where("id", "=", ticketId)
+    .forUpdate()
+    .executeTakeFirst();
+  return row?.status;
 }
 
 const replyCount = sql<string>`(
@@ -319,6 +339,13 @@ const replyCount = sql<string>`(
 
 const attachmentCount = sql<string>`(
   select count(*) from support_attachments a where a.ticket_id = t.id
+)`;
+
+/** For the learner: files on internal notes are not theirs to see. */
+const visibleAttachmentCount = sql<string>`(
+  select count(*) from support_attachments a
+  left join support_messages m on m.id = a.message_id
+  where a.ticket_id = t.id and not coalesce(m.internal, false)
 )`;
 
 /** A learner's own tickets, newest activity first. */
@@ -341,7 +368,7 @@ export async function listUserTickets(
       "t.last_message_at",
       "t.user_unread as unread",
       replyCount.as("reply_count"),
-      attachmentCount.as("attachment_count"),
+      visibleAttachmentCount.as("attachment_count"),
     ])
     .where("t.user_id", "=", userId)
     .orderBy("t.last_message_at", "desc")

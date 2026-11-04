@@ -40,8 +40,9 @@ export interface IncomingSupportFile {
   mimetype: string;
   stream: Readable;
   isTruncated: () => boolean;
-  width: number | null;
-  height: number | null;
+  /** Read once the file is stored: fields sent after the file are parsed
+   * only then. */
+  dimensions: () => { width: number | null; height: number | null };
 }
 
 /** Markdown from the comment editor, as plain text for titles and search. */
@@ -279,11 +280,9 @@ export function createSupportService({
       ticketId,
       asStaff,
     );
-    const [messages, attachments] = await Promise.all([
-      supportRepository.listMessages(database, ticketId, isStaff),
-      supportRepository.listTicketAttachments(database, ticketId),
-    ]);
-    // Opening it is reading it.
+    // Opening it is reading it. Cleared before the messages are read: a
+    // reply that lands in between is then in this answer, or sets the flag
+    // again, and is never marked read unseen.
     if (isStaff ? ticket.staff_unread : ticket.user_unread) {
       await supportRepository.markRead(
         database,
@@ -291,6 +290,10 @@ export function createSupportService({
         isStaff ? "staff" : "user",
       );
     }
+    const [messages, attachments] = await Promise.all([
+      supportRepository.listMessages(database, ticketId, isStaff),
+      supportRepository.listTicketAttachments(database, ticketId),
+    ]);
 
     const visibleMessageIds = new Set(messages.map((message) => message.id));
     const byMessage = new Map<string, SupportAttachment[]>();
@@ -327,7 +330,10 @@ export function createSupportService({
       resolvedAt: ticket.resolved_at ? iso(ticket.resolved_at) : null,
       unread: false,
       replyCount: staffReplies.length,
-      attachmentCount: attachments.length,
+      // What this viewer can open: a learner never counts internal notes' files.
+      attachmentCount:
+        onTicket.length +
+        [...byMessage.values()].reduce((sum, list) => sum + list.length, 0),
       attachments: onTicket,
       requester: {
         id: ticket.requester_id,
@@ -394,16 +400,21 @@ export function createSupportService({
     const messageId = crypto.randomUUID();
     const now = new Date();
 
-    // A learner answering a report that was waiting on them, or that was
-    // closed, opens it again.
-    const nextStatus: SupportTicketStatus | undefined = isStaff
-      ? body.status
-      : ticket.kind === "problem" &&
-          (ticket.status === "waiting" || ticket.status === "resolved")
-        ? "open"
-        : undefined;
-
     await database.transaction().execute(async (trx) => {
+      // The status as it stands now, held until this reply is saved, so a
+      // change made meanwhile by the team is not missed.
+      const currentStatus = await supportRepository.lockTicketStatus(
+        trx,
+        ticketId,
+      );
+      // A learner answering a report that was waiting on them, or that was
+      // closed, opens it again.
+      const nextStatus: SupportTicketStatus | undefined = isStaff
+        ? body.status
+        : ticket.kind === "problem" &&
+            (currentStatus === "waiting" || currentStatus === "resolved")
+          ? "open"
+          : undefined;
       await supportRepository.insertMessage(trx, {
         id: messageId,
         ticketId,
@@ -451,6 +462,9 @@ export function createSupportService({
             ticketNumber: Number(ticket.number),
             ticketKind: ticket.kind,
             replySnippet: snippetFrom(plainText, 280) || "New reply",
+            // Feedback sent with "don't contact me" gets the reply in the
+            // app only, never by email.
+            emailAllowed: ticket.kind === "problem" || ticket.contact_allowed,
           },
         });
       }
@@ -598,12 +612,13 @@ export function createSupportService({
       new Date(Date.now() - DAY_MS),
     );
     if (abandoned.length === 0) return;
-    await supportRepository.deleteAttachments(
+    // Only those still unsent when deleted: one sent meanwhile is kept.
+    const removed = await supportRepository.deleteUnclaimedAttachments(
       database,
       abandoned.map((row) => row.id),
     );
     await Promise.all(
-      abandoned.map((row) => uploadStore.remove(fileNameOf(row.storage_key))),
+      removed.map((row) => uploadStore.remove(fileNameOf(row.storage_key))),
     );
   }
 
@@ -653,8 +668,7 @@ export function createSupportService({
       fileName: file.filename.slice(0, 255) || fileName,
       mimeType: file.mimetype,
       fileSize: stored.size,
-      width: file.width,
-      height: file.height,
+      ...file.dimensions(),
     };
     try {
       await supportRepository.insertAttachment(database, row);
@@ -685,7 +699,9 @@ export function createSupportService({
     const notFound = () =>
       httpError(404, "SUPPORT_ATTACHMENT_NOT_FOUND", "File not found.");
     if (!attachment) throw notFound();
-    const isUploader = attachment.owner_id === viewerId;
+    // An internal note's file is for staff only, its uploader included.
+    const isUploader =
+      attachment.owner_id === viewerId && !attachment.message_internal;
     const isTicketOwner =
       attachment.ticket_user_id === viewerId && !attachment.message_internal;
     if (!isUploader && !isTicketOwner && !(await canRead(viewerId))) {

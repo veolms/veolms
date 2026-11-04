@@ -1,6 +1,7 @@
 import type {
   CreateSupportMessageRequest,
   CreateSupportTicketRequest,
+  CreateSupportTicketResponse,
   SupportAdminListResponse,
   SupportAdminStatsResponse,
   SupportAttachment,
@@ -35,8 +36,8 @@ export const supportService = {
 
   createTicket: (
     body: CreateSupportTicketRequest,
-  ): Promise<{ id: string; number: number }> =>
-    api.post<{ id: string; number: number }>("/support/tickets", body),
+  ): Promise<CreateSupportTicketResponse> =>
+    api.post<CreateSupportTicketResponse>("/support/tickets", body),
 
   postMessage: (
     ticketId: string,

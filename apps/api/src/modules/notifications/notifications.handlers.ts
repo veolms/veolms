@@ -403,7 +403,8 @@ const notificationHandlers: Record<string, NotificationHandler> = {
           ticketKind: event.ticketKind,
           replySnippet: event.replySnippet,
         },
-        channels: commonChannels,
+        channels:
+          event.emailAllowed === false ? (["in_app"] as const) : commonChannels,
         // An answer to something the learner asked us; not a preference.
         mandatory: true,
         deepLink: `/support/${event.ticketId}`,

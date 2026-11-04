@@ -310,6 +310,7 @@ function PanelContent({
           <SupportTicketView
             ticket={ticket.data}
             headingLevel={2}
+            canReply={canManage}
             staffControls={
               <StatusControl ticket={ticket.data} disabled={!canManage} />
             }
