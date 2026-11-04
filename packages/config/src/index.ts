@@ -479,12 +479,16 @@ const serverConfigSchema = z.object({
     .min(60)
     .max(86_400)
     .default(900),
+  // A segment token cannot be revoked (it is an expiry signed with the
+  // folder), so it is kept short: after a sign-out, or losing the course,
+  // the rest of a paid video stops loading within this. The player renews
+  // it while it plays, which needs a session that may still watch.
   CDN_HLS_TOKEN_TTL_SECONDS: z.coerce
     .number()
     .int()
     .min(60)
     .max(86_400)
-    .default(900),
+    .default(300),
   CDN_PUBLIC_FOLDERS: folderListSchema(
     "public,thumbnails,course-hls,course-videos",
   ),
