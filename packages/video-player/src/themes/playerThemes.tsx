@@ -247,8 +247,8 @@ export interface PlayerThemeAutoplay {
   knob?: string;
   /**
    * Where autoplay is switched: as a switch inside the settings menu, named
-   * in full (the default), or on its own beside the settings key (`bar`,
-   * YouTube).
+   * in full (the default, every theme now), or on its own beside the
+   * settings key (`bar`).
    */
   placement?: "bar" | "settings";
 }
@@ -477,10 +477,10 @@ export const BUILT_IN_PLAYER_THEMES: Record<
     },
     icons: youtubeIcons,
     motion: { settingsClosedRotation: 30 },
-    // The one theme with autoplay beside the settings key, as on YouTube;
-    // every other theme switches it in the settings menu (the user's call),
-    // so a theme made from this one says where its own goes.
-    autoplay: { placement: "bar" },
+    // Autoplay is switched in the settings menu here too, as in every theme
+    // (the user's call: a cleaner bar); `bar` is still there for a theme
+    // that wants the switch beside the settings key.
+    autoplay: { placement: "settings" },
     // Every theme names the lesson and its place in the course at the top
     // left in full screen (the user's call); themes made from this one
     // keep it unless they word it their own way.

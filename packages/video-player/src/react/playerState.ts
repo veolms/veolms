@@ -11,7 +11,8 @@ export type PlayerSettingsView =
   | "playback-rate"
   | "captions"
   | "audio"
-  | "theme";
+  | "theme"
+  | "advanced";
 
 export interface PlayerHudOptions {
   direction?: -1 | 1;

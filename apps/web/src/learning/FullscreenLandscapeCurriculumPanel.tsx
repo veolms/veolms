@@ -95,7 +95,7 @@ export function FullscreenLandscapeCurriculumPanel({
   onVideoWidthPreviewChange,
   videoWidthPercent,
 }: FullscreenLandscapeCurriculumPanelProps) {
-  const lessonTheme = useLessonListTheme();
+  const lessonTheme = useLessonListTheme("fullscreen");
   const [motionMode, setMotionMode] = useState<PanelMotionMode>("idle");
   const dismissPendingRef = useRef(false);
   const motionTimerRef = useRef<number | null>(null);

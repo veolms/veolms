@@ -14,7 +14,10 @@ import {
 import { createPortal } from "react-dom";
 
 import { classNames } from "../../utils/classNames";
-import { getPlayerThemeStyle } from "../../themes/playerThemes";
+import {
+  getPlayerThemeStyle,
+  type PlayerThemeDefinition,
+} from "../../themes/playerThemes";
 import { playerRectOf, toPlayerPoint } from "../../react/pageFullscreen";
 import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { usePlayerMobileInteraction } from "../../react/PlayerInteractionMode";
@@ -53,6 +56,11 @@ export interface PopoverMenuProps {
   forceSheet?: boolean;
   /** Optional fullscreen-local host for a mobile sheet. Defaults to document.body. */
   mobileSheetPortalTarget?: HTMLElement | null;
+  /**
+   * The open menu drawn in another theme than the player's (its trigger
+   * keeps the player's), e.g. a sheet in the app's own look.
+   */
+  panelTheme?: PlayerThemeDefinition;
   /** Classes applied only when the mobile sheet presentation is active. */
   mobileSheetPanelClassName?: string;
   /** Inline styles applied only when the mobile sheet presentation is active. */
@@ -207,13 +215,15 @@ export function PopoverMenu({
   onOpenChange,
   open: controlledOpen,
   panelClassName,
+  panelTheme,
   placement = "anchored",
   sheetTitle,
   side = "top",
   trigger,
   triggerClassName,
 }: PopoverMenuProps) {
-  const theme = usePlayerTheme();
+  const playerTheme = usePlayerTheme();
+  const theme = panelTheme ?? playerTheme;
   const mobileInteraction = usePlayerMobileInteraction();
   const generatedId = useId();
   const menuId = `video-player-menu-${generatedId.replaceAll(":", "")}`;

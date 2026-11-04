@@ -23,6 +23,13 @@ export interface SettingsMenuToggle {
   onCheckedChange: (checked: boolean) => void;
 }
 
+/** A heading and its switches, in the Advanced view. */
+export interface SettingsMenuSection {
+  id: string;
+  label: string;
+  toggles: readonly SettingsMenuToggle[];
+}
+
 /** One thing the main view offers, in the order it shows them. */
 export type SettingsEntry =
   | {
