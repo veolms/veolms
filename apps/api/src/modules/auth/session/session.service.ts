@@ -54,33 +54,70 @@ export interface SessionServiceOptions {
 const touchedSessions = new Map<string, number>();
 const SESSION_TOUCH_EVERY_MS = 15 * 60 * 1000;
 
+/** Sessions waiting to be written, with the time each was used. */
+const pendingTouches = new Map<string, Date>();
+const SESSION_TOUCH_FLUSH_MS = 5_000;
+let flushTimer: ReturnType<typeof setInterval> | null = null;
+
 /**
  * Records that a session was used, without making the request wait.
  *
- * Committed locally (`withLocalCommit`): the time only feeds "last active"
- * in the sessions list, so waiting for the replica on every learner's first
- * request after 15 minutes (measured 2026-11-05: ~160 ms per write, the
- * busiest query under load) is not worth it. A failed write is retried by
- * the next request after the interval.
+ * The times are written together every 5 seconds in one statement with a
+ * local commit (`withLocalCommit`): they only feed "last active" in the
+ * sessions list. Load test 2026-11-05: one write per request (~160 ms each,
+ * waiting for the replica and the disk) was the busiest query, and one
+ * background write per session filled the database pool when many learners
+ * came back at once. A batch takes one connection for a few milliseconds
+ * however many sessions it holds. A failed batch is retried by later
+ * requests after the interval.
  */
 export function touchSessionInBackground(
   database: Kysely<Database>,
   sessionId: string,
   now: number = Date.now(),
-): Promise<void> | null {
+): boolean {
   const last = touchedSessions.get(sessionId);
-  if (last !== undefined && now - last < SESSION_TOUCH_EVERY_MS) return null;
+  if (last !== undefined && now - last < SESSION_TOUCH_EVERY_MS) return false;
   touchedSessions.set(sessionId, now);
   if (touchedSessions.size > 50_000) {
     for (const [id, at] of touchedSessions) {
       if (now - at >= SESSION_TOUCH_EVERY_MS) touchedSessions.delete(id);
     }
   }
-  return withLocalCommit(database, (executor) =>
-    sessionRepository.touchSession(executor, sessionId, new Date(now)),
-  ).catch(() => {
-    touchedSessions.delete(sessionId);
-  });
+  pendingTouches.set(sessionId, new Date(now));
+  if (!flushTimer) {
+    flushTimer = setInterval(() => {
+      void flushSessionTouches(database);
+    }, SESSION_TOUCH_FLUSH_MS);
+    flushTimer.unref();
+  }
+  return true;
+}
+
+/** Writes the waiting session times in one statement; returns how many. */
+export async function flushSessionTouches(
+  database: Kysely<Database>,
+): Promise<number> {
+  if (pendingTouches.size === 0) return 0;
+  const batch = [...pendingTouches];
+  pendingTouches.clear();
+  const usedAt = batch.reduce(
+    (latest, [, at]) => (at > latest ? at : latest),
+    batch[0]![1],
+  );
+  try {
+    await withLocalCommit(database, (executor) =>
+      sessionRepository.touchSessions(
+        executor,
+        batch.map(([id]) => id),
+        usedAt,
+      ),
+    );
+    return batch.length;
+  } catch {
+    for (const [id] of batch) touchedSessions.delete(id);
+    return 0;
+  }
 }
 
 /**
@@ -415,7 +452,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     if (session.last_used_at < fifteenMinutesAgo) {
-      void touchSessionInBackground(database, session.id);
+      touchSessionInBackground(database, session.id);
     }
 
     const context: AuthenticatedRequestContext = {

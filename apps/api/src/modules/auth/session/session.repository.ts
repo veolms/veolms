@@ -223,15 +223,18 @@ export async function purgeOldSessions(
   return Number(result.numDeletedRows);
 }
 
-export async function touchSession(
+/** Marks several sessions as used at `now`, in one statement. */
+export async function touchSessions(
   database: Executor,
-  sessionId: string,
+  sessionIds: readonly string[],
   now: Date,
 ): Promise<void> {
+  if (sessionIds.length === 0) return;
   await database
     .updateTable("sessions")
     .set({ last_used_at: now })
-    .where("id", "=", sessionId)
+    .where("id", "in", sessionIds)
+    .where("last_used_at", "<", now)
     .execute();
 }
 
