@@ -696,10 +696,17 @@ export function CourseCard({
                   <MenuAction
                     Icon={Flag}
                     label="Report an Issue"
+                    // The Report a problem form, with this course as the
+                    // place it happened.
                     onClick={() =>
                       closeThen(() =>
-                        setNotice(
-                          `Issue reporting opened for ${course.title}.`,
+                        onNavigatePage(
+                          `/support/new?${new URLSearchParams({
+                            type: "problem",
+                            from: overviewPath,
+                            fromLabel: course.title,
+                            courseId: course.id,
+                          }).toString()}`,
                         ),
                       )
                     }

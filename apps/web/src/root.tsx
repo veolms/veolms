@@ -88,6 +88,7 @@ import {
   DEFAULT_ACADEMY_THEME,
   academyThemes,
 } from "./themes";
+import { useRememberAppPage } from "./legal/legalReturn";
 
 interface LayoutProps {
   children: ReactNode;
@@ -201,7 +202,9 @@ const getInitialLayoutDomState = (): InitialLayoutDomState => {
 };
 // Shared HTML shell wrapping both the academy and authentication routes.
 export function Layout({ children }: LayoutProps) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  // The legal pages' Back button returns to the last app page.
+  useRememberAppPage(pathname, search);
   const isPublicRoute =
     pathname === "/login" ||
     pathname === "/mfa-setup" ||

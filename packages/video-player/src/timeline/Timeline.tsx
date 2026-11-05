@@ -37,12 +37,13 @@ const TRACK_CLASS =
   "absolute top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height,scale] duration-150 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5";
 
 /**
- * While the thumb is being dragged, it catches on the start of a chapter
- * once it is this close to it, and the device gives a short buzz (where the
- * browser can make it).
+ * Dragged back to where it started, the thumb offers to cancel the drag
+ * within this distance (and never more than CANCEL_MAX_SECONDS of the
+ * video). Nothing else pulls the thumb: it stays under the pointer, to the
+ * second (the user's call: no snap to chapter starts or to the ends).
  */
-const CHAPTER_SNAP_DISTANCE_PX = 8;
-const CHAPTER_SNAP_VIBRATION_MS = 35;
+const CANCEL_DISTANCE_PX = 8;
+const CANCEL_MAX_SECONDS = 3;
 
 interface TimelineSegment {
   id: string;
@@ -96,11 +97,8 @@ export function Timeline({
   const controller = usePlayerController();
   const trackRef = useRef<HTMLDivElement | null>(null);
   const pointerIdRef = useRef<number | null>(null);
-  // The chapter start the dragged thumb is currently caught on, so that it
-  // buzzes once on arriving there and not on every move while it stays.
-  const snappedChapterTimeRef = useRef<number | null>(null);
   // Where the video was when the drag began. A drag that wanders off and
-  // comes back to this point catches on it too, and letting go there
+  // comes back to this point catches on it, and letting go there
   // leaves the video where it was: "release to cancel".
   const scrubOriginRef = useRef<{ time: number; left: boolean } | null>(null);
   const [cancelArmed, setCancelArmed] = useState(false);
@@ -172,40 +170,32 @@ export function Timeline({
       const position = trackPosition(event);
       if (!position || position.bounds.width <= 0) return 0;
       const { bounds } = position;
-      const time = pointerPositionToTime(position.x, bounds, duration);
-      const snapSeconds = (CHAPTER_SNAP_DISTANCE_PX / bounds.width) * duration;
-      let snapped: number | null = null;
+      // The last pixel at either end is that end: a track can run a fraction
+      // of a pixel past the screen, which a finger cannot reach.
+      const fromStart = position.x - bounds.left;
+      const fromEnd = bounds.left + bounds.width - position.x;
+      const time =
+        fromStart <= 1
+          ? 0
+          : fromEnd <= 1
+            ? duration
+            : pointerPositionToTime(position.x, bounds, duration);
+      const cancelSeconds = Math.min(
+        (CANCEL_DISTANCE_PX / bounds.width) * duration,
+        CANCEL_MAX_SECONDS,
+      );
       const origin = scrubOriginRef.current;
       const nearOrigin =
-        origin !== null && Math.abs(origin.time - time) <= snapSeconds;
+        origin !== null && Math.abs(origin.time - time) <= cancelSeconds;
       if (origin && !nearOrigin) origin.left = true;
       const cancelling = Boolean(origin?.left && nearOrigin);
       setCancelArmed(cancelling);
-      if (cancelling && origin) snapped = origin.time;
-      for (const chapter of cancelling ? [] : chapters) {
-        const start = chapter.startTime;
-        if (start <= 0 || start >= duration) continue;
-        const distance = Math.abs(start - time);
-        if (
-          distance <= snapSeconds &&
-          (snapped === null || distance < Math.abs(snapped - time))
-        ) {
-          snapped = start;
-        }
-      }
-      if (snapped !== null && snappedChapterTimeRef.current !== snapped) {
-        try {
-          navigator.vibrate?.(CHAPTER_SNAP_VIBRATION_MS);
-        } catch {
-          // Haptics are a nicety; the snap itself still happens.
-        }
-      }
-      snappedChapterTimeRef.current = snapped;
+      const snapped = cancelling && origin ? origin.time : null;
       const target = snapped ?? time;
       controller.setPreviewTime(target);
       return target;
     },
-    [chapters, controller, duration, trackPosition],
+    [controller, duration, trackPosition],
   );
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -213,7 +203,6 @@ export function Timeline({
     event.preventDefault();
     pointerIdRef.current = event.pointerId;
     setScrubPointerType(event.pointerType);
-    snappedChapterTimeRef.current = null;
     scrubOriginRef.current = { time: currentTime, left: false };
     event.currentTarget.setPointerCapture(event.pointerId);
     controller.setScrubbing(true);
@@ -243,7 +232,6 @@ export function Timeline({
     if (pointerIdRef.current !== event.pointerId) return;
     controller.seekTo(scrubAtPointer(event));
     pointerIdRef.current = null;
-    snappedChapterTimeRef.current = null;
     scrubOriginRef.current = null;
     setCancelArmed(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {

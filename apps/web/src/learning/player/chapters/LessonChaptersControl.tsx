@@ -5,6 +5,7 @@ import {
   ChapterNowLabel,
   PopoverMenu,
   usePlayerTheme,
+  type PlayerThemeDefinition,
 } from "@veolms/video-player";
 import { cn } from "../../../lib/utils";
 import { LessonChapterRows } from "./LessonChapterRows";
@@ -77,11 +78,14 @@ export function LessonChaptersSheetMenu({
   getSheetHeight,
   mobileSheetPanelClassName,
   mobileSheetPortalTarget,
+  sheetTheme,
   triggerClassName,
 }: {
   getSheetHeight?: () => number | null;
   mobileSheetPanelClassName?: string;
   mobileSheetPortalTarget?: HTMLElement | null;
+  /** The sheet in another theme than the key that opens it. */
+  sheetTheme?: PlayerThemeDefinition;
   triggerClassName?: string;
 }) {
   const ChaptersIcon = usePlayerTheme().icons.chapters;
@@ -93,6 +97,7 @@ export function LessonChaptersSheetMenu({
       mobilePresentation="sheet"
       mobileSheetPanelClassName={mobileSheetPanelClassName}
       mobileSheetPortalTarget={mobileSheetPortalTarget}
+      panelTheme={sheetTheme}
       mobileSheetExpandable={sheetHeight !== null}
       mobileSheetStyle={
         sheetHeight !== null

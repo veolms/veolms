@@ -132,7 +132,7 @@ export function CurriculumColumn({
   setChaptersPanelHost,
   listShown,
 }: CurriculumColumnProps) {
-  const lessonTheme = useLessonListTheme();
+  const lessonTheme = useLessonListTheme("page");
   // prettier-ignore
   return (
     <SplitFramePane

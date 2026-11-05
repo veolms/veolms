@@ -134,7 +134,7 @@ export function CourseLessonsDrawerContent({
   setLessonDrawerSnapPoint,
   lessonDrawerHeroControlProps,
 }: CourseLessonsDrawerContentProps) {
-  const lessonTheme = useLessonListTheme();
+  const lessonTheme = useLessonListTheme("drawer");
   // prettier-ignore
   return (
     <DrawerContent

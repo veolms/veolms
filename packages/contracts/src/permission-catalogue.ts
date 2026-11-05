@@ -251,6 +251,23 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
     ],
   },
   {
+    area: "support",
+    label: "Support",
+    entries: [
+      entry(
+        "support.read",
+        "View reports and feedback",
+        "Open Support: problems learners report and the feedback they send.",
+      ),
+      entry(
+        "support.manage",
+        "Answer reports and feedback",
+        "Reply to learners, leave internal notes and change a report's status.",
+        ["support.read"],
+      ),
+    ],
+  },
+  {
     area: "orders",
     label: "Orders and payments",
     entries: [

@@ -156,6 +156,29 @@ export class S3StorageService {
 
     if (options.client) {
       this.client = options.client;
+      if (
+        typeof this.client.config === "object" &&
+        this.client.config !== null
+      ) {
+        const cfg = this.client.config as {
+          requestChecksumCalculation?: () => Promise<string>;
+          responseChecksumValidation?: () => Promise<string>;
+        };
+        if (
+          !options.requestChecksumCalculation &&
+          typeof cfg.requestChecksumCalculation === "function"
+        ) {
+          cfg.requestChecksumCalculation = () =>
+            Promise.resolve("WHEN_REQUIRED");
+        }
+        if (
+          !options.responseChecksumValidation &&
+          typeof cfg.responseChecksumValidation === "function"
+        ) {
+          cfg.responseChecksumValidation = () =>
+            Promise.resolve("WHEN_REQUIRED");
+        }
+      }
     } else {
       const {
         bucket: _bucket,
@@ -172,6 +195,8 @@ export class S3StorageService {
         endpoint,
         forcePathStyle,
         credentials: explicitCredentials,
+        requestChecksumCalculation = "WHEN_REQUIRED",
+        responseChecksumValidation = "WHEN_REQUIRED",
         ...restClientOptions
       } = options;
 
@@ -189,6 +214,8 @@ export class S3StorageService {
         endpoint,
         forcePathStyle,
         credentials,
+        requestChecksumCalculation,
+        responseChecksumValidation,
         ...restClientOptions,
       });
     }

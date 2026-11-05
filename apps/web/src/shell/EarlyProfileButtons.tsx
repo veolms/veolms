@@ -34,10 +34,15 @@ export function EarlyProfileButtons({
   className,
   arrowSize,
   onLogin,
+  opensMenu = false,
+  menuExpanded,
 }: {
   className: string;
   arrowSize: number;
   onLogin: () => void;
+  /** See LoginProfileButton: the sidebar's opens the guest menu. */
+  opensMenu?: boolean;
+  menuExpanded?: boolean;
 }) {
   const roleIcon = (role: "student" | "admin" | "creator") =>
     `courses-profile__role-icon courses-profile__role-icon--${role}`;
@@ -47,6 +52,8 @@ export function EarlyProfileButtons({
         className={`${className} [:root[data-session-hint]_&]:hidden!`}
         arrowSize={arrowSize}
         onLogin={onLogin}
+        opensMenu={opensMenu}
+        menuExpanded={menuExpanded}
       />
       <div
         aria-hidden="true"

@@ -366,7 +366,37 @@ export interface LearningPreferences {
    * while its lessons scroll under it.
    */
   stickOpenSection: boolean;
+  /**
+   * Keys taken off the player (settings > Advanced) to keep it clean; each
+   * still works from its keyboard shortcut.
+   */
+  hiddenPlayerControls: HideablePlayerControl[];
+  /**
+   * Where the lessons list and the chapters take the player theme's look
+   * (settings > Advanced); everywhere else they keep the app's own.
+   */
+  lessonListThemeInPage: boolean;
+  lessonListThemeInFullscreen: boolean;
+  lessonListThemeInDrawer: boolean;
+  chaptersThemeInFullscreen: boolean;
+  chaptersThemeInSheet: boolean;
 }
+
+/** The player's keys a learner can hide. */
+export const HIDEABLE_PLAYER_CONTROLS = [
+  "lessons",
+  "chapters",
+  "volume",
+  "lesson-navigation",
+] as const;
+export type HideablePlayerControl = (typeof HIDEABLE_PLAYER_CONTROLS)[number];
+
+const normalizeHiddenPlayerControls = (
+  value: unknown,
+): HideablePlayerControl[] =>
+  Array.isArray(value)
+    ? HIDEABLE_PLAYER_CONTROLS.filter((control) => value.includes(control))
+    : [];
 
 export const LEARNING_PREFERENCES_KEY = "veolms-learning-preferences";
 export const LEARNING_PREFERENCES_EVENT = "veolms:learning-preferences";
@@ -407,6 +437,12 @@ export const normalizePlayerThemeChoice = (value: unknown): string =>
 export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   videoQuality: "auto",
   playerThemeChoice: "",
+  hiddenPlayerControls: [],
+  lessonListThemeInPage: false,
+  lessonListThemeInFullscreen: true,
+  lessonListThemeInDrawer: true,
+  chaptersThemeInFullscreen: true,
+  chaptersThemeInSheet: true,
   playbackSpeed: "1",
   seekIntervalSeconds: LEARNING_SEEK_INTERVAL_DEFAULT,
   resumeFromLastPosition: true,
@@ -787,7 +823,21 @@ export const readLearningPreferences = (): LearningPreferences => {
       playerThemeChoice: normalizePlayerThemeChoice(
         storedPreferences.playerThemeChoice,
       ),
+      hiddenPlayerControls: normalizeHiddenPlayerControls(
+        storedPreferences.hiddenPlayerControls,
+      ),
     };
+    for (const key of [
+      "lessonListThemeInPage",
+      "lessonListThemeInFullscreen",
+      "lessonListThemeInDrawer",
+      "chaptersThemeInFullscreen",
+      "chaptersThemeInSheet",
+    ] as const) {
+      if (typeof preferences[key] !== "boolean") {
+        preferences[key] = LEARNING_PREFERENCE_DEFAULTS[key];
+      }
+    }
     delete (preferences as Record<string, unknown>).autoplayNextLecture;
     // Goal/reminder fields moved to the server (learning goal settings
     // API); stale copies in old localStorage payloads are dropped.

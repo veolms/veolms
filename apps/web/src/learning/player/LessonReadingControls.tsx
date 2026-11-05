@@ -26,7 +26,6 @@ import {
 } from "./readingFontScale";
 import {
   getDocumentFullscreenElement,
-  isInstalledAppDisplay,
   unlockScreenOrientation,
 } from "../../fullscreen";
 import { cn } from "../../lib/utils";
@@ -82,9 +81,11 @@ export function useLessonReadingFullscreen(
   useEffect(() => {
     if (!enabled) return undefined;
     const surface = surfaceRef.current as WebkitFullscreenElement | null;
+    // The installed app too: its window still has the phone's bars, which
+    // full screen takes away (where an element cannot go full screen, as on
+    // an iPhone, there is no request function and no button).
     setAvailable(
-      Boolean(surface?.requestFullscreen || surface?.webkitRequestFullscreen) &&
-        !isInstalledAppDisplay(),
+      Boolean(surface?.requestFullscreen || surface?.webkitRequestFullscreen),
     );
     setCanRotate(
       window.matchMedia("(pointer: coarse)").matches &&

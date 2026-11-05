@@ -7,9 +7,11 @@ import {
   type PlayerThemeDefinition,
 } from "@veolms/video-player";
 import {
+  LEARNING_PREFERENCE_DEFAULTS,
   LEARNING_PREFERENCES_EVENT,
   LEARNING_PREFERENCES_KEY,
   readLearningPreferences,
+  type LearningPreferences,
 } from "../../settings/settingsPreferences";
 import { usePublicPlatformSettings } from "../../services/platform";
 import { readPlatformAppearance } from "../../store/appearanceDefaults";
@@ -73,18 +75,69 @@ const subscribeToThemeChoice = (onChange: () => void) => {
 const readThemeChoice = () => readLearningPreferences().playerThemeChoice;
 const readNoThemeChoice = () => "";
 
+/** What settings > Advanced decides about the player's keys and lists. */
+export type PlayerLayoutPreferences = Pick<
+  LearningPreferences,
+  | "hiddenPlayerControls"
+  | "lessonListThemeInPage"
+  | "lessonListThemeInFullscreen"
+  | "lessonListThemeInDrawer"
+  | "chaptersThemeInFullscreen"
+  | "chaptersThemeInSheet"
+>;
+
+const pickLayoutPreferences = (
+  preferences: LearningPreferences,
+): PlayerLayoutPreferences => ({
+  hiddenPlayerControls: preferences.hiddenPlayerControls,
+  lessonListThemeInPage: preferences.lessonListThemeInPage,
+  lessonListThemeInFullscreen: preferences.lessonListThemeInFullscreen,
+  lessonListThemeInDrawer: preferences.lessonListThemeInDrawer,
+  chaptersThemeInFullscreen: preferences.chaptersThemeInFullscreen,
+  chaptersThemeInSheet: preferences.chaptersThemeInSheet,
+});
+// Read as text, so the snapshot only changes when one of them does.
+const readLayoutPreferences = () =>
+  JSON.stringify(pickLayoutPreferences(readLearningPreferences()));
+const DEFAULT_LAYOUT_PREFERENCES = JSON.stringify(
+  pickLayoutPreferences(LEARNING_PREFERENCE_DEFAULTS),
+);
+const readDefaultLayoutPreferences = () => DEFAULT_LAYOUT_PREFERENCES;
+
+export function usePlayerLayoutPreferences(): PlayerLayoutPreferences {
+  const text = useSyncExternalStore(
+    subscribeToThemeChoice,
+    readLayoutPreferences,
+    readDefaultLayoutPreferences,
+  );
+  return useMemo(() => JSON.parse(text) as PlayerLayoutPreferences, [text]);
+}
+
+/** Where a lessons list is shown, for whether it wears the player theme. */
+export type LessonListPlace = "page" | "fullscreen" | "drawer";
+
 /**
  * The player theme the lessons list is drawn in (the page's column, the
  * Lessons drawer, the full-screen panel), as `data-lesson-theme`: every
- * theme but YouTube, which keeps the app's own look.
+ * theme but YouTube, which keeps the app's own look, and only where
+ * settings > Advanced says so (by default the drawer and full screen, not
+ * the page).
  */
-export function useLessonListTheme(): string | undefined {
+export function useLessonListTheme(place: LessonListPlace): string | undefined {
   const { id } = useLearningPlayerTheme();
+  const preferences = usePlayerLayoutPreferences();
   const hydrated = useHydrated();
-  // The prerendered list is given its theme by the head script before it is
-  // painted; hydration reads back the same value, so nothing changes.
-  if (!hydrated) return readEarlyLessonListTheme();
-  return id === DEFAULT_PLAYER_THEME_ID ? undefined : id;
+  // The prerendered column is given its theme by the head script before it
+  // is painted; hydration reads back the same value, so nothing changes.
+  if (!hydrated)
+    return place === "page" ? readEarlyLessonListTheme() : undefined;
+  const themed =
+    place === "page"
+      ? preferences.lessonListThemeInPage
+      : place === "fullscreen"
+        ? preferences.lessonListThemeInFullscreen
+        : preferences.lessonListThemeInDrawer;
+  return themed && id !== DEFAULT_PLAYER_THEME_ID ? id : undefined;
 }
 
 export function useLearningPlayerTheme(): PlayerThemeDefinition {

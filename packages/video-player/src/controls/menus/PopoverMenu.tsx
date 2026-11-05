@@ -14,7 +14,10 @@ import {
 import { createPortal } from "react-dom";
 
 import { classNames } from "../../utils/classNames";
-import { getPlayerThemeStyle } from "../../themes/playerThemes";
+import {
+  getPlayerThemeStyle,
+  type PlayerThemeDefinition,
+} from "../../themes/playerThemes";
 import { playerRectOf, toPlayerPoint } from "../../react/pageFullscreen";
 import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { usePlayerMobileInteraction } from "../../react/PlayerInteractionMode";
@@ -53,6 +56,11 @@ export interface PopoverMenuProps {
   forceSheet?: boolean;
   /** Optional fullscreen-local host for a mobile sheet. Defaults to document.body. */
   mobileSheetPortalTarget?: HTMLElement | null;
+  /**
+   * The open menu drawn in another theme than the player's (its trigger
+   * keeps the player's), e.g. a sheet in the app's own look.
+   */
+  panelTheme?: PlayerThemeDefinition;
   /** Classes applied only when the mobile sheet presentation is active. */
   mobileSheetPanelClassName?: string;
   /** Inline styles applied only when the mobile sheet presentation is active. */
@@ -207,13 +215,15 @@ export function PopoverMenu({
   onOpenChange,
   open: controlledOpen,
   panelClassName,
+  panelTheme,
   placement = "anchored",
   sheetTitle,
   side = "top",
   trigger,
   triggerClassName,
 }: PopoverMenuProps) {
-  const theme = usePlayerTheme();
+  const playerTheme = usePlayerTheme();
+  const theme = panelTheme ?? playerTheme;
   const mobileInteraction = usePlayerMobileInteraction();
   const generatedId = useId();
   const menuId = `video-player-menu-${generatedId.replaceAll(":", "")}`;
@@ -617,7 +627,7 @@ export function PopoverMenu({
         // below so they fade out instead of being cut off in a line.
         <div
           data-video-player-mobile-sheet-drag-handle=""
-          className="relative z-10 -mb-16 flex h-16 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-2 bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] px-5 pb-3 pt-2 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-5 after:bg-linear-to-b after:from-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] after:to-transparent after:content-[''] active:cursor-grabbing"
+          className="relative z-10 -mb-11 flex h-11 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-1 bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] px-5 pb-1.5 pt-1 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-5 after:bg-linear-to-b after:from-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] after:to-transparent after:content-[''] active:cursor-grabbing"
           onPointerDown={handleMobileSheetDragStart}
           onPointerMove={handleMobileSheetDragMove}
           onPointerUp={finishMobileSheetDrag}
@@ -640,7 +650,7 @@ export function PopoverMenu({
         <div
           role="menu"
           aria-label={resolvedMenuLabel}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pt-18 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pt-[3.25rem] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
         >
           {typeof children === "function"
             ? children({ close: closeMenu, sheet: isMobileSheet })
