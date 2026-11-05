@@ -1,6 +1,7 @@
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool, types } from "pg";
 
+import { createRoutingPool } from "./routing.ts";
 import type { Database } from "./schema.ts";
 
 // pg returns bigint (OID 20, e.g. jobs.video_size) as a string by default to
@@ -18,6 +19,12 @@ export interface DatabasePoolOptions {
   statementTimeoutMillis?: number;
   /** Shows up in pg_stat_activity.application_name for debugging. */
   applicationName?: string;
+  /**
+   * This server's own database copy, for the plain reads of GET requests
+   * (see routing.ts). Default DATABASE_READ_URL; none: everything uses
+   * `databaseUrl`.
+   */
+  readUrl?: string;
 }
 
 function intFromEnv(name: string): number | undefined {
@@ -83,36 +90,62 @@ export function createDatabase(
     intFromEnv("DATABASE_STATEMENT_TIMEOUT_MS") ??
     30_000;
 
-  const pool = new Pool({
-    connectionString: databaseUrl,
-    max: options.max ?? intFromEnv("DATABASE_POOL_MAX") ?? 10,
-    connectionTimeoutMillis:
-      options.connectionTimeoutMillis ??
-      intFromEnv("DATABASE_CONNECT_TIMEOUT_MS") ??
-      5_000,
-    ...(statementTimeout > 0 ? { statement_timeout: statementTimeout } : {}),
-    application_name:
-      options.applicationName ??
-      process.env.DATABASE_APPLICATION_NAME ??
-      "veolms",
-  });
+  const name =
+    options.applicationName ??
+    process.env.DATABASE_APPLICATION_NAME ??
+    "veolms";
+  const readUrl = options.readUrl ?? process.env.DATABASE_READ_URL ?? "";
+  const max = options.max ?? intFromEnv("DATABASE_POOL_MAX") ?? 10;
+  const newPool = (
+    connectionString: string,
+    poolMax: number,
+    poolName: string,
+  ) => {
+    const pool = new Pool({
+      connectionString,
+      max: poolMax,
+      connectionTimeoutMillis:
+        options.connectionTimeoutMillis ??
+        intFromEnv("DATABASE_CONNECT_TIMEOUT_MS") ??
+        5_000,
+      ...(statementTimeout > 0 ? { statement_timeout: statementTimeout } : {}),
+      application_name: poolName,
+    });
+    // node-postgres emits errors from connections that are idle in the pool.
+    // EventEmitter treats an `error` event without a listener as fatal, which
+    // would terminate the API process when the database or network drops an
+    // idle connection. The pool removes the failed client and can create a
+    // replacement for the next query after this is handled.
+    pool.on("error", (error) => {
+      console.error("Unexpected PostgreSQL pool error", error);
+    });
+    poolRegistry.push({ name: poolName, max: poolMax, pool });
+    return pool;
+  };
 
-  // node-postgres emits errors from connections that are idle in the pool.
-  // EventEmitter treats an `error` event without a listener as fatal, which
-  // would terminate the API process when the database or network drops an
-  // idle connection. The pool removes the failed client and can create a
-  // replacement for the next query after this is handled.
-  pool.on("error", (error) => {
-    console.error("Unexpected PostgreSQL pool error", error);
-  });
+  // With a copy for reads, the boss pool is small (DATABASE_WRITE_POOL_MAX):
+  // every API process of every server opens one, and Postgres has a fixed
+  // connection limit.
+  const writer = readUrl
+    ? newPool(
+        databaseUrl,
+        intFromEnv("DATABASE_WRITE_POOL_MAX") ?? 4,
+        `${name}-write`,
+      )
+    : newPool(databaseUrl, max, name);
+  const reader = readUrl ? newPool(readUrl, max, `${name}-read`) : undefined;
+  const holdMillis =
+    process.env.DATABASE_WRITE_HOLD_MS === "0"
+      ? 0
+      : (intFromEnv("DATABASE_WRITE_HOLD_MS") ?? 35_000);
 
-  poolRegistry.push({
-    name:
-      options.applicationName ??
-      process.env.DATABASE_APPLICATION_NAME ??
-      "veolms",
-    max: options.max ?? intFromEnv("DATABASE_POOL_MAX") ?? 10,
-    pool,
+  const pool = createRoutingPool({
+    writer,
+    reader,
+    holdMillis,
+    maxReadLagBytes:
+      intFromEnv("DATABASE_READ_MAX_LAG_BYTES") ?? 16 * 1024 * 1024,
+    log: (message) => console.warn(message),
   });
 
   return new Kysely<Database>({
