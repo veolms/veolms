@@ -1146,13 +1146,14 @@ function LessonTimeControl({ mobile = false }: { mobile?: boolean }) {
 /** Shift+C, for the chapters. */
 const CHAPTERS_SHORTCUT_CODE = "KeyC";
 
-type ListThemePreference = keyof Pick<
+type SwitchPreference = keyof Pick<
   LearningPreferences,
   | "lessonListThemeInPage"
   | "lessonListThemeInFullscreen"
   | "lessonListThemeInDrawer"
   | "chaptersThemeInFullscreen"
   | "chaptersThemeInSheet"
+  | "numberKeysSeekVideo"
 >;
 
 /**
@@ -1236,7 +1237,7 @@ function getAdvancedSettings({
       : []),
   ];
   const themeToggle = (
-    key: ListThemePreference,
+    key: SwitchPreference,
     label: string,
   ): SettingsMenuToggle => ({
     id: key,
@@ -1245,8 +1246,22 @@ function getAdvancedSettings({
     onCheckedChange: (checked) => updateLearningPreferences({ [key]: checked }),
   });
 
+  const numberKeysSwitched = preferences.numberKeysSeekVideo;
+
   return [
     { id: "player-keys", label: "Keys on the player", toggles: keys },
+    {
+      id: "shortcuts",
+      label: "Shortcuts",
+      toggles: [
+        {
+          ...themeToggle("numberKeysSeekVideo", "Switch number shortcuts"),
+          description: numberKeysSwitched
+            ? "1-9 jump in the video. Alt+1-9 open the sidebar's pages"
+            : "1-9 open the sidebar's pages. Alt+1-9 jump in the video",
+        },
+      ],
+    },
     // YouTube keeps the app's own look everywhere: nothing to choose.
     ...(themed
       ? [

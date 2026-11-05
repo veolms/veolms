@@ -131,6 +131,7 @@ import { normalizeSidebarDockItems } from "../settings/settingsPreferences";
 import { autosyncManager } from "../lib/autosync/manager";
 import {
   getNumberShortcutIndex,
+  sidebarNumberKeysNeedAlt,
   isEditingShortcutTarget,
 } from "../keyboardShortcuts";
 import {
@@ -1088,8 +1089,10 @@ export default function AcademyLayout() {
             ? 1
             : -1
           : null;
+      // Alt+1-9 while a lesson video has the number keys (settings >
+      // Advanced), 1-9 everywhere else.
       const numberIndex =
-        cycleDirection === null && !event.altKey
+        cycleDirection === null && event.altKey === sidebarNumberKeysNeedAlt()
           ? getNumberShortcutIndex(event)
           : null;
       if (cycleDirection === null && numberIndex === null) return;

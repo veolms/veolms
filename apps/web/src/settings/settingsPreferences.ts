@@ -380,6 +380,12 @@ export interface LearningPreferences {
   lessonListThemeInDrawer: boolean;
   chaptersThemeInFullscreen: boolean;
   chaptersThemeInSheet: boolean;
+  /**
+   * On a lesson with a video, 1-9 and 0 jump the video to that tenth and
+   * Alt with them opens the sidebar's pages; off, the other way round
+   * (settings > Advanced).
+   */
+  numberKeysSeekVideo: boolean;
 }
 
 /** The player's keys a learner can hide. */
@@ -443,6 +449,7 @@ export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   lessonListThemeInDrawer: true,
   chaptersThemeInFullscreen: true,
   chaptersThemeInSheet: true,
+  numberKeysSeekVideo: true,
   playbackSpeed: "1",
   seekIntervalSeconds: LEARNING_SEEK_INTERVAL_DEFAULT,
   resumeFromLastPosition: true,
@@ -833,6 +840,7 @@ export const readLearningPreferences = (): LearningPreferences => {
       "lessonListThemeInDrawer",
       "chaptersThemeInFullscreen",
       "chaptersThemeInSheet",
+      "numberKeysSeekVideo",
     ] as const) {
       if (typeof preferences[key] !== "boolean") {
         preferences[key] = LEARNING_PREFERENCE_DEFAULTS[key];
