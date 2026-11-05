@@ -131,9 +131,15 @@ async function generatedAvatarFile(previewUrl: string): Promise<File> {
   return new File([blob], "generated-avatar.png", { type: "image/png" });
 }
 
+/**
+ * Sign-in requests go without a CORS preflight (see `simple` in api-client):
+ * a student who cannot sign in cannot use anything else either.
+ */
+const SIGN_IN = { simple: true } as const;
+
 export const authService = {
   sendOtp: (payload: OtpSendRequest): Promise<OtpSendResponse> => {
-    return api.post<OtpSendResponse>("/auth/otp/send", payload);
+    return api.post<OtpSendResponse>("/auth/otp/send", payload, SIGN_IN);
   },
 
   sendPhoneVerificationOtp: (
@@ -161,19 +167,19 @@ export const authService = {
   },
 
   login: (payload: LoginRequest): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/login", payload);
+    return api.post<LoginResponse>("/auth/login", payload, SIGN_IN);
   },
 
   register: (payload: RegisterRequest): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/register", payload);
+    return api.post<LoginResponse>("/auth/register", payload, SIGN_IN);
   },
 
   getOauthUrl: (payload: OauthUrlRequest): Promise<OauthUrlResponse> => {
-    return api.post<OauthUrlResponse>("/auth/oauth/url", payload);
+    return api.post<OauthUrlResponse>("/auth/oauth/url", payload, SIGN_IN);
   },
 
   oauthLogin: (payload: OauthLoginRequest): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/oauth/login", payload);
+    return api.post<LoginResponse>("/auth/oauth/login", payload, SIGN_IN);
   },
 
   getAuthConfig: (): Promise<AuthConfigResponse> => {
@@ -183,7 +189,11 @@ export const authService = {
   reportSignInFailures: (
     payload: SignInFailureReportRequest,
   ): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>("/auth/sign-in-failures", payload);
+    return api.post<AuthMessageResponse>(
+      "/auth/sign-in-failures",
+      payload,
+      SIGN_IN,
+    );
   },
 
   googleOneTapLogin: (
@@ -192,6 +202,7 @@ export const authService = {
     // The client has no global timeout; without one a hung request leaves the
     // One Tap UI stuck on "Verifying…" with the login buttons locked.
     return api.post<LoginResponse>("/auth/oauth/google/one-tap", payload, {
+      ...SIGN_IN,
       timeout: 20_000,
     });
   },
@@ -215,7 +226,7 @@ export const authService = {
   },
 
   verifyMfaTotp: (payload: TotpVerifyRequest): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>("/auth/totp/verify", payload);
+    return api.post<AuthMessageResponse>("/auth/totp/verify", payload, SIGN_IN);
   },
 
   getPasskeyRegisterOptions:
@@ -245,7 +256,7 @@ export const authService = {
     async (): Promise<PasskeyAuthenticationOptionsResponse> => {
       const [response, { passkeyAuthenticationOptionsResponseSchema }] =
         await Promise.all([
-          api.post<unknown>("/auth/passkey/login/options"),
+          api.post<unknown>("/auth/passkey/login/options", {}, SIGN_IN),
           import("@veolms/contracts/auth/session"),
         ]);
       return passkeyAuthenticationOptionsResponseSchema.parse(response);
@@ -254,7 +265,11 @@ export const authService = {
   verifyPasskeyLogin: (payload: {
     response: unknown;
   }): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>("/auth/passkey/login/verify", payload);
+    return api.post<AuthMessageResponse>(
+      "/auth/passkey/login/verify",
+      payload,
+      SIGN_IN,
+    );
   },
 
   getSessions: async (): Promise<SessionResponse[]> => {
