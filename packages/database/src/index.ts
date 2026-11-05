@@ -10,6 +10,7 @@ export * from "./role-grants.ts";
 export { withLocalCommit } from "./local-commit.ts";
 export {
   isConnectFailure,
+  isDatabaseBossUnreachable,
   isPlainRead,
   isReadCopyPreferred,
   preferReadCopy,

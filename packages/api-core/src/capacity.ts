@@ -2,7 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { cpus, freemem, totalmem } from "node:os";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 
-import { getDatabasePoolMetrics } from "@veolms/database";
+import {
+  getDatabasePoolMetrics,
+  isDatabaseBossUnreachable,
+} from "@veolms/database";
 import type { FastifyInstance } from "fastify";
 
 /**
@@ -34,6 +37,11 @@ export interface CapacitySample {
   eventLoopDelayMs: number;
   poolsOverloaded: boolean;
   draining: boolean;
+  /**
+   * This server has not reached the database's boss for 5 s: cut off, or a
+   * takeover is running. Its users are better served by a server that can.
+   */
+  bossUnreachable?: boolean;
 }
 
 export interface CapacityState {
@@ -52,6 +60,9 @@ export function nextCapacityState(
 ): CapacityState {
   if (sample.draining) return { full: true, reason: "draining" };
   if (sample.poolsOverloaded) return { full: true, reason: "database pool" };
+  if (sample.bossUnreachable) {
+    return { full: true, reason: "database boss unreachable" };
+  }
   if (!previous.full) {
     if (sample.cpuPercent >= limits.cpuFullPercent) {
       return { full: true, reason: "cpu" };
@@ -176,6 +187,7 @@ export function registerCapacityMonitor(
         (pool) => pool.waiting > pool.max,
       ),
       draining: options.drainFile ? existsSync(options.drainFile) : false,
+      bossUnreachable: isDatabaseBossUnreachable(),
     };
     delay.reset();
     const next = nextCapacityState(state, sample, options.thresholds);

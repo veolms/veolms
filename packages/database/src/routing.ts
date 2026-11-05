@@ -95,6 +95,26 @@ export function isConnectFailure(error: unknown): boolean {
   );
 }
 
+/**
+ * Whether each pool can currently reach the boss, from the connections it
+ * opens anyway (no extra queries): failing since when, or null.
+ */
+const bossHealth: Array<{ failingSince: number | null }> = [];
+
+/**
+ * True when some pool has not been able to reach the boss for `forMillis`:
+ * this server is cut off (or a takeover is running), so the proxy in front
+ * should send its users to a server that can. False while no connection has
+ * been tried.
+ */
+export function isDatabaseBossUnreachable(forMillis = 5_000): boolean {
+  const now = Date.now();
+  return bossHealth.some(
+    (health) =>
+      health.failingSince !== null && now - health.failingSince >= forMillis,
+  );
+}
+
 class ReadOnlyBossError extends Error {
   code = "25006";
 }
@@ -123,6 +143,14 @@ type QueryFunction = (text: unknown, values?: unknown) => Promise<QueryResult>;
 export function createRoutingPool(options: RoutingPoolOptions): RoutingPool {
   const { writer, reader } = options;
   const writable = new WeakSet<PoolClient>();
+  const health: { failingSince: number | null } = { failingSince: null };
+  bossHealth.push(health);
+  const bossFailed = () => {
+    health.failingSince ??= Date.now();
+  };
+  const bossAnswered = () => {
+    health.failingSince = null;
+  };
   /** Each copy client's own query, before it was taught to route. */
   const copyQuery = new WeakMap<PoolClient, QueryFunction>();
   /** Closes the boss connection a copy client still holds for a transaction. */
@@ -144,7 +172,10 @@ export function createRoutingPool(options: RoutingPoolOptions): RoutingPool {
     for (;;) {
       try {
         const client = await writer.connect();
-        if (writable.has(client)) return client;
+        if (writable.has(client)) {
+          bossAnswered();
+          return client;
+        }
         const { rows } = await client.query<{ recovery: boolean }>(
           "select pg_is_in_recovery() as recovery",
         );
@@ -155,10 +186,12 @@ export function createRoutingPool(options: RoutingPoolOptions): RoutingPool {
           );
         }
         writable.add(client);
+        bossAnswered();
         return client;
       } catch (error) {
         const retryable =
           error instanceof ReadOnlyBossError || isConnectFailure(error);
+        if (retryable) bossFailed();
         if (!retryable || Date.now() + delay > deadline) throw error;
         await sleep(delay);
         delay = Math.min(delay * 2, 1_000);
@@ -293,6 +326,7 @@ export function createRoutingPool(options: RoutingPoolOptions): RoutingPool {
           );
           healthy =
             Number(boss.rows[0]?.lag ?? Infinity) <= options.maxReadLagBytes;
+          bossAnswered();
         }
       } catch {
         healthy = false;

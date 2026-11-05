@@ -101,3 +101,16 @@ await test("room levels are always below full levels", () => {
   assert.equal(odd.cpuRoomPercent, 65);
   assert.equal(odd.memoryRoomPercent, 75);
 });
+
+await test("a server that cannot reach the database boss is full, and has room once it can", () => {
+  const cutOff = nextCapacityState(
+    room,
+    { ...quiet, bossUnreachable: true },
+    limits,
+  );
+  assert.deepEqual(cutOff, { full: true, reason: "database boss unreachable" });
+  assert.deepEqual(
+    nextCapacityState(cutOff, { ...quiet, bossUnreachable: false }, limits),
+    room,
+  );
+});

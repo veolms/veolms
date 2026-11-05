@@ -108,3 +108,8 @@ await test("GET handlers see the read context, other methods and concurrent requ
   assert.equal(isReadCopyPreferred(), false);
   await app.close();
 });
+
+await test("the boss counts as reachable until a connection to it has failed", async () => {
+  const { isDatabaseBossUnreachable } = await import("@veolms/database");
+  assert.equal(isDatabaseBossUnreachable(), false);
+});
