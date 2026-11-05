@@ -668,10 +668,21 @@ export const BUILT_IN_PLAYER_THEMES: Record<
   },
 };
 
+/**
+ * Built-in themes kept out of the pickers until they are polished (the
+ * user's call, 2026-11-05): defined and styled, but unknown to
+ * `findPlayerTheme`, so a saved choice of one plays in the default.
+ */
+const UNFINISHED_BUILT_IN_PLAYER_THEME_IDS: ReadonlySet<string> = new Set([
+  "mono",
+]);
+
 /** The built-in themes, in picker order. */
-export const PLAYER_THEME_OPTIONS = BUILT_IN_PLAYER_THEME_IDS.map(
-  (id) => BUILT_IN_PLAYER_THEMES[id],
-).sort((left, right) => (left.order ?? 100) - (right.order ?? 100));
+export const PLAYER_THEME_OPTIONS = BUILT_IN_PLAYER_THEME_IDS.filter(
+  (id) => !UNFINISHED_BUILT_IN_PLAYER_THEME_IDS.has(id),
+)
+  .map((id) => BUILT_IN_PLAYER_THEMES[id])
+  .sort((left, right) => (left.order ?? 100) - (right.order ?? 100));
 
 /*
  * Themes added by plugins. Kept on `globalThis` so a plugin that ends up
@@ -744,6 +755,7 @@ export function subscribePlayerThemes(listener: () => void): () => void {
 
 /** A theme by id, built in or registered; `undefined` when unknown. */
 export function findPlayerTheme(id: string): PlayerThemeDefinition | undefined {
+  if (UNFINISHED_BUILT_IN_PLAYER_THEME_IDS.has(id)) return undefined;
   return (
     (BUILT_IN_PLAYER_THEMES as Record<string, PlayerThemeDefinition>)[id] ??
     getRegistry().themes.get(id)

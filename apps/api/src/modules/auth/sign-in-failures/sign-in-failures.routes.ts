@@ -6,6 +6,7 @@ import {
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+import { acceptTextJsonBody } from "../../../lib/text-json-body.ts";
 import { createSignInFailuresController } from "./sign-in-failures.controller.ts";
 
 const signInFailuresRoutes: RoutePlugin = async (app) => {
@@ -14,6 +15,8 @@ const signInFailuresRoutes: RoutePlugin = async (app) => {
   app.post(
     "/auth/sign-in-failures",
     {
+      // Sign-in requests may arrive as text/plain (no CORS preflight).
+      preValidation: acceptTextJsonBody,
       // Unauthenticated and only written to the log, so a low cap per IP keeps
       // it from being used to flood the log.
       config: {

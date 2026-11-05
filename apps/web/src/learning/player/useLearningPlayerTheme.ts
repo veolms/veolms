@@ -84,6 +84,7 @@ export type PlayerLayoutPreferences = Pick<
   | "lessonListThemeInDrawer"
   | "chaptersThemeInFullscreen"
   | "chaptersThemeInSheet"
+  | "numberKeysSeekVideo"
 >;
 
 const pickLayoutPreferences = (
@@ -95,6 +96,7 @@ const pickLayoutPreferences = (
   lessonListThemeInDrawer: preferences.lessonListThemeInDrawer,
   chaptersThemeInFullscreen: preferences.chaptersThemeInFullscreen,
   chaptersThemeInSheet: preferences.chaptersThemeInSheet,
+  numberKeysSeekVideo: preferences.numberKeysSeekVideo,
 });
 // Read as text, so the snapshot only changes when one of them does.
 const readLayoutPreferences = () =>
