@@ -337,6 +337,17 @@ export interface AnalyticsSink {
    * sign-out. A sink registered later gets the current visitor at once.
    */
   identify?(visitor: AnalyticsVisitor | null): void;
+  /**
+   * An error the app caught and showed its own error screen for, so it
+   * never reached the window's `error` event (see `reportAppError`).
+   */
+  appError?(error: unknown, context: AppErrorContext): void;
+}
+
+/** Where `reportAppError` caught the error. */
+export interface AppErrorContext {
+  /** "screen": the root error screen replaced the page. */
+  source: "screen";
 }
 
 type Listener = () => void;
@@ -349,6 +360,8 @@ interface ContributionStore {
   analyticsSink?: AnalyticsSink | null;
   /** Unset until the session is known; `null` is a guest. */
   analyticsVisitor?: AnalyticsVisitor | null;
+  /** Errors reported before a sink was registered. */
+  pendingAppErrors?: Array<[unknown, AppErrorContext]>;
   storageReclaimers?: Map<string, StorageReclaimer>;
 }
 
@@ -559,6 +572,9 @@ export function registerAnalyticsSink(sink: AnalyticsSink): () => void {
   if (store.analyticsVisitor !== undefined) {
     sink.identify?.(store.analyticsVisitor);
   }
+  const pending = store.pendingAppErrors ?? [];
+  store.pendingAppErrors = [];
+  for (const [error, context] of pending) sink.appError?.(error, context);
   return () => {
     if (store.analyticsSink === sink) store.analyticsSink = null;
   };
@@ -573,4 +589,26 @@ export function reportAnalyticsVisitor(visitor: AnalyticsVisitor | null): void {
   const store = getStore();
   store.analyticsVisitor = visitor;
   store.analyticsSink?.identify?.(visitor);
+}
+
+// Errors kept for a sink that registers later (an error screen can show
+// before the plugins have loaded).
+const MAX_PENDING_APP_ERRORS = 10;
+
+/**
+ * Core reports an error it caught itself (the root error screen) here, for
+ * the sink's error tracking. Never throws.
+ */
+export function reportAppError(error: unknown, context: AppErrorContext): void {
+  try {
+    const store = getStore();
+    if (store.analyticsSink) {
+      store.analyticsSink.appError?.(error, context);
+      return;
+    }
+    const pending = (store.pendingAppErrors ??= []);
+    if (pending.length < MAX_PENDING_APP_ERRORS) pending.push([error, context]);
+  } catch {
+    // Error tracking never breaks the error screen.
+  }
 }

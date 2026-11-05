@@ -1,4 +1,5 @@
 import { OctopusIllustration } from "./components/OctopusIllustration";
+import { reportAppError } from "@veolms/web-core";
 import { useEffect, useLayoutEffect, type ReactNode } from "react";
 import {
   isRouteErrorResponse,
@@ -452,11 +453,14 @@ export function ErrorBoundary() {
   const error = useRouteError();
   const isStaleBuild = isChunkLoadError(error);
 
+  const isNotFound = isRouteErrorResponse(error) && error.status === 404;
+
   useEffect(() => {
     if (isStaleBuild) reloadOnceForNewBuild();
-  }, [isStaleBuild]);
+    // A missing page and a tab left open across a deploy are not bugs.
+    else if (!isNotFound) reportAppError(error, { source: "screen" });
+  }, [error, isStaleBuild, isNotFound]);
 
-  const isNotFound = isRouteErrorResponse(error) && error.status === 404;
   const title = isNotFound
     ? "Page not found"
     : isStaleBuild
