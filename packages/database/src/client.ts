@@ -137,7 +137,7 @@ export function createDatabase(
   const holdMillis =
     process.env.DATABASE_WRITE_HOLD_MS === "0"
       ? 0
-      : (intFromEnv("DATABASE_WRITE_HOLD_MS") ?? 15_000);
+      : (intFromEnv("DATABASE_WRITE_HOLD_MS") ?? 35_000);
 
   const pool = createRoutingPool({
     writer,
