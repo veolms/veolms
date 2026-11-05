@@ -262,7 +262,7 @@ export function createMediaConvertDispatcher(options: {
               RateControlMode: "QVBR" as const,
               MaxBitrate: (profile.maxBitrateKbps || 2800) * 1000,
               QualityTuningLevel: "SINGLE_PASS" as const,
-              SceneChangeDetect: "TRANSITION_DETECTION" as const,
+              SceneChangeDetect: "ENABLED" as const,
             },
           },
         },
@@ -348,6 +348,8 @@ export function createMediaConvertDispatcher(options: {
             AudioSelectors: {
               "Audio Selector 1": {
                 DefaultSelection: "DEFAULT",
+                SelectorType: "TRACK",
+                Tracks: [1],
               },
             },
           },
