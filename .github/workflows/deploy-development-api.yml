@@ -1,24 +1,9 @@
 name: Deploy development API
 
+# By hand only. Since 2026-10-31 dev.veolms.org runs the cloud API (veolms-cloud
+# dev, port 4100 on the dev box); this core-only copy in /var/www/veolms is
+# retired, and on every push it stopped at "Port 4100 is in use".
 on:
-  push:
-    branches:
-      - dev
-    paths:
-      - "apps/api/**"
-      - "packages/api-core/**"
-      - "packages/services/**"
-      - "packages/plugin-sdk/**"
-      - "packages/video-player/**"
-      - "packages/contracts/**"
-      - "packages/database/**"
-      - "packages/config/**"
-      - "packages/storage/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "turbo.json"
-      - ".github/workflows/deploy-development-api.yml"
   workflow_dispatch:
 
 permissions:
