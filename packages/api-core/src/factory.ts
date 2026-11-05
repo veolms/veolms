@@ -11,6 +11,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 
 import { createCorsMatcher } from "./cors.ts";
 import { AppError, registerErrorHandler } from "./errors.ts";
+import { capacityThresholds, registerCapacityMonitor } from "./capacity.ts";
 import { registerLoadShedding } from "./load-shedding.ts";
 import { registerOpenApi } from "./openapi.ts";
 import {
@@ -272,6 +273,11 @@ export async function createVeoLMSApi<
   registerErrorHandler(app);
   // Before any route: an overloaded process answers what can wait at once.
   registerLoadShedding(app);
+  // Whether this server has room, for the proxy in front (GET /v1/ready/capacity).
+  registerCapacityMonitor(app, {
+    thresholds: capacityThresholds(config),
+    drainFile: config.CAPACITY_DRAIN_FILE,
+  });
 
   app.addHook("preSerialization", async (request, reply, payload) => {
     if (
