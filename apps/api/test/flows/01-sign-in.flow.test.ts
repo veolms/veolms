@@ -13,6 +13,8 @@ import {
 } from "./setup/flow-app.ts";
 
 const flow = await startFlowApp();
+// Loaded after the flow app set up the test environment.
+const { config } = await import("../../src/config.ts");
 
 await test("a new learner signs up with the code emailed to them and is signed in as a student", async () => {
   const learner = newLearner();
@@ -234,6 +236,53 @@ await test("at the device limit, a new device signs in and the one used longest 
     });
     assert.equal(reset.status, 200);
   }
+});
+
+await test("sign-in also works sent as text/plain (no CORS preflight) from the site, and not from another site", async () => {
+  const { learner, userId } = await signedUpLearner(flow);
+  const browser = flow.visitor();
+  const site = config.CORS_ORIGINS[0] ?? "https://procodrr.dev";
+  const plain = (url: string, body: unknown, origin = site) =>
+    browser.request("POST", url, JSON.stringify(body), {
+      "content-type": "text/plain;charset=UTF-8",
+      origin,
+    });
+
+  const elsewhere = await plain(
+    "/v1/auth/otp/send",
+    { email: learner.email },
+    "https://another-site.example",
+  );
+  assert.equal(elsewhere.status, 403);
+  assert.equal(elsewhere.body.error?.code, "ORIGIN_NOT_ALLOWED");
+
+  const broken = await browser.request("POST", "/v1/auth/otp/send", "{oops", {
+    "content-type": "text/plain;charset=UTF-8",
+    origin: site,
+  });
+  assert.equal(broken.status, 400);
+
+  const sent = await plain("/v1/auth/otp/send", { email: learner.email });
+  assert.equal(sent.status, 200);
+  const code = flow.email.lastCodeFor(learner.email);
+
+  const signIn = await plain("/v1/auth/login", { email: learner.email, code });
+  assert.equal(signIn.status, 200);
+  assert.equal(await browser.whoAmI(), userId);
+
+  const report = await plain("/v1/auth/sign-in-failures", {
+    reports: [
+      {
+        request: "otp-send",
+        kind: "unreachable",
+        code: "ERR_NETWORK",
+        occurredAt: new Date().toISOString(),
+        elapsedMs: 150,
+        online: true,
+      },
+    ],
+  });
+  assert.equal(report.status, 200);
 });
 
 await flow.close();

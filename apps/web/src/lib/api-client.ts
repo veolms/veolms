@@ -45,6 +45,14 @@ export interface ApiRequestConfig {
   /** Milliseconds before the request aborts with code ECONNABORTED. */
   timeout?: number;
   headers?: Record<string, string>;
+  /**
+   * Send a JSON body as `text/plain` with no extra headers, so the browser
+   * makes a "simple" request without a CORS preflight. Only for API routes
+   * that accept it (the sign-in routes: `acceptTextJsonBody`). Some
+   * students' computers let the preflight through but never sent the POST
+   * after it, so sign-in failed with "Can't reach our server".
+   */
+  simple?: boolean;
 }
 
 const CONFIGURED_BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "/v1";
@@ -349,7 +357,7 @@ async function request<T>(
   const requestUrl = buildRequestUrl(url, config.params);
   const headers = new Headers(config.headers);
   // A managing account in its Student view asks to be answered as a learner.
-  if (isLearnerView()) {
+  if (isLearnerView() && !config.simple) {
     headers.set(LEARNER_VIEW_HEADER, LEARNER_VIEW_HEADER_VALUE);
   }
   let body: BodyInit | undefined;
@@ -357,7 +365,9 @@ async function request<T>(
     if (typeof FormData !== "undefined" && data instanceof FormData) {
       body = data; // fetch sets the multipart boundary header itself.
     } else {
-      if (!headers.has("Content-Type")) {
+      if (config.simple) {
+        headers.set("Content-Type", "text/plain;charset=UTF-8");
+      } else if (!headers.has("Content-Type")) {
         headers.set("Content-Type", "application/json");
       }
       body = JSON.stringify(data);

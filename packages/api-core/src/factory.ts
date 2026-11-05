@@ -11,6 +11,9 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 
 import { createCorsMatcher } from "./cors.ts";
 import { AppError, registerErrorHandler } from "./errors.ts";
+import { withReadCopy } from "@veolms/database";
+
+import { capacityThresholds, registerCapacityMonitor } from "./capacity.ts";
 import { registerLoadShedding } from "./load-shedding.ts";
 import { registerOpenApi } from "./openapi.ts";
 import {
@@ -272,6 +275,26 @@ export async function createVeoLMSApi<
   registerErrorHandler(app);
   // Before any route: an overloaded process answers what can wait at once.
   registerLoadShedding(app);
+  // GET and HEAD read from this server's own database copy when there is
+  // one (DATABASE_READ_URL); writes and transactions in them still go to the
+  // boss. A client that must see the boss itself sends
+  // "x-veolms-consistency: primary".
+  // A callback hook, so the rest of the request runs inside the context.
+  app.addHook("onRequest", (request, _reply, done) => {
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      request.headers["x-veolms-consistency"] !== "primary"
+    ) {
+      withReadCopy(done);
+      return;
+    }
+    done();
+  });
+  // Whether this server has room, for the proxy in front (GET /v1/ready/capacity).
+  registerCapacityMonitor(app, {
+    thresholds: capacityThresholds(config),
+    drainFile: config.CAPACITY_DRAIN_FILE,
+  });
 
   app.addHook("preSerialization", async (request, reply, payload) => {
     if (

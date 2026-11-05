@@ -220,6 +220,45 @@ const serverConfigSchema = z.object({
     .max(600)
     .default(60),
   /**
+   * When this server says it is full on GET /v1/ready/capacity, so the
+   * proxy in front of it sends new requests to another server: the whole
+   * machine's CPU in use (Postgres included, over 5 s), in percent. It says
+   * it has room again only below CAPACITY_CPU_ROOM_PERCENT, so it does not
+   * flip on and off. Lower both on the database's boss, whose CPU is also
+   * the database's.
+   */
+  CAPACITY_CPU_FULL_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(100)
+    .default(80),
+  CAPACITY_CPU_ROOM_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(100)
+    .default(65),
+  /** The same for the machine's memory in use (not counting reclaimable cache). */
+  CAPACITY_MEMORY_FULL_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(100)
+    .default(85),
+  CAPACITY_MEMORY_ROOM_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(100)
+    .default(75),
+  /**
+   * While this file exists the server says it is full, so traffic moves
+   * away before a deploy or maintenance restarts it (create it, wait a few
+   * seconds, restart, remove it). Unset: no drain file.
+   */
+  CAPACITY_DRAIN_FILE: z.string().min(1).optional(),
+  /**
    * TTL for the process-local cache of a course as every visitor sees it
    * (the signed-out overview, the public curriculum and its version), in
    * ms. A change made through the API clears that course at once in the

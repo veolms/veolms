@@ -1,5 +1,5 @@
 # Commit emails allowed to push straight to dev.
-dev_push_allowed="rameshkumaryadav1918@gmail.com"
+dev_push_allowed="rameshkumaryadav1918@gmail.com bhupeshkr2912@gmail.com"
 push_email=$(git config user.email)
 
 while read -r local_ref local_oid remote_ref remote_oid; do
