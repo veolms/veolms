@@ -12,6 +12,7 @@ import {
   learningStreakMilestoneEventSchema,
   moderationContentModeratedEventSchema,
   moderationReportResolvedEventSchema,
+  supportReplyPostedEventSchema,
   moderationUserSuspendedEventSchema,
   moderationUserUnsuspendedEventSchema,
   paymentCompletedEventSchema,
@@ -50,6 +51,22 @@ function courseWideChannels(dependencies: NotificationHandlerDependencies) {
   return dependencies.courseWideEmail === false
     ? (["in_app"] as const)
     : commonChannels;
+}
+
+/**
+ * The lecture, course and time a discussion email shows, where the event
+ * has them (events from before they were added do not).
+ */
+function discussionEmailData(event: {
+  lessonTitle?: string | undefined;
+  courseTitle?: string | undefined;
+  occurredAt?: string | undefined;
+}): Record<string, string> {
+  const data: Record<string, string> = {};
+  if (event.lessonTitle) data.lessonTitle = event.lessonTitle;
+  if (event.courseTitle) data.courseTitle = event.courseTitle;
+  if (event.occurredAt) data.occurredAt = event.occurredAt;
+  return data;
 }
 
 const notificationHandlers: Record<string, NotificationHandler> = {
@@ -228,7 +245,12 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         type: "user.mentioned",
         category: "social",
         templateKey: "user.mentioned",
-        templateData: { actorName: event.actorName, context: event.context },
+        templateData: {
+          actorName: event.actorName,
+          context: event.context,
+          ...discussionEmailData(event),
+          ...(event.inReply ? { inReply: "true" } : {}),
+        },
         channels: commonChannels,
         mandatory: false,
         deepLink: event.deepLink,
@@ -262,6 +284,13 @@ const notificationHandlers: Record<string, NotificationHandler> = {
           actorName: event.actorName,
           threadTitle: event.threadTitle,
           replySnippet: event.replySnippet,
+          ...discussionEmailData(event),
+          ...(event.recipientRole
+            ? { recipientRole: event.recipientRole }
+            : {}),
+          ...(event.originalSnippet
+            ? { originalSnippet: event.originalSnippet }
+            : {}),
         },
         channels: commonChannels,
         mandatory: false,
@@ -358,6 +387,27 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         channels: commonChannels,
         mandatory: false,
         deepLink: "/discussions",
+      },
+    ];
+  },
+  "support.reply_posted": async (payload) => {
+    const event = supportReplyPostedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "support.reply_posted",
+        category: "transactional",
+        templateKey: "support.reply_posted",
+        templateData: {
+          ticketNumber: String(event.ticketNumber),
+          ticketKind: event.ticketKind,
+          replySnippet: event.replySnippet,
+        },
+        channels:
+          event.emailAllowed === false ? (["in_app"] as const) : commonChannels,
+        // An answer to something the learner asked us; not a preference.
+        mandatory: true,
+        deepLink: `/support/${event.ticketId}`,
       },
     ];
   },

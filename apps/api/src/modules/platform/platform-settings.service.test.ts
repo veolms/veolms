@@ -58,7 +58,11 @@ await test("before anything is saved, the defaults apply and the phone rule foll
 
   assert.deepEqual(await service.getSettings(), {
     settings: {
-      appearance: { defaultDisplayMode: "dark", defaultColorTheme: "ocean" },
+      appearance: {
+        defaultDisplayMode: "dark",
+        defaultColorTheme: "ocean",
+        defaultVideoPlayerTheme: "youtube",
+      },
       security: {
         requireVerifiedPhoneForEnrollment:
           config.REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT,
@@ -81,6 +85,7 @@ await test("a saved document fills in what it lacks, setting by setting", async 
   assert.deepEqual(settings.appearance, {
     defaultDisplayMode: "light",
     defaultColorTheme: "ocean",
+    defaultVideoPlayerTheme: "youtube",
   });
   // The retired student two-factor switch is not read back.
   assert.deepEqual(settings.security, {
@@ -99,7 +104,33 @@ await test("an appearance the contract no longer accepts falls back to the defau
   assert.deepEqual((await service.getPublicSettings()).appearance, {
     defaultDisplayMode: "dark",
     defaultColorTheme: "ocean",
+    defaultVideoPlayerTheme: "youtube",
   });
+});
+
+await test("the default player theme is saved with the rest of the appearance and sent to every visitor", async () => {
+  const { database, writes } = fakeDatabase({
+    appearance: { defaultColorTheme: "grove" },
+  });
+  const service = createPlatformSettingsService({ database });
+
+  await service.updateSettings(
+    { appearance: { defaultVideoPlayerTheme: "cinema" } },
+    null,
+  );
+
+  assert.deepEqual(writes, [
+    {
+      appearance: {
+        defaultColorTheme: "grove",
+        defaultVideoPlayerTheme: "cinema",
+      },
+    },
+  ]);
+  assert.equal(
+    (await service.getPublicSettings()).appearance.defaultVideoPlayerTheme,
+    "cinema",
+  );
 });
 
 await test("a save writes only what was set, so the phone rule keeps following the configuration", async () => {

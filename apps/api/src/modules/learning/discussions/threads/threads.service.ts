@@ -30,6 +30,8 @@ import {
   resolveAcademyId,
   takePage,
   toDate,
+  containsPattern,
+  findFirstMatchingReplies,
 } from "../shared/discussion.utils.ts";
 import {
   presentDiscussionAuthor,
@@ -1308,6 +1310,40 @@ export function createThreadsService(
   // Every tab of the Discussions page shows a Like button, so each item says
   // whether the viewer liked it. Added here, in one lookup for the page,
   // rather than in each tab's own query.
+  /**
+   * A search also finds a thread by its replies, which its row does not
+   * show: for each thread found that way (its own words and author do not
+   * contain the search), the first reply that matched, for the row to show.
+   */
+  async function searchMatchedReplies(
+    db: DatabaseExecutor,
+    items: readonly {
+      id: string;
+      itemType: "thread" | "note" | "reply";
+      title?: string | null;
+      plainText: string;
+      author: { displayName: string; username: string | null };
+    }[],
+    search: string | undefined,
+  ) {
+    const term = search?.trim().toLowerCase();
+    if (!term) return new Map<string, never>();
+    const contains = (value: string | null | undefined) =>
+      Boolean(value?.toLowerCase().includes(term));
+    const threadIds = items
+      .filter(
+        (item) =>
+          item.itemType === "thread" &&
+          !contains(item.title) &&
+          !contains(item.plainText) &&
+          !contains(item.author.displayName) &&
+          !contains(item.author.username),
+      )
+      .map((item) => item.id);
+    if (threadIds.length === 0) return new Map<string, never>();
+    return findFirstMatchingReplies(db, threadIds, containsPattern(term));
+  }
+
   const getDiscussionsWorkspaceItems = service.getDiscussionsWorkspace;
   service.getDiscussionsWorkspace = async (db, query) => {
     const response = await getDiscussionsWorkspaceItems(db, query);
@@ -1335,11 +1371,17 @@ export function createThreadsService(
     const numberByLesson = new Map(
       lessonNumbers.map((row) => [row.id, row.lessonNumber]),
     );
-    const marked = await addThreadMarks(db, response.items);
+    const [marked, matchedReplies] = await Promise.all([
+      addThreadMarks(db, response.items),
+      searchMatchedReplies(db, response.items, query.search),
+    ]);
     return {
       ...response,
       items: marked.map((item) => ({
         ...item,
+        ...(matchedReplies.has(item.id)
+          ? { searchMatchedReply: matchedReplies.get(item.id) }
+          : {}),
         ...(likes ? { isLiked: liked.has(`${item.itemType}:${item.id}`) } : {}),
         lessonNumber: item.lessonId
           ? (numberByLesson.get(item.lessonId) ?? null)

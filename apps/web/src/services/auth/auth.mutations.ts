@@ -82,6 +82,7 @@ function persistAuthenticatedSession(
     mobileVerified: data.user.mobileVerified,
     roles: data.user.roles,
     isTestAccount: data.user.isTestAccount,
+    localAnyCourseUnenroll: data.user.localAnyCourseUnenroll,
     mfaVerified: !data.mfaRequired,
     totpEnabled: data.totpEnabled,
     passkeyEnabled: data.passkeyEnabled,
@@ -518,23 +519,6 @@ export function useLogout() {
   return useMutation<AuthMessageResponse, ApiError, void>({
     mutationFn: () => authService.logout(),
     onSettled: (_data, error) => clearSignedOutState(queryClient, !error),
-  });
-}
-
-export function useDeactivateAccount() {
-  const queryClient = useQueryClient();
-
-  return useMutation<AuthMessageResponse, ApiError, void>({
-    mutationFn: () => authService.deactivateAccount(),
-    onSettled: () => {
-      authStore.clearAuth();
-      resetRegisteredInteractionState();
-      clearCoursePlayerSessions();
-
-      // A deactivated account must not leave protected data in the client
-      // cache, especially if another account signs in in the same tab.
-      queryClient.clear();
-    },
   });
 }
 

@@ -5,7 +5,14 @@ import type { StoryboardFrame } from "../storyboard/storyboardTypes";
 import type { TimelineMarker } from "../timeline/timelineMath";
 
 export type PlayerSettingsView =
-  "closed" | "main" | "quality" | "playback-rate" | "captions" | "audio";
+  | "closed"
+  | "main"
+  | "quality"
+  | "playback-rate"
+  | "captions"
+  | "audio"
+  | "theme"
+  | "advanced";
 
 export interface PlayerHudOptions {
   direction?: -1 | 1;

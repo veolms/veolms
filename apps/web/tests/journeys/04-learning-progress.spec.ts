@@ -6,8 +6,9 @@
  * 12 seconds of real playback, the way a learner finishes a lesson.
  *
  * The lesson page keeps progress in the browser first and sends it to the
- * API every 15 seconds, when a lesson ends, and when the learner moves on
- * in the app. The tests wait for that save (`waitForProgressSave`) before
+ * API once a minute while a video plays (the interval the API names), a
+ * few seconds after the video pauses or a lesson ends, and when the learner
+ * moves on in the app. The tests wait for that save (`waitForProgressSave`) before
  * checking anything another page or device reads from the API.
  */
 import type { Page } from "@playwright/test";

@@ -6,6 +6,7 @@ import {
 } from "react";
 import { usePlayerController } from "../react/context";
 import { useVolume } from "../react/usePlayerState";
+import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import { classNames } from "../utils/classNames";
 import { MuteButton } from "./MuteButton";
 
@@ -24,6 +25,8 @@ export function VolumeControl({
 }: VolumeControlProps = {}) {
   const controller = usePlayerController();
   const { muted, volume } = useVolume();
+  // Some themes write the level beside the slider (Cone).
+  const showPercent = Boolean(usePlayerTheme().chrome?.volumePercent);
   const groupRef = useRef<HTMLDivElement>(null);
   // Whatever changes the volume here, the player says it at the top
   // (controller.showVolume), as it does for the Up and Down keys.
@@ -100,6 +103,19 @@ export function VolumeControl({
         onChange={(event) => changeVolume(event.currentTarget.valueAsNumber)}
         onPointerDown={setVolumeFromPointer}
       />
+      {showPercent ? (
+        <span
+          aria-hidden="true"
+          data-volume-percent=""
+          className={classNames(
+            "shrink-0 text-xs font-bold text-(--video-player-control-text-muted) tabular-nums",
+            collapsible &&
+              "w-0 overflow-hidden opacity-0 transition-[width,opacity] duration-200 ease-out group-focus-within/volume:w-9 group-focus-within/volume:opacity-100 group-hover/volume:w-9 group-hover/volume:opacity-100",
+          )}
+        >
+          {Math.round((muted ? 0 : volume) * 100)}%
+        </span>
+      ) : null}
     </div>
   );
 }

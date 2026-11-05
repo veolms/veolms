@@ -4,10 +4,12 @@ export const GENERIC_API_ERROR_MESSAGE =
 /**
  * A request that got no answer at all. It may never have left the device,
  * so blaming the server ("on our end") sent students looking in the wrong
- * place, and support found nothing in the server logs.
+ * place, and support found nothing in the server logs. Kept to one short
+ * sentence: it is shown beside a field's label (the sign-in window's Email),
+ * where the longer "Can't reach our server. …" wrapped onto two lines.
  */
 export const UNREACHABLE_API_ERROR_MESSAGE =
-  "Can't reach our server. Check your connection and try again.";
+  "Check your connection and try again.";
 
 export interface ApiError {
   status: number;

@@ -27,6 +27,7 @@ import {
 import { renderContentWithMentions } from "../learning/discussion-editor/MentionLink";
 import { requestDiscussionReplyFocus } from "./discussionReplyFocus";
 import { cn } from "../lib/utils";
+import { HighlightedText, useSearchHighlight } from "../lib/searchHighlight";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 // Drawn with the row, not loaded after it: a post first shown as plain
 // text and then redrawn as Markdown jumps in front of the learner.
@@ -124,6 +125,20 @@ export function getDiscussionAttachmentLabel(
  * lines. Pressing it opens the discussion beside the list; its course and
  * lesson, and its menu, lead to the lesson itself.
  */
+/**
+ * The part of a reply around the first place the search appears in it, so
+ * the match is within the two lines the row shows. The whole text when the
+ * search is not in it (the reply was found by its author's name).
+ */
+function excerptAround(text: string, search: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  const term = search.trim().toLowerCase();
+  const at = term ? flat.toLowerCase().indexOf(term) : -1;
+  if (at <= 60) return flat;
+  const start = flat.lastIndexOf(" ", at - 40);
+  return `…${flat.slice(start > 0 ? start + 1 : at - 40)}`;
+}
+
 export function DiscussionWorkspaceRow({
   card,
   destination,
@@ -163,6 +178,7 @@ export function DiscussionWorkspaceRow({
   const markdown = card.content?.trim() || "";
   const isNote = card.itemType === "note" || card.kind === "note";
   const username = card.authorUsername.replace(/^@+/, "");
+  const search = useSearchHighlight();
 
   // The row, its name and Enter select it; pressed again while it is the
   // open discussion, they close the panel. "Reply" always opens it.
@@ -229,7 +245,10 @@ export function DiscussionWorkspaceRow({
                 card.isOwn ? "you" : card.author
               }`}
             >
-              {card.isOwn ? `${card.author || "You"} (You)` : card.author}
+              <HighlightedText
+                text={card.isOwn ? card.author || "You" : card.author}
+              />
+              {card.isOwn ? " (You)" : null}
             </button>
             <span
               className="text-[0.8125rem] text-(--muted)"
@@ -250,7 +269,7 @@ export function DiscussionWorkspaceRow({
           </div>
           {username && (
             <span className="truncate text-[0.8125rem] text-(--muted)">
-              @{username}
+              @<HighlightedText text={username} />
             </span>
           )}
         </div>
@@ -263,6 +282,35 @@ export function DiscussionWorkspaceRow({
 
         {(markdown || text) && (
           <RowMarkdown markdown={markdown} fallbackText={text} />
+        )}
+
+        {/* Found by a reply: the reply is shown, so the match is visible
+            without opening the discussion. */}
+        {card.searchMatchedReply && (
+          <p
+            className="m-0 line-clamp-2 border-l-2 border-[color-mix(in_srgb,var(--accent)_55%,transparent)] pl-2.5 text-[0.875rem] text-(--muted)"
+            data-search-matched-reply=""
+          >
+            <span className="font-semibold text-(--text)">
+              Reply from{" "}
+              <HighlightedText text={card.searchMatchedReply.authorName} />
+              {card.searchMatchedReply.authorUsername ? (
+                <>
+                  {" "}
+                  <span className="font-normal text-(--muted)">
+                    @
+                    <HighlightedText
+                      text={card.searchMatchedReply.authorUsername}
+                    />
+                  </span>
+                </>
+              ) : null}
+              :
+            </span>{" "}
+            <HighlightedText
+              text={excerptAround(card.searchMatchedReply.plainText, search)}
+            />
+          </p>
         )}
 
         {attachmentLabel && (

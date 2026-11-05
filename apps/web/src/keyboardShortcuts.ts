@@ -6,6 +6,24 @@ export const isEditingShortcutTarget = (target: EventTarget | null): boolean =>
     ),
   );
 
+let lessonVideosTakingNumberKeys = 0;
+
+/**
+ * A lesson video on screen takes 1-9 and 0 to jump to that tenth when the
+ * learner has number keys switched to the video (settings > Advanced); the
+ * sidebar's pages then move to Alt with them. Returns the release.
+ */
+export const claimNumberKeysForVideo = (): (() => void) => {
+  lessonVideosTakingNumberKeys += 1;
+  return () => {
+    lessonVideosTakingNumberKeys -= 1;
+  };
+};
+
+/** Whether the sidebar's pages are on Alt+1-9 just now (see above). */
+export const sidebarNumberKeysNeedAlt = (): boolean =>
+  lessonVideosTakingNumberKeys > 0;
+
 export const getNumberShortcutIndex = (
   event: Pick<
     KeyboardEvent,

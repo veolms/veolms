@@ -14,6 +14,11 @@ export interface DiscussionFormattingState {
   linkUrl: string;
 }
 
+export interface DiscussionEditorSelection {
+  from: number;
+  to: number;
+}
+
 export interface DiscussionEditorCommands {
   focus(): void;
   undo(): boolean;
@@ -30,7 +35,11 @@ export interface DiscussionEditorCommands {
   toggleBlockquote(): void;
   applyLink(href: string): void;
   removeLink(): void;
-  insertMarkdown(markdown: string): void;
+  getSelection(): DiscussionEditorSelection | null;
+  insertMarkdown(
+    markdown: string,
+    selection?: DiscussionEditorSelection | null,
+  ): void;
   getFormattingState(): DiscussionFormattingState;
 }
 
@@ -77,12 +86,30 @@ export function createDiscussionEditorCommands(
       withView((view) => toggleLinePrefix(view, "> ", BLOCKQUOTE_PREFIX)),
     applyLink: (href) => withView((view) => applyLink(view, href)),
     removeLink: () => withView(removeLink),
-    insertMarkdown: (markdown) =>
+    getSelection: () => {
+      const selection = getView()?.state.selection.main;
+      return selection ? { from: selection.from, to: selection.to } : null;
+    },
+    insertMarkdown: (markdown, preservedSelection) =>
       withView((view) => {
-        const selection = view.state.selection.main;
+        const currentSelection = view.state.selection.main;
+        const selection = preservedSelection
+          ? {
+              from: Math.min(
+                Math.max(0, preservedSelection.from),
+                view.state.doc.length,
+              ),
+              to: Math.min(
+                Math.max(0, preservedSelection.to),
+                view.state.doc.length,
+              ),
+            }
+          : currentSelection;
+        const from = Math.min(selection.from, selection.to);
+        const to = Math.max(selection.from, selection.to);
         view.dispatch({
-          changes: { from: selection.from, to: selection.to, insert: markdown },
-          selection: { anchor: selection.from + markdown.length },
+          changes: { from, to, insert: markdown },
+          selection: { anchor: from + markdown.length },
         });
       }),
     getFormattingState: () => getFormattingState(getView()),

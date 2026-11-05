@@ -34,6 +34,11 @@ const lessonDiscussionThreadItemSchema = z.object({
   identity: z.string().regex(/^thread:[0-9a-f-]{36}$/iu),
   entityId: z.uuid(),
   thread: learningThreadSchema,
+  /**
+   * With a search: the replies it found in this thread, oldest first. The
+   * page opens the thread's replies to show them. Absent when none did.
+   */
+  searchMatchedReplyIds: z.array(z.uuid()).max(20).optional(),
 });
 
 const lessonDiscussionNoteItemSchema = z.object({

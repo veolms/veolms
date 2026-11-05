@@ -16,7 +16,7 @@ import {
 import { ExpandableSearch } from "../../ExpandableSearch";
 import { ThemedSelect } from "../../ThemedSelect";
 import { CommentCard } from "../CommentCard";
-import type { Comment } from "../CommentCard";
+import type { Comment, LinkedCommentHighlight } from "../CommentCard";
 import { CommentComposer } from "../CommentComposer";
 import { getApplicationScrollElement } from "../../shell/applicationScroll";
 import {
@@ -90,6 +90,12 @@ interface ThreadSurfaceProps {
   onNoteDeepLinkHandled?: (noteId: string) => void;
   /** The thread a link led to; its card keeps a highlight in the list. */
   linkedThreadId?: string | null;
+  /**
+   * How the linked comment is highlighted, until the visitor clears it: a
+   * reply in it to highlight as well, and whether the link came from an
+   * email (the card then says so, with a Clear button). Null once cleared.
+   */
+  linkedHighlight?: LinkedCommentHighlight | null;
   /** The same thread while its highlight has still to play. */
   highlightedThreadId?: string | null;
   onThreadHighlightShown?: () => void;
@@ -285,6 +291,7 @@ export function ThreadSurface({
   noteDeepLinkTargetId = null,
   onNoteDeepLinkHandled,
   linkedThreadId = null,
+  linkedHighlight = null,
   highlightedThreadId = null,
   onThreadHighlightShown,
   discussionCount,
@@ -567,9 +574,13 @@ export function ThreadSurface({
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
+      // The emoji picker opens in a layer outside the composer; a press on
+      // an emoji closed the composer before the emoji could be inserted.
       if (
         target instanceof Element &&
-        target.closest("[data-comment-composer-container]")
+        target.closest(
+          "[data-comment-composer-container], [data-comment-emoji-picker]",
+        )
       ) {
         return;
       }
@@ -704,6 +715,10 @@ export function ThreadSurface({
     onSeekToTimestamp,
     onCopyTextNotice,
     onThreadHighlightShown,
+    // Liking without access asks to log in (or get access), as the composer does.
+    onParticipationRequired: onParticipationAction
+      ? askToParticipate
+      : undefined,
   });
 
   const renderEntry = useCallback(
@@ -728,6 +743,9 @@ export function ThreadSurface({
         onCopyTextNotice={cardHandlers.onCopyTextNotice}
         courseId={courseId}
         canParticipate={canParticipate}
+        onParticipationRequired={
+          canParticipate ? undefined : cardHandlers.onParticipationRequired
+        }
         constrainToContainer
         canEdit={
           canParticipate &&
@@ -743,10 +761,18 @@ export function ThreadSurface({
           getServerEntityId(entry) === noteDeepLinkTargetId,
         )}
         showHighlightedLabel={Boolean(
+          linkedHighlight &&
           linkedThreadId &&
           entry.entryKind !== "note" &&
           getServerEntityId(entry) === linkedThreadId,
         )}
+        linkedHighlight={
+          linkedThreadId &&
+          entry.entryKind !== "note" &&
+          getServerEntityId(entry) === linkedThreadId
+            ? linkedHighlight
+            : null
+        }
         isHighlighted={Boolean(
           highlightedThreadId &&
           entry.entryKind !== "note" &&
@@ -764,6 +790,7 @@ export function ThreadSurface({
       canParticipate,
       noteDeepLinkTargetId,
       linkedThreadId,
+      linkedHighlight,
       highlightedThreadId,
       canModerate,
     ],

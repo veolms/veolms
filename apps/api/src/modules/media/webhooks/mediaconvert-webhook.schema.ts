@@ -67,6 +67,8 @@ export const mediaConvertEventDetailSchema = z
     errorMessage: z.string().optional(),
     errorCode: z.number().optional(),
     jobPercentComplete: z.number().optional(),
+    masterPlaylistPath: z.string().optional(),
+    availableQualities: z.array(z.number()).optional(),
   })
   .passthrough();
 export type MediaConvertEventDetail = z.infer<

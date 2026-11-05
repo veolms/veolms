@@ -303,17 +303,6 @@ export async function insertUser(
     .execute();
 }
 
-/** Atomically changes an active account into a deactivated account. */
-export async function deactivateUser(database: Executor, userId: string) {
-  return database
-    .updateTable("users")
-    .set({ is_deleted: true, updated_at: new Date() })
-    .where("id", "=", userId)
-    .where("is_deleted", "=", false)
-    .returningAll()
-    .executeTakeFirst();
-}
-
 export interface UpdateUserProfileInput {
   username?: string;
   displayName?: string;

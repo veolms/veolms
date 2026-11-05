@@ -306,27 +306,6 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
     },
     controller.deleteUploadedAvatars,
   );
-
-  app.delete(
-    "/auth/me",
-    {
-      schema: {
-        operationId: "deactivateCurrentUserAccount",
-        tags: ["Auth"],
-        summary: "Deactivate the current user account",
-        description:
-          "Deactivates the authenticated account, invalidates every active session, and queues a confirmation email.",
-        response: {
-          200: jsonResponse("Account deactivated.", authMessageResponseSchema),
-          401: errorResponse("Authentication required."),
-          403: errorResponse("MFA step-up required."),
-          404: errorResponse("User account was not found."),
-        },
-      },
-      preHandler: context.mfaVerified,
-    },
-    controller.deactivateAccount,
-  );
 };
 
 export default authenticationRoutes;

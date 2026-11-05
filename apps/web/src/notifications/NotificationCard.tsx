@@ -89,12 +89,14 @@ export function NotificationCard({
   };
 
   return (
+    // A read card's opacity makes it a stacking context, so its menu's
+    // z-index only counted inside the card and the next card painted over
+    // the menu. The card with an open menu is lifted above its neighbours
+    // and drops the fade, which the menu would otherwise show through.
     <article
       id={notification.id}
-      className={`group relative rounded-2xl border border-(--border) p-4 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover)) ${
-        notification.isRead
-          ? "bg-(--card-surface-raised,var(--surface)) opacity-90"
-          : "bg-(--card-surface-raised,var(--surface))"
+      className={`group relative rounded-2xl border border-(--border) p-4 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover)) bg-(--card-surface-raised,var(--surface)) ${
+        menuOpen ? "z-30" : notification.isRead ? "opacity-90" : ""
       }`}
       style={{ boxShadow: "var(--card-shadow)" }}
     >

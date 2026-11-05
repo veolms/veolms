@@ -19,6 +19,12 @@ export interface PlatformAppearanceSettings {
    * app's theme ids; an id it does not know falls back to its first theme.
    */
   defaultColorTheme: string;
+  /**
+   * The video player theme everyone sees until they pick their own in the
+   * player's settings. A player theme id; an id the web app does not have
+   * (a plugin theme that is not installed) plays as YouTube.
+   */
+  defaultVideoPlayerTheme: string;
 }
 
 export interface PlatformSecuritySettings {
@@ -95,4 +101,5 @@ export const DEFAULT_PLATFORM_APPEARANCE_SETTINGS: PlatformAppearanceSettings =
   {
     defaultDisplayMode: "dark",
     defaultColorTheme: "ocean",
+    defaultVideoPlayerTheme: "youtube",
   };

@@ -263,3 +263,69 @@ export function threadRepliesMatchSql(threadIdColumn: string, pattern: string) {
       )
   )`;
 }
+
+/**
+ * For each thread, the first (oldest) active reply that matches the
+ * pattern the same way `threadRepliesMatchSql` does: what to show on a
+ * search result that was found by one of its replies.
+ */
+export async function findFirstMatchingReplies(
+  db: DatabaseExecutor,
+  threadIds: readonly string[],
+  pattern: string,
+): Promise<
+  Map<
+    string,
+    {
+      id: string;
+      authorName: string;
+      authorUsername: string | null;
+      plainText: string;
+    }
+  >
+> {
+  const matched = new Map<
+    string,
+    {
+      id: string;
+      authorName: string;
+      authorUsername: string | null;
+      plainText: string;
+    }
+  >();
+  if (threadIds.length === 0) return matched;
+  const result = await sql<{
+    threadId: string;
+    id: string;
+    displayName: string | null;
+    username: string | null;
+    plainText: string;
+  }>`
+    select distinct on (sr.thread_id)
+      sr.thread_id as "threadId",
+      sr.id,
+      sru.display_name as "displayName",
+      sru.username,
+      sr.plain_text as "plainText"
+    from learning_replies sr
+    left join users sru on sru.id = sr.user_id and sru.is_deleted = false
+    where sr.thread_id in (${sql.join(threadIds.map((id) => sql`${id}`))})
+      and sr.status = 'active'
+      and (
+        lower(sr.plain_text) like ${pattern}
+        or lower(coalesce(sru.display_name, '')) like ${pattern}
+        or lower(coalesce(sru.username, '')) like ${pattern}
+        or lower(coalesce(sru.email, '')) like ${pattern}
+      )
+    order by sr.thread_id, sr.created_at, sr.id
+  `.execute(db);
+  for (const row of result.rows) {
+    matched.set(row.threadId, {
+      id: row.id,
+      authorName: row.displayName?.trim() || row.username?.trim() || "Someone",
+      authorUsername: row.username?.trim() || null,
+      plainText: row.plainText,
+    });
+  }
+  return matched;
+}

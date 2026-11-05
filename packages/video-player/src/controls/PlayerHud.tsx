@@ -132,6 +132,9 @@ export function PlayerHud() {
     );
   }
   if (hud.variant === "volume") {
+    // On a phone the volume pill's own slider shows the level, and the
+    // pill, open at the top of the player, would cover this one.
+    if (mobileInteraction) return null;
     const level = getVolumeLevel(hud.level ?? 0);
 
     return (

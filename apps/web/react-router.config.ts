@@ -28,11 +28,14 @@ const staticApplicationPages = [
   "/settings/learning",
   "/settings/security",
   "/settings/account",
+  // The legal and company pages.
   "/terms",
   "/privacy",
-  "/refund-policy",
+  "/policies",
   "/contact",
   "/about",
+  "/community-guidelines",
+  "/delete-account",
 ];
 
 const requestedLearningPrerenderScope =

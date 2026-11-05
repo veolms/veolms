@@ -932,7 +932,8 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
       },
       proxy: {
         "/v1": {
-          target: "http://127.0.0.1:4000",
+          // VITE_API_PROXY_TARGET points a second dev server at another API.
+          target: process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:4000",
           changeOrigin: true,
           secure: false,
         },

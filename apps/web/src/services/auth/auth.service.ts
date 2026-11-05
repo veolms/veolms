@@ -343,8 +343,4 @@ export const authService = {
   logout: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/logout");
   },
-
-  deactivateAccount: (): Promise<AuthMessageResponse> => {
-    return api.delete<AuthMessageResponse>("/auth/me");
-  },
 };
