@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { isIP } from "node:net";
 
-import type { Database } from "@veolms/database";
+import { withLocalCommit, type Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { config } from "../../../config.ts";
@@ -43,6 +43,44 @@ import { createPlatformSettingsService } from "../../platform/platform-settings.
 
 export interface SessionServiceOptions {
   database: Kysely<Database>;
+}
+
+/**
+ * Sessions this process marked as used, and when. A session's "last used"
+ * time is kept to within 15 minutes, so each process writes it at most once
+ * per session per 15 minutes, even while the sign-in cache still holds the
+ * older time.
+ */
+const touchedSessions = new Map<string, number>();
+const SESSION_TOUCH_EVERY_MS = 15 * 60 * 1000;
+
+/**
+ * Records that a session was used, without making the request wait.
+ *
+ * Committed locally (`withLocalCommit`): the time only feeds "last active"
+ * in the sessions list, so waiting for the replica on every learner's first
+ * request after 15 minutes (measured 2026-11-05: ~160 ms per write, the
+ * busiest query under load) is not worth it. A failed write is retried by
+ * the next request after the interval.
+ */
+export function touchSessionInBackground(
+  database: Kysely<Database>,
+  sessionId: string,
+  now: number = Date.now(),
+): Promise<void> | null {
+  const last = touchedSessions.get(sessionId);
+  if (last !== undefined && now - last < SESSION_TOUCH_EVERY_MS) return null;
+  touchedSessions.set(sessionId, now);
+  if (touchedSessions.size > 50_000) {
+    for (const [id, at] of touchedSessions) {
+      if (now - at >= SESSION_TOUCH_EVERY_MS) touchedSessions.delete(id);
+    }
+  }
+  return withLocalCommit(database, (executor) =>
+    sessionRepository.touchSession(executor, sessionId, new Date(now)),
+  ).catch(() => {
+    touchedSessions.delete(sessionId);
+  });
 }
 
 /**
@@ -377,7 +415,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     if (session.last_used_at < fifteenMinutesAgo) {
-      await sessionRepository.touchSession(database, session.id, new Date());
+      void touchSessionInBackground(database, session.id);
     }
 
     const context: AuthenticatedRequestContext = {
