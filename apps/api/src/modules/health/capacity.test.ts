@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   capacityThresholds,
   nextCapacityState,
+  sustainedEventLoopDelayMs,
   type CapacitySample,
   type CapacityState,
 } from "@veolms/api-core";
@@ -111,6 +112,36 @@ await test("a server that cannot reach the database boss is full, and has room o
   assert.deepEqual(cutOff, { full: true, reason: "database boss unreachable" });
   assert.deepEqual(
     nextCapacityState(cutOff, { ...quiet, bossUnreachable: false }, limits),
+    room,
+  );
+});
+
+await test("one slow second does not make a server full; three in a row do", () => {
+  const judge = (recentMs: number[]) =>
+    nextCapacityState(
+      room,
+      { ...quiet, eventLoopDelayMs: sustainedEventLoopDelayMs(recentMs) },
+      limits,
+    );
+  // Seen on idle production servers about once a minute (210-310 ms).
+  assert.deepEqual(judge([20, 20, 300]), room);
+  assert.deepEqual(judge([300, 20, 300]), room);
+  assert.deepEqual(judge([250, 300, 280]), {
+    full: true,
+    reason: "event loop",
+  });
+  // Just started: too few samples to say.
+  assert.equal(sustainedEventLoopDelayMs([500, 500]), 0);
+});
+
+await test("a server full by its event loop has room again after one on-time second", () => {
+  const full: CapacityState = { full: true, reason: "event loop" };
+  assert.deepEqual(
+    nextCapacityState(
+      full,
+      { ...quiet, eventLoopDelayMs: sustainedEventLoopDelayMs([300, 300, 40]) },
+      limits,
+    ),
     room,
   );
 });

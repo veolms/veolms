@@ -17,7 +17,8 @@ import type { FastifyInstance } from "fastify";
  * Full means any of: the whole machine's CPU over CAPACITY_CPU_FULL_PERCENT
  * (5 s average, Postgres included, so it is the same answer from every API
  * process on the machine), memory in use over CAPACITY_MEMORY_FULL_PERCENT,
- * the event loop late by more than 200 ms, more requests waiting for a
+ * the event loop late by more than 200 ms for 3 seconds in a row, more
+ * requests waiting for a
  * database connection than a pool holds, or the drain file present. It has
  * room again only when everything is back under the lower "room" levels, so
  * it does not flip on and off around one value.
@@ -147,6 +148,26 @@ function readMemoryPercent(): number {
 
 const SAMPLE_INTERVAL_MS = 1_000;
 const CPU_WINDOW_SAMPLES = 5;
+/**
+ * The event loop counts as late only when it was late in each of the last 3
+ * one-second samples. A single slow second (a large JSON response, a garbage
+ * collection, a batch job's tick) happens on an idle server about once a
+ * minute and would otherwise send its learners elsewhere for no reason.
+ */
+export const EVENT_LOOP_SUSTAINED_SAMPLES = 3;
+
+/**
+ * The event-loop delay to judge capacity by: the lowest of the latest
+ * samples (one per second, newest last), so it is over a limit only if every
+ * one of them is. Fewer samples than needed (just started) count as on time.
+ */
+export function sustainedEventLoopDelayMs(
+  recentMs: readonly number[],
+  samples = EVENT_LOOP_SUSTAINED_SAMPLES,
+): number {
+  if (recentMs.length < samples) return 0;
+  return Math.min(...recentMs.slice(-samples));
+}
 
 let report: CapacityReport = {
   cpuPercent: 0,
@@ -170,11 +191,16 @@ export function registerCapacityMonitor(
   const delay = monitorEventLoopDelay({ resolution: 20 });
   delay.enable();
   const window: CpuTimes[] = [readCpuTimes()];
+  const recentDelayMs: number[] = [];
   let state: CapacityState = { full: false, reason: null };
 
   const timer = setInterval(() => {
     window.push(readCpuTimes());
     if (window.length > CPU_WINDOW_SAMPLES + 1) window.shift();
+    recentDelayMs.push(delay.percentile(99) / 1e6);
+    if (recentDelayMs.length > EVENT_LOOP_SUSTAINED_SAMPLES) {
+      recentDelayMs.shift();
+    }
     const first = window[0];
     const last = window[window.length - 1];
     const totalDelta = last && first ? last.total - first.total : 0;
@@ -182,7 +208,7 @@ export function registerCapacityMonitor(
     const sample: CapacitySample = {
       cpuPercent: totalDelta > 0 ? 100 * (1 - idleDelta / totalDelta) : 0,
       memoryPercent: readMemoryPercent(),
-      eventLoopDelayMs: delay.percentile(99) / 1e6,
+      eventLoopDelayMs: sustainedEventLoopDelayMs(recentDelayMs),
       poolsOverloaded: getDatabasePoolMetrics().some(
         (pool) => pool.waiting > pool.max,
       ),
