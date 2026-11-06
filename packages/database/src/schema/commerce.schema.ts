@@ -85,6 +85,21 @@ export interface CouponTable {
   updated_at: Generated<Date>;
 }
 
+export type CouponDiscountRuleTarget = "course" | "bundle";
+
+/** A course's or bundle's own discount under a coupon. */
+export interface CouponDiscountRuleTable {
+  id: string;
+  coupon_id: string;
+  target_type: CouponDiscountRuleTarget;
+  target_id: string;
+  discount_type: CouponDiscountType;
+  discount_value: number;
+  max_discount_amount: number | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface CouponRedemptionTable {
   id: string;
   coupon_id: string;

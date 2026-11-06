@@ -1,5 +1,8 @@
 import { sql } from "kysely";
-import type { CouponDiscountType } from "@veolms/database";
+import type {
+  CouponDiscountRuleTarget,
+  CouponDiscountType,
+} from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 import { exactCursorTimestamp } from "../../../lib/keyset.ts";
 
@@ -386,4 +389,60 @@ export async function getCouponOverallSummary(
     totalRedemptions: Number(redemptions?.total_redemptions ?? 0),
     totalDiscountGiven: Number(redemptions?.total_discount_given ?? 0),
   };
+}
+
+/** A coupon's own per-course and per-bundle discounts. */
+export async function listCouponDiscountRules(
+  database: Executor,
+  couponId: string,
+) {
+  return await database
+    .selectFrom("coupon_discount_rules")
+    .select([
+      "target_type",
+      "target_id",
+      "discount_type",
+      "discount_value",
+      "max_discount_amount",
+    ])
+    .where("coupon_id", "=", couponId)
+    .orderBy("created_at")
+    .orderBy("id")
+    .execute();
+}
+
+/**
+ * Makes `rules` the coupon's whole set: rules not listed are removed. Call
+ * inside the transaction that writes the coupon.
+ */
+export async function replaceCouponDiscountRules(
+  database: Executor,
+  couponId: string,
+  rules: ReadonlyArray<{
+    target_type: CouponDiscountRuleTarget;
+    target_id: string;
+    discount_type: CouponDiscountType;
+    discount_value: number;
+    max_discount_amount: number | null;
+  }>,
+) {
+  await database
+    .deleteFrom("coupon_discount_rules")
+    .where("coupon_id", "=", couponId)
+    .execute();
+  if (rules.length === 0) return;
+  const now = new Date();
+  await database
+    .insertInto("coupon_discount_rules")
+    .values(
+      rules.map((rule, i) => ({
+        id: crypto.randomUUID(),
+        coupon_id: couponId,
+        ...rule,
+        // Kept in the order given.
+        created_at: new Date(now.getTime() + i),
+        updated_at: now,
+      })),
+    )
+    .execute();
 }

@@ -80,6 +80,7 @@ import type {
   CartTable,
   CartItemTable,
   CouponTable,
+  CouponDiscountRuleTable,
   CouponRedemptionTable,
   OrderTable,
   InvoiceNumberCounterTable,
@@ -201,6 +202,7 @@ export interface Database {
   carts: CartTable;
   cart_items: CartItemTable;
   coupons: CouponTable;
+  coupon_discount_rules: CouponDiscountRuleTable;
   coupon_redemptions: CouponRedemptionTable;
   orders: OrderTable;
   invoice_number_counters: InvoiceNumberCounterTable;
