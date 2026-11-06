@@ -486,6 +486,23 @@ const serverConfigSchema = z.object({
    * the sending domain rate-limited by Gmail, delaying sign-in codes too.
    */
   NOTIFICATION_COURSE_WIDE_EMAIL: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Serves GET /notifications/stream, a Server-Sent Events stream that tells
+   * a signed-in browser the moment its notifications change, so the badge
+   * and list refresh without waiting for the next poll. Off, the endpoint
+   * answers 503 and the web app falls back to polling every 2 minutes.
+   */
+  NOTIFICATION_STREAM_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Open notification streams one user may hold on one API process (one
+   * per browser tab). Beyond it the stream is refused and that tab polls.
+   */
+  NOTIFICATION_STREAM_MAX_PER_USER: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .default(8),
 
   // SMS Delivery
   /**

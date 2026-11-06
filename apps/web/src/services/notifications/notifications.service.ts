@@ -6,7 +6,7 @@ import type {
   UpdateNotificationPreferences,
 } from "@veolms/contracts";
 
-import { api } from "../../lib/api-client";
+import { api, getApiRequestUrl } from "../../lib/api-client";
 import type { NotificationListFilters } from "./notifications.keys";
 
 export const notificationsService = {
@@ -15,6 +15,15 @@ export const notificationsService = {
   ): Promise<NotificationListResponse> =>
     api.get<NotificationListResponse>("/notifications", {
       params: { limit: 25, ...filters },
+    }),
+
+  /**
+   * Server-Sent Events: `ready` once open, `changed` when this user's
+   * notifications change. Carries no notifications; refetch on each.
+   */
+  openChangeStream: (): EventSource =>
+    new window.EventSource(getApiRequestUrl("/notifications/stream"), {
+      withCredentials: true,
     }),
 
   summary: (): Promise<NotificationSummary> =>
