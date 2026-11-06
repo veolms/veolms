@@ -7,6 +7,7 @@ import { AppSlider } from "../AppSlider";
 import { LaptopWallpaperSettingsCard } from "./LaptopWallpaperSettingsCard";
 import { LearningGoalSettingsCard } from "./LearningGoalSettingsCard";
 import { PlayerThemePicker } from "./PlayerThemePicker";
+import { useAcademyPlayerTheme } from "../learning/player/useLearningPlayerTheme";
 import { StorageSettingsCard } from "./StorageSettingsCard";
 import { useAdminOnlySettings } from "./useAdminOnlySettings";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
@@ -63,14 +64,15 @@ export function LearningSettings({
   const [preferences, setPreferences] = useState({
     ...LEARNING_PREFERENCE_DEFAULTS,
   });
-  // Shown to admins alone (see `useAdminOnlySettings`): the player theme,
-  // which learners are not offered yet (see `useLearningPlayerTheme`), and
-  // the settings below that nothing reads yet, so changing them did nothing:
+  // Shown to admins alone (see `useAdminOnlySettings`): the settings below
+  // that nothing reads yet, so changing them did nothing:
   // default speed (the player keeps its own), theatre mode on
   // opening, captions by default and their language, the transcript (there
   // is none), four course navigation choices, and the two scrollbars (with
   // scrollbars hidden by default they changed nothing either).
   const showAdminSettings = useAdminOnlySettings();
+  // The picker shows the academy's theme while this browser follows it.
+  const academyPlayerTheme = useAcademyPlayerTheme();
   const [storageReady, setStorageReady] = useState(false);
   const [customSeekInterval, setCustomSeekInterval] = useState(false);
   const update = (next: Partial<LearningPreferences>) =>
@@ -149,12 +151,12 @@ export function LearningSettings({
             <h3 id="playback-preferences-heading">Playback preferences</h3>
           </header>
           <div className="settings-learning-card__rows">
+            <PlayerThemePicker
+              value={preferences.playerThemeChoice || academyPlayerTheme}
+              onChange={(playerThemeChoice) => update({ playerThemeChoice })}
+            />
             {showAdminSettings ? (
               <>
-                <PlayerThemePicker
-                  value={preferences.videoPlayerTheme}
-                  onChange={(videoPlayerTheme) => update({ videoPlayerTheme })}
-                />
                 <LearningSelectRow
                   id="learning-playback-speed"
                   label="Default playback speed"

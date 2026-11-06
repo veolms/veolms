@@ -1,6 +1,6 @@
 import {
-  DEFAULT_PLAYBACK_RATES,
   formatPlaybackRate,
+  PRESET_PLAYBACK_RATES,
 } from "../../playback/playbackRates";
 import { usePlayerController } from "../../react/context";
 import { usePlayerState } from "../../react/usePlayerState";
@@ -24,7 +24,7 @@ export function PlaybackRateMenu({
   onRateChange,
   open,
   panelClassName,
-  rates = DEFAULT_PLAYBACK_RATES,
+  rates = PRESET_PLAYBACK_RATES,
   side,
   trigger,
   triggerClassName,

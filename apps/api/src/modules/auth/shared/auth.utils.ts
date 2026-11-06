@@ -23,6 +23,15 @@ export function isTestLoginAccount(email: string | null | undefined): boolean {
   return Boolean(email && config.TEST_LOGIN_ACCOUNTS.has(email.toLowerCase()));
 }
 
+/**
+ * Whether every account may leave any course it is enrolled in, as an admin
+ * or a test account may: on a developer's machine with
+ * LOCAL_ANY_COURSE_UNENROLL, never anywhere else.
+ */
+export function isLocalAnyCourseUnenroll(): boolean {
+  return config.NODE_ENV === "development" && config.LOCAL_ANY_COURSE_UNENROLL;
+}
+
 export function generateRandomToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }

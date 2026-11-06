@@ -5,7 +5,6 @@ import type {
   CreateLearningNoteRequest,
   CreateLearningReplyRequest,
   CreateLearningThreadRequest,
-  CreateReportRequest,
   InitiateAttachmentUploadRequest,
   InitiateAttachmentUploadResponse,
   LearningNote,
@@ -386,15 +385,6 @@ export const learningInteractionsService = {
       );
 
       return this.completeUpload({ attachmentId: initiated.attachmentId });
-    });
-  },
-
-  // Reporting
-  createReport(payload: CreateReportRequest): Promise<{ message: string }> {
-    const serverId = requireServerEntityId(payload.targetId);
-    return api.post<{ message: string }>("/reports", {
-      ...payload,
-      targetId: serverId,
     });
   },
 };

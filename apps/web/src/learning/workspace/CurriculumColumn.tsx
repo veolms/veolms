@@ -13,6 +13,7 @@ import {
   type getRightPanelShortcutLabel,
 } from "../../keyboardShortcuts";
 import { Curriculum } from "../Curriculum";
+import { useLessonListTheme } from "../player/useLearningPlayerTheme";
 import type { AdaptedCurriculumSection } from "../courseCurriculumAdapter";
 import {
   CURRICULUM_COLLAPSED_WIDTH,
@@ -131,6 +132,7 @@ export function CurriculumColumn({
   setChaptersPanelHost,
   listShown,
 }: CurriculumColumnProps) {
+  const lessonTheme = useLessonListTheme("page");
   // prettier-ignore
   return (
     <SplitFramePane
@@ -144,6 +146,7 @@ export function CurriculumColumn({
       <div
         className={`learning-workspace__curriculum-column ${curriculumCollapsed ? "is-collapsed" : ""}`}
         data-split-frame-card=""
+        data-lesson-theme={lessonTheme}
       >
         <SplitFrameGutter
           className="learning-curriculum__resize-rail"

@@ -1,4 +1,4 @@
-import type { FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import type {
   CheckoutPreviewRequest,
   CreateCheckoutOrderRequest,
@@ -6,6 +6,7 @@ import type {
 import type { CheckoutService } from "./checkout.service.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { config } from "../../../config.ts";
+import { pricingRegionForCountry } from "../shared/pricing-region.ts";
 import type { PlatformSettingsService } from "../../platform/index.ts";
 
 /**
@@ -39,7 +40,21 @@ export function createCheckoutController({
     request: FastifyRequest<{ Body: CheckoutPreviewRequest }>,
   ) {
     const userId = request.user?.id;
-    return await service.previewCheckout(userId, request.body);
+    return await service.previewCheckout(userId, request.body, {
+      country: buyerCountry(request),
+    });
+  }
+
+  /** Which prices this visitor sees, for the page to show the right one. */
+  async function getPricingRegion(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) {
+    const country = buyerCountry(request);
+    // Answered per request: a shared cache would hand one visitor's
+    // country to the next.
+    reply.header("Cache-Control", "private, no-store");
+    return { region: pricingRegionForCountry(country), country };
   }
 
   async function createOrder(
@@ -83,6 +98,7 @@ export function createCheckoutController({
 
   return {
     previewCheckout,
+    getPricingRegion,
     createOrder,
     releaseCheckoutOrder,
   };

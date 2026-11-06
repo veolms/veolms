@@ -57,17 +57,34 @@ export function SidebarProfileMenuLayer({
   // prettier-ignore
   return (
     <>
-      {isAuthenticated && profileMenuSurfaceMounted && (
+      {/* A guest gets the same menu with only Log in and Help and
+          feedback (see ProfileMenu's `guest`). */}
+      {profileMenuSurfaceMounted && (
         <Suspense fallback={null}>
           <ProfileMenu
             id="desktop-profile-menu"
-            className="profile-menu--animated"
+            // Beside the collapsed sidebar the menus share one bottom line;
+            // the guest's, three rows long, opens level with its button.
+            className={
+              isAuthenticated
+                ? "profile-menu--animated"
+                : "profile-menu--animated in-[.courses-app--collapsed]:top-0! in-[.courses-app--collapsed]:bottom-auto!"
+            }
             isOpen={profileMenu}
             role={effectiveRole}
-            allowedRoles={allowedWorkspaceRoles}
+            allowedRoles={isAuthenticated ? allowedWorkspaceRoles : []}
+            guest={!isAuthenticated}
+            onLogin={
+              isAuthenticated
+                ? undefined
+                : () => {
+                    setEdgeSidebarOpen(false);
+                    dismissProfileMenuThen(() => onNavigatePage("/login"));
+                  }
+            }
             userRoles={userRoles}
             identity={
-              activeUser?.username
+              isAuthenticated && activeUser?.username
                 ? {
                     displayName: shellProfileDisplayName,
                     username: activeUser.username,

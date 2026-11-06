@@ -19,6 +19,12 @@ export interface PlatformAppearanceSettings {
    * app's theme ids; an id it does not know falls back to its first theme.
    */
   defaultColorTheme: string;
+  /**
+   * The video player theme everyone sees until they pick their own in the
+   * player's settings. A player theme id; an id the web app does not have
+   * (a plugin theme that is not installed) plays as YouTube.
+   */
+  defaultVideoPlayerTheme: string;
 }
 
 export interface PlatformSecuritySettings {
@@ -32,7 +38,7 @@ export interface PlatformSecuritySettings {
   maxDevicesPerStudent: number | null;
   /**
    * How many devices a student may play video on at once; null for no limit.
-   * The most recent play wins; the others pause within 15 seconds and show a
+   * The most recent play wins; the others pause within one sync interval (~1 minute) and show a
    * notice. Staff are never limited.
    */
   maxSimultaneousStreams: number | null;
@@ -76,6 +82,13 @@ export interface PlatformInvoiceSettings {
   footerNote: string;
   /** Print the academy's logo (General tab) above the company name. */
   showLogo: boolean;
+  /**
+   * A logo for the invoice only, printed instead of the General tab's one.
+   * The emails are dark and the invoice is white, so a logo with light text
+   * for the emails needs a dark-text version here. Null prints the General
+   * tab's logo. Set by its own upload, never by a settings save.
+   */
+  logoUrl: string | null;
 }
 
 export interface PlatformSettings {
@@ -101,10 +114,12 @@ export const DEFAULT_PLATFORM_INVOICE_SETTINGS: PlatformInvoiceSettings = {
   footerNote:
     "This is computer generated receipt and does not require physical signature",
   showLogo: true,
+  logoUrl: null,
 };
 
 export const DEFAULT_PLATFORM_APPEARANCE_SETTINGS: PlatformAppearanceSettings =
   {
     defaultDisplayMode: "dark",
     defaultColorTheme: "ocean",
+    defaultVideoPlayerTheme: "youtube",
   };

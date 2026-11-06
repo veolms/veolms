@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { LearningProgressBatchRequest } from "@veolms/contracts";
 import { getDeviceTimeZone } from "../lib/device-time-zone";
@@ -29,8 +29,8 @@ import {
   takeWatchedSeconds,
 } from "./learningWatchTime";
 import {
+  handleRefusedLessonPositions,
   hasLessonPositions,
-  refuseLessonPositions,
   restoreLessonPositions,
   takeLessonPositions,
   withLessonPositions,
@@ -42,6 +42,12 @@ import {
   subscribeToClaimRequests,
   takePlayingReport,
 } from "./playbackClaim";
+import {
+  adoptProgressSyncInterval,
+  getProgressSyncIntervalMs,
+  noteProgressActivity,
+  subscribeProgressIdle,
+} from "./progressSyncSchedule";
 import { getApiError } from "../lib/api-client";
 import { markCourseResumeStale } from "./courseResumeCache";
 import { readEarlyProgressCopy } from "../store/lessonEarlyState";
@@ -240,6 +246,9 @@ export function useLearningProgress({
         }
         return result;
       });
+      // A finished lesson (a text or quiz one has no player reporting
+      // activity) is sent within moments, not at the next interval.
+      if (progressPercent >= 100) noteProgressActivity();
     },
     [lessonIdsByNumber],
   );
@@ -308,6 +317,7 @@ export function useLearningProgress({
       isFlushingRef.current = true;
       try {
         const response = await learningProgressService.sync(courseKey, payload);
+        adoptProgressSyncInterval(response.nextSyncSeconds);
         if (response.synced) {
           syncedProgressKnownAtRef.current = Date.now();
           setLocalState((current) =>
@@ -332,13 +342,13 @@ export function useLearningProgress({
         // Restore the fresh-claim flag so the next flush still sends
         // event: "play" rather than silently downgrading to a heartbeat.
         restorePlayingReport(courseKey, playing);
-        // An API from before positions were kept turns the whole batch
-        // down: it goes again without them.
+        // An API from before positions (or their age) were kept turns the
+        // whole batch down: it goes again without them.
         if (
           getApiError(error).status === 400 &&
           items.some((item) => item.positionSeconds !== undefined)
         ) {
-          refuseLessonPositions();
+          handleRefusedLessonPositions(courseKey, positions);
         } else {
           restoreLessonPositions(courseKey, positions);
         }
@@ -368,13 +378,24 @@ export function useLearningProgress({
     };
 
     const unsubscribeClaimRequests = subscribeToClaimRequests(courseKey, flush);
-    const interval = window.setInterval(flush, 15_000);
+    // While a video plays, once per interval (the server names it, see
+    // progressSyncSchedule); a pause or a lesson's end sends at once.
+    let timer: number | undefined;
+    const scheduleNext = () => {
+      timer = window.setTimeout(() => {
+        flush();
+        scheduleNext();
+      }, getProgressSyncIntervalMs());
+    };
+    scheduleNext();
+    const unsubscribeIdle = subscribeProgressIdle(flush);
     window.addEventListener("online", flush);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", handlePageHide);
     return () => {
       unsubscribeClaimRequests();
-      window.clearInterval(interval);
+      window.clearTimeout(timer);
+      unsubscribeIdle();
       window.removeEventListener("online", flush);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);

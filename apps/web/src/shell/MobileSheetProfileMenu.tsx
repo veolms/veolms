@@ -48,13 +48,15 @@ export function MobileSheetProfileMenu({
   // prettier-ignore
   return (
     <div className="mobile-menu-sheet__scroll overflow-x-hidden pb-11">
-      {isAuthenticated && (
+      {/* A guest's sheet has its own Login button above; the menu adds
+          Help and feedback (see ProfileMenu's `guest`). */}
         <Suspense fallback={null}>
           <ProfileMenu
             id="mobile-profile-menu"
             className="mobile-menu-sheet__profile-menu"
             role={effectiveRole}
-            allowedRoles={allowedWorkspaceRoles}
+            allowedRoles={isAuthenticated ? allowedWorkspaceRoles : []}
+            guest={!isAuthenticated}
             userRoles={userRoles}
             unreadNotificationCount={unreadNotificationCount}
             includeSidebarControl={false}
@@ -116,7 +118,6 @@ export function MobileSheetProfileMenu({
             }}
           />
         </Suspense>
-      )}
     </div>
   );
 }

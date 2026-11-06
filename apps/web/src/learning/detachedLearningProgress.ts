@@ -15,8 +15,8 @@ import {
   takeWatchedSeconds,
 } from "./learningWatchTime";
 import {
+  handleRefusedLessonPositions,
   hasLessonPositions,
-  refuseLessonPositions,
   restoreLessonPositions,
   takeLessonPositions,
   withLessonPositions,
@@ -26,6 +26,10 @@ import {
   notifyPlaybackConflict,
   takePlayingReport,
 } from "./playbackClaim";
+import {
+  adoptProgressSyncInterval,
+  getProgressSyncIntervalMs,
+} from "./progressSyncSchedule";
 import { getApiError } from "../lib/api-client";
 import { queryClient } from "../lib/query-client";
 import { markCourseResumeStale } from "./courseResumeCache";
@@ -46,7 +50,6 @@ export interface DetachedProgressTarget {
   lessonIdsByNumber?: ReadonlyMap<number, string>;
 }
 
-const SYNC_INTERVAL_MS = 15_000;
 const MAX_BATCH_ITEMS = 100;
 
 const lastSyncAtByCourse = new Map<string, number>();
@@ -75,7 +78,8 @@ export async function syncDetachedLearningProgress(
   const identity = `${userId}\u0000${courseKey}`;
   if (syncingCourses.has(identity)) return;
   const lastSyncAt = lastSyncAtByCourse.get(identity) ?? 0;
-  if (!force && Date.now() - lastSyncAt < SYNC_INTERVAL_MS) return;
+  // As often as the lesson page sends (the server names the interval).
+  if (!force && Date.now() - lastSyncAt < getProgressSyncIntervalMs()) return;
 
   const pending = getPendingLearningProgress(
     readLearningProgress(userId, courseKey),
@@ -115,6 +119,7 @@ export async function syncDetachedLearningProgress(
       timeZone: getDeviceTimeZone(),
       playing,
     });
+    adoptProgressSyncInterval(response.nextSyncSeconds);
     if (response.synced) {
       writeLearningProgress(
         userId,
@@ -136,12 +141,13 @@ export async function syncDetachedLearningProgress(
     // The items stay pending in storage; the next update or the lesson page
     // sends the same batch again.
     restoreWatchedSeconds(courseKey, watchedSeconds);
-    // An API from before positions were kept turns the whole batch down.
+    // An API from before positions (or their age) were kept turns the
+    // whole batch down: it goes again without them.
     if (
       getApiError(error).status === 400 &&
       items.some((item) => item.positionSeconds !== undefined)
     ) {
-      refuseLessonPositions();
+      handleRefusedLessonPositions(courseKey, positions);
     } else {
       restoreLessonPositions(courseKey, positions);
     }
@@ -155,13 +161,30 @@ export async function syncDetachedLearningProgress(
  * carry it (the usual interval between requests still applies).
  */
 export function syncDetachedWatchTime(target: DetachedProgressTarget): void {
+  syncDetachedLearningProgressSoon(target, false);
+}
+
+/**
+ * Sends what is waiting now, whatever the interval: the mini player has
+ * paused or ended (progressSyncSchedule), so another device should see it.
+ */
+export function flushDetachedLearningProgress(
+  target: DetachedProgressTarget,
+): void {
+  syncDetachedLearningProgressSoon(target, true);
+}
+
+function syncDetachedLearningProgressSoon(
+  target: DetachedProgressTarget,
+  force: boolean,
+): void {
   if (
     peekWatchedSeconds(target.courseKey) < 1 &&
     !hasLessonPositions(target.courseKey)
   ) {
     return;
   }
-  void syncDetachedLearningProgress(target, false);
+  void syncDetachedLearningProgress(target, force);
 }
 
 export function recordDetachedLearningProgress(

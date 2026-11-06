@@ -15,6 +15,8 @@ import {
   formatFullPlacedDate,
   getCourseBrandBadge,
   getOrderStatusStyle,
+  hasOrderInvoice,
+  isOrderRefundable,
   orderItemLabel,
 } from "./orderHelpers";
 import { StudentAvatar } from "./StudentAvatar";
@@ -25,9 +27,6 @@ const ghostIconButtonClasses =
   "grid size-8 shrink-0 place-items-center rounded-lg text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) disabled:pointer-events-none disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-(--accent)";
 const rowButtonClasses =
   "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-(--accent)";
-
-/** Refunds can be made only from an order that was paid. */
-const REFUNDABLE_STATUSES = new Set(["paid", "partially_refunded"]);
 
 export interface OrderDetailsStep {
   hasPrev: boolean;
@@ -122,11 +121,8 @@ export function OrderDetailsContent({
   const showStepButtons = variant !== "phone";
   const issuesRefunds = useCapabilities().can("billing.manage");
   // Nothing to give back from a free order; refunds take billing.manage.
-  const canRefund =
-    issuesRefunds &&
-    REFUNDABLE_STATUSES.has(order.status) &&
-    order.totalAmount > 0;
-  const hasInvoice = Boolean(order.invoiceNumber);
+  const canRefund = issuesRefunds && isOrderRefundable(order);
+  const hasInvoice = hasOrderInvoice(order);
 
   const copy = (text: string, label: string) => {
     void navigator.clipboard.writeText(text);

@@ -156,10 +156,7 @@ function applyLessonPageEarlyState(keys: LessonEarlyStateKeys) {
             },
           );
         }
-        // The last 500 only, as the store keeps them.
-        for (const { lessonNumber, percent } of [...byKey.values()].slice(
-          -500,
-        )) {
+        for (const { lessonNumber, percent } of byKey.values()) {
           progress[lessonNumber] = Math.max(
             progress[lessonNumber] ?? 0,
             percent,

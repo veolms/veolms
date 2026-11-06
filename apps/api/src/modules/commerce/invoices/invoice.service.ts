@@ -172,7 +172,11 @@ export function createInvoiceService({
       },
       seller: {
         name: settings.companyName || academy?.name || "Academy",
-        logoUrl: settings.showLogo ? (academy?.logo_url ?? null) : null,
+        // The invoice-only logo (a dark-text version for the white page),
+        // else the academy's.
+        logoUrl: settings.showLogo
+          ? (settings.logoUrl ?? academy?.logo_url ?? null)
+          : null,
         customDomain: academy?.custom_domain ?? null,
         address: settings.address || null,
         gstin: settings.gstin || null,

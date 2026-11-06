@@ -18,6 +18,8 @@ export function LoginProfileButton({
   onLogin,
   remembered,
   preloadWhenShown = false,
+  opensMenu = false,
+  menuExpanded,
 }: {
   className: string;
   arrowSize: number;
@@ -33,6 +35,13 @@ export function LoginProfileButton({
    * sheet, opened by a visitor who is about to tap it.
    */
   preloadWhenShown?: boolean;
+  /**
+   * The button opens the guest menu (Log in, Help and feedback) rather than
+   * the login pop-up: the sidebar's. It says so, and points down.
+   */
+  opensMenu?: boolean;
+  /** Whether that menu is open. */
+  menuExpanded?: boolean;
 }) {
   useEffect(() => {
     if (preloadWhenShown) preloadLoginDialog();
@@ -50,9 +59,13 @@ export function LoginProfileButton({
       aria-label={
         displayName
           ? `Account for ${displayName}. Open account access`
-          : "Login. Sign in for more"
+          : opensMenu
+            ? "Login, help and more. Open menu"
+            : "Login. Sign in for more"
       }
       data-auth-identity-button=""
+      aria-expanded={opensMenu ? Boolean(menuExpanded) : undefined}
+      aria-controls={opensMenu ? "desktop-profile-menu" : undefined}
       onClick={onLogin}
       onPointerDown={preloadLoginDialog}
       onPointerEnter={preloadLoginDialog}
@@ -79,14 +92,18 @@ export function LoginProfileButton({
           className="courses-profile__login-subtitle"
           data-auth-identity-subtitle=""
         >
-          {displayName ? (handle ?? "Account") : "Sign in for more"}
+          {displayName
+            ? (handle ?? "Account")
+            : opensMenu
+              ? "Help and more"
+              : "Sign in for more"}
         </small>
       </span>
-      {remembered ? (
+      {remembered || opensMenu ? (
         <CaretDown
           size={19}
           aria-hidden="true"
-          className="courses-profile__caret"
+          className={`courses-profile__caret${menuExpanded ? " is-open" : ""}`}
         />
       ) : (
         <i

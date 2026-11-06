@@ -11,8 +11,6 @@ import {
   skipsStaffMfa,
 } from "../modules/auth/shared/mfa-policy.ts";
 import type { SessionService } from "../modules/auth/index.ts";
-import { setDeviceSignInCookie } from "../modules/auth/shared/auth.cookies.ts";
-import { DeviceLimitReachedError } from "../modules/auth/session/session.service.ts";
 
 export interface AuthMiddleware {
   authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -83,19 +81,6 @@ export function checkSessionBeforeValidation(app: FastifyInstance): void {
       ...(handlers.slice(0, count) as preValidationHookHandler[]),
     ];
     routeOptions.preHandler = handlers.slice(count);
-  });
-}
-
-/**
- * A student's sign-in held back by the device limit, from any sign-in route
- * (code, Google, GitHub, One Tap): the browser keeps the waiting sign-in in
- * a cookie, so the page that lists their devices can let it in.
- */
-export function rememberDeviceLimitedSignIns(app: FastifyInstance): void {
-  app.addHook("onError", async (_request, reply, error) => {
-    if (error instanceof DeviceLimitReachedError) {
-      setDeviceSignInCookie(reply, error.signInToken);
-    }
   });
 }
 

@@ -10,3 +10,4 @@ export * from "./responses.ts";
 export * from "./site-content-changes.ts";
 export * from "./server.ts";
 export * from "./cache/index.ts";
+export * from "./capacity.ts";

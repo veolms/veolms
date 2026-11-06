@@ -99,7 +99,7 @@ export function restorePlayingReport(
 
 /**
  * `markPlaying` with a fresh claim asks for an immediate flush so the new
- * device claims at once instead of waiting for the next 15 second tick.
+ * device claims at once instead of waiting for the next sync interval (~1 minute).
  * `useLearningProgress` and `detachedLearningProgress` subscribe here.
  */
 export function subscribeToClaimRequests(

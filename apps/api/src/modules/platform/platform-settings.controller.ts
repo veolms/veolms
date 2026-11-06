@@ -1,9 +1,12 @@
 import type {
+  AcademyLogoCompleteRequest,
+  AcademyLogoPresignRequest,
   StaticSiteRebuildStatus,
   UpdatePlatformSettingsRequest,
 } from "@veolms/contracts";
 import type { CourseStaticPageRefreshService } from "@veolms/services/course-static-pages";
 import type { FastifyRequest } from "fastify";
+import type { PlatformInvoiceLogoService } from "./platform-invoice-logo.service.ts";
 import type { PlatformSettingsService } from "./platform-settings.service.ts";
 
 const NOT_CONFIGURED: StaticSiteRebuildStatus = {
@@ -15,11 +18,29 @@ const NOT_CONFIGURED: StaticSiteRebuildStatus = {
 
 export function createPlatformSettingsController({
   service,
+  invoiceLogo,
   staticPages,
 }: {
   service: PlatformSettingsService;
+  invoiceLogo: PlatformInvoiceLogoService;
   staticPages?: CourseStaticPageRefreshService;
 }) {
+  async function presignInvoiceLogo(
+    request: FastifyRequest<{ Body: AcademyLogoPresignRequest }>,
+  ) {
+    return await invoiceLogo.presign(request.body);
+  }
+
+  async function completeInvoiceLogo(
+    request: FastifyRequest<{ Body: AcademyLogoCompleteRequest }>,
+  ) {
+    return await invoiceLogo.complete(request.body, request.user?.id ?? null);
+  }
+
+  async function removeInvoiceLogo(request: FastifyRequest) {
+    return await invoiceLogo.remove(request.user?.id ?? null);
+  }
+
   async function getSettings() {
     return await service.getSettings();
   }
@@ -46,6 +67,9 @@ export function createPlatformSettingsController({
     getSettings,
     getPublicSettings,
     updateSettings,
+    presignInvoiceLogo,
+    completeInvoiceLogo,
+    removeInvoiceLogo,
     getStaticSiteRebuildStatus,
     rebuildStaticSite,
   };

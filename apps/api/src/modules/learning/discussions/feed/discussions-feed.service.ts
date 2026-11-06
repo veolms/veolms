@@ -344,7 +344,7 @@ export function createLearningDiscussionsFeedService(options?: {
         ids: threadIds,
       };
 
-      const [threadResponse, feedNotes] = await Promise.all([
+      const [threadResponse, feedNotes, matchedReplies] = await Promise.all([
         threadIds.length > 0
           ? threads.listThreads(db, threadQuery)
           : Promise.resolve({ threads: [], nextCursor: null }),
@@ -356,6 +356,11 @@ export function createLearningDiscussionsFeedService(options?: {
               mine: context.mine,
             })
           : Promise.resolve([]),
+        // A thread found by one of its replies shows nothing that matched
+        // until those replies are open: the page opens them.
+        query.search && threadIds.length > 0
+          ? feedRepo.listSearchMatchedReplyIds(db, threadIds, query.search)
+          : Promise.resolve(new Map<string, string[]>()),
       ]);
 
       const threadsById = new Map(
@@ -376,11 +381,13 @@ export function createLearningDiscussionsFeedService(options?: {
               "The discussion feed could not be hydrated.",
             );
           }
+          const searchMatchedReplyIds = matchedReplies.get(thread.id);
           items.push({
             sourceType: "thread",
             identity: `thread:${thread.id}`,
             entityId: thread.id,
             thread,
+            ...(searchMatchedReplyIds?.length ? { searchMatchedReplyIds } : {}),
           });
         } else {
           const note = notesById.get(row.entityId);

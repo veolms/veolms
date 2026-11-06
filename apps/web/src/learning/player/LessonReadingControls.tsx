@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { usePlayerTheme } from "@veolms/video-player";
 import { DeviceRotateIcon as DeviceRotate } from "@phosphor-icons/react/DeviceRotate";
 import { TextAaIcon as TextAa } from "@phosphor-icons/react/TextAa";
 import {
@@ -25,7 +26,6 @@ import {
 } from "./readingFontScale";
 import {
   getDocumentFullscreenElement,
-  isInstalledAppDisplay,
   unlockScreenOrientation,
 } from "../../fullscreen";
 import { cn } from "../../lib/utils";
@@ -81,9 +81,11 @@ export function useLessonReadingFullscreen(
   useEffect(() => {
     if (!enabled) return undefined;
     const surface = surfaceRef.current as WebkitFullscreenElement | null;
+    // The installed app too: its window still has the phone's bars, which
+    // full screen takes away (where an element cannot go full screen, as on
+    // an iPhone, there is no request function and no button).
     setAvailable(
-      Boolean(surface?.requestFullscreen || surface?.webkitRequestFullscreen) &&
-        !isInstalledAppDisplay(),
+      Boolean(surface?.requestFullscreen || surface?.webkitRequestFullscreen),
     );
     setCanRotate(
       window.matchMedia("(pointer: coarse)").matches &&
@@ -309,6 +311,7 @@ export function LessonReadingNavigationControls({
   /** The player theme's colours, which a video's own controls are given. */
   style?: CSSProperties;
 }) {
+  const theme = usePlayerTheme();
   return (
     <div
       className={cn(
@@ -319,6 +322,9 @@ export function LessonReadingNavigationControls({
       aria-hidden={hidden ? true : undefined}
       inert={hidden ? true : undefined}
       style={style}
+      // The theme's shapes as well as its colours: its rules key on this
+      // mark, which a video's controls have from the player around them.
+      data-player-theme={theme.id}
       data-player-fullscreen-swipe-ignore=""
     >
       {showLessonNavigation && (canGoNext || canGoPrevious) ? (
@@ -356,6 +362,7 @@ export function LessonReadingFullscreenControls({
   /** The player theme's colours, as for the previous and next buttons. */
   style?: CSSProperties;
 }) {
+  const theme = usePlayerTheme();
   const { available, canRotate, enter, exit, fullscreen, rotate } =
     readingFullscreen;
   if (!available && !lessonsButton) return null;
@@ -370,6 +377,7 @@ export function LessonReadingFullscreenControls({
       aria-hidden={hidden ? true : undefined}
       inert={hidden ? true : undefined}
       style={style}
+      data-player-theme={theme.id}
       data-player-fullscreen-swipe-ignore=""
     >
       {lessonsButton ? (

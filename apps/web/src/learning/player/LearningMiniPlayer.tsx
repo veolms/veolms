@@ -31,11 +31,16 @@ import {
   refreshVideoPlaybackToken,
 } from "../videoPlaybackBootstrap";
 import {
+  flushDetachedLearningProgress,
   recordDetachedLearningProgress,
   syncDetachedLearningProgress,
   syncDetachedWatchTime,
   useDetachedLessonProgress,
 } from "../detachedLearningProgress";
+import {
+  getProgressSyncIntervalMs,
+  subscribeProgressIdle,
+} from "../progressSyncSchedule";
 import {
   markPlaying,
   markNotPlaying,
@@ -53,7 +58,7 @@ import { CenteredLoadingSpinner } from "../../components/LoadingSpinner";
 import { useAuthStore } from "../../store/auth.store";
 import { useLearningMiniPlayerGestures } from "./useLearningMiniPlayerGestures";
 import { useMiniPlayerSwipeVolume } from "./useMiniPlayerSwipeVolume";
-import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
+import { MINI_PLAYER_THEME } from "./useLearningPlayerTheme";
 import {
   MiniPlayerControls,
   MiniPlayerWindowControls,
@@ -107,7 +112,6 @@ export function LearningMiniPlayer({
 }: LearningMiniPlayerProps) {
   const playerRef = useRef<VideoPlayerHandle>(null);
   const miniPlayerRef = useRef<HTMLElement>(null);
-  const playerTheme = useLearningPlayerTheme();
   // Where to start. A session handed over by the lesson page carries the
   // live position. One read back from storage after a reload only knows
   // where the video was when it was minimized (or 0 for a lesson picked
@@ -457,11 +461,21 @@ export function LearningMiniPlayer({
 
   useEffect(() => {
     if (!progressTarget) return undefined;
-    const interval = window.setInterval(
-      () => syncDetachedWatchTime(progressTarget),
-      15_000,
+    let timer: number | undefined;
+    const scheduleNext = () => {
+      timer = window.setTimeout(() => {
+        syncDetachedWatchTime(progressTarget);
+        scheduleNext();
+      }, getProgressSyncIntervalMs());
+    };
+    scheduleNext();
+    const unsubscribeIdle = subscribeProgressIdle(() =>
+      flushDetachedLearningProgress(progressTarget),
     );
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribeIdle();
+    };
   }, [progressTarget]);
 
   const handleEvent = useCallback(
@@ -700,7 +714,7 @@ export function LearningMiniPlayer({
             article={reading.article}
             frame={{ width: reading.frameWidth, scrollTop: reading.scrollTop }}
           />
-          <PlayerThemeProvider theme={playerTheme}>
+          <PlayerThemeProvider theme={MINI_PLAYER_THEME}>
             <MiniPlayerWindowControls
               onClose={handleClose}
               onRestore={handleRestore}
@@ -719,7 +733,7 @@ export function LearningMiniPlayer({
         <VideoPlayer
           ref={playerRef}
           source={playerSource}
-          theme={playerTheme}
+          theme={MINI_PLAYER_THEME}
           engine="shaka"
           autoPlay={preparing ? false : session.playing}
           keyboardEnabled={false}

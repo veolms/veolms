@@ -1,24 +1,12 @@
 name: Deploy development API
 
+# Manual only. Since 2026-10-31 dev.veolms.org runs the cloud app (its API on
+# 127.0.0.1:4100, deployed by the cloud repo's "Deploy dev API" after the
+# "Update core" bot pins a core merge). This workflow deploys the old core API
+# (DEPLOY_APP_DIR, pm2 `veolms-api`, API_PORT 4000), which is stopped and kept
+# only as a rollback target: run it by hand to bring it back, then point the
+# nginx map in /etc/nginx/conf.d/veolms-dev-backend.conf at 127.0.0.1:4000.
 on:
-  push:
-    branches:
-      - dev
-    paths:
-      - "apps/api/**"
-      - "packages/api-core/**"
-      - "packages/services/**"
-      - "packages/plugin-sdk/**"
-      - "packages/video-player/**"
-      - "packages/contracts/**"
-      - "packages/database/**"
-      - "packages/config/**"
-      - "packages/storage/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "turbo.json"
-      - ".github/workflows/deploy-development-api.yml"
   workflow_dispatch:
 
 permissions:
@@ -102,7 +90,6 @@ jobs:
           DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
           DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
           DEPLOY_SERVICE_NAME: ${{ vars.DEPLOY_SERVICE_NAME }}
-          API_HEALTHCHECK_URL: ${{ vars.API_HEALTHCHECK_URL }}
           DEPLOY_SHA: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
@@ -111,7 +98,6 @@ jobs:
           test -n "${DEPLOY_USER}" || { echo "::error::DEPLOY_USER variable is missing"; exit 1; }
           test -n "${DEPLOY_APP_DIR}" || { echo "::error::DEPLOY_APP_DIR variable is missing"; exit 1; }
           test -n "${DEPLOY_SERVICE_NAME}" || { echo "::error::DEPLOY_SERVICE_NAME variable is missing"; exit 1; }
-          test -n "${API_HEALTHCHECK_URL}" || { echo "::error::API_HEALTHCHECK_URL variable is missing"; exit 1; }
 
           echo "Connecting to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PORT:-22}..."
 
@@ -121,13 +107,12 @@ jobs:
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            bash -s -- "${DEPLOY_APP_DIR}" "${DEPLOY_SHA}" "${DEPLOY_SERVICE_NAME}" "${API_HEALTHCHECK_URL}" <<'REMOTE'
+            bash -s -- "${DEPLOY_APP_DIR}" "${DEPLOY_SHA}" "${DEPLOY_SERVICE_NAME}" <<'REMOTE'
           set -Eeuo pipefail
 
           app_dir="$1"
           deploy_sha="$2"
           service_name="$3"
-          healthcheck_url="$4"
 
           # Ensure Node/pnpm/pm2 are on PATH for non-interactive SSH shells
           export PATH="${HOME}/.local/share/pnpm:${HOME}/.nvm/versions/node/$(ls -1 "${HOME}/.nvm/versions/node" 2>/dev/null | tail -n 1)/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
@@ -177,18 +162,28 @@ jobs:
           # `pm2 reload` (below) stops each old process once its replacement
           # is ready or listen_timeout runs out, whichever comes first, so a
           # build that cannot start would take the API down. It is started
-          # first on a spare port, on 127.0.0.1 only, and must answer
-          # /v1/ready there. Its background jobs are safe beside the live
-          # ones (database locks). If it fails, the previous code is put back
-          # on disk and nothing is restarted.
+          # first on a port the system reports free, on 127.0.0.1 only, and
+          # must answer /v1/ready there. (A fixed API_PORT + 100 was 4100,
+          # the cloud API's port.) Its background jobs are safe beside the
+          # live ones (database locks). If it fails, the previous code is put
+          # back on disk and nothing is restarted.
+          free_port() {
+            node -e '
+              const server = require("node:net").createServer();
+              server.listen(0, "127.0.0.1", () => {
+                process.stdout.write(String(server.address().port));
+                server.close();
+              });
+            '
+          }
           boot_check() {
-            local port=$(( api_port + 100 ))
+            local port
+            port="$(free_port)" || {
+              echo "::error::Could not find a free port to check the new build."
+              return 1
+            }
             local url="http://127.0.0.1:${port}/v1/ready"
             local boot_log="${HOME}/deploy-boot-check.log"
-            if curl --silent --max-time 2 "${url}" >/dev/null 2>&1; then
-              echo "::error::Port ${port} is in use; it is needed to check the new build."
-              return 1
-            fi
             echo "==> Checking that the new build starts (port ${port})..."
             (cd apps/api && API_HOST=127.0.0.1 API_PORT="${port}" \
               exec node --env-file-if-exists=../../.env src/index.ts) >"${boot_log}" 2>&1 &
@@ -273,6 +268,9 @@ jobs:
             sudo systemctl restart "${service_name}"
           fi
 
+          # Checked on its own port: the public API URL reaches whichever API
+          # nginx points at (the cloud one since 2026-10-31).
+          healthcheck_url="http://127.0.0.1:${api_port}/v1/ready"
           echo "==> Performing health check at: ${healthcheck_url}"
           curl --fail --silent --show-error \
             --retry 30 \

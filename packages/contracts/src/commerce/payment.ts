@@ -296,6 +296,13 @@ export interface GatewayPaymentDetails {
   gatewayOrderId: string;
   amount: number;
   currency: string;
+  /**
+   * For a payment in another currency than the gateway settles in: what it
+   * settles for, in that currency's minor units (Razorpay's `base_amount`
+   * in rupees). Absent otherwise.
+   */
+  settlementAmount?: number | null;
+  settlementCurrency?: string | null;
   status: PaymentStatus;
   captured?: boolean;
   amountRefunded?: number;
@@ -429,6 +436,13 @@ export const normalizedPaymentEventSchema = z.strictObject({
   gatewayRefundId: z.string().optional(),
   amount: z.number().int().nonnegative().optional(),
   currency: z.string().length(3).optional(),
+  /**
+   * For a payment in another currency than the gateway settles in: what it
+   * settles for, in that currency's minor units (Razorpay's `base_amount`
+   * in rupees). Absent otherwise.
+   */
+  settlementAmount: z.number().int().nonnegative().optional(),
+  settlementCurrency: z.string().length(3).optional(),
   paymentMethod: paymentMethodDetailsSchema.optional(),
   errorCode: z.string().optional(),
   errorDescription: z.string().optional(),

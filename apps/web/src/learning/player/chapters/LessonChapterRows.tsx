@@ -175,7 +175,10 @@ export function LessonChapterRows({
               onChapterSelect?.(chapter);
             }}
           >
-            <span className="relative block aspect-video w-24 shrink-0 overflow-hidden rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.24)] transition-transform duration-200 ease-out group-hover/chapter:scale-[1.03] motion-reduce:transition-none">
+            <span
+              data-chapter-thumb=""
+              className="relative block aspect-video w-24 shrink-0 overflow-hidden rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.24)] transition-transform duration-200 ease-out group-hover/chapter:scale-[1.03] motion-reduce:transition-none"
+            >
               <ChapterThumbnail chapter={chapter} index={index} tone={tone} />
               {active ? (
                 <ActiveChapterProgress chapter={chapter} tone={tone} />

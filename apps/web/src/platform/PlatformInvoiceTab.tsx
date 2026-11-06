@@ -15,9 +15,11 @@ import {
   usePlatformSettings,
   useUpdatePlatformSettings,
 } from "../services/platform";
+import { InvoiceLogoField } from "./InvoiceLogoField";
 import { PlatformSettingsStatus } from "./PlatformSettingsStatus";
 
-type Field = keyof PlatformInvoiceSettings;
+/** The logo is saved by its own upload, not with the form. */
+type Field = Exclude<keyof PlatformInvoiceSettings, "logoUrl">;
 
 /**
  * What the academy prints on the invoices students download: the seller's
@@ -115,8 +117,9 @@ function InvoiceForm({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (firstProblem || !isDirty || update.isPending) return;
+    const { logoUrl: _logo, ...details } = draft;
     update.mutate(
-      { invoice: draft },
+      { invoice: details },
       { onSuccess: () => setNotice?.("Invoice details saved.") },
     );
   };
@@ -202,7 +205,7 @@ function InvoiceForm({
       <SettingsSection
         id="platform-invoice-footer-heading"
         title="Logo and footer"
-        description="The academy logo comes from the General tab."
+        description="The invoice is white. If the General tab's logo has light text (for the dark emails), upload a dark-text version here."
       >
         <label className="flex items-center justify-between gap-4 text-sm font-medium text-(--text)">
           <span>Print the academy logo</span>
@@ -212,6 +215,9 @@ function InvoiceForm({
             label="Print the academy logo on invoices"
           />
         </label>
+        {draft.showLogo ? (
+          <InvoiceLogoField logoUrl={saved.logoUrl} setNotice={setNotice} />
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
             id="platform-invoice-signatory"

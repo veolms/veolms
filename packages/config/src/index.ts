@@ -207,6 +207,58 @@ const serverConfigSchema = z.object({
     .max(60_000)
     .default(30_000),
   /**
+   * Seconds a page waits, while a video plays, between two lesson progress
+   * batches (pauses, a lesson's end and leaving the page send at once). The
+   * batches are the API's most frequent write; raising this during a load
+   * spike slows every open page down within one interval, with a reload
+   * of the API and no deploy.
+   */
+  LEARNING_PROGRESS_SYNC_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(15)
+    .max(600)
+    .default(60),
+  /**
+   * When this server says it is full on GET /v1/ready/capacity, so the
+   * proxy in front of it sends new requests to another server: the whole
+   * machine's CPU in use (Postgres included, over 5 s), in percent. It says
+   * it has room again only below CAPACITY_CPU_ROOM_PERCENT, so it does not
+   * flip on and off. Lower both on the database's boss, whose CPU is also
+   * the database's.
+   */
+  CAPACITY_CPU_FULL_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(100)
+    .default(80),
+  CAPACITY_CPU_ROOM_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(100)
+    .default(65),
+  /** The same for the machine's memory in use (not counting reclaimable cache). */
+  CAPACITY_MEMORY_FULL_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(100)
+    .default(85),
+  CAPACITY_MEMORY_ROOM_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(100)
+    .default(75),
+  /**
+   * While this file exists the server says it is full, so traffic moves
+   * away before a deploy or maintenance restarts it (create it, wait a few
+   * seconds, restart, remove it). Unset: no drain file.
+   */
+  CAPACITY_DRAIN_FILE: z.string().min(1).optional(),
+  /**
    * TTL for the process-local cache of a course as every visitor sees it
    * (the signed-out overview, the public curriculum and its version), in
    * ms. A change made through the API clears that course at once in the
@@ -371,6 +423,16 @@ const serverConfigSchema = z.object({
     .optional(),
 
   /**
+   * Local development only: every account may leave any course it is
+   * enrolled in, bought ones included, as an admin or a shared test account
+   * may (no money is returned, the order is left as it is, and the course's
+   * progress is cleared), so a purchase can be tried again. Honoured only
+   * when `NODE_ENV` is `development`, and the API refuses to start in
+   * production with it set.
+   */
+  LOCAL_ANY_COURSE_UNENROLL: booleanEnvironmentValueSchema.default(false),
+
+  /**
    * Enables the `mock_<email>` OAuth short-circuit, which skips both the
    * provider round-trip and the state/CSRF check. Requires `NODE_ENV` to be
    * `development` as well, so it can never be switched on in a deployed
@@ -479,12 +541,16 @@ const serverConfigSchema = z.object({
     .min(60)
     .max(86_400)
     .default(900),
+  // A segment token cannot be revoked (it is an expiry signed with the
+  // folder), so it is kept short: after a sign-out, or losing the course,
+  // the rest of a paid video stops loading within this. The player renews
+  // it while it plays, which needs a session that may still watch.
   CDN_HLS_TOKEN_TTL_SECONDS: z.coerce
     .number()
     .int()
     .min(60)
     .max(86_400)
-    .default(900),
+    .default(300),
   CDN_PUBLIC_FOLDERS: folderListSchema(
     "public,thumbnails,course-hls,course-videos",
   ),
@@ -558,6 +624,26 @@ const serverConfigSchema = z.object({
   MEDIACONVERT_WEBHOOK_URL: z.string().url().optional(),
   MEDIACONVERT_WEBHOOK_SECRET: z.string().optional(),
 
+  /**
+   * AWS MediaConvert job template name.
+   * When set, the dispatcher uses this pre-created template instead of building
+   * inline output settings. The template must exist in the same AWS account and
+   * region, e.g. "DASH_ADAPTIVE_LADDER".
+   */
+  MEDIACONVERT_JOB_TEMPLATE: z.string().optional(),
+  /**
+   * ClearKey DRM master key (hex). When set alongside DRM_MASTER_KEY_VERSION
+   * the dispatcher injects drmKeySystem / drmMasterKeyVersion into the job's
+   * UserMetadata so the webhook handler and license server can resolve the key.
+   * The raw key is kept server-side only; it is never sent to AWS.
+   */
+  DRM_MASTER_KEY: z.string().optional(),
+  /**
+   * Monotonic version tag for DRM_MASTER_KEY. Embedded in UserMetadata so the
+   * ClearKey license driver can look up the correct key version.
+   */
+  DRM_MASTER_KEY_VERSION: z.string().optional(),
+
   FLEET_MANAGER_TRIGGER_URL: z.string().url().optional(),
   FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
   PROBE_LAMBDA_NAME: z.string().optional(),
@@ -618,6 +704,25 @@ const serverConfigSchema = z.object({
     .regex(/^[A-Za-z]{2}$/u, "Expected a two-letter country code, such as US.")
     .transform((value) => value.toUpperCase())
     .optional(),
+  // Automatic prices for buyers outside India use the day's USD/INR rate,
+  // fetched from public sources (European Central Bank via Frankfurter, then
+  // open.er-api.com). Set this to use a fixed rate instead: rupees per
+  // dollar, such as 95.
+  INTERNATIONAL_PRICE_INR_PER_USD: z.coerce.number().positive().optional(),
+  // Countries whose buyers see and pay a course's rupee price, comma
+  // separated ISO codes. Everywhere else, a course that has a price for
+  // buyers outside India is shown and sold at that price. A buyer whose
+  // country is not known gets the rupee price.
+  DOMESTIC_PRICING_COUNTRIES: z
+    .string()
+    .trim()
+    .default("IN")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((code) => code.trim().toUpperCase())
+        .filter((code) => /^[A-Z]{2}$/u.test(code)),
+    ),
 
   // An extra payment taken by the gateway (a second payment for a paid
   // order, or a late payment for something the buyer already has) is sent
@@ -795,6 +900,19 @@ export function loadServerConfig(
   environment: Record<string, string | undefined>,
 ): ServerConfig {
   const parsed = serverConfigSchema.parse(environment);
+  // The development-only switches are honoured when NODE_ENV is
+  // `development`, which is also the schema's default: a deployment that
+  // forgot NODE_ENV would have them on. So they need it named outright.
+  const developmentOnly = [
+    parsed.LOCAL_FIXED_OTP ? "LOCAL_FIXED_OTP" : null,
+    parsed.LOCAL_ANY_COURSE_UNENROLL ? "LOCAL_ANY_COURSE_UNENROLL" : null,
+  ].filter((name): name is string => name !== null);
+  if (developmentOnly.length > 0 && !environment.NODE_ENV?.trim()) {
+    throw new Error(
+      `Refusing to start with ${developmentOnly.join(", ")} set and no NODE_ENV: ` +
+        "set NODE_ENV=development explicitly for these development-only switches.",
+    );
+  }
   const offenders = findInsecureDefaults(parsed);
   const missingRequired = findMissingRequiredInProduction(parsed);
 
@@ -802,6 +920,12 @@ export function loadServerConfig(
     if (parsed.LOCAL_FIXED_OTP) {
       throw new Error(
         "Refusing to start in production with LOCAL_FIXED_OTP set: it lets anyone sign in to any account. " +
+          "Remove it from the environment.",
+      );
+    }
+    if (parsed.LOCAL_ANY_COURSE_UNENROLL) {
+      throw new Error(
+        "Refusing to start in production with LOCAL_ANY_COURSE_UNENROLL set: it lets any student give up a paid course. " +
           "Remove it from the environment.",
       );
     }

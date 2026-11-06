@@ -45,10 +45,7 @@ import {
   assertEnoughDiskSpace,
   resolveImportScratchRoot,
 } from "../lib/media-tools/disk.ts";
-import {
-  readAvc1CodecString,
-  toFfmpegPath,
-} from "../lib/media-tools/fmp4.ts";
+import { readAvc1CodecString, toFfmpegPath } from "../lib/media-tools/fmp4.ts";
 
 // ANSI colors
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;

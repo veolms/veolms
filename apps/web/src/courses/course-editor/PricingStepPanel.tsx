@@ -35,6 +35,11 @@ export interface PricingStepPanelProps {
   handleSellingPriceChange: (val: string) => void;
   flushPricingPersistence: () => Promise<void>;
   handleOriginalPriceChange: (val: string) => void;
+  handleInternationalPriceChange: (
+    field: "internationalSellingPrice" | "internationalOriginalPrice",
+    val: string,
+  ) => void;
+  handleInternationalAutoChange: (checked: boolean) => void;
   handleShowDiscountBadgeChange: (checked: boolean) => void;
   handleLinkedOnlyChange: (checked: boolean) => void;
   currentCourseId: string | null;
@@ -53,6 +58,8 @@ export function PricingStepPanel({
   handleSellingPriceChange,
   flushPricingPersistence,
   handleOriginalPriceChange,
+  handleInternationalPriceChange,
+  handleInternationalAutoChange,
   handleShowDiscountBadgeChange,
   handleLinkedOnlyChange,
   currentCourseId,
@@ -318,6 +325,80 @@ export function PricingStepPanel({
                 </div>
               );
             })()}
+
+            {/* Price for buyers outside India */}
+            <div className="mt-5 flex flex-col gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_55%,var(--surface))] px-4 py-3.5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <span className="text-(--text) text-[0.88rem] font-semibold">
+                    International price (USD)
+                  </span>
+                  <p className="m-0 mt-1 text-(--muted) text-[0.8rem]">
+                    {pricing.internationalAuto
+                      ? "Buyers outside India pay this in US dollars. It is worked out from today's exchange rate, rounded up to .99, and again whenever the price above changes. Type a price to set your own."
+                      : `Buyers outside India pay this in US dollars. Leave both empty to sell the course in ${pricing.currency || "INR"} everywhere, or turn Automatic on.`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-(--text-secondary) text-[0.8rem] font-semibold">
+                    Automatic
+                  </span>
+                  <Switch
+                    checked={pricing.internationalAuto}
+                    onChange={handleInternationalAutoChange}
+                    label="Work out the international price automatically"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-[560px]:grid-cols-1">
+                <DollarPriceField
+                  id="international-selling-price"
+                  label="Selling price"
+                  placeholder="43.99"
+                  value={pricing.internationalSellingPrice}
+                  status={getPricingControlDisplayStatus(
+                    "internationalSellingPrice",
+                  )}
+                  disabled={
+                    isSavingPricing || isPricingControlSaving("pricingType")
+                  }
+                  onChange={(value) =>
+                    handleInternationalPriceChange(
+                      "internationalSellingPrice",
+                      value,
+                    )
+                  }
+                  onBlur={() => {
+                    void flushPricingPersistence();
+                  }}
+                />
+                <DollarPriceField
+                  id="international-original-price"
+                  label="Original price"
+                  placeholder="64.99"
+                  value={pricing.internationalOriginalPrice}
+                  status={getPricingControlDisplayStatus(
+                    "internationalOriginalPrice",
+                  )}
+                  disabled={
+                    isSavingPricing || isPricingControlSaving("pricingType")
+                  }
+                  onChange={(value) =>
+                    handleInternationalPriceChange(
+                      "internationalOriginalPrice",
+                      value,
+                    )
+                  }
+                  onBlur={() => {
+                    void flushPricingPersistence();
+                  }}
+                />
+              </div>
+              <p className="m-0 text-(--muted) text-[0.78rem]">
+                Coupons with a fixed amount off are in rupees; for these
+                buyers they take off the same share of the price.
+              </p>
+            </div>
           </div>
           )}
         </div>
@@ -388,6 +469,60 @@ export function PricingStepPanel({
         >
           Go to Coupons <ArrowUpRight size={15} weight="bold" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** A price in dollars and cents, as the international price asks for it. */
+function DollarPriceField({
+  id,
+  label,
+  placeholder,
+  value,
+  status,
+  disabled,
+  onChange,
+  onBlur,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  status: "saving" | "saved" | "failed" | null;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <label
+          htmlFor={id}
+          className="text-(--text-secondary) text-[0.84rem] font-semibold"
+        >
+          {label}
+        </label>
+        <PricingControlStatusIndicator
+          status={status}
+          testId={`pricing-field-status-${id}`}
+        />
+      </div>
+      <div className="relative flex w-full items-center">
+        <span className="pointer-events-none absolute left-3.5 text-[0.9rem] font-semibold text-(--muted)">
+          $
+        </span>
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          disabled={disabled}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          className="w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] py-2.5 pr-3.5 pl-8 text-[0.9rem] font-semibold text-(--text) outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
+        />
       </div>
     </div>
   );

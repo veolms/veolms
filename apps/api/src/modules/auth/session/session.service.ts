@@ -1,13 +1,12 @@
-﻿import crypto from "node:crypto";
+import crypto from "node:crypto";
 import { isIP } from "node:net";
 
-import type { Database } from "@veolms/database";
+import { withLocalCommit, type Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
 import {
-  PLAYBACK_CLAIM_STALE_MS,
   SESSION_TTL_MS,
   SESSION_USER_AGENT_MAX_LENGTH,
 } from "../shared/auth.constants.ts";
@@ -49,31 +48,83 @@ import type {
   LearningProgressPlaying,
 } from "@veolms/contracts";
 
-/** How long a sign-in may wait for its student to sign another device out. */
-export const PENDING_DEVICE_SIGN_IN_TTL_MS = 10 * 60_000;
-
-/**
- * A student already signed in on as many devices as the academy allows
- * (Platform > Security). The sign-in is kept waiting under `signInToken`,
- * which goes to the browser in a cookie; signing one of the other devices
- * out lets it in (`resolveDeviceLimit`).
- */
-export class DeviceLimitReachedError extends AppError {
-  readonly signInToken: string;
-
-  constructor(signInToken: string) {
-    super(
-      409,
-      "DEVICE_LIMIT_REACHED",
-      "You are signed in on as many devices as your academy allows. Sign out of one to sign in here.",
-    );
-    this.name = "DeviceLimitReachedError";
-    this.signInToken = signInToken;
-  }
-}
-
 export interface SessionServiceOptions {
   database: Kysely<Database>;
+}
+
+/**
+ * Sessions this process marked as used, and when. A session's "last used"
+ * time is kept to within 15 minutes, so each process writes it at most once
+ * per session per 15 minutes, even while the sign-in cache still holds the
+ * older time.
+ */
+const touchedSessions = new Map<string, number>();
+const SESSION_TOUCH_EVERY_MS = 15 * 60 * 1000;
+
+/** Sessions waiting to be written, with the time each was used. */
+const pendingTouches = new Map<string, Date>();
+const SESSION_TOUCH_FLUSH_MS = 5_000;
+let flushTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Records that a session was used, without making the request wait.
+ *
+ * The times are written together every 5 seconds in one statement with a
+ * local commit (`withLocalCommit`): they only feed "last active" in the
+ * sessions list. Load test 2026-11-05: one write per request (~160 ms each,
+ * waiting for the replica and the disk) was the busiest query, and one
+ * background write per session filled the database pool when many learners
+ * came back at once. A batch takes one connection for a few milliseconds
+ * however many sessions it holds. A failed batch is retried by later
+ * requests after the interval.
+ */
+export function touchSessionInBackground(
+  database: Kysely<Database>,
+  sessionId: string,
+  now: number = Date.now(),
+): boolean {
+  const last = touchedSessions.get(sessionId);
+  if (last !== undefined && now - last < SESSION_TOUCH_EVERY_MS) return false;
+  touchedSessions.set(sessionId, now);
+  if (touchedSessions.size > 50_000) {
+    for (const [id, at] of touchedSessions) {
+      if (now - at >= SESSION_TOUCH_EVERY_MS) touchedSessions.delete(id);
+    }
+  }
+  pendingTouches.set(sessionId, new Date(now));
+  if (!flushTimer) {
+    flushTimer = setInterval(() => {
+      void flushSessionTouches(database);
+    }, SESSION_TOUCH_FLUSH_MS);
+    flushTimer.unref();
+  }
+  return true;
+}
+
+/** Writes the waiting session times in one statement; returns how many. */
+export async function flushSessionTouches(
+  database: Kysely<Database>,
+): Promise<number> {
+  if (pendingTouches.size === 0) return 0;
+  const batch = [...pendingTouches];
+  pendingTouches.clear();
+  const usedAt = batch.reduce(
+    (latest, [, at]) => (at > latest ? at : latest),
+    batch[0]![1],
+  );
+  try {
+    await withLocalCommit(database, (executor) =>
+      sessionRepository.touchSessions(
+        executor,
+        batch.map(([id]) => id),
+        usedAt,
+      ),
+    );
+    return batch.length;
+  } catch {
+    for (const [id] of batch) touchedSessions.delete(id);
+    return 0;
+  }
 }
 
 /**
@@ -198,8 +249,6 @@ export function createSessionService({ database }: SessionServiceOptions) {
     },
     /** Pass when already loaded for this user and request; read here otherwise. */
     prerequisites?: SessionPrerequisites,
-    /** Set once the student has signed a device out to make room. */
-    options?: { skipDeviceLimit?: boolean },
   ): Promise<EstablishedSession> {
     if (user.is_deleted) {
       throw new AppError(
@@ -279,9 +328,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     // testers sign in to at once, are never limited, and a browser already
     // signed in (above) is no new device.
     const limit =
-      options?.skipDeviceLimit ||
-      isStaffAccount(roles) ||
-      isTestLoginAccount(user.email)
+      isStaffAccount(roles) || isTestLoginAccount(user.email)
         ? null
         : await platformSettings.maxDevicesPerStudent();
     if (limit === null) {
@@ -289,123 +336,21 @@ export function createSessionService({ database }: SessionServiceOptions) {
       return { token, sessionId, mfa, roles };
     }
 
-    const signInToken = await database.transaction().execute(async (trx) => {
+    await database.transaction().execute(async (trx) => {
       // Two sign-ins of the same student at once count one after the other.
       await sessionRepository.lockUserForSignIn(trx, user.id);
-      const active = await sessionRepository.countActiveUserSessions(
+      // At the limit, the newest sign-in always gets in: the devices used
+      // longest ago are signed out to make room, without a notice. Each
+      // finds itself signed out at its next request.
+      await sessionRepository.revokeLeastRecentlyUsedSessions(
         trx,
         user.id,
+        limit - 1,
       );
-      if (active < limit) {
-        await sessionRepository.insertSession(trx, newSession);
-        return null;
-      }
-      const pendingToken = generateRandomToken();
-      await sessionRepository.insertPendingDeviceSignIn(trx, {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        tokenHash: hashToken(pendingToken),
-        ipAddress,
-        userAgent,
-        location: request.location ?? null,
-        expiresAt: new Date(Date.now() + PENDING_DEVICE_SIGN_IN_TTL_MS),
-      });
-      return pendingToken;
+      await sessionRepository.insertSession(trx, newSession);
     });
-    if (signInToken !== null) throw new DeviceLimitReachedError(signInToken);
 
     return { token, sessionId, mfa, roles };
-  }
-
-  async function findPendingSignIn(signInToken: string | undefined) {
-    const pending = signInToken
-      ? await sessionRepository.findPendingDeviceSignIn(
-          database,
-          hashToken(signInToken),
-        )
-      : undefined;
-    if (!pending) {
-      throw new AppError(
-        401,
-        "DEVICE_SIGN_IN_EXPIRED",
-        "This sign-in has expired. Sign in again.",
-      );
-    }
-    return pending;
-  }
-
-  /** The devices a waiting sign-in can make room on, and the limit. */
-  async function getDeviceLimitChoice(signInToken: string | undefined) {
-    const pending = await findPendingSignIn(signInToken);
-    const [limit, sessions] = await Promise.all([
-      platformSettings.maxDevicesPerStudent(),
-      sessionRepository.listUserSessions(database, pending.user_id),
-    ]);
-    return { limit, sessions };
-  }
-
-  /**
-   * Signs the student's chosen device out and lets the waiting sign-in in,
-   * on the device and from the place it came from.
-   */
-  async function resolveDeviceLimit(
-    signInToken: string | undefined,
-    sessionId: string,
-  ) {
-    const pending = await findPendingSignIn(signInToken);
-    await database.transaction().execute(async (trx) => {
-      const revoked = await sessionRepository.revokeUserSession(
-        trx,
-        pending.user_id,
-        sessionId,
-      );
-      if (!revoked) {
-        throw new AppError(
-          404,
-          "SESSION_NOT_FOUND",
-          "That device is no longer signed in. Choose another.",
-        );
-      }
-      // Used once: a second try with the same cookie finds it gone.
-      if (!(await sessionRepository.usePendingDeviceSignIn(trx, pending.id))) {
-        throw new AppError(
-          401,
-          "DEVICE_SIGN_IN_EXPIRED",
-          "This sign-in has expired. Sign in again.",
-        );
-      }
-      await outbox.publish(trx, {
-        type: "auth.session_revoked",
-        version: 1,
-        dedupeKey: `auth.session_revoked:${sessionId}`,
-        occurredAt: new Date(),
-        payload: { recipientUserId: pending.user_id, sessionId },
-      });
-    });
-
-    const user = await userRepository.findUserById(database, pending.user_id);
-    if (!user) {
-      throw new AppError(
-        403,
-        "ACCOUNT_DEACTIVATED",
-        "This account has been deactivated.",
-      );
-    }
-    const session = await establishSession(
-      user,
-      {
-        ip: pending.ip_address ?? "",
-        userAgent: pending.user_agent,
-        location: {
-          city: pending.location_city,
-          region: pending.location_region,
-          country: pending.location_country,
-        },
-      },
-      undefined,
-      { skipDeviceLimit: true },
-    );
-    return { user: { ...user, roles: session.roles }, session };
   }
 
   async function completeMfaEnrolment(
@@ -514,7 +459,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     if (session.last_used_at < fifteenMinutesAgo) {
-      await sessionRepository.touchSession(database, session.id, new Date());
+      touchSessionInBackground(database, session.id);
     }
 
     const context: AuthenticatedRequestContext = {
@@ -563,7 +508,10 @@ export function createSessionService({ database }: SessionServiceOptions) {
     return await database.transaction().execute(async (trx) => {
       await sessionRepository.lockUserForSignIn(trx, user.id);
       const now = new Date();
-      const since = new Date(now.getTime() - PLAYBACK_CLAIM_STALE_MS);
+      // Dynamic stale window: 2 * sync interval + 10s (130 s under default 60 s sync).
+      const staleWindowMs =
+        (2 * config.LEARNING_PROGRESS_SYNC_SECONDS + 10) * 1000;
+      const since = new Date(now.getTime() - staleWindowMs);
       const live = await sessionRepository.listLivePlaybackClaims(
         trx,
         user.id,
@@ -637,8 +585,6 @@ export function createSessionService({ database }: SessionServiceOptions) {
     forgetCachedAuthContexts: clearSessionAuthCache,
     loadSessionPrerequisites,
     establishSession,
-    getDeviceLimitChoice,
-    resolveDeviceLimit,
     completeMfaEnrolment,
     logout,
     listSessions,

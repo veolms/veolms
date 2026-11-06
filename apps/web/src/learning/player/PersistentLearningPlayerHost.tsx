@@ -26,11 +26,16 @@ import {
   clearLearningPlayerWindowMinimizeMotion,
 } from "./learningPlayerMotion";
 import {
+  flushDetachedLearningProgress,
   recordDetachedLearningProgress,
   syncDetachedWatchTime,
   useDetachedLessonProgress,
   type DetachedProgressTarget,
 } from "../detachedLearningProgress";
+import {
+  getProgressSyncIntervalMs,
+  subscribeProgressIdle,
+} from "../progressSyncSchedule";
 import { LearningExpandPlaceholderSheet } from "./LearningExpandPlaceholderSheet";
 import {
   expandLearningPlayerFromRect,
@@ -685,14 +690,26 @@ export function PersistentLearningPlayerHost({
     [detachedLessonNumber, detachedProgressTarget],
   );
   // A lesson replayed after it is complete moves no progress, so nothing
-  // above would send its watch time: the tally is looked at on a timer too.
+  // above would send its watch time: the tally is looked at on a timer too
+  // (it goes out once per sync interval), and at once when the mini player
+  // pauses or ends (progressSyncSchedule).
   useEffect(() => {
     if (!detachedProgressTarget) return undefined;
-    const interval = window.setInterval(
-      () => syncDetachedWatchTime(detachedProgressTarget),
-      15_000,
+    let timer: number | undefined;
+    const scheduleNext = () => {
+      timer = window.setTimeout(() => {
+        syncDetachedWatchTime(detachedProgressTarget);
+        scheduleNext();
+      }, getProgressSyncIntervalMs());
+    };
+    scheduleNext();
+    const unsubscribeIdle = subscribeProgressIdle(() =>
+      flushDetachedLearningProgress(detachedProgressTarget),
     );
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribeIdle();
+    };
   }, [detachedProgressTarget]);
   const recordsDetachedProgress = Boolean(
     detachedProgressTarget && detachedLessonNumber !== undefined,

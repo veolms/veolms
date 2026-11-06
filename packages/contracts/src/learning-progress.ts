@@ -13,6 +13,15 @@ export const learningProgressItemSchema = z.strictObject({
    * keeps), and saving it marks the lesson as the course's last played.
    */
   positionSeconds: z.number().int().min(0).max(86_400).optional(),
+  /**
+   * How many seconds ago, by this device's clock, the learner was at
+   * `positionSeconds`. A duration rather than a time, so a device whose
+   * clock is wrong still orders correctly against the learner's other
+   * devices: a position held back (offline, a failed request) and sent
+   * later does not replace one saved since from another device. Absent
+   * from an older page, which means "now".
+   */
+  positionAgeSeconds: z.number().int().min(0).max(604_800).optional(),
 });
 
 /**
@@ -121,6 +130,12 @@ export const learningProgressPlaybackSchema = z.discriminatedUnion("allowed", [
 export const learningProgressSyncResponseSchema = z.strictObject({
   synced: z.literal(true),
   playback: learningProgressPlaybackSchema.optional(),
+  /**
+   * How long the page should wait, while a video plays, before it sends the
+   * next batch. Pauses, the end of a lesson and leaving the page still send
+   * at once. The server raises it to shed load; absent from an older API.
+   */
+  nextSyncSeconds: z.number().int().min(15).max(600).optional(),
 });
 
 export type LearningProgressCourseParams = z.infer<

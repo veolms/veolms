@@ -37,7 +37,7 @@ import {
   getCoursePlayerNote,
   getCoursePlayerPath,
   getCoursePlayerThread,
-  getCoursePlayerThreadFocus,
+  getCoursePlayerThreadLink,
   getStoredCourseLessonId,
   migrateCoursePlayerSessionKey,
   upsertCoursePlayerSessionFromRoute,
@@ -335,7 +335,7 @@ export default function LearningRoute() {
     const threadId = noteDeepLinkId ? null : threadDeepLinkId;
     const nextPath = getCoursePlayerPath(canonicalCourseSlug, lessonId, {
       threadId,
-      threadFocus: getCoursePlayerThreadFocus(location.search),
+      ...getCoursePlayerThreadLink(location.search),
       noteId: noteDeepLinkId,
       view: isQuizViewRequested ? "quiz" : undefined,
     });
@@ -365,7 +365,7 @@ export default function LearningRoute() {
         isSameLesson && !noteId ? getCoursePlayerThread(location.search) : null;
       const path = getCoursePlayerPath(courseSlug, nextLessonId, {
         threadId,
-        threadFocus: getCoursePlayerThreadFocus(location.search),
+        ...getCoursePlayerThreadLink(location.search),
         noteId,
         view,
       });

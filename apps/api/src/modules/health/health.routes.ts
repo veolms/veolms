@@ -1,9 +1,13 @@
 import { sql } from "kysely";
 
-import { healthResponseSchema } from "@veolms/contracts";
+import { getCapacity } from "@veolms/api-core";
+import {
+  capacityResponseSchema,
+  healthResponseSchema,
+} from "@veolms/contracts";
 import { listPendingMigrations } from "@veolms/database";
 
-import { AppError } from "../../lib/errors.ts";
+import { AppError, errorResponse, httpError } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 
@@ -39,6 +43,9 @@ const healthRoutes: RoutePlugin = async (app, { database }) => {
   app.get(
     "/health",
     {
+      // Polled several times a second by load balancers and probes: its
+      // requests are not logged (a failing one still is, as an error).
+      logLevel: "warn",
       schema: {
         operationId: "getHealth",
         tags: ["Health"],
@@ -60,6 +67,9 @@ const healthRoutes: RoutePlugin = async (app, { database }) => {
   app.get(
     "/ready",
     {
+      // Polled several times a second by load balancers and probes: its
+      // requests are not logged (a failing one still is, as an error).
+      logLevel: "warn",
       schema: {
         operationId: "getReadiness",
         tags: ["Health"],
@@ -96,6 +106,54 @@ const healthRoutes: RoutePlugin = async (app, { database }) => {
         );
       }
       return { status: "ok" as const };
+    },
+  );
+
+  app.get(
+    "/ready/capacity",
+    {
+      // Asked about once a second by the proxy in front of every server: not
+      // logged, and a "full" answer is not an error (the monitor logs once
+      // when the server becomes full and once when it has room again).
+      logLevel: "warn",
+      schema: {
+        operationId: "getCapacity",
+        tags: ["Health"],
+        summary: "Room for more requests",
+        description:
+          "Succeeds while this server has room: its CPU, memory, event loop " +
+          "and database pool are under their limits and it is not draining. " +
+          "503 means full: the proxy should send new requests to another " +
+          "server. Liveness is /health and database readiness is /ready.",
+        response: {
+          200: jsonResponse(
+            "The server has room for more requests.",
+            capacityResponseSchema,
+          ),
+          503: errorResponse("The server is full or draining."),
+        },
+      },
+    },
+    async (_request, reply) => {
+      const capacity = getCapacity();
+      if (capacity.full) {
+        return reply
+          .code(503)
+          .header("Retry-After", "1")
+          .send(
+            httpError(
+              503,
+              "SERVER_FULL",
+              `This server is full (${capacity.reason ?? "unknown"}); use another server.`,
+            ).toJSON(),
+          );
+      }
+      return {
+        status: "ok" as const,
+        cpuPercent: Math.round(capacity.cpuPercent),
+        memoryPercent: Math.round(capacity.memoryPercent),
+        eventLoopDelayMs: Math.round(capacity.eventLoopDelayMs),
+      };
     },
   );
 };

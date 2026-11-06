@@ -15,6 +15,7 @@ import {
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+import { acceptTextJsonBody } from "../../../lib/text-json-body.ts";
 import { createAuthContext } from "../shared/auth.context.ts";
 import { createMfaController } from "./mfa.controller.ts";
 
@@ -152,6 +153,8 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/totp/verify",
     {
+      // Sign-in requests may arrive as text/plain (no CORS preflight).
+      preValidation: acceptTextJsonBody,
       // Six-digit code space: without a per-IP cap this is brute-forceable
       // at wire speed (the TOTP step counter alone does not bound tries).
       config: {
@@ -233,6 +236,8 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/passkey/login/options",
     {
+      // Sign-in requests may arrive as text/plain (no CORS preflight).
+      preValidation: acceptTextJsonBody,
       schema: {
         operationId: "getPasskeyLoginOptions",
         tags: ["Auth"],
@@ -255,6 +260,8 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/passkey/login/verify",
     {
+      // Sign-in requests may arrive as text/plain (no CORS preflight).
+      preValidation: acceptTextJsonBody,
       // Step-up verification for a session that has only passed its first
       // factor — cap per-IP like the other login verifiers.
       config: {

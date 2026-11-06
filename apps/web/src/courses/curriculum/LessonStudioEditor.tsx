@@ -1,5 +1,5 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
-import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CloudArrowUpIcon as CloudArrowUp } from "@phosphor-icons/react/CloudArrowUp";
@@ -699,7 +699,7 @@ export const LessonStudioEditor = forwardRef<
                   : "border-transparent text-(--muted) hover:text-(--text)"
               }`}
             >
-              <Brain size={15} weight="bold" />
+              <ListChecks size={15} weight="bold" />
               <span>Quiz</span>
             </button>
           )}

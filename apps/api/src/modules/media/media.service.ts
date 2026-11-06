@@ -131,6 +131,14 @@ function normalizeOutputPrefix(outputPrefix: string): string {
   return outputPrefix.replace(/^\/+|\/+$/g, "");
 }
 
+function splitManifestPath(path: string): {
+  key: string;
+  version: string | null;
+} {
+  const [key = "", query = ""] = path.split("?", 2);
+  return { key, version: new URLSearchParams(query).get("v") };
+}
+
 function isYoutubeImportMedia(metadata: unknown): boolean {
   return (
     typeof metadata === "object" &&
@@ -324,6 +332,7 @@ function isUniqueViolation(err: unknown): boolean {
 
 function hlsContentType(path: string): string {
   if (/\.m3u8$/i.test(path)) return "application/vnd.apple.mpegurl";
+  if (/\.mpd$/i.test(path)) return "application/dash+xml";
   if (/\.ts$/i.test(path)) return "video/mp2t";
   if (/\.m4s$/i.test(path)) return "video/iso.segment";
   if (/\.mp4$/i.test(path)) return "video/mp4";
@@ -918,7 +927,8 @@ export function createMediaService({
       if (
         existingJob.status === "queued" ||
         existingJob.status === "provisioning" ||
-        existingJob.status === "processing"
+        existingJob.status === "processing" ||
+        existingJob.status === "ready"
       ) {
         logger?.info(
           {
@@ -1124,7 +1134,9 @@ export function createMediaService({
 
     const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
     if (!job) return queueTranscodeJob(mediaId, ownerId, logger, userRoles);
-    if (["queued", "provisioning", "processing"].includes(job.status)) {
+    if (
+      ["queued", "provisioning", "processing", "ready"].includes(job.status)
+    ) {
       return { should202: true, jobId: job.id };
     }
 
@@ -1238,7 +1250,9 @@ export function createMediaService({
         "No transcoding job exists for this video.",
       );
     }
-    if (!["queued", "provisioning", "processing"].includes(job.status)) {
+    if (
+      !["queued", "provisioning", "processing", "ready"].includes(job.status)
+    ) {
       throw new AppError(
         409,
         "MEDIA_NOT_CANCELLABLE",
@@ -1266,12 +1280,29 @@ export function createMediaService({
       throw error;
     }
 
-    // In serverful/local mode the fleet manager watches the database directly;
-    // in serverless mode the cancellation event above performs this update.
-    await mediaRepo.updateVideoJobStatus(database, job.id, {
-      status: "cancelled",
+    // Recheck after the provider call: a completion may have committed meanwhile.
+    const cancelled = await database.transaction().execute(async (trx) => {
+      const locked = await mediaRepo.lockVideoJobStateById(trx, job.id);
+      if (
+        !locked ||
+        !["queued", "provisioning", "processing", "ready"].includes(
+          locked.status,
+        )
+      )
+        return false;
+      await mediaRepo.updateVideoJobStatus(trx, job.id, {
+        status: "cancelled",
+      });
+      await mediaRepo.updateMediaAssetStatus(trx, mediaId, "failed");
+      return true;
     });
-    await mediaRepo.updateMediaAssetStatus(database, mediaId, "failed");
+
+    if (!cancelled)
+      throw new AppError(
+        409,
+        "MEDIA_NOT_CANCELLABLE",
+        "This video is no longer being transcoded.",
+      );
 
     return { cancelled: true, jobId: job.id };
   }
@@ -1408,22 +1439,17 @@ export function createMediaService({
       );
     }
 
-    let status = progress.job_status;
-    let progressPercent = Number(progress.progress_percent ?? 0);
+    const status = progress.job_status;
+    const progressPercent = Number(progress.progress_percent ?? 0);
 
     if (status === "completed" && progress.media_status !== "ready") {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "ready");
-    } else if (status === "failed" && progress.media_status !== "failed") {
+    } else if (
+      status === "failed" &&
+      progress.media_status !== "failed" &&
+      progress.media_status !== "ready"
+    ) {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "failed");
-    } else if (progress.media_status === "ready" && status !== "completed") {
-      status = "completed";
-      progressPercent = 100;
-      await mediaRepo
-        .updateVideoJobStatus(database, progress.job_id, {
-          status: "completed",
-          progress_percent: 100,
-        })
-        .catch(() => {});
     }
 
     return {
@@ -1546,9 +1572,11 @@ export function createMediaService({
       database,
       mediaId,
     );
-    const manifestKey = normalizeOutputPrefix(
+    const storedManifest = normalizeOutputPrefix(
       latestOutput?.master_playlist_path || `${outputPrefix}/master.m3u8`,
     );
+    const { key: manifestKey, version: manifestVersion } =
+      splitManifestPath(storedManifest);
     if (options.verifyManifest !== false) {
       const manifest = await services.storage.headObject(manifestKey);
       if (!manifest) {
@@ -1561,7 +1589,15 @@ export function createMediaService({
     }
 
     // A new transcode adds a new output row; its id tells the copies apart.
-    return { outputPrefix, manifestKey, outputVersion: latestOutput?.id ?? "" };
+    // A storyboard records only that id (`outputId` in its index), while
+    // cached copies of the manifest also change with the manifest version.
+    return {
+      outputPrefix,
+      manifestKey,
+      manifestVersion,
+      outputId: latestOutput?.id ?? "",
+      outputVersion: `${latestOutput?.id ?? ""}:${manifestVersion ?? ""}`,
+    };
   }
 
   function getDirectDelivery(storageKey: string) {
@@ -1881,14 +1917,14 @@ export function createMediaService({
    */
   async function readStoryboardUrl(
     manifestKey: string,
-    outputVersion: string,
+    outputId: string,
     logger?: FastifyBaseLogger,
   ): Promise<string | undefined> {
     const indexKey = storyboardIndexKeyFor(manifestKey);
     try {
       const indexPath = await STORYBOARD_PRESENCE_CACHE.resolve(
         indexKey,
-        outputVersion,
+        outputId,
         (key) =>
           readStorageText(services.storage, key, STORYBOARD_INDEX_MAX_BYTES),
       );
@@ -1948,12 +1984,15 @@ export function createMediaService({
     // The transcode worker only marks a job completed after publishing its
     // output. Avoid an extra storage HEAD round-trip on every first play;
     // the CDN manifest request itself remains the authoritative final check.
-    const { manifestKey, outputVersion } = await getReadyPlaybackOutput(
-      context.content_media_id!,
-      context,
-      { verifyManifest: false },
-    );
-    const manifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    const { manifestKey, manifestVersion, outputId, outputVersion } =
+      await getReadyPlaybackOutput(context.content_media_id!, context, {
+        verifyManifest: false,
+      });
+    const baseManifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    const manifestUrl =
+      baseManifestUrl && manifestVersion !== null
+        ? `${baseManifestUrl}?v=${encodeURIComponent(manifestVersion)}`
+        : baseManifestUrl;
     if (!manifestUrl) {
       throw new AppError(
         503,
@@ -1963,11 +2002,16 @@ export function createMediaService({
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
     // Read alongside the chapters; access has already been checked above.
-    const inlinedMasterManifestPromise = options.inlineManifest
-      ? readInlinedMasterManifest(manifestKey, outputVersion, options.logger)
-      : Promise.resolve(undefined);
+    const playbackJob = await mediaRepo.findVideoJobStateByVideoId(
+      database,
+      context.content_media_id!,
+    );
+    const inlinedMasterManifestPromise =
+      options.inlineManifest && playbackJob?.status !== "ready"
+        ? readInlinedMasterManifest(manifestKey, outputVersion, options.logger)
+        : Promise.resolve(undefined);
     const storyboardUrlPromise = options.storyboard
-      ? readStoryboardUrl(manifestKey, outputVersion, options.logger)
+      ? readStoryboardUrl(manifestKey, outputId, options.logger)
       : Promise.resolve(undefined);
     // Where this learner left the video, from whichever device. Optional:
     // a failure plays from wherever this browser says.
@@ -2109,7 +2153,11 @@ export function createMediaService({
       stream: file.body,
       contentType: hlsContentType(hlsPath),
       contentLength: file.contentLength,
-      isManifest: /\.m3u8$/i.test(hlsPath),
+      isManifest: /\.(?:m3u8|mpd)$/i.test(hlsPath),
+      isChangingManifest:
+        /\.(?:m3u8|mpd)$/i.test(hlsPath) &&
+        (await mediaRepo.findVideoJobStateByVideoId(database, mediaId))
+          ?.status === "ready",
       // Only what a signed-out visitor may play is cacheable for everyone.
       isPublic:
         context.course_status === "published" &&
@@ -2303,36 +2351,50 @@ export function createMediaService({
       return { success: false, status: statusRaw.toLowerCase(), jobId };
     }
 
-    if (statusRaw === "COMPLETE" || statusRaw === "COMPLETED") {
-      if (job.status === "cancelled") {
+    if (
+      statusRaw === "READY" ||
+      statusRaw === "COMPLETE" ||
+      statusRaw === "COMPLETED"
+    ) {
+      const isReady = statusRaw === "READY";
+      if (job.status === "cancelled" || job.status === "failed") {
         logger?.info(
           { jobId: job.id, videoId: job.video_id },
           "[mediaconvert-webhook] Ignoring completion callback for cancelled job",
         );
-        return { success: true, status: "cancelled", jobId: job.id };
+        return { success: true, status: job.status, jobId: job.id };
       }
 
       // The fleet retries completion callbacks and may deliver them more
       // than once; video_outputs has no unique key, so re-processing would
       // insert a duplicate output row.
       if (job.status === "completed") {
-        return { success: true, status: "completed", jobId: job.id };
+        return { success: true, status: job.status, jobId: job.id };
       }
 
       const outputGroupDetails =
         eventDetail?.outputGroupDetails || body?.outputGroupDetails;
       // The thumbnail FILE_GROUP also reports its .webp in playlistFilePaths,
       // so select the group that carries the HLS .m3u8 playlist.
-      const isHlsPlaylist = (path: string) => /\.m3u8$/i.test(path);
+      const isHlsPlaylist = (path: string) => /\.(?:m3u8|mpd)$/i.test(path);
       const firstOutput =
         outputGroupDetails?.find((group) =>
           group.playlistFilePaths?.some(isHlsPlaylist),
         ) ?? outputGroupDetails?.[0];
       const playlistPaths =
         firstOutput?.playlistFilePaths?.filter(isHlsPlaylist);
-      const rawMasterPath =
-        playlistPaths?.[0] ||
+      const suppliedMasterPath =
+        eventDetail?.masterPlaylistPath ||
         body?.masterPlaylistPath ||
+        playlistPaths?.[0];
+      if (isReady && !suppliedMasterPath)
+        throw new AppError(
+          400,
+          "BAD_REQUEST",
+          "READY webhook must include a manifest path.",
+        );
+      const rawMasterPath =
+        suppliedMasterPath ||
         `${normalizeOutputPrefix(job.output_prefix)}/master.m3u8`;
 
       let normalizedMaster = rawMasterPath;
@@ -2342,42 +2404,103 @@ export function createMediaService({
         normalizedMaster =
           slashIdx !== -1 ? withoutS3.slice(slashIdx + 1) : withoutS3;
       }
-      normalizedMaster = normalizeOutputPrefix(normalizedMaster);
+      normalizedMaster = splitManifestPath(
+        normalizeOutputPrefix(normalizedMaster),
+      ).key;
+
+      if (isReady && !(await services.storage.headObject(normalizedMaster))) {
+        throw new AppError(
+          409,
+          "MEDIA_NOT_READY",
+          "The video manifest is not available yet.",
+        );
+      }
 
       const durationMs = firstOutput?.outputDetails?.[0]?.durationInMs;
       const durationSeconds =
         body?.durationSeconds ||
         (durationMs ? Math.round(durationMs / 1000) : undefined);
 
-      await mediaRepo.updateVideoJobStatus(database, job.id, {
-        status: "completed",
-        progress_percent: 100,
-        error_message: null,
-      });
-
-      await mediaRepo.updateMediaAssetStatus(database, job.video_id, "ready");
-
-      if (durationSeconds) {
-        await mediaRepo.updateMediaAssetDuration(
-          database,
-          job.video_id,
-          durationSeconds,
+      const publication = await database.transaction().execute(async (trx) => {
+        const locked = await mediaRepo.lockVideoJobStateById(trx, job.id);
+        if (
+          !locked ||
+          locked.status === "cancelled" ||
+          locked.status === "failed" ||
+          locked.status === "completed"
+        ) {
+          return { status: locked?.status ?? "failed", outputId: null };
+        }
+        const previousOutput = await mediaRepo.findLatestVideoOutput(
+          trx,
+          locked.video_id,
         );
-      }
-
-      const outputId = crypto.randomUUID();
-      await mediaRepo.insertVideoOutput(database, {
-        id: outputId,
-        video_id: job.video_id,
-        master_playlist_path: normalizedMaster,
-        created_at: new Date(),
+        const previousManifest = previousOutput
+          ? splitManifestPath(previousOutput.master_playlist_path)
+          : undefined;
+        if (
+          !suppliedMasterPath &&
+          previousManifest &&
+          locked.status === "ready"
+        )
+          normalizedMaster = previousManifest.key;
+        const samePath = previousManifest?.key === normalizedMaster;
+        const versionPrefix = `${locked.id}-`;
+        const previousRevision =
+          locked.status === "ready" &&
+          samePath &&
+          previousManifest?.version?.startsWith(versionPrefix)
+            ? previousManifest.version.slice(versionPrefix.length)
+            : "";
+        const revision = /^\d+$/u.test(previousRevision)
+          ? BigInt(previousRevision) + 1n
+          : 1n;
+        const version = `${versionPrefix}${revision}`;
+        const storedMaster = `${normalizedMaster}?v=${version}`;
+        const reuseOutput =
+          locked.status === "ready" && samePath && previousOutput;
+        const outputId = reuseOutput ? reuseOutput.id : crypto.randomUUID();
+        if (reuseOutput)
+          await mediaRepo.updateVideoOutputManifest(
+            trx,
+            outputId,
+            storedMaster,
+          );
+        else
+          await mediaRepo.insertVideoOutput(trx, {
+            id: outputId,
+            video_id: locked.video_id,
+            master_playlist_path: storedMaster,
+            created_at: new Date(),
+          });
+        await mediaRepo.updateVideoJobStatus(trx, locked.id, {
+          status: isReady ? "ready" : "completed",
+          ...(isReady ? {} : { progress_percent: 100 }),
+          error_message: null,
+        });
+        await mediaRepo.updateMediaAssetStatus(trx, locked.video_id, "ready");
+        if (durationSeconds)
+          await mediaRepo.updateMediaAssetDuration(
+            trx,
+            locked.video_id,
+            durationSeconds,
+          );
+        return {
+          status: isReady ? "ready" : "completed",
+          outputId,
+          firstReady: locked.status !== "ready",
+        };
       });
-      services.analyticsEvents?.emit("media.video.ready", {
-        mediaId: job.video_id,
-        manifestKey: normalizedMaster,
-        outputId,
-        at: new Date(),
-      });
+      if (publication.outputId === null || (isReady && !publication.firstReady))
+        return { success: true, status: publication.status, jobId: job.id };
+      const outputId = publication.outputId;
+      if (publication.firstReady)
+        services.analyticsEvents?.emit("media.video.ready", {
+          mediaId: job.video_id,
+          manifestKey: normalizedMaster,
+          outputId,
+          at: new Date(),
+        });
 
       // The duration is only reliable now, so chapters authored before the
       // upload finished are derived (and their frames requested) here.
@@ -2417,21 +2540,45 @@ export function createMediaService({
         },
         "[mediaconvert-webhook] Video job successfully marked as completed",
       );
-      return { success: true, status: "completed", jobId: job.id };
+      return { success: true, status: publication.status, jobId: job.id };
     }
 
-    if (statusRaw === "ERROR" || statusRaw === "FAILED") {
-      await mediaRepo.updateVideoJobStatus(database, job.id, {
-        status: "failed",
-        error_message: errorMessage || "MediaConvert transcoding failed.",
-        failed_at: new Date(),
+    if (
+      statusRaw === "ERROR" ||
+      statusRaw === "FAILED" ||
+      statusRaw === "CANCELED" ||
+      statusRaw === "CANCELLED"
+    ) {
+      const terminalStatus =
+        statusRaw === "ERROR" || statusRaw === "FAILED"
+          ? "failed"
+          : "cancelled";
+      const actualStatus = await database.transaction().execute(async (trx) => {
+        const locked = await mediaRepo.lockVideoJobStateById(trx, job.id);
+        if (
+          !locked ||
+          ["completed", "failed", "cancelled"].includes(locked.status)
+        )
+          return locked?.status ?? terminalStatus;
+        await mediaRepo.updateVideoJobStatus(trx, locked.id, {
+          status: terminalStatus,
+          ...(terminalStatus === "failed"
+            ? {
+                error_message:
+                  errorMessage || "MediaConvert transcoding failed.",
+                failed_at: new Date(),
+              }
+            : {}),
+        });
+        if (locked.status !== "ready")
+          await mediaRepo.updateMediaAssetStatus(
+            trx,
+            locked.video_id,
+            "failed",
+          );
+        return terminalStatus;
       });
-      await mediaRepo.updateMediaAssetStatus(database, job.video_id, "failed");
-      logger?.warn(
-        { jobId: job.id, videoId: job.video_id, error: errorMessage },
-        "[mediaconvert-webhook] Video job marked as failed",
-      );
-      return { success: true, status: "failed", jobId: job.id };
+      return { success: true, status: actualStatus, jobId: job.id };
     }
 
     if (statusRaw === "PROGRESSING" || statusRaw === "PROCESSING") {
@@ -2451,15 +2598,11 @@ export function createMediaService({
             : 50;
 
       await mediaRepo.markVideoJobProcessing(database, job.id, progressPercent);
-      return { success: true, status: "processing", jobId: job.id };
-    }
-
-    if (statusRaw === "CANCELED" || statusRaw === "CANCELLED") {
-      await mediaRepo.updateVideoJobStatus(database, job.id, {
-        status: "cancelled",
-      });
-      await mediaRepo.updateMediaAssetStatus(database, job.video_id, "failed");
-      return { success: true, status: "cancelled", jobId: job.id };
+      return {
+        success: true,
+        status: job.status === "ready" ? "ready" : "processing",
+        jobId: job.id,
+      };
     }
 
     return { success: true, status: statusRaw.toLowerCase(), jobId: job.id };
@@ -2474,16 +2617,21 @@ export function createMediaService({
     media: VideoAssetForPlayback,
     details: { mediaKey: string; title?: string | null },
   ): Promise<HeroVideoPlayback> {
-    const { manifestKey, outputVersion } = await getReadyPlaybackOutput(
-      media.id,
-      {
-        media_type: media.type,
-        media_status: media.status,
-        media_storage_key: media.storageKey,
-      },
-      { verifyManifest: false },
-    );
-    const manifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    const { manifestKey, manifestVersion, outputId } =
+      await getReadyPlaybackOutput(
+        media.id,
+        {
+          media_type: media.type,
+          media_status: media.status,
+          media_storage_key: media.storageKey,
+        },
+        { verifyManifest: false },
+      );
+    const baseManifestUrl = services.storage.getCdnObjectUrl(manifestKey);
+    const manifestUrl =
+      baseManifestUrl && manifestVersion !== null
+        ? `${baseManifestUrl}?v=${encodeURIComponent(manifestVersion)}`
+        : baseManifestUrl;
     if (!manifestUrl) {
       throw new AppError(
         503,
@@ -2493,7 +2641,7 @@ export function createMediaService({
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
     // The seek previews, as a lesson's (read from a cache, never failing).
-    const storyboardUrl = await readStoryboardUrl(manifestKey, outputVersion);
+    const storyboardUrl = await readStoryboardUrl(manifestKey, outputId);
     return {
       mediaKey: details.mediaKey,
       manifestUrl,

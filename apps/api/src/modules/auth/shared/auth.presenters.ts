@@ -2,7 +2,11 @@ import { PUBLIC_PROFILE_USERNAME_MAX_LENGTH } from "@veolms/contracts";
 
 import { DISPLAY_NAME_MAX_LENGTH } from "./auth.constants.ts";
 import type { MfaState, SessionUser, UserProfileFields } from "./auth.types.ts";
-import { isTestLoginAccount, toUserProfileFields } from "./auth.utils.ts";
+import {
+  isLocalAnyCourseUnenroll,
+  isTestLoginAccount,
+  toUserProfileFields,
+} from "./auth.utils.ts";
 import { avatarSrcSetFromUrl, displayAvatarUrl } from "../../avatars/index.ts";
 
 export function presentAvatar(avatarDataUrl: string | null) {
@@ -44,6 +48,7 @@ function presentAccount(profile: UserProfileFields, roles: string[]) {
     mobileVerified: profile.mobileVerified,
     roles,
     isTestAccount: isTestLoginAccount(profile.email),
+    localAnyCourseUnenroll: isLocalAnyCourseUnenroll(),
   };
 }
 

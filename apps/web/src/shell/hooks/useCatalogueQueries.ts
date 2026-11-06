@@ -40,6 +40,7 @@ import {
 import { useEnrolledCourses } from "../../services/enrollments";
 import { useCapabilities } from "../../services/authorization";
 import {
+  isViewerCourseStateFailed,
   isViewerCourseStateKnown,
   useHydrated,
 } from "../../courses/viewerCourseState";
@@ -99,6 +100,8 @@ export interface UseCatalogueQueriesResult {
   enrolledCoursesData: ReturnType<typeof useEnrolledCourses>["data"];
   /** Whether the cards may show a price or progress yet (see below). */
   learnerStateKnown: boolean;
+  /** See `isViewerCourseStateFailed`. */
+  learnerStateFailed: boolean;
   myCoursesQuery: ReturnType<typeof useMyCourses>;
   myCoursesData: ReturnType<typeof useMyCourses>["data"];
   deletedCoursesQuery: UseQueryResult<
@@ -237,13 +240,19 @@ export function useCatalogueQueries({
   const hydrated = useHydrated();
   const identityHint = useAuthIdentityHint();
   const sessionPresentAtBoot = useSessionPresentAtBoot();
+  const learnerStateFailed = isViewerCourseStateFailed({
+    signedIn: isAuthenticated,
+    enrolmentsLoaded: enrolledCoursesData !== undefined,
+    enrolmentsFailed: enrolledCoursesQuery.isError,
+    enrolmentsFetching: enrolledCoursesQuery.isFetching,
+  });
   const learnerStateKnown = isViewerCourseStateKnown({
     hydrated,
     signedIn: isAuthenticated,
     sessionChecked: authUserFetched,
     sessionRemembered: sessionPresentAtBoot || identityHint !== null,
     enrolmentsLoaded: enrolledCoursesData !== undefined,
-    enrolmentsFailed: enrolledCoursesQuery.isError,
+    enrolmentsFailed: learnerStateFailed,
   });
   const myCoursesQuery = useMyCourses({
     enabled:
@@ -364,6 +373,7 @@ export function useCatalogueQueries({
     publishedCourses,
     enrolledCoursesData,
     learnerStateKnown,
+    learnerStateFailed,
     myCoursesQuery,
     myCoursesData,
     deletedCoursesQuery,

@@ -16,6 +16,8 @@ export interface AppliedCoupon {
   discountLabel?: string;
   /** What was to be charged before the coupon when `totalAmount` was worked out. */
   pricedForAmount: number;
+  /** Set when the coupon would have left less than the smallest card payment. */
+  minimumCharge?: number;
 }
 
 export function checkoutCourseItem(

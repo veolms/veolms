@@ -10,6 +10,7 @@ import type {
   EmailVerificationVerifyRequest,
   AuthConfigResponse,
   GoogleOneTapLoginRequest,
+  GoogleOneTapNonceResponse,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
@@ -26,7 +27,7 @@ import type {
   PublicProfileResponse,
   RegisterRequest,
   SessionResponse,
-  DeviceLimitResponse,
+  SignInFailureReportRequest,
   UserAvatarListResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
@@ -131,9 +132,67 @@ async function generatedAvatarFile(previewUrl: string): Promise<File> {
   return new File([blob], "generated-avatar.png", { type: "image/png" });
 }
 
+const GOOGLE_ONE_TAP_NONCE_STORAGE_KEY = "veolms:google_one_tap_nonce";
+const NONCE_REUSE_SAFETY_MARGIN_MS = 5 * 60 * 1000; // 5 minutes
+
+let inFlightNoncePromise: Promise<GoogleOneTapNonceResponse> | null = null;
+
+function readCachedNonce(): GoogleOneTapNonceResponse | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(GOOGLE_ONE_TAP_NONCE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as GoogleOneTapNonceResponse;
+    if (
+      typeof parsed?.nonce === "string" &&
+      typeof parsed?.expiresAt === "string"
+    ) {
+      const expiresAtMs = Date.parse(parsed.expiresAt);
+      if (
+        !Number.isNaN(expiresAtMs) &&
+        expiresAtMs - Date.now() > NONCE_REUSE_SAFETY_MARGIN_MS
+      ) {
+        return parsed;
+      }
+    }
+    window.sessionStorage.removeItem(GOOGLE_ONE_TAP_NONCE_STORAGE_KEY);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedNonce(data: GoogleOneTapNonceResponse): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      GOOGLE_ONE_TAP_NONCE_STORAGE_KEY,
+      JSON.stringify(data),
+    );
+  } catch {
+    // Storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
+export function clearGoogleOneTapNonce(): void {
+  inFlightNoncePromise = null;
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(GOOGLE_ONE_TAP_NONCE_STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
+/**
+ * Sign-in requests go without a CORS preflight (see `simple` in api-client):
+ * a student who cannot sign in cannot use anything else either.
+ */
+const SIGN_IN = { simple: true } as const;
+
 export const authService = {
   sendOtp: (payload: OtpSendRequest): Promise<OtpSendResponse> => {
-    return api.post<OtpSendResponse>("/auth/otp/send", payload);
+    return api.post<OtpSendResponse>("/auth/otp/send", payload, SIGN_IN);
   },
 
   sendPhoneVerificationOtp: (
@@ -161,33 +220,73 @@ export const authService = {
   },
 
   login: (payload: LoginRequest): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/login", payload);
+    return api.post<LoginResponse>("/auth/login", payload, SIGN_IN);
   },
 
   register: (payload: RegisterRequest): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/register", payload);
+    return api.post<LoginResponse>("/auth/register", payload, SIGN_IN);
   },
 
   getOauthUrl: (payload: OauthUrlRequest): Promise<OauthUrlResponse> => {
-    return api.post<OauthUrlResponse>("/auth/oauth/url", payload);
+    return api.post<OauthUrlResponse>("/auth/oauth/url", payload, SIGN_IN);
   },
 
   oauthLogin: (payload: OauthLoginRequest): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/oauth/login", payload);
+    return api.post<LoginResponse>("/auth/oauth/login", payload, SIGN_IN);
   },
 
   getAuthConfig: (): Promise<AuthConfigResponse> => {
     return api.get<AuthConfigResponse>("/auth/config");
   },
 
+  reportSignInFailures: (
+    payload: SignInFailureReportRequest,
+  ): Promise<AuthMessageResponse> => {
+    return api.post<AuthMessageResponse>(
+      "/auth/sign-in-failures",
+      payload,
+      SIGN_IN,
+    );
+  },
+
   googleOneTapLogin: (
     payload: GoogleOneTapLoginRequest,
   ): Promise<LoginResponse> => {
+    clearGoogleOneTapNonce();
     // The client has no global timeout; without one a hung request leaves the
     // One Tap UI stuck on "Verifying…" with the login buttons locked.
     return api.post<LoginResponse>("/auth/oauth/google/one-tap", payload, {
+      ...SIGN_IN,
       timeout: 20_000,
     });
+  },
+  getGoogleOneTapNonce: (): Promise<GoogleOneTapNonceResponse> => {
+    const cached = readCachedNonce();
+    if (cached) {
+      return Promise.resolve(cached);
+    }
+    if (inFlightNoncePromise) {
+      return inFlightNoncePromise;
+    }
+    const fetchPromise = api
+      .post<GoogleOneTapNonceResponse>("/auth/oauth/google/nonce", undefined, {
+        ...SIGN_IN,
+        timeout: 20_000,
+      })
+      .then((data) => {
+        writeCachedNonce(data);
+        return data;
+      })
+      .finally(() => {
+        if (inFlightNoncePromise === fetchPromise) {
+          inFlightNoncePromise = null;
+        }
+      });
+    inFlightNoncePromise = fetchPromise;
+    return fetchPromise;
+  },
+  clearGoogleOneTapNonce: (): void => {
+    clearGoogleOneTapNonce();
   },
 
   setupTotp: (): Promise<TotpSetupResponse> => {
@@ -209,7 +308,7 @@ export const authService = {
   },
 
   verifyMfaTotp: (payload: TotpVerifyRequest): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>("/auth/totp/verify", payload);
+    return api.post<AuthMessageResponse>("/auth/totp/verify", payload, SIGN_IN);
   },
 
   getPasskeyRegisterOptions:
@@ -239,7 +338,7 @@ export const authService = {
     async (): Promise<PasskeyAuthenticationOptionsResponse> => {
       const [response, { passkeyAuthenticationOptionsResponseSchema }] =
         await Promise.all([
-          api.post<unknown>("/auth/passkey/login/options"),
+          api.post<unknown>("/auth/passkey/login/options", {}, SIGN_IN),
           import("@veolms/contracts/auth/session"),
         ]);
       return passkeyAuthenticationOptionsResponseSchema.parse(response);
@@ -248,7 +347,11 @@ export const authService = {
   verifyPasskeyLogin: (payload: {
     response: unknown;
   }): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>("/auth/passkey/login/verify", payload);
+    return api.post<AuthMessageResponse>(
+      "/auth/passkey/login/verify",
+      payload,
+      SIGN_IN,
+    );
   },
 
   getSessions: async (): Promise<SessionResponse[]> => {
@@ -265,20 +368,6 @@ export const authService = {
 
   revokeAllOtherSessions: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/sessions/revoke-all");
-  },
-
-  /** The devices a sign-in held back by the device limit can make room on. */
-  getDeviceLimit: async (): Promise<DeviceLimitResponse> => {
-    const [response, { deviceLimitResponseSchema }] = await Promise.all([
-      api.get<unknown>("/auth/device-limit"),
-      import("@veolms/contracts/auth/session"),
-    ]);
-    return deviceLimitResponseSchema.parse(response);
-  },
-
-  /** Signs that device out and finishes the sign-in that was held back. */
-  resolveDeviceLimit: (sessionId: string): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/device-limit/resolve", { sessionId });
   },
 
   getMe: async (): Promise<CurrentUserResponse> => {
@@ -350,9 +439,5 @@ export const authService = {
 
   logout: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/logout");
-  },
-
-  deactivateAccount: (): Promise<AuthMessageResponse> => {
-    return api.delete<AuthMessageResponse>("/auth/me");
   },
 };

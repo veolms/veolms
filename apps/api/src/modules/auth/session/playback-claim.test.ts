@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { test } from "node:test";
 import { clearAllCaches } from "@veolms/api-core";
 import type { Database } from "@veolms/database";
@@ -71,6 +71,7 @@ function createFakeDatabase(options: FakeDbOptions = {}) {
     updateValues?: Record<string, unknown>,
   ): unknown => {
     let targetSessionId: string | null = null;
+    let sinceThreshold: Date | null = null;
 
     const proxy: unknown = new Proxy(
       {},
@@ -84,6 +85,13 @@ function createFakeDatabase(options: FakeDbOptions = {}) {
             return (col: string, opStr: string, val: unknown) => {
               if (col === "id" && opStr === "=" && typeof val === "string") {
                 targetSessionId = val;
+              }
+              if (
+                col === "sessions.playing_at" &&
+                opStr === ">" &&
+                val instanceof Date
+              ) {
+                sinceThreshold = val;
               }
               return proxy;
             };
@@ -149,7 +157,8 @@ function createFakeDatabase(options: FakeDbOptions = {}) {
               if (table === "sessions") {
                 // Return live sessions matching standard criteria
                 const now = new Date();
-                const staleThreshold = new Date(now.getTime() - 40_000);
+                const staleThreshold =
+                  sinceThreshold ?? new Date(now.getTime() - 130_000);
                 return sessions.filter(
                   (s) =>
                     s.revoked_at === null &&
@@ -341,9 +350,9 @@ await test("own claim stale, another device live, heartbeat => denied", async ()
         location_region: null,
         location_country: null,
         playing_lesson_id: LESSON_1,
-        // playing_at is old enough to be excluded by listLivePlaybackClaims
-        playing_claimed_at: new Date(Date.now() - 60_000),
-        playing_at: new Date(Date.now() - 60_000),
+        // playing_at is old enough to be excluded by listLivePlaybackClaims (> 130s)
+        playing_claimed_at: new Date(Date.now() - 150_000),
+        playing_at: new Date(Date.now() - 150_000),
         revoked_at: null,
         expires_at: new Date(Date.now() + 86_400_000),
       },
@@ -434,8 +443,8 @@ await test("a play event always wins against an existing stream", async () => {
   assert.ok(setWrite, "sess-2 must have claim set");
 });
 
-await test("a stale claim (older than 40 s) is ignored", async () => {
-  const staleTime = new Date(Date.now() - 50_000); // 50s ago (> 40s stale threshold)
+await test("a stale claim (older than the dynamic stale window) is ignored", async () => {
+  const staleTime = new Date(Date.now() - 150_000); // 150s ago (> 130s stale window)
 
   const { db, writes } = createFakeDatabase({
     maxStreams: 1,
@@ -581,4 +590,78 @@ await test("a batch without playing clears the claim", async () => {
   );
   assert.ok(clearWrite, "Claim must be cleared when playing is undefined");
   assert.equal(sessions[0]?.playing_lesson_id, null);
+});
+
+await test("two devices sending heartbeats 60 seconds apart: newer play maintains priority and wins", async () => {
+  const tPlayDevice1 = new Date(Date.now() - 70_000); // Device 1 pressed play 70s ago
+  const tPlayDevice2 = new Date(Date.now() - 10_000); // Device 2 pressed play 10s ago (newer play)
+
+  const { db, writes } = createFakeDatabase({
+    maxStreams: 1,
+    sessions: [
+      {
+        id: "sess-device-1",
+        user_id: "u-1",
+        user_agent: "Chrome on Windows",
+        location_city: "Delhi",
+        location_region: "Delhi",
+        location_country: "IN",
+        playing_lesson_id: LESSON_1,
+        playing_claimed_at: tPlayDevice1,
+        // Heartbeat sent 60s ago: within the 130s stale window
+        playing_at: new Date(Date.now() - 60_000),
+        revoked_at: null,
+        expires_at: new Date(Date.now() + 86_400_000),
+        lesson_title: "Lesson 1",
+      },
+      {
+        id: "sess-device-2",
+        user_id: "u-1",
+        user_agent: "Safari on iPhone",
+        location_city: "Pune",
+        location_region: "Maharashtra",
+        location_country: "IN",
+        playing_lesson_id: LESSON_2,
+        playing_claimed_at: tPlayDevice2,
+        // Heartbeat sent 5s ago
+        playing_at: new Date(Date.now() - 5_000),
+        revoked_at: null,
+        expires_at: new Date(Date.now() + 86_400_000),
+        lesson_title: "Lesson 2",
+      },
+    ],
+  });
+  const service = createSessionService({ database: db });
+
+  // Device 1 sends a heartbeat 60 seconds after its previous one
+  const res1 = await service.reportPlayback(
+    { id: "u-1", roles: [STUDENT_ROLE] },
+    "sess-device-1",
+    { lessonId: LESSON_1, event: "heartbeat" },
+  );
+
+  // Newer play (Device 2) wins: Device 1 is denied and its claim cleared
+  assert.equal(res1.allowed, false, "Older device heartbeat must be denied");
+  if (!res1.allowed) {
+    assert.equal(res1.playingOn.userAgent, "Safari on iPhone");
+    assert.equal(res1.playingOn.lessonTitle, "Lesson 2");
+    assert.equal(res1.playingOn.since, tPlayDevice2.toISOString());
+  }
+
+  const clearWrite = writes.find(
+    (w) => w.type === "clear" && w.sessionId === "sess-device-1",
+  );
+  assert.ok(clearWrite, "sess-device-1 claim must be cleared when denied");
+
+  // Device 2 sends a heartbeat: allowed because it has the newer play
+  const res2 = await service.reportPlayback(
+    { id: "u-1", roles: [STUDENT_ROLE] },
+    "sess-device-2",
+    { lessonId: LESSON_2, event: "heartbeat" },
+  );
+  assert.equal(
+    res2.allowed,
+    true,
+    "Newer play device heartbeat must be allowed",
+  );
 });
