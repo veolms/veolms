@@ -1589,10 +1589,13 @@ export function createMediaService({
     }
 
     // A new transcode adds a new output row; its id tells the copies apart.
+    // A storyboard records only that id (`outputId` in its index), while
+    // cached copies of the manifest also change with the manifest version.
     return {
       outputPrefix,
       manifestKey,
       manifestVersion,
+      outputId: latestOutput?.id ?? "",
       outputVersion: `${latestOutput?.id ?? ""}:${manifestVersion ?? ""}`,
     };
   }
@@ -1914,14 +1917,14 @@ export function createMediaService({
    */
   async function readStoryboardUrl(
     manifestKey: string,
-    outputVersion: string,
+    outputId: string,
     logger?: FastifyBaseLogger,
   ): Promise<string | undefined> {
     const indexKey = storyboardIndexKeyFor(manifestKey);
     try {
       const indexPath = await STORYBOARD_PRESENCE_CACHE.resolve(
         indexKey,
-        outputVersion,
+        outputId,
         (key) =>
           readStorageText(services.storage, key, STORYBOARD_INDEX_MAX_BYTES),
       );
@@ -1981,7 +1984,7 @@ export function createMediaService({
     // The transcode worker only marks a job completed after publishing its
     // output. Avoid an extra storage HEAD round-trip on every first play;
     // the CDN manifest request itself remains the authoritative final check.
-    const { manifestKey, manifestVersion, outputVersion } =
+    const { manifestKey, manifestVersion, outputId, outputVersion } =
       await getReadyPlaybackOutput(context.content_media_id!, context, {
         verifyManifest: false,
       });
@@ -2008,7 +2011,7 @@ export function createMediaService({
         ? readInlinedMasterManifest(manifestKey, outputVersion, options.logger)
         : Promise.resolve(undefined);
     const storyboardUrlPromise = options.storyboard
-      ? readStoryboardUrl(manifestKey, outputVersion, options.logger)
+      ? readStoryboardUrl(manifestKey, outputId, options.logger)
       : Promise.resolve(undefined);
     // Where this learner left the video, from whichever device. Optional:
     // a failure plays from wherever this browser says.
@@ -2614,7 +2617,7 @@ export function createMediaService({
     media: VideoAssetForPlayback,
     details: { mediaKey: string; title?: string | null },
   ): Promise<HeroVideoPlayback> {
-    const { manifestKey, manifestVersion, outputVersion } =
+    const { manifestKey, manifestVersion, outputId } =
       await getReadyPlaybackOutput(
         media.id,
         {
@@ -2638,7 +2641,7 @@ export function createMediaService({
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
     // The seek previews, as a lesson's (read from a cache, never failing).
-    const storyboardUrl = await readStoryboardUrl(manifestKey, outputVersion);
+    const storyboardUrl = await readStoryboardUrl(manifestKey, outputId);
     return {
       mediaKey: details.mediaKey,
       manifestUrl,
