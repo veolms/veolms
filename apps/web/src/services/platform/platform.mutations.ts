@@ -67,6 +67,28 @@ export function useUpdatePlatformSettings() {
   });
 }
 
+/** Uploads a logo for the invoices only (Platform > Invoice). */
+export function useUploadInvoiceLogo() {
+  const queryClient = useQueryClient();
+  return useMutation<PlatformSettingsResponse, ApiError, File>({
+    mutationFn: (file) => platformService.uploadInvoiceLogo(file),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(platformKeys.settings(), saved);
+    },
+  });
+}
+
+/** Invoices go back to printing the academy's logo. */
+export function useRemoveInvoiceLogo() {
+  const queryClient = useQueryClient();
+  return useMutation<PlatformSettingsResponse, ApiError, void>({
+    mutationFn: () => platformService.removeInvoiceLogo(),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(platformKeys.settings(), saved);
+    },
+  });
+}
+
 /** Starts a build of every public page (or joins the one under way). */
 export function useRebuildStaticSite() {
   const queryClient = useQueryClient();

@@ -70,6 +70,13 @@ export interface PlatformInvoiceSettings {
   footerNote: string;
   /** Print the academy's logo (General tab) above the company name. */
   showLogo: boolean;
+  /**
+   * A logo for the invoice only, printed instead of the General tab's one.
+   * The emails are dark and the invoice is white, so a logo with light text
+   * for the emails needs a dark-text version here. Null prints the General
+   * tab's logo. Set by its own upload, never by a settings save.
+   */
+  logoUrl: string | null;
 }
 
 export interface PlatformSettings {
@@ -95,6 +102,7 @@ export const DEFAULT_PLATFORM_INVOICE_SETTINGS: PlatformInvoiceSettings = {
   footerNote:
     "This is computer generated receipt and does not require physical signature",
   showLogo: true,
+  logoUrl: null,
 };
 
 export const DEFAULT_PLATFORM_APPEARANCE_SETTINGS: PlatformAppearanceSettings =
