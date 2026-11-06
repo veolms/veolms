@@ -8,12 +8,7 @@
 import "./flow-env.ts";
 
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import type {
-  EmailContent,
-  EmailService,
-  SmsContent,
-  SmsService,
-} from "@veolms/services";
+import type { EmailContent, EmailService } from "@veolms/services";
 
 import {
   FakePaymentGateway,
@@ -60,34 +55,6 @@ class CapturingEmailService implements EmailService {
   }
 }
 
-/** Keeps every text the API sends; nothing leaves the machine. */
-class CapturingSmsService implements SmsService {
-  readonly sent: { to: string; text: string }[] = [];
-
-  async send(to: string, content: SmsContent) {
-    this.sent.push({ to, text: content.text });
-    return { status: "logged" as const };
-  }
-
-  async sendOtp(to: string, otp: string) {
-    this.sent.push({ to, text: otp });
-    return { status: "logged" as const };
-  }
-
-  /** How many texts went to `to`. */
-  countTo(to: string): number {
-    return this.sent.filter((sms) => sms.to === to).length;
-  }
-
-  /** The six-digit code in the last text sent to `to`. */
-  lastCodeFor(to: string): string {
-    const sms = this.sent.findLast((message) => message.to === to);
-    const code = sms?.text.match(/\b(\d{6})\b/u)?.[1];
-    if (!code) throw new Error(`No code was texted to ${to}`);
-    return code;
-  }
-}
-
 const silentLogger = {
   level: "silent",
   fatal() {},
@@ -106,7 +73,6 @@ export interface FlowApp {
   app: FastifyInstance;
   database: ReturnType<typeof createDatabase>;
   email: CapturingEmailService;
-  sms: CapturingSmsService;
   gateway: FakePaymentGateway;
   /** A new visitor with an address of their own (rate limits are per address). */
   visitor(): FlowClient;
@@ -127,12 +93,10 @@ export async function startFlowApp(
     applicationName: "veolms-flow-tests",
   });
   const email = new CapturingEmailService();
-  const sms = new CapturingSmsService();
   const gateway = new FakePaymentGateway();
   const services = {
     ...createServices({ config, logger: silentLogger }),
     email,
-    sms,
     paymentGateways: fakePaymentGateways(gateway),
   };
   const app = await createApp({
@@ -146,7 +110,6 @@ export async function startFlowApp(
     app,
     database,
     email,
-    sms,
     gateway,
     visitor: () => {
       addressCounter += 1;
