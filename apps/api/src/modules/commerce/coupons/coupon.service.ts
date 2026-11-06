@@ -1,12 +1,14 @@
+import type { Kysely } from "kysely";
+import type { Database } from "@veolms/database";
 import type {
   Coupon,
+  CouponDiscountRule,
   CouponListItem,
   CouponListResponse,
   CreateCouponRequest,
   ListCouponsQuery,
   UpdateCouponRequest,
 } from "@veolms/contracts";
-import type { Executor } from "../shared/repository.types.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { hasAcademyPermission } from "../../authorization/index.ts";
 import type { CourseService } from "../../courses/index.ts";
@@ -100,11 +102,52 @@ function assertValidWindow(startsAt: Date, expiresAt: Date) {
   }
 }
 
+/**
+ * A rule only gives an item the coupon already applies to its own discount;
+ * it never widens the coupon. With course restrictions only those courses
+ * qualify (and no bundle); with bundle restrictions only those bundles (and
+ * no course, unless courses are restricted too); with none, everything.
+ */
+export function assertRulesWithinScope(
+  rules: readonly CouponDiscountRule[],
+  restrictedCourseIds: readonly string[] | null | undefined,
+  restrictedBundleIds: readonly string[] | null | undefined,
+): void {
+  const courses = new Set(restrictedCourseIds ?? []);
+  const bundles = new Set(restrictedBundleIds ?? []);
+  for (const rule of rules) {
+    const inScope =
+      rule.targetType === "course"
+        ? courses.size > 0
+          ? courses.has(rule.targetId)
+          : bundles.size === 0
+        : bundles.size > 0
+          ? bundles.has(rule.targetId)
+          : courses.size === 0;
+    if (!inScope) {
+      throw new AppError(
+        400,
+        "COUPON_RULE_OUT_OF_SCOPE",
+        `A ${rule.targetType} with its own discount must be one this coupon applies to. Add it to the coupon's ${rule.targetType}s, or remove its discount.`,
+      );
+    }
+  }
+}
+
+const toRuleRows = (rules: readonly CouponDiscountRule[]) =>
+  rules.map((rule) => ({
+    target_type: rule.targetType,
+    target_id: rule.targetId,
+    discount_type: rule.discountType,
+    discount_value: rule.discountValue,
+    max_discount_amount: rule.maxDiscountAmount ?? null,
+  }));
+
 export function createCouponService({
   database,
   courseService,
 }: {
-  database: Executor;
+  database: Kysely<Database>;
   courseService: Pick<CourseService, "listOwnedCourseIds">;
 }): CouponService {
   /**
@@ -177,6 +220,7 @@ export function createCouponService({
 
   function mapToCoupon(
     row: NonNullable<Awaited<ReturnType<typeof couponRepo.findCouponById>>>,
+    rules: Awaited<ReturnType<typeof couponRepo.listCouponDiscountRules>>,
   ): Coupon {
     return {
       id: row.id,
@@ -192,6 +236,14 @@ export function createCouponService({
       perUserLimit: row.per_user_limit,
       isActive: row.is_active,
       restrictedCourseIds: row.restricted_course_ids,
+      restrictedBundleIds: row.restricted_bundle_ids,
+      discountRules: rules.map((rule) => ({
+        targetType: rule.target_type,
+        targetId: rule.target_id,
+        discountType: rule.discount_type,
+        discountValue: rule.discount_value,
+        maxDiscountAmount: rule.max_discount_amount,
+      })),
     };
   }
 
@@ -293,7 +345,10 @@ export function createCouponService({
     ) {
       throw couponNotFound(id);
     }
-    return mapToCoupon(coupon);
+    return mapToCoupon(
+      coupon,
+      await couponRepo.listCouponDiscountRules(database, coupon.id),
+    );
   }
 
   async function createCoupon(
@@ -315,6 +370,12 @@ export function createCouponService({
     }
 
     assertValidWindow(new Date(request.startsAt), new Date(request.expiresAt));
+    const rules = request.discountRules ?? [];
+    assertRulesWithinScope(
+      rules,
+      request.restrictedCourseIds,
+      request.restrictedBundleIds,
+    );
 
     const existing = await couponRepo.findCouponByCode(database, request.code);
     if (existing) {
@@ -326,25 +387,34 @@ export function createCouponService({
     }
 
     const now = new Date();
-    const created = await couponRepo
-      .insertCoupon(database, {
-        id: crypto.randomUUID(),
-        code: request.code.toUpperCase(),
-        description: request.description ?? null,
-        discount_type: request.discountType,
-        discount_value: request.discountValue,
-        max_discount_amount: request.maxDiscountAmount ?? null,
-        min_order_amount: request.minOrderAmount ?? 0,
-        starts_at: new Date(request.startsAt),
-        expires_at: new Date(request.expiresAt),
-        global_usage_limit: request.globalUsageLimit ?? null,
-        per_user_limit: request.perUserLimit ?? 1,
-        is_active: request.isActive ?? true,
-        restricted_course_ids: request.restrictedCourseIds ?? null,
-        restricted_bundle_ids: request.restrictedBundleIds ?? null,
-        created_by: actor.id,
-        created_at: now,
-        updated_at: now,
+    const created = await database
+      .transaction()
+      .execute(async (trx) => {
+        const coupon = await couponRepo.insertCoupon(trx, {
+          id: crypto.randomUUID(),
+          code: request.code.toUpperCase(),
+          description: request.description ?? null,
+          discount_type: request.discountType,
+          discount_value: request.discountValue,
+          max_discount_amount: request.maxDiscountAmount ?? null,
+          min_order_amount: request.minOrderAmount ?? 0,
+          starts_at: new Date(request.startsAt),
+          expires_at: new Date(request.expiresAt),
+          global_usage_limit: request.globalUsageLimit ?? null,
+          per_user_limit: request.perUserLimit ?? 1,
+          is_active: request.isActive ?? true,
+          restricted_course_ids: request.restrictedCourseIds ?? null,
+          restricted_bundle_ids: request.restrictedBundleIds ?? null,
+          created_by: actor.id,
+          created_at: now,
+          updated_at: now,
+        });
+        await couponRepo.replaceCouponDiscountRules(
+          trx,
+          coupon.id,
+          toRuleRows(rules),
+        );
+        return coupon;
       })
       .catch((error: unknown) => {
         // Two requests creating the same code at once both pass the check
@@ -362,7 +432,10 @@ export function createCouponService({
         throw error;
       });
 
-    return mapToCoupon(created);
+    return mapToCoupon(
+      created,
+      await couponRepo.listCouponDiscountRules(database, created.id),
+    );
   }
 
   async function updateCoupon(
@@ -408,19 +481,50 @@ export function createCouponService({
       : existing.expires_at;
     assertValidWindow(nextStartsAt, nextExpiresAt);
 
-    const updated = await couponRepo.updateCoupon(database, id, {
-      description: request.description,
-      discount_type: request.discountType,
-      discount_value: request.discountValue,
-      max_discount_amount: request.maxDiscountAmount,
-      min_order_amount: request.minOrderAmount,
-      starts_at: request.startsAt ? new Date(request.startsAt) : undefined,
-      expires_at: request.expiresAt ? new Date(request.expiresAt) : undefined,
-      global_usage_limit: request.globalUsageLimit,
-      per_user_limit: request.perUserLimit,
-      is_active: request.isActive,
-      restricted_course_ids: request.restrictedCourseIds,
-      restricted_bundle_ids: request.restrictedBundleIds,
+    // The rules the coupon will have, checked against the scope it will
+    // have: narrowing the courses must not leave a rule outside them.
+    const nextRules =
+      request.discountRules ??
+      (await couponRepo.listCouponDiscountRules(database, id)).map((rule) => ({
+        targetType: rule.target_type,
+        targetId: rule.target_id,
+        discountType: rule.discount_type,
+        discountValue: rule.discount_value,
+        maxDiscountAmount: rule.max_discount_amount,
+      }));
+    assertRulesWithinScope(
+      nextRules,
+      request.restrictedCourseIds === undefined
+        ? existing.restricted_course_ids
+        : request.restrictedCourseIds,
+      request.restrictedBundleIds === undefined
+        ? existing.restricted_bundle_ids
+        : request.restrictedBundleIds,
+    );
+
+    const updated = await database.transaction().execute(async (trx) => {
+      const row = await couponRepo.updateCoupon(trx, id, {
+        description: request.description,
+        discount_type: request.discountType,
+        discount_value: request.discountValue,
+        max_discount_amount: request.maxDiscountAmount,
+        min_order_amount: request.minOrderAmount,
+        starts_at: request.startsAt ? new Date(request.startsAt) : undefined,
+        expires_at: request.expiresAt ? new Date(request.expiresAt) : undefined,
+        global_usage_limit: request.globalUsageLimit,
+        per_user_limit: request.perUserLimit,
+        is_active: request.isActive,
+        restricted_course_ids: request.restrictedCourseIds,
+        restricted_bundle_ids: request.restrictedBundleIds,
+      });
+      if (row && request.discountRules) {
+        await couponRepo.replaceCouponDiscountRules(
+          trx,
+          id,
+          toRuleRows(request.discountRules),
+        );
+      }
+      return row;
     });
 
     if (!updated) {
@@ -431,7 +535,10 @@ export function createCouponService({
       );
     }
 
-    return mapToCoupon(updated);
+    return mapToCoupon(
+      updated,
+      await couponRepo.listCouponDiscountRules(database, id),
+    );
   }
 
   async function deleteCoupon(id: string): Promise<void> {
