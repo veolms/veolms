@@ -1,12 +1,6 @@
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
-import {
-  ACADEMY_LOGO_CONTENT_TYPES,
-  ACADEMY_LOGO_MAX_BYTES,
-  type AcademyBrandResponse,
-} from "@veolms/contracts";
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import type { AcademyBrandResponse } from "@veolms/contracts";
+import { useState, type FormEvent } from "react";
 import { Button } from "../components/Button";
 import { getApiError } from "../lib/api-error";
 import {
@@ -16,6 +10,7 @@ import {
   useUploadAcademyLogo,
 } from "../services/academy";
 import { SettingsSection, TextField } from "./homePageSettingsControls";
+import { LogoUploadField } from "./LogoUploadField";
 
 /**
  * The academy's name and logo: what its emails (the sign-in code, account
@@ -59,20 +54,7 @@ export function AcademyBrandSection({
   );
 }
 
-function logoFileProblem(file: File): string | null {
-  if (!(ACADEMY_LOGO_CONTENT_TYPES as readonly string[]).includes(file.type)) {
-    return "Choose a PNG or JPEG image.";
-  }
-  if (file.size > ACADEMY_LOGO_MAX_BYTES) {
-    return "The logo must be 2 MB or smaller.";
-  }
-  return null;
-}
-
-/**
- * The logo, as the top of an email shows it, with buttons to upload,
- * replace or remove it. Each takes effect at once.
- */
+/** The logo, as the top of an email shows it (on the emails' navy). */
 function AcademyLogoField({
   saved,
   setNotice,
@@ -80,123 +62,28 @@ function AcademyLogoField({
   saved: AcademyBrandResponse;
   setNotice?: (message: string) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadAcademyLogo();
   const remove = useRemoveAcademyLogo();
-  const [fileProblem, setFileProblem] = useState<string | null>(null);
-  const [logoFailed, setLogoFailed] = useState(false);
-  const busy = upload.isPending || remove.isPending;
-  const error =
-    fileProblem ??
-    (upload.isError
-      ? getApiError(upload.error).message || "The logo could not be uploaded."
-      : remove.isError
-        ? getApiError(remove.error).message || "The logo could not be removed."
-        : null);
-
-  const chooseFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    // The same file can be chosen again after a failed upload.
-    event.target.value = "";
-    if (!file) return;
-    upload.reset();
-    remove.reset();
-    const problem = logoFileProblem(file);
-    setFileProblem(problem);
-    if (problem) return;
-    upload.mutate(file, {
-      onSuccess: () => {
-        setLogoFailed(false);
-        setNotice?.("Academy logo uploaded.");
-      },
-    });
-  };
-
-  const showLogo = saved.logoUrl && !logoFailed;
-
   return (
-    <div>
-      <p className="mb-1.5 text-[13px] font-medium text-(--text)">Logo</p>
-      {/* How the top of an email will look: the emails' navy, with the logo
-          or, without one, the name in the wordmark's style. */}
-      <div className="flex min-h-18 items-center rounded-xl bg-[#0B0D12] px-6 py-5">
-        {showLogo ? (
-          <img
-            alt={saved.name || "Academy logo"}
-            className="block h-8 w-auto max-w-60"
-            onError={() => setLogoFailed(true)}
-            src={saved.logoUrl ?? undefined}
-          />
-        ) : (
-          <span className="text-2xl leading-8 font-bold tracking-[-0.5px] text-[#F3F4F6]">
-            <span className="text-[#6E7CFF]">{saved.name.charAt(0)}</span>
-            {saved.name.slice(1)}
-          </span>
-        )}
-      </div>
-      <p className="mt-1.5 text-xs text-(--muted)">
-        {logoFailed
-          ? "The logo could not be shown here. Try uploading it again."
-          : "A PNG or JPEG up to 2 MB, about 64px tall, ideally with a transparent background. Without one, the academy's name is shown instead."}
-      </p>
-      {error ? (
-        <p className="mt-1.5 text-xs text-rose-500" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACADEMY_LOGO_CONTENT_TYPES.join(",")}
-        className="hidden"
-        onChange={chooseFile}
-        aria-label="Choose a logo image"
-      />
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button
-          type="button"
-          motion="static"
-          disabled={busy}
-          onClick={() => inputRef.current?.click()}
-        >
-          {upload.isPending ? (
-            <CircleNotch size={16} className="animate-spin" />
-          ) : (
-            <UploadSimple size={16} weight="bold" />
-          )}
-          {upload.isPending
-            ? "Uploading…"
-            : saved.logoUrl
-              ? "Replace logo"
-              : "Upload logo"}
-        </Button>
-        {saved.logoUrl ? (
-          <button
-            type="button"
-            disabled={busy}
-            className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-xl px-3.5 text-sm font-semibold text-(--muted) hover:text-rose-500 focus-visible:outline-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => {
-              upload.reset();
-              setFileProblem(null);
-              remove.mutate(undefined, {
-                onSuccess: () => {
-                  setLogoFailed(false);
-                  setNotice?.("Academy logo removed.");
-                },
-              });
-            }}
-          >
-            {remove.isPending ? (
-              <CircleNotch size={16} className="animate-spin" />
-            ) : (
-              <Trash size={16} />
-            )}
-            Remove
-          </button>
-        ) : null}
-      </div>
-    </div>
+    <LogoUploadField
+      label="Logo"
+      inputLabel="Choose a logo image"
+      logoUrl={saved.logoUrl}
+      alt={saved.name || "Academy logo"}
+      surface="dark"
+      fallback={
+        <span className="text-2xl leading-8 font-bold tracking-[-0.5px] text-[#F3F4F6]">
+          <span className="text-[#6E7CFF]">{saved.name.charAt(0)}</span>
+          {saved.name.slice(1)}
+        </span>
+      }
+      hint="A PNG or JPEG up to 2 MB, about 64px tall, ideally with a transparent background. Without one, the academy's name is shown instead."
+      upload={upload}
+      remove={remove}
+      uploadedNotice="Academy logo uploaded."
+      removedNotice="Academy logo removed."
+      setNotice={setNotice}
+    />
   );
 }
 

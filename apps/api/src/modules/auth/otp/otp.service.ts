@@ -101,8 +101,9 @@ export function createOtpService({
   getAcademyBrand,
 }: OtpServiceOptions) {
   /**
-   * Existing accounts get a login code; unknown identifiers get a signup
-   * code. A deactivated account gets none: `null`.
+   * Existing accounts get a login code; an unknown email gets a signup
+   * code. An unknown number resolves to `phone_verification`, but sendOtp
+   * sends it nothing. A deactivated account gets none: `null`.
    */
   async function resolveOtpPurpose(
     identifier: string,
@@ -243,6 +244,10 @@ export function createOtpService({
       await sendDeactivatedAccountNotice(identifier, identifierType, requester);
       return;
     }
+    if (purpose === "phone_verification") {
+      await recordUnknownNumberRequest(identifier, requester);
+      return;
+    }
     const fixedCode = await resolveTestLoginCode(identifier, identifierType);
     await sendOtpWithPurpose(
       identifier,
@@ -321,6 +326,23 @@ export function createOtpService({
         "We could not deliver a verification code. Please try again later.",
       );
     }
+  }
+
+  /**
+   * A number no account uses gets no text. Accounts are opened with an
+   * email or OAuth only, so a code sent to such a number could never be
+   * used, and each one costs an SMS. The request is answered like any other
+   * (same limits, same success), so the answer does not say whether the
+   * number has an account. It is charged to the requester alone, under a
+   * stand-in for the number.
+   */
+  async function recordUnknownNumberRequest(
+    phoneNo: string,
+    requester: OtpRequester,
+  ): Promise<void> {
+    await recordRefusedSend(phoneNo, "phone", "phone_verification", requester, {
+      countAgainstDestination: false,
+    });
   }
 
   /**

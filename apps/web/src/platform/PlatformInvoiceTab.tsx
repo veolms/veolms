@@ -15,9 +15,11 @@ import {
   usePlatformSettings,
   useUpdatePlatformSettings,
 } from "../services/platform";
+import { InvoiceLogoField } from "./InvoiceLogoField";
 import { PlatformSettingsStatus } from "./PlatformSettingsStatus";
 
-type Field = keyof PlatformInvoiceSettings;
+/** The logo is saved by its own upload, not with the form. */
+type Field = Exclude<keyof PlatformInvoiceSettings, "logoUrl">;
 
 /**
  * What the academy prints on the invoices students download: the seller's
@@ -49,11 +51,9 @@ export function PlatformInvoiceTab({
       </header>
       {saved ? (
         <InvoiceForm
-          // A save the server confirms starts the draft again from what it
-          // stored. Keyed on the save time, not the values: those change at
-          // once while a save is under way, and back if it fails, and the
-          // draft must survive both.
-          key={query.data?.updatedAt ?? "defaults"}
+          // Not keyed on the save time: an invoice logo upload saves the
+          // settings too, and must not discard unsaved details. The form
+          // takes what the server stored after its own save instead.
           saved={saved}
           update={update}
           setNotice={setNotice}
@@ -93,9 +93,10 @@ function InvoiceForm({
 }) {
   const [draft, setDraft] = useState(saved);
 
-  const isDirty = (Object.keys(saved) as Field[]).some(
-    (field) => draft[field] !== saved[field],
-  );
+  // The logo is saved apart from the form, so it never makes the form dirty.
+  const isDirty = (Object.keys(saved) as (keyof PlatformInvoiceSettings)[])
+    .filter((field): field is Field => field !== "logoUrl")
+    .some((field) => draft[field] !== saved[field]);
   const problems = fieldProblems(draft);
   const firstProblem = Object.values(problems)[0] ?? null;
   const saveError = update.isError ? getApiError(update.error).message : null;
@@ -115,9 +116,17 @@ function InvoiceForm({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (firstProblem || !isDirty || update.isPending) return;
+    const { logoUrl: _logo, ...details } = draft;
     update.mutate(
-      { invoice: draft },
-      { onSuccess: () => setNotice?.("Invoice details saved.") },
+      { invoice: details },
+      {
+        // The draft starts again from what the server stored (trimmed,
+        // upper-cased GSTIN and so on).
+        onSuccess: (response) => {
+          setDraft(response.settings.invoice);
+          setNotice?.("Invoice details saved.");
+        },
+      },
     );
   };
 
@@ -202,7 +211,7 @@ function InvoiceForm({
       <SettingsSection
         id="platform-invoice-footer-heading"
         title="Logo and footer"
-        description="The academy logo comes from the General tab."
+        description="The invoice is white. If the General tab's logo has light text (for the dark emails), upload a dark-text version here."
       >
         <label className="flex items-center justify-between gap-4 text-sm font-medium text-(--text)">
           <span>Print the academy logo</span>
@@ -212,6 +221,9 @@ function InvoiceForm({
             label="Print the academy logo on invoices"
           />
         </label>
+        {draft.showLogo ? (
+          <InvoiceLogoField logoUrl={saved.logoUrl} setNotice={setNotice} />
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
             id="platform-invoice-signatory"

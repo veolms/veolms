@@ -106,8 +106,8 @@ export function layout({
 </head>
 <body style="margin:0;padding:0;background-color:${colors.page};-webkit-text-size-adjust:100%">
 <div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all">${escapeHtml(preheader)}${PREVIEW_PADDING}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${colors.page}" style="background-color:${colors.page}">
-<tr><td align="center" style="padding:40px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${colors.page}" style="background-color:${colors.page};border-radius:16px;border-collapse:separate">
+<tr><td align="center" style="padding:40px 16px;border-radius:16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;font-family:${fontStack}">
 <tr><td style="padding:0 4px 20px">${brandMark(academyName, logoUrl)}</td></tr>
 <tr><td bgcolor="${colors.card}" style="background-color:${colors.card};border:1px solid ${colors.cardBorder};border-radius:20px;padding:36px 32px">

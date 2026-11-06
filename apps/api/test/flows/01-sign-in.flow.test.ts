@@ -285,4 +285,51 @@ await test("sign-in also works sent as text/plain (no CORS preflight) from the s
   assert.equal(report.status, 200);
 });
 
+let phoneCounter = 0;
+/** A number no other test uses. */
+function newPhoneNumber(): string {
+  phoneCounter += 1;
+  return `+9198${String(Date.now() % 1_000_000).padStart(6, "0")}${String(phoneCounter).padStart(2, "0")}`;
+}
+
+await test("a number no account uses is answered as usual but sent no text", async () => {
+  const phoneNo = newPhoneNumber();
+  const browser = flow.visitor();
+
+  const sent = await browser.post("/v1/auth/otp/send", { phoneNo });
+
+  assert.equal(sent.status, 200);
+  assert.equal(flow.sms.countTo(phoneNo), 0);
+});
+
+await test("an account's unconfirmed number signs in with its texted code and is confirmed by it", async () => {
+  const { userId } = await signedUpLearner(flow);
+  const phoneNo = newPhoneNumber();
+  // Typed by staff, say: on the account but never confirmed.
+  await flow.database
+    .updateTable("users")
+    .set({ phone_no: phoneNo, phone_verified_at: null })
+    .where("id", "=", userId)
+    .execute();
+  const phone = flow.visitor();
+
+  const sent = await phone.post("/v1/auth/otp/send", { phoneNo });
+  assert.equal(sent.status, 200);
+  const code = flow.sms.lastCodeFor(phoneNo);
+
+  const signIn = await phone.post<{ user: { id: string } }>("/v1/auth/login", {
+    phoneNo,
+    code,
+  });
+
+  assert.equal(signIn.status, 200);
+  assert.equal(signIn.body.data?.user.id, userId);
+  const row = await flow.database
+    .selectFrom("users")
+    .select("phone_verified_at")
+    .where("id", "=", userId)
+    .executeTakeFirstOrThrow();
+  assert.ok(row.phone_verified_at, "the number is confirmed by the sign-in");
+});
+
 await flow.close();

@@ -130,14 +130,14 @@ export function createAcademyBrandService({
   }
 
   /**
-   * Checks the uploaded file is the image it claims to be, then makes it the
-   * academy's logo. The logo it replaces is kept in storage: emails already
-   * sent still show it.
+   * Checks a file uploaded to a `presignLogo` address is the PNG or JPEG it
+   * claims to be, and one an invoice can draw; answers its public address.
+   * A file that fails is deleted. Used for the academy's logo and for the
+   * invoice-only logo (Platform > Invoice).
    */
-  async function completeLogo(
+  async function verifyUploadedLogo(
     input: AcademyLogoCompleteRequest,
-  ): Promise<AcademyBrandResponse> {
-    const row = await requireAcademy();
+  ): Promise<string> {
     const store = requireStorage();
     const key = academyLogoKey(input.uploadId, input.contentType);
     const reject = async (message: string): Promise<never> => {
@@ -175,6 +175,18 @@ export function createAcademyBrandService({
     if (!logoUrl) {
       return await reject("Logos cannot be stored: no public address is set.");
     }
+    return logoUrl;
+  }
+
+  /**
+   * Makes an uploaded file the academy's logo. The logo it replaces is kept
+   * in storage: emails already sent still show it.
+   */
+  async function completeLogo(
+    input: AcademyLogoCompleteRequest,
+  ): Promise<AcademyBrandResponse> {
+    const row = await requireAcademy();
+    const logoUrl = await verifyUploadedLogo(input);
     return await saveBrand(row.id, { name: row.name, logoUrl });
   }
 
@@ -192,6 +204,7 @@ export function createAcademyBrandService({
     readBrand,
     updateBrand,
     presignLogo,
+    verifyUploadedLogo,
     completeLogo,
     removeLogo,
   };
