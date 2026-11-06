@@ -1454,6 +1454,7 @@ export function createMediaService({
 
     return {
       status,
+      playbackReady: progress.media_status === "ready",
       // The worker reports live FFmpeg progress to worker_monitoring. The
       // video_jobs value is the durable fallback used before a worker is
       // assigned and after the worker is released.
@@ -2475,7 +2476,16 @@ export function createMediaService({
           });
         await mediaRepo.updateVideoJobStatus(trx, locked.id, {
           status: isReady ? "ready" : "completed",
-          ...(isReady ? {} : { progress_percent: 100 }),
+          ...(isReady
+            ? typeof eventDetail?.jobPercentComplete === "number"
+              ? {
+                  progress_percent: Math.max(
+                    0,
+                    Math.min(100, Math.floor(eventDetail.jobPercentComplete)),
+                  ),
+                }
+              : {}
+            : { progress_percent: 100 }),
           error_message: null,
         });
         await mediaRepo.updateMediaAssetStatus(trx, locked.video_id, "ready");
