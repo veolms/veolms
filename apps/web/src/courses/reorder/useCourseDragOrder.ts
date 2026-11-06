@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type MouseEvent,
   type PointerEvent,
 } from "react";
 import { moveCourseTo, sameOrder } from "./courseOrder";
@@ -13,6 +14,10 @@ import {
 } from "./dragAutoScroll";
 
 const DRAG_TYPE = "application/x-veolms-course";
+/** How long a finger holds a card before it is picked up. */
+const HOLD_MS = 280;
+/** How far a finger may drift while holding before it counts as a scroll. */
+const HOLD_SLOP_PX = 10;
 
 export interface CourseDragHandlers {
   onDragStart: (event: DragEvent<HTMLElement>) => void;
@@ -23,6 +28,7 @@ export interface CourseDragHandlers {
 
 export interface CoursePointerDragHandlers {
   onPointerDown: (event: PointerEvent<HTMLElement>) => void;
+  onContextMenu?: (event: MouseEvent<HTMLElement>) => void;
 }
 
 /**
@@ -47,6 +53,10 @@ export function useCourseDragOrder(
   const previewRef = useRef<string[] | null>(null);
   const scroller = useRef<AutoScroller | null>(null);
   const stopListening = useRef<(() => void) | null>(null);
+  /** Where the pointer last was, in viewport coordinates. */
+  const lastPoint = useRef<{ x: number; y: number } | null>(null);
+  /** What last pressed a course; a touch never starts the browser's drag. */
+  const lastPointerType = useRef<string>("mouse");
   const idsRef = useRef(ids);
   idsRef.current = ids;
   const commitRef = useRef(onCommit);
@@ -70,7 +80,6 @@ export function useCourseDragOrder(
   }
 
   /** Moves the dragged course to where the course under (x, y) stands. */
-  const lastPoint = useRef<{ x: number; y: number } | null>(null);
   function moveOver(point: { x: number; y: number }) {
     const target = document
       .elementFromPoint(point.x, point.y)
@@ -108,6 +117,12 @@ export function useCourseDragOrder(
 
   const handlersFor = (id: string, label: string): CourseDragHandlers => ({
     onDragStart: (event) => {
+      // A long press starts the browser's own drag on some touch screens;
+      // a finger drags with the pointer events instead.
+      if (lastPointerType.current !== "mouse" || dragged.current) {
+        event.preventDefault();
+        return;
+      }
       event.dataTransfer.effectAllowed = "move";
       // A link inside the card would carry its address; the course is what
       // moves.
@@ -146,42 +161,126 @@ export function useCourseDragOrder(
     onDragEnd: () => finish(false),
   });
 
+  /**
+   * Follows one finger on the whole page until it lifts. The listeners are
+   * on the document, not the element touched: reordering moves that
+   * element in the page, and a moved element stops receiving the finger's
+   * events. While the drag lasts the page does not scroll under the finger
+   * (the auto-scroll does that).
+   */
+  function followFinger(pointerId: number) {
+    const move = (event: globalThis.PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      lastPoint.current = { x: event.clientX, y: event.clientY };
+      scroller.current?.update(event.clientY);
+      moveOver(lastPoint.current);
+    };
+    const end = (event: globalThis.PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      finish(event.type === "pointerup");
+      swallowNextClick();
+    };
+    const holdStill = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault();
+    };
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", end);
+    document.addEventListener("pointercancel", end);
+    document.addEventListener("touchmove", holdStill, { passive: false });
+    stopListening.current = () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", end);
+      document.removeEventListener("pointercancel", end);
+      document.removeEventListener("touchmove", holdStill);
+    };
+  }
+
+  /** A drop is not a tap: the card it ends on does not open. */
+  function swallowNextClick() {
+    const swallow = (event: globalThis.MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener("click", swallow, { capture: true, once: true });
+    window.setTimeout(
+      () => window.removeEventListener("click", swallow, { capture: true }),
+      400,
+    );
+  }
+
+  function startFingerDrag(
+    id: string,
+    source: HTMLElement,
+    event: { pointerId: number; clientX: number; clientY: number },
+  ) {
+    begin(id, source);
+    lastPoint.current = { x: event.clientX, y: event.clientY };
+    scroller.current?.update(event.clientY);
+    followFinger(event.pointerId);
+    navigator.vibrate?.(12);
+  }
+
+  /** A handle that drags at once when a finger presses it. */
   const pointerHandlersFor = (id: string): CoursePointerDragHandlers => ({
     onPointerDown: (event) => {
+      lastPointerType.current = event.pointerType;
       // The mouse has the browser's drag and drop.
       if (event.pointerType === "mouse" || event.button !== 0) return;
       event.preventDefault();
-      const handle = event.currentTarget;
-      try {
-        // The finger keeps steering this handle wherever it goes.
-        handle.setPointerCapture(event.pointerId);
-      } catch {
-        // Already lifted: the pointer events below still end the drag.
-      }
-      begin(id, handle);
-      lastPoint.current = { x: event.clientX, y: event.clientY };
-      scroller.current?.update(event.clientY);
-
-      const move = (moveEvent: globalThis.PointerEvent) => {
-        if (moveEvent.pointerId !== event.pointerId) return;
-        lastPoint.current = { x: moveEvent.clientX, y: moveEvent.clientY };
-        scroller.current?.update(moveEvent.clientY);
-        moveOver(lastPoint.current);
-      };
-      const end = (endEvent: globalThis.PointerEvent) => {
-        if (endEvent.pointerId !== event.pointerId) return;
-        finish(endEvent.type === "pointerup");
-      };
-      handle.addEventListener("pointermove", move);
-      handle.addEventListener("pointerup", end);
-      handle.addEventListener("pointercancel", end);
-      stopListening.current = () => {
-        handle.removeEventListener("pointermove", move);
-        handle.removeEventListener("pointerup", end);
-        handle.removeEventListener("pointercancel", end);
-      };
+      startFingerDrag(id, event.currentTarget, event);
     },
   });
 
-  return { order, draggedId, handlersFor, pointerHandlersFor };
+  /**
+   * A whole card that a finger picks up by pressing and holding it; a
+   * finger that moves first is scrolling the page, and a quick tap still
+   * opens the card.
+   */
+  const holdHandlersFor = (id: string): CoursePointerDragHandlers => ({
+    onPointerDown: (event) => {
+      lastPointerType.current = event.pointerType;
+      if (event.pointerType === "mouse" || event.button !== 0) return;
+      if (dragged.current) return;
+      const card = event.currentTarget;
+      const pointerId = event.pointerId;
+      const origin = { x: event.clientX, y: event.clientY };
+      let latest = { pointerId, clientX: origin.x, clientY: origin.y };
+
+      const cancel = () => {
+        window.clearTimeout(timer);
+        document.removeEventListener("pointermove", watch);
+        document.removeEventListener("pointerup", cancel);
+        document.removeEventListener("pointercancel", cancel);
+      };
+      const watch = (moveEvent: globalThis.PointerEvent) => {
+        if (moveEvent.pointerId !== pointerId) return;
+        latest = {
+          pointerId,
+          clientX: moveEvent.clientX,
+          clientY: moveEvent.clientY,
+        };
+        if (
+          Math.hypot(
+            moveEvent.clientX - origin.x,
+            moveEvent.clientY - origin.y,
+          ) > HOLD_SLOP_PX
+        ) {
+          cancel();
+        }
+      };
+      const timer = window.setTimeout(() => {
+        cancel();
+        startFingerDrag(id, card, latest);
+      }, HOLD_MS);
+      document.addEventListener("pointermove", watch);
+      document.addEventListener("pointerup", cancel);
+      document.addEventListener("pointercancel", cancel);
+    },
+    // A held finger would open the browser's menu for the card's link.
+    onContextMenu: (event) => {
+      if (lastPointerType.current !== "mouse") event.preventDefault();
+    },
+  });
+
+  return { order, draggedId, handlersFor, pointerHandlersFor, holdHandlersFor };
 }

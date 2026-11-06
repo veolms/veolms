@@ -10,9 +10,9 @@
  */
 
 /** How long the pointer stays at an edge before the scroll is at full speed. */
-const RAMP_MS = 1200;
+const RAMP_MS = 700;
 /** How much faster than the starting speed the ramp ends. */
-const RAMP_GAIN = 2.5;
+const RAMP_GAIN = 3;
 
 export interface EdgeBounds {
   top: number;
@@ -21,12 +21,15 @@ export interface EdgeBounds {
 
 /** The band at each edge that scrolls: a share of the height, kept usable. */
 export function edgeZone(height: number): number {
-  return Math.min(Math.max(height * 0.18, 56), 140);
+  return Math.min(Math.max(height * 0.22, 72), 160);
 }
 
-/** The fastest scroll before the ramp: a screenful in about 0.9 seconds. */
+/**
+ * The fastest scroll before the ramp: a screenful in about half a second,
+ * and never slow on a short list (a phone's, or the panel's).
+ */
 export function baseSpeed(height: number): number {
-  return Math.min(Math.max(height / 900, 0.5), 1.6);
+  return Math.min(Math.max(height / 500, 1.2), 2.6);
 }
 
 /**
@@ -55,7 +58,9 @@ export function autoScrollSpeed(
   const intensity = Math.min(Math.max(depth, 0), 1);
   const ramp = 1 + (RAMP_GAIN - 1) * Math.min(heldMs / RAMP_MS, 1);
   // Squared, so the band's inner part creeps and its outer part rushes.
-  return direction * baseSpeed(height) * (0.15 + 0.85 * intensity ** 2) * ramp;
+  return (
+    direction * baseSpeed(height) * (0.25 + 0.75 * intensity ** 1.5) * ramp
+  );
 }
 
 /** The nearest ancestor that scrolls up and down, or the page itself. */
@@ -103,6 +108,7 @@ export function startAutoScroll(
 ): AutoScroller {
   let pointerY: number | null = null;
   let heldSince: number | null = null;
+  let carry = 0;
   let last = performance.now();
   let frame = requestAnimationFrame(step);
 
@@ -113,6 +119,7 @@ export function startAutoScroll(
       const speed = autoScrollSpeed(pointerY, boundsOf(container), 0);
       if (speed === 0) {
         heldSince = null;
+        carry = 0;
       } else {
         heldSince ??= now;
         const ramped = autoScrollSpeed(
@@ -120,9 +127,18 @@ export function startAutoScroll(
           boundsOf(container),
           now - heldSince,
         );
-        const before = container.scrollTop;
-        container.scrollTop = before + ramped * elapsed;
-        if (container.scrollTop !== before) onScrolled?.();
+        // Whole pixels, with what is left over carried to the next frame:
+        // a browser drops the fraction, which would stall a slow scroll.
+        carry += ramped * elapsed;
+        const delta = Math.trunc(carry);
+        carry -= delta;
+        if (delta !== 0) {
+          const before = container.scrollTop;
+          // "instant": the page scrolls smoothly by default (foundation.css),
+          // and an eased scroll restarted on every frame barely moves.
+          container.scrollBy({ top: delta, behavior: "instant" });
+          if (container.scrollTop !== before) onScrolled?.();
+        }
       }
     }
     frame = requestAnimationFrame(step);

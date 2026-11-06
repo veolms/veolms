@@ -157,18 +157,13 @@ export function CourseCatalogue({
     activeSection === "Courses" &&
     (isAdmin || capabilities.canOnCourse("course.details.update", null));
   const reorder = useCourseReorder({ enabled: canReorder, setNotice });
-  // A mouse drags cards in any view but the Bin: in a filtered view (only
-  // Published, a search) a card takes the place of the one it is dropped
-  // on in the full order. A touch screen reorders from the Reorder panel,
-  // where a long press would otherwise fight the page's scrolling.
-  const finePointer = useCourseCatalogueBreakpoint("(pointer: fine)");
+  // Cards are dragged in any view but the Bin, with a mouse or, after a
+  // press and hold, a finger. In a filtered view (only Published, a search)
+  // a card takes the place of the one it is dropped on in the full order.
   const visibleIds = visibleCourses.map((course) => course.id);
   const savedIds = reorder.courses.map((course) => course.id);
   const gridReorderable =
-    canReorder &&
-    finePointer &&
-    enrollmentFilter !== "bin" &&
-    savedIds.length > 0;
+    canReorder && enrollmentFilter !== "bin" && savedIds.length > 0;
   const fullOrder = [
     ...savedIds,
     ...visibleIds.filter((id) => !savedIds.includes(id)),
@@ -572,10 +567,13 @@ export function CourseCatalogue({
                   key={course.id}
                   draggable={!reorder.saving}
                   {...gridDrag.handlersFor(course.id, course.title)}
+                  {...gridDrag.holdHandlersFor(course.id)}
                   data-course-reorder-card={course.id}
                   data-course-drop-id={course.id}
-                  className={`min-w-0 cursor-grab transition-opacity active:cursor-grabbing ${
-                    gridDrag.draggedId === course.id ? "opacity-40" : ""
+                  className={`min-w-0 cursor-grab rounded-2xl transition-[opacity,scale,box-shadow] duration-150 select-none [-webkit-touch-callout:none] active:cursor-grabbing ${
+                    gridDrag.draggedId === course.id
+                      ? "scale-[0.97] opacity-60 shadow-[0_0_0_2px_var(--accent)]"
+                      : ""
                   }`}
                 >
                   {renderCard(course, priorityImageIndexes.has(index))}
