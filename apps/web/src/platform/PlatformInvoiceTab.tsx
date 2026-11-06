@@ -51,11 +51,9 @@ export function PlatformInvoiceTab({
       </header>
       {saved ? (
         <InvoiceForm
-          // A save the server confirms starts the draft again from what it
-          // stored. Keyed on the save time, not the values: those change at
-          // once while a save is under way, and back if it fails, and the
-          // draft must survive both.
-          key={query.data?.updatedAt ?? "defaults"}
+          // Not keyed on the save time: an invoice logo upload saves the
+          // settings too, and must not discard unsaved details. The form
+          // takes what the server stored after its own save instead.
           saved={saved}
           update={update}
           setNotice={setNotice}
@@ -95,9 +93,10 @@ function InvoiceForm({
 }) {
   const [draft, setDraft] = useState(saved);
 
-  const isDirty = (Object.keys(saved) as Field[]).some(
-    (field) => draft[field] !== saved[field],
-  );
+  // The logo is saved apart from the form, so it never makes the form dirty.
+  const isDirty = (Object.keys(saved) as (keyof PlatformInvoiceSettings)[])
+    .filter((field): field is Field => field !== "logoUrl")
+    .some((field) => draft[field] !== saved[field]);
   const problems = fieldProblems(draft);
   const firstProblem = Object.values(problems)[0] ?? null;
   const saveError = update.isError ? getApiError(update.error).message : null;
@@ -120,7 +119,14 @@ function InvoiceForm({
     const { logoUrl: _logo, ...details } = draft;
     update.mutate(
       { invoice: details },
-      { onSuccess: () => setNotice?.("Invoice details saved.") },
+      {
+        // The draft starts again from what the server stored (trimmed,
+        // upper-cased GSTIN and so on).
+        onSuccess: (response) => {
+          setDraft(response.settings.invoice);
+          setNotice?.("Invoice details saved.");
+        },
+      },
     );
   };
 
