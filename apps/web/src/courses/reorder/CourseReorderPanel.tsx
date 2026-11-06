@@ -61,16 +61,17 @@ export function CourseReorderPanel({
     <Drawer open={open} onOpenChange={onOpenChange} swipeDirection="right">
       <DrawerContent
         aria-label="Reorder courses"
-        className="m-0! border-l border-(--border) data-[swipe-direction=right]:rounded-none! [--drawer-content-width:100%] sm:[--drawer-content-width:26rem]"
+        className="m-0! border-l border-(--border) data-[swipe-direction=right]:rounded-none! [--drawer-content-width:100%]! sm:[--drawer-content-width:min(36rem,92vw)]! xl:[--drawer-content-width:40rem]!"
       >
-        <header className="flex items-start gap-3 border-b border-(--border) px-5 py-4">
+        <header className="flex items-start gap-3 border-b border-(--border) px-6 py-5">
           <div className="min-w-0 flex-1">
             <DrawerTitle className="text-base font-semibold text-(--text)">
               Reorder courses
             </DrawerTitle>
-            <DrawerDescription className="mt-1 text-[0.8rem] leading-5 text-(--muted)">
-              Drag courses into the order learners should see them. The home
-              page, the catalogue and every course list follow it.
+            <DrawerDescription className="mt-1.5 max-w-[34rem] text-[0.85rem] leading-6 text-(--muted)">
+              Drag courses into the order everyone should see them in. The home
+              page, the catalogue and every course list, for learners and
+              visitors alike, follow it.
             </DrawerDescription>
           </div>
           <button
@@ -84,7 +85,7 @@ export function CourseReorderPanel({
         </header>
 
         <ol
-          className="m-0 flex min-h-0 flex-1 list-none flex-col gap-1.5 overflow-y-auto p-3"
+          className="m-0 flex min-h-0 flex-1 list-none flex-col gap-2 overflow-y-auto px-4 py-4"
           data-base-ui-swipe-ignore=""
           aria-label="Courses, first to last"
         >
@@ -102,7 +103,7 @@ export function CourseReorderPanel({
                   setDragHandleId(null);
                 }}
                 data-course-reorder-item={id}
-                className={`group/line flex items-center gap-2 rounded-xl border bg-(--surface) p-1.5 pr-2 transition-colors ${
+                className={`group/line flex items-center gap-3 rounded-xl border bg-(--surface) p-2 pr-2.5 transition-colors ${
                   dragging
                     ? "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] opacity-60"
                     : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] hover:bg-(--hover)"
@@ -131,17 +132,20 @@ export function CourseReorderPanel({
                   <img
                     src={course.thumbnailUrl}
                     alt=""
-                    className="h-9 w-14 shrink-0 rounded-md object-cover"
+                    className="h-11 w-18 shrink-0 rounded-md object-cover"
                     draggable={false}
                   />
                 ) : (
-                  <span className="h-9 w-14 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface))]" />
+                  <span className="h-11 w-18 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface))]" />
                 )}
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-[0.85rem] font-semibold text-(--text)">
+                  <span
+                    className="line-clamp-2 text-[0.9rem] leading-snug font-semibold break-words text-(--text)"
+                    title={course.title}
+                  >
                     {course.title}
                   </span>
-                  <span className="text-[0.72rem] text-(--muted)">
+                  <span className="mt-0.5 text-[0.75rem] text-(--muted)">
                     {STATUS_LABEL[course.status]}
                   </span>
                 </span>
@@ -170,7 +174,7 @@ export function CourseReorderPanel({
           })}
         </ol>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-(--border) px-5 py-3">
+        <footer className="flex items-center justify-end gap-2 border-t border-(--border) px-6 py-4">
           <button
             type="button"
             className="min-h-10 rounded-(--control-radius-action) px-4 text-[0.8rem] font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent)"
