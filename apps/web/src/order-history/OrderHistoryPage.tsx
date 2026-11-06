@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
@@ -9,8 +10,9 @@ import { OrderHistoryInvoiceModal } from "./OrderHistoryInvoiceModal";
 import { OrderHistoryPagination } from "./OrderHistoryPagination";
 import { OrderHistoryTable } from "./OrderHistoryTable";
 import { useOrderHistoryFilter } from "./useOrderHistoryFilter";
-import { ordersService } from "../services/orders";
+import { ordersService, useRequestRefund } from "../services/orders";
 import type { OrderHistoryItem } from "./orderHistoryData";
+import { RefundRequestDialog } from "./RefundRequestDialog";
 import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface OrderHistoryPageProps {
@@ -54,6 +56,39 @@ export function OrderHistoryPage({
   } = useOrderHistoryFilter(setNotice);
 
   usePageSearchShortcut("order-history-search-input");
+
+  const requestRefund = useRequestRefund();
+  const [refundOrder, setRefundOrder] = useState<OrderHistoryItem | null>(null);
+  const [refundError, setRefundError] = useState<string | null>(null);
+
+  const openRefund = (order: OrderHistoryItem) => {
+    setRefundError(null);
+    setRefundOrder(order);
+  };
+
+  const confirmRefund = async (reason: string) => {
+    if (!refundOrder || requestRefund.isPending) return;
+    setRefundError(null);
+    try {
+      const request = await requestRefund.mutateAsync({
+        orderId: refundOrder.id,
+        ...(reason ? { reason } : {}),
+      });
+      setNotice?.(
+        request.status === "approved"
+          ? `Your refund of ${refundOrder.formattedAmount} is on its way. It usually reaches you within 5 to 10 business days.`
+          : refundOrder.refund?.manualTransfer
+            ? "Refund requested. We'll send your money back by bank transfer and let you know."
+            : "Refund requested. We're processing it and will let you know.",
+      );
+      setRefundOrder(null);
+    } catch (error) {
+      setRefundError(
+        (error as { message?: string })?.message ||
+          "Your refund could not be requested. Please try again.",
+      );
+    }
+  };
 
   const handleDownloadReceipt = (order: OrderHistoryItem) => {
     setNotice?.(`Downloading invoice for order ${order.orderNumber}...`);
@@ -142,6 +177,7 @@ export function OrderHistoryPage({
               onToggleSortOrder={toggleSortOrder}
               onViewInvoice={setSelectedReceiptOrder}
               onDownloadReceipt={handleDownloadReceipt}
+              onRequestRefund={openRefund}
               onNavigatePage={onNavigatePage}
               setNotice={setNotice}
             />
@@ -253,6 +289,17 @@ export function OrderHistoryPage({
         isOpen={Boolean(selectedReceiptOrder)}
         onClose={() => setSelectedReceiptOrder(null)}
         onDownloadReceipt={handleDownloadReceipt}
+      />
+
+      <RefundRequestDialog
+        key={refundOrder?.id ?? "closed"}
+        order={refundOrder}
+        submitting={requestRefund.isPending}
+        error={refundError}
+        onCancel={() => {
+          if (!requestRefund.isPending) setRefundOrder(null);
+        }}
+        onConfirm={(reason) => void confirmRefund(reason)}
       />
     </main>
   );

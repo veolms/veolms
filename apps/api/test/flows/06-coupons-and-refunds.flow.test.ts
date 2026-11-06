@@ -1,8 +1,8 @@
 /**
  * Coupons and refunds: what a coupon takes off the price the gateway
  * charges, which coupons the checkout refuses, and what a refund (asked for
- * by the learner and approved by staff, or made by staff) gives back and
- * takes away.
+ * by the learner and made at once when the purchase is eligible, approved
+ * by staff, or made by staff) gives back and takes away.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -114,6 +114,75 @@ function reviewRefund(
     `/v1/refund-requests/${requestId}/review`,
     { action, ...extra },
   );
+}
+
+/**
+ * A request left with staff: one for a purchase paid by bank transfer, or
+ * one the gateway did not refund. An eligible request is refunded at once,
+ * so staff review only these.
+ */
+async function pendingRefundRequest(userId: string, orderId: string) {
+  const id = crypto.randomUUID();
+  await flow.database
+    .insertInto("refund_requests")
+    .values({
+      id,
+      order_id: orderId,
+      user_id: userId,
+      reason: "The course was not what I expected.",
+      status: "pending",
+    })
+    .execute();
+  return id;
+}
+
+/** The learner's progress through one of the course's lessons. */
+async function watched(
+  userId: string,
+  course: FlowCourse,
+  lessonIndex: number,
+  percent: number,
+) {
+  await flow.database
+    .insertInto("learning_progress")
+    .values({
+      id: crypto.randomUUID(),
+      user_id: userId,
+      course_id: course.id,
+      lesson_id: course.lessons[lessonIndex]!.id,
+      progress_percent: percent,
+      position_seconds: null,
+      position_updated_at: null,
+    })
+    .execute();
+}
+
+/** Moves an order's payment back in time. */
+async function paidDaysAgo(orderId: string, days: number) {
+  await flow.database
+    .updateTable("orders")
+    .set({ paid_at: new Date(Date.now() - days * DAY) })
+    .where("id", "=", orderId)
+    .execute();
+}
+
+/** The refund option Purchase History shows on an order. */
+async function refundOption(client: FlowClient, orderId: string) {
+  const list = await client.get<{
+    orders: {
+      id: string;
+      refund?: {
+        eligible: boolean;
+        reasons: string[];
+        requestStatus: string | null;
+        manualTransfer: boolean;
+      };
+    }[];
+  }>("/v1/orders");
+  assert.equal(list.status, 200, JSON.stringify(list.body));
+  const order = list.body.data!.orders.find((o) => o.id === orderId);
+  assert.ok(order, "the order is in the learner's purchase history");
+  return order.refund;
 }
 
 async function orderStatus(orderId: string) {
@@ -289,19 +358,22 @@ await test("a coupon limited to another course is refused", async () => {
 
 // ---------------------------------------------------------------- refunds
 
-await test("a refund staff approve returns the payment and takes the course away", async () => {
+await test("an eligible refund request is refunded at once and takes the course away", async () => {
   const course = await createCourse(flow, { price: 1_299 });
   const { client } = await signedUpLearner(flow);
   const bought = await buy(client, course);
   assert.equal((await play(client, course, 2)).status, 200);
+  assert.deepEqual(await refundOption(client, bought.orderId), {
+    eligible: true,
+    reasons: [],
+    requestStatus: null,
+    manualTransfer: false,
+  });
 
   const asked = await requestRefund(client, bought.orderId);
-  assert.equal(asked.status, 201, JSON.stringify(asked.body));
-  assert.equal(asked.body.data?.status, "pending");
-  const approved = await reviewRefund(asked.body.data!.id, "approve");
 
-  assert.equal(approved.status, 200, JSON.stringify(approved.body));
-  assert.equal(approved.body.data?.status, "approved");
+  assert.equal(asked.status, 201, JSON.stringify(asked.body));
+  assert.equal(asked.body.data?.status, "approved");
   assert.deepEqual(
     flow.gateway.refundsOf(bought.gatewayPaymentId).map((r) => r.amount),
     [129_900],
@@ -310,6 +382,111 @@ await test("a refund staff approve returns the payment and takes the course away
   assert.equal((await play(client, course, 2)).status, 403);
   assert.equal((await courseAccess(client, course)).access?.enrolled, false);
   assert.ok(!(await myCourseIds(client)).includes(course.id));
+  // A refunded purchase has no refund option left, and cannot be asked twice.
+  assert.equal(await refundOption(client, bought.orderId), undefined);
+  assert.equal((await requestRefund(client, bought.orderId)).status, 400);
+});
+
+await test("the reason for a refund is the learner's to give or leave out", async () => {
+  const course = await createCourse(flow);
+  const { client } = await signedUpLearner(flow);
+  const bought = await buy(client, course);
+
+  const asked = await client.post<{ status: string; reason: string }>(
+    `/v1/orders/${bought.orderId}/refund-requests`,
+    {},
+  );
+
+  assert.equal(asked.status, 201, JSON.stringify(asked.body));
+  assert.equal(asked.body.data?.status, "approved");
+  assert.equal(asked.body.data?.reason, "Requested from Purchase History");
+});
+
+await test("a purchase watched past 10% is not refunded, and says why", async () => {
+  // Three 10-minute lessons: 10% is 3 minutes, and half a lesson is 5.
+  const course = await createCourse(flow);
+  const { client, userId } = await signedUpLearner(flow);
+  const bought = await buy(client, course);
+  await watched(userId, course, 1, 50);
+
+  const option = await refundOption(client, bought.orderId);
+  const asked = await requestRefund(client, bought.orderId);
+
+  assert.deepEqual(option, {
+    eligible: false,
+    reasons: ["You've completed more than 10% of this course."],
+    requestStatus: null,
+    manualTransfer: false,
+  });
+  assert.equal(asked.status, 400);
+  assert.equal(asked.body.error?.code, "REFUND_NOT_ELIGIBLE");
+  assert.equal(
+    asked.body.error?.message,
+    "You've completed more than 10% of this course.",
+  );
+  assert.deepEqual(flow.gateway.refundsOf(bought.gatewayPaymentId), []);
+  assert.equal(await orderStatus(bought.orderId), "paid");
+});
+
+await test("a purchase barely watched is still refunded", async () => {
+  const course = await createCourse(flow);
+  const { client, userId } = await signedUpLearner(flow);
+  const bought = await buy(client, course);
+  // 2 of the 3 minutes allowed.
+  await watched(userId, course, 0, 20);
+
+  const asked = await requestRefund(client, bought.orderId);
+
+  assert.equal(asked.status, 201, JSON.stringify(asked.body));
+  assert.equal(asked.body.data?.status, "approved");
+});
+
+await test("a purchase more than 30 days old is not refunded, and both reasons are given", async () => {
+  const course = await createCourse(flow);
+  const { client, userId } = await signedUpLearner(flow);
+  const bought = await buy(client, course);
+  await paidDaysAgo(bought.orderId, 31);
+
+  assert.deepEqual((await refundOption(client, bought.orderId))?.reasons, [
+    "Refunds are only available within 30 days of purchase.",
+  ]);
+
+  await watched(userId, course, 2, 100);
+  assert.deepEqual((await refundOption(client, bought.orderId))?.reasons, [
+    "You've completed more than 10% of this course.",
+    "Refunds are only available within 30 days of purchase.",
+  ]);
+  const asked = await requestRefund(client, bought.orderId);
+  assert.equal(asked.status, 400);
+  assert.equal(asked.body.error?.code, "REFUND_NOT_ELIGIBLE");
+  assert.deepEqual(flow.gateway.refundsOf(bought.gatewayPaymentId), []);
+});
+
+await test("a purchase paid by bank transfer goes to staff, who send the money back by hand", async () => {
+  const course = await createCourse(flow);
+  const { client } = await signedUpLearner(flow);
+  const bought = await buy(client, course);
+  await flow.database
+    .updateTable("payments")
+    .set({ gateway_provider: "manual" })
+    .where("order_id", "=", bought.orderId)
+    .execute();
+  assert.equal(
+    (await refundOption(client, bought.orderId))?.manualTransfer,
+    true,
+  );
+
+  const asked = await requestRefund(client, bought.orderId);
+
+  assert.equal(asked.status, 201, JSON.stringify(asked.body));
+  assert.equal(asked.body.data?.status, "pending");
+  assert.deepEqual(flow.gateway.refundsOf(bought.gatewayPaymentId), []);
+  assert.equal(await orderStatus(bought.orderId), "paid");
+  assert.equal((await play(client, course, 2)).status, 200);
+  assert.equal(
+    (await refundOption(client, bought.orderId))?.requestStatus,
+    "pending",
+  );
 });
 
 await test("a coupon purchase is refunded what the learner paid, not the course's price", async () => {
@@ -365,14 +542,19 @@ await test("a learner cannot refund an order through the staff refund", async ()
 
 await test("a learner asks for a refund of an order once", async () => {
   const course = await createCourse(flow);
-  const { client } = await signedUpLearner(flow);
+  const { client, userId } = await signedUpLearner(flow);
   const bought = await buy(client, course);
-  assert.equal((await requestRefund(client, bought.orderId)).status, 201);
+  await pendingRefundRequest(userId, bought.orderId);
 
   const again = await requestRefund(client, bought.orderId);
 
   assert.equal(again.status, 409);
   assert.equal(again.body.error?.code, "REFUND_REQUEST_ALREADY_EXISTS");
+  assert.equal(
+    (await refundOption(client, bought.orderId))?.requestStatus,
+    "pending",
+  );
+  assert.deepEqual(flow.gateway.refundsOf(bought.gatewayPaymentId), []);
 });
 
 await test("an order that was never paid cannot be submitted for a refund", async () => {
@@ -387,13 +569,31 @@ await test("an order that was never paid cannot be submitted for a refund", asyn
   assert.equal(response.body.error?.code, "REFUND_REQUEST_NOT_ALLOWED");
 });
 
+await test("a refund request staff approve returns the payment and takes the course away", async () => {
+  const course = await createCourse(flow, { price: 1_299 });
+  const { client, userId } = await signedUpLearner(flow);
+  const bought = await buy(client, course);
+  const requestId = await pendingRefundRequest(userId, bought.orderId);
+
+  const approved = await reviewRefund(requestId, "approve");
+
+  assert.equal(approved.status, 200, JSON.stringify(approved.body));
+  assert.equal(approved.body.data?.status, "approved");
+  assert.deepEqual(
+    flow.gateway.refundsOf(bought.gatewayPaymentId).map((r) => r.amount),
+    [129_900],
+  );
+  assert.equal(await orderStatus(bought.orderId), "refunded");
+  assert.equal((await play(client, course, 2)).status, 403);
+});
+
 await test("a rejected refund request leaves the course with the learner and cannot be reviewed again", async () => {
   const course = await createCourse(flow);
-  const { client } = await signedUpLearner(flow);
+  const { client, userId } = await signedUpLearner(flow);
   const bought = await buy(client, course);
-  const asked = await requestRefund(client, bought.orderId);
+  const requestId = await pendingRefundRequest(userId, bought.orderId);
 
-  const rejected = await reviewRefund(asked.body.data!.id, "reject");
+  const rejected = await reviewRefund(requestId, "reject");
 
   assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
   assert.equal(rejected.body.data?.status, "rejected");
@@ -401,7 +601,7 @@ await test("a rejected refund request leaves the course with the learner and can
   assert.equal(await orderStatus(bought.orderId), "paid");
   assert.equal((await play(client, course, 2)).status, 200);
 
-  const approvedLater = await reviewRefund(asked.body.data!.id, "approve");
+  const approvedLater = await reviewRefund(requestId, "approve");
   assert.equal(approvedLater.status, 400);
   assert.equal(
     approvedLater.body.error?.code,
@@ -412,11 +612,11 @@ await test("a rejected refund request leaves the course with the learner and can
 
 await test("staff can approve a refund and leave the course with the learner", async () => {
   const course = await createCourse(flow);
-  const { client } = await signedUpLearner(flow);
+  const { client, userId } = await signedUpLearner(flow);
   const bought = await buy(client, course);
-  const asked = await requestRefund(client, bought.orderId);
+  const requestId = await pendingRefundRequest(userId, bought.orderId);
 
-  const approved = await reviewRefund(asked.body.data!.id, "approve", {
+  const approved = await reviewRefund(requestId, "approve", {
     preserveAccess: true,
   });
 
@@ -476,9 +676,14 @@ await test("an order a 100% coupon paid for has nothing to refund", async () => 
   const refund = await admin.post("/v1/refunds", {
     orderId: free.body.data!.order.id,
   });
+  const asked = await requestRefund(client, free.body.data!.order.id);
 
   assert.equal(refund.status, 400);
   assert.equal(refund.body.error?.code, "REFUND_NOT_ALLOWED");
+  // The learner is offered no refund of it, and cannot ask for one.
+  assert.equal(await refundOption(client, free.body.data!.order.id), undefined);
+  assert.equal(asked.status, 400);
+  assert.equal(asked.body.error?.code, "REFUND_REQUEST_NOT_ALLOWED");
   assert.equal((await play(client, course, 2)).status, 200);
 });
 

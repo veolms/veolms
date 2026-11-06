@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import type { DatabaseExecutor as Executor } from "@veolms/database";
+import type { Database } from "@veolms/database";
+import type { Kysely } from "kysely";
 import type {
   LearnerRefundRequest,
   RefundRequest,
@@ -19,6 +20,11 @@ import {
   toRefundRequestContract,
 } from "./refund.mapper.ts";
 import type { RefundService } from "./refund.service.ts";
+import {
+  createRefundEligibilityService,
+  toLearnerOrderRefund,
+  type RefundEligibilityService,
+} from "./refund-eligibility.service.ts";
 
 export interface RefundRequestService {
   submitStudentRefundRequest(
@@ -35,12 +41,22 @@ export interface RefundRequestService {
   ): Promise<{ refundRequest: RefundRequest; refund?: Refund }>;
 }
 
+function requestAlreadyExists(status: string): AppError {
+  return new AppError(
+    409,
+    "REFUND_REQUEST_ALREADY_EXISTS",
+    `A refund request for this order is already ${status}.`,
+  );
+}
+
 export function createRefundRequestService({
   database,
   refundService,
+  refundEligibility = createRefundEligibilityService({ database }),
 }: {
-  database: Executor;
-  refundService: RefundService;
+  database: Kysely<Database>;
+  refundService: Pick<RefundService, "processRefund">;
+  refundEligibility?: RefundEligibilityService;
 }): RefundRequestService {
   /** Of these orders, the ones paid by manual bank or UPI transfer. */
   async function ordersPaidByManualTransfer(
@@ -57,6 +73,16 @@ export function createRefundRequestService({
     );
   }
 
+  /**
+   * A learner asks for their purchase back from Purchase History.
+   *
+   * Only an eligible purchase is accepted (refund-eligibility.ts: within 30
+   * days, no more watched than 10% or 10 hours), and it is refunded at once
+   * with no staff review, its access ending as with any refund. The two
+   * exceptions stay with staff as a pending request: a purchase paid by
+   * bank or UPI transfer, whose money staff send back by hand, and one the
+   * gateway did not refund (staff see it in the refund requests and retry).
+   */
   async function submitStudentRefundRequest(
     userId: string,
     orderId: string,
@@ -75,30 +101,76 @@ export function createRefundRequestService({
       );
     }
 
-    const existing = await refundRequestRepo.findRefundRequestByOrderId(
-      database,
-      orderId,
-    );
-    if (existing) {
+    const assessment = (
+      await refundEligibility.assessOrders(userId, [orderId])
+    ).get(orderId);
+    if (!assessment) {
       throw new AppError(
-        409,
-        "REFUND_REQUEST_ALREADY_EXISTS",
-        `A refund request for this order is already ${existing.status}.`,
+        400,
+        "REFUND_REQUEST_NOT_ALLOWED",
+        "This purchase has nothing to refund.",
+      );
+    }
+    if (assessment.requestStatus) {
+      throw requestAlreadyExists(assessment.requestStatus);
+    }
+    if (!assessment.eligibility.eligible) {
+      throw new AppError(
+        400,
+        "REFUND_NOT_ELIGIBLE",
+        toLearnerOrderRefund(assessment).reasons.join(" "),
       );
     }
 
-    const now = new Date();
-    const row = await refundRequestRepo.insertRefundRequest(database, {
-      id: crypto.randomUUID(),
-      order_id: orderId,
-      user_id: userId,
-      reason: request.reason,
-      status: "pending",
-      created_at: now,
-      updated_at: now,
+    const reason = request.reason?.trim() || "Requested from Purchase History";
+    // One request per order, even for two taps at once: the order row is
+    // locked while the request is looked for and written.
+    const row = await database.transaction().execute(async (trx) => {
+      await orderRepo.findOrderByIdForUpdate(trx, orderId);
+      const existing = await refundRequestRepo.findRefundRequestByOrderId(
+        trx,
+        orderId,
+      );
+      if (existing) throw requestAlreadyExists(existing.status);
+      const now = new Date();
+      return refundRequestRepo.insertRefundRequest(trx, {
+        id: crypto.randomUUID(),
+        order_id: orderId,
+        user_id: userId,
+        reason,
+        status: "pending",
+        created_at: now,
+        updated_at: now,
+      });
     });
 
-    return toLearnerRefundRequest(row);
+    if (assessment.manualTransfer) return toLearnerRefundRequest(row);
+
+    try {
+      // Started by the learner, so the refund is recorded as theirs.
+      await refundService.processRefund(userId, {
+        orderId,
+        reason: `Automatic refund at the student's request: ${reason}`,
+        preserveAccess: false,
+      });
+    } catch {
+      // The gateway did not refund it (or did not say). The request stays
+      // pending, so staff see it in the refund requests and finish it; the
+      // refund service keeps its own record of the attempt.
+      return toLearnerRefundRequest(row);
+    }
+
+    const approved = await refundRequestRepo.updateRefundRequestStatus(
+      database,
+      row.id,
+      {
+        status: "approved",
+        admin_notes:
+          "Refunded automatically: within 30 days, and no more watched than 10% or 10 hours.",
+        resolved_at: new Date(),
+      },
+    );
+    return toLearnerRefundRequest(approved ?? row);
   }
 
   async function listStudentRefundRequests(

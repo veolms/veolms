@@ -1,3 +1,5 @@
+import type { LearnerOrderRefund } from "@veolms/contracts";
+
 export type OrderHistoryStatus =
   "completed" | "processing" | "refunded" | "failed" | "canceled";
 
@@ -54,6 +56,11 @@ export interface OrderHistoryItem {
    * nothing is shown in its place.
    */
   transactionId: string | null;
+  /**
+   * The refund option, on a paid purchase with something to return: whether
+   * it may be refunded, why not, and any refund already asked for.
+   */
+  refund?: LearnerOrderRefund;
 }
 
 export type OrderHistoryTabId =
