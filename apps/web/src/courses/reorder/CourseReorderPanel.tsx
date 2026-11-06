@@ -68,7 +68,7 @@ export function CourseReorderPanel({
             <DrawerTitle className="text-base font-semibold text-(--text)">
               Reorder courses
             </DrawerTitle>
-            <DrawerDescription className="mt-1.5 max-w-[34rem] text-[0.85rem] leading-6 text-(--muted)">
+            <DrawerDescription className="mt-1 max-w-[34rem] text-[0.8rem] leading-5 text-(--muted) sm:mt-1.5 sm:text-[0.85rem] sm:leading-6">
               Drag courses, or move them with the arrows, into the order
               everyone should see them in. The home page, the catalogue and
               every course list, for learners and visitors alike, follow it.
@@ -104,14 +104,14 @@ export function CourseReorderPanel({
                 }}
                 data-course-reorder-item={id}
                 data-course-drop-id={id}
-                className={`group/line flex items-center gap-2 rounded-xl border bg-(--surface) p-2 transition-colors sm:gap-3 sm:pr-2.5 ${
+                className={`group/line flex items-center gap-2 rounded-xl border bg-(--surface) py-1.5 pr-1 pl-0.5 transition-colors sm:gap-3 sm:p-2 sm:pr-2.5 ${
                   dragging
                     ? "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] opacity-60"
                     : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] hover:bg-(--hover)"
                 }`}
               >
                 <span
-                  className={`flex shrink-0 touch-none items-center justify-center rounded-md p-1 text-(--muted) select-none [@media(pointer:coarse)]:size-11 ${
+                  className={`flex shrink-0 touch-none items-center justify-center rounded-md p-1 text-(--muted) select-none [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-8 sm:[@media(pointer:coarse)]:size-11 ${
                     saving
                       ? "pointer-events-none opacity-30"
                       : "cursor-grab hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) active:cursor-grabbing"
@@ -130,27 +130,27 @@ export function CourseReorderPanel({
                 >
                   <DotsSixVertical size={20} />
                 </span>
-                <span className="w-5 shrink-0 text-right text-[0.75rem] font-semibold tabular-nums text-(--muted) sm:w-6">
+                <span className="w-4 shrink-0 text-right text-[0.7rem] font-semibold tabular-nums text-(--muted) sm:w-6 sm:text-[0.75rem]">
                   {index + 1}
                 </span>
                 {course.thumbnailUrl ? (
                   <img
                     src={course.thumbnailUrl}
                     alt=""
-                    className="aspect-video w-24 shrink-0 rounded-lg object-cover sm:w-32"
+                    className="aspect-video w-16 shrink-0 rounded-md object-cover sm:w-32 sm:rounded-lg"
                     draggable={false}
                   />
                 ) : (
-                  <span className="aspect-video w-24 shrink-0 rounded-lg sm:w-32 bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface))]" />
+                  <span className="aspect-video w-16 shrink-0 rounded-md sm:w-32 sm:rounded-lg bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface))]" />
                 )}
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span
-                    className="line-clamp-2 text-[0.88rem] leading-snug font-semibold break-words text-(--text) sm:text-[0.95rem]"
+                    className="line-clamp-2 text-[0.85rem] leading-tight font-semibold break-words text-(--text) sm:text-[0.95rem] sm:leading-snug"
                     title={course.title}
                   >
                     {course.title}
                   </span>
-                  <span className="mt-0.5 text-[0.75rem] text-(--muted)">
+                  <span className="mt-0.5 text-[0.7rem] text-(--muted) sm:text-[0.75rem]">
                     {STATUS_LABEL[course.status]}
                   </span>
                 </span>
@@ -159,7 +159,7 @@ export function CourseReorderPanel({
                     type="button"
                     aria-label={`Move ${course.title} up`}
                     disabled={saving || index === 0}
-                    className="inline-flex size-8 items-center justify-center rounded-md text-(--muted) [@media(pointer:coarse)]:size-11 hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent) disabled:opacity-30"
+                    className="inline-flex size-8 items-center justify-center rounded-md text-(--muted) [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-9 sm:[@media(pointer:coarse)]:size-11 hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent) disabled:opacity-30"
                     onClick={() => setIds(moveCourseBy(ids, id, -1))}
                   >
                     <ArrowUp size={16} />
@@ -168,7 +168,7 @@ export function CourseReorderPanel({
                     type="button"
                     aria-label={`Move ${course.title} down`}
                     disabled={saving || index === shown.length - 1}
-                    className="inline-flex size-8 items-center justify-center rounded-md text-(--muted) [@media(pointer:coarse)]:size-11 hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent) disabled:opacity-30"
+                    className="inline-flex size-8 items-center justify-center rounded-md text-(--muted) [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-9 sm:[@media(pointer:coarse)]:size-11 hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent) disabled:opacity-30"
                     onClick={() => setIds(moveCourseBy(ids, id, 1))}
                   >
                     <ArrowDown size={16} />
