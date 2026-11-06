@@ -211,15 +211,6 @@ export function createAuthController(context: AuthContext) {
     return presentUpdatedProfile(request, updated);
   }
 
-  async function deactivateAccount(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) {
-    await authService.deactivateAccount(request.user!.id);
-    clearSessionCookie(reply);
-    return { message: "Account deactivated successfully" };
-  }
-
   return {
     login,
     register,
@@ -233,7 +224,6 @@ export function createAuthController(context: AuthContext) {
     listAvatars,
     selectAvatar,
     deleteUploadedAvatars,
-    deactivateAccount,
   };
 }
 

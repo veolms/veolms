@@ -7,10 +7,13 @@ import type { ApiError } from "../../lib/api-error";
 import { learningProgressKeys } from "./learning-progress.keys";
 import { learningProgressService } from "./learning-progress.service";
 
+// A minute, the interval a playing page sends at: a tab the learner comes
+// back to after watching on another device asks again (on focus or when
+// the lesson opens) and picks that device's progress up.
 const learningProgressSnapshotOptions = (courseKey: string) => ({
   queryKey: learningProgressKeys.course(courseKey),
   queryFn: () => learningProgressService.get(courseKey),
-  staleTime: 5 * 60 * 1000,
+  staleTime: 60 * 1000,
   retry: false,
 });
 

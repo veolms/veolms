@@ -4,6 +4,7 @@ import {
   checkoutPreviewResponseSchema,
   createCheckoutOrderRequestSchema,
   createCheckoutOrderResponseSchema,
+  pricingRegionResponseSchema,
   releaseCheckoutOrderResponseSchema,
 } from "@veolms/contracts";
 import { normalizeIP } from "@fastify/rate-limit";
@@ -75,6 +76,27 @@ const checkoutRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.previewCheckout,
+  );
+
+  // 1b. GET /checkout/pricing-region - Which of a course's prices this visitor sees
+  app.get(
+    "/checkout/pricing-region",
+    {
+      schema: {
+        operationId: "getPricingRegion",
+        tags: ["Commerce - Checkout"],
+        summary: "Pricing region of the request",
+        description:
+          "Says whether the visitor sees the rupee prices (India, or country unknown) or the prices for buyers outside India, from the country the request comes from. Never cached.",
+        response: {
+          200: jsonResponse(
+            "The visitor's pricing region",
+            pricingRegionResponseSchema,
+          ),
+        },
+      },
+    },
+    controller.getPricingRegion,
   );
 
   // 2. POST /checkout/orders - Creates internal order, items snapshots, and initializes payment

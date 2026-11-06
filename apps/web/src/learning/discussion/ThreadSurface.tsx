@@ -16,7 +16,7 @@ import {
 import { ExpandableSearch } from "../../ExpandableSearch";
 import { ThemedSelect } from "../../ThemedSelect";
 import { CommentCard } from "../CommentCard";
-import type { Comment } from "../CommentCard";
+import type { Comment, LinkedCommentHighlight } from "../CommentCard";
 import { CommentComposer } from "../CommentComposer";
 import { getApplicationScrollElement } from "../../shell/applicationScroll";
 import {
@@ -47,6 +47,7 @@ import {
   MobileCompactComposerPortal,
   CompactComposer,
 } from "./CompactComposer";
+import { useStableHandlers } from "./useStableHandlers";
 import {
   type ComposerMode,
   DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT,
@@ -89,6 +90,12 @@ interface ThreadSurfaceProps {
   onNoteDeepLinkHandled?: (noteId: string) => void;
   /** The thread a link led to; its card keeps a highlight in the list. */
   linkedThreadId?: string | null;
+  /**
+   * How the linked comment is highlighted, until the visitor clears it: a
+   * reply in it to highlight as well, and whether the link came from an
+   * email (the card then says so, with a Clear button). Null once cleared.
+   */
+  linkedHighlight?: LinkedCommentHighlight | null;
   /** The same thread while its highlight has still to play. */
   highlightedThreadId?: string | null;
   onThreadHighlightShown?: () => void;
@@ -284,6 +291,7 @@ export function ThreadSurface({
   noteDeepLinkTargetId = null,
   onNoteDeepLinkHandled,
   linkedThreadId = null,
+  linkedHighlight = null,
   highlightedThreadId = null,
   onThreadHighlightShown,
   discussionCount,
@@ -566,9 +574,13 @@ export function ThreadSurface({
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
+      // The emoji picker opens in a layer outside the composer; a press on
+      // an emoji closed the composer before the emoji could be inserted.
       if (
         target instanceof Element &&
-        target.closest("[data-comment-composer-container]")
+        target.closest(
+          "[data-comment-composer-container], [data-comment-emoji-picker]",
+        )
       ) {
         return;
       }
@@ -686,28 +698,54 @@ export function ThreadSurface({
     onNoteDeepLinkHandled?.(noteDeepLinkTargetId);
   }, [entryFilter, noteDeepLinkTargetId, onNoteDeepLinkHandled]);
 
+  // The cards are memoized; handlers that kept changing identity rendered
+  // every card again on every render of the discussion.
+  const cardHandlers = useStableHandlers({
+    onLike,
+    onEdit,
+    onDelete,
+    onReplyEditFailure,
+    onDeleteFailure,
+    onReport,
+    onOpenThread,
+    onToggleAcceptReply,
+    onToggleLockThread,
+    onToggleBookmark,
+    onToggleFollow,
+    onSeekToTimestamp,
+    onCopyTextNotice,
+    onThreadHighlightShown,
+    // Liking without access asks to log in (or get access), as the composer does.
+    onParticipationRequired: onParticipationAction
+      ? askToParticipate
+      : undefined,
+  });
+
   const renderEntry = useCallback(
     (entry: Comment) => (
       <CommentCard
         comment={entry}
-        onLike={onLike}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onEditFailure={onReplyEditFailure}
-        onDeleteFailure={onDeleteFailure}
-        onReport={onReport}
-        onOpenThread={onOpenThread}
+        onLike={cardHandlers.onLike}
+        onEdit={cardHandlers.onEdit}
+        onDelete={cardHandlers.onDelete}
+        onEditFailure={cardHandlers.onReplyEditFailure}
+        onDeleteFailure={cardHandlers.onDeleteFailure}
+        onReport={cardHandlers.onReport}
+        onOpenThread={cardHandlers.onOpenThread}
         isBackendMode={isBackendMode}
         currentUserId={currentUserId}
         canModerate={canModerate}
-        onToggleAcceptReply={onToggleAcceptReply}
-        onToggleLockThread={onToggleLockThread}
-        onToggleBookmark={onToggleBookmark}
-        onToggleFollow={onToggleFollow}
-        onSeekToTimestamp={onSeekToTimestamp}
-        onCopyTextNotice={onCopyTextNotice}
+        onToggleAcceptReply={cardHandlers.onToggleAcceptReply}
+        onToggleLockThread={cardHandlers.onToggleLockThread}
+        onToggleBookmark={cardHandlers.onToggleBookmark}
+        onToggleFollow={cardHandlers.onToggleFollow}
+        onSeekToTimestamp={cardHandlers.onSeekToTimestamp}
+        onCopyTextNotice={cardHandlers.onCopyTextNotice}
         courseId={courseId}
         canParticipate={canParticipate}
+        onParticipationRequired={
+          canParticipate ? undefined : cardHandlers.onParticipationRequired
+        }
         constrainToContainer
         canEdit={
           canParticipate &&
@@ -723,41 +761,37 @@ export function ThreadSurface({
           getServerEntityId(entry) === noteDeepLinkTargetId,
         )}
         showHighlightedLabel={Boolean(
+          linkedHighlight &&
           linkedThreadId &&
           entry.entryKind !== "note" &&
           getServerEntityId(entry) === linkedThreadId,
         )}
+        linkedHighlight={
+          linkedThreadId &&
+          entry.entryKind !== "note" &&
+          getServerEntityId(entry) === linkedThreadId
+            ? linkedHighlight
+            : null
+        }
         isHighlighted={Boolean(
           highlightedThreadId &&
           entry.entryKind !== "note" &&
           getServerEntityId(entry) === highlightedThreadId,
         )}
-        onHighlightShown={onThreadHighlightShown}
+        onHighlightShown={cardHandlers.onThreadHighlightShown}
       />
     ),
     [
+      cardHandlers,
       courseId,
       currentUserId,
       isBackendMode,
-      onDelete,
-      onDeleteFailure,
-      onEdit,
-      onLike,
-      onOpenThread,
-      onReplyEditFailure,
-      onReport,
-      onToggleAcceptReply,
-      onToggleBookmark,
-      onToggleFollow,
-      onSeekToTimestamp,
-      onCopyTextNotice,
-      onToggleLockThread,
       capabilities.allowNotes,
       canParticipate,
       noteDeepLinkTargetId,
       linkedThreadId,
+      linkedHighlight,
       highlightedThreadId,
-      onThreadHighlightShown,
       canModerate,
     ],
   );

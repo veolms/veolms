@@ -1,4 +1,4 @@
-import { sql } from "kysely";
+import { sql, type RawBuilder } from "kysely";
 import type { OrderScope } from "@veolms/contracts";
 import type { Executor } from "../commerce/shared/repository.types.ts";
 import { SURPLUS_CAPTURE_ERROR_CODE } from "../commerce/payments/surplus-payment.ts";
@@ -34,6 +34,28 @@ const refundsOfOrder = sql<number>`(
     )
 )`;
 
+/**
+ * Orders a report in `currency` counts: each order once, in the currency
+ * it settled in when it was paid in another (a sale at a course's price for
+ * buyers outside India, settled in rupees), in its own otherwise. The same
+ * rule as the order statistics' `settledCurrency`.
+ */
+function inReportCurrency(currency: string) {
+  return sql<boolean>`coalesce(o.settlement_currency, o.currency) = ${currency}`;
+}
+
+/**
+ * An amount of order `o` (minor units of its own currency) in a report in
+ * `currency`: as it is for an order in that currency, otherwise at the rate
+ * the order settled at, its settlement amount against its total.
+ */
+function inReport(amount: RawBuilder<number>, currency: string) {
+  return sql<number>`(case
+    when o.currency = ${currency} then ${amount}
+    when o.total_amount > 0 then round(${amount}::numeric * o.settlement_amount / o.total_amount)
+    else 0 end)`;
+}
+
 function toIdList(courseId: string | string[] | undefined): string[] {
   if (!courseId) return [];
   return Array.isArray(courseId) ? courseId : [courseId];
@@ -66,18 +88,18 @@ export async function getDailyOrderSeries(
     .selectFrom("orders as o")
     .select([
       sql<string>`to_char(${day}, 'YYYY-MM-DD')`.as("date"),
-      sql<number>`coalesce(sum(case when ${SUCCESSFUL} then o.total_amount else 0 end), 0)::bigint`.as(
+      sql<number>`coalesce(sum(case when ${SUCCESSFUL} then ${inReport(sql`o.total_amount`, window.currency)} else 0 end), 0)::bigint`.as(
         "gross",
       ),
       sql<number>`count(*) filter (where ${SUCCESSFUL})::int`.as("orders"),
-      sql<number>`coalesce(sum(case when ${SUCCESSFUL} then ${refundsOfOrder} else 0 end), 0)::bigint`.as(
+      sql<number>`coalesce(sum(case when ${SUCCESSFUL} then ${inReport(refundsOfOrder, window.currency)} else 0 end), 0)::bigint`.as(
         "refunded",
       ),
       sql<number>`count(*) filter (where o.status in ('partially_refunded', 'refunded'))::int`.as(
         "refunds",
       ),
     ])
-    .where("o.currency", "=", window.currency)
+    .where(inReportCurrency(window.currency))
     .where("o.created_at", ">=", window.from)
     .where("o.created_at", "<=", window.to)
     .groupBy(day)
@@ -131,16 +153,23 @@ export async function getRevenueByProduct(
       sql<string>`coalesce(max(c.title), max(b.title), max(oi.title_snapshot))`.as(
         "title",
       ),
-      sql<number>`coalesce(sum(oi.final_amount), 0)::bigint`.as("gross"),
-      sql<number>`coalesce(sum(${itemRefunds}), 0)::bigint`.as("refunded"),
+      sql<number>`coalesce(sum(${inReport(sql`oi.final_amount`, window.currency)}), 0)::bigint`.as(
+        "gross",
+      ),
+      sql<number>`coalesce(sum(${inReport(itemRefunds, window.currency)}), 0)::bigint`.as(
+        "refunded",
+      ),
       sql<number>`count(distinct o.id)::int`.as("orders"),
     ])
     .where(SUCCESSFUL)
-    .where("o.currency", "=", window.currency)
+    .where(inReportCurrency(window.currency))
     .where("o.created_at", ">=", window.from)
     .where("o.created_at", "<=", window.to)
     .groupBy([productId, "oi.item_type"])
-    .orderBy(sql`sum(oi.final_amount)`, "desc")
+    .orderBy(
+      sql`sum(${inReport(sql`oi.final_amount`, window.currency)})`,
+      "desc",
+    )
     .limit(window.limit);
   if (scope.type === "user") query = query.where("o.user_id", "=", scope.id);
   const courseIds = toIdList(window.courseId);
@@ -178,11 +207,15 @@ export async function getRevenueSources(
     .select([
       source.as("source"),
       sql<number>`count(*)::int`.as("orders"),
-      sql<number>`coalesce(sum(o.total_amount), 0)::bigint`.as("gross"),
-      sql<number>`coalesce(sum(${refundsOfOrder}), 0)::bigint`.as("refunded"),
+      sql<number>`coalesce(sum(${inReport(sql`o.total_amount`, window.currency)}), 0)::bigint`.as(
+        "gross",
+      ),
+      sql<number>`coalesce(sum(${inReport(refundsOfOrder, window.currency)}), 0)::bigint`.as(
+        "refunded",
+      ),
     ])
     .where(SUCCESSFUL)
-    .where("o.currency", "=", window.currency)
+    .where(inReportCurrency(window.currency))
     .where("o.created_at", ">=", window.from)
     .where("o.created_at", "<=", window.to)
     .groupBy(source);
@@ -235,7 +268,7 @@ export async function getPaymentMethods(
     select method, count(*)::int as orders,
       coalesce(sum(total_amount), 0)::bigint as gross
     from (
-      select o.total_amount,
+      select ${inReport(sql`o.total_amount`, window.currency)} as total_amount,
         coalesce((
           select lower(p.payment_method ->> 'method')
           from payments p
@@ -247,7 +280,7 @@ export async function getPaymentMethods(
         ), case when o.total_amount <= 0 then 'free' else 'unknown' end) as method
       from orders o
       where ${SUCCESSFUL}
-        and o.currency = ${window.currency}
+        and ${inReportCurrency(window.currency)}
         and o.created_at >= ${window.from}
         and o.created_at <= ${window.to}
         ${scopeFilter}
@@ -285,16 +318,25 @@ export async function getCouponPerformance(
       "cp.id as coupon_id",
       "cp.code",
       sql<number>`count(*)::int`.as("orders"),
-      sql<number>`coalesce(sum(o.total_amount), 0)::bigint`.as("gross"),
-      sql<number>`coalesce(sum(o.discount_amount), 0)::bigint`.as("discount"),
-      sql<number>`coalesce(sum(${refundsOfOrder}), 0)::bigint`.as("refunded"),
+      sql<number>`coalesce(sum(${inReport(sql`o.total_amount`, window.currency)}), 0)::bigint`.as(
+        "gross",
+      ),
+      sql<number>`coalesce(sum(${inReport(sql`o.discount_amount`, window.currency)}), 0)::bigint`.as(
+        "discount",
+      ),
+      sql<number>`coalesce(sum(${inReport(refundsOfOrder, window.currency)}), 0)::bigint`.as(
+        "refunded",
+      ),
     ])
     .where(SUCCESSFUL)
-    .where("o.currency", "=", window.currency)
+    .where(inReportCurrency(window.currency))
     .where("o.created_at", ">=", window.from)
     .where("o.created_at", "<=", window.to)
     .groupBy(["cp.id", "cp.code"])
-    .orderBy(sql`sum(o.total_amount)`, "desc")
+    .orderBy(
+      sql`sum(${inReport(sql`o.total_amount`, window.currency)})`,
+      "desc",
+    )
     .limit(window.limit);
   if (scope.type === "user") query = query.where("o.user_id", "=", scope.id);
   const courseIds = toIdList(window.courseId);
@@ -353,17 +395,24 @@ export async function getTopRevenueCourses(
     .select([
       "c.id as course_id",
       "c.title",
-      sql<number>`coalesce(sum(oi.final_amount), 0)::bigint`.as("gross"),
-      sql<number>`coalesce(sum(${lineRefunds}), 0)::bigint`.as("refunded"),
+      sql<number>`coalesce(sum(${inReport(sql`oi.final_amount`, window.currency)}), 0)::bigint`.as(
+        "gross",
+      ),
+      sql<number>`coalesce(sum(${inReport(lineRefunds, window.currency)}), 0)::bigint`.as(
+        "refunded",
+      ),
       sql<number>`count(distinct o.id)::int`.as("orders"),
       sql<number>`count(distinct o.user_id)::int`.as("buyers"),
     ])
     .where(SUCCESSFUL)
-    .where("o.currency", "=", window.currency)
+    .where(inReportCurrency(window.currency))
     .where("o.created_at", ">=", window.from)
     .where("o.created_at", "<=", window.to)
     .groupBy(["c.id", "c.title"])
-    .orderBy(sql`sum(oi.final_amount)`, "desc")
+    .orderBy(
+      sql`sum(${inReport(sql`oi.final_amount`, window.currency)})`,
+      "desc",
+    )
     .limit(window.limit);
   if (scope.type === "user") query = query.where("o.user_id", "=", scope.id);
   const courseIds = toIdList(window.courseId);

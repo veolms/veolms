@@ -486,6 +486,19 @@ export function createPaymentService({
           }
         : null,
     });
+    // A payment in another currency: what it settles for, for the revenue
+    // reports. Whichever path saw the capture first records it.
+    if (
+      (result.outcome === "finalized" ||
+        result.outcome === "already_captured") &&
+      typeof paymentDetails.settlementAmount === "number" &&
+      paymentDetails.settlementCurrency
+    ) {
+      await orderRepo.recordOrderSettlement(database, order.id, {
+        amount: paymentDetails.settlementAmount,
+        currency: paymentDetails.settlementCurrency,
+      });
+    }
 
     if (
       result.outcome === "recorded_as_surplus" ||

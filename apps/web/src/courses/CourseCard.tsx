@@ -44,10 +44,13 @@ import { PinToHomeMenuAction } from "./PinToHomeMenuAction";
 import {
   COURSE_CARD_BUTTON_CLASSES,
   CourseCardEarlyActions,
+  CourseCardLoadError,
+  CourseCardOfferShimmer,
   CourseCardPricing,
   CourseCardProgress,
   LearnerActionContent,
 } from "./CourseCardActionParts";
+import { useRetryCourseCardState } from "./viewerCourseState";
 import { raisedCourseCardClasses } from "../components/cardElevation";
 import type { Permission } from "@veolms/contracts";
 import { useCapabilities } from "../services/authorization/authorization.queries";
@@ -202,6 +205,20 @@ export function CourseCard({
   // (see `Course.viewerStatePending`); the actions' place shimmers instead.
   const viewerStatePending =
     role === "student" && !isPublic && Boolean(course.viewerStatePending);
+  // What stands in the place of the price and the button once the viewer
+  // is known, when the card cannot offer the course: the viewer's own
+  // courses or the price could not be loaded ("failed"), or the price is
+  // on its way ("pending"). A course the learner holds needs no price, nor
+  // does one that comes free with another.
+  const offerUnavailable: "failed" | "pending" | null =
+    role !== "student" || viewerStatePending
+      ? null
+      : course.viewerStateFailed && !isPublic
+        ? "failed"
+        : course.enrolled || course.includedWith?.length
+          ? null
+          : (course.priceStatus ?? null);
+  const retryCardState = useRetryCourseCardState();
   const progress = course.progress ?? 0;
   const begun = hasBegunCourse(course);
   const progressText = formatCourseProgress(progress);
@@ -358,7 +375,7 @@ export function CourseCard({
           ? "border-(--card-border,var(--border)) bg-(--card-surface,var(--surface)) bg-(image:--raised-surface-image) opacity-60 pointer-events-none select-none"
           : `border-(--card-border,var(--border)) bg-(--card-surface,var(--surface)) bg-(image:--raised-surface-image) shadow-(--card-shadow) hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow) ${raisedCourseCardClasses}`
       }`}
-      aria-label={`${course.title}${isDeleting ? ", deleting..." : isPublic ? ", public course" : role === "creator" ? `, ${course.lifecycleStatus}` : viewerStatePending ? "" : course.enrolled ? `, ${progressText} complete` : ", not enrolled"}`}
+      aria-label={`${course.title}${isDeleting ? ", deleting..." : isPublic ? ", public course" : role === "creator" ? `, ${course.lifecycleStatus}` : viewerStatePending || offerUnavailable === "failed" ? "" : course.enrolled ? `, ${progressText} complete` : ", not enrolled"}`}
       aria-busy={isDeleting}
       data-course-card
       data-course-card-id={course.id}
@@ -679,10 +696,17 @@ export function CourseCard({
                   <MenuAction
                     Icon={Flag}
                     label="Report an Issue"
+                    // The Report a problem form, with this course as the
+                    // place it happened.
                     onClick={() =>
                       closeThen(() =>
-                        setNotice(
-                          `Issue reporting opened for ${course.title}.`,
+                        onNavigatePage(
+                          `/support/new?${new URLSearchParams({
+                            type: "problem",
+                            from: overviewPath,
+                            fromLabel: course.title,
+                            courseId: course.id,
+                          }).toString()}`,
                         ),
                       )
                     }
@@ -750,10 +774,17 @@ export function CourseCard({
             />
           ) : null}
 
+          {offerUnavailable === "failed" ? (
+            <CourseCardLoadError onRetry={retryCardState} />
+          ) : offerUnavailable === "pending" ? (
+            <CourseCardOfferShimmer />
+          ) : null}
+
           {!viewerStatePending &&
+          !offerUnavailable &&
           role === "student" &&
           !course.enrolled &&
-          course.pricing ? (
+          (course.pricing || course.includedWith?.[0]) ? (
             <CourseCardPricing
               pricing={course.pricing}
               studentHome={studentHome}
@@ -771,7 +802,10 @@ export function CourseCard({
             />
           ) : null}
 
-          {!viewerStatePending && role === "student" && course.enrolled ? (
+          {!viewerStatePending &&
+          !offerUnavailable &&
+          role === "student" &&
+          course.enrolled ? (
             <CourseCardProgress
               progress={progress}
               progressText={progressText}
@@ -780,6 +814,7 @@ export function CourseCard({
           ) : null}
 
           {viewerStatePending ||
+          offerUnavailable ||
           (role === "creator" &&
             (isBin || course.deletedAt) &&
             (!onRestoreRequested || !canRestore)) ? null : (

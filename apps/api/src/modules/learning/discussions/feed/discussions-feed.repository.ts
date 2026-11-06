@@ -61,7 +61,21 @@ export interface DiscussionsFeedRepository {
     db: DatabaseExecutor,
     options: FeedCandidateOptions,
   ): Promise<FeedCandidate[]>;
+
+  /**
+   * The replies under these threads that a search found (by their words or
+   * their author's name), by thread, oldest first. A thread is in the
+   * results when one of them matched, and the page shows them.
+   */
+  listSearchMatchedReplyIds(
+    db: DatabaseExecutor,
+    threadIds: readonly string[],
+    search: string,
+  ): Promise<Map<string, string[]>>;
 }
+
+/** At most this many matching replies are named per thread. */
+const MATCHED_REPLIES_PER_THREAD = 20;
 
 /**
  * The member in `userIdColumn` is named (display name or username) like the
@@ -84,6 +98,14 @@ function authorNamedSql(userIdColumn: string, pattern: string) {
   )`;
 }
 
+/** A reply's words, or its author's name. */
+function replySearchSql(pattern: string) {
+  return sql<boolean>`(
+    lower(sr.plain_text) like ${pattern}
+    or ${authorNamedSql("sr.user_id", pattern)}
+  )`;
+}
+
 /** The thread's own words, its replies' words, or any of their authors. */
 function threadSearchSql(pattern: string) {
   return sql<boolean>`(
@@ -95,10 +117,7 @@ function threadSearchSql(pattern: string) {
       select 1 from learning_replies sr
       where sr.thread_id = t.id
         and sr.status = 'active'
-        and (
-          lower(sr.plain_text) like ${pattern}
-          or ${authorNamedSql("sr.user_id", pattern)}
-        )
+        and ${replySearchSql(pattern)}
     )
   )`;
 }
@@ -114,6 +133,35 @@ function noteSearchSql(pattern: string) {
 
 export function createDiscussionsFeedRepository(): DiscussionsFeedRepository {
   return {
+    async listSearchMatchedReplyIds(db, threadIds, search) {
+      const matched = new Map<string, string[]>();
+      if (threadIds.length === 0 || !search.trim()) return matched;
+      const pattern = containsPattern(search);
+      const result = await sql<{ id: string; threadId: string }>`
+        select ranked.id, ranked."threadId"
+        from (
+          select
+            sr.id,
+            sr.thread_id as "threadId",
+            row_number() over (
+              partition by sr.thread_id order by sr.created_at, sr.id
+            ) as position
+          from learning_replies sr
+          where sr.thread_id in (${sql.join(threadIds.map((id) => sql`${id}`))})
+            and sr.status = 'active'
+            and ${replySearchSql(pattern)}
+        ) as ranked
+        where ranked.position <= ${MATCHED_REPLIES_PER_THREAD}
+        order by ranked."threadId", ranked.position
+      `.execute(db);
+      for (const row of result.rows) {
+        const ids = matched.get(row.threadId) ?? [];
+        ids.push(row.id);
+        matched.set(row.threadId, ids);
+      }
+      return matched;
+    },
+
     async listCandidates(db, options) {
       const sources = [];
       const kinds = options.threadKinds;

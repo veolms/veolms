@@ -111,7 +111,7 @@ export function PlatformSecurityTab({
             className={ROW_CLASS}
             icon={Devices}
             label="Devices per student"
-            note="A student signing in on one more is shown their devices, with roughly where each signed in, and signs one out to continue. Your team is never limited."
+            note="A student signing in on one more gets in, and the device they used longest ago is signed out. Your team is never limited."
           >
             <ThemedSelect
               id="platform-max-devices"

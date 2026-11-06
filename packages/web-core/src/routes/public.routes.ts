@@ -19,15 +19,20 @@ export function getPublicRoutes(): RouteConfigEntry[] {
       id: "public-course-overview",
       caseSensitive: true,
     }),
-    // The legal and company pages, one module for all of them.
+    // The legal and company pages, a route module each (prerendered).
     ...[
-      ["terms", "legal-terms"],
-      ["privacy", "legal-privacy"],
-      ["refund-policy", "legal-refund-policy"],
-      ["contact", "legal-contact"],
-      ["about", "legal-about"],
-    ].map(([path, id]) =>
-      route(path!, "routes/legal-page.tsx", { id, caseSensitive: true }),
+      "terms",
+      "privacy",
+      "policies",
+      "contact",
+      "about",
+      "community-guidelines",
+      "delete-account",
+    ].map((path) =>
+      route(path, `routes/legal/${path}.tsx`, {
+        id: `legal-${path}`,
+        caseSensitive: true,
+      }),
     ),
   ];
 }

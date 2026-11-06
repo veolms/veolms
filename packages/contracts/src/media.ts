@@ -21,6 +21,7 @@ export const VIDEO_JOB_STATUSES = [
   "queued",
   "provisioning",
   "processing",
+  "ready",
   "completed",
   "failed",
   "cancelled",

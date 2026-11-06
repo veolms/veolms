@@ -10,6 +10,10 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../../../lib/utils";
 import { LessonChapterRows } from "./LessonChapterRows";
+import {
+  MINI_PLAYER_THEME,
+  usePlayerLayoutPreferences,
+} from "../useLearningPlayerTheme";
 
 // A full screen the page draws itself (Safari on iPhone) counts as one.
 const subscribeToFullscreen = (onChange: () => void) => {
@@ -50,7 +54,12 @@ export function LessonChaptersPanel({
   open,
   placement,
 }: LessonChaptersPanelProps) {
-  const playerTheme = usePlayerTheme();
+  const theme = usePlayerTheme();
+  // Over the video the panel wears the player theme, unless the learner
+  // keeps the app’s own look there (settings > Advanced).
+  const playerTheme = usePlayerLayoutPreferences().chaptersThemeInFullscreen
+    ? theme
+    : MINI_PLAYER_THEME;
   const { activeChapterId, chapters } = useChapters();
   const listRef = useRef<HTMLDivElement>(null);
   const inPlayer = placement === "player";

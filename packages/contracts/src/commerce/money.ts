@@ -50,6 +50,21 @@ export function minorUnitsPerMajor(currency: string): number {
 }
 
 /**
+ * The smallest card payment taken in a currency, in minor units, where it
+ * is more than one minor unit. Razorpay creates a 10-cent USD order, but
+ * its payment page shows $1 and refuses the payment as "different from
+ * your order amount" (seen in production on 2026-11-02).
+ */
+const MINIMUM_CARD_PAYMENT_MINOR: Readonly<Record<string, number>> = {
+  USD: 100,
+};
+
+/** The smallest card payment in `currency`, in minor units (0: none). */
+export function minimumCardPayment(currency: string): number {
+  return MINIMUM_CARD_PAYMENT_MINOR[currency.toUpperCase()] ?? 0;
+}
+
+/**
  * Converts a whole major-unit amount (a list price, a checkout preview) to
  * minor units. Throws on a negative, fractional or unsafe value rather than
  * guessing — a wrong amount here is a wrong charge.
@@ -68,6 +83,24 @@ export function toMinorUnits(amountMajor: number, currency: string): number {
   }
 
   return minorUnits;
+}
+
+/**
+ * An amount of a price calculation (a checkout preview) in minor units.
+ * Such amounts are whole major units, converted here, except in a
+ * calculation for a course bought at its price for buyers outside India,
+ * which is already in minor units (cents) and is taken as it is.
+ */
+export function pricingAmountToMinorUnits(
+  amount: number,
+  currency: string,
+  unit: MoneyUnit = "major",
+): number {
+  if (unit === "major") return toMinorUnits(amount, currency);
+  if (!Number.isSafeInteger(amount) || amount < 0) {
+    throw new Error(`Invalid order amount: ${amount}`);
+  }
+  return amount;
 }
 
 /**

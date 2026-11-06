@@ -27,7 +27,7 @@ import type {
   PublicProfileResponse,
   RegisterRequest,
   SessionResponse,
-  DeviceLimitResponse,
+  SignInFailureReportRequest,
   UserAvatarListResponse,
   TotpEnableRequest,
   TotpVerifyRequest,
@@ -184,9 +184,15 @@ export function clearGoogleOneTapNonce(): void {
   }
 }
 
+/**
+ * Sign-in requests go without a CORS preflight (see `simple` in api-client):
+ * a student who cannot sign in cannot use anything else either.
+ */
+const SIGN_IN = { simple: true } as const;
+
 export const authService = {
   sendOtp: (payload: OtpSendRequest): Promise<OtpSendResponse> => {
-    return api.post<OtpSendResponse>("/auth/otp/send", payload);
+    return api.post<OtpSendResponse>("/auth/otp/send", payload, SIGN_IN);
   },
 
   sendPhoneVerificationOtp: (
@@ -214,23 +220,33 @@ export const authService = {
   },
 
   login: (payload: LoginRequest): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/login", payload);
+    return api.post<LoginResponse>("/auth/login", payload, SIGN_IN);
   },
 
   register: (payload: RegisterRequest): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/register", payload);
+    return api.post<LoginResponse>("/auth/register", payload, SIGN_IN);
   },
 
   getOauthUrl: (payload: OauthUrlRequest): Promise<OauthUrlResponse> => {
-    return api.post<OauthUrlResponse>("/auth/oauth/url", payload);
+    return api.post<OauthUrlResponse>("/auth/oauth/url", payload, SIGN_IN);
   },
 
   oauthLogin: (payload: OauthLoginRequest): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/oauth/login", payload);
+    return api.post<LoginResponse>("/auth/oauth/login", payload, SIGN_IN);
   },
 
   getAuthConfig: (): Promise<AuthConfigResponse> => {
     return api.get<AuthConfigResponse>("/auth/config");
+  },
+
+  reportSignInFailures: (
+    payload: SignInFailureReportRequest,
+  ): Promise<AuthMessageResponse> => {
+    return api.post<AuthMessageResponse>(
+      "/auth/sign-in-failures",
+      payload,
+      SIGN_IN,
+    );
   },
 
   googleOneTapLogin: (
@@ -240,6 +256,7 @@ export const authService = {
     // The client has no global timeout; without one a hung request leaves the
     // One Tap UI stuck on "Verifying…" with the login buttons locked.
     return api.post<LoginResponse>("/auth/oauth/google/one-tap", payload, {
+      ...SIGN_IN,
       timeout: 20_000,
     });
   },
@@ -253,6 +270,7 @@ export const authService = {
     }
     const fetchPromise = api
       .post<GoogleOneTapNonceResponse>("/auth/oauth/google/nonce", undefined, {
+        ...SIGN_IN,
         timeout: 20_000,
       })
       .then((data) => {
@@ -290,7 +308,7 @@ export const authService = {
   },
 
   verifyMfaTotp: (payload: TotpVerifyRequest): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>("/auth/totp/verify", payload);
+    return api.post<AuthMessageResponse>("/auth/totp/verify", payload, SIGN_IN);
   },
 
   getPasskeyRegisterOptions:
@@ -320,7 +338,7 @@ export const authService = {
     async (): Promise<PasskeyAuthenticationOptionsResponse> => {
       const [response, { passkeyAuthenticationOptionsResponseSchema }] =
         await Promise.all([
-          api.post<unknown>("/auth/passkey/login/options"),
+          api.post<unknown>("/auth/passkey/login/options", {}, SIGN_IN),
           import("@veolms/contracts/auth/session"),
         ]);
       return passkeyAuthenticationOptionsResponseSchema.parse(response);
@@ -329,7 +347,11 @@ export const authService = {
   verifyPasskeyLogin: (payload: {
     response: unknown;
   }): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>("/auth/passkey/login/verify", payload);
+    return api.post<AuthMessageResponse>(
+      "/auth/passkey/login/verify",
+      payload,
+      SIGN_IN,
+    );
   },
 
   getSessions: async (): Promise<SessionResponse[]> => {
@@ -346,20 +368,6 @@ export const authService = {
 
   revokeAllOtherSessions: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/sessions/revoke-all");
-  },
-
-  /** The devices a sign-in held back by the device limit can make room on. */
-  getDeviceLimit: async (): Promise<DeviceLimitResponse> => {
-    const [response, { deviceLimitResponseSchema }] = await Promise.all([
-      api.get<unknown>("/auth/device-limit"),
-      import("@veolms/contracts/auth/session"),
-    ]);
-    return deviceLimitResponseSchema.parse(response);
-  },
-
-  /** Signs that device out and finishes the sign-in that was held back. */
-  resolveDeviceLimit: (sessionId: string): Promise<LoginResponse> => {
-    return api.post<LoginResponse>("/auth/device-limit/resolve", { sessionId });
   },
 
   getMe: async (): Promise<CurrentUserResponse> => {
@@ -431,9 +439,5 @@ export const authService = {
 
   logout: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/logout");
-  },
-
-  deactivateAccount: (): Promise<AuthMessageResponse> => {
-    return api.delete<AuthMessageResponse>("/auth/me");
   },
 };

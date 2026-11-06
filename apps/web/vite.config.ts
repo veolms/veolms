@@ -17,6 +17,7 @@ import {
 import { parseSiteOrigin } from "./src/routing/siteOrigin.ts";
 import { colorMixFallbackPlugin } from "./scripts/colorMixFallbackPlugin.ts";
 import { containerUnitFallbackPlugin } from "./scripts/containerUnitFallbackPlugin.ts";
+import { legacyStylesheetsDevPlugin } from "./scripts/legacyStylesheetsDevPlugin.ts";
 
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
 const webSourceRoot = fileURLToPath(new URL("./src", import.meta.url));
@@ -834,6 +835,7 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
       // Older Safari (iOS 15): see each plugin.
       colorMixFallbackPlugin(),
       containerUnitFallbackPlugin(),
+      legacyStylesheetsDevPlugin(),
       reactRouter(),
     ],
     // React Router's prerender pass fetches route data from Vite's temporary
@@ -930,7 +932,8 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
       },
       proxy: {
         "/v1": {
-          target: "http://127.0.0.1:4000",
+          // VITE_API_PROXY_TARGET points a second dev server at another API.
+          target: process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:4000",
           changeOrigin: true,
           secure: false,
         },

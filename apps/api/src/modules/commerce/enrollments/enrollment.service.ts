@@ -17,7 +17,11 @@ import {
   type StudentsService,
 } from "../../students/index.ts";
 import type { CourseService } from "../../courses/index.ts";
-import { ADMIN_ROLE, isTestLoginAccount } from "../../auth/index.ts";
+import {
+  ADMIN_ROLE,
+  isLocalAnyCourseUnenroll,
+  isTestLoginAccount,
+} from "../../auth/index.ts";
 import { hasAcademyPermission } from "../../authorization/index.ts";
 import { createAccessService, type AccessService } from "../../access/index.ts";
 import {
@@ -55,7 +59,8 @@ export interface EnrollmentService {
    * returned and the order is left as it is, and their progress in the
    * course is cleared, so the next enrollment starts from nothing. A shared
    * test account (TEST_LOGIN_ACCOUNTS) may do the same, so testers can buy
-   * or join a course again.
+   * or join a course again, and so may every account on a developer's
+   * machine with LOCAL_ANY_COURSE_UNENROLL.
    */
   unenrollFromCourse(
     actor: { id: string; roles: readonly string[]; email: string | null },
@@ -209,7 +214,9 @@ export function createEnrollmentService({
   ): Promise<void> {
     const userId = actor.id;
     const leavesAnyCourse =
-      actor.roles.includes(ADMIN_ROLE) || isTestLoginAccount(actor.email);
+      actor.roles.includes(ADMIN_ROLE) ||
+      isTestLoginAccount(actor.email) ||
+      isLocalAnyCourseUnenroll();
     await database.transaction().execute(async (trx) => {
       const enrollment = await enrollmentRepo.findEnrollment(
         trx,
@@ -265,9 +272,10 @@ export function createEnrollmentService({
           await orderRepo.cancelFreeOrder(trx, freeOrderId);
         }
       } else {
-        // An admin or test account leaving a course that was bought, came in
-        // a bundle or was granted: the access goes, the order behind it is
-        // not touched.
+        // An admin or test account (or anyone, on a developer's machine
+        // with LOCAL_ANY_COURSE_UNENROLL) leaving a course that was bought,
+        // came in a bundle or was granted: the access goes, the order behind
+        // it is not touched.
         await accessService.revokeCourseAccess(trx, userId, courseId);
       }
 

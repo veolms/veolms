@@ -43,6 +43,8 @@ const RESERVED_PROFILE_PATHS = new Set([
   "/progress",
   "/notifications",
   "/settings",
+  "/support",
+  "/support-inbox",
   "/coupons",
   "/home-page",
   "/platform",
@@ -94,6 +96,8 @@ export function isCourseAuthorPath(pathname: string): boolean {
     normalized.startsWith("/analytics/") ||
     normalized === "/coupons" ||
     normalized.startsWith("/coupons/") ||
+    normalized === "/support-inbox" ||
+    normalized.startsWith("/support-inbox/") ||
     normalized === "/home-page" ||
     normalized === "/platform" ||
     normalized.startsWith("/platform/") ||
@@ -192,6 +196,8 @@ const LOGIN_PROMPT_PATH_ROOTS = [
   "/purchase-history",
   "/progress",
   "/notifications",
+  "/support",
+  "/support-inbox",
   "/coupons",
   "/home-page",
   "/platform",

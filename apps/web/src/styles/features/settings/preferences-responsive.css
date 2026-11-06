@@ -24,6 +24,43 @@
   height: auto;
   border-right: 0;
 }
+
+/* Edge-to-edge scrolls the document, and a sticky sidebar only stays put
+   within its own grid row. On Notifications, Downloads and Purchase History
+   the shell grew taller than that row, and scrolling took the sidebar off
+   the screen with it. Pinned to the window instead, at the width of the
+   column it leaves (the page stays in column 2), it no longer depends on
+   the row. A hidden sidebar already floats (above). */
+@media (min-width: 641px) {
+  :root[data-content-layout="edge-to-edge"]
+    .courses-app:not(.courses-app--hidden)
+    > .courses-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--sidebar-expanded-width);
+    transition: width 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  :root[data-content-layout="edge-to-edge"]
+    :is(
+      .courses-app--collapsed,
+      .courses-app.courses-app--resizing:not(.courses-app--hidden)
+    )
+    > .courses-sidebar,
+  :root[data-content-layout="edge-to-edge"][data-sidebar-state="collapsed"]
+    .courses-app:not(.courses-app--hidden)
+    > .courses-sidebar {
+    width: var(--sidebar-resize-preview-width, 76px);
+  }
+
+  :root[data-content-layout="edge-to-edge"]
+    .courses-app--resizing
+    > .courses-sidebar {
+    transition: none;
+  }
+}
 :root[data-collapsed-tooltips="false"]
   .sidebar-nav-tooltip.is-preference-controlled {
   display: none !important;

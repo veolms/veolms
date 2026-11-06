@@ -60,6 +60,8 @@ Object.assign(process.env, {
   RAZORPAY_KEY_ID: "rzp_test_flow",
   RAZORPAY_KEY_SECRET: "rzp_test_flow_secret",
   RAZORPAY_WEBHOOK_SECRET: "rzp_test_flow_webhook_secret",
+  // Automatic dollar prices at a fixed rate: no exchange-rate site is asked.
+  INTERNATIONAL_PRICE_INR_PER_USD: "95",
   PAYMENT_GATEWAY_DEFAULT: "razorpay",
 });
 // Values a developer's shell may hold that would change what is tested.

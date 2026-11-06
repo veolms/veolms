@@ -4,6 +4,7 @@ import type {
   DeletedCourse,
   ManagedCourseSummary,
 } from "@veolms/contracts";
+import { formatMoney } from "@veolms/contracts/commerce/money";
 import type { Course, CourseLifecycleStatus, CoursePricing } from "./catalogue";
 import {
   getCourseThumbnailCdnSrcSet,
@@ -76,6 +77,7 @@ export function formatCoursePricing(
   }
 
   const formattedPrice = formatAmount(Number(pricing.price));
+  const international = formatInternationalCoursePricing(pricing.international);
 
   if (
     pricing.salePrice !== null &&
@@ -91,6 +93,7 @@ export function formatCoursePricing(
       originalPrice: formattedPrice,
       discount: `${discountPercent}% off`,
       showDiscountBadge: pricing.showDiscountBadge === true,
+      ...(international ? { international } : {}),
     };
   }
 
@@ -98,6 +101,26 @@ export function formatCoursePricing(
     price: formattedPrice,
     originalPrice: "",
     discount: "",
+    ...(international ? { international } : {}),
+  };
+}
+
+/**
+ * A course's price line for buyers outside India: its amounts are minor
+ * units (cents), and a discount is worked out on them.
+ */
+export function formatInternationalCoursePricing(
+  international: CoursePricingSummary["international"],
+): CoursePricing["international"] | undefined {
+  if (!international) return undefined;
+  const { currency, priceMinor, salePriceMinor } = international;
+  const discounted = priceMinor > salePriceMinor;
+  return {
+    price: formatMoney(salePriceMinor, { currency }),
+    originalPrice: discounted ? formatMoney(priceMinor, { currency }) : "",
+    discount: discounted
+      ? `${Math.round(((priceMinor - salePriceMinor) / priceMinor) * 100)}% off`
+      : "",
   };
 }
 
