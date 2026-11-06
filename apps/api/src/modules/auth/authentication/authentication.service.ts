@@ -29,7 +29,10 @@ import * as oauthRepository from "../oauth/oauth.repository.ts";
 import * as userRepository from "./authentication.repository.ts";
 import type { OtpService } from "../otp/otp.service.ts";
 import type { SessionService } from "../session/session.service.ts";
-import { normalizePhoneIdentifier } from "../shared/auth.utils.ts";
+import {
+  normalizePhoneIdentifier,
+  refusesUnconfirmedPhoneSignIn,
+} from "../shared/auth.utils.ts";
 import { evictCachedUserSessions } from "../shared/session-auth-cache.ts";
 import {
   AVATAR_CONTENT_TYPES,
@@ -947,6 +950,25 @@ export function createAuthService({
       );
     }
 
+    // A number nobody confirmed (the one typed during platform setup, or by
+    // staff adding a student) cannot sign in until the owner confirms it
+    // from their profile. That holds whether or not the email is confirmed
+    // yet: a student added by staff has neither, and a mistyped number would
+    // otherwise open their account to its holder.
+    if (refusesUnconfirmedPhoneSignIn(input.identifierType, user)) {
+      await otpService.assertOtpMatches(
+        input.identifier,
+        input.identifierType,
+        "login",
+        input.code,
+      );
+      throw new AppError(
+        403,
+        "PHONE_NOT_VERIFIED",
+        "This mobile number has not been confirmed yet. Sign in with your email, then confirm the number in Settings.",
+      );
+    }
+
     // The read-only prerequisites of the session do not depend on the OTP,
     // so they load while the code is being consumed. Nothing is written for
     // the session until the OTP has been consumed: a rejected code fails
@@ -964,11 +986,10 @@ export function createAuthService({
       ),
     ]);
 
-    // The code reached this inbox or phone, so the address or number is
-    // proven. An account staff created by hand is saved unverified and
-    // becomes verified here, on its owner's first sign-in; before the
-    // session, so what the session claims for a verified channel applies at
-    // once.
+    // The code reached this inbox, so the address is proven. An account
+    // staff created by hand is saved unverified and becomes verified here,
+    // on its owner's first sign-in; before the session, so what the session
+    // claims for a verified address applies at once.
     let signedInUser = user;
     if (input.identifierType === "email" && !user.email_verified_at) {
       const verifiedAt = new Date();
@@ -980,19 +1001,6 @@ export function createAuthService({
         )
       ) {
         signedInUser = { ...user, email_verified_at: verifiedAt };
-        forgetCachedAccount(user.id);
-      }
-    }
-    if (input.identifierType === "phone" && !user.phone_verified_at) {
-      const verifiedAt = new Date();
-      if (
-        await userRepository.markUserPhoneVerified(
-          database,
-          user.id,
-          verifiedAt,
-        )
-      ) {
-        signedInUser = { ...user, phone_verified_at: verifiedAt };
         forgetCachedAccount(user.id);
       }
     }
