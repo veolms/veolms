@@ -51,8 +51,10 @@ function resolvePayload(identifier: AuthIdentifier) {
 
 const ALREADY_SENT_NOTICE = "We sent you a code a moment ago — enter it below.";
 
+// The server's answer (PHONE_NOT_REGISTERED) when phone sign-in is asked to
+// send a code to a number that is not an account's confirmed number.
 const NO_ACCOUNT_FOR_NUMBER =
-  "No account uses this number. Try another number, or sign up with email or Google.";
+  "This phone number is not associated with any account.";
 // True when the server refuses a send because it is too soon after one this
 // tab made to the same destination. The server answers its other request
 // limits with the same code, so the earlier send has to be known here.
@@ -174,6 +176,13 @@ export function LoginView({
     });
   }, [flow.status, navigate, onAuthenticated, requestedReturnTo]);
 
+  // Phone sign-in never creates an account, so it asks the server to send a
+  // code only to an account's confirmed number and refuse any other.
+  const sendPayload = (identifier: AuthIdentifier) =>
+    phoneSignIn && identifier.method === "mobile"
+      ? { ...resolvePayload(identifier), intent: "sign_in" as const }
+      : resolvePayload(identifier);
+
   const handleSendCode = async (identifier: AuthIdentifier) => {
     if (sendOtpMutation.isPending) return;
     setIdentifierError(null);
@@ -189,9 +198,7 @@ export function LoginView({
     setOtpNotice(null);
 
     try {
-      const sent = await sendOtpMutation.mutateAsync(
-        resolvePayload(identifier),
-      );
+      const sent = await sendOtpMutation.mutateAsync(sendPayload(identifier));
       rememberCodeSent(identifier, sent.codeExpiresInSeconds);
       dispatch({ type: "OTP_SENT" });
     } catch (err: unknown) {
@@ -220,9 +227,7 @@ export function LoginView({
     dispatch({ type: "RESEND_OTP" });
 
     try {
-      const sent = await sendOtpMutation.mutateAsync(
-        resolvePayload(identifier),
-      );
+      const sent = await sendOtpMutation.mutateAsync(sendPayload(identifier));
       rememberCodeSent(identifier, sent.codeExpiresInSeconds);
       setOtpNotice(null);
       dispatch({ type: "OTP_SENT" });

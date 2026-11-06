@@ -20,11 +20,8 @@ import * as courseConfigRepo from "../../courses/configuration/configuration.rep
 import * as bundleRepo from "../bundles/bundle.repository.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
-import {
-  computeCouponDiscount,
-  raiseToMinimumCharge,
-  resolveCourseCharge,
-} from "./pricing.amount.ts";
+import { raiseToMinimumCharge, resolveCourseCharge } from "./pricing.amount.ts";
+import { allocateCouponDiscount } from "./coupon-allocation.ts";
 import { resolveQuizCharge } from "./quiz-pricing.amount.ts";
 import {
   courseSaleState,
@@ -647,7 +644,6 @@ export function createPricingService({
 
       // Check item restrictions (course/bundle eligibility)
       let eligibleSubtotal = 0;
-      let eligibleDomesticSubtotal = 0;
       const eligibleItems: typeof calculatedItems = [];
 
       for (const item of calculatedItems) {
@@ -705,7 +701,6 @@ export function createPricingService({
 
         if (isEligible) {
           eligibleSubtotal += item.couponBase;
-          eligibleDomesticSubtotal += item.domesticCouponBase;
           eligibleItems.push(item);
         }
       }
@@ -714,42 +709,48 @@ export function createPricingService({
         throw CommerceErrors.COUPON_NOT_APPLICABLE(codeUpper);
       }
 
-      // A coupon's amounts are set in rupees. Against items priced in cents
-      // they are taken at those items' own rate (what they sell for in
-      // cents against their rupee price), rounded down to a cent. A
-      // percentage needs no converting.
-      const toChargeUnits = (rupees: number) =>
-        amountUnit === "minor" && eligibleDomesticSubtotal > 0
-          ? Math.floor((rupees * eligibleSubtotal) / eligibleDomesticSubtotal)
-          : rupees;
-      totalDiscount = computeCouponDiscount({
-        discountType: coupon.discount_type,
-        discountValue:
-          coupon.discount_type === "fixed"
-            ? toChargeUnits(coupon.discount_value)
-            : coupon.discount_value,
-        maxDiscountAmount: coupon.max_discount_amount
-          ? toChargeUnits(coupon.max_discount_amount)
-          : coupon.max_discount_amount,
-        eligibleCatalogSubtotal: eligibleSubtotal,
+      // A course or bundle may have its own discount under this coupon; the
+      // coupon's own terms are the default for every other eligible item.
+      // Amounts in rupees are taken at each item's own rate when it is
+      // priced in cents (see allocateCouponDiscount).
+      const rules = await couponRepo.listCouponDiscountRules(
+        database,
+        coupon.id,
+      );
+      const ruleByTarget = new Map(
+        rules.map((rule) => [
+          `${rule.target_type}:${rule.target_id}`,
+          {
+            discountType: rule.discount_type,
+            discountValue: rule.discount_value,
+            maxDiscountAmount: rule.max_discount_amount,
+          },
+        ]),
+      );
+      const itemDiscounts = allocateCouponDiscount({
+        coupon: {
+          discountType: coupon.discount_type,
+          discountValue: coupon.discount_value,
+          maxDiscountAmount: coupon.max_discount_amount,
+        },
+        items: eligibleItems.map((it) => ({
+          couponBase: it.couponBase,
+          domesticCouponBase:
+            amountUnit === "minor" ? it.domesticCouponBase : it.couponBase,
+          rule: ruleByTarget.get(`${it.itemType}:${it.itemId}`) ?? null,
+        })),
       });
 
-      // Allocate proportional discount among eligible items by catalog base.
       // Tip remains on unitPrice, so finalAmount = catalog + tip - catalogDiscount.
-      let remainingDiscountToDistribute = totalDiscount;
-      for (let i = 0; i < eligibleItems.length; i++) {
-        const it = eligibleItems[i]!;
-        if (i === eligibleItems.length - 1) {
-          it.discountAmount = remainingDiscountToDistribute;
-        } else {
-          const itemDiscount = Math.floor(
-            (it.couponBase / eligibleSubtotal) * totalDiscount,
-          );
-          it.discountAmount = itemDiscount;
-          remainingDiscountToDistribute -= itemDiscount;
-        }
+      totalDiscount = 0;
+      eligibleItems.forEach((it, i) => {
+        it.discountAmount = itemDiscounts[i] ?? 0;
         it.finalAmount = Math.max(0, it.unitPrice - it.discountAmount);
-      }
+        totalDiscount += it.discountAmount;
+      });
+      const hasOwnRates = eligibleItems.some((it) =>
+        ruleByTarget.has(`${it.itemType}:${it.itemId}`),
+      );
 
       couponId = coupon.id;
       couponValidation = {
@@ -759,14 +760,19 @@ export function createPricingService({
         discountValue: coupon.discount_value,
         discountAmount: totalDiscount,
         message: `${
-          coupon.discount_type === "percentage"
-            ? `${coupon.discount_value}%`
-            : amountUnit === "minor"
-              ? formatMoney(totalDiscount, {
-                  currency: detectedCurrency,
-                  unit: "minor",
-                })
-              : `₹${coupon.discount_value}`
+          hasOwnRates
+            ? formatMoney(totalDiscount, {
+                currency: detectedCurrency,
+                unit: amountUnit,
+              })
+            : coupon.discount_type === "percentage"
+              ? `${coupon.discount_value}%`
+              : amountUnit === "minor"
+                ? formatMoney(totalDiscount, {
+                    currency: detectedCurrency,
+                    unit: "minor",
+                  })
+                : `₹${coupon.discount_value}`
         } discount applied.`,
       };
     }

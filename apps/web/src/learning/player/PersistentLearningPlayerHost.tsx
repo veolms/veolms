@@ -28,10 +28,12 @@ import {
 import {
   flushDetachedLearningProgress,
   recordDetachedLearningProgress,
+  syncDetachedLearningProgress,
   syncDetachedWatchTime,
   useDetachedLessonProgress,
   type DetachedProgressTarget,
 } from "../detachedLearningProgress";
+import { subscribeToClaimRequests } from "../playbackClaim";
 import { subscribeProgressIdle } from "../progressSyncSchedule";
 import { LearningExpandPlaceholderSheet } from "./LearningExpandPlaceholderSheet";
 import {
@@ -699,9 +701,17 @@ export function PersistentLearningPlayerHost({
     const unsubscribeIdle = subscribeProgressIdle(() =>
       flushDetachedLearningProgress(detachedProgressTarget),
     );
+    // Pressing play here claims the stream at once, as on the lesson page,
+    // so the student's other device pauses at its next save rather than
+    // one save later.
+    const unsubscribeClaims = subscribeToClaimRequests(
+      detachedProgressTarget.courseKey,
+      () => void syncDetachedLearningProgress(detachedProgressTarget, true),
+    );
     return () => {
       window.clearInterval(interval);
       unsubscribeIdle();
+      unsubscribeClaims();
     };
   }, [detachedProgressTarget]);
   const recordsDetachedProgress = Boolean(
@@ -846,6 +856,14 @@ export function PersistentLearningPlayerHost({
       <LessonVideoPlayer
         {...lessonVideoPlayerProps}
         watchTimeCourseKey={player.progressTarget?.courseKey}
+        lessonId={
+          player.playerProps.lessonId ??
+          (player.selectedLesson !== undefined
+            ? player.progressTarget?.lessonIdsByNumber?.get(
+                player.selectedLesson,
+              )
+            : undefined)
+        }
         minimizeMotionTarget={resolveMinimizeMotionTarget}
         onMinimizeGestureStart={finishRestoreBeforeMinimize}
         onMinimizeTriggerReady={setMinimizeTrigger}

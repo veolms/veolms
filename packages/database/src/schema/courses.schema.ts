@@ -37,6 +37,11 @@ export interface CourseTable {
    * courses (or the parts of courses) it links. See "Partial access".
    */
   unlisted: Generated<boolean>;
+  /**
+   * The course's place in the order an admin set (0 first). Null: not
+   * placed, listed after the placed courses in each list's own order.
+   */
+  sort_position: number | null;
 }
 
 export interface CategoryTable {

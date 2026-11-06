@@ -5,7 +5,9 @@ const PLAYER_THEME_ID_PATTERN = /^[a-z][a-z0-9-]{0,39}$/;
 import {
   DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
   MAX_MAX_DEVICES_PER_STUDENT,
+  MAX_MAX_SIMULTANEOUS_STREAMS,
   MIN_MAX_DEVICES_PER_STUDENT,
+  MIN_MAX_SIMULTANEOUS_STREAMS,
   PLATFORM_DISPLAY_MODES,
   type PlatformAppearanceSettings,
   type PlatformInvoiceSettings,
@@ -42,6 +44,12 @@ export const platformSecuritySettingsSchema = z.strictObject({
     .int()
     .min(MIN_MAX_DEVICES_PER_STUDENT)
     .max(MAX_MAX_DEVICES_PER_STUDENT)
+    .nullable(),
+  maxSimultaneousStreams: z
+    .number()
+    .int()
+    .min(MIN_MAX_SIMULTANEOUS_STREAMS)
+    .max(MAX_MAX_SIMULTANEOUS_STREAMS)
     .nullable(),
 }) satisfies z.ZodType<PlatformSecuritySettings>;
 

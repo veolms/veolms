@@ -17,6 +17,7 @@ import type { Kysely } from "kysely";
 import type { ClaimedOutboxEvent } from "../../events/outbox.repository.ts";
 import * as outboxRepository from "../../events/outbox.repository.ts";
 import { AppError } from "../../lib/errors.ts";
+import { encodeNotificationSignal } from "./notification-signal.ts";
 import * as notificationRepository from "./notifications.repository.ts";
 import { clampText } from "../../lib/text.ts";
 import {
@@ -75,7 +76,19 @@ export interface NotificationService {
     event: ClaimedOutboxEvent,
     intents: NotificationIntent[],
     recipients: NotificationRecipientDirectory,
-  ): Promise<{ created: number; skipped: number }>;
+  ): Promise<ProcessedNotificationEvent>;
+  /**
+   * Tells every API process that these users' notifications changed, so
+   * their open notification streams refetch. Call after the change commits.
+   */
+  signalUsersChanged(userIds: readonly string[]): Promise<void>;
+}
+
+export interface ProcessedNotificationEvent {
+  created: number;
+  skipped: number;
+  /** Users who got a notification, to be told over the stream. */
+  notifiedUserIds: string[];
 }
 
 interface DecodedCursor {
@@ -153,6 +166,21 @@ export function createNotificationService({
 }: {
   database: Kysely<Database>;
 }): NotificationService {
+  async function signalUsersChanged(userIds: readonly string[]) {
+    for (const payload of encodeNotificationSignal(userIds)) {
+      await notificationRepository.publishSignal(database, payload);
+    }
+  }
+
+  /**
+   * Tells this user's other open tabs and devices that their notifications
+   * changed (read, unread, archived), so their badge follows. Best effort:
+   * the change is already saved, and those tabs still poll.
+   */
+  function signalChanged(userId: string) {
+    signalUsersChanged([userId]).catch(() => {});
+  }
+
   async function list(
     userId: string,
     query: NotificationListQuery,
@@ -206,6 +234,7 @@ export function createNotificationService({
         "Notification not found.",
       );
     }
+    signalChanged(userId);
     return presentReadState(row);
   }
 
@@ -225,13 +254,17 @@ export function createNotificationService({
         "Notification not found.",
       );
     }
+    signalChanged(userId);
     return presentReadState(row);
   }
 
   async function markAllRead(userId: string) {
-    return {
-      updatedCount: await notificationRepository.markAllRead(database, userId),
-    };
+    const updatedCount = await notificationRepository.markAllRead(
+      database,
+      userId,
+    );
+    if (updatedCount > 0) signalChanged(userId);
+    return { updatedCount };
   }
 
   async function archive(userId: string, notificationId: string) {
@@ -244,6 +277,7 @@ export function createNotificationService({
         "Notification not found.",
       );
     }
+    signalChanged(userId);
     return { archived: true as const };
   }
 
@@ -291,7 +325,7 @@ export function createNotificationService({
     event: ClaimedOutboxEvent,
     intents: NotificationIntent[],
     recipients: NotificationRecipientDirectory,
-  ): Promise<{ created: number; skipped: number }> {
+  ): Promise<ProcessedNotificationEvent> {
     const recipientRecords = new Map<
       string,
       Awaited<ReturnType<typeof recipients.findRecipient>>
@@ -329,6 +363,7 @@ export function createNotificationService({
     const emailBrand = await loadEmailBrand(database);
     let created = 0;
     let skipped = 0;
+    const notifiedUserIds = new Set<string>();
 
     for (let start = 0; start < intents.length; start += CHUNK_SIZE) {
       const chunk = intents.slice(start, start + CHUNK_SIZE);
@@ -431,6 +466,7 @@ export function createNotificationService({
               });
             }
             chunkCreated += 1;
+            notifiedUserIds.add(intent.recipientUserId);
           }
 
           return { created: chunkCreated, skipped: chunkSkipped };
@@ -449,7 +485,7 @@ export function createNotificationService({
       // Claimed events always carry the lease the claim assigned.
       event.locked_until!,
     );
-    return { created, skipped };
+    return { created, skipped, notifiedUserIds: [...notifiedUserIds] };
   }
 
   return {
@@ -462,5 +498,6 @@ export function createNotificationService({
     getPreferences,
     updatePreferences,
     processClaimedEvent,
+    signalUsersChanged,
   };
 }

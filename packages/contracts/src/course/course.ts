@@ -780,7 +780,40 @@ export const managedCourseSummarySchema = z.object({
   totalSections: z.number().int().nonnegative(),
   totalLessons: z.number().int().nonnegative(),
   totalDurationSeconds: z.number().int().nonnegative(),
+  /** Its place in the order an admin set (0 first); null when not placed. */
+  sortPosition: z.number().int().nonnegative().nullable().optional(),
 });
+
+/** The most courses one reorder may name. */
+export const COURSE_REORDER_MAX = 1000;
+
+/**
+ * Every listed course of the academy, in the order an admin wants them
+ * shown. It names each course once, and every course the list holds.
+ */
+export const reorderCoursesRequestSchema = z.object({
+  courseIds: z
+    .array(z.uuid())
+    .min(1)
+    .max(COURSE_REORDER_MAX)
+    .refine(
+      (ids) => new Set(ids.map((id) => id.toLowerCase())).size === ids.length,
+      {
+        message: "Each course may appear only once.",
+      },
+    ),
+});
+
+export const reorderCoursesResponseSchema = z.object({
+  courses: z.array(
+    z.object({ id: z.uuid(), sortPosition: z.number().int().nonnegative() }),
+  ),
+});
+
+export type ReorderCoursesRequest = z.infer<typeof reorderCoursesRequestSchema>;
+export type ReorderCoursesResponse = z.infer<
+  typeof reorderCoursesResponseSchema
+>;
 
 export const createCourseRequestSchema = z.object({
   title: z.string().min(1).max(120),

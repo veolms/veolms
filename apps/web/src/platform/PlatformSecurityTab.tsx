@@ -3,9 +3,12 @@ import { FingerprintIcon as Fingerprint } from "@phosphor-icons/react/Fingerprin
 import { DevicesIcon as Devices } from "@phosphor-icons/react/Devices";
 import { IdentificationCardIcon as IdentificationCard } from "@phosphor-icons/react/IdentificationCard";
 import { UserGearIcon as UserGear } from "@phosphor-icons/react/UserGear";
+import { VideoIcon as Video } from "@phosphor-icons/react/Video";
 import {
   MAX_MAX_DEVICES_PER_STUDENT,
   MIN_MAX_DEVICES_PER_STUDENT,
+  MAX_MAX_SIMULTANEOUS_STREAMS,
+  MIN_MAX_SIMULTANEOUS_STREAMS,
 } from "@veolms/contracts";
 import {
   SettingRow,
@@ -36,6 +39,21 @@ const DEVICE_LIMIT_OPTIONS: readonly ThemedSelectOption[] = [
   [NO_DEVICE_LIMIT, "No limit"],
 ];
 
+const NO_STREAM_LIMIT = "none";
+
+const STREAM_LIMIT_OPTIONS: readonly ThemedSelectOption[] = [
+  ...Array.from(
+    {
+      length: MAX_MAX_SIMULTANEOUS_STREAMS - MIN_MAX_SIMULTANEOUS_STREAMS + 1,
+    },
+    (_, index): ThemedSelectOption => {
+      const count = MIN_MAX_SIMULTANEOUS_STREAMS + index;
+      return [String(count), count === 1 ? "1 stream" : `${count} streams`];
+    },
+  ),
+  [NO_STREAM_LIMIT, "No limit"],
+];
+
 /**
  * The academy's sign-in and enrolment rules for students. Admins and
  * instructors always sign in with a second step; that is not a setting.
@@ -56,8 +74,11 @@ export function PlatformSecurityTab({
     );
   }
 
-  const { requireVerifiedPhoneForEnrollment, maxDevicesPerStudent } =
-    settings.security;
+  const {
+    requireVerifiedPhoneForEnrollment,
+    maxDevicesPerStudent,
+    maxSimultaneousStreams,
+  } = settings.security;
 
   return (
     <div className="settings-content">
@@ -129,6 +150,32 @@ export function PlatformSecurityTab({
                   limit === null
                     ? "Students can sign in on any number of devices."
                     : `Students can now be signed in on ${limit} ${limit === 1 ? "device" : "devices"} at once.`,
+                );
+              }}
+            />
+          </SettingRow>
+          <SettingRow
+            className={ROW_CLASS}
+            icon={Video}
+            label="Streams at a time"
+            note="How many devices a student can play video on at the same time. The most recent play wins; the others pause."
+          >
+            <ThemedSelect
+              id="platform-max-streams"
+              ariaLabel="Streams at a time"
+              value={
+                maxSimultaneousStreams === null
+                  ? NO_STREAM_LIMIT
+                  : String(maxSimultaneousStreams)
+              }
+              options={STREAM_LIMIT_OPTIONS}
+              onValueChange={(value) => {
+                const limit = value === NO_STREAM_LIMIT ? null : Number(value);
+                save(
+                  { security: { maxSimultaneousStreams: limit } },
+                  limit === null
+                    ? "Students can play video on any number of devices at the same time."
+                    : `Students can now play video on ${limit} ${limit === 1 ? "device" : "devices"} at a time.`,
                 );
               }}
             />

@@ -16,6 +16,10 @@ export const otpSendRequestSchema = z
       .min(8, "Phone number is too short")
       .meta({ example: "+15551234567" })
       .optional(),
+    // "sign_in": the code is only for getting into an existing account, so
+    // a number that is not an account's confirmed number is refused instead
+    // of being sent a sign-up code.
+    intent: z.enum(["sign_in"]).optional(),
   })
   .refine((data) => data.email || data.phoneNo, {
     message: "Either email or phone number must be provided",

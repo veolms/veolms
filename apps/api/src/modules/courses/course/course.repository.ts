@@ -218,12 +218,19 @@ export async function listCourseAccessFacts(
     .execute();
 }
 
+/**
+ * Where a course stands in the admin's order, with the courses not placed
+ * after every placed one: one value a keyset cursor can compare.
+ */
+export const UNPLACED_SORT_POSITION = 2_147_483_647;
+const placedPosition = sql<number>`coalesce(courses.sort_position, ${sql.lit(UNPLACED_SORT_POSITION)})`;
+
 export async function listPublishedCourses(
   database: Kysely<Database>,
   filters?: {
     creatorId?: string;
     limit?: number;
-    cursor?: { value: string; id: string };
+    cursor?: { value: string; id: string; position?: number };
     search?: string;
     sort?: "latest" | "title";
   },
@@ -249,6 +256,7 @@ export async function listPublishedCourses(
       "courses.id",
       "courses.created_at",
       sql<string>`courses.created_at::text`.as("created_at_cursor"),
+      "courses.sort_position",
       "courses.slug",
       "courses.title",
       "courses.short_description",
@@ -343,8 +351,9 @@ export async function listPublishedCourses(
         sql<boolean>`(courses.title, courses.id) > (${filters.cursor.value}, ${filters.cursor.id}::uuid)`,
       );
     } else {
+      const position = filters.cursor.position ?? UNPLACED_SORT_POSITION;
       query = query.where(
-        sql<boolean>`(courses.created_at, courses.id) > (${filters.cursor.value}::timestamptz, ${filters.cursor.id}::uuid)`,
+        sql<boolean>`(${placedPosition}, courses.created_at, courses.id) > (${position}::integer, ${filters.cursor.value}::timestamptz, ${filters.cursor.id}::uuid)`,
       );
     }
   }
@@ -353,6 +362,7 @@ export async function listPublishedCourses(
     query = query.orderBy("courses.title", "asc");
     query = query.orderBy("courses.id", "asc");
   } else {
+    query = query.orderBy(placedPosition, "asc");
     query = query.orderBy("courses.created_at", "asc");
     query = query.orderBy("courses.id", "asc");
   }
@@ -398,6 +408,7 @@ export async function listHomeDiscoveryCourses(
     .leftJoin(enrollmentCounts, "enrollment_counts.course_id", "courses.id")
     .select((eb) => [
       "courses.id",
+      "courses.sort_position",
       "courses.slug",
       "courses.title",
       "courses.short_description",
@@ -478,6 +489,8 @@ export async function listHomeDiscoveryCourses(
     query = query.where("courses.id", "in", [...options.courseIds]);
   }
 
+  // The admin's order first; their own order for courses not placed.
+  query = query.orderBy(placedPosition, "asc");
   if (options.order === "popular") {
     query = query
       .orderBy(
@@ -508,6 +521,7 @@ export async function listPublishedCourseOptions(database: Kysely<Database>) {
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
     .where("unlisted", "=", false)
+    .orderBy("sort_position", (order) => order.asc().nullsLast())
     .orderBy("created_at", "asc")
     .orderBy("id", "asc")
     .execute();
@@ -575,6 +589,7 @@ export async function listManagedCourses(
       "thumbnail_media.owner_id as thumbnail_owner_id",
       "courses.created_at",
       "courses.updated_at",
+      "courses.sort_position",
       "course_settings.estimated_duration",
       eb
         .selectFrom("course_sections")
@@ -616,6 +631,7 @@ export async function listManagedCourses(
   }
 
   return await query
+    .orderBy("courses.sort_position", (order) => order.asc().nullsLast())
     .orderBy("courses.updated_at", "desc")
     .orderBy("courses.created_at", "desc")
     .execute();
@@ -642,6 +658,7 @@ export async function listAvailableCoursesByCreator(
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
     .where("unlisted", "=", false)
+    .orderBy("sort_position", (order) => order.asc().nullsLast())
     .orderBy("created_at", "desc")
     .execute();
 }

@@ -247,6 +247,7 @@ export function adaptApiCourseToCatalogueCourse(
     lifecycleStatus: validStatus,
     createdAt: apiCourse.createdAt,
     updatedAt: apiCourse.updatedAt,
+    sortPosition: apiCourse.sortPosition ?? null,
     creatorId: apiCourse.creatorId,
     isApi: true,
   };

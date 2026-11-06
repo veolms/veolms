@@ -49,6 +49,10 @@ import {
 import { hasAcademyPermission } from "../../authorization/index.ts";
 import * as courseRepo from "./course.repository.ts";
 import {
+  decodePublishedCourseCursor,
+  encodePublishedCourseCursor,
+} from "./published-course-cursor.ts";
+import {
   presentInternationalPrice,
   type StoredInternationalPrice,
 } from "../shared/international-price.ts";
@@ -138,37 +142,6 @@ type PublicCourseSummaryRow = Omit<
   PublishedCourseSummaryRow,
   "created_at" | "created_at_cursor"
 >;
-
-function decodePublishedCourseCursor(cursor: string, sort: "latest" | "title") {
-  const separator = cursor.lastIndexOf("~");
-  if (separator <= 0) {
-    throw new AppError(400, "INVALID_COURSE_CURSOR", "Invalid course cursor.");
-  }
-
-  let value: string;
-  try {
-    value = decodeURIComponent(cursor.slice(0, separator));
-  } catch {
-    throw new AppError(400, "INVALID_COURSE_CURSOR", "Invalid course cursor.");
-  }
-  const id = cursor.slice(separator + 1);
-  if (!/^[0-9a-f-]{36}$/iu.test(id)) {
-    throw new AppError(400, "INVALID_COURSE_CURSOR", "Invalid course cursor.");
-  }
-  if (sort === "latest" && !Number.isFinite(Date.parse(value))) {
-    throw new AppError(400, "INVALID_COURSE_CURSOR", "Invalid course cursor.");
-  }
-
-  return { value, id };
-}
-
-function encodePublishedCourseCursor(
-  row: { created_at_cursor: string; id: string; title: string },
-  sort: "latest" | "title",
-) {
-  const value = sort === "title" ? row.title : row.created_at_cursor;
-  return `${encodeURIComponent(value)}~${row.id}`;
-}
 
 type PublicThumbnailVariant = CourseThumbnailUrls["thumbnailSrcSet"][number];
 
@@ -972,6 +945,7 @@ export function createCourseService({
             Number(c.lesson_duration_seconds ?? 0),
             c.estimated_duration,
           ),
+          sortPosition: c.sort_position,
         } satisfies ManagedCourseSummary;
       }),
     );

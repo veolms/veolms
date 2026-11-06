@@ -54,6 +54,52 @@ await test("a learner who signed up before signs in again with a new emailed cod
   assert.equal(await laptop.whoAmI(), userId);
 });
 
+/** A number no other test uses, as the sign-in screen sends it. */
+function newIndianNumber(): string {
+  return `+919${String(Math.floor(Math.random() * 1e9)).padStart(9, "0")}`;
+}
+
+await test("phone sign-in refuses a number with no account, and sends no code", async () => {
+  const visitor = flow.visitor();
+
+  const sent = await visitor.post("/v1/auth/otp/send", {
+    phoneNo: newIndianNumber(),
+    intent: "sign_in",
+  });
+
+  assert.equal(sent.status, 404);
+  assert.equal(sent.body.error?.code, "PHONE_NOT_REGISTERED");
+});
+
+await test("a number staff typed for a student is not associated with any account until confirmed", async () => {
+  const admin = await signedInAdmin(flow);
+  const learner = newLearner("typed");
+  const phoneNo = newIndianNumber();
+  const created = await admin.post("/v1/students", {
+    displayName: learner.displayName,
+    email: learner.email,
+    phoneNo,
+  });
+  assert.equal(created.status, 201);
+  const visitor = flow.visitor();
+
+  const signInScreen = await visitor.post("/v1/auth/otp/send", {
+    phoneNo,
+    intent: "sign_in",
+  });
+  const generalScreen = await visitor.post("/v1/auth/otp/send", { phoneNo });
+  const login = await visitor.post("/v1/auth/login", {
+    phoneNo,
+    code: "123456",
+  });
+
+  for (const refused of [signInScreen, generalScreen, login]) {
+    assert.equal(refused.status, 404);
+    assert.equal(refused.body.error?.code, "PHONE_NOT_REGISTERED");
+  }
+  assert.equal(visitor.signedIn, false);
+});
+
 await test("a visitor who is not signed in is nobody, and is refused what needs an account", async () => {
   const visitor = flow.visitor();
   assert.equal(await visitor.whoAmI(), null);

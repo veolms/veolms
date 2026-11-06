@@ -101,6 +101,8 @@ export interface Course {
   slug?: string;
   createdAt?: string;
   updatedAt?: string;
+  /** Its place in the order an admin set (0 first); null when not placed. */
+  sortPosition?: number | null;
   deletedAt?: string;
   isApi?: boolean;
   creatorId?: string | null;
@@ -382,6 +384,10 @@ export function getVisibleCourses(
   }
   if (role === "creator" && sort === "latest") {
     result = [...result].sort((a, b) => {
+      // The admin's order first; the most recently changed after it.
+      const placeA = a.sortPosition ?? Number.POSITIVE_INFINITY;
+      const placeB = b.sortPosition ?? Number.POSITIVE_INFINITY;
+      if (placeA !== placeB) return placeA < placeB ? -1 : 1;
       const dateA = a.updatedAt || a.createdAt;
       const dateB = b.updatedAt || b.createdAt;
       const timeA = dateA ? new Date(dateA).getTime() : 0;
