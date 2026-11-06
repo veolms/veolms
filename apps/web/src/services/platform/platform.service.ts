@@ -7,7 +7,7 @@ import type {
   UpdatePlatformSettingsRequest,
 } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
-import { mediaService } from "../media/media.service";
+import { mediaService } from "../media";
 
 export const platformService = {
   /** The settings in force, saved or default (administrators only). */

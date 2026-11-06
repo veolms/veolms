@@ -65,7 +65,9 @@ export function LogoUploadField({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileProblem, setFileProblem] = useState<string | null>(null);
-  const [logoFailed, setLogoFailed] = useState(false);
+  // The address that failed to load: a new logo (a new address) is tried.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const logoFailed = logoUrl !== null && failedUrl === logoUrl;
   const busy = upload.isPending || remove.isPending;
   const error =
     fileProblem ??
@@ -86,10 +88,7 @@ export function LogoUploadField({
     setFileProblem(problem);
     if (problem) return;
     upload.mutate(file, {
-      onSuccess: () => {
-        setLogoFailed(false);
-        setNotice?.(uploadedNotice);
-      },
+      onSuccess: () => setNotice?.(uploadedNotice),
     });
   };
 
@@ -109,7 +108,7 @@ export function LogoUploadField({
           <img
             alt={alt}
             className="block h-8 w-auto max-w-60"
-            onError={() => setLogoFailed(true)}
+            onError={() => setFailedUrl(logoUrl)}
             src={logoUrl}
           />
         ) : (
@@ -162,10 +161,7 @@ export function LogoUploadField({
               upload.reset();
               setFileProblem(null);
               remove.mutate(undefined, {
-                onSuccess: () => {
-                  setLogoFailed(false);
-                  setNotice?.(removedNotice);
-                },
+                onSuccess: () => setNotice?.(removedNotice),
               });
             }}
           >
