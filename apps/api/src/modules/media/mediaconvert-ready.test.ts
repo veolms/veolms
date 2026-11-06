@@ -9,6 +9,7 @@ void test("READY publishes output without completion and later events preserve i
     video_id: "550e8400-e29b-41d4-a716-446655440001",
     status: "processing",
     output_prefix: "protected/test",
+    progress_percent: 0,
   };
   const asset: Record<string, unknown> = { status: "processing" };
   const outputs: Array<Record<string, unknown>> = [];
@@ -16,12 +17,20 @@ void test("READY publishes output without completion and later events preserve i
     selectFrom(table: string) {
       const query = {
         select: () => query,
+        leftJoin: () => query,
         where: () => query,
         orderBy: () => query,
         limit: () => query,
         forUpdate: () => query,
         async executeTakeFirst() {
           if (table === "video_jobs") return { ...job };
+          if (table === "media_assets")
+            return {
+              media_status: asset.status,
+              job_id: job.id,
+              job_status: job.status,
+              progress_percent: job.progress_percent,
+            };
           if (table === "video_outputs") return outputs.at(-1);
           return undefined;
         },
@@ -39,6 +48,8 @@ void test("READY publishes output without completion and later events preserve i
         async execute() {
           if (table === "video_jobs") {
             if (typeof values.status === "string") job.status = values.status;
+            if (typeof values.progress_percent === "number")
+              job.progress_percent = values.progress_percent;
           } else if (table === "media_assets") Object.assign(asset, values);
           else if (table === "video_outputs")
             Object.assign(outputs.at(-1)!, values);
@@ -90,6 +101,8 @@ void test("READY publishes output without completion and later events preserve i
         videoId: job.video_id,
         masterPlaylistPath: "s3://bucket/protected/test/video.mpd",
         jobPercentComplete: 40,
+        progressPercent: status === "READY" ? 100 : 40,
+        overallProgressPercent: 40,
       },
     };
     const rawBody = JSON.stringify(body);
@@ -107,7 +120,14 @@ void test("READY publishes output without completion and later events preserve i
   manifestExists = true;
   assert.equal((await deliver("READY")).status, "ready");
   assert.equal(job.status, "ready");
+  assert.equal(job.progress_percent, 40);
   assert.equal(asset.status, "ready");
+  assert.deepEqual(await service.getVideoJobProgress(job.video_id), {
+    status: "ready",
+    playbackReady: true,
+    progressPercent: 40,
+    error: null,
+  });
   assert.equal(outputs.length, 1);
   assert.equal(
     outputs[0]?.master_playlist_path,
@@ -137,6 +157,13 @@ void test("READY publishes output without completion and later events preserve i
   assert.equal(job.status, "ready");
   assert.equal((await deliver("COMPLETE")).status, "completed");
   assert.equal(job.status, "completed");
+  assert.equal(job.progress_percent, 100);
+  assert.deepEqual(await service.getVideoJobProgress(job.video_id), {
+    status: "completed",
+    playbackReady: true,
+    progressPercent: 100,
+    error: null,
+  });
   assert.equal(outputs.length, 1);
   assert.equal(
     outputs[0]?.master_playlist_path,
