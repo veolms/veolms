@@ -103,6 +103,7 @@ export function CourseReorderPanel({
                   setDragHandleId(null);
                 }}
                 data-course-reorder-item={id}
+                data-course-drop-id={id}
                 className={`group/line flex items-center gap-2 rounded-xl border bg-(--surface) p-2 transition-colors sm:gap-3 sm:pr-2.5 ${
                   dragging
                     ? "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] opacity-60"
@@ -110,20 +111,24 @@ export function CourseReorderPanel({
                 }`}
               >
                 <span
-                  className={`flex shrink-0 items-center justify-center rounded-md p-1 text-(--muted) [@media(pointer:coarse)]:hidden ${
+                  className={`flex shrink-0 touch-none items-center justify-center rounded-md p-1 text-(--muted) select-none [@media(pointer:coarse)]:size-11 ${
                     saving
                       ? "pointer-events-none opacity-30"
                       : "cursor-grab hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) active:cursor-grabbing"
                   }`}
                   onPointerEnter={() => setDragHandleId(id)}
-                  onPointerDown={() => setDragHandleId(id)}
+                  onPointerDown={(event) => {
+                    if (saving) return;
+                    setDragHandleId(id);
+                    drag.pointerHandlersFor(id).onPointerDown(event);
+                  }}
                   onPointerLeave={() => {
                     if (!drag.draggedId) setDragHandleId(null);
                   }}
                   title="Drag to reorder"
                   aria-hidden="true"
                 >
-                  <DotsSixVertical size={18} />
+                  <DotsSixVertical size={20} />
                 </span>
                 <span className="w-5 shrink-0 text-right text-[0.75rem] font-semibold tabular-nums text-(--muted) sm:w-6">
                   {index + 1}

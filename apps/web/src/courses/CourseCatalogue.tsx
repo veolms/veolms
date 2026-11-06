@@ -573,6 +573,7 @@ export function CourseCatalogue({
                   draggable={!reorder.saving}
                   {...gridDrag.handlersFor(course.id, course.title)}
                   data-course-reorder-card={course.id}
+                  data-course-drop-id={course.id}
                   className={`min-w-0 cursor-grab transition-opacity active:cursor-grabbing ${
                     gridDrag.draggedId === course.id ? "opacity-40" : ""
                   }`}
