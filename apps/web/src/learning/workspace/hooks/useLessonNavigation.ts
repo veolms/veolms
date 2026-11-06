@@ -1,4 +1,5 @@
 import {
+  startTransition,
   useCallback,
   useEffect,
   type Dispatch,
@@ -274,22 +275,29 @@ export function useLessonNavigation({
         roundedProgress >= LESSON_PROGRESS_COMPLETE_THRESHOLD
           ? 100
           : roundedProgress;
-      // Not a transition. On 2026-10-22 one here looped until React stopped
-      // with "Maximum update depth exceeded" (error #185) after a seek:
-      // every progress change registered the persistent player again, a
-      // sync update in the layout's commit; the transition kept losing to
-      // those renders and was replayed on each, and `recordProgress` stamped
-      // a new time on every replay. Neither holds any more (progress reaches
-      // the player through `liveLessonProgress`, and a replayed
-      // `recordProgress` gives back the same state); seeking was checked
-      // with the transition put back, but it has not been restored.
-      setLocalLessonProgress((current) => {
-        if (current[selectedLesson] === nextProgress) return current;
-        return { ...current, [selectedLesson]: nextProgress };
+      // A transition, so React renders the lesson page for the new percent
+      // in small slices: as one task it took 25 to 60 ms once per percent
+      // (every second on a short lesson) and dropped frames of a scroll
+      // while playing (measured 2026-11-02).
+      //
+      // On 2026-10-22 a transition here looped until React stopped with
+      // "Maximum update depth exceeded" (error #185) after a seek: every
+      // progress change registered the persistent player again, a sync
+      // update in the layout's commit; the transition kept losing to those
+      // renders and was replayed on each, and `recordProgress` stamped a new
+      // time on every replay. Neither holds any more: progress reaches the
+      // player through `liveLessonProgress`, and a replayed `recordProgress`
+      // gives back the same state. Check seeking while playing again if
+      // either changes.
+      startTransition(() => {
+        setLocalLessonProgress((current) => {
+          if (current[selectedLesson] === nextProgress) return current;
+          return { ...current, [selectedLesson]: nextProgress };
+        });
+        // Kept by `recordProgress` under the learner's account; the course
+        // cards read it from there (`catalogueCardProgress.ts`).
+        recordProgress(selectedLesson, nextProgress);
       });
-      // Kept by `recordProgress` under the learner's account; the course
-      // cards read it from there (`catalogueCardProgress.ts`).
-      recordProgress(selectedLesson, nextProgress);
     },
     [recordProgress, selectedLesson, setLocalLessonProgress],
   );

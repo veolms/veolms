@@ -59,6 +59,15 @@ export const googleOneTapLoginRequestSchema = z.object({
   }),
 });
 
+export const googleOneTapNonceResponseSchema = z.object({
+  nonce: z.string().min(16).meta({
+    description:
+      "Single-use cryptographic nonce to embed in google.accounts.id.initialize().",
+  }),
+  expiresAt: z.string().datetime().meta({
+    description: "ISO-8601 UTC timestamp after which the nonce is invalid.",
+  }),
+});
 export const oauthRegisterRequestSchema = oauthCallbackRequestSchema.extend({
   username: z
     .string()
@@ -126,19 +135,6 @@ export const sessionResponseSchema = z.object({
   }),
   isCurrent: z.boolean(),
   lastUsedAt: z.string().max(40),
-});
-
-/**
- * A student at the academy's device limit, signing in on one more: the
- * devices they are signed in on, one of which they sign out to continue.
- */
-export const deviceLimitResponseSchema = z.object({
-  limit: z.number().int().positive().nullable(),
-  sessions: sessionResponseSchema.array(),
-});
-
-export const resolveDeviceLimitRequestSchema = z.object({
-  sessionId: z.uuid().describe("The session to sign out to make room."),
 });
 
 export const sessionParamsSchema = z.object({
@@ -344,10 +340,6 @@ export type AuthMessageResponse = z.output<typeof authMessageResponseSchema>;
 export type OtpSendResponse = z.output<typeof otpSendResponseSchema>;
 export type SessionParams = z.input<typeof sessionParamsSchema>;
 export type SessionResponse = z.output<typeof sessionResponseSchema>;
-export type DeviceLimitResponse = z.output<typeof deviceLimitResponseSchema>;
-export type ResolveDeviceLimitRequest = z.input<
-  typeof resolveDeviceLimitRequestSchema
->;
 export type PasskeyRegisterVerifyRequest = z.input<
   typeof passkeyRegisterVerifyRequestSchema
 >;
@@ -360,3 +352,6 @@ export type PasskeyRegisterVerifyResponse = z.output<
 export type BackupCodesResponse = z.output<typeof backupCodesResponseSchema>;
 export type TotpVerifyRequest = z.input<typeof totpVerifyRequestSchema>;
 export type TotpEnableRequest = z.input<typeof totpEnableRequestSchema>;
+export type GoogleOneTapNonceResponse = z.output<
+  typeof googleOneTapNonceResponseSchema
+>;

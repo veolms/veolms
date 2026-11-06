@@ -83,7 +83,12 @@ import {
   writeVolumePreference,
 } from "./lessonPlayerPersistence";
 import { createLearningLessonVideoSource } from "./lessonVideoSource";
-import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
+import { claimNumberKeysForVideo } from "../../keyboardShortcuts";
+import {
+  MINI_PLAYER_THEME,
+  useLearningPlayerTheme,
+  usePlayerLayoutPreferences,
+} from "./useLearningPlayerTheme";
 import { useLearningSeekInterval } from "./useLearningSeekInterval";
 import { MiniPlayerControls } from "./MiniPlayerControls";
 import {
@@ -146,6 +151,22 @@ const LESSON_PLAYER_SHORTCUTS = {
   seekForwardLarge: false,
   toggleTheaterMode: false,
   togglePictureInPicture: false,
+} as const;
+/** 1-9 and 0 jump to that tenth without Alt (settings > Advanced). */
+const LESSON_PLAYER_SHORTCUTS_WITH_NUMBER_KEYS = {
+  ...LESSON_PLAYER_SHORTCUTS,
+  seekToPercentage: [
+    "Digit0",
+    "Digit1",
+    "Digit2",
+    "Digit3",
+    "Digit4",
+    "Digit5",
+    "Digit6",
+    "Digit7",
+    "Digit8",
+    "Digit9",
+  ],
 } as const;
 
 type FullscreenCoursePanelStyle = CSSProperties & {
@@ -541,7 +562,17 @@ export function LessonVideoPlayer({
     }
     goToNextLesson();
   }, [goToNextLesson, lessonQuizOffered, showEndScreen]);
-  const playerTheme = useLearningPlayerTheme();
+  const lessonPlayerTheme = useLearningPlayerTheme();
+  // The mini window wears no theme (see MINI_PLAYER_THEME).
+  const playerTheme =
+    presentation === "mini" ? MINI_PLAYER_THEME : lessonPlayerTheme;
+  // The mini window, over other pages, leaves their number keys alone.
+  const numberKeysSeekVideo =
+    usePlayerLayoutPreferences().numberKeysSeekVideo && presentation === "full";
+  useEffect(
+    () => (numberKeysSeekVideo ? claimNumberKeysForVideo() : undefined),
+    [numberKeysSeekVideo],
+  );
   const mediaKey = resumePersistenceKey ?? media.fileName;
   const activeMediaKeyRef = useRef(mediaKey);
   const requestedMediaKeyRef = useRef(mediaKey);
@@ -1634,10 +1665,18 @@ export function LessonVideoPlayer({
             article={reading}
             minimizeControl={
               onMinimize ? (
-                <LessonPlayerMinimizeControl
-                  icon={<MinimizeIcon size={22} />}
-                  onMinimize={minimizeReadingFromControl}
-                />
+                // In the theme's shape, as over a video (see the controls
+                // row's `data-player-theme`).
+                <div
+                  className="contents"
+                  data-player-theme={playerTheme.id}
+                  style={getPlayerThemeStyle(playerTheme)}
+                >
+                  <LessonPlayerMinimizeControl
+                    icon={<MinimizeIcon size={22} />}
+                    onMinimize={minimizeReadingFromControl}
+                  />
+                </div>
               ) : undefined
             }
             clearBottom
@@ -1919,7 +1958,11 @@ export function LessonVideoPlayer({
       ariaLabel={`Lesson video player for ${lessonTitle}`}
       theaterMode={theaterMode}
       onTheaterModeChange={handleTheaterModeChange}
-      shortcuts={LESSON_PLAYER_SHORTCUTS}
+      shortcuts={
+        numberKeysSeekVideo
+          ? LESSON_PLAYER_SHORTCUTS_WITH_NUMBER_KEYS
+          : LESSON_PLAYER_SHORTCUTS
+      }
       seekIntervalSeconds={seekIntervalSeconds}
       emptyTapBehavior="responsive"
       controlsIdleDelay={LESSON_PLAYER_CONTROLS_IDLE_DELAY_MS}
@@ -2043,6 +2086,7 @@ export function LessonVideoPlayer({
             canGoNext={canGoNext}
             canGoPrevious={canGoPrevious}
             controlsSuppressed={chromeSuppressed}
+            endScreenOpen={endScreenVisible}
             onGoNext={onGoNext}
             onGoPrevious={onGoPrevious}
           />
@@ -2086,6 +2130,8 @@ export function LessonVideoPlayer({
             courseLessonsSidePanel={courseLessonsSidePanel}
             courseLessonsBottomSheet={courseLessonsBottomSheet}
             lessonTitle={lessonTitle}
+            lessonIndex={lessonIndex}
+            totalLessons={totalLessons}
             chaptersPanelHost={chaptersPanelHost}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}

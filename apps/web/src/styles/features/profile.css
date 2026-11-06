@@ -1162,23 +1162,12 @@
   font-weight: 720;
 }
 
-.settings-profile__verification-dialog-field input {
-  width: 100%;
-  min-height: 54px;
-  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
-  border-radius: 11px;
-  padding: 0 16px;
-  color: var(--text);
-  background: var(--canvas);
-  font: inherit;
-  font-size: 1.05rem;
-  font-weight: 720;
-  letter-spacing: 0.28em;
-  text-align: center;
-  caret-color: var(--accent);
-}
+/* The field holds only OtpCodeInput: six drawn boxes under one invisible
+   input. Rules for that input from when the code was one visible field
+   (a border, a background, 54px high) drew it as a second, empty box over
+   the six, so they are gone; the input styles itself.
 
-/* The code boxes are styled by the login page's stylesheet, which this page
+   The code boxes are styled by the login page's stylesheet, which this page
    does not load. These rules used to target a class the dialog no longer
    has, so the boxes stacked vertically with their screen-reader labels
    showing. */
@@ -1242,17 +1231,6 @@
 .settings-profile__verification-dialog-card .auth-otp__digit:disabled {
   color: var(--muted);
   background: color-mix(in srgb, var(--surface) 62%, transparent);
-}
-
-.settings-profile__verification-dialog-field input::placeholder {
-  color: var(--muted);
-  opacity: 0.65;
-}
-
-.settings-profile__verification-dialog-field input:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
-  outline-offset: 2px;
-  border-color: var(--accent);
 }
 
 .settings-profile__verification-dialog-field small {

@@ -398,9 +398,20 @@ export async function upsertProgressAndAccrueActivity(
       on conflict (user_id, course_id, lesson_id) do update set
         progress_percent = GREATEST(learning_progress.progress_percent, EXCLUDED.progress_percent),
         -- The last point watched, not the furthest: a part watched again
-        -- moves it back. A row sent without one keeps the stored position.
-        position_seconds = COALESCE(EXCLUDED.position_seconds, learning_progress.position_seconds),
-        position_updated_at = COALESCE(EXCLUDED.position_updated_at, learning_progress.position_updated_at),
+        -- moves it back. A row sent without one keeps the stored position,
+        -- and so does one older than it: a position another device held
+        -- back (offline, a failed request) and sent late does not replace
+        -- where the learner has been since. GREATEST skips a NULL.
+        position_seconds = CASE
+          WHEN EXCLUDED.position_updated_at IS NOT NULL
+            AND (
+              learning_progress.position_updated_at IS NULL
+              OR EXCLUDED.position_updated_at >= learning_progress.position_updated_at
+            )
+          THEN EXCLUDED.position_seconds
+          ELSE learning_progress.position_seconds
+        END,
+        position_updated_at = GREATEST(learning_progress.position_updated_at, EXCLUDED.position_updated_at),
         updated_at = EXCLUDED.updated_at
       returning
         new.lesson_id as lesson_id,

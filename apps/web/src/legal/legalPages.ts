@@ -1,86 +1,61 @@
 /**
- * The academy's legal and company pages. The text here is a placeholder:
- * each page says so, and lists what its final version covers, until the
- * academy's own wording replaces it.
+ * The legal and company pages, as the logo menu and the pages' own
+ * navigation list them. Their words are in `documents/`.
  */
-export interface LegalPage {
-  path: string;
-  /** The page's name, as links and its heading show it. */
-  title: string;
-  /** One line under the heading. */
-  summary: string;
-  sections: readonly { heading: string; body: string }[];
-}
+export const LEGAL_SUPPORT_EMAIL = "contact@procodrr.com";
 
-const PLACEHOLDER_NOTE =
-  "This page is a placeholder. The academy's final text will be published here.";
+export interface LegalPageLink {
+  path: string;
+  /** The page's name in menus and the side navigation. */
+  title: string;
+  /** A shorter name, for the phone layout's chips and the footer. */
+  label: string;
+  group: "policies" | "company";
+}
 
 export const LEGAL_PAGES = [
   {
     path: "/terms",
     title: "Terms of Service",
-    summary: "The terms that apply when you use this academy.",
-    sections: [
-      { heading: "About this page", body: PLACEHOLDER_NOTE },
-      {
-        heading: "What it will cover",
-        body: "Your account, using the courses and their content, purchases and access, community rules in discussions, and how these terms change.",
-      },
-    ],
+    label: "Terms",
+    group: "policies",
   },
   {
     path: "/privacy",
     title: "Privacy Policy",
-    summary: "What we collect, why, and the choices you have.",
-    sections: [
-      { heading: "About this page", body: PLACEHOLDER_NOTE },
-      {
-        heading: "What it will cover",
-        body: "The information collected when you sign up, learn and pay; how it is used and kept; who it is shared with; and how to see, change or delete it.",
-      },
-    ],
+    label: "Privacy",
+    group: "policies",
   },
   {
-    path: "/refund-policy",
+    path: "/policies",
     title: "Refund Policy",
-    summary: "When and how a purchase can be refunded.",
-    sections: [
-      { heading: "About this page", body: PLACEHOLDER_NOTE },
-      {
-        heading: "What it will cover",
-        body: "Which purchases can be refunded, the time to ask in, how to ask, and how long a refund takes.",
-      },
-    ],
+    label: "Refunds",
+    group: "policies",
+  },
+  {
+    path: "/community-guidelines",
+    title: "Community Guidelines",
+    label: "Guidelines",
+    group: "policies",
+  },
+  {
+    path: "/about",
+    title: "About ProCodrr",
+    label: "About",
+    group: "company",
   },
   {
     path: "/contact",
     title: "Contact Us",
-    summary: "How to reach the academy.",
-    sections: [
-      { heading: "About this page", body: PLACEHOLDER_NOTE },
-      {
-        heading: "What it will cover",
-        body: "Where to write for help with your account, a purchase or a course, and when to expect an answer.",
-      },
-    ],
+    label: "Contact",
+    group: "company",
   },
   {
-    path: "/about",
-    title: "About Us",
-    summary: "Who runs this academy and why.",
-    sections: [
-      { heading: "About this page", body: PLACEHOLDER_NOTE },
-      {
-        heading: "What it will cover",
-        body: "The people behind the academy, what it teaches, and how its courses are made.",
-      },
-    ],
+    path: "/delete-account",
+    title: "Delete Your Account",
+    label: "Delete account",
+    group: "company",
   },
-] as const satisfies readonly LegalPage[];
+] as const satisfies readonly LegalPageLink[];
 
 export type LegalPagePath = (typeof LEGAL_PAGES)[number]["path"];
-
-export function findLegalPage(pathname: string): LegalPage | undefined {
-  const path = pathname.replace(/\/+$/, "") || "/";
-  return LEGAL_PAGES.find((page) => page.path === path);
-}

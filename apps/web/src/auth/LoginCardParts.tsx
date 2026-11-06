@@ -32,6 +32,13 @@ const quietTextClasses =
 export const loginLinkClasses =
   "font-semibold! text-[0.84375rem]! text-(--accent-ink,var(--accent)) hover:text-[color-mix(in_srgb,var(--accent-ink,var(--accent))_75%,var(--text))] focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:pointer-events-none disabled:opacity-50";
 
+/**
+ * A link in a footnote that is a way back into an account rather than a
+ * way in beside Google and email: quiet, like a "Forgot password?" link.
+ */
+export const loginQuietLinkClasses =
+  "font-medium text-(--muted) underline underline-offset-2 hover:text-(--text) focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:pointer-events-none disabled:opacity-50";
+
 export function LoginHeading({
   title,
   subtitle,

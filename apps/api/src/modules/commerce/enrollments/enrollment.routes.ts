@@ -84,7 +84,8 @@ const enrollmentRoutes: RoutePlugin = async (app, options) => {
         description:
           "Removes the authenticated student from a free course they enrolled in at no cost. " +
           "Learning progress is kept. Purchased, bundled, and staff-granted enrollments cannot be removed this way. " +
-          "An admin may leave any course they are enrolled in: the order is not changed, no money is returned, and their progress in the course is cleared.",
+          "An admin may leave any course they are enrolled in: the order is not changed, no money is returned, and their progress in the course is cleared. " +
+          "A shared test account may do the same, and so may every account on a local development server with LOCAL_ANY_COURSE_UNENROLL.",
         params: unenrollCourseParamsSchema,
         response: {
           200: jsonResponse(

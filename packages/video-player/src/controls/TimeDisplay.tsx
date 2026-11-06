@@ -33,9 +33,17 @@ export function TimeDisplay({
   const currentLabel = formatMediaTime(displayCurrentTime);
   const durationLabel = formatMediaTime(displayDuration);
   const remainingLabel = formatMediaTime(remainingTime);
-  const displayValue = showRemaining
-    ? `-${remainingLabel} / ${durationLabel}`
-    : `${currentLabel} / ${durationLabel}`;
+  // The time and the length each in a span of its own, so a theme can
+  // colour them apart (Cyberpunk: the time in cyan, the length muted).
+  const displayValue = (
+    <>
+      <span data-time-part="now">
+        {showRemaining ? `-${remainingLabel}` : currentLabel}
+      </span>
+      {" / "}
+      <span data-time-part="total">{durationLabel}</span>
+    </>
+  );
   const displayClassName = classNames(
     "select-none whitespace-nowrap px-1 text-xs font-medium tabular-nums text-(--video-player-control-text) focus-visible:outline-(--video-player-control-text) sm:text-sm",
     mobileInteraction && "!text-xs",

@@ -5,7 +5,11 @@ import type {
   PricingRegion,
   CouponValidationResult,
 } from "@veolms/contracts";
-import { formatMoney } from "../shared/currency.ts";
+import {
+  formatMoney,
+  minimumCardPayment,
+  minorUnitsPerMajor,
+} from "../shared/currency.ts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import { isRestrictedFreeCourse } from "../../access/index.ts";
@@ -18,6 +22,7 @@ import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
 import {
   computeCouponDiscount,
+  raiseToMinimumCharge,
   resolveCourseCharge,
 } from "./pricing.amount.ts";
 import { resolveQuizCharge } from "./quiz-pricing.amount.ts";
@@ -769,7 +774,45 @@ export function createPricingService({
     // An upgrade's credit comes off with any coupon on the other items.
     totalDiscount += upgradeCredit?.amount ?? 0;
     const totalTax = 0; // Configurable tax if needed in future
-    const totalAmount = Math.max(0, subtotalAmount - totalDiscount + totalTax);
+    let totalAmount = Math.max(0, subtotalAmount - totalDiscount + totalTax);
+
+    // A card payment has a floor ($1 on Razorpay): a total the discounts
+    // bring under it is charged at the floor, the discounts taking less.
+    const minimumMinor = minimumCardPayment(detectedCurrency);
+    const minimumCharge =
+      amountUnit === "minor"
+        ? minimumMinor
+        : Math.ceil(minimumMinor / minorUnitsPerMajor(detectedCurrency));
+    const raisedBy = raiseToMinimumCharge({
+      totalAmount,
+      discountAmount: totalDiscount,
+      minimum: minimumCharge,
+      items: calculatedItems,
+    });
+    if (raisedBy > 0) {
+      totalDiscount -= raisedBy;
+      totalAmount += raisedBy;
+      const fromCoupon = Math.min(
+        raisedBy,
+        couponValidation?.discountAmount ?? 0,
+      );
+      if (couponValidation) {
+        couponValidation = {
+          ...couponValidation,
+          discountAmount: couponValidation.discountAmount - fromCoupon,
+          message: `Discount applied. The smallest card payment is ${formatMoney(
+            minimumCharge,
+            { currency: detectedCurrency, unit: amountUnit },
+          )}.`,
+        };
+      }
+      if (upgradeCredit && raisedBy > fromCoupon) {
+        upgradeCredit = {
+          ...upgradeCredit,
+          amount: upgradeCredit.amount - (raisedBy - fromCoupon),
+        };
+      }
+    }
 
     const pricing: PricingCalculation = {
       amountUnit,
@@ -778,6 +821,7 @@ export function createPricingService({
       ...(upgradeCredit ? { upgradeCredit } : {}),
       taxAmount: totalTax,
       totalAmount,
+      ...(raisedBy > 0 ? { minimumCharge } : {}),
       currency: detectedCurrency,
       couponCode: couponValidation?.code,
       couponId,

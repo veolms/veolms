@@ -93,3 +93,30 @@ export function computeCouponDiscount(input: {
 
   return Math.min(totalDiscount, eligibleCatalogSubtotal);
 }
+
+/**
+ * Raises a total that discounts brought under the smallest card payment back
+ * up to it, taking the difference off the items' discounts (the last item's
+ * first). A total of nothing stays free, and a price under the minimum
+ * before any discount is left as it is. Returns how much was put back.
+ */
+export function raiseToMinimumCharge(input: {
+  totalAmount: number;
+  discountAmount: number;
+  minimum: number;
+  items: Array<{ discountAmount: number; finalAmount: number }>;
+}): number {
+  const { totalAmount, discountAmount, minimum, items } = input;
+  if (totalAmount <= 0 || totalAmount >= minimum) return 0;
+
+  const wanted = Math.min(minimum - totalAmount, discountAmount);
+  let left = wanted;
+  for (let i = items.length - 1; i >= 0 && left > 0; i--) {
+    const item = items[i]!;
+    const back = Math.min(left, item.discountAmount);
+    item.discountAmount -= back;
+    item.finalAmount += back;
+    left -= back;
+  }
+  return wanted - left;
+}

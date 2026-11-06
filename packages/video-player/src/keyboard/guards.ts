@@ -31,6 +31,8 @@ const NATIVE_ACTIVATION_OWNER_SELECTOR = [
 const OWNED_NAVIGATION_CODES = new Set([
   "ArrowLeft",
   "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
   "Home",
   "End",
 ]);

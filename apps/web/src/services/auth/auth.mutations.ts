@@ -32,7 +32,6 @@ import type {
 import type { ApiError } from "../../lib/api-error";
 import { autosyncManager } from "../../lib/autosync/manager";
 import { authStore } from "../../store/auth.store";
-import { askToSignOutADevice } from "../../store/deviceLimitPrompt";
 import { writeSessionPresence } from "../../store/sessionPresence";
 import {
   endPendingMfaLogin,
@@ -43,6 +42,12 @@ import { forgetAccountBrowserState } from "../../store/accountBrowserState";
 import { authKeys } from "./auth.keys";
 import { updatePublicProfileCacheFromUser } from "./auth.queries";
 import { authService, type TotpSetupResponse } from "./auth.service";
+import {
+  recordSignInFailure,
+  sendPendingSignInFailures,
+  startSignInAttempt,
+  type SignInAttempt,
+} from "./sign-in-failures";
 // Deliberately not the learning-interactions barrel: these two modules are
 // dependency-light, while the barrel drags the optimistic cache coordinators
 // into the startup bundle of every page.
@@ -50,25 +55,6 @@ import { courseKeys } from "../courses/courses.keys";
 import { learningInteractionKeys } from "../learning-interactions/learning-interactions.keys";
 import { resetRegisteredInteractionState } from "../learning-interactions/interaction-reset-registry";
 import { trackAnalyticsEvent } from "../../lib/analytics-track";
-
-/**
- * A student at the academy's device limit is asked to sign a device out;
- * once they do, the sign-in finishes as if it had gone through at once, so
- * whatever was waiting on it (the login card, the OAuth callback, One Tap)
- * carries on as usual.
- */
-async function signInMakingRoom(
-  signIn: () => Promise<LoginResponse>,
-): Promise<LoginResponse> {
-  try {
-    return await signIn();
-  } catch (error) {
-    if ((error as Partial<ApiError> | null)?.code !== "DEVICE_LIMIT_REACHED") {
-      throw error;
-    }
-    return askToSignOutADevice(error);
-  }
-}
 
 function persistAuthenticatedSession(
   queryClient: QueryClient,
@@ -96,6 +82,7 @@ function persistAuthenticatedSession(
     mobileVerified: data.user.mobileVerified,
     roles: data.user.roles,
     isTestAccount: data.user.isTestAccount,
+    localAnyCourseUnenroll: data.user.localAnyCourseUnenroll,
     mfaVerified: !data.mfaRequired,
     totpEnabled: data.totpEnabled,
     passkeyEnabled: data.passkeyEnabled,
@@ -199,8 +186,21 @@ export function cancelPendingLogin(queryClient: QueryClient): Promise<void> {
 }
 
 export function useSendOtp() {
-  return useMutation<OtpSendResponse, ApiError, OtpSendRequest>({
+  return useMutation<OtpSendResponse, ApiError, OtpSendRequest, SignInAttempt>({
     mutationFn: (payload) => authService.sendOtp(payload),
+    onMutate: startSignInAttempt,
+    onSuccess: () => {
+      // The server answered: failures kept from earlier attempts can go.
+      void sendPendingSignInFailures();
+    },
+    onError: (error, payload, attempt) => {
+      recordSignInFailure(
+        "otp-send",
+        error,
+        attempt,
+        payload.email ?? payload.phoneNo,
+      );
+    },
   });
 }
 
@@ -253,10 +253,19 @@ export function useVerifyEmail() {
 export function useLogin() {
   const queryClient = useQueryClient();
 
-  return useMutation<LoginResponse, ApiError, LoginRequest>({
-    mutationFn: (payload) => signInMakingRoom(() => authService.login(payload)),
+  return useMutation<LoginResponse, ApiError, LoginRequest, SignInAttempt>({
+    mutationFn: (payload) => authService.login(payload),
+    onMutate: startSignInAttempt,
     onSuccess: (data) => {
       persistAuthenticatedSession(queryClient, data, "otp");
+    },
+    onError: (error, payload, attempt) => {
+      recordSignInFailure(
+        "login",
+        error,
+        attempt,
+        payload.email ?? payload.phoneNo,
+      );
     },
   });
 }
@@ -264,11 +273,20 @@ export function useLogin() {
 export function useRegister() {
   const queryClient = useQueryClient();
 
-  return useMutation<LoginResponse, ApiError, RegisterRequest>({
+  return useMutation<LoginResponse, ApiError, RegisterRequest, SignInAttempt>({
     mutationFn: (payload) => authService.register(payload),
+    onMutate: startSignInAttempt,
     onSuccess: (data) => {
       persistAuthenticatedSession(queryClient, data, "otp");
       trackAnalyticsEvent("signup_completed");
+    },
+    onError: (error, payload, attempt) => {
+      recordSignInFailure(
+        "register",
+        error,
+        attempt,
+        payload.email ?? payload.phoneNo,
+      );
     },
   });
 }
@@ -312,31 +330,53 @@ export function useSelectAvatar() {
 }
 
 export function useOauthUrl() {
-  return useMutation<OauthUrlResponse, ApiError, OauthUrlRequest>({
+  return useMutation<
+    OauthUrlResponse,
+    ApiError,
+    OauthUrlRequest,
+    SignInAttempt
+  >({
     mutationFn: (payload) => authService.getOauthUrl(payload),
+    onMutate: startSignInAttempt,
+    onError: (error, _payload, attempt) => {
+      recordSignInFailure("oauth-url", error, attempt);
+    },
   });
 }
 
 export function useOauthLogin() {
   const queryClient = useQueryClient();
 
-  return useMutation<LoginResponse, ApiError, OauthLoginRequest>({
-    mutationFn: (payload) =>
-      signInMakingRoom(() => authService.oauthLogin(payload)),
-    onSuccess: (data) => {
-      persistAuthenticatedSession(queryClient, data, "oauth");
+  return useMutation<LoginResponse, ApiError, OauthLoginRequest, SignInAttempt>(
+    {
+      mutationFn: (payload) => authService.oauthLogin(payload),
+      onMutate: startSignInAttempt,
+      onSuccess: (data) => {
+        persistAuthenticatedSession(queryClient, data, "oauth");
+      },
+      onError: (error, _payload, attempt) => {
+        recordSignInFailure("oauth-login", error, attempt);
+      },
     },
-  });
+  );
 }
 
 export function useGoogleOneTapLogin() {
   const queryClient = useQueryClient();
 
-  return useMutation<LoginResponse, ApiError, GoogleOneTapLoginRequest>({
-    mutationFn: (payload) =>
-      signInMakingRoom(() => authService.googleOneTapLogin(payload)),
+  return useMutation<
+    LoginResponse,
+    ApiError,
+    GoogleOneTapLoginRequest,
+    SignInAttempt
+  >({
+    mutationFn: (payload) => authService.googleOneTapLogin(payload),
+    onMutate: startSignInAttempt,
     onSuccess: (data) => {
       persistAuthenticatedSession(queryClient, data, "google");
+    },
+    onError: (error, _payload, attempt) => {
+      recordSignInFailure("google-one-tap", error, attempt);
     },
   });
 }
@@ -479,23 +519,6 @@ export function useLogout() {
   return useMutation<AuthMessageResponse, ApiError, void>({
     mutationFn: () => authService.logout(),
     onSettled: (_data, error) => clearSignedOutState(queryClient, !error),
-  });
-}
-
-export function useDeactivateAccount() {
-  const queryClient = useQueryClient();
-
-  return useMutation<AuthMessageResponse, ApiError, void>({
-    mutationFn: () => authService.deactivateAccount(),
-    onSettled: () => {
-      authStore.clearAuth();
-      resetRegisteredInteractionState();
-      clearCoursePlayerSessions();
-
-      // A deactivated account must not leave protected data in the client
-      // cache, especially if another account signs in in the same tab.
-      queryClient.clear();
-    },
   });
 }
 

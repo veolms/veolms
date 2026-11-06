@@ -49,6 +49,24 @@ export function getAcademyRoutes(): RouteConfigEntry {
       caseSensitive: true,
     }),
     route("progress", marker, { id: "progress", caseSensitive: true }),
+    // Help and feedback: the learner's reports and feedback, and the team's
+    // Support page. Each route renders its own page inside the shell.
+    route("support", "routes/support/home.tsx", {
+      id: "support",
+      caseSensitive: true,
+    }),
+    route("support/new", "routes/support/new.tsx", {
+      id: "support-new",
+      caseSensitive: true,
+    }),
+    route("support/:ticketId", "routes/support/ticket.tsx", {
+      id: "support-ticket",
+      caseSensitive: true,
+    }),
+    route("support-inbox/:inboxTab?", "routes/support/inbox.tsx", {
+      id: "support-inbox",
+      caseSensitive: true,
+    }),
     route("progress/:username", marker, {
       id: "progress-learner",
       caseSensitive: true,

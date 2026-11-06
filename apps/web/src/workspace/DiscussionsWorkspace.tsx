@@ -67,6 +67,7 @@ import { DiscussionAvatar } from "../learning/DiscussionAvatar";
 import type { DiscussionContent } from "../learning/discussion-editor/types";
 import { formatRelativeTime } from "../learning/learning-notes.adapter";
 import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
+import { discussionCommentPath } from "../learning/discussionLinks";
 import {
   Drawer,
   DrawerContent,
@@ -469,16 +470,11 @@ function getDiscussionThreadDestination(
       : thread.id;
   // The lesson shows the comment at the top of its discussion and highlights
   // it, rather than opening it as a thread.
-  const basePath = getCoursePlayerPath(thread.courseId, 1, {
+  return discussionCommentPath({
+    courseId: thread.courseId,
+    lessonId: thread.lessonId,
     threadId,
-    threadFocus: "comment",
   });
-  if (!thread.lessonId) return basePath;
-
-  const [pathname, query = ""] = basePath.split("?", 2);
-  const search = new URLSearchParams(query);
-  search.set("lessonId", thread.lessonId);
-  return `${pathname}?${search.toString()}`;
 }
 
 function getDiscussionNoteDestination(
@@ -776,7 +772,7 @@ function DiscussionWorkspaceIdentity({
   return (
     <div className="discussion-thread__author discussion-thread__selectable-text">
       <span className="discussion-thread__author-name">
-        {thread.isOwn ? "You" : thread.author}
+        {thread.isOwn ? "You" : <HighlightedText text={thread.author} />}
       </span>
       {thread.authorUsername && (
         <>
@@ -787,7 +783,8 @@ function DiscussionWorkspaceIdentity({
             ·
           </span>
           <span className="discussion-thread__author-username">
-            @{thread.authorUsername.replace(/^@+/, "")}
+            @
+            <HighlightedText text={thread.authorUsername.replace(/^@+/, "")} />
           </span>
         </>
       )}
@@ -2562,7 +2559,7 @@ export function DiscussionsWorkspace({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
-  const { openReport, reportDialog } = useDiscussionWorkspaceReport(setNotice);
+  const { openReport } = useDiscussionWorkspaceReport();
   const openMobileActions = useCallback(
     (card: DiscussionWorkspaceCard, destination: string | null) => {
       setMobileActionTarget({ card, destination });
@@ -3272,7 +3269,6 @@ export function DiscussionsWorkspace({
             }
           />
         }
-        {reportDialog}
       </div>
     </SearchHighlightProvider>
   );

@@ -13,6 +13,8 @@ import {
 } from "./setup/flow-app.ts";
 
 const flow = await startFlowApp();
+// Loaded after the flow app set up the test environment.
+const { config } = await import("../../src/config.ts");
 
 await test("a new learner signs up with the code emailed to them and is signed in as a student", async () => {
   const learner = newLearner();
@@ -197,30 +199,90 @@ await test("signing out of every other device keeps this one and ends the rest",
   assert.equal(await laptop.whoAmI(), null);
 });
 
-await test("with a limit of one device, a second device is held until the first signs out", async () => {
+await test("at the device limit, a new device signs in and the one used longest ago is signed out", async () => {
   const admin = await signedInAdmin(flow);
   const limit = await admin.patch("/v1/platform/settings", {
-    security: { maxDevicesPerStudent: 1 },
+    security: { maxDevicesPerStudent: 2 },
   });
   assert.equal(limit.status, 200);
   try {
-    const { client: phone, learner } = await signedUpLearner(flow);
+    const { client: phone, learner, userId } = await signedUpLearner(flow);
     const laptop = flow.visitor();
+    assert.equal((await laptop.signIn(learner.email)).status, 200);
 
-    const held = await laptop.signIn(learner.email);
-    assert.equal(held.status, 409);
-    assert.equal(held.body.error?.code, "DEVICE_LIMIT_REACHED");
+    // The phone signed in first but is still in use; the laptop is the
+    // device used longest ago.
+    const first = await flow.database
+      .selectFrom("sessions")
+      .select("id")
+      .where("user_id", "=", userId)
+      .orderBy("created_at")
+      .executeTakeFirstOrThrow();
+    await flow.database
+      .updateTable("sessions")
+      .set({ last_used_at: new Date(Date.now() + 60_000) })
+      .where("id", "=", first.id)
+      .execute();
+
+    const tablet = flow.visitor();
+    const signIn = await tablet.signIn(learner.email);
+    assert.equal(signIn.status, 200);
+    assert.equal(await tablet.whoAmI(), userId);
+    assert.equal(await phone.whoAmI(), userId);
     assert.equal(await laptop.whoAmI(), null);
-
-    await phone.post("/v1/auth/logout");
-    const retry = await flow.visitor().signIn(learner.email);
-    assert.equal(retry.status, 200);
   } finally {
     const reset = await admin.patch("/v1/platform/settings", {
       security: { maxDevicesPerStudent: null },
     });
     assert.equal(reset.status, 200);
   }
+});
+
+await test("sign-in also works sent as text/plain (no CORS preflight) from the site, and not from another site", async () => {
+  const { learner, userId } = await signedUpLearner(flow);
+  const browser = flow.visitor();
+  const site = config.CORS_ORIGINS[0] ?? "https://procodrr.dev";
+  const plain = (url: string, body: unknown, origin = site) =>
+    browser.request("POST", url, JSON.stringify(body), {
+      "content-type": "text/plain;charset=UTF-8",
+      origin,
+    });
+
+  const elsewhere = await plain(
+    "/v1/auth/otp/send",
+    { email: learner.email },
+    "https://another-site.example",
+  );
+  assert.equal(elsewhere.status, 403);
+  assert.equal(elsewhere.body.error?.code, "ORIGIN_NOT_ALLOWED");
+
+  const broken = await browser.request("POST", "/v1/auth/otp/send", "{oops", {
+    "content-type": "text/plain;charset=UTF-8",
+    origin: site,
+  });
+  assert.equal(broken.status, 400);
+
+  const sent = await plain("/v1/auth/otp/send", { email: learner.email });
+  assert.equal(sent.status, 200);
+  const code = flow.email.lastCodeFor(learner.email);
+
+  const signIn = await plain("/v1/auth/login", { email: learner.email, code });
+  assert.equal(signIn.status, 200);
+  assert.equal(await browser.whoAmI(), userId);
+
+  const report = await plain("/v1/auth/sign-in-failures", {
+    reports: [
+      {
+        request: "otp-send",
+        kind: "unreachable",
+        code: "ERR_NETWORK",
+        occurredAt: new Date().toISOString(),
+        elapsedMs: 150,
+        online: true,
+      },
+    ],
+  });
+  assert.equal(report.status, 200);
 });
 
 await flow.close();

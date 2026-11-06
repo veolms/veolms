@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import type { ApiError } from "../lib/api-client";
 import {
+  authService,
   useAuthConfig,
   useCurrentUser,
   useGoogleOneTapLogin,
@@ -31,6 +32,7 @@ interface GoogleIdentity {
     cancel_on_tap_outside: boolean;
     use_fedcm_for_prompt: boolean;
     itp_support: boolean;
+    nonce?: string;
   }): void;
   prompt(): void;
   cancel(): void;
@@ -181,50 +183,77 @@ export function GoogleOneTap({
 
     let active = true;
 
-    const cancelIdleLoad = scheduleIdleWork(() => {
-      void loadGoogleIdentityServices()
-        .then(() => {
-          const googleIdentity = window.google?.accounts?.id;
-          if (!active || !googleIdentity) return;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
-          googleIdentity.initialize({
-            client_id: clientId,
-            auto_select: false,
-            cancel_on_tap_outside: true,
-            use_fedcm_for_prompt: true,
-            itp_support: true,
-            callback: (response) => {
-              if (!active || !response.credential) return;
+    async function initializeWithFreshNonce() {
+      const [, nonceData] = await Promise.all([
+        loadGoogleIdentityServices(),
+        authService.getGoogleOneTapNonce().catch(() => null),
+      ]);
 
-              onPendingChangeRef.current?.(true);
-              loginRef.current(
-                { credential: response.credential },
-                {
-                  onSuccess: (result) => {
-                    rememberGoogleSignIn(result.user);
-                    navigateRef.current(
-                      resolvePostAuthPath(result, returnToRef.current),
-                      { replace: true },
-                    );
-                  },
-                  onError: (error) => {
-                    onPendingChangeRef.current?.(false);
-                    onErrorRef.current?.(toOneTapErrorMessage(error));
-                  },
-                },
-              );
+      const googleIdentity = window.google?.accounts?.id;
+      // Fail safe: if nonce fetch failed, do not show the prompt.
+      if (!active || !googleIdentity || !nonceData?.nonce) return;
+
+      googleIdentity.initialize({
+        client_id: clientId,
+        nonce: nonceData.nonce,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        use_fedcm_for_prompt: true,
+        itp_support: true,
+        callback: (response) => {
+          if (!active || !response.credential) return;
+
+          authService.clearGoogleOneTapNonce();
+          onPendingChangeRef.current?.(true);
+          loginRef.current(
+            { credential: response.credential },
+            {
+              onSuccess: (result) => {
+                rememberGoogleSignIn(result.user);
+                navigateRef.current(
+                  resolvePostAuthPath(result, returnToRef.current),
+                  { replace: true },
+                );
+              },
+              onError: (error) => {
+                onPendingChangeRef.current?.(false);
+                onErrorRef.current?.(toOneTapErrorMessage(error));
+              },
             },
-          });
-          oneTapPromptStarted = true;
-          googleIdentity.prompt();
-        })
-        .catch(() => {
-          // The existing Google button remains the fallback.
-        });
+          );
+        },
+      });
+      oneTapPromptStarted = true;
+      googleIdentity.prompt();
+
+      // Schedule a refresh just before the cached nonce evicts (expiresAt - 5 min).
+      // The timer callback clears the cache so the server issues a new nonce.
+      const expiresAtMs = new Date(nonceData.expiresAt).getTime();
+      const refreshIn = expiresAtMs - Date.now() - 5.5 * 60 * 1000; // 5.5 min
+      if (refreshIn > 0) {
+        refreshTimer = setTimeout(() => {
+          if (!active) return;
+          // Cancel the prompt with the expiring nonce, clear the cache so
+          // getGoogleOneTapNonce() fetches a fresh one from the server.
+          window.google?.accounts?.id?.cancel();
+          oneTapPromptStarted = false;
+          authService.clearGoogleOneTapNonce();
+          void initializeWithFreshNonce().catch(() => {});
+        }, refreshIn);
+      }
+    }
+
+    const cancelIdleLoad = scheduleIdleWork(() => {
+      void initializeWithFreshNonce().catch(() => {
+        // The existing Google button remains the fallback.
+      });
     });
 
     return () => {
       active = false;
+      clearTimeout(refreshTimer);
       cancelIdleLoad();
       cancelGoogleOneTap();
     };
@@ -331,61 +360,87 @@ export function GlobalGoogleOneTap() {
 
     let active = true;
 
-    const cancelScheduledLoad = scheduleAfterFirstInteraction(() => {
-      void loadGoogleIdentityServices()
-        .then(() => {
-          const googleIdentity = window.google?.accounts?.id;
-          if (!active || !googleIdentity) return;
+    let refreshTimerGlobal: ReturnType<typeof setTimeout> | undefined;
 
-          googleIdentity.initialize({
-            client_id: clientId,
-            auto_select: false,
-            cancel_on_tap_outside: true,
-            use_fedcm_for_prompt: true,
-            itp_support: true,
-            callback: (response) => {
-              if (!active || !response.credential) return;
+    async function initializeGlobalWithFreshNonce() {
+      const [, nonceData] = await Promise.all([
+        loadGoogleIdentityServices(),
+        authService.getGoogleOneTapNonce().catch(() => null),
+      ]);
 
-              setVerifyingDone(false);
-              setVerifyingAccount(readCredentialAccount(response.credential));
-              loginRef.current(
-                { credential: response.credential },
-                {
-                  onSuccess: (result) => {
-                    rememberGoogleSignIn(result.user);
-                    setVerifyingDone(true);
-                    navigateRef.current(
-                      resolvePostAuthPath(result, returnToRef.current),
-                      { replace: true },
-                    );
-                  },
-                  onError: (error) => {
-                    setVerifyingDone(true);
-                    setErrorMessage(toOneTapErrorMessage(error));
-                  },
-                },
-              );
+      const googleIdentity = window.google?.accounts?.id;
+      // Fail safe: if nonce fetch failed, do not show the prompt.
+      if (!active || !googleIdentity || !nonceData?.nonce) return;
+
+      googleIdentity.initialize({
+        client_id: clientId,
+        nonce: nonceData.nonce,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        use_fedcm_for_prompt: true,
+        itp_support: true,
+        callback: (response) => {
+          if (!active || !response.credential) return;
+
+          authService.clearGoogleOneTapNonce();
+          setVerifyingDone(false);
+          setVerifyingAccount(readCredentialAccount(response.credential));
+          loginRef.current(
+            { credential: response.credential },
+            {
+              onSuccess: (result) => {
+                rememberGoogleSignIn(result.user);
+                setVerifyingDone(true);
+                navigateRef.current(
+                  resolvePostAuthPath(result, returnToRef.current),
+                  { replace: true },
+                );
+              },
+              onError: (error) => {
+                setVerifyingDone(true);
+                setErrorMessage(toOneTapErrorMessage(error));
+              },
             },
-          });
-          oneTapPromptStarted = true;
-          googleIdentity.prompt();
-          void loadSigningInModule()
-            .then((module) => {
-              if (!active) return;
-              module.prepareOneTapSigningIn(readLastGoogleAccount()?.avatarUrl);
-              setSigningInCard(() => module.OneTapSigningInCard);
-            })
-            .catch(() => {
-              // Signing in still works, without the card.
-            });
+          );
+        },
+      });
+      oneTapPromptStarted = true;
+      googleIdentity.prompt();
+      void loadSigningInModule()
+        .then((module) => {
+          if (!active) return;
+          module.prepareOneTapSigningIn(readLastGoogleAccount()?.avatarUrl);
+          setSigningInCard(() => module.OneTapSigningInCard);
         })
         .catch(() => {
-          // Fallback gracefully
+          // Signing in still works, without the card.
         });
+
+      // Schedule a refresh just before the cached nonce evicts (expiresAt - 5 min).
+      const expiresAtMs = new Date(nonceData.expiresAt).getTime();
+      const refreshIn = expiresAtMs - Date.now() - 5.5 * 60 * 1000; // 5.5 min
+      if (refreshIn > 0) {
+        refreshTimerGlobal = setTimeout(() => {
+          if (!active) return;
+          // Cancel the prompt with the expiring nonce, clear the cache so
+          // getGoogleOneTapNonce() fetches a fresh one from the server.
+          window.google?.accounts?.id?.cancel();
+          oneTapPromptStarted = false;
+          authService.clearGoogleOneTapNonce();
+          void initializeGlobalWithFreshNonce().catch(() => {});
+        }, refreshIn);
+      }
+    }
+
+    const cancelScheduledLoad = scheduleAfterFirstInteraction(() => {
+      void initializeGlobalWithFreshNonce().catch(() => {
+        // Fallback gracefully
+      });
     });
 
     return () => {
       active = false;
+      clearTimeout(refreshTimerGlobal);
       cancelScheduledLoad();
       cancelGoogleOneTap();
     };

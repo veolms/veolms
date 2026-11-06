@@ -18,6 +18,7 @@ import {
   applyWithThemeViewTransition,
 } from "../themeViewTransition";
 import type { ThemeRevealOrigin } from "../themeViewTransition";
+import { ensureAcademyPaletteStylesheets } from "../academyPaletteStyles";
 import { getInitialAcademyTheme, persistAcademyTheme } from "../../themes";
 import {
   persistDisplayMode,
@@ -345,9 +346,25 @@ export function useShellLayoutEffects({
     // reveals, so this covers the initial application once stored
     // preferences load and any change that arrives outside a handler.
     if (appliedPaletteRef.current === displayedAcademyTheme) return;
-    appliedPaletteRef.current = displayedAcademyTheme;
-    applyRootPalette(displayedAcademyTheme);
-    setAppliedAcademyTheme(displayedAcademyTheme);
+    // Only the palette the head script chose has its stylesheet linked. Theme
+    // rotation picks the visit's theme here, after that, so its stylesheet is
+    // loaded before the palette is applied: applied without it, the palette's
+    // tokens (--surface-strong, --canvas) were undefined and surfaces built
+    // from them, such as the sidebar's settings menu, turned transparent.
+    let cancelled = false;
+    const apply = () => {
+      if (cancelled) return;
+      appliedPaletteRef.current = displayedAcademyTheme;
+      applyRootPalette(displayedAcademyTheme);
+      setAppliedAcademyTheme(displayedAcademyTheme);
+    };
+    void ensureAcademyPaletteStylesheets(displayedAcademyTheme).then(
+      apply,
+      apply,
+    );
+    return () => {
+      cancelled = true;
+    };
   }, [
     displayedAcademyTheme,
     storedPreferencesReady,

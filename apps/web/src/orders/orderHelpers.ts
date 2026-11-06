@@ -266,3 +266,37 @@ export function getStudentInitials(
     .join("")
     .toUpperCase();
 }
+
+/** The orders whose payment went through: the only ones with money taken. */
+const PAID_ORDER_STATUSES: ReadonlySet<string> = new Set([
+  "paid",
+  "partially_refunded",
+  "refunded",
+]);
+/** What can still be given back: a paid order not refunded in full. */
+const REFUNDABLE_ORDER_STATUSES: ReadonlySet<string> = new Set([
+  "paid",
+  "partially_refunded",
+]);
+
+/**
+ * Whether an order can be refunded. A failed, processing, cancelled or
+ * expired order took no payment, and a free one took nothing.
+ */
+export function isOrderRefundable(order: {
+  status: OrderStatus | string;
+  totalAmount: number;
+}): boolean {
+  return REFUNDABLE_ORDER_STATUSES.has(order.status) && order.totalAmount > 0;
+}
+
+/**
+ * Whether an order has an invoice to download: one is issued only for a
+ * payment that went through.
+ */
+export function hasOrderInvoice(order: {
+  status: OrderStatus | string;
+  invoiceNumber?: string | null;
+}): boolean {
+  return PAID_ORDER_STATUSES.has(order.status) && Boolean(order.invoiceNumber);
+}

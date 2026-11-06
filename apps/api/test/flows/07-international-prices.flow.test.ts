@@ -37,6 +37,7 @@ interface Preview {
     subtotalAmount?: number;
     discountAmount: number;
     totalAmount: number;
+    minimumCharge?: number;
     currency: string;
   };
   couponValidation?: { valid: boolean; message?: string };
@@ -285,6 +286,36 @@ await test("a rupee coupon takes the same share off a dollar price", async () =>
   const home = await preview(learner, course, FROM_INDIA, code);
   assert.equal(home.body.data?.pricing.discountAmount, 700);
   assert.equal(home.body.data?.pricing.totalAmount, 2799);
+});
+
+await test("a coupon that would leave less than $1 abroad charges $1, the smallest card payment", async () => {
+  const course = await dualPricedCourse();
+  const { client: learner } = await signedUpLearner(flow);
+  // ₹3,450 off ₹3,499 is 98.6% of the price: 4337 of 4399 cents, which
+  // would leave 62 cents. Razorpay's payment page refuses that.
+  const code = await fixedCoupon(3450);
+
+  const abroad = await preview(learner, course, FROM_JAPAN, code);
+  assert.equal(abroad.status, 200, JSON.stringify(abroad.body));
+  assert.equal(abroad.body.data?.pricing.totalAmount, 100);
+  assert.equal(abroad.body.data?.pricing.discountAmount, 4399 - 100);
+  assert.equal(abroad.body.data?.pricing.minimumCharge, 100);
+  assert.match(abroad.body.data?.couponValidation?.message ?? "", /\$1/u);
+
+  const order = await checkout(learner, course, FROM_JAPAN, code);
+  assert.equal(order.status, 200, JSON.stringify(order.body));
+  assert.equal(order.body.data?.gateway?.amount, 100);
+  assert.equal(order.body.data?.gateway?.currency, "USD");
+
+  // Rupees have no such floor: ₹49 is charged in India.
+  const home = await preview(learner, course, FROM_INDIA, code);
+  assert.equal(home.body.data?.pricing.totalAmount, 49);
+  assert.equal(home.body.data?.pricing.minimumCharge, undefined);
+
+  // A coupon that takes everything off still makes the course free.
+  const whole = await fixedCoupon(3499);
+  const free = await preview(learner, course, FROM_JAPAN, whole);
+  assert.equal(free.body.data?.pricing.totalAmount, 0);
 });
 
 interface SavedPricing {

@@ -43,7 +43,7 @@ import type {
   CreateCourseLessonRequest,
   Permission,
 } from "@veolms/contracts";
-import { mediaService } from "../../services/media";
+import { mediaService, uploadVideoResumable } from "../../services/media";
 import {
   LessonDescriptionPreview,
   LessonDropIndicator,
@@ -603,31 +603,44 @@ export function CurriculumStepPanel({
               }
               onUploadMedia={uploadsLessonMedia ? async (file) => {
                 try {
-                  const presigned =
-                    await mediaService.presignMediaUpload({
-                      filename: file.name,
-                      contentType:
-                        file.type || "application/octet-stream",
-                      fileSize: file.size,
-                      type:
-                        activeLesson.contentType === "image"
-                          ? "image"
-                          : activeLesson.contentType === "document"
-                            ? "document"
-                            : "video",
+                  let mediaAssetId: string;
+                  if (
+                    activeLesson.contentType === "video" ||
+                    file.type.startsWith("video/")
+                  ) {
+                    const result = await uploadVideoResumable({
+                      file,
                       visibility: "protected",
                     });
-                  await mediaService.uploadFileToPresignedUrl(
-                    presigned.uploadUrl,
-                    file,
-                  );
-                  await mediaService.confirmUpload(
-                    presigned.mediaAssetId,
-                  );
+                    mediaAssetId = result.mediaAssetId;
+                  } else {
+                    const presigned =
+                      await mediaService.presignMediaUpload({
+                        filename: file.name,
+                        contentType:
+                          file.type || "application/octet-stream",
+                        fileSize: file.size,
+                        type:
+                          activeLesson.contentType === "image"
+                            ? "image"
+                            : activeLesson.contentType === "document"
+                              ? "document"
+                              : "video",
+                        visibility: "protected",
+                      });
+                    await mediaService.uploadFileToPresignedUrl(
+                      presigned.uploadUrl,
+                      file,
+                    );
+                    await mediaService.confirmUpload(
+                      presigned.mediaAssetId,
+                    );
+                    mediaAssetId = presigned.mediaAssetId;
+                  }
                   const attached = await handleLessonMediaAttached(
                     activeSection.id,
                     activeLesson.id,
-                    presigned.mediaAssetId,
+                    mediaAssetId,
                   );
                   // A failed attach has already shown its own error.
                   if (!attached) return;
@@ -1796,40 +1809,53 @@ export function CurriculumStepPanel({
                                                   file,
                                                 ) => {
                                                   try {
-                                                    const presigned =
-                                                      await mediaService.presignMediaUpload(
-                                                        {
-                                                          filename:
-                                                            file.name,
-                                                          contentType:
-                                                            file.type ||
-                                                            "application/octet-stream",
-                                                          fileSize:
-                                                            file.size,
-                                                          type:
-                                                            les.contentType ===
-                                                            "image"
-                                                              ? "image"
-                                                              : les.contentType ===
-                                                                  "document"
-                                                                ? "document"
-                                                                : "video",
-                                                          visibility:
-                                                            "protected",
-                                                        },
+                                                    let mediaAssetId: string;
+                                                    if (
+                                                      les.contentType === "video" ||
+                                                      file.type.startsWith("video/")
+                                                    ) {
+                                                      const result = await uploadVideoResumable({
+                                                        file,
+                                                        visibility: "protected",
+                                                      });
+                                                      mediaAssetId = result.mediaAssetId;
+                                                    } else {
+                                                      const presigned =
+                                                        await mediaService.presignMediaUpload(
+                                                          {
+                                                            filename:
+                                                              file.name,
+                                                            contentType:
+                                                              file.type ||
+                                                              "application/octet-stream",
+                                                            fileSize:
+                                                              file.size,
+                                                            type:
+                                                              les.contentType ===
+                                                              "image"
+                                                                ? "image"
+                                                                : les.contentType ===
+                                                                    "document"
+                                                                  ? "document"
+                                                                  : "video",
+                                                            visibility:
+                                                              "protected",
+                                                          },
+                                                        );
+                                                      await mediaService.uploadFileToPresignedUrl(
+                                                        presigned.uploadUrl,
+                                                        file,
                                                       );
-                                                    await mediaService.uploadFileToPresignedUrl(
-                                                      presigned.uploadUrl,
-                                                      file,
-                                                    );
-                                                    await mediaService.confirmUpload(
-                                                      presigned.mediaAssetId,
-                                                    );
+                                                      await mediaService.confirmUpload(
+                                                        presigned.mediaAssetId,
+                                                      );
+                                                      mediaAssetId = presigned.mediaAssetId;
+                                                    }
                                                     const attached =
                                                       await handleLessonMediaAttached(
                                                         sec.id,
                                                         les.id,
-                                                        presigned.mediaAssetId,
+                                                        mediaAssetId,
                                                       );
                                                     // A failed attach has already shown its own error.
                                                     if (!attached)

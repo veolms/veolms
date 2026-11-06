@@ -31,9 +31,9 @@ export const CURRICULUM_HELD_EVENT = "veo:curriculum-held";
  * with a list gap between (`measureItemTop`), and the heading's frame cut
  * at its foot (`--frame-clip-top`). The app finds them as it would set
  * them, so nothing moves when it takes over. A lesson too near the end to
- * reach the top is left where the list can go; the app adds the room under
- * it as before. A list that is not shown (the phone's drawer) is left
- * alone. While the page loads it keeps them so (see below), until the app
+ * reach the top is given the room under the list the app would give it
+ * (`--curriculum-reveal-space`), once the whole page has been read. A
+ * list that is not shown (the phone's drawer) is left alone. While the page loads it keeps them so (see below), until the app
  * takes over. It is embedded as text, so it reads nothing from outside
  * itself but its arguments.
  */
@@ -94,10 +94,45 @@ function placeCurriculumAtLesson(
         return target;
       };
 
+      // A lesson too near the end to come to the top gets room under the
+      // list first, as the app gives it (`revealAtTop` in Curriculum.tsx,
+      // which finds it there): left where the list could go, the list
+      // showed what is above the lesson (on a short course, its title)
+      // until the app moved it. Only once the page has been read: until
+      // then the rest of the list may still be coming.
+      const lessonList = panel.querySelector<HTMLElement>(
+        ".learning-curriculum__lesson-list",
+      );
+      const makeRoom = (target: number) => {
+        if (
+          !lessonList ||
+          document.readyState === "loading" ||
+          Math.abs(panel.scrollTop - target) <= 1
+        ) {
+          return;
+        }
+        const current =
+          Number.parseFloat(lessonList.dataset.revealSpace || "0") || 0;
+        const reachable = Math.max(
+          0,
+          panel.scrollHeight - current - panel.clientHeight,
+        );
+        const room = Math.ceil(Math.max(0, target - reachable) + 4);
+        if (room !== current) {
+          lessonList.dataset.revealSpace = String(room);
+          lessonList.style.setProperty(
+            "--curriculum-reveal-space",
+            `${room}px`,
+          );
+        }
+        panel.scrollTop = target;
+      };
+
       // Held, as it is wherever a lesson stands at the top; then as far
       // as where the list could go brings it (a lesson near the start).
       holdBar(1);
       let target = go();
+      makeRoom(target);
       const head = bar?.previousElementSibling;
       if (bar && head) {
         const stick = Math.min(
@@ -111,6 +146,7 @@ function placeCurriculumAtLesson(
         if (stick < 1) {
           holdBar(stick);
           target = go();
+          makeRoom(target);
         }
       }
 
