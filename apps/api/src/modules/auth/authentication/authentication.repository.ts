@@ -520,23 +520,6 @@ export async function markUserEmailVerified(
     .executeTakeFirst();
 }
 
-export async function markUserPhoneVerified(
-  database: Executor,
-  userId: string,
-  verifiedAt: Date,
-) {
-  return database
-    .updateTable("users")
-    .set({
-      phone_verified_at: verifiedAt,
-      updated_at: new Date(),
-    })
-    .where("id", "=", userId)
-    .where("is_deleted", "=", false)
-    .returning("id")
-    .executeTakeFirst();
-}
-
 /**
  * Names of the roles a user holds platform-wide, from both role tables:
  * team roles are written to `role_assignments`, and the role-name checks
