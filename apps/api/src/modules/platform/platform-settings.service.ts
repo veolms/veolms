@@ -92,6 +92,7 @@ function resolveInvoiceSettings(
     signatoryLabel: read("signatoryLabel"),
     footerNote: read("footerNote"),
     showLogo: read("showLogo"),
+    logoUrl: read("logoUrl"),
   };
 }
 
@@ -151,6 +152,14 @@ export interface PlatformSettingsService {
     updatedBy: string | null,
   ): Promise<PlatformSettingsResponse>;
   /**
+   * Sets the invoice-only logo, or clears it (null) so invoices print the
+   * General tab's logo. The address must be one the upload checked.
+   */
+  setInvoiceLogo(
+    logoUrl: string | null,
+    updatedBy: string | null,
+  ): Promise<PlatformSettingsResponse>;
+  /**
    * Whether enrolling needs a verified mobile number: the academy's
    * setting, and, for a given learner, only when their account is new (see
    * `PHONE_VERIFICATION_NEW_ACCOUNTS_FROM`).
@@ -197,7 +206,9 @@ export function createPlatformSettingsService({
   }
 
   async function updateSettings(
-    changes: UpdatePlatformSettingsRequest,
+    changes: UpdatePlatformSettingsRequest & {
+      invoice?: Partial<PlatformInvoiceSettings>;
+    },
     updatedBy: string | null,
   ): Promise<PlatformSettingsResponse> {
     // Read fresh, so a change saved by another process is not written over.
@@ -263,6 +274,8 @@ export function createPlatformSettingsService({
       toPublicSettings((await readSettings()).settings),
     getInvoiceSettings: async () => (await readSettings()).settings.invoice,
     updateSettings,
+    setInvoiceLogo: async (logoUrl, updatedBy) =>
+      await updateSettings({ invoice: { logoUrl } }, updatedBy),
     maxDevicesPerStudent: async () =>
       (await readSettings()).settings.security.maxDevicesPerStudent,
     requiresVerifiedPhoneForEnrollment: async (userId?: string) => {

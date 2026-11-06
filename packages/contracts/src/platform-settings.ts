@@ -77,6 +77,7 @@ export const platformInvoiceSettingsSchema = z.strictObject({
   signatoryLabel: z.string().trim().max(60),
   footerNote: z.string().trim().max(200),
   showLogo: z.boolean(),
+  logoUrl: z.url().nullable(),
 }) satisfies z.ZodType<PlatformInvoiceSettings>;
 
 export const platformSettingsSchema = z.strictObject({
@@ -113,7 +114,12 @@ export const updatePlatformSettingsRequestSchema = z
       .partial()
       .optional(),
     security: platformSecuritySettingsSchema.partial().optional(),
-    invoice: platformInvoiceSettingsSchema.partial().optional(),
+    // The invoice logo is set by its own upload (an address the server
+    // checked), never sent with the other details.
+    invoice: platformInvoiceSettingsSchema
+      .omit({ logoUrl: true })
+      .partial()
+      .optional(),
   })
   .refine(
     (value) =>

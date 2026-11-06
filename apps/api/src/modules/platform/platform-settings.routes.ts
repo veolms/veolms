@@ -1,4 +1,7 @@
 import {
+  academyLogoCompleteRequestSchema,
+  academyLogoPresignRequestSchema,
+  academyLogoPresignResponseSchema,
   platformSettingsResponseSchema,
   publicPlatformSettingsResponseSchema,
   staticSiteRebuildStatusSchema,
@@ -8,7 +11,9 @@ import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createSessionService } from "../auth/index.ts";
+import { createAcademyBrandService } from "../academy/academy-brand.service.ts";
 import { createPermissionPreHandlers } from "../authorization/index.ts";
+import { createPlatformInvoiceLogoService } from "./platform-invoice-logo.service.ts";
 import { createPlatformSettingsController } from "./platform-settings.controller.ts";
 import { createPlatformSettingsService } from "./platform-settings.service.ts";
 
@@ -26,6 +31,13 @@ const platformSettingsRoutes: RoutePlugin = async (app, options) => {
   });
   const controller = createPlatformSettingsController({
     service,
+    invoiceLogo: createPlatformInvoiceLogoService({
+      settings: service,
+      brand: createAcademyBrandService({
+        database: options.database,
+        storage: options.services.storage,
+      }),
+    }),
     staticPages: options.services.courseStaticPages,
   });
 
@@ -94,6 +106,78 @@ const platformSettingsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.updateSettings,
+  );
+
+  app.post(
+    "/platform/settings/invoice-logo/presign",
+    {
+      preHandler: requires("platform.settings.update"),
+      schema: {
+        operationId: "presignInvoiceLogoUpload",
+        tags: ["Platform"],
+        summary: "Get an address to upload an invoice-only logo to",
+        description:
+          "The browser PUTs the PNG or JPEG straight to the returned address, then calls /platform/settings/invoice-logo/complete.",
+        body: academyLogoPresignRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Where to upload the logo.",
+            academyLogoPresignResponseSchema,
+          ),
+          400: errorResponse("Not a PNG or JPEG, or larger than 2 MB"),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          409: errorResponse("The academy has not been set up yet"),
+        },
+      },
+    },
+    controller.presignInvoiceLogo,
+  );
+
+  app.post(
+    "/platform/settings/invoice-logo/complete",
+    {
+      preHandler: requires("platform.settings.update"),
+      schema: {
+        operationId: "completeInvoiceLogoUpload",
+        tags: ["Platform"],
+        summary: "Make an uploaded image the logo printed on invoices",
+        body: academyLogoCompleteRequestSchema,
+        response: {
+          200: jsonResponse(
+            "The settings in force after the change.",
+            platformSettingsResponseSchema,
+          ),
+          400: errorResponse("The upload is missing or is not a PNG or JPEG"),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          503: errorResponse("Settings storage is not available yet"),
+        },
+      },
+    },
+    controller.completeInvoiceLogo,
+  );
+
+  app.delete(
+    "/platform/settings/invoice-logo",
+    {
+      preHandler: requires("platform.settings.update"),
+      schema: {
+        operationId: "removeInvoiceLogo",
+        tags: ["Platform"],
+        summary: "Print the academy's logo on invoices again",
+        response: {
+          200: jsonResponse(
+            "The settings in force after the change.",
+            platformSettingsResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          503: errorResponse("Settings storage is not available yet"),
+        },
+      },
+    },
+    controller.removeInvoiceLogo,
   );
 
   app.get(
