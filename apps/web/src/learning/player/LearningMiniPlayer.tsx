@@ -31,16 +31,11 @@ import {
   refreshVideoPlaybackToken,
 } from "../videoPlaybackBootstrap";
 import {
-  flushDetachedLearningProgress,
   recordDetachedLearningProgress,
   syncDetachedLearningProgress,
   syncDetachedWatchTime,
   useDetachedLessonProgress,
 } from "../detachedLearningProgress";
-import {
-  getProgressSyncIntervalMs,
-  subscribeProgressIdle,
-} from "../progressSyncSchedule";
 import {
   markPlaying,
   markNotPlaying,
@@ -461,21 +456,11 @@ export function LearningMiniPlayer({
 
   useEffect(() => {
     if (!progressTarget) return undefined;
-    let timer: number | undefined;
-    const scheduleNext = () => {
-      timer = window.setTimeout(() => {
-        syncDetachedWatchTime(progressTarget);
-        scheduleNext();
-      }, getProgressSyncIntervalMs());
-    };
-    scheduleNext();
-    const unsubscribeIdle = subscribeProgressIdle(() =>
-      flushDetachedLearningProgress(progressTarget),
+    const interval = window.setInterval(
+      () => syncDetachedWatchTime(progressTarget),
+      15_000,
     );
-    return () => {
-      window.clearTimeout(timer);
-      unsubscribeIdle();
-    };
+    return () => window.clearInterval(interval);
   }, [progressTarget]);
 
   const handleEvent = useCallback(

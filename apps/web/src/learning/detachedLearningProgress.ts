@@ -24,6 +24,7 @@ import {
 import {
   markNotPlaying,
   notifyPlaybackConflict,
+  restorePlayingReport,
   takePlayingReport,
 } from "./playbackClaim";
 import {
@@ -141,6 +142,7 @@ export async function syncDetachedLearningProgress(
     // The items stay pending in storage; the next update or the lesson page
     // sends the same batch again.
     restoreWatchedSeconds(courseKey, watchedSeconds);
+    restorePlayingReport(courseKey, playing);
     // An API from before positions (or their age) were kept turns the
     // whole batch down: it goes again without them.
     if (

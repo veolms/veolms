@@ -32,10 +32,7 @@ import {
   useDetachedLessonProgress,
   type DetachedProgressTarget,
 } from "../detachedLearningProgress";
-import {
-  getProgressSyncIntervalMs,
-  subscribeProgressIdle,
-} from "../progressSyncSchedule";
+import { subscribeProgressIdle } from "../progressSyncSchedule";
 import { LearningExpandPlaceholderSheet } from "./LearningExpandPlaceholderSheet";
 import {
   expandLearningPlayerFromRect,
@@ -695,19 +692,15 @@ export function PersistentLearningPlayerHost({
   // pauses or ends (progressSyncSchedule).
   useEffect(() => {
     if (!detachedProgressTarget) return undefined;
-    let timer: number | undefined;
-    const scheduleNext = () => {
-      timer = window.setTimeout(() => {
-        syncDetachedWatchTime(detachedProgressTarget);
-        scheduleNext();
-      }, getProgressSyncIntervalMs());
-    };
-    scheduleNext();
+    const interval = window.setInterval(
+      () => syncDetachedWatchTime(detachedProgressTarget),
+      15_000,
+    );
     const unsubscribeIdle = subscribeProgressIdle(() =>
       flushDetachedLearningProgress(detachedProgressTarget),
     );
     return () => {
-      window.clearTimeout(timer);
+      window.clearInterval(interval);
       unsubscribeIdle();
     };
   }, [detachedProgressTarget]);

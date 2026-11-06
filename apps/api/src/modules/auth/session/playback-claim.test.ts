@@ -608,8 +608,8 @@ await test("two devices sending heartbeats 60 seconds apart: newer play maintain
         location_country: "IN",
         playing_lesson_id: LESSON_1,
         playing_claimed_at: tPlayDevice1,
-        // Heartbeat sent 60s ago: within the 130s stale window
-        playing_at: new Date(Date.now() - 60_000),
+        // Heartbeat sent 5s ago
+        playing_at: new Date(Date.now() - 5_000),
         revoked_at: null,
         expires_at: new Date(Date.now() + 86_400_000),
         lesson_title: "Lesson 1",
@@ -623,8 +623,8 @@ await test("two devices sending heartbeats 60 seconds apart: newer play maintain
         location_country: "IN",
         playing_lesson_id: LESSON_2,
         playing_claimed_at: tPlayDevice2,
-        // Heartbeat sent 5s ago
-        playing_at: new Date(Date.now() - 5_000),
+        // Heartbeat sent 60s ago: within the 130s stale window
+        playing_at: new Date(Date.now() - 60_000),
         revoked_at: null,
         expires_at: new Date(Date.now() + 86_400_000),
         lesson_title: "Lesson 2",
@@ -633,15 +633,25 @@ await test("two devices sending heartbeats 60 seconds apart: newer play maintain
   });
   const service = createSessionService({ database: db });
 
-  // Device 1 sends a heartbeat 60 seconds after its previous one
+  // Device 2 (newer play) sends a heartbeat after 60s: allowed (protected by the 130s stale window)
+  const res2 = await service.reportPlayback(
+    { id: "u-1", roles: [STUDENT_ROLE] },
+    "sess-device-2",
+    { lessonId: LESSON_2, event: "heartbeat" },
+  );
+  assert.equal(
+    res2.allowed,
+    true,
+    "Device 2's 60-second-old heartbeat must be allowed (protected by the 130s stale window)",
+  );
+
+  // Device 1 sends its next heartbeat: denied because Device 2 has the newer play
   const res1 = await service.reportPlayback(
     { id: "u-1", roles: [STUDENT_ROLE] },
     "sess-device-1",
     { lessonId: LESSON_1, event: "heartbeat" },
   );
-
-  // Newer play (Device 2) wins: Device 1 is denied and its claim cleared
-  assert.equal(res1.allowed, false, "Older device heartbeat must be denied");
+  assert.equal(res1.allowed, false, "Device 1's next heartbeat must be denied");
   if (!res1.allowed) {
     assert.equal(res1.playingOn.userAgent, "Safari on iPhone");
     assert.equal(res1.playingOn.lessonTitle, "Lesson 2");
@@ -652,16 +662,4 @@ await test("two devices sending heartbeats 60 seconds apart: newer play maintain
     (w) => w.type === "clear" && w.sessionId === "sess-device-1",
   );
   assert.ok(clearWrite, "sess-device-1 claim must be cleared when denied");
-
-  // Device 2 sends a heartbeat: allowed because it has the newer play
-  const res2 = await service.reportPlayback(
-    { id: "u-1", roles: [STUDENT_ROLE] },
-    "sess-device-2",
-    { lessonId: LESSON_2, event: "heartbeat" },
-  );
-  assert.equal(
-    res2.allowed,
-    true,
-    "Newer play device heartbeat must be allowed",
-  );
 });
