@@ -1,3 +1,4 @@
+import { ArrowsDownUpIcon as ArrowsDownUp } from "@phosphor-icons/react/ArrowsDownUp";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
@@ -43,6 +44,9 @@ import { hasAdminRole } from "../shell/workspaceRole";
 import { courseMatchesWishlist, getCourseRouteKey } from "./catalogue";
 import { useCatalogSearchTracking } from "./useCatalogSearchTracking";
 import { ShownCourseThumbnailsScript } from "./CourseCardThumbnail";
+import { CourseReorderPanel } from "./reorder/CourseReorderPanel";
+import { useCourseDragOrder } from "./reorder/useCourseDragOrder";
+import { useCourseReorder } from "./reorder/useCourseReorder";
 
 // Only a learner leaving a free course needs this, so it stays out of the
 // catalogue's own code.
@@ -147,6 +151,29 @@ export function CourseCatalogue({
   // The bin lists every deleted course, so it takes the academy-wide key.
   const canOpenBin =
     isAdmin || capabilities.canOnCourse("course.restore", null);
+  // The order spans every course, so it takes the academy-wide key.
+  const canReorder =
+    role === "creator" &&
+    activeSection === "Courses" &&
+    (isAdmin || capabilities.canOnCourse("course.details.update", null));
+  const reorder = useCourseReorder({ enabled: canReorder, setNotice });
+  // Cards are dragged only while the grid shows every course, unfiltered:
+  // a move then reads the same on the page as in the saved order.
+  const gridReorderable =
+    canReorder &&
+    enrollmentFilter === "all" &&
+    statusFilter === "all" &&
+    !search.trim();
+  const gridDrag = useCourseDragOrder(
+    visibleCourses.map((course) => course.id),
+    (ids) => void reorder.save(ids),
+  );
+  const coursesById = new Map(
+    visibleCourses.map((course) => [course.id, course]),
+  );
+  const shownCourses = gridReorderable
+    ? gridDrag.order.flatMap((id) => coursesById.get(id) ?? [])
+    : visibleCourses;
   useCatalogSearchTracking(
     search,
     isLoading,
@@ -384,18 +411,32 @@ export function CourseCatalogue({
 
           {role === "creator" &&
             activeSection === "Courses" &&
-            canCreateCourse && (
+            (canCreateCourse || canReorder) && (
               <div className="order-3 flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="Create"
-                  className="flex h-11 shrink-0 items-center gap-2 rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-4 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-                  data-control-radius-action
-                  onClick={() => onNavigatePage("Create Course")}
-                >
-                  <Plus size={18} weight="bold" />
-                  <span>Create</span>
-                </button>
+                {canReorder ? (
+                  <button
+                    type="button"
+                    className="flex h-11 shrink-0 items-center gap-2 rounded-(--control-radius-action) border border-(--border-strong) bg-(--card-surface) px-4 text-[14px]! font-[650]! text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                    data-control-radius-action
+                    aria-haspopup="dialog"
+                    onClick={() => reorder.setPanelOpen(true)}
+                  >
+                    <ArrowsDownUp size={18} weight="bold" />
+                    <span>Reorder</span>
+                  </button>
+                ) : null}
+                {canCreateCourse ? (
+                  <button
+                    type="button"
+                    aria-label="Create"
+                    className="flex h-11 shrink-0 items-center gap-2 rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-4 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                    data-control-radius-action
+                    onClick={() => onNavigatePage("Create Course")}
+                  >
+                    <Plus size={18} weight="bold" />
+                    <span>Create</span>
+                  </button>
+                ) : null}
               </div>
             )}
         </ExpandableSearch>
@@ -513,8 +554,22 @@ export function CourseCatalogue({
           suppressHydrationWarning
         >
           <div className={gridClasses}>
-            {visibleCourses.map((course, index) =>
-              renderCard(course, priorityImageIndexes.has(index)),
+            {shownCourses.map((course, index) =>
+              gridReorderable ? (
+                <div
+                  key={course.id}
+                  draggable={!reorder.saving}
+                  {...gridDrag.handlersFor(course.id, course.title)}
+                  data-course-reorder-card={course.id}
+                  className={`min-w-0 cursor-grab transition-opacity active:cursor-grabbing ${
+                    gridDrag.draggedId === course.id ? "opacity-40" : ""
+                  }`}
+                >
+                  {renderCard(course, priorityImageIndexes.has(index))}
+                </div>
+              ) : (
+                renderCard(course, priorityImageIndexes.has(index))
+              ),
             )}
           </div>
           <ShownCourseThumbnailsScript />
@@ -554,6 +609,17 @@ export function CourseCatalogue({
         </div>
       ) : null}
 
+      {canReorder ? (
+        <CourseReorderPanel
+          open={reorder.panelOpen}
+          onOpenChange={reorder.setPanelOpen}
+          courses={reorder.courses}
+          saving={reorder.saving}
+          onSave={async (ids) => {
+            if (await reorder.save(ids)) reorder.setPanelOpen(false);
+          }}
+        />
+      ) : null}
       <ConfirmDeleteModal
         isOpen={pendingDelete !== null}
         title="Move course to Bin?"

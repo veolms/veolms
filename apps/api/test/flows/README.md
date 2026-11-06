@@ -14,6 +14,7 @@ app does; nothing is mocked inside the API.
 | `05-staff-only.flow.test.ts`           | The admin area refuses learners and visitors                          |
 | `06-coupons-and-refunds.flow.test.ts`  | What coupons take off, refused coupons, refunds and what they revoke  |
 | `07-international-prices.flow.test.ts` | Dollar prices for buyers outside India, coupons on them, revenue in ₹ |
+| `08-course-order.flow.test.ts`         | The admin's course order, on every list; who may set it               |
 
 ## Running them
 

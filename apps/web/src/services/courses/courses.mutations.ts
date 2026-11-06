@@ -24,7 +24,9 @@ import type {
   CreateLessonResourceRequest,
   CreateCourseRequest,
   CreateCourseSectionRequest,
+  MyCoursesListResponse,
   ReorderCourseIncludesRequest,
+  ReorderCoursesResponse,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
   RestoreCourseResponse,
@@ -38,6 +40,7 @@ import type {
   UpdateCourseSettingsRequest,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
+import { homeKeys } from "../home/home.keys";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 
@@ -804,6 +807,58 @@ export function useSetLinkedCourse() {
         courseKeys.linkedCourses(variables.courseId),
         data,
       );
+    },
+  });
+}
+
+/**
+ * Saves the order an admin put the courses in. The admin's list shows the
+ * new order at once and goes back to the old one if saving fails; every
+ * list of courses is asked for again afterwards.
+ */
+export function useReorderCourses() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ReorderCoursesResponse,
+    ApiError,
+    readonly string[],
+    { previous: MyCoursesListResponse | undefined }
+  >({
+    mutationFn: (courseIds) =>
+      coursesService.reorderCourses({ courseIds: [...courseIds] }),
+    onMutate: async (courseIds) => {
+      await queryClient.cancelQueries({ queryKey: courseKeys.mine() });
+      const previous = queryClient.getQueryData<MyCoursesListResponse>(
+        courseKeys.mine(),
+      );
+      if (previous) {
+        const place = new Map(courseIds.map((id, index) => [id, index]));
+        queryClient.setQueryData<MyCoursesListResponse>(courseKeys.mine(), {
+          courses: previous.courses
+            .map((course) => ({
+              ...course,
+              sortPosition: place.get(course.id) ?? null,
+            }))
+            .sort(
+              (a, b) =>
+                (a.sortPosition ?? Number.POSITIVE_INFINITY) -
+                (b.sortPosition ?? Number.POSITIVE_INFINITY),
+            ),
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _courseIds, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(courseKeys.mine(), context.previous);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
+      // The catalogue, its pages and the course options.
+      void queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: homeKeys.all });
     },
   });
 }

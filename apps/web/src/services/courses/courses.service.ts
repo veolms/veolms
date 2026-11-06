@@ -44,6 +44,8 @@ import type {
   LessonResource,
   LessonResourceDownloadResponse,
   ReorderCourseIncludesRequest,
+  ReorderCoursesRequest,
+  ReorderCoursesResponse,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
   RestoreCourseResponse,
@@ -168,6 +170,13 @@ export const coursesService = {
 
   listMyCourses: (): Promise<MyCoursesListResponse> => {
     return api.get<MyCoursesListResponse>("/courses/mine");
+  },
+
+  /** Every listed course, first to last: the order every list shows. */
+  reorderCourses: (
+    payload: ReorderCoursesRequest,
+  ): Promise<ReorderCoursesResponse> => {
+    return api.put<ReorderCoursesResponse>("/courses/order", payload);
   },
 
   listDeletedCourses: (

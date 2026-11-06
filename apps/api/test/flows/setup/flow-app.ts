@@ -254,6 +254,10 @@ export class FlowClient {
     return this.request<T>("PATCH", url, payload);
   }
 
+  put<T = unknown>(url: string, payload: unknown = {}) {
+    return this.request<T>("PUT", url, payload);
+  }
+
   delete<T = unknown>(url: string) {
     return this.request<T>("DELETE", url);
   }
