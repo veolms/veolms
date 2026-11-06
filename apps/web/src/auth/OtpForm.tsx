@@ -194,8 +194,14 @@ export function OtpForm({
             subtitle ??
             (notice ? (
               <>We already sent a code to {destination}. Enter it below.</>
-            ) : (
+            ) : byEmail ? (
               <>We sent a 6-digit code to {destination}</>
+            ) : (
+              // A number no account uses is sent nothing, and the answer
+              // must not say which numbers have accounts.
+              <>
+                If {destination} is on an account, we sent a 6-digit code to it
+              </>
             ))
           }
         />
