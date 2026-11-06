@@ -26,7 +26,11 @@ import type { IdentifierType, OtpPurpose } from "../shared/auth.types.ts";
 import type { Executor } from "../shared/repository.types.ts";
 import * as otpRepository from "./otp.repository.ts";
 import * as userRepository from "../authentication/authentication.repository.ts";
-import { hashToken } from "../shared/auth.utils.ts";
+import {
+  hashToken,
+  phoneNotRegistered,
+  refusesPhoneSignInCode,
+} from "../shared/auth.utils.ts";
 
 export interface OtpServiceOptions {
   database: Kysely<Database>;
@@ -237,7 +241,22 @@ export function createOtpService({
     identifier: string,
     identifierType: IdentifierType,
     requester: OtpRequester = {},
+    options: { signInOnly?: boolean } = {},
   ): Promise<void> {
+    // A number is answered before anything is sent: no code goes to a
+    // number its account never confirmed, and phone sign-in sends nothing
+    // to a number without an account. Both get the same answer.
+    if (identifierType === "phone") {
+      const account = await userRepository.findUserStatusByIdentifier(
+        database,
+        identifier,
+        identifierType,
+      );
+      if (refusesPhoneSignInCode(account, options.signInOnly === true)) {
+        throw phoneNotRegistered();
+      }
+    }
+
     const purpose = await resolveOtpPurpose(identifier, identifierType);
     if (purpose === null) {
       await sendDeactivatedAccountNotice(identifier, identifierType, requester);

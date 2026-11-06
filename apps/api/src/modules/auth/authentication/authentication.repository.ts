@@ -194,7 +194,7 @@ export function findUserStatusByIdentifier(
 ) {
   return database
     .selectFrom("users")
-    .select(["id", "is_deleted"])
+    .select(["id", "is_deleted", "phone_verified_at"])
     .where(identifierType === "email" ? "email" : "phone_no", "=", identifier)
     .executeTakeFirst();
 }

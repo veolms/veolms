@@ -31,6 +31,7 @@ import type { OtpService } from "../otp/otp.service.ts";
 import type { SessionService } from "../session/session.service.ts";
 import {
   normalizePhoneIdentifier,
+  phoneNotRegistered,
   refusesUnconfirmedPhoneSignIn,
 } from "../shared/auth.utils.ts";
 import { evictCachedUserSessions } from "../shared/session-auth-cache.ts";
@@ -950,23 +951,13 @@ export function createAuthService({
       );
     }
 
-    // A number nobody confirmed (the one typed during platform setup, or by
-    // staff adding a student) cannot sign in until the owner confirms it
-    // from their profile. That holds whether or not the email is confirmed
-    // yet: a student added by staff has neither, and a mistyped number would
-    // otherwise open their account to its holder.
+    // A number nobody confirmed (the one typed during platform setup, by
+    // staff adding a student, or by an import) cannot sign in until the
+    // owner confirms it from their profile: a mistyped number would
+    // otherwise open the account to its holder. No code is sent to such a
+    // number, so this only answers a caller who skipped that step.
     if (refusesUnconfirmedPhoneSignIn(input.identifierType, user)) {
-      await otpService.assertOtpMatches(
-        input.identifier,
-        input.identifierType,
-        "login",
-        input.code,
-      );
-      throw new AppError(
-        403,
-        "PHONE_NOT_VERIFIED",
-        "This mobile number has not been confirmed yet. Sign in with your email, then confirm the number in Settings.",
-      );
+      throw phoneNotRegistered();
     }
 
     // The read-only prerequisites of the session do not depend on the OTP,
