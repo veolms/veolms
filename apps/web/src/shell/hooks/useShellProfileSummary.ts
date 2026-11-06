@@ -5,7 +5,10 @@ import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import type { CourseRole } from "../../courses/catalogue";
 import type { AuthIdentityHint } from "../../store/auth.store";
 import { hasAdminRole, getShellProfileSubtitle } from "../workspaceRole";
-import { useNotificationSummary } from "../../services/notifications";
+import {
+  useNotificationStream,
+  useNotificationSummary,
+} from "../../services/notifications";
 import type { AuthUser } from "../../store/auth.store";
 import type { Icon } from "@phosphor-icons/react";
 import { rememberProfileChip } from "../profileHintEarlyState";
@@ -68,6 +71,8 @@ export function useShellProfileSummary({
   const { data: notificationSummary } = useNotificationSummary({
     enabled: isAuthenticated,
   });
+  // The badge updates the moment a notification arrives, not at the next poll.
+  useNotificationStream(isAuthenticated);
   const unreadNotificationCount = notificationSummary?.unreadCount ?? 0;
   // What the button shows under the name, kept for the next load's first
   // paint (see profileHintEarlyState.ts).

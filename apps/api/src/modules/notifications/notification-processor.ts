@@ -123,6 +123,19 @@ export function createNotificationProcessor({
           recipients,
         );
         result.processed += 1;
+        // The notifications are committed: tell the recipients' open
+        // streams. A failure here loses nothing (those tabs still poll), so
+        // it never fails the event.
+        if (outcome.notifiedUserIds.length > 0) {
+          await service
+            .signalUsersChanged(outcome.notifiedUserIds)
+            .catch((error: unknown) => {
+              log.warn(
+                { err: error, eventId: event.id },
+                "Could not signal notification streams",
+              );
+            });
+        }
         log.info(
           {
             eventId: event.id,
