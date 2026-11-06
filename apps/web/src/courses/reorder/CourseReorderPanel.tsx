@@ -63,21 +63,21 @@ export function CourseReorderPanel({
         aria-label="Reorder courses"
         className="m-0! border-l border-(--border) data-[swipe-direction=right]:rounded-none! [--drawer-content-width:100%]! sm:[--drawer-content-width:min(36rem,92vw)]! xl:[--drawer-content-width:40rem]!"
       >
-        <header className="flex items-start gap-3 border-b border-(--border) px-6 py-5">
+        <header className="flex items-start gap-3 border-b border-(--border) px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4 sm:px-6 sm:py-5">
           <div className="min-w-0 flex-1">
             <DrawerTitle className="text-base font-semibold text-(--text)">
               Reorder courses
             </DrawerTitle>
             <DrawerDescription className="mt-1.5 max-w-[34rem] text-[0.85rem] leading-6 text-(--muted)">
-              Drag courses into the order everyone should see them in. The home
-              page, the catalogue and every course list, for learners and
-              visitors alike, follow it.
+              Drag courses, or move them with the arrows, into the order
+              everyone should see them in. The home page, the catalogue and
+              every course list, for learners and visitors alike, follow it.
             </DrawerDescription>
           </div>
           <button
             type="button"
             aria-label="Close"
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-(--muted) hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent)"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-(--muted) [@media(pointer:coarse)]:size-11 hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent)"
             onClick={() => onOpenChange(false)}
           >
             <X size={18} />
@@ -85,7 +85,7 @@ export function CourseReorderPanel({
         </header>
 
         <ol
-          className="m-0 flex min-h-0 flex-1 list-none flex-col gap-2 overflow-y-auto px-4 py-4"
+          className="m-0 flex min-h-0 flex-1 list-none flex-col gap-2 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4 sm:py-4"
           data-base-ui-swipe-ignore=""
           aria-label="Courses, first to last"
         >
@@ -103,14 +103,14 @@ export function CourseReorderPanel({
                   setDragHandleId(null);
                 }}
                 data-course-reorder-item={id}
-                className={`group/line flex items-center gap-3 rounded-xl border bg-(--surface) p-2 pr-2.5 transition-colors ${
+                className={`group/line flex items-center gap-2 rounded-xl border bg-(--surface) p-2 transition-colors sm:gap-3 sm:pr-2.5 ${
                   dragging
                     ? "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] opacity-60"
                     : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] hover:bg-(--hover)"
                 }`}
               >
                 <span
-                  className={`flex shrink-0 items-center justify-center rounded-md p-1 text-(--muted) ${
+                  className={`flex shrink-0 items-center justify-center rounded-md p-1 text-(--muted) [@media(pointer:coarse)]:hidden ${
                     saving
                       ? "pointer-events-none opacity-30"
                       : "cursor-grab hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) active:cursor-grabbing"
@@ -125,22 +125,22 @@ export function CourseReorderPanel({
                 >
                   <DotsSixVertical size={18} />
                 </span>
-                <span className="w-6 shrink-0 text-right text-[0.75rem] font-semibold tabular-nums text-(--muted)">
+                <span className="w-5 shrink-0 text-right text-[0.75rem] font-semibold tabular-nums text-(--muted) sm:w-6">
                   {index + 1}
                 </span>
                 {course.thumbnailUrl ? (
                   <img
                     src={course.thumbnailUrl}
                     alt=""
-                    className="h-11 w-18 shrink-0 rounded-md object-cover"
+                    className="aspect-video w-24 shrink-0 rounded-lg object-cover sm:w-32"
                     draggable={false}
                   />
                 ) : (
-                  <span className="h-11 w-18 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface))]" />
+                  <span className="aspect-video w-24 shrink-0 rounded-lg sm:w-32 bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface))]" />
                 )}
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span
-                    className="line-clamp-2 text-[0.9rem] leading-snug font-semibold break-words text-(--text)"
+                    className="line-clamp-2 text-[0.88rem] leading-snug font-semibold break-words text-(--text) sm:text-[0.95rem]"
                     title={course.title}
                   >
                     {course.title}
@@ -149,24 +149,24 @@ export function CourseReorderPanel({
                     {STATUS_LABEL[course.status]}
                   </span>
                 </span>
-                <span className="flex shrink-0 items-center">
+                <span className="flex shrink-0 flex-col items-center sm:flex-row">
                   <button
                     type="button"
                     aria-label={`Move ${course.title} up`}
                     disabled={saving || index === 0}
-                    className="inline-flex size-7 items-center justify-center rounded-md text-(--muted) hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent) disabled:opacity-30"
+                    className="inline-flex size-8 items-center justify-center rounded-md text-(--muted) [@media(pointer:coarse)]:size-11 hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent) disabled:opacity-30"
                     onClick={() => setIds(moveCourseBy(ids, id, -1))}
                   >
-                    <ArrowUp size={15} />
+                    <ArrowUp size={16} />
                   </button>
                   <button
                     type="button"
                     aria-label={`Move ${course.title} down`}
                     disabled={saving || index === shown.length - 1}
-                    className="inline-flex size-7 items-center justify-center rounded-md text-(--muted) hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent) disabled:opacity-30"
+                    className="inline-flex size-8 items-center justify-center rounded-md text-(--muted) [@media(pointer:coarse)]:size-11 hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent) disabled:opacity-30"
                     onClick={() => setIds(moveCourseBy(ids, id, 1))}
                   >
-                    <ArrowDown size={15} />
+                    <ArrowDown size={16} />
                   </button>
                 </span>
               </li>
@@ -174,10 +174,10 @@ export function CourseReorderPanel({
           })}
         </ol>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-(--border) px-6 py-4">
+        <footer className="flex items-center justify-end gap-2 border-t border-(--border) px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
           <button
             type="button"
-            className="min-h-10 rounded-(--control-radius-action) px-4 text-[0.8rem] font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent)"
+            className="min-h-11 rounded-(--control-radius-action) px-4 text-[0.85rem] font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent)"
             onClick={() => onOpenChange(false)}
           >
             Cancel
@@ -186,7 +186,7 @@ export function CourseReorderPanel({
             type="button"
             disabled={!changed || saving}
             aria-busy={saving}
-            className="inline-flex min-h-10 items-center gap-2 rounded-(--control-radius-action) bg-(--accent) px-4 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-2 rounded-(--control-radius-action) bg-(--accent) px-5 text-[0.85rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:opacity-50"
             onClick={() => void onSave(ids)}
           >
             {saving ? (

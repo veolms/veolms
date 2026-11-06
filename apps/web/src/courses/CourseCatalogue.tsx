@@ -157,23 +157,33 @@ export function CourseCatalogue({
     activeSection === "Courses" &&
     (isAdmin || capabilities.canOnCourse("course.details.update", null));
   const reorder = useCourseReorder({ enabled: canReorder, setNotice });
-  // Cards are dragged only while the grid shows every course, unfiltered:
-  // a move then reads the same on the page as in the saved order.
+  // A mouse drags cards in any view but the Bin: in a filtered view (only
+  // Published, a search) a card takes the place of the one it is dropped
+  // on in the full order. A touch screen reorders from the Reorder panel,
+  // where a long press would otherwise fight the page's scrolling.
+  const finePointer = useCourseCatalogueBreakpoint("(pointer: fine)");
+  const visibleIds = visibleCourses.map((course) => course.id);
+  const savedIds = reorder.courses.map((course) => course.id);
   const gridReorderable =
     canReorder &&
-    enrollmentFilter === "all" &&
-    statusFilter === "all" &&
-    !search.trim();
+    finePointer &&
+    enrollmentFilter !== "bin" &&
+    savedIds.length > 0;
+  const fullOrder = [
+    ...savedIds,
+    ...visibleIds.filter((id) => !savedIds.includes(id)),
+  ];
   const gridDrag = useCourseDragOrder(
-    visibleCourses.map((course) => course.id),
-    (ids) => void reorder.save(ids),
+    fullOrder,
+    (ids) => void reorder.save(ids.filter((id) => savedIds.includes(id))),
   );
   const coursesById = new Map(
     visibleCourses.map((course) => [course.id, course]),
   );
-  const shownCourses = gridReorderable
-    ? gridDrag.order.flatMap((id) => coursesById.get(id) ?? [])
-    : visibleCourses;
+  const shownCourses =
+    gridReorderable && gridDrag.draggedId
+      ? gridDrag.order.flatMap((id) => coursesById.get(id) ?? [])
+      : visibleCourses;
   useCatalogSearchTracking(
     search,
     isLoading,
@@ -416,13 +426,15 @@ export function CourseCatalogue({
                 {canReorder ? (
                   <button
                     type="button"
-                    className="flex h-11 shrink-0 items-center gap-2 rounded-(--control-radius-action) border border-(--border-strong) bg-(--card-surface) px-4 text-[14px]! font-[650]! text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                    className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-(--control-radius-action) border border-(--border-strong) bg-(--card-surface) px-4 text-[14px]! font-[650]! text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) max-[640px]:w-11 max-[640px]:px-0"
                     data-control-radius-action
                     aria-haspopup="dialog"
+                    aria-label="Reorder courses"
+                    title="Reorder courses"
                     onClick={() => reorder.setPanelOpen(true)}
                   >
                     <ArrowsDownUp size={18} weight="bold" />
-                    <span>Reorder</span>
+                    <span className="max-[640px]:sr-only">Reorder</span>
                   </button>
                 ) : null}
                 {canCreateCourse ? (
