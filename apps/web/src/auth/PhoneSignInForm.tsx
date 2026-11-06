@@ -38,8 +38,9 @@ export function PhoneSignInForm({
       >
         <CaretLeft aria-hidden size={18} weight="bold" />
       </button>
-      <div className="pt-2.5">
+      <div className="pt-7">
         <LoginHeading
+          centered
           title="Sign in with phone"
           subtitle="We'll text a one-time code to the phone number on your account."
         />
