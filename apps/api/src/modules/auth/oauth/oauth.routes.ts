@@ -1,5 +1,6 @@
 import {
   googleOneTapLoginRequestSchema,
+  googleOneTapNonceResponseSchema,
   loginResponseSchema,
   oauthCallbackRequestSchema,
   oauthRegisterRequestSchema,
@@ -60,6 +61,37 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.login,
+  );
+
+  app.post(
+    "/auth/oauth/google/nonce",
+    {
+      // Sign-in requests may arrive as text/plain (no CORS preflight).
+      preValidation: acceptTextJsonBody,
+      // Unauthenticated; each call writes one row to the DB. Cached per
+      // tab on the client with in-flight deduplication; rate-limited to 60
+      // per minute per IP for shared networks.
+      config: {
+        rateLimit: {
+          max: 60,
+          timeWindow: "1 minute",
+        },
+      },
+      schema: {
+        operationId: "getGoogleOneTapNonce",
+        tags: ["Auth"],
+        summary: "Get Google One Tap Nonce",
+        description:
+          "Generates a single-use cryptographic server nonce for Google One Tap sign-in. Embed the returned nonce in google.accounts.id.initialize() before prompting the user.",
+        response: {
+          200: jsonResponse(
+            "Nonce generated.",
+            googleOneTapNonceResponseSchema,
+          ),
+        },
+      },
+    },
+    controller.getGoogleOneTapNonce,
   );
 
   app.post(
