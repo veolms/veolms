@@ -2,15 +2,31 @@ import type {
   NotificationListQuery,
   UpdateNotificationPreferences,
 } from "@veolms/contracts";
-import type { FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 
+import {
+  createNotificationStreamHandler,
+  type NotificationStreamHub,
+} from "./notification-stream.ts";
 import type { NotificationService } from "./notifications.service.ts";
 
 export function createNotificationController({
   service,
+  stream,
 }: {
   service: NotificationService;
+  stream: {
+    hub: NotificationStreamHub;
+    enabled: boolean;
+    maxStreamsPerUser: number;
+  };
 }) {
+  const streamHandler = createNotificationStreamHandler(stream);
+
+  async function streamChanges(request: FastifyRequest, reply: FastifyReply) {
+    await streamHandler(request, reply);
+  }
+
   async function list(
     request: FastifyRequest<{ Querystring: NotificationListQuery }>,
   ) {
@@ -50,6 +66,7 @@ export function createNotificationController({
   }
 
   return {
+    streamChanges,
     list,
     getSummary,
     markRead,

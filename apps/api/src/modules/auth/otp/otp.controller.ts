@@ -18,9 +18,15 @@ export function createOtpController(context: AuthContext) {
     request: FastifyRequest<{ Body: OtpSendRequest }>,
   ): Promise<OtpSendResponse> {
     const { identifier, identifierType } = resolveIdentifier(request.body);
-    await otpService.sendOtp(identifier, identifierType, { ip: request.ip });
-    // The same for every address (a deactivated account's included), so the
-    // answer says nothing about the account behind it.
+    await otpService.sendOtp(
+      identifier,
+      identifierType,
+      { ip: request.ip },
+      { signInOnly: request.body.intent === "sign_in" },
+    );
+    // The same for every email address (a deactivated account's included),
+    // so the answer says nothing about the account behind it. A number that
+    // is not an account's confirmed number is refused above instead.
     return {
       message: "Verification OTP sent successfully.",
       codeExpiresInSeconds: config.OTP_TTL_MINUTES * 60,

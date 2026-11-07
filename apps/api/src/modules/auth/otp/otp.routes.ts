@@ -47,6 +47,9 @@ const otpRoutes: RoutePlugin = async (app, options) => {
             otpSendResponseSchema,
           ),
           400: errorResponse("Validation error or missing parameters."),
+          404: errorResponse(
+            "The phone number is not an account's confirmed number (PHONE_NOT_REGISTERED).",
+          ),
           429: errorResponse("Rate limit exceeded."),
           503: errorResponse("Verification code could not be delivered."),
         },
