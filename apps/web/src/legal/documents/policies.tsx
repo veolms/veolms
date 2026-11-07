@@ -33,13 +33,28 @@ export const policiesDocument: LegalDocument = {
           <span>01</span>Refund and Cancellation Policy
         </h2>
         <p>
-          You may request a refund within <strong>30 days</strong> of your
-          purchase if you have completed no more than <strong>10%</strong> of
-          the course content. To request one, email{" "}
-          <a href="mailto:contact@procodrr.com">contact@procodrr.com</a> from
-          the email address on your account with your order number and the
-          course name. We check your course usage and reply within 5 business
-          days.
+          You can get a refund yourself from <strong>Purchase History</strong>:
+          open the menu next to the course and choose{" "}
+          <strong>Request refund</strong>. Refunds are processed automatically,
+          with no need to contact us.
+        </p>
+        <p>
+          A purchase is eligible when both of these are true: it was made within
+          the last <strong>30 days</strong>, and you have watched no more than{" "}
+          <strong>10% of the course or 10 hours of it</strong>, whichever is
+          less. For example, you can watch up to 5 hours of a 50-hour course,
+          and up to 10 hours of a 200-hour course.
+        </p>
+        <p>
+          A <strong>quiz pass</strong> is eligible when it was bought within the
+          last <strong>30 days</strong> and you have attempted no more than{" "}
+          <strong>10% of its quizzes</strong>. For example, you can try 1 quiz
+          of a pass with 10 quizzes.
+        </p>
+        <p>
+          If <strong>Request refund</strong> is greyed out, the purchase is not
+          eligible for a refund, and the menu shows why. Emailing us will not
+          change that.
         </p>
         <p>
           Approved refunds are returned to the original payment method through
@@ -50,16 +65,18 @@ export const policiesDocument: LegalDocument = {
         </p>
         <p>
           Refunds are not available after 30 days, where more than 10% of the
-          course has been completed, for purchases made with a promotional or
-          bundle discount where the offer terms say so, or where an account has
-          been terminated for breaching our Terms of Service. Nothing here
-          limits your rights under the Consumer Protection Act, 2019.
+          course or 10 hours of it has been watched, where more than 10% of a
+          quiz pass’s quizzes have been attempted, for purchases made with a
+          promotional or bundle discount where the offer terms say so, or where
+          an account has been terminated for breaching our Terms of Service.
+          Nothing here limits your rights under the Consumer Protection Act,
+          2019.
         </p>
         <p>
           <strong>Android app:</strong> courses cannot be bought inside the
           ProCodrr Android app and we do not use Google Play billing, so Google
-          Play’s refund process does not apply. All refund requests come to us
-          directly using the steps above.
+          Play’s refund process does not apply. Refunds are requested from
+          Purchase History as described above.
         </p>
       </section>
       <section id="delivery-policy">
@@ -97,7 +114,7 @@ export const policiesDocument: LegalDocument = {
           <span>04</span>Contact Us
         </h2>
         <p>
-          For support, purchase questions, refunds, or anything else, email{" "}
+          For support, purchase questions, or anything else, email{" "}
           <a href="mailto:contact@procodrr.com">contact@procodrr.com</a>. Our
           postal address and Grievance Officer details are on the{" "}
           <Link to="/contact">Contact page</Link>.

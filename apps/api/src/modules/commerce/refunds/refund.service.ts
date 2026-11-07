@@ -23,9 +23,14 @@ import { createCourseAccessService } from "../shared/course-access.service.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface RefundService {
+  /**
+   * `initiatorUserId` is who started the refund: a staff member, or with
+   * `initiatedBy: "student"` the buyer, asking from Purchase History.
+   */
   processRefund(
-    adminUserId: string,
+    initiatorUserId: string,
     request: CreateRefundRequest,
+    options?: { initiatedBy?: "staff" | "student" },
   ): Promise<Refund>;
   getRefundById(refundId: string): Promise<Refund | undefined>;
   listRefundsForOrder(orderId: string): Promise<Refund[]>;
@@ -107,6 +112,7 @@ export function createRefundService({
   async function processRefund(
     adminUserId: string,
     request: CreateRefundRequest,
+    options: { initiatedBy?: "staff" | "student" } = {},
   ): Promise<Refund> {
     const { orderId, orderItemId, amount, reason, idempotencyKey } = request;
     const newRefundId = crypto.randomUUID();
@@ -359,11 +365,19 @@ export function createRefundService({
             gatewayPaymentId: payment.gateway_payment_id!,
             amount: requestedAmount,
             currency: payment.currency,
-            reason: reason ?? "Admin initiated refund",
+            reason:
+              reason ??
+              (options.initiatedBy === "student"
+                ? "Refund requested by the student"
+                : "Admin initiated refund"),
             idempotencyKey: gatewayIdempotencyKey,
             notes: {
               orderId: order.id,
-              adminUserId,
+              // Named for who it is, so the gateway's dashboard does not
+              // show a student as an admin.
+              ...(options.initiatedBy === "student"
+                ? { studentUserId: adminUserId }
+                : { adminUserId }),
               ...(targetItem ? { orderItemId: targetItem.id } : {}),
             },
           });
