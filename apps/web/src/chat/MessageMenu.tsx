@@ -42,6 +42,7 @@ export type MessageAction =
   | "message-sender"
   | "react-toggle"
   | "react-more"
+  | "react-remove"
   | `react:${string}`;
 
 const ROLE_LEVEL: Record<string, number> = {

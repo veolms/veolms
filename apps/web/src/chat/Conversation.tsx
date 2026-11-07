@@ -45,6 +45,7 @@ import {
   useUpdateMyChatState,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { roomAvatarUrl } from "./chatIcon";
 import {
   DeleteMessageDialog,
   ReportDialog,
@@ -203,6 +204,13 @@ export function Conversation({
 
   function onAction(action: MessageAction, message: ChatMessage) {
     const base = { roomId: room.id, seq: message.seq };
+    if (action === "react-remove") {
+      const previous = myReactions.get(message.id) ?? null;
+      myReactions.delete(message.id);
+      forceRender((n) => n + 1);
+      react.mutate({ ...base, emoji: null, previous }, { onError: fail });
+      return;
+    }
     if (action.startsWith("react:") || action === "react-toggle") {
       const previous = myReactions.get(message.id) ?? null;
       const picked = action === "react-toggle" ? previous : action.slice(6);
@@ -333,7 +341,7 @@ export function Conversation({
         >
           <ChatAvatar
             name={room.title}
-            url={room.peer?.avatarUrl ?? room.iconUrl}
+            url={roomAvatarUrl(room)}
             group={room.kind !== "direct"}
             size="md"
           />

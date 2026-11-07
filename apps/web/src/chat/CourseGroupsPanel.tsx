@@ -2,12 +2,13 @@ import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/Ma
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatRoomSummary } from "@veolms/contracts";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { getApiError } from "../lib/api-error";
 import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
-import { chatKeys, chatService, useUpdateRoomSettings } from "../services/chat";
+import { chatKeys, chatService } from "../services/chat";
+import type { ChatRoomList } from "../services/chat/chat.service";
 import { useMyCourses } from "../services/courses";
 import { ChatToggle, ListPanelHeader } from "./ChatControls";
 import { ChatListSkeleton } from "./ChatSkeletons";
@@ -15,8 +16,8 @@ import { ChatListSkeleton } from "./ChatSkeletons";
 /**
  * Staff: a group per course, like adding groups to a WhatsApp community.
  * The switch turns a course's group on (everyone enrolled gets it in Chats
- * at once) or off (archived: hidden from learners, history kept). Tapping a
- * course whose group is on opens it.
+ * at once) or off (archived: hidden from learners, history kept, and in the
+ * staff's Archived chats). Tapping a course whose group is on opens it.
  */
 export function CourseGroupsPanel({
   rooms,
@@ -31,9 +32,12 @@ export function CourseGroupsPanel({
 }) {
   const client = useQueryClient();
   const courses = useMyCourses();
-  const settings = useUpdateRoomSettings();
   const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
+  // Switches moved but not answered yet: course id -> on/off.
+  const [turning, setTurning] = useState<Record<string, boolean>>({});
+  const inflight = useRef(new Set<string>());
+  const isOn = (courseId: string) =>
+    turning[courseId] ?? byCourse.get(courseId)?.status === "active";
   const byCourse = new Map(
     rooms.filter((r) => r.courseId).map((r) => [r.courseId!, r]),
   );
@@ -41,52 +45,85 @@ export function CourseGroupsPanel({
   const list = (courses.data?.courses ?? [])
     .filter((course) => course.status !== "archived")
     .filter((course) => !term || fuzzyMatches(term, course.title));
-  const on = list.filter(
-    (course) => byCourse.get(course.id)?.status === "active",
-  );
-  const off = list.filter(
-    (course) => byCourse.get(course.id)?.status !== "active",
-  );
+  const on = list.filter((course) => isOn(course.id));
+  const off = list.filter((course) => !isOn(course.id));
 
-  async function turnOn(courseId: string) {
-    setBusy(courseId);
+  // The switch moves at once; the server is asked in the background and
+  // the switch goes back only if it says no. Turning a group on doesn't
+  // open it: tap the course (or find it in Chats) to go in.
+  function setRoomStatus(roomId: string, status: ChatRoomSummary["status"]) {
+    client.setQueryData<ChatRoomList>(chatKeys.rooms(), (old) =>
+      old
+        ? {
+            ...old,
+            rooms: old.rooms.map((r) =>
+              r.id === roomId ? { ...r, status } : r,
+            ),
+          }
+        : old,
+    );
+  }
+
+  async function turnOn(courseId: string, room: ChatRoomSummary | undefined) {
+    if (inflight.current.has(courseId)) return;
+    inflight.current.add(courseId);
+    setTurning((all) => ({ ...all, [courseId]: true }));
+    await client.cancelQueries({ queryKey: chatKeys.rooms() });
+    if (room) setRoomStatus(room.id, "active");
     try {
-      const { room } = await chatService.enableCourseChat(courseId);
-      await client.invalidateQueries({ queryKey: chatKeys.rooms() });
+      const { room: created } = await chatService.enableCourseChat(courseId);
+      client.setQueryData<ChatRoomList>(chatKeys.rooms(), (old) =>
+        old
+          ? {
+              ...old,
+              rooms: old.rooms.some((r) => r.id === created.id)
+                ? old.rooms.map((r) => (r.id === created.id ? created : r))
+                : [created, ...old.rooms],
+            }
+          : old,
+      );
+      client.setQueryData(chatKeys.room(created.id), created);
       onToast("Group turned on. Everyone enrolled can see it now.");
-      onOpen(room.id);
     } catch (error) {
+      if (room) setRoomStatus(room.id, room.status);
       onToast(getApiError(error).message);
     } finally {
-      setBusy(null);
+      inflight.current.delete(courseId);
+      setTurning(({ [courseId]: _done, ...rest }) => rest);
+      void client.invalidateQueries({ queryKey: chatKeys.rooms() });
     }
   }
 
-  function turnOff(courseId: string, room: ChatRoomSummary) {
-    setBusy(courseId);
-    settings.mutate(
-      { roomId: room.id, patch: { status: "archived" } },
-      {
-        onSuccess: () => {
-          void client.invalidateQueries({ queryKey: chatKeys.rooms() });
-          onToast("Group turned off. Its messages are kept.");
-        },
-        onError: (error) => onToast(getApiError(error).message),
-        onSettled: () => setBusy(null),
-      },
-    );
+  async function turnOff(courseId: string, room: ChatRoomSummary) {
+    if (inflight.current.has(courseId)) return;
+    inflight.current.add(courseId);
+    setTurning((all) => ({ ...all, [courseId]: false }));
+    await client.cancelQueries({ queryKey: chatKeys.rooms() });
+    setRoomStatus(room.id, "archived");
+    try {
+      await chatService.updateSettings(room.id, { status: "archived" });
+      onToast("Group turned off. It's in Archived; its messages are kept.");
+    } catch (error) {
+      setRoomStatus(room.id, room.status);
+      onToast(getApiError(error).message);
+    } finally {
+      inflight.current.delete(courseId);
+      setTurning(({ [courseId]: _done, ...rest }) => rest);
+      void client.invalidateQueries({ queryKey: chatKeys.rooms() });
+      void client.invalidateQueries({ queryKey: chatKeys.room(room.id) });
+    }
   }
 
   const row = (course: (typeof list)[number]) => {
     const room = byCourse.get(course.id);
-    const active = room?.status === "active";
+    const active = isOn(course.id);
     const thumb = course.thumbnailSrcSet?.[0]?.url ?? course.thumbnailUrl;
     return (
       <li key={course.id} className="group/row relative">
         <button
           type="button"
           disabled={!active}
-          onClick={() => room && active && onOpen(room.id)}
+          onClick={() => room && room.status === "active" && onOpen(room.id)}
           className={cn(
             "flex w-full items-center gap-3.5 rounded-xl border-0 bg-transparent py-2.5 pr-18 pl-3 text-left text-(--text)",
             active
@@ -112,7 +149,7 @@ export function CourseGroupsPanel({
             </span>
             <span className="block truncate text-[0.8rem] text-(--muted)">
               {active
-                ? room.lastMessage
+                ? room?.lastMessage
                   ? `Group on · ${room.lastMessage.preview || "Media"}`
                   : "Group on · no messages yet"
                 : room
@@ -126,10 +163,11 @@ export function CourseGroupsPanel({
         <span className="absolute top-1/2 right-4 -translate-y-1/2">
           <ChatToggle
             checked={active}
-            disabled={busy === course.id}
             label={`${active ? "Turn off" : "Turn on"} the group for ${course.title}`}
             onChange={(next) =>
-              next ? void turnOn(course.id) : room && turnOff(course.id, room)
+              next
+                ? void turnOn(course.id, room)
+                : room && void turnOff(course.id, room)
             }
           />
         </span>

@@ -40,6 +40,7 @@ import {
   useUpdateMyChatState,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { roomAvatarUrl } from "./chatIcon";
 import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
 import { listTime, messageTime, ROLE_LABEL } from "./chatFormat";
@@ -169,10 +170,13 @@ export function ChatList({
   }
 
   const archivedView = panel === "archived";
-  const archivedCount = rooms?.filter((r) => r.me.archived).length ?? 0;
+  // A group its admins turned off goes with the archived chats too.
+  const isArchived = (room: ChatRoomSummary) =>
+    room.me.archived || room.status === "archived";
+  const archivedCount = rooms?.filter(isArchived).length ?? 0;
   const term = search.trim();
   const visible = (rooms ?? []).filter((room) => {
-    if (room.me.archived !== archivedView) return false;
+    if (isArchived(room) !== archivedView) return false;
     // Loose, like the app's other search boxes: typos, parts of words and
     // any order ("bhupsh", "node backend") still find the chat.
     if (
@@ -472,7 +476,7 @@ function ChatRow({
       {photoOpen ? (
         <ProfilePhotoPreview
           name={room.title}
-          url={room.peer?.avatarUrl ?? room.iconUrl}
+          url={roomAvatarUrl(room)}
           group={room.kind !== "direct"}
           onClose={() => setPhotoOpen(false)}
           onMessage={() => {
@@ -504,7 +508,7 @@ function ChatRow({
       >
         <ChatAvatar
           name={room.title}
-          url={room.peer?.avatarUrl ?? room.iconUrl}
+          url={roomAvatarUrl(room)}
           group={room.kind !== "direct"}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">

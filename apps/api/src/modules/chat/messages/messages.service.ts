@@ -306,6 +306,30 @@ export function createMessagesService(runtime: ChatRuntime) {
       };
     },
 
+    /** Who reacted, with what: you first, then the newest (WhatsApp). */
+    async reactions(userId: string, roomId: string, seq: number) {
+      await views.assertCanRead(database, userId, roomId);
+      const row = await loadMessage(roomId, seq);
+      if (row.deleted_at) return { reactions: [] };
+      const rows = await repository.listReactions(
+        database,
+        roomId,
+        seq,
+        MESSAGE_INFO_LIMIT,
+      );
+      const people = rows.map((r) => ({
+        ...presentPerson(r),
+        emoji: r.emoji,
+        at: new Date(r.created_at).toISOString(),
+      }));
+      return {
+        reactions: [
+          ...people.filter((p) => p.id === userId),
+          ...people.filter((p) => p.id !== userId),
+        ],
+      };
+    },
+
     /** "Search in this chat": newest matches first, 30 at a time. */
     async search(
       userId: string,

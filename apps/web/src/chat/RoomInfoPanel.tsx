@@ -34,6 +34,7 @@ import {
   type ChatThread,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { roomAvatarUrl } from "./chatIcon";
 import {
   chatIconButton,
   ChatSelect,
@@ -217,7 +218,7 @@ export function RoomInfoPanel({
               >
                 <ChatAvatar
                   name={room.title}
-                  url={room.iconUrl}
+                  url={roomAvatarUrl(room)}
                   group
                   size="xl"
                 />
@@ -246,7 +247,7 @@ export function RoomInfoPanel({
           ) : (
             <ChatAvatar
               name={room.title}
-              url={room.peer?.avatarUrl ?? room.iconUrl}
+              url={roomAvatarUrl(room)}
               group={isGroup}
               size="xl"
             />

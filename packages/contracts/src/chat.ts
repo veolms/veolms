@@ -223,10 +223,12 @@ export const chatRoomSummarySchema = z.object({
   title: z.string(),
   courseId: z.uuid().nullable(),
   /**
-   * Groups: the icon an admin set, else (course groups) the course's
-   * picture; null for none. Private chats use the person's picture.
+   * Groups: the icon an admin set (an API path, like attachments); null for
+   * none. Private chats use the person's picture.
    */
   iconUrl: z.string().nullable(),
+  /** Course groups without an icon of their own show the course picture. */
+  courseThumbnailUrl: z.string().nullable(),
   /** Private chats: the other person. */
   peer: chatSenderSchema.nullable(),
   directStatus: chatDirectStatusSchema.nullable(),
@@ -333,6 +335,18 @@ export const chatMessageInfoSchema = z.object({
   receiptsHidden: z.boolean(),
 });
 export type ChatMessageInfo = z.infer<typeof chatMessageInfoSchema>;
+
+/** Who reacted to a message, and with what (tap the reactions under it). */
+export const chatReactionPersonSchema = chatPersonSchema.extend({
+  emoji: z.string(),
+  at: isoDate,
+});
+export type ChatReactionPerson = z.infer<typeof chatReactionPersonSchema>;
+export const chatMessageReactionsSchema = z.object({
+  /** You first, then the newest. */
+  reactions: z.array(chatReactionPersonSchema),
+});
+export type ChatMessageReactions = z.infer<typeof chatMessageReactionsSchema>;
 
 /** Your chat privacy and preferences (WhatsApp Settings › Privacy, Chats). */
 export const chatProfileSchema = z.object({

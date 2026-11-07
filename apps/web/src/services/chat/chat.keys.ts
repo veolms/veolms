@@ -14,6 +14,8 @@ export const chatKeys = {
     [...chatKeys.all, "search", roomId, q] as const,
   messageInfo: (roomId: string, seq: number) =>
     [...chatKeys.all, "message-info", roomId, seq] as const,
+  messageReactions: (roomId: string, seq: number, version: string) =>
+    [...chatKeys.all, "message-reactions", roomId, seq, version] as const,
   reports: (roomId: string | null) =>
     [...chatKeys.all, "reports", roomId ?? "all"] as const,
   restrictions: (roomId: string | null) =>
