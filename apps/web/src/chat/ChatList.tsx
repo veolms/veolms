@@ -438,6 +438,7 @@ function ChatRow({
   const leave = useLeaveChat();
   const typing = useTypingNames(room.id);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMounted, setMenuMounted] = useState(false);
   const last = room.lastMessage;
   const mine = Boolean(last && viewerId && last.senderId === viewerId);
   const unread = room.unreadCount > 0;
@@ -603,76 +604,94 @@ function ChatRow({
           menuOpen && "translate-x-0 opacity-100",
         )}
       >
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger
+        {menuMounted ? (
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger
+              aria-label={`Chat options for ${room.title}`}
+              className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:text-(--text)"
+            >
+              <CaretDown size={18} weight="bold" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 min-w-0">
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  onClick={() => setState({ archived: !room.me.archived })}
+                >
+                  <Archive size={17} aria-hidden="true" />
+                  {room.me.archived ? "Unarchive chat" : "Archive chat"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    setState({ notifyLevel: muted ? "all" : "none" })
+                  }
+                >
+                  <BellSlash size={17} aria-hidden="true" />
+                  {muted ? "Unmute notifications" : "Mute notifications"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setState({ pinned: !room.me.pinned })}
+                >
+                  <PushPin size={17} aria-hidden="true" />
+                  {room.me.pinned ? "Unpin chat" : "Pin chat"}
+                </DropdownMenuItem>
+                {unread ? (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      queueReceipt(room.id, { readSeq: room.lastSeq });
+                      markRoomRead(client, room.id, room.lastSeq);
+                    }}
+                  >
+                    <Checks size={17} aria-hidden="true" /> Mark as read
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuGroup>
+              {room.kind === "direct" && room.peer ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-500"
+                    onClick={() =>
+                      block.mutate({
+                        userId: room.peer!.id,
+                        blocked: room.me.cannotPostReason !== "blocked",
+                      })
+                    }
+                  >
+                    <Prohibit size={17} aria-hidden="true" />
+                    {room.me.cannotPostReason === "blocked"
+                      ? "Unblock"
+                      : "Block"}
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+              {room.kind === "team" ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-500"
+                    onClick={() => leave.mutate(room.id)}
+                  >
+                    <SignOut size={17} aria-hidden="true" /> Exit group
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          // The menu mounts on first use, so a long chat list stays light.
+          <button
+            type="button"
             aria-label={`Chat options for ${room.title}`}
+            aria-haspopup="menu"
+            onClick={() => {
+              setMenuMounted(true);
+              setMenuOpen(true);
+            }}
             className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:text-(--text)"
           >
             <CaretDown size={18} weight="bold" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56 min-w-0">
-            <DropdownMenuGroup>
-              <DropdownMenuItem
-                onClick={() => setState({ archived: !room.me.archived })}
-              >
-                <Archive size={17} aria-hidden="true" />
-                {room.me.archived ? "Unarchive chat" : "Archive chat"}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  setState({ notifyLevel: muted ? "all" : "none" })
-                }
-              >
-                <BellSlash size={17} aria-hidden="true" />
-                {muted ? "Unmute notifications" : "Mute notifications"}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setState({ pinned: !room.me.pinned })}
-              >
-                <PushPin size={17} aria-hidden="true" />
-                {room.me.pinned ? "Unpin chat" : "Pin chat"}
-              </DropdownMenuItem>
-              {unread ? (
-                <DropdownMenuItem
-                  onClick={() => {
-                    queueReceipt(room.id, { readSeq: room.lastSeq });
-                    markRoomRead(client, room.id, room.lastSeq);
-                  }}
-                >
-                  <Checks size={17} aria-hidden="true" /> Mark as read
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuGroup>
-            {room.kind === "direct" && room.peer ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-red-500"
-                  onClick={() =>
-                    block.mutate({
-                      userId: room.peer!.id,
-                      blocked: room.me.cannotPostReason !== "blocked",
-                    })
-                  }
-                >
-                  <Prohibit size={17} aria-hidden="true" />
-                  {room.me.cannotPostReason === "blocked" ? "Unblock" : "Block"}
-                </DropdownMenuItem>
-              </>
-            ) : null}
-            {room.kind === "team" ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-red-500"
-                  onClick={() => leave.mutate(room.id)}
-                >
-                  <SignOut size={17} aria-hidden="true" /> Exit group
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </button>
+        )}
       </div>
     </li>
   );

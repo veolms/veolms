@@ -53,6 +53,11 @@ export function MessageBubble({
   onJumpTo: (seq: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMounted, setMenuMounted] = useState(false);
+  const openMenu = () => {
+    setMenuMounted(true);
+    setMenuOpen(true);
+  };
   const [dragX, setDragX] = useState(0);
   const touch = useRef<{
     x: number;
@@ -74,6 +79,19 @@ export function MessageBubble({
   }
 
   const deleted = message.deleted !== null;
+  const chevron = (
+    <span
+      className={cn(
+        // WhatsApp: the chevron sits on a soft fade of the bubble.
+        "inline-flex h-6 w-8 items-start justify-end rounded-tr-lg pt-1 pr-1 text-(--muted)",
+        outgoing
+          ? "bg-[radial-gradient(at_top_right,var(--chat-out)_55%,transparent_75%)]"
+          : "bg-[radial-gradient(at_top_right,var(--chat-in)_55%,transparent_75%)]",
+      )}
+    >
+      <CaretDown size={14} weight="bold" />
+    </span>
+  );
   const ticks =
     outgoing && !deleted ? <Ticks message={message} ctx={ctx} /> : null;
   const roleLabel = message.sender
@@ -112,7 +130,7 @@ export function MessageBubble({
         // A finger still down: the long press opens it when it lifts.
         if (touch.current) return;
         // After the press ends, or the menu reads it as a press outside.
-        setTimeout(() => setMenuOpen(true), 0);
+        setTimeout(openMenu, 0);
       }}
       onTouchStart={(event) => {
         const t = event.touches[0]!;
@@ -150,7 +168,7 @@ export function MessageBubble({
         else if (start?.long && !deleted) {
           // Opened after the lift, so the lift is not a press outside it.
           event.preventDefault();
-          setTimeout(() => setMenuOpen(true), 0);
+          setTimeout(openMenu, 0);
         }
         setDragX(0);
       }}
@@ -253,27 +271,29 @@ export function MessageBubble({
               menuOpen && "opacity-100",
             )}
           >
-            <MessageMenu
-              message={message}
-              ctx={ctx}
-              outgoing={outgoing}
-              open={menuOpen}
-              onOpenChange={setMenuOpen}
-              onAction={(action) => onAction(action, message)}
-              trigger={
-                <span
-                  className={cn(
-                    // WhatsApp: the chevron sits on a soft fade of the bubble.
-                    "inline-flex h-6 w-8 items-start justify-end rounded-tr-lg pt-1 pr-1 text-(--muted)",
-                    outgoing
-                      ? "bg-[radial-gradient(at_top_right,var(--chat-out)_55%,transparent_75%)]"
-                      : "bg-[radial-gradient(at_top_right,var(--chat-in)_55%,transparent_75%)]",
-                  )}
-                >
-                  <CaretDown size={14} weight="bold" />
-                </span>
-              }
-            />
+            {menuMounted ? (
+              <MessageMenu
+                message={message}
+                ctx={ctx}
+                outgoing={outgoing}
+                open={menuOpen}
+                onOpenChange={setMenuOpen}
+                onAction={(action) => onAction(action, message)}
+                trigger={chevron}
+              />
+            ) : (
+              // The menu itself mounts on first use: a chat of hundreds of
+              // messages then draws without hundreds of menus.
+              <button
+                type="button"
+                aria-label="Message options"
+                aria-haspopup="menu"
+                onClick={openMenu}
+                className="cursor-pointer border-0 bg-transparent p-0"
+              >
+                {chevron}
+              </button>
+            )}
           </div>
         ) : null}
 
