@@ -1266,6 +1266,23 @@ export function createChatRepository() {
       });
     },
 
+    /** A group's own icon, else its course's picture (storage and address). */
+    async roomIconSource(db: Executor, roomId: string) {
+      return db
+        .selectFrom("chat_rooms as r")
+        .leftJoin("courses as c", "c.id", "r.course_id")
+        .leftJoin("media_assets as ma", "ma.id", "c.thumbnail_media_id")
+        .select([
+          "r.kind",
+          "r.icon_upload_id",
+          "c.thumbnail_url",
+          "ma.storage_key as media_storage_key",
+          "ma.metadata as media_metadata",
+        ])
+        .where("r.id", "=", roomId)
+        .executeTakeFirst();
+    },
+
     async listReactions(
       db: Executor,
       roomId: string,

@@ -54,6 +54,29 @@ const EXTENSIONS: Record<string, string> = {
   "application/json": ".json",
 };
 
+/** The course picture at avatar size: its 240 px copy, else the original. */
+function thumbnailKey(metadata: unknown, storageKey: string): string {
+  const variants =
+    metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? (metadata as { variants?: unknown }).variants
+      : null;
+  if (Array.isArray(variants)) {
+    for (const width of [240, 320, 160, 480]) {
+      const found = variants.find(
+        (v): v is { key: string } =>
+          Boolean(v) &&
+          typeof v === "object" &&
+          (v as { width?: unknown }).width === width &&
+          typeof (v as { key?: unknown }).key === "string",
+      );
+      if (found?.key.trim()) return found.key.trim();
+    }
+  }
+  return storageKey;
+}
+
+const DAY_SECONDS = 24 * 60 * 60;
+
 function hasObjectStorage(): boolean {
   return Boolean(
     config.STORAGE_ACCESS_KEY_ID && config.STORAGE_SECRET_ACCESS_KEY,
@@ -86,6 +109,25 @@ export function createUploadsService(
     objectPrefix: "protected/chat",
     diskDirectory: join(process.cwd(), ".data", "chat-uploads"),
   });
+
+  /** A short-lived link, on 6-hour boundaries so browsers can cache it. */
+  async function signedRedirect(key: string, disposition?: string) {
+    const now = Math.floor(Date.now() / 1000);
+    const bucketEnd =
+      Math.ceil((now + 60) / READ_BUCKET_SECONDS) * READ_BUCKET_SECONDS +
+      READ_BUCKET_SECONDS;
+    const expiresIn = bucketEnd - now;
+    const url = await storage.getPresignedGetUrl(
+      key,
+      expiresIn,
+      disposition ? { responseContentDisposition: disposition } : undefined,
+    );
+    return {
+      kind: "redirect" as const,
+      url,
+      maxAge: Math.max(60, expiresIn - READ_BUCKET_SECONDS),
+    };
+  }
 
   function diskName(upload: { id: string; mime_type: string }) {
     return `${upload.id}${EXTENSIONS[upload.mime_type] ?? ".bin"}`;
@@ -290,21 +332,45 @@ export function createUploadsService(
           disposition,
         };
       }
-      const now = Math.floor(Date.now() / 1000);
-      const bucketEnd =
-        Math.ceil((now + 60) / READ_BUCKET_SECONDS) * READ_BUCKET_SECONDS +
-        READ_BUCKET_SECONDS;
-      const expiresIn = bucketEnd - now;
-      const url = await storage.getPresignedGetUrl(
-        upload.storage_key,
-        expiresIn,
-        { responseContentDisposition: disposition },
-      );
-      return {
-        kind: "redirect" as const,
-        url,
-        maxAge: Math.max(60, expiresIn - READ_BUCKET_SECONDS),
-      };
+      return signedRedirect(upload.storage_key, disposition);
+    },
+
+    /**
+     * A group's picture, for anyone who can read the group: the icon its
+     * admins set, else the course's picture (a public copy from the CDN, or
+     * a signed link when the course's files are private, as for a course
+     * that is not published).
+     */
+    async icon(userId: string, roomId: string) {
+      await views.assertCanRead(database, userId, roomId);
+      const source = await repository.roomIconSource(database, roomId);
+      if (!source || source.kind === "direct")
+        throw ChatErrors.uploadNotFound();
+      if (source.icon_upload_id) {
+        return this.read(userId, source.icon_upload_id, false);
+      }
+      if (source.media_storage_key) {
+        const key = thumbnailKey(
+          source.media_metadata,
+          source.media_storage_key,
+        );
+        const publicUrl = storage.isCdnPublicKey(key)
+          ? storage.getPublicObjectUrl(key)
+          : null;
+        if (publicUrl && /^https?:\/\//.test(publicUrl)) {
+          return {
+            kind: "redirect" as const,
+            url: publicUrl,
+            maxAge: DAY_SECONDS,
+          };
+        }
+        if (hasObjectStorage()) return signedRedirect(key);
+      }
+      const stored = source.thumbnail_url?.trim();
+      if (stored && /^https?:\/\//.test(stored)) {
+        return { kind: "redirect" as const, url: stored, maxAge: DAY_SECONDS };
+      }
+      throw ChatErrors.uploadNotFound();
     },
 
     /** Removes files nobody can read any more (retention job). */

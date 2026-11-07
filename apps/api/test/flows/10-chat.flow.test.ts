@@ -632,6 +632,46 @@ await test("files: signed direct uploads, allowed types only, never sent unfinis
   );
 });
 
+await test("group icon: only admins set it, an unfinished upload can't be one, and the picture is read through the API", async () => {
+  type Summary = { iconUrl: string | null; customIcon: boolean };
+  const before = ok<{ room: Summary }>(
+    await b.client.get(`/v1/chat/rooms/${roomId}`),
+  ).room;
+  // This course has no picture and no icon was set: nothing to show.
+  assert.equal(before.customIcon, false);
+  assert.equal(before.iconUrl, null);
+  refused(
+    await b.client.get(`/v1/chat/rooms/${roomId}/icon`),
+    404,
+    "CHAT_UPLOAD_NOT_FOUND",
+  );
+
+  const started = ok<{ uploadId: string }>(
+    await admin.post(`/v1/chat/rooms/${roomId}/uploads`, {
+      kind: "image",
+      name: "icon.jpg",
+      mimeType: "image/jpeg",
+      size: 2_000,
+      width: 64,
+      height: 64,
+    }),
+  );
+  refused(
+    await b.client.patch(`/v1/chat/rooms/${roomId}/settings`, {
+      iconUploadId: started.uploadId,
+    }),
+    403,
+    "CHAT_NOT_ADMIN",
+  );
+  refused(
+    await admin.patch(`/v1/chat/rooms/${roomId}/settings`, {
+      iconUploadId: started.uploadId,
+    }),
+    400,
+    "CHAT_ICON_INVALID",
+  );
+});
+
 await test("the live stream delivers new messages to the group", async () => {
   await flow.app.listen({ port: 0, host: "127.0.0.1" });
   const { port } = flow.app.server.address() as AddressInfo;

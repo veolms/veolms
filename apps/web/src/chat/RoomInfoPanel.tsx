@@ -28,6 +28,7 @@ import {
   useChatRestrictions,
   useRestrictMember,
   useSetHelper,
+  storeRoomDetail,
   useStartDirect,
   useUpdateMyChatState,
   useUpdateRoomSettings,
@@ -35,6 +36,7 @@ import {
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
 import { roomAvatarUrl } from "./chatIcon";
+import { squareIcon } from "./groupIcon";
 import {
   chatIconButton,
   ChatSelect,
@@ -126,29 +128,30 @@ export function RoomInfoPanel({
     settings.mutate({ roomId: room.id, patch: change }, { onError: fail });
   const moderator = isGroup && (room.me.canModerate || room.me.isHelper);
   const iconInputRef = useRef<HTMLInputElement>(null);
-  const [iconBusy, setIconBusy] = useState(false);
-  async function changeIcon(file: File) {
-    setIconBusy(true);
+  // The chosen photo shows at once, with how much is uploaded, until the
+  // server has it; then the group's own address takes over.
+  const [iconPreview, setIconPreview] = useState<string | null>(null);
+  const [iconProgress, setIconProgress] = useState<number | null>(null);
+  async function changeIcon(picked: File) {
+    const preview = URL.createObjectURL(picked);
+    setIconPreview(preview);
+    setIconProgress(0);
     try {
-      const size = await new Promise<{ width?: number; height?: number }>(
-        (resolve) => {
-          const img = new Image();
-          img.onload = () => {
-            resolve({ width: img.naturalWidth, height: img.naturalHeight });
-            URL.revokeObjectURL(img.src);
-          };
-          img.onerror = () => resolve({});
-          img.src = URL.createObjectURL(file);
-        },
+      const { file, ...size } = await squareIcon(picked);
+      const { room: updated } = await chatService.setGroupIcon(
+        room.id,
+        file,
+        size,
+        setIconProgress,
       );
-      await chatService.setGroupIcon(room.id, file, size);
-      await client.invalidateQueries({ queryKey: chatKeys.room(room.id) });
-      await client.invalidateQueries({ queryKey: chatKeys.rooms() });
+      storeRoomDetail(client, updated);
       onToast("Group icon changed.");
     } catch (error) {
       fail(error);
     } finally {
-      setIconBusy(false);
+      setIconProgress(null);
+      setIconPreview(null);
+      URL.revokeObjectURL(preview);
     }
   }
   const reports = useChatReports(room.id, admin);
@@ -214,24 +217,32 @@ export function RoomInfoPanel({
             <DropdownMenu>
               <DropdownMenuTrigger
                 aria-label="Change group icon"
+                disabled={iconProgress !== null}
                 className="group/icon relative cursor-pointer rounded-full border-0 bg-transparent p-0"
               >
                 <ChatAvatar
                   name={room.title}
-                  url={roomAvatarUrl(room)}
+                  url={iconPreview ?? roomAvatarUrl(room)}
                   group
                   size="xl"
                 />
-                <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-full bg-black/55 text-[0.7rem] font-semibold text-white opacity-0 transition-opacity group-hover/icon:opacity-100 group-focus-visible/icon:opacity-100">
+                <span
+                  className={cn(
+                    "absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-full bg-black/55 text-[0.7rem] font-semibold text-white transition-opacity group-hover/icon:opacity-100 group-focus-visible/icon:opacity-100",
+                    iconProgress === null ? "opacity-0" : "opacity-100",
+                  )}
+                >
                   <Camera size={22} aria-hidden="true" />
-                  {iconBusy ? "Saving…" : "Change icon"}
+                  {iconProgress === null
+                    ? "Change icon"
+                    : `Saving… ${Math.round(iconProgress * 100)}%`}
                 </span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="w-52 min-w-0">
                 <DropdownMenuItem onClick={() => iconInputRef.current?.click()}>
                   <ImageSquare size={17} aria-hidden="true" /> Upload photo
                 </DropdownMenuItem>
-                {room.iconUrl ? (
+                {room.customIcon ? (
                   <DropdownMenuItem
                     className="text-red-500"
                     onClick={() => patch({ iconUploadId: null })}

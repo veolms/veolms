@@ -4,6 +4,7 @@ import {
   chatCreateUploadResponseSchema,
   chatOkResponseSchema,
   chatReadUploadQuerySchema,
+  chatRoomIconQuerySchema,
   chatRoomParamsSchema,
   chatUploadParamsSchema,
 } from "@veolms/contracts";
@@ -124,6 +125,43 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
     },
     async (request: FastifyRequest<{ Params: { uploadId: string } }>) =>
       service.complete(request.user!.id, request.params.uploadId),
+  );
+
+  app.get(
+    "/chat/rooms/:roomId/icon",
+    {
+      preHandler,
+      schema: {
+        operationId: "readChatRoomIcon",
+        tags,
+        summary:
+          "A group's picture: its icon, else its course's picture (redirects)",
+        params: chatRoomParamsSchema,
+        querystring: chatRoomIconQuerySchema,
+        response: { ...common },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { roomId: string } }>,
+      reply: FastifyReply,
+    ) => {
+      const result = await service.icon(
+        request.user!.id,
+        request.params.roomId,
+      );
+      reply.header("X-Content-Type-Options", "nosniff");
+      if (result.kind === "redirect") {
+        reply.header("Cache-Control", `private, max-age=${result.maxAge}`);
+        return reply.redirect(result.url, 302);
+      }
+      reply
+        .header("Content-Type", result.mimeType)
+        .header("Content-Length", String(result.size))
+        .header("Content-Disposition", result.disposition)
+        .header("Cache-Control", "private, max-age=3600")
+        .header("Content-Security-Policy", "default-src 'none'; sandbox");
+      return reply.send(result.stream);
+    },
   );
 
   app.get(

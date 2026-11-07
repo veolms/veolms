@@ -168,6 +168,10 @@ export const chatCompleteUploadResponseSchema = z.object({
 export const chatReadUploadQuerySchema = z.strictObject({
   download: z.enum(["1", "0"]).optional(),
 });
+/** `v` only makes the address change when the picture does (caching). */
+export const chatRoomIconQuerySchema = z.strictObject({
+  v: z.string().max(200).optional(),
+});
 
 export const chatSenderSchema = chatPersonSchema.extend({
   role: chatSenderRoleSchema,
@@ -223,12 +227,13 @@ export const chatRoomSummarySchema = z.object({
   title: z.string(),
   courseId: z.uuid().nullable(),
   /**
-   * Groups: the icon an admin set (an API path, like attachments); null for
-   * none. Private chats use the person's picture.
+   * Groups: where their picture is read (an API path, like attachments):
+   * the icon an admin set, else the course's picture; null for none.
+   * Private chats use the person's picture.
    */
   iconUrl: z.string().nullable(),
-  /** Course groups without an icon of their own show the course picture. */
-  courseThumbnailUrl: z.string().nullable(),
+  /** An admin set this group's icon (it can be removed). */
+  customIcon: z.boolean(),
   /** Private chats: the other person. */
   peer: chatSenderSchema.nullable(),
   directStatus: chatDirectStatusSchema.nullable(),

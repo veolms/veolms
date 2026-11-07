@@ -1,14 +1,20 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type {
   ChatMessage,
   ChatProfile,
   ChatReason,
   ChatRestrictionType,
+  ChatRoomDetail,
+  ChatRoomSummary,
 } from "@veolms/contracts";
 
 import { applyMessages, type ChatThread } from "./chat.cache";
 import { chatKeys } from "./chat.keys";
-import { chatService } from "./chat.service";
+import { chatService, type ChatRoomList } from "./chat.service";
 
 /** Writes a changed message into its chat. */
 function useMessageResult() {
@@ -121,6 +127,35 @@ export function useStarMessage() {
   });
 }
 
+/**
+ * Puts a chat's new header (a settings answer) in the cache at once, in its
+ * page and its row in the list, then checks with the server in the
+ * background: the change shows without waiting for a second request.
+ */
+export function storeRoomDetail(client: QueryClient, room: ChatRoomDetail) {
+  client.setQueryData(chatKeys.room(room.id), room);
+  client.setQueryData<ChatRoomList>(chatKeys.rooms(), (old) =>
+    old
+      ? {
+          ...old,
+          rooms: old.rooms.map((r) =>
+            r.id === room.id
+              ? (Object.fromEntries(
+                  Object.keys(r).map((key) => [
+                    key,
+                    key in room
+                      ? room[key as keyof ChatRoomDetail]
+                      : r[key as keyof ChatRoomSummary],
+                  ]),
+                ) as unknown as ChatRoomSummary)
+              : r,
+          ),
+        }
+      : old,
+  );
+  void client.invalidateQueries({ queryKey: chatKeys.rooms() });
+}
+
 function useRoomResult() {
   const client = useQueryClient();
   return (roomId: string) => {
@@ -145,13 +180,13 @@ export function useUpdateMyChatState() {
 }
 
 export function useUpdateRoomSettings() {
-  const refresh = useRoomResult();
+  const client = useQueryClient();
   return useMutation({
     mutationFn: (v: {
       roomId: string;
       patch: Parameters<typeof chatService.updateSettings>[1];
     }) => chatService.updateSettings(v.roomId, v.patch),
-    onSuccess: (_d, v) => refresh(v.roomId),
+    onSuccess: (data) => storeRoomDetail(client, data.room),
   });
 }
 
