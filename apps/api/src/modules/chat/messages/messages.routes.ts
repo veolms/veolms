@@ -5,6 +5,7 @@ import {
   chatEditMessageRequestSchema,
   chatMessageListQuerySchema,
   chatMessageInfoSchema,
+  chatMessageReactionsSchema,
   chatMessageSearchQuerySchema,
   chatMessageSearchResponseSchema,
   chatMessageListResponseSchema,
@@ -107,6 +108,27 @@ const messagesRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.info,
+  );
+
+  app.get(
+    "/chat/rooms/:roomId/messages/:seq/reactions",
+    {
+      preHandler,
+      schema: {
+        operationId: "listChatMessageReactions",
+        tags,
+        summary: "Who reacted to a message, and with which emoji",
+        params: chatMessageParamsSchema,
+        response: {
+          200: jsonResponse(
+            "People and their reactions",
+            chatMessageReactionsSchema,
+          ),
+          ...common,
+        },
+      },
+    },
+    controller.reactions,
   );
 
   app.get(

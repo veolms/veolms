@@ -198,7 +198,7 @@ export function createChatRepository() {
         row ?? {
           id: 1,
           direct_policy: "course_peers" as ChatDirectPolicy,
-          course_retention_months: 12,
+          course_retention_months: 120,
           max_direct_requests_per_day: 10,
           max_helpers_per_room: 10,
           updated_by: null,
@@ -1264,6 +1264,30 @@ export function createChatRepository() {
         `.execute(trx);
         return result.rows[0] ? Number(result.rows[0].version_seq) : null;
       });
+    },
+
+    async listReactions(
+      db: Executor,
+      roomId: string,
+      seq: number,
+      limit: number,
+    ) {
+      return db
+        .selectFrom("chat_reactions as r")
+        .innerJoin("users as u", "u.id", "r.user_id")
+        .select([
+          "u.id",
+          "u.display_name",
+          "u.avatar_data_url",
+          "u.is_deleted",
+          "r.emoji",
+          "r.created_at",
+        ])
+        .where("r.room_id", "=", roomId)
+        .where("r.seq", "=", String(seq))
+        .orderBy("r.created_at", "desc")
+        .limit(limit)
+        .execute();
     },
 
     async setReaction(

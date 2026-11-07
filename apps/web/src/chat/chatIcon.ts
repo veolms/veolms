@@ -1,6 +1,5 @@
 import type { ChatRoomSummary } from "@veolms/contracts";
 
-import { getCourseThumbnailCdnUrl } from "../courses/courseMedia";
 import { chatService } from "../services/chat";
 
 /**
@@ -11,11 +10,7 @@ import { chatService } from "../services/chat";
 export function roomAvatarUrl(
   room: Pick<
     ChatRoomSummary,
-    | "kind"
-    | "peer"
-    | "iconUrl"
-    | "courseThumbnailMediaId"
-    | "courseThumbnailUrl"
+    "kind" | "peer" | "iconUrl" | "courseThumbnailUrl"
   >,
 ): string | null {
   if (room.kind === "direct") return room.peer?.avatarUrl ?? null;
@@ -24,9 +19,5 @@ export function roomAvatarUrl(
       ? chatService.fileUrl({ url: room.iconUrl })
       : room.iconUrl;
   }
-  return (
-    getCourseThumbnailCdnUrl(room.courseThumbnailMediaId, 240) ??
-    room.courseThumbnailUrl ??
-    null
-  );
+  return room.courseThumbnailUrl;
 }

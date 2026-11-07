@@ -3,6 +3,7 @@ import type {
   ChatChangesResponse,
   ChatMessage,
   ChatMessageInfo,
+  ChatMessageReactions,
   ChatMessageSearchResponse,
   ChatProfile,
   ChatReason,
@@ -119,6 +120,10 @@ export const chatService = {
     }),
   messageInfo: (roomId: string, seq: number) =>
     api.get<ChatMessageInfo>(`/chat/rooms/${roomId}/messages/${seq}/info`),
+  messageReactions: (roomId: string, seq: number) =>
+    api.get<ChatMessageReactions>(
+      `/chat/rooms/${roomId}/messages/${seq}/reactions`,
+    ),
   getRoom: (roomId: string) =>
     api.get<{ room: ChatRoomDetail }>(`/chat/rooms/${roomId}`),
   listMessages: (
