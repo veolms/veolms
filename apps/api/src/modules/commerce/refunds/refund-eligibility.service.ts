@@ -17,7 +17,14 @@ import * as eligibilityRepo from "./refund-eligibility.repository.ts";
 export interface OrderRefundAssessment {
   orderId: string;
   eligibility: RefundEligibility;
+  /**
+   * The request already made, if it still stands. An approved request
+   * whose refund then failed at the gateway (the order still paid, no
+   * refund under way) does not: the learner may ask again, and that
+   * request (`retryRequestId`) is used for it.
+   */
   requestStatus: RefundRequestStatus | null;
+  retryRequestId: string | null;
   manualTransfer: boolean;
 }
 
@@ -69,15 +76,26 @@ export function createRefundEligibilityService({
     if (orders.length === 0) return assessments;
 
     const ids = orders.map((order) => order.id);
-    const [totals, requests, payments] = await Promise.all([
+    const [
+      totals,
+      quizTotals,
+      requests,
+      payments,
+      liveRefunds,
+      transferSentAt,
+      credited,
+    ] = await Promise.all([
       eligibilityRepo.getOrderWatchTotals(database, userId, ids),
+      eligibilityRepo.getOrderQuizTotals(database, userId, ids),
       eligibilityRepo.listRefundRequestStatuses(database, ids),
       paymentRepo.listPaymentProvidersByOrderIds(database, ids),
+      eligibilityRepo.listOrdersWithLiveRefund(database, ids),
+      eligibilityRepo.listTransferSentAt(database, ids),
+      eligibilityRepo.listOrdersCreditedToUpgrade(database, ids),
     ]);
     const totalsByOrder = new Map(totals.map((row) => [row.orderId, row]));
-    const requestByOrder = new Map(
-      requests.map((row) => [row.order_id, row.status as RefundRequestStatus]),
-    );
+    const quizzesByOrder = new Map(quizTotals.map((row) => [row.orderId, row]));
+    const requestByOrder = new Map(requests.map((row) => [row.order_id, row]));
     const manual = new Set(
       payments
         .filter((payment) => isManualTransferProvider(payment.gateway_provider))
@@ -87,15 +105,26 @@ export function createRefundEligibilityService({
     const at = now();
     for (const order of orders) {
       const totals = totalsByOrder.get(order.id);
+      const request = requestByOrder.get(order.id);
+      // Only offered orders get here, so the order is still paid.
+      const refundFailed =
+        request?.status === "approved" && !liveRefunds.has(order.id);
       assessments.set(order.id, {
         orderId: order.id,
         eligibility: evaluateRefundEligibility({
-          paidAt: order.paid_at!,
+          paidAt: transferSentAt.get(order.id) ?? order.paid_at!,
           now: at,
           watchedSeconds: totals?.watchedSeconds ?? 0,
           courseSeconds: totals?.courseSeconds ?? 0,
+          creditedToUpgrade: credited.has(order.id),
+          quizzesAttempted: quizzesByOrder.get(order.id)?.attempted ?? 0,
+          quizzesTotal: quizzesByOrder.get(order.id)?.total ?? 0,
         }),
-        requestStatus: requestByOrder.get(order.id) ?? null,
+        requestStatus:
+          request && !refundFailed
+            ? (request.status as RefundRequestStatus)
+            : null,
+        retryRequestId: refundFailed ? request.id : null,
         manualTransfer: manual.has(order.id),
       });
     }

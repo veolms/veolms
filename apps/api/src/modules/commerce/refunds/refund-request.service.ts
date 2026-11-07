@@ -25,6 +25,7 @@ import {
   toLearnerOrderRefund,
   type RefundEligibilityService,
 } from "./refund-eligibility.service.ts";
+import * as eligibilityRepo from "./refund-eligibility.repository.ts";
 
 export interface RefundRequestService {
   submitStudentRefundRequest(
@@ -49,15 +50,51 @@ function requestAlreadyExists(status: string): AppError {
   );
 }
 
+/** A refund's reason is kept to 500 characters, and the gateway is sent it. */
+const REFUND_REASON_MAX = 480;
+
+export function refundReason(text: string): string {
+  return text.length <= REFUND_REASON_MAX
+    ? text
+    : `${text.slice(0, REFUND_REASON_MAX - 1)}…`;
+}
+
+/**
+ * The idempotency key of a request's refund: the same for every try of one
+ * attempt, so a refund whose outcome was lost (a gateway timeout) is resumed
+ * rather than made twice; a new one after a refund of the order failed
+ * outright, which a retry must not replay.
+ */
+export function refundRequestKey(
+  requestId: string,
+  failedRefunds: number,
+): string {
+  return `refund-request:${requestId}:${failedRefunds}`;
+}
+
+/** What the service writes to the server's log. */
+export interface RefundRequestLog {
+  error(details: object, message: string): void;
+}
+
 export function createRefundRequestService({
   database,
   refundService,
   refundEligibility = createRefundEligibilityService({ database }),
+  log,
 }: {
   database: Kysely<Database>;
   refundService: Pick<RefundService, "processRefund">;
   refundEligibility?: RefundEligibilityService;
+  log?: RefundRequestLog;
 }): RefundRequestService {
+  async function refundKeyFor(requestId: string, orderId: string) {
+    return refundRequestKey(
+      requestId,
+      await eligibilityRepo.countFailedRefunds(database, orderId),
+    );
+  }
+
   /** Of these orders, the ones paid by manual bank or UPI transfer. */
   async function ordersPaidByManualTransfer(
     orderIds: string[],
@@ -131,7 +168,28 @@ export function createRefundRequestService({
         trx,
         orderId,
       );
-      if (existing) throw requestAlreadyExists(existing.status);
+      if (existing) {
+        // The one exception: an approved request whose refund failed at the
+        // gateway. Looked at again under the lock, and asked again on the
+        // same request.
+        const stillFailed =
+          existing.id === assessment.retryRequestId &&
+          existing.status === "approved" &&
+          !(await eligibilityRepo.listOrdersWithLiveRefund(trx, [orderId])).has(
+            orderId,
+          );
+        if (!stillFailed) throw requestAlreadyExists(existing.status);
+        return (await refundRequestRepo.updateRefundRequestStatus(
+          trx,
+          existing.id,
+          {
+            status: "pending",
+            admin_notes:
+              "The earlier refund failed at the gateway; asked again.",
+            resolved_at: null,
+          },
+        ))!;
+      }
       const now = new Date();
       return refundRequestRepo.insertRefundRequest(trx, {
         id: crypto.randomUUID(),
@@ -146,17 +204,36 @@ export function createRefundRequestService({
 
     if (assessment.manualTransfer) return toLearnerRefundRequest(row);
 
+    let refund: Refund;
     try {
       // Started by the learner, so the refund is recorded as theirs.
-      await refundService.processRefund(userId, {
-        orderId,
-        reason: `Automatic refund at the student's request: ${reason}`,
-        preserveAccess: false,
-      });
-    } catch {
-      // The gateway did not refund it (or did not say). The request stays
-      // pending, so staff see it in the refund requests and finish it; the
-      // refund service keeps its own record of the attempt.
+      refund = await refundService.processRefund(
+        userId,
+        {
+          orderId,
+          reason: refundReason(
+            `Automatic refund at the student's request: ${reason}`,
+          ),
+          preserveAccess: false,
+          idempotencyKey: await refundKeyFor(row.id, orderId),
+        },
+        { initiatedBy: "student" },
+      );
+    } catch (err) {
+      // The gateway did not refund it, or did not say. The request stays
+      // pending: staff see it in the refund requests, and approving it
+      // resumes this same refund (same key) rather than starting another.
+      log?.error(
+        { err, orderId, refundRequestId: row.id },
+        "automatic refund failed; the request is left for staff",
+      );
+      return toLearnerRefundRequest(row);
+    }
+    if (refund.status === "failed") {
+      log?.error(
+        { orderId, refundRequestId: row.id, refundId: refund.id },
+        "automatic refund came back failed; the request is left for staff",
+      );
       return toLearnerRefundRequest(row);
     }
 
@@ -248,10 +325,13 @@ export function createRefundRequestService({
       // recorded once), so approving here and refunding from the order
       // answer alike. Anything it refuses is thrown before the request is
       // touched, which leaves it pending.
+      // The request's key: approving one whose automatic refund was lost
+      // (a gateway timeout) resumes that refund instead of making another.
       refund = await refundService.processRefund(adminUserId, {
         orderId: refundReq.order_id,
-        reason: `Approved student request: ${refundReq.reason}`,
+        reason: refundReason(`Approved student request: ${refundReq.reason}`),
         preserveAccess: request.preserveAccess ?? false,
+        idempotencyKey: await refundKeyFor(refundReq.id, refundReq.order_id),
         ...(request.outsideRefund
           ? { outsideRefund: request.outsideRefund }
           : {}),

@@ -87,8 +87,11 @@ export function createOrderService({
   database,
   studentsService = createStudentsService({ database }),
   courseCards,
+  log,
 }: {
   database: Executor;
+  /** The server's log, for what goes wrong without failing the request. */
+  log?: { error(details: object, message: string): void };
   studentsService?: Pick<StudentsService, "resolveStudentAvatars">;
   /**
    * The courses' pictures (the course module's `listCourseCardsByIds`),
@@ -164,7 +167,12 @@ export function createOrderService({
         userId,
         orders.map((order) => order.id),
       );
-    } catch {
+    } catch (err) {
+      // Not silent: without this, refunds would quietly stop being offered.
+      log?.error(
+        { err, userId },
+        "refund options could not be worked out; purchase history shows none",
+      );
       return orders;
     }
     return orders.map((order) => {

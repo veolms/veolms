@@ -18,23 +18,46 @@ export const REFUND_WATCH_HOURS = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type RefundIneligibleReason =
-  "watched_share" | "watched_hours" | "window_passed";
+  | "watched_share"
+  | "watched_hours"
+  | "quizzes_attempted"
+  | "window_passed"
+  | "credited_to_upgrade";
 
 export const REFUND_REASON_MESSAGES: Readonly<
   Record<RefundIneligibleReason, string>
 > = {
   watched_share: "You've completed more than 10% of this course.",
   watched_hours: "You've watched more than 10 hours of this course.",
+  quizzes_attempted: "You've attempted more than 10% of the quizzes.",
   window_passed: "Refunds are only available within 30 days of purchase.",
+  credited_to_upgrade:
+    "This purchase counts toward your upgrade to the full course, so it can't be refunded on its own.",
 };
 
 export interface RefundEligibilityInput {
+  /**
+   * When the purchase was made: the payment, or for a bank transfer when
+   * the learner sent it (staff may confirm it days later).
+   */
   paidAt: Date;
   now: Date;
   /** What the learner's progress covers of the purchase's videos. */
   watchedSeconds: number;
   /** The length of every video the purchase opens. */
   courseSeconds: number;
+  /**
+   * Part of a course whose price was later taken off the whole course's
+   * (an upgrade). Refunding it would return money already spent as that
+   * discount, with the whole course kept.
+   */
+  creditedToUpgrade?: boolean;
+  /**
+   * A quiz pass: of the quizzes it opens, how many the learner has started
+   * an attempt on. More than 10% of them is too many to refund.
+   */
+  quizzesAttempted?: number;
+  quizzesTotal?: number;
 }
 
 export interface RefundEligibility {
@@ -61,8 +84,15 @@ export function evaluateRefundEligibility({
   now,
   watchedSeconds,
   courseSeconds,
+  creditedToUpgrade = false,
+  quizzesAttempted = 0,
+  quizzesTotal = 0,
 }: RefundEligibilityInput): RefundEligibility {
   const reasons: RefundIneligibleReason[] = [];
+
+  // Said alone: watched and dates do not matter for it.
+  if (creditedToUpgrade)
+    return { eligible: false, reasons: ["credited_to_upgrade"] };
 
   if (courseSeconds > 0) {
     const shareLimit = courseSeconds * REFUND_WATCH_SHARE;
@@ -74,6 +104,14 @@ export function evaluateRefundEligibility({
         shareLimit <= hoursLimit ? "watched_share" : "watched_hours",
       );
     }
+  }
+
+  // The same 10%, counted in quizzes: a quiz pass has no video to watch.
+  if (
+    quizzesTotal > 0 &&
+    quizzesAttempted > quizzesTotal * REFUND_WATCH_SHARE
+  ) {
+    reasons.push("quizzes_attempted");
   }
 
   if (now.getTime() - paidAt.getTime() > REFUND_WINDOW_DAYS * DAY_MS) {

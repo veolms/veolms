@@ -101,6 +101,61 @@ await test("a course with no video is judged on the 30 days alone", () => {
   );
 });
 
+await test("part of a course credited toward its upgrade is not refunded on its own", () => {
+  assert.deepEqual(
+    evaluateRefundEligibility({
+      paidAt,
+      now: daysLater(1),
+      watchedSeconds: 0,
+      courseSeconds: 50 * HOUR,
+      creditedToUpgrade: true,
+    }),
+    { eligible: false, reasons: ["credited_to_upgrade"] },
+  );
+});
+
+await test("a quiz pass with no more than 10% of its quizzes attempted is eligible", () => {
+  assert.equal(
+    evaluateRefundEligibility({
+      paidAt,
+      now: daysLater(1),
+      watchedSeconds: 0,
+      courseSeconds: 0,
+      quizzesAttempted: 1,
+      quizzesTotal: 10,
+    }).eligible,
+    true,
+  );
+});
+
+await test("a quiz pass with more than 10% of its quizzes attempted is not", () => {
+  assert.deepEqual(
+    evaluateRefundEligibility({
+      paidAt,
+      now: daysLater(1),
+      watchedSeconds: 0,
+      courseSeconds: 0,
+      quizzesAttempted: 2,
+      quizzesTotal: 10,
+    }).reasons,
+    ["quizzes_attempted"],
+  );
+});
+
+await test("a quiz pass past 30 days with its quizzes attempted gives both reasons", () => {
+  assert.deepEqual(
+    evaluateRefundEligibility({
+      paidAt,
+      now: daysLater(31),
+      watchedSeconds: 0,
+      courseSeconds: 0,
+      quizzesAttempted: 5,
+      quizzesTotal: 5,
+    }).reasons,
+    ["quizzes_attempted", "window_passed"],
+  );
+});
+
 await test("a refund is offered on a paid purchase", () => {
   assert.equal(
     isRefundOffered({ status: "paid", totalAmount: 69_900, paidAt }),
@@ -145,5 +200,8 @@ await test("every reason has the message the student is shown", () => {
     watched_share: "You've completed more than 10% of this course.",
     watched_hours: "You've watched more than 10 hours of this course.",
     window_passed: "Refunds are only available within 30 days of purchase.",
+    quizzes_attempted: "You've attempted more than 10% of the quizzes.",
+    credited_to_upgrade:
+      "This purchase counts toward your upgrade to the full course, so it can't be refunded on its own.",
   });
 });

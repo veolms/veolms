@@ -46,6 +46,12 @@ export const policiesDocument: LegalDocument = {
           and up to 10 hours of a 200-hour course.
         </p>
         <p>
+          A <strong>quiz pass</strong> is eligible when it was bought within the
+          last <strong>30 days</strong> and you have attempted no more than{" "}
+          <strong>10% of its quizzes</strong>. For example, you can try 1 quiz
+          of a pass with 10 quizzes.
+        </p>
+        <p>
           If <strong>Request refund</strong> is greyed out, the purchase is not
           eligible for a refund, and the menu shows why. Emailing us will not
           change that.
@@ -59,7 +65,8 @@ export const policiesDocument: LegalDocument = {
         </p>
         <p>
           Refunds are not available after 30 days, where more than 10% of the
-          course or 10 hours of it has been watched, for purchases made with a
+          course or 10 hours of it has been watched, where more than 10% of a
+          quiz pass’s quizzes have been attempted, for purchases made with a
           promotional or bundle discount where the offer terms say so, or where
           an account has been terminated for breaching our Terms of Service.
           Nothing here limits your rights under the Consumer Protection Act,
