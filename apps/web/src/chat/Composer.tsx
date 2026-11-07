@@ -431,7 +431,8 @@ export const Composer = forwardRef<
 
       {emojiOpen ? (
         <EmojiPanel
-          className="absolute bottom-full left-3 mb-1 w-[min(22rem,calc(100%-1.5rem))]"
+          // WhatsApp: the panel spans the chat above the message box.
+          className="absolute inset-x-2 bottom-full mb-2"
           onPick={(emoji) => {
             const area = textareaRef.current;
             const start = area?.selectionStart ?? text.length;

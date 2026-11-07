@@ -58,6 +58,8 @@ export function MessageBubble({
     x: number;
     y: number;
     timer: ReturnType<typeof setTimeout> | null;
+    /** Held long enough: the menu opens when the finger lifts. */
+    long: boolean;
   } | null>(null);
   const outgoing = message.sender?.id === ctx.viewerId;
 
@@ -93,6 +95,9 @@ export function MessageBubble({
       id={`chat-message-${message.seq}`}
       className={cn(
         "group/message relative flex px-[4%] transition-colors duration-700",
+        // A long press opens the menu (WhatsApp), not the phone's own text
+        // selection and callout; Copy is in the menu.
+        "[-webkit-touch-callout:none] [@media(hover:none)]:select-none",
         outgoing ? "justify-end" : "justify-start",
         firstOfRun ? "mt-2" : "mt-0.5",
         reactions.length > 0 && "mb-3",
@@ -101,16 +106,24 @@ export function MessageBubble({
       onContextMenu={(event) => {
         if (window.getSelection()?.toString()) return;
         event.preventDefault();
+        // A finger still down: the long press opens it when it lifts.
+        if (touch.current) return;
         // After the press ends, or the menu reads it as a press outside.
         setTimeout(() => setMenuOpen(true), 0);
       }}
       onTouchStart={(event) => {
         const t = event.touches[0]!;
-        touch.current = {
+        const start = {
           x: t.clientX,
           y: t.clientY,
-          timer: setTimeout(() => setMenuOpen(true), 480),
+          timer: null as ReturnType<typeof setTimeout> | null,
+          long: false,
         };
+        start.timer = setTimeout(() => {
+          start.long = true;
+          navigator.vibrate?.(12);
+        }, 450);
+        touch.current = start;
       }}
       onTouchMove={(event) => {
         const start = touch.current;
@@ -120,15 +133,22 @@ export function MessageBubble({
         if (Math.abs(t.clientY - start.y) > 10 || Math.abs(dx) > 10) {
           if (start.timer) clearTimeout(start.timer);
           start.timer = null;
+          start.long = false;
         }
         if (dx > 0 && Math.abs(t.clientY - start.y) < 24 && !deleted) {
           setDragX(Math.min(dx, SWIPE_TO_REPLY_PX + 16));
         }
       }}
-      onTouchEnd={() => {
-        if (touch.current?.timer) clearTimeout(touch.current.timer);
+      onTouchEnd={(event) => {
+        const start = touch.current;
+        if (start?.timer) clearTimeout(start.timer);
         touch.current = null;
         if (dragX >= SWIPE_TO_REPLY_PX) onAction("reply", message);
+        else if (start?.long && !deleted) {
+          // Opened after the lift, so the lift is not a press outside it.
+          event.preventDefault();
+          setTimeout(() => setMenuOpen(true), 0);
+        }
         setDragX(0);
       }}
     >
