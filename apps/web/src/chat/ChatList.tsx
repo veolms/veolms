@@ -26,9 +26,11 @@ import {
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import { useDebounce } from "../hooks/useDebounce";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
 import {
   markRoomRead,
+  prefetchChat,
   queueReceipt,
   useBlockUser,
   useChatCandidates,
@@ -168,13 +170,19 @@ export function ChatList({
 
   const archivedView = panel === "archived";
   const archivedCount = rooms?.filter((r) => r.me.archived).length ?? 0;
-  const term = search.trim().toLowerCase();
+  const term = search.trim();
   const visible = (rooms ?? []).filter((room) => {
     if (room.me.archived !== archivedView) return false;
+    // Loose, like the app's other search boxes: typos, parts of words and
+    // any order ("bhupsh", "node backend") still find the chat.
     if (
       term &&
-      !room.title.toLowerCase().includes(term) &&
-      !room.lastMessage?.preview.toLowerCase().includes(term)
+      !fuzzyMatches(
+        term,
+        room.title,
+        room.peer?.name,
+        room.lastMessage?.preview,
+      )
     )
       return false;
     if (archivedView) return true;
@@ -479,6 +487,10 @@ function ChatRow({
       <button
         type="button"
         onClick={() => onSelect(room.id)}
+        // Start loading before the click lands: opening is then instant.
+        onPointerEnter={() => prefetchChat(client, room.id)}
+        onTouchStart={() => prefetchChat(client, room.id)}
+        onFocus={() => prefetchChat(client, room.id)}
         aria-current={selected ? "true" : undefined}
         className={cn(
           "flex h-18 w-full cursor-pointer items-center gap-3 rounded-xl border-0 px-2.5 text-left text-(--text) transition-colors",

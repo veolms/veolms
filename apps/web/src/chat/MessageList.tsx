@@ -181,7 +181,14 @@ export function MessageList({
       setNewBelow(0);
       if (lastSeq > 0) onAtBottom(lastSeq);
     }
-    if (box.scrollTop < 300 && thread.hasMoreBefore && !loadingOlder) {
+    // About two screens before the top: older messages are usually in
+    // before the reader gets there, so scrolling up a long group never
+    // stops at a spinner.
+    if (
+      box.scrollTop < box.clientHeight * 2 &&
+      thread.hasMoreBefore &&
+      !loadingOlder
+    ) {
       heightBeforeRef.current = box.scrollHeight;
       onLoadOlder();
     }

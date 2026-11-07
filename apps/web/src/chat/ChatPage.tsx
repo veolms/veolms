@@ -3,6 +3,7 @@ import "./chat.css";
 import type { ChatMessage } from "@veolms/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { ToastNotification } from "../ToastNotification";
 import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
@@ -11,6 +12,7 @@ import { cn } from "../lib/utils";
 import { useCurrentUser } from "../services/auth";
 import {
   flushReceipts,
+  prefetchChat,
   syncWithRoomList,
   useChatRoom,
   useChatRooms,
@@ -34,6 +36,19 @@ import { useChatPrefs } from "../store/chatPrefs.store";
 import { CHAT_TEXT_SIZES, CHAT_WALLPAPERS } from "./chatWallpapers";
 import { useChatShortcuts } from "./useChatShortcuts";
 
+/** Chats loaded ahead, from the top of the list. */
+const WARM_CHATS = 6;
+
+/** Runs `work` when the browser has a quiet moment; returns the cancel. */
+function whenIdle(work: () => void): () => void {
+  if ("requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(work, { timeout: 2_000 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = setTimeout(work, 800);
+  return () => clearTimeout(id);
+}
+
 type Drawer =
   | { kind: "info" }
   | { kind: "search" }
@@ -56,6 +71,7 @@ type Drawer =
 export function ChatPage() {
   const { roomId = null } = useParams<{ roomId?: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const me = useCurrentUser();
   const viewerId = me.data?.id ?? null;
   const isStaff = (me.data?.roles ?? []).some((role) => role !== "student");
@@ -90,6 +106,22 @@ export function ChatPage() {
   useEffect(() => {
     if (rooms.data) syncWithRoomList(rooms.data.rooms);
   }, [rooms.data]);
+
+  // While the browser is idle: the first chats of the list (the ones most
+  // likely opened next) and the emoji panel, so opening either is instant.
+  const warmedRef = useRef(false);
+  useEffect(() => {
+    if (warmedRef.current || !rooms.data) return;
+    warmedRef.current = true;
+    const ids = rooms.data.rooms
+      .filter((room) => !room.me.archived)
+      .slice(0, WARM_CHATS)
+      .map((room) => room.id);
+    return whenIdle(() => {
+      for (const id of ids) prefetchChat(queryClient, id);
+      void import("emoji-picker-react");
+    });
+  }, [rooms.data, queryClient]);
 
   const open = useCallback(
     (id: string | null) => {

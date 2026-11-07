@@ -21,6 +21,7 @@ import {
   type ChatThread,
 } from "./chat.cache";
 import { chatKeys } from "./chat.keys";
+import { restoreChatCache, startChatCachePersistence } from "./chat.persist";
 import { queueReceipt } from "./chat.receipts";
 import { chatService } from "./chat.service";
 
@@ -48,6 +49,7 @@ let hiddenTimer: ReturnType<typeof setTimeout> | undefined;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let retryDelay = REFUSED_RETRY_MIN_MS;
 let live = false;
+let stopPersisting: (() => void) | undefined;
 const liveListeners = new Set<() => void>();
 
 /** The chats this tab's stream carries (from `ready`, then added/removed). */
@@ -458,6 +460,11 @@ export function startChatStream(
   users += 1;
   if (users === 1) {
     document.addEventListener("visibilitychange", onVisibilityChange);
+    // Last visit's chats first (instant), then the stream catches them up.
+    if (viewerId) {
+      void restoreChatCache(queryClient, viewerId);
+      stopPersisting = startChatCachePersistence(queryClient, viewerId);
+    }
     open();
   }
   let left = false;
@@ -466,6 +473,8 @@ export function startChatStream(
     left = true;
     users -= 1;
     if (users === 0) {
+      stopPersisting?.();
+      stopPersisting = undefined;
       document.removeEventListener("visibilitychange", onVisibilityChange);
       clearTimeout(hiddenTimer);
       close();

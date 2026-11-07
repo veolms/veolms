@@ -5,6 +5,7 @@ import type { ChatRoomSummary } from "@veolms/contracts";
 import { useState } from "react";
 
 import { getApiError } from "../lib/api-error";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
 import { chatKeys, chatService, useUpdateRoomSettings } from "../services/chat";
 import { useMyCourses } from "../services/courses";
@@ -36,10 +37,10 @@ export function CourseGroupsPanel({
   const byCourse = new Map(
     rooms.filter((r) => r.courseId).map((r) => [r.courseId!, r]),
   );
-  const term = search.trim().toLowerCase();
+  const term = search.trim();
   const list = (courses.data?.courses ?? [])
     .filter((course) => course.status !== "archived")
-    .filter((course) => !term || course.title.toLowerCase().includes(term));
+    .filter((course) => !term || fuzzyMatches(term, course.title));
   const on = list.filter(
     (course) => byCourse.get(course.id)?.status === "active",
   );

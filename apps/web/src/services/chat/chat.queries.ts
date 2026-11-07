@@ -2,8 +2,16 @@ import {
   useInfiniteQuery,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import type { ChatRoomDetail, ChatRoomSummary } from "@veolms/contracts";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { upsertMessages, type ChatThread } from "./chat.cache";
 import { chatKeys } from "./chat.keys";
@@ -15,7 +23,7 @@ import {
   subscribeChatStreamLive,
   subscribeTyping,
 } from "./chat.realtime";
-import { chatService } from "./chat.service";
+import { chatService, type ChatRoomList } from "./chat.service";
 
 export function useChatRooms(enabled = true) {
   const live = useSyncExternalStore(
@@ -34,12 +42,60 @@ export function useChatRooms(enabled = true) {
   });
 }
 
+/**
+ * A chat's header and settings. Until it arrives, the chat list's entry
+ * stands in for it, so an open chat draws at once (name, picture, ticks)
+ * instead of a skeleton.
+ */
 export function useChatRoom(roomId: string | null) {
+  const client = useQueryClient();
   return useQuery({
     queryKey: chatKeys.room(roomId ?? ""),
     queryFn: async () => (await chatService.getRoom(roomId!)).room,
     enabled: Boolean(roomId),
     staleTime: 30_000,
+    placeholderData: () => {
+      const summary = client
+        .getQueryData<ChatRoomList>(chatKeys.rooms())
+        ?.rooms.find((room) => room.id === roomId);
+      return summary ? detailFromSummary(summary) : undefined;
+    },
+  });
+}
+
+/** A chat list entry dressed as a chat's details (for the first frame). */
+function detailFromSummary(summary: ChatRoomSummary): ChatRoomDetail {
+  return {
+    ...summary,
+    description: null,
+    directMessagesAllowed: false,
+    attachmentsAllowed: true,
+    memberCount: null,
+    pinnedMessages: [],
+    memberNames: [],
+    peerPresence: null,
+  };
+}
+
+const PREFETCH_STALE_MS = 30_000;
+
+/**
+ * Starts loading a chat before it is opened (the pointer reaches its row,
+ * a finger touches it, or the list just loaded and it is near the top), so
+ * opening it is instant. Does nothing for a chat already in the cache.
+ */
+export function prefetchChat(client: QueryClient, roomId: string) {
+  if (!client.getQueryData(chatKeys.messages(roomId))) {
+    void client.prefetchQuery({
+      queryKey: chatKeys.messages(roomId),
+      queryFn: () => chatService.listMessages(roomId, { limit: 50 }),
+      staleTime: Number.POSITIVE_INFINITY,
+    });
+  }
+  void client.prefetchQuery({
+    queryKey: chatKeys.room(roomId),
+    queryFn: async () => (await chatService.getRoom(roomId)).room,
+    staleTime: PREFETCH_STALE_MS,
   });
 }
 
@@ -55,17 +111,21 @@ export function useChatThread(roomId: string | null) {
     gcTime: 10 * 60_000,
   });
   const [loadingOlder, setLoadingOlder] = useState(false);
+  // Scroll events come faster than renders: one older page at a time.
+  const inFlight = useRef(false);
 
   const loadOlder = useCallback(async () => {
-    if (!roomId) return;
+    if (!roomId || inFlight.current) return;
     const thread = client.getQueryData<ChatThread>(chatKeys.messages(roomId));
     const oldest = thread?.messages[0]?.seq;
     if (!thread || !thread.hasMoreBefore || oldest === undefined) return;
+    inFlight.current = true;
     setLoadingOlder(true);
     try {
+      // Bigger pages further back: scrolling up a long group asks rarely.
       const page = await chatService.listMessages(roomId, {
         before: oldest,
-        limit: 50,
+        limit: 100,
       });
       client.setQueryData<ChatThread>(chatKeys.messages(roomId), (current) =>
         current
@@ -76,6 +136,7 @@ export function useChatThread(roomId: string | null) {
           : current,
       );
     } finally {
+      inFlight.current = false;
       setLoadingOlder(false);
     }
   }, [client, roomId]);

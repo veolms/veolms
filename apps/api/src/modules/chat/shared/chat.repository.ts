@@ -10,6 +10,11 @@ import type {
 } from "@veolms/database";
 import { sql, type Selectable } from "kysely";
 
+import {
+  fuzzyMatchesAny,
+  fuzzySearchTerm,
+  isFuzzySearchTerm,
+} from "../../../lib/fuzzy-search.ts";
 import { CHAT_CHANNEL } from "../realtime/chat-bus.ts";
 
 /**
@@ -585,16 +590,34 @@ export function createChatRepository() {
       limit: number,
     ) {
       const pattern = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      const near = isFuzzySearchTerm(term);
       let query = messageQuery(db, viewerId)
         .where("m.room_id", "=", roomId)
         .where("m.deleted_at", "is", null)
-        .where("m.body", "ilike", pattern);
+        .where((eb) =>
+          near
+            ? eb.or([
+                eb("m.body", "ilike", pattern),
+                eb(sql<boolean>`${fuzzySearchTerm(term)} <% m.body`, "=", true),
+              ])
+            : eb("m.body", "ilike", pattern),
+        );
       if (beforeSeq !== null)
         query = query.where("m.seq", "<", String(beforeSeq));
-      const rows = (await query
-        .orderBy("m.seq", "desc")
-        .limit(limit + 1)
-        .execute()) as MessageRow[];
+      const page = query.orderBy("m.seq", "desc").limit(limit + 1);
+      // A typo in a long message scores about 0.5 ("homwork" against
+      // "Homework is due…": 0.545); pg_trgm's default line (0.6) missed it.
+      // Set for this one query, so the trigram index is still used.
+      const rows = (
+        near
+          ? await db.transaction().execute(async (trx) => {
+              await sql`select set_config('pg_trgm.word_similarity_threshold', '0.5', true)`.execute(
+                trx,
+              );
+              return (await trx.executeQuery(page.compile())).rows;
+            })
+          : await page.execute()
+      ) as MessageRow[];
       return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
     },
 
@@ -623,65 +646,103 @@ export function createChatRepository() {
       const digits = text.replace(/\D/g, "");
       const looksLikeNumber = /^[+\d\s()-]+$/.test(text) && digits.length >= 4;
       const phoneDigits = sql<string>`regexp_replace(coalesce(u.phone_no, ''), '[^0-9]', '', 'g')`;
-      return db
-        .selectFrom("users as u")
-        .select(["u.id", "u.display_name", "u.avatar_data_url", "u.is_deleted"])
-        .where("u.id", "<>", excludeId)
-        .where("u.is_deleted", "=", false)
-        .$if(among !== undefined, (query) =>
-          query.where((eb) =>
+      return (
+        db
+          .selectFrom("users as u")
+          .select([
+            "u.id",
+            "u.display_name",
+            "u.avatar_data_url",
+            "u.is_deleted",
+          ])
+          .where("u.id", "<>", excludeId)
+          .where("u.is_deleted", "=", false)
+          .$if(among !== undefined, (query) =>
+            query.where((eb) =>
+              eb.or([
+                ...(among!.userIds.length > 0
+                  ? [eb("u.id", "in", [...among!.userIds])]
+                  : []),
+                ...(among!.courseIds.length > 0
+                  ? [
+                      eb(
+                        "u.id",
+                        "in",
+                        eb
+                          .selectFrom("chat_members as cm")
+                          .innerJoin("chat_rooms as r", "r.id", "cm.room_id")
+                          .select("cm.user_id")
+                          .where("r.kind", "=", "course")
+                          .where("r.course_id", "in", [...among!.courseIds])
+                          .where("cm.state", "=", "active"),
+                      ),
+                    ]
+                  : []),
+                // Nobody to look among: match nothing.
+                eb.val(false),
+              ]),
+            ),
+          )
+          .where((eb) =>
             eb.or([
-              ...(among!.userIds.length > 0
-                ? [eb("u.id", "in", [...among!.userIds])]
-                : []),
-              ...(among!.courseIds.length > 0
-                ? [
-                    eb(
-                      "u.id",
-                      "in",
-                      eb
-                        .selectFrom("chat_members as cm")
-                        .innerJoin("chat_rooms as r", "r.id", "cm.room_id")
-                        .select("cm.user_id")
-                        .where("r.kind", "=", "course")
-                        .where("r.course_id", "in", [...among!.courseIds])
-                        .where("cm.state", "=", "active"),
-                    ),
-                  ]
-                : []),
-              // Nobody to look among: match nothing.
-              eb.val(false),
-            ]),
-          ),
-        )
-        .where((eb) =>
-          eb.or([
-            eb("u.display_name", "ilike", pattern),
-            eb("u.username", "ilike", pattern),
-            ...(staff
-              ? [
-                  eb("u.email", "ilike", pattern),
-                  ...(looksLikeNumber
-                    ? [eb(phoneDigits, "like", `%${digits}%`)]
-                    : []),
-                ]
-              : [
-                  eb(sql`lower(u.email)`, "=", text.toLowerCase()),
-                  ...(looksLikeNumber && digits.length >= 10
-                    ? [
-                        eb(
-                          sql`right(${phoneDigits}, 10)`,
-                          "=",
-                          digits.slice(-10),
-                        ),
-                      ]
-                    : []),
+              eb("u.display_name", "ilike", pattern),
+              eb("u.username", "ilike", pattern),
+              eb(
+                fuzzyMatchesAny(text, [
+                  sql.ref("u.display_name"),
+                  sql.ref("u.username"),
                 ]),
-          ]),
-        )
-        .orderBy("u.display_name")
-        .limit(limit)
+                "=",
+                true,
+              ),
+              ...(staff
+                ? [
+                    eb("u.email", "ilike", pattern),
+                    ...(looksLikeNumber
+                      ? [eb(phoneDigits, "like", `%${digits}%`)]
+                      : []),
+                  ]
+                : [
+                    eb(sql`lower(u.email)`, "=", text.toLowerCase()),
+                    ...(looksLikeNumber && digits.length >= 10
+                      ? [
+                          eb(
+                            sql`right(${phoneDigits}, 10)`,
+                            "=",
+                            digits.slice(-10),
+                          ),
+                        ]
+                      : []),
+                  ]),
+            ]),
+          )
+          // The closest names first ("Bhupesh" before "Bhupeshwar"), then A–Z.
+          .orderBy(
+            sql`greatest(word_similarity(${fuzzySearchTerm(text)}, lower(u.display_name)), word_similarity(${fuzzySearchTerm(text)}, lower(u.username)))`,
+            "desc",
+          )
+          .orderBy("u.display_name")
+          .limit(limit)
+          .execute()
+      );
+    },
+
+    /** Which of these messages this person deleted "for me". */
+    async hiddenSeqs(
+      db: Executor,
+      userId: string,
+      roomId: string,
+      seqs: readonly number[],
+    ) {
+      if (seqs.length === 0) return new Set<number>();
+      const rows = await db
+        .selectFrom("chat_hidden_messages")
+        .select("seq")
+        .where("user_id", "=", userId)
+        .where("room_id", "=", roomId)
+        .where("seq", "in", seqs.map(String))
         .execute();
+      return new Set(rows.map((row) => Number(row.seq)));
     },
 
     /** A few active members' names, for a group header. */
@@ -899,8 +960,22 @@ export function createChatRepository() {
         .where("cm.state", "=", "active")
         .where("u.is_deleted", "=", false);
       if (options.search) {
-        const pattern = `%${options.search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-        query = query.where("u.display_name", "ilike", pattern);
+        const search = options.search;
+        const pattern = `%${search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        query = query.where((eb) =>
+          eb.or([
+            eb("u.display_name", "ilike", pattern),
+            eb("u.username", "ilike", pattern),
+            eb(
+              fuzzyMatchesAny(search, [
+                sql.ref("u.display_name"),
+                sql.ref("u.username"),
+              ]),
+              "=",
+              true,
+            ),
+          ]),
+        );
       }
       if (options.after) {
         const after = options.after;
@@ -1031,7 +1106,7 @@ export function createChatRepository() {
 
     async listMessages(
       db: Executor,
-      viewerId: string,
+      viewerId: string | null,
       roomId: string,
       page:
         | { mode: "before"; seq: number; limit: number }

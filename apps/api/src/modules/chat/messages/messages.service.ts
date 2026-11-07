@@ -9,6 +9,7 @@ import {
   type ChatMessage,
   type ChatSendMessageRequest,
 } from "@veolms/contracts";
+import { createCache } from "@veolms/api-core";
 
 import type { ChatAttachmentRef } from "@veolms/database";
 
@@ -33,6 +34,25 @@ const EMOJI =
 /** People listed in Message info (big groups show the first ones). */
 const MESSAGE_INFO_LIMIT = 200;
 const SEARCH_PAGE = 30;
+
+/**
+ * Pages of a chat's messages as everyone sees them, keyed by the chat's
+ * change number: any new, edited, deleted, pinned or reacted message moves
+ * it, so a cached page is never out of date and needs no clearing, on this
+ * server or another. When 400 people open the same course group, the
+ * database is read once per change, not once per person. Each viewer's
+ * "deleted for me" messages are taken out afterwards (a tiny lookup).
+ */
+const pageCache = createCache<{
+  messages: ChatMessage[];
+  hasMoreBefore: boolean;
+  hasMoreAfter: boolean;
+  oldestSeq: number | null;
+}>({
+  name: "chat.message-pages",
+  ttlMs: 10 * 60_000,
+  maxBytes: 48 * 1024 * 1024,
+});
 
 export function createMessagesService(runtime: ChatRuntime) {
   const { database, repository, access, receipts, updates } = runtime;
@@ -169,6 +189,62 @@ export function createMessagesService(runtime: ChatRuntime) {
     });
   }
 
+  /** One page of a chat as everyone sees it (cached above). */
+  async function readPage(
+    roomId: string,
+    query: { before?: number; after?: number; around?: number },
+    limit: number,
+  ) {
+    let rows;
+    let hasMoreBefore = false;
+    let hasMoreAfter = false;
+    if (query.around !== undefined) {
+      const half = Math.max(1, Math.floor(limit / 2));
+      const before = await repository.listMessages(database, null, roomId, {
+        mode: "before",
+        seq: query.around + 1,
+        limit: half,
+      });
+      const after = await repository.listMessages(database, null, roomId, {
+        mode: "after",
+        seq: query.around,
+        limit: limit - half,
+      });
+      rows = [...before.rows, ...after.rows];
+      hasMoreBefore = before.hasMore;
+      hasMoreAfter = after.hasMore;
+    } else if (query.after !== undefined) {
+      const page = await repository.listMessages(database, null, roomId, {
+        mode: "after",
+        seq: query.after,
+        limit,
+      });
+      rows = page.rows;
+      hasMoreAfter = page.hasMore;
+    } else if (query.before !== undefined) {
+      const page = await repository.listMessages(database, null, roomId, {
+        mode: "before",
+        seq: query.before,
+        limit,
+      });
+      rows = page.rows;
+      hasMoreBefore = page.hasMore;
+    } else {
+      const page = await repository.listMessages(database, null, roomId, {
+        mode: "latest",
+        limit,
+      });
+      rows = page.rows;
+      hasMoreBefore = page.hasMore;
+    }
+    return {
+      messages: rows.map(presentMessage),
+      hasMoreBefore,
+      hasMoreAfter,
+      oldestSeq: await repository.oldestSeq(database, roomId),
+    };
+  }
+
   return {
     /** Throws unless the person may post in this chat now (uploads ask first). */
     async assertCanPostIn(userId: string, roomId: string) {
@@ -253,55 +329,31 @@ export function createMessagesService(runtime: ChatRuntime) {
     ) {
       const ctx = await views.assertCanRead(database, userId, roomId);
       const limit = query.limit ?? CHAT_PAGE_SIZE;
-      let rows;
-      let hasMoreBefore = false;
-      let hasMoreAfter = false;
-      if (query.around !== undefined) {
-        const half = Math.max(1, Math.floor(limit / 2));
-        const before = await repository.listMessages(database, userId, roomId, {
-          mode: "before",
-          seq: query.around + 1,
-          limit: half,
-        });
-        const after = await repository.listMessages(database, userId, roomId, {
-          mode: "after",
-          seq: query.around,
-          limit: limit - half,
-        });
-        rows = [...before.rows, ...after.rows];
-        hasMoreBefore = before.hasMore;
-        hasMoreAfter = after.hasMore;
-      } else if (query.after !== undefined) {
-        const page = await repository.listMessages(database, userId, roomId, {
-          mode: "after",
-          seq: query.after,
-          limit,
-        });
-        rows = page.rows;
-        hasMoreAfter = page.hasMore;
-      } else if (query.before !== undefined) {
-        const page = await repository.listMessages(database, userId, roomId, {
-          mode: "before",
-          seq: query.before,
-          limit,
-        });
-        rows = page.rows;
-        hasMoreBefore = page.hasMore;
-      } else {
-        const page = await repository.listMessages(database, userId, roomId, {
-          mode: "latest",
-          limit,
-        });
-        rows = page.rows;
-        hasMoreBefore = page.hasMore;
-      }
+      const key = [
+        roomId,
+        ctx.room.last_event_seq,
+        query.around ?? "",
+        query.after ?? "",
+        query.before ?? "",
+        limit,
+      ].join(":");
+      const page = await pageCache.fetch(key, () =>
+        readPage(roomId, query, limit),
+      );
+      const hidden = await repository.hiddenSeqs(
+        database,
+        userId,
+        roomId,
+        page.messages.map((m) => m.seq),
+      );
       return {
-        messages: rows.map(presentMessage),
-        hasMoreBefore,
-        hasMoreAfter,
+        ...page,
+        messages:
+          hidden.size > 0
+            ? page.messages.filter((m) => !hidden.has(m.seq))
+            : page.messages,
         lastSeq: Number(ctx.room.last_seq),
         lastEventSeq: Number(ctx.room.last_event_seq),
-        oldestSeq: await repository.oldestSeq(database, roomId),
       };
     },
 

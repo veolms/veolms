@@ -883,6 +883,14 @@ await test("a message reaching someone's open app is delivered at once; search a
     await b.client.get(`/v1/chat/rooms/${room.id}/search?q=tuesday`),
   );
   assert.equal(none.messages.length, 0);
+  // A typo still finds it, as the app's other search boxes do.
+  const typo = ok<{ messages: Message[] }>(
+    await b.client.get(`/v1/chat/rooms/${room.id}/search?q=homwork`),
+  );
+  assert.deepEqual(
+    typo.messages.map((m) => m.seq),
+    [sent.seq],
+  );
 });
 
 await test("New chat: an admin finds any learner by name", async () => {

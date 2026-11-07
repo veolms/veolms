@@ -95,12 +95,15 @@ export function MessageBubble({
       id={`chat-message-${message.seq}`}
       className={cn(
         "group/message relative flex px-[4%] transition-colors duration-700",
+        // Off-screen messages skip layout and paint (sizes are remembered),
+        // so a chat with thousands of messages scrolls as lightly as a short one.
+        "[contain-intrinsic-size:auto_56px] [content-visibility:auto]",
         // A long press opens the menu (WhatsApp), not the phone's own text
         // selection and callout; Copy is in the menu.
         "[-webkit-touch-callout:none] [@media(hover:none)]:select-none",
         outgoing ? "justify-end" : "justify-start",
         firstOfRun ? "mt-2" : "mt-0.5",
-        reactions.length > 0 && "mb-3",
+        reactions.length > 0 && "pb-3.5",
         highlighted && "bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]",
       )}
       onContextMenu={(event) => {
