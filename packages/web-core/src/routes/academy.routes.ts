@@ -63,6 +63,11 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "support-ticket",
       caseSensitive: true,
     }),
+    // Chat: course groups, team groups and private chats (WhatsApp-style).
+    route("chat/:roomId?", "routes/chat/chat.tsx", {
+      id: "chat",
+      caseSensitive: true,
+    }),
     route("support-inbox/:inboxTab?", "routes/support/inbox.tsx", {
       id: "support-inbox",
       caseSensitive: true,

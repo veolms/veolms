@@ -16,6 +16,7 @@ app does; nothing is mocked inside the API.
 | `07-international-prices.flow.test.ts` | Dollar prices for buyers outside India, coupons on them, revenue in ₹ |
 | `08-course-order.flow.test.ts`         | The admin's course order, on every list; who may set it               |
 | `09-coupon-course-rates.flow.test.ts`  | One coupon with a different discount per course; rates it refuses     |
+| `10-chat.flow.test.ts`                 | Chat: groups, retries, catch-up, mutes, helpers, private chats, live  |
 
 ## Running them
 

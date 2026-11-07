@@ -12,6 +12,7 @@ import {
 import type { AuthUser } from "../../store/auth.store";
 import type { Icon } from "@phosphor-icons/react";
 import { rememberProfileChip } from "../profileHintEarlyState";
+import { useChatStream } from "../../services/chat";
 
 export interface UseShellProfileSummaryArgs {
   authUserFetched: boolean;
@@ -73,6 +74,22 @@ export function useShellProfileSummary({
   });
   // The badge updates the moment a notification arrives, not at the next poll.
   useNotificationStream(isAuthenticated);
+  // Chat's live stream on every page: new messages count as delivered
+  // (second tick) and you show as online while the app is open, as in
+  // WhatsApp. It carries notification changes too (lib/tabLiveStream).
+  useChatStream(activeUser?.id ?? null, isAuthenticated);
+  // The Chats page's code, fetched once the app is quiet, so opening Chats
+  // from any page draws at once instead of waiting for its chunk.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const load = () => void import("../../routes/chat/chat");
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(load, { timeout: 8_000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(load, 4_000);
+    return () => clearTimeout(id);
+  }, [isAuthenticated]);
   const unreadNotificationCount = notificationSummary?.unreadCount ?? 0;
   // What the button shows under the name, kept for the next load's first
   // paint (see profileHintEarlyState.ts).
