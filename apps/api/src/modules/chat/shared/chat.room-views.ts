@@ -5,9 +5,8 @@ import type {
 } from "@veolms/contracts";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 
-import { config } from "../../../config.ts";
 import { ChatErrors } from "./chat.errors.ts";
-import { chatUploadUrl, presentMessage, preview } from "./chat.presenters.ts";
+import { chatRoomIconUrl, presentMessage, preview } from "./chat.presenters.ts";
 import type { ChatRuntime } from "./chat.runtime.ts";
 import type {
   ChatRoomRow,
@@ -37,24 +36,6 @@ export interface RoomAccess {
   canModerate: boolean;
   isHelper: boolean;
   restrictions: RestrictionRow[];
-}
-
-/**
- * A course's picture at avatar size, on the public CDN like the course
- * pages show it; else the address stored with older courses.
- */
-function courseThumbnail(
-  mediaId: string | null,
-  stored: string | null,
-): string | null {
-  const cdn = config.CDN_URL?.trim().replace(/\/+$/, "");
-  const built =
-    mediaId && cdn
-      ? `${cdn}/public/thumbnails/${encodeURIComponent(mediaId)}/240.webp`
-      : null;
-  // A relative CDN (local development) only works where the web proxies it.
-  if (built && /^https?:\/\//.test(built)) return built;
-  return stored?.trim() || built;
 }
 
 /**
@@ -271,14 +252,8 @@ export function createRoomViews(runtime: ChatRuntime) {
                 : "Private chat"
               : (row.title ?? "Team"),
         courseId: row.course_id,
-        iconUrl:
-          row.kind !== "direct" && row.icon_upload_id
-            ? chatUploadUrl(row.icon_upload_id)
-            : null,
-        courseThumbnailUrl: courseThumbnail(
-          row.course_thumbnail_media_id,
-          row.course_thumbnail,
-        ),
+        iconUrl: chatRoomIconUrl(row),
+        customIcon: row.kind !== "direct" && Boolean(row.icon_upload_id),
         peer: peer
           ? {
               id: peer.id,

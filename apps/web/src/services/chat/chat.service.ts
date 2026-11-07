@@ -280,6 +280,7 @@ export const chatService = {
     roomId: string,
     file: File,
     size: { width?: number; height?: number },
+    onProgress: (fraction: number) => void = () => {},
   ) => {
     const start = await chatService.startUpload(roomId, {
       kind: "image",
@@ -288,7 +289,7 @@ export const chatService = {
       size: file.size,
       ...size,
     });
-    await chatService.putFile(start, file, () => {});
+    await chatService.putFile(start, file, onProgress);
     await chatService.completeUpload(start.uploadId);
     return chatService.updateSettings(roomId, {
       iconUploadId: start.uploadId,

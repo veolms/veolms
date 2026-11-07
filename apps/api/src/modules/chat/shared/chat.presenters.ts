@@ -13,6 +13,27 @@ const DELETED_USER = "Deleted user";
 export function chatUploadUrl(uploadId: string): string {
   return `/v1/chat/uploads/${uploadId}`;
 }
+/**
+ * Where a group's picture is read (the API picks the icon an admin set, else
+ * the course's picture, and redirects). `v` changes with the picture, so
+ * a browser's cached copy is never shown after a change.
+ */
+export function chatRoomIconUrl(row: {
+  id: string;
+  kind: string;
+  icon_upload_id: string | null;
+  course_thumbnail_media_id: string | null;
+  course_thumbnail: string | null;
+}): string | null {
+  if (row.kind === "direct") return null;
+  const version =
+    row.icon_upload_id ??
+    row.course_thumbnail_media_id ??
+    (row.course_thumbnail ? "course" : null);
+  return version
+    ? `/v1/chat/rooms/${row.id}/icon?v=${encodeURIComponent(version)}`
+    : null;
+}
 const PREVIEW_CHARS = 120;
 
 export function preview(text: string): string {
