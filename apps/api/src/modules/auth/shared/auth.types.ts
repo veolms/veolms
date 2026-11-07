@@ -1,6 +1,11 @@
 export type IdentifierType = "email" | "phone";
 
-export type OtpPurpose = "login" | "email_verification" | "phone_verification";
+export type OtpPurpose =
+  | "login"
+  | "email_verification"
+  | "phone_verification"
+  /** Proving the account's current email or number, to change it. */
+  | "contact_change";
 
 export interface SessionUser {
   id: string;

@@ -154,7 +154,13 @@ export function findUserByIdIncludingDeleted(
 export function findUserContactById(database: Executor, userId: string) {
   return database
     .selectFrom("users")
-    .select(["id", "email", "email_verified_at"])
+    .select([
+      "id",
+      "email",
+      "email_verified_at",
+      "phone_no",
+      "phone_verified_at",
+    ])
     .where("id", "=", userId)
     .where("is_deleted", "=", false)
     .executeTakeFirst();

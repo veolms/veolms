@@ -38,6 +38,7 @@ import type {
   WebauthnChallengeTable,
   UserAvatarTable,
   OauthNonceTable,
+  ContactChangeTable,
 } from "./auth.schema.ts";
 
 import type {
@@ -184,6 +185,7 @@ export interface Database {
   pending_device_sign_ins: PendingDeviceSignInTable;
   oauth_accounts: OauthAccountTable;
   otp_codes: OtpCodeTable;
+  contact_changes: ContactChangeTable;
   passkeys: PasskeyTable;
   user_totp_credentials: UserTotpCredentialTable;
   mfa_backup_codes: MfaBackupCodeTable;

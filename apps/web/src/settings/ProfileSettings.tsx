@@ -8,6 +8,8 @@ import {
   useState,
 } from "react";
 import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from "react";
+import type { ContactChannel } from "@veolms/contracts";
+import { ContactChangeDialog } from "./ContactChangeDialog";
 import { createPortal } from "react-dom";
 import { AtIcon as At } from "@phosphor-icons/react/At";
 import { CameraIcon as Camera } from "@phosphor-icons/react/Camera";
@@ -487,6 +489,10 @@ export function ProfileSettings({
   const [usernameError, setUsernameError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [mobileError, setMobileError] = useState("");
+  // Changing the verified email or number (ContactChangeDialog).
+  const [contactChange, setContactChange] = useState<ContactChannel | null>(
+    null,
+  );
   const [socialVisibilityErrors, setSocialVisibilityErrors] = useState<
     Partial<Record<SocialVisibilityField, string>>
   >({});
@@ -1496,9 +1502,19 @@ export function ProfileSettings({
                         disabled={!canEdit}
                       />
                       {isEmailVerified ? (
-                        <span className="settings-profile__tag settings-profile__tag--success">
-                          <SealCheck size={14} weight="fill" /> Verified
-                        </span>
+                        <>
+                          <span className="settings-profile__tag settings-profile__tag--success">
+                            <SealCheck size={14} weight="fill" /> Verified
+                          </span>
+                          <button
+                            type="button"
+                            className="settings-profile__inline-verify-action"
+                            onClick={() => setContactChange("email")}
+                            disabled={!canEdit}
+                          >
+                            Change
+                          </button>
+                        </>
                       ) : (
                         <button
                           type="button"
@@ -1592,16 +1608,26 @@ export function ProfileSettings({
                         {isMobileVerified && (
                           <span
                             className="settings-profile__locked-icon"
-                            title="Verified mobile numbers cannot be changed here"
+                            title="Use Change to replace your verified number"
                             aria-label="Verified mobile number locked"
                           >
                             <Lock size={15} aria-hidden="true" />
                           </span>
                         )}
                         {isMobileVerified ? (
-                          <span className="settings-profile__tag settings-profile__tag--success">
-                            <SealCheck size={14} weight="fill" /> Verified
-                          </span>
+                          <>
+                            <span className="settings-profile__tag settings-profile__tag--success">
+                              <SealCheck size={14} weight="fill" /> Verified
+                            </span>
+                            <button
+                              type="button"
+                              className="settings-profile__inline-verify-action"
+                              onClick={() => setContactChange("phone")}
+                              disabled={!canEdit}
+                            >
+                              Change
+                            </button>
+                          </>
                         ) : (
                           <button
                             type="button"
@@ -2009,6 +2035,12 @@ export function ProfileSettings({
             )
           : null}
 
+        {contactChange && (
+          <ContactChangeDialog
+            channel={contactChange}
+            onClose={() => setContactChange(null)}
+          />
+        )}
         {mobileVisibilityPromptOpen && (
           <dialog
             ref={mobileVisibilityDialogRef}

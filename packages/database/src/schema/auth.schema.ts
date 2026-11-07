@@ -2,7 +2,32 @@ import type { Generated } from "kysely";
 
 export type OtpIdentifierType = "email" | "phone";
 export type OtpPurpose =
-  "login" | "registration" | "email_verification" | "phone_verification";
+  | "login"
+  | "registration"
+  | "email_verification"
+  | "phone_verification"
+  /** Proving the email or number on the account now, to change it. */
+  | "contact_change";
+
+/**
+ * A learner changing their own email address or mobile number: the current
+ * value proven first (a code sent to it), then the new one. Open for 15
+ * minutes; done once `completed_at` is set.
+ */
+export interface ContactChangeTable {
+  id: string;
+  user_id: string;
+  channel: "email" | "phone";
+  /** The value being replaced, as it was when the change started. */
+  current_value: string | null;
+  /** When the current value was proven; set at once when it had nothing to prove. */
+  current_proven_at: Date | null;
+  /** The value a code was last sent to, to replace it with. */
+  new_value: string | null;
+  expires_at: Date;
+  completed_at: Date | null;
+  created_at: Generated<Date>;
+}
 
 export interface AcademyTable {
   id: string;

@@ -66,6 +66,48 @@ ${recovery}
   };
 }
 
+/**
+ * Sent to the account's previous email address (and for a new number, to
+ * its email) once the learner changed it, so the real owner hears of a
+ * change they did not make. Neither value is spelled out in full.
+ */
+export function contactChangedEmail({
+  academyName,
+  logoUrl = null,
+  channel,
+  newValueMasked,
+}: {
+  academyName: string;
+  logoUrl?: string | null;
+  channel: "email" | "phone";
+  /** The new value, partly hidden ("n*****@getgtm.ai", "+91 •••••• 3210"). */
+  newValueMasked: string;
+}): EmailContent {
+  const what = channel === "email" ? "email address" : "mobile number";
+  const title = `Your ${academyName} ${what} was changed`;
+  const intro = `The ${what} on your ${academyName} account was changed to ${newValueMasked}. Other devices were signed out.`;
+  const notYou = `If you did not make this change, contact the ${academyName} team straight away.`;
+
+  return {
+    subject: title,
+    text: `${intro}\n\n${notYou}\n\nIf this was you, no action is needed.`,
+    html: layout({
+      academyName,
+      logoUrl,
+      title,
+      preheader: intro,
+      bodyHtml: [
+        heading(title),
+        paragraph(escapeHtml(intro)),
+        paragraph(escapeHtml(notYou), { last: true }),
+        divider(),
+        smallPrint("If this was you, no action is needed."),
+      ].join(""),
+      footer: `Sent by ${escapeHtml(academyName)} because your account's ${what} was changed.`,
+    }),
+  };
+}
+
 export interface OtpVerificationInput {
   code: string;
   expiresInMinutes: number;
