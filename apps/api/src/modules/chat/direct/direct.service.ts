@@ -2,6 +2,7 @@ import type { ChatSenderRole } from "@veolms/contracts";
 
 import { encodeChatEvent } from "../realtime/chat-bus.ts";
 import { directKey } from "../shared/chat.access.ts";
+import { listPlatformPermissionHolders } from "../../authorization/index.ts";
 import { ChatErrors } from "../shared/chat.errors.ts";
 import { presentPerson } from "../shared/chat.presenters.ts";
 import { createRoomViews } from "../shared/chat.room-views.ts";
@@ -244,12 +245,34 @@ export function createDirectService(runtime: ChatRuntime) {
         ReturnType<typeof presentPerson> & { role: ChatSenderRole }
       > = [];
       if (term.length >= 2) {
+        // Learners search among whom they may message; staff, everyone.
+        const among = userStaff
+          ? undefined
+          : {
+              userIds: [
+                ...new Set([
+                  ...staffIds,
+                  ...(await listPlatformPermissionHolders(
+                    database,
+                    "chat.moderate",
+                    200,
+                  )),
+                ]),
+              ],
+              courseIds:
+                settings.direct_policy === "course_peers"
+                  ? classmateCourses
+                      .filter((c) => directAllowedByCourse.get(c.id))
+                      .map((c) => c.id)
+                  : [],
+            };
         const found = await repository.searchPeople(
           database,
           term,
           userId,
           userStaff,
           SEARCH_LIMIT,
+          among,
         );
         const allowed: typeof found = [];
         for (const person of found) {

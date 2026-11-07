@@ -611,6 +611,12 @@ export function createChatRepository() {
       excludeId: string,
       staff: boolean,
       limit: number,
+      /**
+       * Learners: only these people (staff they may message) and classmates
+       * who opened these courses' groups. The search runs within them, so a
+       * match is never crowded out by people they could not message.
+       */
+      among?: { userIds: readonly string[]; courseIds: readonly string[] },
     ) {
       const text = term.trim().replace(/^@/, "");
       const pattern = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -622,6 +628,32 @@ export function createChatRepository() {
         .select(["u.id", "u.display_name", "u.avatar_data_url", "u.is_deleted"])
         .where("u.id", "<>", excludeId)
         .where("u.is_deleted", "=", false)
+        .$if(among !== undefined, (query) =>
+          query.where((eb) =>
+            eb.or([
+              ...(among!.userIds.length > 0
+                ? [eb("u.id", "in", [...among!.userIds])]
+                : []),
+              ...(among!.courseIds.length > 0
+                ? [
+                    eb(
+                      "u.id",
+                      "in",
+                      eb
+                        .selectFrom("chat_members as cm")
+                        .innerJoin("chat_rooms as r", "r.id", "cm.room_id")
+                        .select("cm.user_id")
+                        .where("r.kind", "=", "course")
+                        .where("r.course_id", "in", [...among!.courseIds])
+                        .where("cm.state", "=", "active"),
+                    ),
+                  ]
+                : []),
+              // Nobody to look among: match nothing.
+              eb.val(false),
+            ]),
+          ),
+        )
         .where((eb) =>
           eb.or([
             eb("u.display_name", "ilike", pattern),

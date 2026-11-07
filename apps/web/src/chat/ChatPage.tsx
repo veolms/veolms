@@ -238,9 +238,13 @@ export function ChatPage() {
         "@container/chat relative flex overflow-hidden bg-(--chat-panel) text-(--text)",
         // Fills the shell's main area (its padding is off, see chat.css).
         "min-[641px]:absolute min-[641px]:inset-0",
-        // Phones: a fixed screen down to the bottom bar (58 px + padding +
-        // the safe area), so nothing scrolls behind it, as in WhatsApp.
-        "max-[640px]:fixed max-[640px]:inset-x-0 max-[640px]:top-0 max-[640px]:bottom-[calc(62px+var(--app-viewport-safe-area-max-bottom,0px))]",
+        // Phones: a fixed screen down to the bottom bar (58 px + the safe
+        // area), so nothing scrolls behind it, as in WhatsApp.
+        "max-[640px]:fixed max-[640px]:inset-x-0 max-[640px]:top-0 max-[640px]:bottom-[calc(58px+var(--app-viewport-safe-area-max-bottom,0px))]",
+        // An open chat covers the bar too (the bar is z-140): this screen is
+        // a stacking context of its own, so its full-screen chat and drawers
+        // only rise above the bar when the screen does.
+        roomId && "max-[640px]:z-150",
       )}
       // Settings › Chats: wallpaper, its pattern and the text size.
       data-chat-pattern={prefs.pattern}

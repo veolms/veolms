@@ -914,6 +914,18 @@ await test("New chat: an admin finds any learner by name", async () => {
   assert.ok(byEmail.results.some((p) => p.id === a.userId));
 });
 
+await test("a learner's search finds the staff they may message", async () => {
+  const staff = (
+    await admin.get<{ id: string; displayName: string }>("/v1/auth/me")
+  ).body.data!;
+  const found = ok<{ results: Array<{ id: string }> }>(
+    await a.client.get(
+      `/v1/chat/direct/candidates?search=${encodeURIComponent(staff.displayName.slice(0, 4))}`,
+    ),
+  );
+  assert.ok(found.results.some((p) => p.id === staff.id));
+});
+
 await test("a learner finds a classmate only by the whole e-mail, not a part of it", async () => {
   const other = (await b.client.get<{ email: string }>("/v1/auth/me")).body
     .data!.email;
