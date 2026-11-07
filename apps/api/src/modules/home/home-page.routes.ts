@@ -1,5 +1,6 @@
 import {
   guestHomePageResponseSchema,
+  homeFestiveResponseSchema,
   heroVideoPlaybackSchema,
   homePageDiscussionListResponseSchema,
   homePageLessonVideoOptionsResponseSchema,
@@ -81,6 +82,26 @@ const homePageRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.getGuestPage,
+  );
+
+  app.get(
+    "/home/festive",
+    {
+      schema: {
+        operationId: "getHomeFestive",
+        tags: ["Home"],
+        summary: "Get the festive greeting and offer",
+        description:
+          "Returns whether the festive greeting and offer are on, with the greeting, its message and the coupon code the sidebar offers. Public: every page reads it.",
+        response: {
+          200: jsonResponse(
+            "The festive greeting and offer.",
+            homeFestiveResponseSchema,
+          ),
+        },
+      },
+    },
+    controller.getFestive,
   );
 
   app.get(

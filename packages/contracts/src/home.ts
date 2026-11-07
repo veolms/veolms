@@ -2,12 +2,14 @@ import { z } from "zod";
 import { courseSummarySchema, type CourseSummary } from "./course/course.ts";
 import {
   DEFAULT_HOME_PAGE_SETTINGS,
+  HOME_PAGE_FESTIVE_ALIGNS,
   HOME_PAGE_HIGHLIGHT_COUNT,
   HOME_PAGE_MAX_HIDDEN_DISCUSSIONS,
   HOME_PAGE_MAX_PINNED_DISCUSSIONS,
   HOME_PAGE_MAX_SELECTED_COURSES,
   type HomePageCourseSection,
   type HomePageDiscussionSection,
+  type HomePageFestive,
   type HomePageHero,
   type HomePageHeroVideo,
   type HomePageHighlights,
@@ -101,10 +103,47 @@ export const homePageHeroVideoSchema = z.discriminatedUnion("source", [
   }),
 ]) satisfies z.ZodType<HomePageHeroVideo>;
 
+/** A coupon code as admins type them: letters, digits, `-` and `_`. */
+const couponCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .max(40)
+  .regex(/^[A-Z0-9_-]*$/u, "Use letters, numbers, - and _ only.");
+
+export const homePageFestiveSchema = z
+  .strictObject({
+    enabled: z.boolean(),
+    // Required only while it is shown: it can be prepared, or left, empty.
+    greeting: z.string().trim().max(30),
+    message: z.string().trim().max(120),
+    couponCode: couponCodeSchema,
+    // Settings saved before the note existed get the default one.
+    couponNote: z
+      .string()
+      .trim()
+      .max(40)
+      .default(DEFAULT_HOME_PAGE_SETTINGS.festive.couponNote),
+    // Settings saved before the alignment could be chosen are centred.
+    align: z
+      .enum(HOME_PAGE_FESTIVE_ALIGNS)
+      .default(DEFAULT_HOME_PAGE_SETTINGS.festive.align),
+  })
+  .refine((festive) => !festive.enabled || festive.greeting.length > 0, {
+    message: "A greeting is required while the festive offer is shown.",
+    path: ["greeting"],
+  }) satisfies z.ZodType<HomePageFestive>;
+
+/** The festive greeting and offer, for every page (see `HomePageFestive`). */
+export const homeFestiveResponseSchema = homePageFestiveSchema;
+export type HomeFestiveResponse = HomePageFestive;
+
 export const homePageSettingsSchema = z.strictObject({
   hero: homePageHeroSchema,
   // Settings saved before the hero video could be chosen play the default.
   heroVideo: homePageHeroVideoSchema.default({ source: "default" }),
+  // Settings saved before the festive offer existed have it off.
+  festive: homePageFestiveSchema.default(DEFAULT_HOME_PAGE_SETTINGS.festive),
   highlights: homePageHighlightsSchema,
   popularCourses: homePageCourseSectionSchema,
   freeCourses: homePageCourseSectionSchema,
@@ -204,6 +243,8 @@ const guestHomeCourseSectionSchema = z.strictObject({
 export const guestHomePageResponseSchema = z.strictObject({
   version: z.string(),
   hero: homePageHeroSchema,
+  // An API from before the festive offer existed sends none: it is off.
+  festive: homePageFestiveSchema.default(DEFAULT_HOME_PAGE_SETTINGS.festive),
   heroLessonPosterUrl: z.string().nullable().optional(),
   highlights: homePageHighlightsSchema,
   popularCourses: guestHomeCourseSectionSchema,
@@ -225,6 +266,8 @@ export interface GuestHomeCourseSection {
 export interface GuestHomePageResponse {
   version: string;
   hero: HomePageHero;
+  /** In the page built ahead of time, so its hero is right from the start. */
+  festive: HomePageFestive;
   /**
    * The picture the hero's laptop shows until its video is played: the
    * thumbnail of the course whose lesson plays there (in a size that suits

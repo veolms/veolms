@@ -46,6 +46,11 @@ export function useMobileProfileDrawerSize({
       ".mobile-menu-sheet__appearance",
     );
     if (!body || !profile || !scroll || !appearance) return;
+    // Optional parts between the menu and the dock (the festive offer):
+    // their wrapper is always there, empty while there is nothing to show.
+    const extras = Array.from(
+      popup.querySelectorAll<HTMLElement>(".mobile-menu-sheet__extra"),
+    );
 
     // The account menu is a lazy chunk behind Suspense: on the first open
     // after signing in it is usually not there yet, and it arrives as a new
@@ -72,6 +77,7 @@ export function useMobileProfileDrawerSize({
         Number.parseFloat(scrollStyle.paddingTop) +
         Number.parseFloat(scrollStyle.paddingBottom) +
         outerHeight(appearance) +
+        extras.reduce((sum, extra) => sum + outerHeight(extra), 0) +
         chromeHeight;
       const next = Math.max(
         0.42,
@@ -91,7 +97,7 @@ export function useMobileProfileDrawerSize({
 
     measure();
     const observer = new ResizeObserver(scheduleMeasure);
-    for (const element of [profile, menu, appearance]) {
+    for (const element of [profile, menu, appearance, ...extras]) {
       if (element) observer.observe(element);
     }
     const menuSwap = new MutationObserver(() => {

@@ -7,6 +7,7 @@ import {
   homePageSettingsSchema,
   type CourseSummary,
   type GuestHomePageResponse,
+  type HomeFestiveResponse,
   type HeroVideoPlayback,
   type HomePageCourseSection,
   type HomePageDiscussionListResponse,
@@ -87,6 +88,8 @@ export interface HomePageService {
     updatedBy: string | null,
   ): Promise<HomePageDiscussionListResponse>;
   getGuestPage(): Promise<GuestHomePageResponse>;
+  /** The festive greeting and offer, read on every page. */
+  getFestive(): Promise<HomeFestiveResponse>;
   /** The lessons of a course an admin can pick as the hero video. */
   getLessonVideoOptions(
     courseId: string,
@@ -311,6 +314,7 @@ export function createHomePageService({
     return {
       version: updatedAt?.toISOString() ?? "default",
       hero: settings.hero,
+      festive: settings.festive,
       heroLessonPosterUrl,
       highlights: settings.highlights,
       popularCourses: {
@@ -469,6 +473,10 @@ export function createHomePageService({
     async getHeroVideoPlaybackToken() {
       const { settings } = await readSettings();
       return await heroVideoService.getPlaybackToken(settings.heroVideo);
+    },
+
+    async getFestive() {
+      return (await readSettings()).settings.festive;
     },
 
     async getGuestPage() {

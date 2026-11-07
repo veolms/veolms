@@ -1,6 +1,7 @@
 import type {
   GuestHomePageResponse,
   HeroVideoPlayback,
+  HomeFestiveResponse,
   HomeDiscoveryResponse,
   HomePageDiscussionListResponse,
   HomePageLessonVideoOptionsResponse,
@@ -19,6 +20,9 @@ export const homeService = {
   },
   getGuestPage(): Promise<GuestHomePageResponse> {
     return api.get<GuestHomePageResponse>("/home/guest-page");
+  },
+  getFestive(): Promise<HomeFestiveResponse> {
+    return api.get<HomeFestiveResponse>("/home/festive");
   },
   /**
    * The signed-in learner's home in one answer. `pinnedCourseId` is the

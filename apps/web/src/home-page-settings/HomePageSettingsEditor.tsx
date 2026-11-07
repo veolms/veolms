@@ -16,6 +16,7 @@ import { CourseSectionEditor } from "./CourseSectionEditor";
 import { DiscussionsEditor } from "./DiscussionsEditor";
 import { HeroVideoEditor } from "./HeroVideoEditor";
 import {
+  ChoiceCards,
   SettingsSection,
   TextField,
   surfaceClass,
@@ -34,6 +35,9 @@ function getBlockingProblem(settings: HomePageSettings): string | null {
       item.title,
     ]),
   ];
+  if (settings.festive.enabled) {
+    required.push(["Festive greeting", settings.festive.greeting]);
+  }
   const missing = required.find(([, value]) => value.trim().length === 0);
   if (missing) return `${missing[0]} is required.`;
 
@@ -204,6 +208,88 @@ function HomePageSettingsForm({
             hint="Scrolls to the free courses. Leave empty to remove the button."
           />
         </div>
+      </SettingsSection>
+
+      <SettingsSection
+        id="home-page-festive-heading"
+        title="Festive greeting and offer"
+        description="For a festival sale. While it is shown, the greeting takes the place of the hero's supporting text for visitors and signed-in students, and the sidebar offers the coupon code on every page."
+        visible={draft.festive.enabled}
+        onVisibleChange={(enabled) =>
+          update("festive", { ...draft.festive, enabled })
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            id="home-page-festive-greeting"
+            label="Greeting"
+            value={draft.festive.greeting}
+            onChange={(greeting) =>
+              update("festive", { ...draft.festive, greeting })
+            }
+            maxLength={30}
+            required={draft.festive.enabled}
+            placeholder="Happy Diwali"
+            hint="Shown large, in gold script, beside a lit diya."
+          />
+          <TextField
+            id="home-page-festive-coupon"
+            label="Coupon code"
+            value={draft.festive.couponCode}
+            onChange={(couponCode) =>
+              update("festive", {
+                ...draft.festive,
+                couponCode: couponCode
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9_-]/gu, ""),
+              })
+            }
+            maxLength={40}
+            placeholder="DIWALI26"
+            hint="Shown in the sidebar, copied with a press. Create it under Coupons first. Leave empty for no code."
+          />
+        </div>
+        <TextField
+          id="home-page-festive-coupon-note"
+          label="Line under the coupon"
+          value={draft.festive.couponNote}
+          onChange={(couponNote) =>
+            update("festive", { ...draft.festive, couponNote })
+          }
+          maxLength={40}
+          placeholder="Up to 55% off on all courses"
+          hint="What the code gives, shown under it in the sidebar. Leave empty to hide it."
+        />
+        <TextField
+          id="home-page-festive-message"
+          label="Message"
+          value={draft.festive.message}
+          onChange={(message) =>
+            update("festive", { ...draft.festive, message })
+          }
+          maxLength={120}
+          multiline
+          placeholder="Wishing you a season of learning, growth and new beginnings."
+          hint="Shown beside the greeting. Leave empty to show the greeting alone."
+        />
+        <ChoiceCards
+          name="home-page-festive-align"
+          legend="On phones and narrow screens"
+          options={[
+            [
+              "center",
+              "Centred",
+              "The greeting and message centred, one over the other.",
+            ],
+            [
+              "start",
+              "Left-aligned",
+              "Lined up with the headline's left edge.",
+            ],
+          ]}
+          value={draft.festive.align}
+          onChange={(align) => update("festive", { ...draft.festive, align })}
+        />
       </SettingsSection>
 
       <HeroVideoEditor
