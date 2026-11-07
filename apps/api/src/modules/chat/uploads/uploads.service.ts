@@ -349,14 +349,21 @@ export function createUploadsService(
       if (source.icon_upload_id) {
         return this.read(userId, source.icon_upload_id, false);
       }
-      if (source.media_storage_key) {
-        const key = thumbnailKey(
-          source.media_metadata,
-          source.media_storage_key,
-        );
-        const publicUrl = storage.isCdnPublicKey(key)
-          ? storage.getPublicObjectUrl(key)
-          : null;
+      if (source.media_storage_key && source.media_id) {
+        // A public picture: its 240 px copy, made for every course picture
+        // and shown the same way on the course pages (about 8 KB, where the
+        // original can be half a megabyte). A private one: the size its
+        // record lists, else the original, through a signed link.
+        const isPublic = !source.media_storage_key
+          .replace(/^\/+/, "")
+          .startsWith("protected/");
+        const key = isPublic
+          ? `public/thumbnails/${source.media_id}/240.webp`
+          : thumbnailKey(source.media_metadata, source.media_storage_key);
+        const publicUrl =
+          isPublic && storage.isCdnPublicKey(key)
+            ? storage.getPublicObjectUrl(key)
+            : null;
         if (publicUrl && /^https?:\/\//.test(publicUrl)) {
           return {
             kind: "redirect" as const,

@@ -1276,6 +1276,7 @@ export function createChatRepository() {
           "r.kind",
           "r.icon_upload_id",
           "c.thumbnail_url",
+          "ma.id as media_id",
           "ma.storage_key as media_storage_key",
           "ma.metadata as media_metadata",
         ])
