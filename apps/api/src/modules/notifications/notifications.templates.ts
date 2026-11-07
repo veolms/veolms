@@ -314,6 +314,26 @@ export function renderNotificationTemplate(
         body: `Your report regarding a ${stringValue(data, "targetType")} has been ${stringValue(data, "status")}${data.actionTaken ? ` (action: ${stringValue(data, "actionTaken")})` : "."}`,
       };
       break;
+    case "chat.mentioned":
+      inApp = {
+        title: `${stringValue(data, "actorName")} mentioned you in ${stringValue(data, "roomTitle")}`,
+        body: stringValue(data, "snippet"),
+      };
+      break;
+    case "chat.platform_restriction": {
+      const restriction = stringValue(data, "restriction");
+      const action =
+        restriction === "ban"
+          ? "removed"
+          : restriction === "no_direct"
+            ? "turned off private chats for"
+            : "muted";
+      inApp = {
+        title: `${stringValue(data, "actorName")} ${action} ${stringValue(data, "targetName")} in all chats`,
+        body: `Reason: ${stringValue(data, "reason")}. Review or lift it in chat restrictions.`,
+      };
+      break;
+    }
     case "support.reply_posted":
       inApp = {
         title: `Reply to your ${stringValue(data, "ticketKind") === "feedback" ? "feedback" : "report"} #${stringValue(data, "ticketNumber")}`,

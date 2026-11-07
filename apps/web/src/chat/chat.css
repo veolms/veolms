@@ -1,0 +1,24 @@
+/*
+ * The chat wallpaper: a quiet doodle pattern (books, pencils, bulbs, code
+ * brackets, speech bubbles) like WhatsApp's, tinted by the theme.
+ *
+ * Why plain CSS: the pattern is an SVG used as a CSS mask so it takes the
+ * active palette's text colour in every theme (light and dark). A data-URI
+ * mask of this length is not expressible as a readable Tailwind utility.
+ * Scoped to `.chat-wallpaper`, imported only by the chat page.
+ */
+.chat-wallpaper {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-color: var(--text);
+  opacity: 0.045;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 30h26a6 6 0 0 1 6 6v26H24a6 6 0 0 1-6-6z M50 36h26a6 6 0 0 1 0 0v32H56a6 6 0 0 1-6-6'/%3E%3Cpath d='M120 22l22 22-34 34-26 4 4-26z M114 28l22 22'/%3E%3Cpath d='M180 30a16 16 0 0 0-10 28v8h20v-8a16 16 0 0 0-10-28z M174 72h12'/%3E%3Cpath d='M30 120l-14 14 14 14 M62 120l14 14-14 14 M52 114l-12 40'/%3E%3Cpath d='M118 112h44a8 8 0 0 1 8 8v22a8 8 0 0 1-8 8h-24l-14 12v-12h-6a8 8 0 0 1-8-8v-22a8 8 0 0 1 8-8z M128 128h24 M128 136h16'/%3E%3Ccircle cx='186' cy='186' r='14'/%3E%3Cpath d='M186 176v10l7 5'/%3E%3Cpath d='M28 182l18-10 18 10-18 10z M38 188v10q8 6 16 0v-10'/%3E%3Cpath d='M100 186h30 M104 178h22 M108 194h14'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 30h26a6 6 0 0 1 6 6v26H24a6 6 0 0 1-6-6z M50 36h26a6 6 0 0 1 0 0v32H56a6 6 0 0 1-6-6'/%3E%3Cpath d='M120 22l22 22-34 34-26 4 4-26z M114 28l22 22'/%3E%3Cpath d='M180 30a16 16 0 0 0-10 28v8h20v-8a16 16 0 0 0-10-28z M174 72h12'/%3E%3Cpath d='M30 120l-14 14 14 14 M62 120l14 14-14 14 M52 114l-12 40'/%3E%3Cpath d='M118 112h44a8 8 0 0 1 8 8v22a8 8 0 0 1-8 8h-24l-14 12v-12h-6a8 8 0 0 1-8-8v-22a8 8 0 0 1 8-8z M128 128h24 M128 136h16'/%3E%3Ccircle cx='186' cy='186' r='14'/%3E%3Cpath d='M186 176v10l7 5'/%3E%3Cpath d='M28 182l18-10 18 10-18 10z M38 188v10q8 6 16 0v-10'/%3E%3Cpath d='M100 186h30 M104 178h22 M108 194h14'/%3E%3C/svg%3E");
+  -webkit-mask-size: 220px 220px;
+  mask-size: 220px 220px;
+}
+
+:root[data-theme="light"] .chat-wallpaper {
+  opacity: 0.06;
+}

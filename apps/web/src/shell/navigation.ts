@@ -7,6 +7,7 @@ import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircle";
 import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
@@ -51,6 +52,7 @@ const studentNavigation: readonly NavigationItem[] = [
     ChatCircleDots,
     "/discussions",
   ),
+  createNavigationItem("student-chat", "Chats", ChatsCircle, "/chat"),
   createNavigationItem("student-settings", "Settings", GearSix, "/settings"),
 ];
 
@@ -62,6 +64,7 @@ const creatorNavigation: readonly NavigationItem[] = [
     ChatCircleDots,
     "/discussions",
   ),
+  createNavigationItem("creator-chat", "Chats", ChatsCircle, "/chat"),
   createNavigationItem("creator-dashboard", "Dashboard", SquaresFour, "/"),
   createNavigationItem("creator-students", "Students", Users, "/students"),
   createNavigationItem(
@@ -83,6 +86,7 @@ const adminNavigation: readonly NavigationItem[] = [
     ChatCircleDots,
     "/discussions",
   ),
+  createNavigationItem("creator-chat", "Chats", ChatsCircle, "/chat"),
   createNavigationItem("creator-orders", "Orders", Tote, "/orders"),
   createNavigationItem("creator-students", "Students", Users, "/students"),
   createNavigationItem(
@@ -168,6 +172,7 @@ const navigationTones: Record<string, string> = {
   Orders: "#d68eea",
   "Purchase History": "#d68eea",
   Messages: "#63c8d5",
+  Chats: "#25d0a8",
   Notifications: "#f1be4b",
   Settings: "#a16cff",
   // Dock controls that are not pages.

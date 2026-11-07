@@ -17,6 +17,7 @@ import { createDiscussionUploadStore } from "./modules/discussion-uploads/index.
 import { createAttachmentsRepository } from "./modules/learning/discussions/attachments/attachments.repository.ts";
 import { createAttachmentsService } from "./modules/learning/discussions/attachments/attachments.service.ts";
 import { createNotificationProcessor } from "./modules/notifications/index.ts";
+import { createChatRetention } from "./modules/chat/index.ts";
 import { startYoutubeImportWorker } from "./modules/media/youtube-import/youtube-import.worker.ts";
 import { getYoutubeImportTools } from "./modules/media/youtube-import/youtube-import.tools.ts";
 import { getHeroVideoReadyWatch } from "./modules/home/home-hero-video-ready.ts";
@@ -101,6 +102,11 @@ export function registerBackgroundJobs(
 
   const stopInvoicePdfJob = startInvoicePdfJob(app, database, services);
 
+  const stopChatRetention =
+    config.CHAT_ENABLED && config.CHAT_RETENTION_INTERVAL_HOURS > 0
+      ? startChatRetention(app, database, services)
+      : null;
+
   // "Import from YouTube": off unless an operator turns it on, because it
   // downloads and packages video on this host.
   let stopYoutubeImportWorker: (() => Promise<void>) | null = null;
@@ -145,11 +151,66 @@ export function registerBackgroundJobs(
     await stopNotificationLoop?.();
     await stopDiscussionUploadPurge?.();
     await stopInvoicePdfJob?.();
+    await stopChatRetention?.();
     await stopYoutubeImportWorker?.();
     stopHeartbeat?.();
   });
 
   return paymentEventQueue;
+}
+
+const CHAT_RETENTION_JOB = "chat-retention";
+const CHAT_RETENTION_FIRST_RUN_MS = 5 * 60 * 1000;
+
+/**
+ * Chat retention on a timer (CHAT_RETENTION_INTERVAL_HOURS, default 6):
+ * course-group messages past the platform's retention and the text of
+ * messages deleted over 7 days ago, in small batches. Every instance runs
+ * its own timer; that is safe (each batch only touches rows still there).
+ */
+function startChatRetention(
+  app: FastifyInstance,
+  database: Kysely<Database>,
+  services: AppServices,
+): () => Promise<void> {
+  const retention = createChatRetention(services.storage);
+  let stopped = false;
+  let activeCycle: Promise<void> | null = null;
+
+  const runCycle = () => {
+    if (stopped || activeCycle) return;
+    activeCycle = (async () => {
+      try {
+        const result = await retention.run(database);
+        app.log.info(
+          { job: CHAT_RETENTION_JOB, ...result },
+          "Chat retention complete",
+        );
+      } catch (error) {
+        app.log.error(
+          { err: error, job: CHAT_RETENTION_JOB },
+          "Chat retention failed",
+        );
+      }
+    })().finally(() => {
+      activeCycle = null;
+    });
+  };
+
+  const first = setTimeout(runCycle, CHAT_RETENTION_FIRST_RUN_MS);
+  first.unref();
+  const timer = setInterval(
+    runCycle,
+    config.CHAT_RETENTION_INTERVAL_HOURS * 60 * 60 * 1000,
+  );
+  timer.unref();
+
+  return async () => {
+    stopped = true;
+    clearTimeout(first);
+    clearInterval(timer);
+    await activeCycle;
+  };
 }
 
 const INVOICE_PDF_JOB = "invoice-pdf";

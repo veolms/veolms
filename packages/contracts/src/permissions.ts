@@ -120,6 +120,12 @@ export const permissions = [
   // Problem reports and feedback from "Help and feedback".
   "support.read",
   "support.manage",
+
+  // Chat: moderate course groups (own courses for instructors), manage
+  // chat platform-wide, and mute or ban a learner from all of chat.
+  "chat.moderate",
+  "chat.manage",
+  "chat.restrict_platform",
 ] as const;
 
 /** Every key that opens a section of the Analytics page. */
