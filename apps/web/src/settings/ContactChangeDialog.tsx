@@ -1,10 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { createPortal } from "react-dom";
+import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
+import { PhoneIcon as Phone } from "@phosphor-icons/react/Phone";
 import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ContactChangeResponse, ContactChannel } from "@veolms/contracts";
 
+import { OtpCodeInput } from "../auth/OtpCodeInput";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { authKeys } from "../services/auth/auth.keys";
 import { contactChangeService } from "../services/auth/contact-change.service";
@@ -31,8 +34,9 @@ function messageOf(error: unknown): string {
 /**
  * Changing the email address or mobile number on one's own account, in
  * three steps: the code sent to the current value, the new value, then the
- * code sent to it. Someone who can no longer reach the current value is
- * pointed to support, whose staff change it for them.
+ * code sent to it. Built from the profile's verification dialog (its card,
+ * code boxes and buttons), and like it rendered over the whole page.
+ * Someone who can no longer reach the current value is pointed to support.
  */
 export function ContactChangeDialog({
   channel,
@@ -43,7 +47,10 @@ export function ContactChangeDialog({
 }) {
   const queryClient = useQueryClient();
   const titleId = useId();
-  const fieldId = useId();
+  const descriptionId = useId();
+  const errorId = useId();
+  const codeFieldId = useId();
+  const valueFieldId = useId();
   const [step, setStep] = useState<Step>({ kind: "starting" });
   const [code, setCode] = useState("");
   const [value, setValue] = useState("");
@@ -51,10 +58,29 @@ export function ContactChangeDialog({
   const [busy, setBusy] = useState(false);
   useBackDismiss({ open: true, onDismiss: onClose });
 
-  const begin = async () => {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const run = async (action: () => Promise<void>) => {
+    if (busy) return;
     setError(null);
     setBusy(true);
     try {
+      await action();
+    } catch (err) {
+      setError(messageOf(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const begin = () =>
+    run(async () => {
       const change = await contactChangeService.start(channel);
       setCode("");
       setStep(
@@ -62,12 +88,7 @@ export function ContactChangeDialog({
           ? { kind: "current", change }
           : { kind: "new", change },
       );
-    } catch (err) {
-      setError(messageOf(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
   // Started once, as the dialog opens. Development runs effects twice, and a
   // second start would send a second code and run into the resend wait.
@@ -79,237 +100,247 @@ export function ContactChangeDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Another code to the new value, the change otherwise as it was. */
-  const resendToNew = async () => {
-    if (busy || step.kind !== "newCode") return;
-    setError(null);
-    setBusy(true);
-    try {
+  const sendToNew = (newValue: string) =>
+    run(async () => {
+      if (step.kind !== "new" && step.kind !== "newCode") return;
       const change = await contactChangeService.sendToNew(
         step.change.id,
-        step.value,
+        newValue,
       );
       setCode("");
-      setStep({ kind: "newCode", change, value: step.value });
-    } catch (err) {
-      setError(messageOf(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+      setStep({ kind: "newCode", change, value: newValue });
+    });
 
-  const submit = async () => {
-    if (busy) return;
-    setError(null);
-    setBusy(true);
-    try {
-      if (step.kind === "current") {
+  const submit = () => {
+    if (step.kind === "current") {
+      return run(async () => {
         const change = await contactChangeService.proveCurrent(
           step.change.id,
-          code.trim(),
+          code,
         );
         setCode("");
         setStep({ kind: "new", change });
-      } else if (step.kind === "new") {
-        const change = await contactChangeService.sendToNew(
-          step.change.id,
-          value.trim(),
-        );
-        setCode("");
-        setStep({ kind: "newCode", change, value: value.trim() });
-      } else if (step.kind === "newCode") {
+      });
+    }
+    if (step.kind === "new") return sendToNew(value.trim());
+    if (step.kind === "newCode") {
+      return run(async () => {
         const done = await contactChangeService.confirmNew(
           step.change.id,
           step.value,
-          code.trim(),
+          code,
         );
         await queryClient.invalidateQueries({ queryKey: authKeys.me() });
         setStep({ kind: "done", value: done.value });
-      }
-    } catch (err) {
-      setError(messageOf(err));
-    } finally {
-      setBusy(false);
+      });
     }
+    return undefined;
   };
 
   const what = WHAT[channel];
   const askingCode = step.kind === "current" || step.kind === "newCode";
-  const sentTo =
-    step.kind === "current" || step.kind === "newCode"
-      ? step.change.sentTo
-      : null;
+  const Icon = channel === "email" ? EnvelopeSimple : Phone;
 
-  return (
+  const title =
+    step.kind === "done"
+      ? `${channel === "email" ? "Email address" : "Mobile number"} changed`
+      : step.kind === "current"
+        ? "Confirm it’s you"
+        : `Change your ${what}`;
+  const description =
+    step.kind === "starting"
+      ? `Sending a code to your current ${what}…`
+      : step.kind === "current"
+        ? `We sent a 6-digit code to your current ${what}, `
+        : step.kind === "newCode"
+          ? "We sent a 6-digit code to "
+          : step.kind === "new"
+            ? `Enter your new ${what}. We’ll send a code to it to confirm it’s yours.`
+            : "Your other devices were signed out.";
+  const sentTo = askingCode ? step.change.sentTo : null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs"
+      className="settings-profile__verification-dialog-overlay"
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
+      aria-describedby={descriptionId}
     >
       <form
-        className="w-full max-w-md rounded-[20px] border border-(--border) bg-(--card-surface) p-6 shadow-2xl"
+        className="settings-profile__verification-dialog-card"
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}
       >
-        <div className="flex items-start justify-between gap-4">
-          <h2
-            id={titleId}
-            className="text-lg font-bold tracking-tight text-(--text)"
+        <span
+          className="settings-profile__verification-dialog-top-line"
+          aria-hidden="true"
+        />
+        <button
+          type="button"
+          className="settings-profile__verification-dialog-close"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <X size={14} weight="bold" />
+        </button>
+
+        <div className="settings-profile__verification-dialog-content">
+          <div
+            className="settings-profile__verification-dialog-icon"
+            aria-hidden="true"
           >
-            Change {what}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="cursor-pointer rounded-lg p-1.5 text-(--muted) hover:bg-(--hover) hover:text-(--text)"
-          >
-            <X size={18} />
-          </button>
+            {step.kind === "done" ? (
+              <SealCheck size={26} weight="fill" />
+            ) : (
+              <Icon size={26} />
+            )}
+          </div>
+          <h3 id={titleId}>{title}</h3>
+          <p id={descriptionId}>
+            {description}
+            {sentTo && (
+              <>
+                <strong>{sentTo}</strong>.
+              </>
+            )}
+            {step.kind === "done" && (
+              <>
+                {" "}
+                Your {what} is now <strong>{step.value}</strong>.
+              </>
+            )}
+          </p>
         </div>
 
-        {step.kind === "starting" && !error && (
-          <p className="mt-4 inline-flex items-center gap-2 text-sm text-(--muted)">
-            <CircleNotch size={16} className="animate-spin" aria-hidden />
-            Sending a code to your current {what}…
-          </p>
-        )}
-
         {askingCode && (
-          <>
-            <p className="mt-3 text-sm leading-relaxed text-(--text-secondary)">
-              {step.kind === "current"
-                ? `First, confirm it's you: enter the code we sent to your current ${what}, ${sentTo}.`
-                : `Now enter the code we sent to ${sentTo}.`}
-            </p>
+          <div className="settings-profile__verification-dialog-field">
             <label
-              htmlFor={fieldId}
-              className="mt-4 block text-xs font-semibold text-(--text-secondary)"
+              className="settings-profile__verification-dialog-field-label"
+              htmlFor={codeFieldId}
             >
-              6-digit code
+              Verification code
             </label>
-            <input
-              id={fieldId}
+            <OtpCodeInput
+              id={codeFieldId}
+              describedBy={error ? errorId : descriptionId}
+              disabled={busy}
+              invalid={Boolean(error)}
+              label="Verification code"
+              autoFocus
               value={code}
-              onChange={(event) =>
-                setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-              }
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              className="mt-1.5 w-full rounded-xl border border-(--border) bg-(--canvas) px-3 py-2.5 font-mono text-lg tracking-[0.4em] text-(--text) outline-none focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20"
+              onChange={setCode}
             />
-          </>
-        )}
-
-        {step.kind === "new" && (
-          <>
-            <p className="mt-3 text-sm leading-relaxed text-(--text-secondary)">
-              Enter your new {what}. We’ll send a code to it to confirm it’s
-              yours.
-            </p>
-            <label
-              htmlFor={fieldId}
-              className="mt-4 block text-xs font-semibold text-(--text-secondary)"
-            >
-              New {what}
-            </label>
-            <input
-              id={fieldId}
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              type={channel === "email" ? "email" : "tel"}
-              inputMode={channel === "email" ? "email" : "tel"}
-              autoComplete={channel === "email" ? "email" : "tel"}
-              placeholder={
-                channel === "email" ? "you@example.com" : "+91 98765 43210"
-              }
-              autoFocus
-              className="mt-1.5 w-full rounded-xl border border-(--border) bg-(--canvas) px-3 py-2.5 text-sm text-(--text) outline-none focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20"
-            />
-          </>
-        )}
-
-        {step.kind === "done" && (
-          <div className="mt-4 flex items-start gap-3">
-            <SealCheck
-              size={22}
-              weight="fill"
-              className="shrink-0 text-emerald-400"
-              aria-hidden
-            />
-            <p className="text-sm leading-relaxed text-(--text-secondary)">
-              Your {what} is now <strong>{step.value}</strong>. Your other
-              devices were signed out.
-            </p>
+            <small>
+              {step.kind === "current"
+                ? `Can’t reach your current ${what}? Contact support from the Help Center and our team will change it for you.`
+                : `Enter the code to confirm your new ${what}.`}
+            </small>
           </div>
         )}
 
-        {error && (
-          <p role="alert" className="mt-3 text-sm text-rose-400">
+        {step.kind === "new" && (
+          <div className="settings-profile__verification-dialog-field">
+            <label
+              className="settings-profile__verification-dialog-field-label"
+              htmlFor={valueFieldId}
+            >
+              New {what}
+            </label>
+            <span className="settings-profile__input-shell">
+              <Icon size={17} aria-hidden="true" />
+              <input
+                id={valueFieldId}
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                type={channel === "email" ? "email" : "tel"}
+                inputMode={channel === "email" ? "email" : "tel"}
+                autoComplete={channel === "email" ? "email" : "tel"}
+                placeholder={
+                  channel === "email" ? "you@example.com" : "+91 98765 43210"
+                }
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
+                autoFocus
+              />
+            </span>
+          </div>
+        )}
+
+        {error ? (
+          <p
+            id={errorId}
+            className="settings-profile__verification-dialog-error"
+            role="alert"
+          >
             {error}
           </p>
+        ) : null}
+
+        {(askingCode || (step.kind === "starting" && error)) && (
+          <div className="settings-profile__verification-dialog-resend-row">
+            <p>
+              {step.kind === "starting"
+                ? "The code was not sent."
+                : "Didn’t receive the code?"}
+            </p>
+            <button
+              type="button"
+              className="settings-profile__verification-dialog-resend"
+              onClick={() =>
+                void (step.kind === "newCode" ? sendToNew(step.value) : begin())
+              }
+              disabled={busy}
+            >
+              {step.kind === "starting" ? "Try again" : "Resend code"}
+            </button>
+          </div>
         )}
 
-        {step.kind === "current" && (
-          <p className="mt-3 text-xs text-(--muted)">
-            Can’t reach your current {what}? Contact support from the Help
-            Center and our team will change it for you.
-          </p>
-        )}
-
-        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <div className="settings-profile__verification-dialog-actions">
           {step.kind === "done" ? (
             <button
               type="button"
+              className="settings-profile__verification-dialog-submit"
               onClick={onClose}
               autoFocus
-              className="cursor-pointer rounded-xl bg-(--accent) px-4 py-2.5 text-sm font-semibold text-(--on-accent,#ffffff) hover:opacity-90"
             >
               Done
             </button>
           ) : (
             <>
-              {(step.kind === "current" ||
-                step.kind === "newCode" ||
-                (error && step.kind === "starting")) && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    void (step.kind === "newCode" ? resendToNew() : begin())
-                  }
-                  disabled={busy}
-                  className="cursor-pointer rounded-xl border border-(--border) px-4 py-2.5 text-sm font-semibold text-(--text) hover:bg-(--hover) disabled:opacity-60"
-                >
-                  {step.kind === "starting" ? "Try again" : "Send a new code"}
-                </button>
-              )}
-              {step.kind !== "starting" && (
-                <button
-                  type="submit"
-                  disabled={
-                    busy || (askingCode ? code.length !== 6 : !value.trim())
-                  }
-                  aria-busy={busy}
-                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-(--accent) px-4 py-2.5 text-sm font-semibold text-(--on-accent,#ffffff) hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {busy && (
-                    <CircleNotch
-                      size={15}
-                      className="animate-spin"
-                      aria-hidden
-                    />
-                  )}
-                  {step.kind === "new" ? "Send code" : "Confirm"}
-                </button>
-              )}
+              <button
+                type="button"
+                className="settings-profile__verification-dialog-cancel"
+                onClick={onClose}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="settings-profile__verification-dialog-submit"
+                disabled={
+                  busy ||
+                  step.kind === "starting" ||
+                  (askingCode ? code.length !== 6 : !value.trim())
+                }
+                aria-busy={busy}
+              >
+                {busy
+                  ? step.kind === "new"
+                    ? "Sending..."
+                    : "Verifying..."
+                  : step.kind === "new"
+                    ? "Send code"
+                    : "Verify OTP"}
+              </button>
             </>
           )}
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }

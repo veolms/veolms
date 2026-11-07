@@ -1502,7 +1502,7 @@ export function ProfileSettings({
                         disabled={!canEdit}
                       />
                       {isEmailVerified ? (
-                        <>
+                        <span className="settings-profile__verified-actions">
                           <span className="settings-profile__tag settings-profile__tag--success">
                             <SealCheck size={14} weight="fill" /> Verified
                           </span>
@@ -1514,7 +1514,7 @@ export function ProfileSettings({
                           >
                             Change
                           </button>
-                        </>
+                        </span>
                       ) : (
                         <button
                           type="button"
@@ -1605,17 +1605,8 @@ export function ProfileSettings({
                             )
                           }
                         />
-                        {isMobileVerified && (
-                          <span
-                            className="settings-profile__locked-icon"
-                            title="Use Change to replace your verified number"
-                            aria-label="Verified mobile number locked"
-                          >
-                            <Lock size={15} aria-hidden="true" />
-                          </span>
-                        )}
                         {isMobileVerified ? (
-                          <>
+                          <span className="settings-profile__verified-actions">
                             <span className="settings-profile__tag settings-profile__tag--success">
                               <SealCheck size={14} weight="fill" /> Verified
                             </span>
@@ -1627,7 +1618,7 @@ export function ProfileSettings({
                             >
                               Change
                             </button>
-                          </>
+                          </span>
                         ) : (
                           <button
                             type="button"

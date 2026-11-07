@@ -910,15 +910,25 @@
   color: var(--muted);
 }
 
-/* A verified number cannot be edited, so its box is only as wide as the
-   number: the lock sits right after it instead of across an empty stretch,
-   and the Verified tag keeps to the end of the field. */
+/* A verified number is not edited in place (Change replaces it), so its box
+   is only as wide as the number. */
 .settings-profile__input-shell--phone-verified input {
   flex: 0 1 auto;
 }
 
-.settings-profile__input-shell--phone-verified > .settings-profile__tag {
+/* Verified, with Change beside it: one group at the end of the field, the
+   same for the email address and the number. Apart, each pushed itself to
+   the end and they split the free space between them. */
+.settings-profile__verified-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
   margin-left: auto;
+}
+
+.settings-profile__verified-actions > .settings-profile__inline-verify-action {
+  margin-left: 0;
 }
 
 .settings-profile__verify-action,
