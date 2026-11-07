@@ -3,6 +3,8 @@ import { useDailyQuote } from "../../services/quotes";
 import { HeroDesk } from "../guest/HeroDesk";
 import { LearnerHeroClock } from "./LearnerHeroClock";
 import { LearnerPhoneBackdrop } from "./LearnerPhoneBackdrop";
+import { useHomeFestive } from "../../services/home";
+import { DiwaliHeroGreeting } from "../../festive/DiwaliHeroGreeting";
 import {
   copyOnDeskClasses,
   heroClockClasses,
@@ -151,6 +153,10 @@ export function LearnerHomeHero({
   laptopScreen: ReactNode;
 }) {
   const quoteQuery = useDailyQuote();
+  // The festive greeting, when an admin has it on, takes the quote's place;
+  // until that is known the quote's place is held, so neither flashes.
+  const festiveQuery = useHomeFestive();
+  const festive = festiveQuery.data?.enabled ? festiveQuery.data : undefined;
   const quote = quoteQuery.data ?? fallbackQuote;
   // Until the day's quote has answered, its place is held (see
   // `LearnerQuoteSkeleton`) and there is no author to stand beside it.
@@ -196,7 +202,15 @@ export function LearnerHomeHero({
                 </h1>
               </div>
 
-              {quotePending ? (
+              {festive ? (
+                <DiwaliHeroGreeting
+                  greeting={festive.greeting}
+                  message={festive.message}
+                  align={festive.align}
+                  size="compact"
+                  className="mt-3 min-w-0 @[50rem]/home:mt-4 @[50rem]/home:max-w-[calc(100cqw_-_var(--picture-h)_*_1.05_+_var(--picture-shift)_-_clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)_-_1.5rem)]"
+                />
+              ) : quotePending || festiveQuery.isPending ? (
                 <LearnerQuoteSkeleton />
               ) : (
                 <figure className={heroQuoteBoxClasses}>

@@ -8,6 +8,7 @@ import type {
 import { HOME_PAGE_MAX_SELECTED_COURSES } from "@veolms/contracts/home-page-defaults";
 import { ThemedSelect } from "../ThemedSelect";
 import {
+  ChoiceCards,
   SettingsSection,
   TextField,
   fieldClass,
@@ -85,49 +86,20 @@ export function CourseSectionEditor({
         />
       </div>
 
-      <fieldset className="min-w-0">
-        <legend className="mb-1.5 text-[13px] font-medium text-(--text)">
-          Courses shown
-        </legend>
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          {(
-            [
-              ["automatic", "Automatic", automaticDescription],
-              [
-                "manual",
-                "Choose courses",
-                `Pick up to ${HOME_PAGE_MAX_SELECTED_COURSES} courses and set their order.`,
-              ],
-            ] as const
-          ).map(([value, label, help]) => (
-            <label
-              key={value}
-              className={`flex cursor-pointer items-start gap-3 p-3.5 ${insetRowClass} ${
-                section.selection === value
-                  ? "border-(--accent)! ring-2 ring-(--accent)/20"
-                  : ""
-              }`}
-            >
-              <input
-                type="radio"
-                name={`${id}-selection`}
-                value={value}
-                checked={section.selection === value}
-                onChange={() => onChange({ ...section, selection: value })}
-                className="mt-0.5 size-4 accent-(--accent)"
-              />
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-(--text)">
-                  {label}
-                </span>
-                <span className="mt-0.5 block text-xs leading-relaxed text-(--muted)">
-                  {help}
-                </span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <ChoiceCards
+        name={`${id}-selection`}
+        legend="Courses shown"
+        options={[
+          ["automatic", "Automatic", automaticDescription],
+          [
+            "manual",
+            "Choose courses",
+            `Pick up to ${HOME_PAGE_MAX_SELECTED_COURSES} courses and set their order.`,
+          ],
+        ]}
+        value={section.selection}
+        onChange={(selection) => onChange({ ...section, selection })}
+      />
 
       {isManual ? (
         <div className="min-w-0">

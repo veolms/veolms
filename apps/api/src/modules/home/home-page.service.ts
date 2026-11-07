@@ -7,6 +7,7 @@ import {
   homePageSettingsSchema,
   type CourseSummary,
   type GuestHomePageResponse,
+  type HomeFestiveResponse,
   type HeroVideoPlayback,
   type HomePageCourseSection,
   type HomePageDiscussionListResponse,
@@ -52,6 +53,16 @@ const guestPages = createCache<GuestHomePageResponse>({
 });
 const GUEST_PAGE_KEY = "guest";
 /**
+ * Every page of every visit asks for the festive greeting and offer, so the
+ * settings are read once and shared, cleared the same way as the guest page.
+ */
+const festiveAnswers = createCache<HomeFestiveResponse>({
+  name: "home.festive",
+  ttlMs: 30_000,
+  maxBytes: 64 * 1024,
+});
+const FESTIVE_KEY = "festive";
+/**
  * The hero's laptop screen is a small part of the picture: about 460 device
  * pixels of thumbnail on a phone, 910 on a high-density laptop, 790 on a
  * 2560px monitor. The full-size thumbnail is three times the download for
@@ -87,6 +98,8 @@ export interface HomePageService {
     updatedBy: string | null,
   ): Promise<HomePageDiscussionListResponse>;
   getGuestPage(): Promise<GuestHomePageResponse>;
+  /** The festive greeting and offer, read on every page. */
+  getFestive(): Promise<HomeFestiveResponse>;
   /** The lessons of a course an admin can pick as the hero video. */
   getLessonVideoOptions(
     courseId: string,
@@ -137,6 +150,7 @@ export function createHomePageService({
     }
     // Other processes are cleared by the site change this save is.
     guestPages.delete(GUEST_PAGE_KEY);
+    festiveAnswers.delete(FESTIVE_KEY);
     // The public home page is a static page: it is built again with these
     // settings, and once more when the video chosen for the hero is ready.
     staticPages?.requestHomePageRefresh();
@@ -311,6 +325,7 @@ export function createHomePageService({
     return {
       version: updatedAt?.toISOString() ?? "default",
       hero: settings.hero,
+      festive: settings.festive,
       heroLessonPosterUrl,
       highlights: settings.highlights,
       popularCourses: {
@@ -469,6 +484,14 @@ export function createHomePageService({
     async getHeroVideoPlaybackToken() {
       const { settings } = await readSettings();
       return await heroVideoService.getPlaybackToken(settings.heroVideo);
+    },
+
+    async getFestive() {
+      return await festiveAnswers.fetch(
+        FESTIVE_KEY,
+        async () => (await readSettings()).settings.festive,
+        { tags: [cacheTags.site] },
+      );
     },
 
     async getGuestPage() {

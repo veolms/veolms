@@ -10,13 +10,17 @@ import {
   homeHeroPictureSizeClasses,
 } from "./homeHeroHeight";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
-import type { HomePageHero } from "@veolms/contracts/home-page-defaults";
+import type {
+  HomePageFestive,
+  HomePageHero,
+} from "@veolms/contracts/home-page-defaults";
 import type { NavigateTo } from "../../routing/navigation";
 import { GuestHomeLink } from "./GuestHomeLink";
 import { type MouseEvent, type ReactNode } from "react";
 import { HeroDesk } from "./HeroDesk";
 import { guestHeroCopyWhenComplete, HeroCopyEnd } from "./HeroPicture";
 import { glassActionClasses, primaryActionClasses } from "./heroActionClasses";
+import { DiwaliHeroGreeting } from "../../festive/DiwaliHeroGreeting";
 
 /**
  * Scrolls to a section of the home page from a link to its id. The page may
@@ -187,6 +191,7 @@ function unquoted(text: string): string {
  */
 export function GuestHomeHero({
   hero,
+  festive,
   greeting,
   returningLearnerHero,
   onNavigatePage,
@@ -196,6 +201,8 @@ export function GuestHomeHero({
 }: {
   /** The configured copy; while it is still loading the hero shows its picture and placeholders. */
   hero?: HomePageHero;
+  /** The festive greeting, when it is on, stands where the quote does. */
+  festive?: HomePageFestive;
   /** A short line of its own above the title, for a signed-in learner. */
   greeting?: string;
   /**
@@ -299,7 +306,16 @@ export function GuestHomeHero({
               />
             )}
           </h1>
-          {!hero || hero.description ? (
+          {festive?.enabled ? (
+            // The festive greeting stands where the quote does, for the
+            // visitor and the returning learner alike, and on a phone too.
+            <DiwaliHeroGreeting
+              greeting={festive.greeting}
+              message={festive.message}
+              align={festive.align}
+              className={`mt-5 @[50rem]/home:mt-6 @[50rem]/home:max-w-[calc(100cqw_-_var(--picture-h)_*_1.05_+_var(--picture-shift)_-_clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)_-_1.5rem)] ${hero ? "" : "invisible"}`}
+            />
+          ) : !hero || hero.description ? (
             // A quote, set, marked and signed as the signed-in learner's is,
             // its first sentence on a line of its own. Only beside the
             // picture: narrower, the video card follows the headline.
@@ -330,7 +346,7 @@ export function GuestHomeHero({
               ) : null}
             </figure>
           ) : null}
-          {returningLearnerHero?.description ? (
+          {!festive?.enabled && returningLearnerHero?.description ? (
             <p className={`${descriptionClasses} ${forReturningLearner}`}>
               {returningLearnerHero.description}
             </p>

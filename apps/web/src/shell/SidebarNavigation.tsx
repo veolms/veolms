@@ -47,6 +47,12 @@ export interface SidebarNavigationProps {
   sidebarResizing: boolean;
   sidebarResizePreviewWidth: number | null;
   renderedSidebarWidth: number;
+  /**
+   * Something below the menu takes the rest of the sidebar's height (the
+   * festive offer): the menu is then only as tall as its items, and still
+   * shrinks and scrolls when they do not fit.
+   */
+  sharesRoomBelow?: boolean;
 }
 
 export function SidebarNavigation({
@@ -67,6 +73,7 @@ export function SidebarNavigation({
   sidebarResizing,
   sidebarResizePreviewWidth,
   renderedSidebarWidth,
+  sharesRoomBelow = false,
 }: SidebarNavigationProps) {
   // The menu item a page was opened from is lit by the document's head
   // before the page runs (see routing/navigationOriginEarlyState.ts), by
@@ -116,6 +123,10 @@ export function SidebarNavigation({
         // (and sends none to the page), so the swipe that resizes
         // the sidebar never began here on a real touch screen.
         "touch-pan-y touch-pinch-zoom",
+        // Collapsed, the rail has no offer below it and the menu fills it.
+        sharesRoomBelow
+          ? "flex-[0_1_auto]! [.courses-app--collapsed_&]:flex-1!"
+          : "",
         navigationScrollFade.top ? "has-scroll-top" : "",
         navigationScrollFade.bottom ? "has-scroll-bottom" : "",
         navigationScrollFade.overflow ? "has-overflow" : "",
