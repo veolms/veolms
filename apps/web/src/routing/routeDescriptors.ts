@@ -475,6 +475,12 @@ export const routeDescriptors = {
     title: "Help and feedback",
     description: "A report or feedback and its conversation with the team.",
   },
+  chat: {
+    kind: "shell",
+    page: "extension",
+    title: "Chats",
+    description: "Course groups, team groups and private chats.",
+  },
   "support-inbox": {
     kind: "shell",
     page: "extension",
@@ -517,6 +523,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "progress-learner": "/progress/:username",
   support: "/support",
   "support-inbox": "/support-inbox",
+  chat: "/chat",
   "public-profile": "/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
@@ -584,6 +591,7 @@ const canonicalPathsByRouteId = {
   "progress-learner": "/progress/:username",
   support: "/support",
   "support-new": "/support/new",
+  chat: "/chat",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -744,6 +752,12 @@ export const getEffectiveRouteId = (
 
   if (routeId === "support-ticket") {
     return /^\/support\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "chat") {
+    return /^\/chat(?:\/[0-9a-f-]{36})?$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

@@ -504,6 +504,35 @@ const serverConfigSchema = z.object({
     .max(50)
     .default(8),
 
+  // Chat (course groups, team groups, private chats)
+  /**
+   * Kill switch for chat. Off, every /chat route answers 404 and the live
+   * stream sends no chat events; nothing is deleted.
+   */
+  CHAT_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /** Open chat streams one user may hold on one API process (one per tab). */
+  CHAT_STREAM_MAX_PER_USER: z.coerce.number().int().min(1).max(50).default(8),
+  /**
+   * Open chat streams one API process holds. Beyond it new streams get 503
+   * with Retry-After, and the browser reconnects later (maybe elsewhere).
+   */
+  CHAT_STREAM_MAX_PER_PROCESS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(100_000)
+    .default(4_000),
+  /**
+   * How often the chat retention job runs (course-group messages older than
+   * the platform's retention, bodies of messages deleted over 7 days ago).
+   * 0 turns it off.
+   */
+  CHAT_RETENTION_INTERVAL_HOURS: z.coerce
+    .number()
+    .min(0)
+    .max(24 * 7)
+    .default(6),
+
   // SMS Delivery
   /**
    * Country calling codes one-time codes may be sent to, comma separated

@@ -251,6 +251,29 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
     ],
   },
   {
+    area: "chat",
+    label: "Chat",
+    entries: [
+      entry(
+        "chat.moderate",
+        "Moderate course groups",
+        "Delete messages, mute or remove members, appoint helpers and change group settings. Instructors: their own courses.",
+      ),
+      entry(
+        "chat.restrict_platform",
+        "Restrict across all chats",
+        "Mute or remove a learner from every group and private chat. Admins are notified.",
+        ["chat.moderate"],
+      ),
+      entry(
+        "chat.manage",
+        "Manage chat",
+        "Platform chat settings, team groups, every report (private chats included) and the moderation log.",
+        ["chat.moderate", "chat.restrict_platform"],
+      ),
+    ],
+  },
+  {
     area: "support",
     label: "Support",
     entries: [
