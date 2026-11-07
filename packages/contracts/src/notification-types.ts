@@ -34,6 +34,8 @@ export const OPTIONAL_NOTIFICATION_GROUPS = {
     "quiz.attempt.failed_final",
   ],
   purchases: ["purchase.completed", "payment.failed", "refund.completed"],
+  // In the app only: someone @mentioned you in a chat group.
+  chat: ["chat.mentioned"],
 } as const;
 
 export type OptionalNotificationGroup =
