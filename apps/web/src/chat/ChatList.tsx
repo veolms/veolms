@@ -42,6 +42,7 @@ import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
 import { listTime, messageTime, ROLE_LABEL } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
+import { ProfilePhotoPreview } from "./ProfilePhotoPreview";
 
 type Filter = "all" | "unread" | "courses" | "direct" | "requests";
 export type ListPanel =
@@ -122,6 +123,7 @@ export function ChatList({
   panel,
   onPanel,
   onSelect,
+  onOpenInfo,
   onStartDirect,
   onJumpToMessage,
   onShowShortcuts,
@@ -135,12 +137,20 @@ export function ChatList({
   panel: ListPanel;
   onPanel: (panel: ListPanel) => void;
   onSelect: (roomId: string) => void;
+  onOpenInfo: (roomId: string) => void;
   onStartDirect: (userId: string) => void;
   onJumpToMessage: (roomId: string, seq: number) => void;
   onShowShortcuts: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  // WhatsApp's search also finds people to start a chat with: by name,
+  // @username, mobile number or e-mail (see the server for what matches).
+  const peopleTerm = useDebounce(search.trim(), 300);
+  const people = useChatCandidates(
+    peopleTerm,
+    peopleTerm.length >= 2 && panel === "chats",
+  );
 
   if (panel === "new") {
     return (
@@ -315,10 +325,43 @@ export function ChatList({
               selected={room.id === selectedId}
               viewerId={viewerId}
               onSelect={onSelect}
+              onOpenInfo={onOpenInfo}
             />
           ))}
         </ul>
-        {rooms && visible.length === 0 ? (
+        {!archivedView &&
+        peopleTerm.length >= 2 &&
+        (people.data?.results.length ?? 0) > 0 ? (
+          <section aria-label="People">
+            <h3 className="m-0 px-3 pt-4 pb-1.5 text-[0.82rem] font-semibold text-(--accent-ink)">
+              People
+            </h3>
+            <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+              {people.data!.results.map((person) => (
+                <li key={person.id}>
+                  <button
+                    type="button"
+                    onClick={() => onStartDirect(person.id)}
+                    className="flex h-16 w-full cursor-pointer items-center gap-3 rounded-xl border-0 bg-transparent px-2.5 text-left text-(--text) hover:bg-(--chat-hover)"
+                  >
+                    <ChatAvatar name={person.name} url={person.avatarUrl} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-[0.98rem]">
+                        {person.name}
+                      </span>
+                      <span className="block truncate text-[0.8rem] text-(--muted)">
+                        {ROLE_LABEL[person.role] ?? "Learner"} · tap to message
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        {rooms &&
+        visible.length === 0 &&
+        !(peopleTerm.length >= 2 && (people.data?.results.length ?? 0) > 0) ? (
           <div className="px-8 py-12 text-center">
             <p className="m-0 text-[0.9rem] text-(--muted)">
               {term
@@ -372,13 +415,16 @@ function ChatRow({
   selected,
   viewerId,
   onSelect,
+  onOpenInfo,
 }: {
   room: ChatRoomSummary;
   selected: boolean;
   viewerId: string | null;
   onSelect: (roomId: string) => void;
+  onOpenInfo: (roomId: string) => void;
 }) {
   const client = useQueryClient();
+  const [photoOpen, setPhotoOpen] = useState(false);
   const myState = useUpdateMyChatState();
   const block = useBlockUser();
   const leave = useLeaveChat();
@@ -407,6 +453,29 @@ function ChatRow({
 
   return (
     <li className="group/row relative">
+      {/* The picture opens the profile photo (WhatsApp), not the chat. */}
+      <button
+        type="button"
+        onClick={() => setPhotoOpen(true)}
+        aria-label={`View ${room.title}'s photo`}
+        className="absolute top-3 left-2.5 z-10 size-12 cursor-pointer rounded-full border-0 bg-transparent p-0"
+      />
+      {photoOpen ? (
+        <ProfilePhotoPreview
+          name={room.title}
+          url={room.peer?.avatarUrl ?? null}
+          group={room.kind !== "direct"}
+          onClose={() => setPhotoOpen(false)}
+          onMessage={() => {
+            setPhotoOpen(false);
+            onSelect(room.id);
+          }}
+          onInfo={() => {
+            setPhotoOpen(false);
+            onOpenInfo(room.id);
+          }}
+        />
+      ) : null}
       <button
         type="button"
         onClick={() => onSelect(room.id)}
@@ -660,7 +729,8 @@ function NewChatPanel({
           ) : null
         ) : (
           <p className="m-0 px-4 pt-1 pb-2 text-[0.8rem] text-(--muted)">
-            Type a name or username to find anyone you can message.
+            Type a name, @username, mobile number or email to find anyone you
+            can message.
           </p>
         )}
         {candidates.data && candidates.data.staff.length > 0 ? (

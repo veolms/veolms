@@ -598,15 +598,25 @@ export function createChatRepository() {
       return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
     },
 
-    /** People by name or username (and e-mail, for staff), for New chat. */
+    /**
+     * People for New chat and the chat list's search: by name or username
+     * (a leading "@" is fine), and by e-mail or mobile number. Staff match
+     * any part of an e-mail or number; everyone else only the whole e-mail,
+     * or a whole 10-digit number (as WhatsApp finds a contact by number),
+     * so nobody can trawl for other learners' details.
+     */
     async searchPeople(
       db: Executor,
       term: string,
       excludeId: string,
-      withEmail: boolean,
+      staff: boolean,
       limit: number,
     ) {
-      const pattern = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      const text = term.trim().replace(/^@/, "");
+      const pattern = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      const digits = text.replace(/\D/g, "");
+      const looksLikeNumber = /^[+\d\s()-]+$/.test(text) && digits.length >= 4;
+      const phoneDigits = sql<string>`regexp_replace(coalesce(u.phone_no, ''), '[^0-9]', '', 'g')`;
       return db
         .selectFrom("users as u")
         .select(["u.id", "u.display_name", "u.avatar_data_url", "u.is_deleted"])
@@ -616,7 +626,25 @@ export function createChatRepository() {
           eb.or([
             eb("u.display_name", "ilike", pattern),
             eb("u.username", "ilike", pattern),
-            ...(withEmail ? [eb("u.email", "ilike", pattern)] : []),
+            ...(staff
+              ? [
+                  eb("u.email", "ilike", pattern),
+                  ...(looksLikeNumber
+                    ? [eb(phoneDigits, "like", `%${digits}%`)]
+                    : []),
+                ]
+              : [
+                  eb(sql`lower(u.email)`, "=", text.toLowerCase()),
+                  ...(looksLikeNumber && digits.length >= 10
+                    ? [
+                        eb(
+                          sql`right(${phoneDigits}, 10)`,
+                          "=",
+                          digits.slice(-10),
+                        ),
+                      ]
+                    : []),
+                ]),
           ]),
         )
         .orderBy("u.display_name")

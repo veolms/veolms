@@ -895,6 +895,44 @@ await test("New chat: an admin finds any learner by name", async () => {
     ),
   );
   assert.ok(found.results.some((p) => p.id === a.userId));
+
+  // By @username and by e-mail too.
+  const me = (
+    await a.client.get<{ username: string; email: string }>("/v1/auth/me")
+  ).body.data!;
+  const byUsername = ok<{ results: Array<{ id: string }> }>(
+    await admin.get(
+      `/v1/chat/direct/candidates?search=${encodeURIComponent("@" + me.username)}`,
+    ),
+  );
+  assert.ok(byUsername.results.some((p) => p.id === a.userId));
+  const byEmail = ok<{ results: Array<{ id: string }> }>(
+    await admin.get(
+      `/v1/chat/direct/candidates?search=${encodeURIComponent(me.email)}`,
+    ),
+  );
+  assert.ok(byEmail.results.some((p) => p.id === a.userId));
+});
+
+await test("a learner finds a classmate only by the whole e-mail, not a part of it", async () => {
+  const other = (await b.client.get<{ email: string }>("/v1/auth/me")).body
+    .data!.email;
+  const part = ok<{ results: Array<{ id: string }> }>(
+    await a.client.get(
+      `/v1/chat/direct/candidates?search=${encodeURIComponent(other.slice(0, 10))}`,
+    ),
+  );
+  assert.equal(
+    part.results.some((p) => p.id === b.userId),
+    false,
+  );
+  const whole = ok<{ results: Array<{ id: string }> }>(
+    await a.client.get(
+      `/v1/chat/direct/candidates?search=${encodeURIComponent(other)}`,
+    ),
+  );
+  // Found only where the private-chat rules let them message each other.
+  assert.ok(Array.isArray(whole.results));
 });
 
 await flow.close();

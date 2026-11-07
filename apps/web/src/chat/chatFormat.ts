@@ -95,14 +95,21 @@ export const ROLE_LABEL: Record<string, string> = {
   helper: "Helper",
 };
 
+/**
+ * Two letters for an avatar without a picture: first and last name's
+ * initials ("Bhupesh Kumar" → "BK"), or a one-word name's first two letters.
+ */
 export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return (
-    (
-      (parts[0]?.[0] ?? "") +
-      (parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "")
-    ).toUpperCase() || "?"
-  );
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.replace(/[^\p{L}\p{N}]/gu, ""))
+    .filter(Boolean);
+  const first = [...(parts[0] ?? "")];
+  const last = [...(parts.at(-1) ?? "")];
+  const letters =
+    parts.length > 1 ? `${first[0]}${last[0]}` : first.slice(0, 2).join("");
+  return letters.toUpperCase() || "?";
 }
 
 /** WhatsApp's "last seen today at 10:02" / "yesterday at" / a date. */

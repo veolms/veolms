@@ -99,8 +99,15 @@ export function ChatPage() {
     [navigate],
   );
 
+  // "Info" from a profile photo: open the chat with its info showing.
+  const infoForRef = useRef<string | null>(null);
   useEffect(() => {
-    setDrawer(null);
+    if (roomId && infoForRef.current === roomId) {
+      setDrawer({ kind: "info" });
+    } else {
+      setDrawer(null);
+    }
+    infoForRef.current = null;
   }, [roomId]);
 
   const list = rooms.data?.rooms ?? [];
@@ -206,6 +213,14 @@ export function ChatPage() {
         panel={panel}
         onPanel={setPanel}
         onSelect={(id) => open(id)}
+        onOpenInfo={(id) => {
+          if (id === roomId) {
+            setDrawer({ kind: "info" });
+            return;
+          }
+          infoForRef.current = id;
+          open(id);
+        }}
         onStartDirect={startChatWith}
         onJumpToMessage={(id) => {
           setPanel("chats");
@@ -223,7 +238,9 @@ export function ChatPage() {
         "@container/chat relative flex overflow-hidden bg-(--chat-panel) text-(--text)",
         // Fills the shell's main area (its padding is off, see chat.css).
         "min-[641px]:absolute min-[641px]:inset-0",
-        "max-[640px]:h-[calc(100dvh-84px)]",
+        // Phones: a fixed screen down to the bottom bar (58 px + padding +
+        // the safe area), so nothing scrolls behind it, as in WhatsApp.
+        "max-[640px]:fixed max-[640px]:inset-x-0 max-[640px]:top-0 max-[640px]:bottom-[calc(62px+var(--app-viewport-safe-area-max-bottom,0px))]",
       )}
       // Settings › Chats: wallpaper, its pattern and the text size.
       data-chat-pattern={prefs.pattern}

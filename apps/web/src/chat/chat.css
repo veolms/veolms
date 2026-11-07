@@ -52,10 +52,18 @@
   display: none;
 }
 
-/* Phones: edge to edge too, keeping the room for the bottom navigation. */
+/*
+ * Phones: Chats is a fixed screen above the bottom bar (ChatPage), so the
+ * page behind it must not scroll: no rubber band, no bar hiding on scroll.
+ */
 @media (max-width: 640px) {
+  :root[data-chat-page],
+  :root[data-chat-page] body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   :root[data-chat-page] .courses-main {
-    padding-top: 0;
-    padding-inline: 0;
+    padding: 0;
   }
 }
