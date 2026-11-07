@@ -7,7 +7,8 @@ import {
 
 // The suffix names the shape that is kept; a change to what the page needs
 // from the response takes a new one, so an older copy is not read as it.
-const GUEST_HOME_PAGE_SESSION_KEY = "veolms-guest-home-page:v1";
+// v2: the page gained `festive`.
+const GUEST_HOME_PAGE_SESSION_KEY = "veolms-guest-home-page:v2";
 
 /**
  * How long a tab goes on showing the home page it was given before asking

@@ -627,7 +627,9 @@ export function PopoverMenu({
         // below so they fade out instead of being cut off in a line.
         <div
           data-video-player-mobile-sheet-drag-handle=""
-          className="relative z-10 -mb-11 flex h-11 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-1 bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] px-5 pb-1.5 pt-1 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-5 after:bg-linear-to-b after:from-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] after:to-transparent after:content-[''] active:cursor-grabbing"
+          // At least 44px, grown to fit where the theme's title is tall,
+          // so the grip always keeps its room above it.
+          className="relative z-10 -mb-11 flex min-h-11 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-1 bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] px-5 pb-1.5 pt-2.5 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-5 after:bg-linear-to-b after:from-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] after:to-transparent after:content-[''] active:cursor-grabbing"
           onPointerDown={handleMobileSheetDragStart}
           onPointerMove={handleMobileSheetDragMove}
           onPointerUp={finishMobileSheetDrag}
@@ -636,7 +638,9 @@ export function PopoverMenu({
           <span
             aria-hidden="true"
             data-video-player-sheet-grip=""
-            className="h-1 w-12 rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_34%,transparent)]"
+            // shrink-0: the header is a fixed-height column, and where the
+            // theme's title is tall (YouTube) the grip would give way first.
+            className="h-1 w-12 shrink-0 rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_34%,transparent)]"
           />
           <div
             id={`${menuId}-title`}

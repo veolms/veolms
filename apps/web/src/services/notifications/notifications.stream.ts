@@ -1,5 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import {
+  chatStreamCarriesNotifications,
+  onChatStreamCarriesChange,
+} from "../../lib/tabLiveStream";
 import { notificationKeys } from "./notifications.keys";
 import { notificationsService } from "./notifications.service";
 
@@ -29,6 +33,7 @@ let live = false;
 let readyBefore = false;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let retryDelay = REFUSED_RETRY_MIN_MS;
+let stopFollowingChat: (() => void) | undefined;
 const liveListeners = new Set<() => void>();
 
 function setLive(next: boolean) {
@@ -52,6 +57,8 @@ function close() {
 
 function open() {
   if (source || users === 0 || document.visibilityState === "hidden") return;
+  // The chat stream already brings "changed" to this tab.
+  if (chatStreamCarriesNotifications()) return;
   const next = notificationsService.openChangeStream();
   source = next;
 
@@ -102,6 +109,10 @@ export function startNotificationStream(client: QueryClient): () => void {
   users += 1;
   if (users === 1) {
     document.addEventListener("visibilitychange", onVisibilityChange);
+    stopFollowingChat = onChatStreamCarriesChange(() => {
+      if (chatStreamCarriesNotifications()) close();
+      else open();
+    });
     open();
   }
   let left = false;
@@ -111,6 +122,8 @@ export function startNotificationStream(client: QueryClient): () => void {
     users -= 1;
     if (users === 0) {
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      stopFollowingChat?.();
+      stopFollowingChat = undefined;
       close();
       retryDelay = REFUSED_RETRY_MIN_MS;
       readyBefore = false;

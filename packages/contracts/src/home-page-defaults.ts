@@ -82,9 +82,34 @@ export type HomePageHeroVideo =
   | { source: "lesson"; courseId: string; lessonId: string }
   | { source: "upload"; mediaId: string; fileName: string };
 
+/**
+ * A festive greeting and offer (Diwali by default). While it is on, the home
+ * hero shows `greeting` and `message` in place of its quote, for visitors and
+ * signed-in learners alike, and the sidebar offers `couponCode` (left out
+ * when the code is empty) with `couponNote` under it (such as "Up to 50%
+ * off"). Everything here is an admin's to set; nothing is shown by default.
+ */
+export interface HomePageFestive {
+  enabled: boolean;
+  greeting: string;
+  message: string;
+  couponCode: string;
+  couponNote: string;
+  /**
+   * How the greeting and message line up where the hero stacks them (a
+   * phone, a narrow window): centred, or along the headline's left edge.
+   * Beside the picture they always follow the headline.
+   */
+  align: HomePageFestiveAlign;
+}
+
+export const HOME_PAGE_FESTIVE_ALIGNS = ["center", "start"] as const;
+export type HomePageFestiveAlign = (typeof HOME_PAGE_FESTIVE_ALIGNS)[number];
+
 export interface HomePageSettings {
   hero: HomePageHero;
   heroVideo: HomePageHeroVideo;
+  festive: HomePageFestive;
   highlights: HomePageHighlights;
   popularCourses: HomePageCourseSection;
   freeCourses: HomePageCourseSection;
@@ -102,6 +127,15 @@ export const DEFAULT_HOME_PAGE_SETTINGS: HomePageSettings = {
     secondaryActionLabel: "Watch Free Courses",
   },
   heroVideo: { source: "default" },
+  // Off and empty until an admin sets a festival up.
+  festive: {
+    enabled: false,
+    greeting: "",
+    message: "",
+    couponCode: "",
+    couponNote: "",
+    align: "center",
+  },
   highlights: {
     visible: true,
     items: [

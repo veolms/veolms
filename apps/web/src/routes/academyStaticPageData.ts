@@ -132,6 +132,7 @@ async function loadDefaultGuestHomePage(): Promise<GuestHomePageResponse> {
   ]);
   const {
     hero,
+    festive,
     highlights,
     popularCourses,
     freeCourses,
@@ -140,6 +141,7 @@ async function loadDefaultGuestHomePage(): Promise<GuestHomePageResponse> {
   return {
     version: "build-default",
     hero,
+    festive,
     highlights,
     popularCourses: {
       visible: popularCourses.visible,

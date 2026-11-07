@@ -148,6 +148,31 @@ export const moderationReportResolvedEventSchema = z.strictObject({
 });
 
 /** Support staff answered a learner's report or feedback. */
+const internalDeepLink = z
+  .string()
+  .min(1)
+  .max(1000)
+  .regex(/^\/(?!\/)/u, "Deep links must be internal application paths.");
+
+/** Someone @mentioned the recipient in a chat group (in the app only). */
+export const chatMentionedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  actorName: z.string().min(1).max(255),
+  roomTitle: z.string().min(1).max(255),
+  snippet: z.string().min(1).max(500),
+  deepLink: internalDeepLink,
+});
+
+/** A learner was restricted across all chats by someone who is not a chat manager. */
+export const chatPlatformRestrictionEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  actorName: z.string().min(1).max(255),
+  targetName: z.string().min(1).max(255),
+  restriction: z.enum(["mute", "ban", "no_direct"]),
+  reason: z.string().min(1).max(40),
+  deepLink: internalDeepLink,
+});
+
 export const supportReplyPostedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   ticketId: z.uuid(),

@@ -1,0 +1,69 @@
+/*
+ * The chat wallpaper: a quiet doodle pattern (books, pencils, bulbs, code
+ * brackets, speech bubbles) like WhatsApp's, tinted by the theme.
+ *
+ * Why plain CSS: the pattern is an SVG used as a CSS mask so it takes the
+ * active palette's text colour in every theme (light and dark). A data-URI
+ * mask of this length is not expressible as a readable Tailwind utility.
+ * Scoped to `.chat-wallpaper`, imported only by the chat page.
+ */
+.chat-wallpaper {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-color: var(--text);
+  opacity: 0.045;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 30h26a6 6 0 0 1 6 6v26H24a6 6 0 0 1-6-6z M50 36h26a6 6 0 0 1 0 0v32H56a6 6 0 0 1-6-6'/%3E%3Cpath d='M120 22l22 22-34 34-26 4 4-26z M114 28l22 22'/%3E%3Cpath d='M180 30a16 16 0 0 0-10 28v8h20v-8a16 16 0 0 0-10-28z M174 72h12'/%3E%3Cpath d='M30 120l-14 14 14 14 M62 120l14 14-14 14 M52 114l-12 40'/%3E%3Cpath d='M118 112h44a8 8 0 0 1 8 8v22a8 8 0 0 1-8 8h-24l-14 12v-12h-6a8 8 0 0 1-8-8v-22a8 8 0 0 1 8-8z M128 128h24 M128 136h16'/%3E%3Ccircle cx='186' cy='186' r='14'/%3E%3Cpath d='M186 176v10l7 5'/%3E%3Cpath d='M28 182l18-10 18 10-18 10z M38 188v10q8 6 16 0v-10'/%3E%3Cpath d='M100 186h30 M104 178h22 M108 194h14'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 30h26a6 6 0 0 1 6 6v26H24a6 6 0 0 1-6-6z M50 36h26a6 6 0 0 1 0 0v32H56a6 6 0 0 1-6-6'/%3E%3Cpath d='M120 22l22 22-34 34-26 4 4-26z M114 28l22 22'/%3E%3Cpath d='M180 30a16 16 0 0 0-10 28v8h20v-8a16 16 0 0 0-10-28z M174 72h12'/%3E%3Cpath d='M30 120l-14 14 14 14 M62 120l14 14-14 14 M52 114l-12 40'/%3E%3Cpath d='M118 112h44a8 8 0 0 1 8 8v22a8 8 0 0 1-8 8h-24l-14 12v-12h-6a8 8 0 0 1-8-8v-22a8 8 0 0 1 8-8z M128 128h24 M128 136h16'/%3E%3Ccircle cx='186' cy='186' r='14'/%3E%3Cpath d='M186 176v10l7 5'/%3E%3Cpath d='M28 182l18-10 18 10-18 10z M38 188v10q8 6 16 0v-10'/%3E%3Cpath d='M100 186h30 M104 178h22 M108 194h14'/%3E%3C/svg%3E");
+  -webkit-mask-size: 220px 220px;
+  mask-size: 220px 220px;
+}
+
+:root[data-theme="light"] .chat-wallpaper {
+  opacity: 0.06;
+}
+
+/*
+ * Chats fill the shell's main area edge to edge, as WhatsApp Web does: the
+ * page sets `data-chat-page` on the root while it is open, and the main
+ * area drops its padding and becomes the box the page fills.
+ *
+ * Why plain CSS: the main area is the shell's element, outside this page's
+ * markup (the course wizard takes its padding off the same way). Not on
+ * phones, where the shell keeps room for its bottom navigation.
+ */
+@media (min-width: 641px) {
+  :root[data-chat-page] .courses-main {
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+/* Settings › Chats › Wallpaper pattern: dots, or none. */
+[data-chat-pattern="dots"] .chat-wallpaper {
+  -webkit-mask-image: radial-gradient(circle, #000 1.2px, transparent 1.6px);
+  mask-image: radial-gradient(circle, #000 1.2px, transparent 1.6px);
+  -webkit-mask-size: 18px 18px;
+  mask-size: 18px 18px;
+}
+
+[data-chat-pattern="none"] .chat-wallpaper {
+  display: none;
+}
+
+/*
+ * Phones: Chats is a fixed screen above the bottom bar (ChatPage), so the
+ * page behind it must not scroll: no rubber band, no bar hiding on scroll.
+ */
+@media (max-width: 640px) {
+  :root[data-chat-page],
+  :root[data-chat-page] body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  :root[data-chat-page] .courses-main {
+    padding: 0;
+  }
+}

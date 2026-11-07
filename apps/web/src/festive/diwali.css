@@ -1,0 +1,166 @@
+/* Diwali decorations: keyframes only.
+
+   Tailwind's `animate-[…]` utilities name an animation but cannot declare
+   its keyframes, and these motions (a flickering flame, fireworks, the
+   sparks of a fountain) have no built-in equivalent. Everything else about
+   the decorations is styled with Tailwind in the components. Every motion
+   here moves only transform and opacity, so it runs on the compositor. */
+
+@keyframes diwali-flicker {
+  0%,
+  100% {
+    transform: scale(1, 1) rotate(-1deg);
+  }
+  25% {
+    transform: scale(0.93, 1.07) rotate(2deg);
+  }
+  50% {
+    transform: scale(1.04, 0.95) rotate(-2deg);
+  }
+  75% {
+    transform: scale(0.97, 1.05) rotate(1deg);
+  }
+}
+
+@keyframes diwali-glow {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes diwali-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* A rocket climbs, then its burst opens and fades, then the sky rests. */
+@keyframes diwali-rocket {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  26% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  29%,
+  100% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+}
+
+@keyframes diwali-burst {
+  0%,
+  26% {
+    transform: scale(0.15);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* A shot fired from the fountain when it is pressed (FountainShots.tsx). */
+@keyframes diwali-shot-rise {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  10%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(var(--shot-len, -230px));
+    opacity: 0;
+  }
+}
+
+@keyframes diwali-shot-fly {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateX(var(--shot-reach, 46px));
+    opacity: 0;
+  }
+}
+
+@keyframes diwali-shot-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(var(--shot-droop, 12px));
+  }
+}
+
+@keyframes diwali-shot-flash {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes diwali-shot-crackle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+
+@keyframes diwali-spark {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  65% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(var(--spark-rise, -120px)) scale(0.25);
+    opacity: 0;
+  }
+}
