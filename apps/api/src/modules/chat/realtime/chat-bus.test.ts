@@ -137,3 +137,56 @@ await test("payloads that are not ours are ignored", () => {
     assert.equal(decodeChatEvent(payload), null, payload);
   }
 });
+
+await test("a course group opening round-trips", () => {
+  const [payload] = encodeChatEvent({ type: "opened", roomId: ROOM });
+  assert.equal(payload, `o|${ROOM}`);
+  assert.deepEqual(decodeChatEvent(payload!), { type: "opened", roomId: ROOM });
+});
+
+await test("a group's read positions round-trip", () => {
+  const [payload] = encodeChatEvent({
+    type: "group_read",
+    roomId: ROOM,
+    deliveredSeq: 41,
+    readSeq: 39,
+  });
+  assert.deepEqual(decodeChatEvent(payload!), {
+    type: "group_read",
+    roomId: ROOM,
+    deliveredSeq: 41,
+    readSeq: 39,
+  });
+});
+
+await test("presence carries the person and their private chats", () => {
+  const OTHER_ROOM = "3c3c8c7e-4a8f-4bb0-9d2e-3a1c2b4d5e6f";
+  const [online] = encodeChatEvent({
+    type: "presence",
+    userId: USER_A,
+    online: true,
+    lastSeenAt: null,
+    roomIds: [ROOM, OTHER_ROOM],
+  });
+  assert.deepEqual(decodeChatEvent(online!), {
+    type: "presence",
+    userId: USER_A,
+    online: true,
+    lastSeenAt: null,
+    roomIds: [ROOM, OTHER_ROOM],
+  });
+  const [away] = encodeChatEvent({
+    type: "presence",
+    userId: USER_B,
+    online: false,
+    lastSeenAt: 1_794_000_000_000,
+    roomIds: [ROOM],
+  });
+  assert.deepEqual(decodeChatEvent(away!), {
+    type: "presence",
+    userId: USER_B,
+    online: false,
+    lastSeenAt: 1_794_000_000_000,
+    roomIds: [ROOM],
+  });
+});

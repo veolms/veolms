@@ -23,7 +23,14 @@
  *   g|<roomId>|<eventSeq>                          chat settings changed
  *   a|<roomId>|<userId>,<userId>,…                 users gained this chat
  *   r|<roomId>|<userId>,<userId>,…                 users lost this chat
- *   d|-|<json [[roomId,userId,readSeq,deliveredSeq,isDirect],…]>  receipts
+ *   o|<roomId>                                     a course group opened: whoever
+ *                                                  may read it joins it
+ *   s|<roomId>|<deliveredSeq>|<readSeq>            a group's "everyone has
+ *                                                  received / read up to"
+ *   l|<userId>|<1|0>|<lastSeenMs>|<roomId>,…       presence, to their private chats
+ *   d|-|<json [[roomId,userId,readSeq,deliveredSeq,isDirect,hideRead],…]>
+ *                                                  receipts (hideRead: read
+ *                                                  receipts off, private chat)
  */
 
 export const CHAT_CHANNEL = "veolms_chat";
@@ -43,6 +50,20 @@ export type ChatBusEvent =
   | { type: "typing"; roomId: string; userId: string; name: string }
   | { type: "room"; roomId: string; eventSeq: number }
   | { type: "added" | "removed"; roomId: string; userIds: string[] }
+  | { type: "opened"; roomId: string }
+  | {
+      type: "group_read";
+      roomId: string;
+      deliveredSeq: number;
+      readSeq: number;
+    }
+  | {
+      type: "presence";
+      userId: string;
+      online: boolean;
+      lastSeenAt: number | null;
+      roomIds: string[];
+    }
   | {
       type: "receipts";
       receipts: Array<{
@@ -51,6 +72,8 @@ export type ChatBusEvent =
         readSeq: number;
         deliveredSeq: number;
         direct: boolean;
+        /** Read receipts off: the other person is not told the read position. */
+        hideRead?: boolean;
       }>;
     };
 
@@ -78,6 +101,14 @@ export function encodeChatEvent(event: ChatBusEvent): string[] {
       ];
     case "room":
       return [`g|${event.roomId}|${event.eventSeq}`];
+    case "opened":
+      return [`o|${event.roomId}`];
+    case "group_read":
+      return [`s|${event.roomId}|${event.deliveredSeq}|${event.readSeq}`];
+    case "presence": {
+      const head = `l|${event.userId}|${event.online ? 1 : 0}|${event.lastSeenAt ?? 0}|`;
+      return chunk(event.roomIds, (ids) => head + ids.join(","));
+    }
     case "added":
     case "removed": {
       const head = `${event.type === "added" ? "a" : "r"}|${event.roomId}|`;
@@ -90,6 +121,7 @@ export function encodeChatEvent(event: ChatBusEvent): string[] {
         r.readSeq,
         r.deliveredSeq,
         r.direct ? 1 : 0,
+        r.hideRead ? 1 : 0,
       ]);
       return chunk(rows, (part) => `d|-|${JSON.stringify(part)}`);
     }
@@ -169,6 +201,34 @@ export function decodeChatEvent(payload: string): ChatBusEvent | null {
         if (!UUID.test(roomId) || !Number.isSafeInteger(n)) return null;
         return { type: "room", roomId, eventSeq: n };
       }
+      case "o":
+        return UUID.test(roomId) ? { type: "opened", roomId } : null;
+      case "s": {
+        const [, , delivered, read] = parts(4);
+        const numbers = [Number(delivered), Number(read)];
+        if (!UUID.test(roomId)) return null;
+        if (numbers.some((n) => !Number.isSafeInteger(n) || n < 0)) return null;
+        return {
+          type: "group_read",
+          roomId,
+          deliveredSeq: numbers[0]!,
+          readSeq: numbers[1]!,
+        };
+      }
+      case "l": {
+        // The second field is the person, not a chat.
+        const [, , online, seen, list] = parts(5);
+        if (!UUID.test(roomId)) return null;
+        const lastSeen = Number(seen);
+        return {
+          type: "presence",
+          userId: roomId,
+          online: online === "1",
+          lastSeenAt:
+            Number.isSafeInteger(lastSeen) && lastSeen > 0 ? lastSeen : null,
+          roomIds: (list ?? "").split(",").filter((id) => UUID.test(id)),
+        };
+      }
       case "a":
       case "r": {
         const [, , list] = parts(3);
@@ -182,8 +242,8 @@ export function decodeChatEvent(payload: string): ChatBusEvent | null {
         if (!Array.isArray(rows)) return null;
         const receipts = [];
         for (const row of rows) {
-          if (!Array.isArray(row) || row.length !== 5) continue;
-          const [r, u, read, delivered, direct] = row as unknown[];
+          if (!Array.isArray(row) || row.length < 5) continue;
+          const [r, u, read, delivered, direct, hideRead] = row as unknown[];
           if (typeof r !== "string" || typeof u !== "string") continue;
           if (!UUID.test(r) || !UUID.test(u)) continue;
           receipts.push({
@@ -192,6 +252,7 @@ export function decodeChatEvent(payload: string): ChatBusEvent | null {
             readSeq: Number(read) || 0,
             deliveredSeq: Number(delivered) || 0,
             direct: direct === 1,
+            ...(hideRead === 1 ? { hideRead: true } : {}),
           });
         }
         return { type: "receipts", receipts };

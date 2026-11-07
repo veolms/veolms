@@ -3,6 +3,7 @@ import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-ic
 import { ChatCircleIcon as ChatCircle } from "@phosphor-icons/react/ChatCircle";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
@@ -27,6 +28,7 @@ export const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"
 
 export type MessageAction =
   | "reply"
+  | "info"
   | "copy"
   | "edit"
   | "pin"
@@ -105,7 +107,7 @@ export function MessageMenu({
               onClick={() => onAction(`react:${emoji}`)}
               className={cn(
                 "size-8 justify-center rounded-full p-0 text-lg",
-                mine === emoji && "bg-(--selected)",
+                mine === emoji && "bg-(--chat-selected)",
               )}
             >
               {emoji}
@@ -121,6 +123,11 @@ export function MessageMenu({
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          {outgoing && message.seq > 0 ? (
+            <DropdownMenuItem onClick={() => onAction("info")}>
+              <Info size={16} aria-hidden="true" /> Message info
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem onClick={() => onAction("reply")}>
             <ArrowBendUpLeft size={16} aria-hidden="true" /> Reply
           </DropdownMenuItem>

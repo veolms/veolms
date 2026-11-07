@@ -1,8 +1,7 @@
 import "./chat.css";
 
-import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircle";
-import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
-import { useCallback, useEffect, useState } from "react";
+import type { ChatMessage } from "@veolms/contracts";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
 import { ToastNotification } from "../ToastNotification";
@@ -12,28 +11,42 @@ import { cn } from "../lib/utils";
 import { useCurrentUser } from "../services/auth";
 import {
   flushReceipts,
+  syncWithRoomList,
   useChatRoom,
   useChatRooms,
   useChatStream,
   useStartDirect,
   useUpdateMyChatState,
 } from "../services/chat";
-import { CourseGroupsDialog, ShortcutsDialog } from "./ChatExtras";
+import { ShortcutsDialog } from "./ChatExtras";
+import { ChatHome } from "./ChatHome";
 import { ChatList, type ListPanel } from "./ChatList";
+import { ChatSettingsPanel } from "./ChatSettingsPanel";
 import { ChatThreadSkeleton } from "./ChatSkeletons";
+import { CHAT_THEME } from "./chatTheme";
 import { Conversation } from "./Conversation";
+import { CourseGroupsPanel } from "./CourseGroupsPanel";
+import { MessageInfoPanel } from "./MessageInfoPanel";
 import { RoomInfoPanel } from "./RoomInfoPanel";
+import { useChatListWidth } from "./useChatListWidth";
+import { useChatWallpaper } from "./useChatWallpaper";
 import { useChatShortcuts } from "./useChatShortcuts";
 
+type Drawer = { kind: "info" } | { kind: "message"; message: ChatMessage };
+
 /**
- * Chats, laid out like WhatsApp Web inside the app shell.
+ * Chats, laid out like WhatsApp Web and filling the app's main area edge
+ * to edge (the shell's padding is taken off while this page is open; see
+ * chat.css).
  *
  * Width comes from the main area, not the window (the sidebar may be 76 to
  * 300 px wide), so the panes follow container queries:
  * - under 720 px: one pane at a time (list, or the open chat; on phones the
  *   open chat covers the screen like WhatsApp's mobile app);
- * - from 720 px: list (340–400 px) beside the chat;
- * - from 1180 px: group info docks as a third column, else it slides over.
+ * - from 720 px: the list (30%, dragged wider or narrower on its edge and
+ *   remembered) beside the chat;
+ * - from 1180 px: group info and message info dock as a third column,
+ *   narrower screens slide them over the chat.
  */
 export function ChatPage() {
   const { roomId = null } = useParams<{ roomId?: string }>();
@@ -44,16 +57,36 @@ export function ChatPage() {
   useChatStream(viewerId, Boolean(viewerId));
   usePageSearchShortcut("chat-search");
 
+  const areaRef = useRef<HTMLDivElement>(null);
+  const { width: listWidth, handleProps } = useChatListWidth(areaRef);
   const rooms = useChatRooms(Boolean(viewerId));
   const room = useChatRoom(roomId);
   const startDirect = useStartDirect();
   const myState = useUpdateMyChatState();
   const [panel, setPanel] = useState<ListPanel>("chats");
-  const [infoOpen, setInfoOpen] = useState(false);
+  const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [groupsOpen, setGroupsOpen] = useState(false);
   const [focusComposer, setFocusComposer] = useState(0);
+
+  const [doodles] = useChatWallpaper();
+  // The shell's padding comes off while Chats is open, and the wallpaper
+  // follows Settings › Chats (chat.css).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-chat-page", "");
+    return () => root.removeAttribute("data-chat-page");
+  }, []);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-chat-doodles", doodles ? "on" : "off");
+    return () => root.removeAttribute("data-chat-doodles");
+  }, [doodles]);
+
+  // Messages the stream did not carry, and chats it does not cover yet.
+  useEffect(() => {
+    if (rooms.data) syncWithRoomList(rooms.data.rooms);
+  }, [rooms.data]);
 
   const open = useCallback(
     (id: string | null) => {
@@ -64,7 +97,7 @@ export function ChatPage() {
   );
 
   useEffect(() => {
-    setInfoOpen(false);
+    setDrawer(null);
   }, [roomId]);
 
   const list = rooms.data?.rooms ?? [];
@@ -82,7 +115,9 @@ export function ChatPage() {
     newChat: () => setPanel("new"),
     previousChat: () => step(-1),
     nextChat: () => step(1),
-    info: () => current && setInfoOpen((v) => !v),
+    info: () =>
+      current &&
+      setDrawer((d) => (d?.kind === "info" ? null : { kind: "info" })),
     archive: () =>
       current &&
       myState.mutate({
@@ -104,8 +139,8 @@ export function ChatPage() {
         patch: { pinned: !current.me.pinned },
       }),
     escape: () => {
-      if (infoOpen) {
-        setInfoOpen(false);
+      if (drawer) {
+        setDrawer(null);
         return true;
       }
       if (panel !== "chats") {
@@ -139,44 +174,73 @@ export function ChatPage() {
     });
   }
 
+  const back = () => setPanel("chats");
+  const listPanel =
+    panel === "settings" ? (
+      <ChatSettingsPanel
+        onBack={back}
+        onShowShortcuts={() => setShortcutsOpen(true)}
+        onToast={setToast}
+      />
+    ) : panel === "groups" && isStaff ? (
+      <CourseGroupsPanel
+        rooms={list}
+        onBack={back}
+        onToast={setToast}
+        onOpen={(id) => {
+          setPanel("chats");
+          open(id);
+        }}
+      />
+    ) : (
+      <ChatList
+        rooms={rooms.data?.rooms}
+        loading={rooms.isLoading}
+        requestsCount={rooms.data?.requestsCount ?? 0}
+        selectedId={roomId}
+        viewerId={viewerId}
+        isStaff={isStaff}
+        panel={panel}
+        onPanel={setPanel}
+        onSelect={(id) => open(id)}
+        onStartDirect={startChatWith}
+        onJumpToMessage={(id) => {
+          setPanel("chats");
+          open(id);
+        }}
+        onShowShortcuts={() => setShortcutsOpen(true)}
+      />
+    );
+
   return (
     <div
+      ref={areaRef}
       className={cn(
-        "@container/chat relative flex h-[calc(100dvh-72px)] min-h-120 overflow-hidden rounded-[14px] bg-(--surface) text-(--text)",
-        "max-[640px]:h-[calc(100dvh-84px)] max-[640px]:rounded-none",
+        CHAT_THEME,
+        "@container/chat relative flex overflow-hidden bg-(--chat-panel) text-(--text)",
+        // Fills the shell's main area (its padding is off, see chat.css).
+        "min-[641px]:absolute min-[641px]:inset-0",
+        "max-[640px]:h-[calc(100dvh-84px)]",
       )}
+      style={{ "--chat-list-w": `${listWidth}px` } as React.CSSProperties}
     >
       <div
         className={cn(
-          "h-full w-full shrink-0 flex-col border-r border-solid border-(--border) @[720px]/chat:flex @[720px]/chat:w-85 @[1080px]/chat:w-100",
+          "relative h-full w-full shrink-0 flex-col border-solid border-(--chat-line) bg-(--chat-panel) @[720px]/chat:flex @[720px]/chat:w-(--chat-list-w) @[720px]/chat:border-r",
           roomId ? "hidden" : "flex",
         )}
       >
-        <ChatList
-          rooms={rooms.data?.rooms}
-          loading={rooms.isLoading}
-          requestsCount={rooms.data?.requestsCount ?? 0}
-          selectedId={roomId}
-          viewerId={viewerId}
-          panel={panel}
-          onPanel={setPanel}
-          onSelect={(id) => open(id)}
-          onStartDirect={startChatWith}
-          onJumpToMessage={(id) => {
-            setPanel("chats");
-            open(id);
-          }}
-          onShowShortcuts={() => setShortcutsOpen(true)}
-        />
-        {isStaff ? (
-          <button
-            type="button"
-            onClick={() => setGroupsOpen(true)}
-            className="m-3 mt-0 inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full border border-solid border-(--accent-border) bg-transparent text-[0.86rem] font-semibold text-(--accent-ink) hover:bg-(--hover)"
-          >
-            <UsersThree size={17} aria-hidden="true" /> Course groups
-          </button>
-        ) : null}
+        {listPanel}
+        <div
+          {...handleProps}
+          title="Drag to resize · double-click to reset"
+          className="absolute inset-y-0 -right-1.5 z-20 hidden w-3 cursor-col-resize touch-none outline-none @[720px]/chat:block [&:focus-visible>span]:bg-(--accent) [&:hover>span]:bg-(--accent)"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-0 left-1.25 w-0.5 bg-transparent transition-colors"
+          />
+        </div>
       </div>
 
       <div
@@ -193,13 +257,16 @@ export function ChatPage() {
             room={current}
             viewerId={viewerId}
             onBack={() => open(null)}
-            onOpenInfo={() => setInfoOpen(true)}
+            onOpenInfo={() => setDrawer({ kind: "info" })}
+            onOpenMessageInfo={(message) =>
+              setDrawer({ kind: "message", message })
+            }
             onOpenChat={(id) => open(id)}
             onToast={setToast}
             focusComposerToken={focusComposer}
           />
         ) : roomId && room.isError ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-(--canvas) p-8 text-center text-(--muted)">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-(--chat-bg) p-8 text-center text-(--muted)">
             <p className="m-0">{getApiError(room.error).message}</p>
             <button
               type="button"
@@ -210,62 +277,50 @@ export function ChatPage() {
             </button>
           </div>
         ) : roomId ? (
-          <div className="relative flex flex-1 flex-col bg-(--canvas)">
-            <div className="h-16 border-b border-solid border-(--border) bg-(--surface)" />
+          <div className="relative flex flex-1 flex-col bg-(--chat-bg)">
+            <div className="h-16 border-b border-solid border-(--chat-line) bg-(--chat-panel)" />
             <ChatThreadSkeleton />
           </div>
         ) : (
-          <div className="relative flex flex-1 flex-col items-center justify-center gap-4 border-b-4 border-solid border-(--accent) bg-(--canvas) p-10 text-center">
-            <div className="chat-wallpaper" aria-hidden="true" />
-            <ChatsCircle
-              size={72}
-              weight="duotone"
-              className="relative text-(--accent)"
-              aria-hidden="true"
-            />
-            <h2 className="relative m-0 text-2xl font-light text-(--text)">
-              Chats
-            </h2>
-            <p className="relative m-0 max-w-md text-[0.9rem] text-(--muted)">
-              Talk with your course groups, classmates and teachers. Pick a chat
-              on the left, or start a new one.
-            </p>
-          </div>
+          <ChatHome
+            isStaff={isStaff}
+            onNewChat={() => setPanel("new")}
+            onStarred={() => setPanel("starred")}
+            onSettings={() => setPanel("settings")}
+            onCourseGroups={() => setPanel("groups")}
+          />
         )}
       </div>
 
-      {roomId && current && infoOpen ? (
+      {roomId && current && drawer ? (
         <div
           className={cn(
-            "absolute inset-y-0 right-0 z-30 flex w-full border-l border-solid border-(--border) shadow-[-8px_0_24px_rgb(0_0_0/0.18)]",
-            "@[720px]/chat:w-95 @[1180px]/chat:static @[1180px]/chat:w-90 @[1180px]/chat:shrink-0 @[1180px]/chat:shadow-none",
+            "absolute inset-y-0 right-0 z-30 flex w-full border-l border-solid border-(--chat-line) shadow-[-8px_0_24px_rgb(0_0_0/0.18)]",
+            "@[720px]/chat:w-95 @[1180px]/chat:static @[1180px]/chat:w-[clamp(340px,30%,440px)] @[1180px]/chat:shrink-0 @[1180px]/chat:shadow-none",
             "max-[640px]:fixed max-[640px]:z-210",
           )}
         >
-          <RoomInfoPanel
-            room={current}
-            viewerId={viewerId}
-            onClose={() => setInfoOpen(false)}
-            onOpenChat={(id) => open(id)}
-            onToast={setToast}
-          />
+          {drawer.kind === "info" ? (
+            <RoomInfoPanel
+              room={current}
+              viewerId={viewerId}
+              onClose={() => setDrawer(null)}
+              onOpenChat={(id) => open(id)}
+              onToast={setToast}
+            />
+          ) : (
+            <MessageInfoPanel
+              roomId={current.id}
+              message={drawer.message}
+              isDirect={current.kind === "direct"}
+              onClose={() => setDrawer(null)}
+            />
+          )}
         </div>
       ) : null}
 
       {shortcutsOpen ? (
         <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />
-      ) : null}
-      {groupsOpen ? (
-        <CourseGroupsDialog
-          rooms={list}
-          onClose={() => setGroupsOpen(false)}
-          onToast={setToast}
-          onOpened={(id) => {
-            setGroupsOpen(false);
-            void rooms.refetch();
-            open(id);
-          }}
-        />
       ) : null}
       <ToastNotification message={toast} onDismiss={() => setToast(null)} />
     </div>

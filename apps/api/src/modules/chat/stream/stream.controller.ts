@@ -15,6 +15,9 @@ export function createStreamController({
   rooms: RoomsService;
   sessionService: SessionService;
 }) {
+  // A course group that opens later is offered to connected readers with
+  // the same lookup a new stream makes.
+  hub.setRoomLoader((userId) => rooms.streamRooms(userId));
   const handler = createChatStreamHandler({
     hub,
     enabled: () => config.CHAT_ENABLED,

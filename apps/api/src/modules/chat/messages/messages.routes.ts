@@ -4,6 +4,7 @@ import {
   chatDeleteMessageQuerySchema,
   chatEditMessageRequestSchema,
   chatMessageListQuerySchema,
+  chatMessageInfoSchema,
   chatMessageListResponseSchema,
   chatMessageParamsSchema,
   chatMessageResponseSchema,
@@ -63,6 +64,24 @@ const messagesRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.list,
+  );
+
+  app.get(
+    "/chat/rooms/:roomId/messages/:seq/info",
+    {
+      preHandler,
+      schema: {
+        operationId: "getChatMessageInfo",
+        tags,
+        summary: "Message info: who read and who received your message",
+        params: chatMessageParamsSchema,
+        response: {
+          200: jsonResponse("Read by and delivered to", chatMessageInfoSchema),
+          ...common,
+        },
+      },
+    },
+    controller.info,
   );
 
   app.get(

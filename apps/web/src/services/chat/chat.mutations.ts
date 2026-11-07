@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   ChatMessage,
+  ChatProfile,
   ChatReason,
   ChatRestrictionType,
 } from "@veolms/contracts";
@@ -239,5 +240,36 @@ export function useReportMessage() {
         ...(v.details ? { details: v.details } : {}),
         ...(v.block ? { block: true } : {}),
       }),
+  });
+}
+
+export function useUpdateChatProfile() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<ChatProfile>) =>
+      chatService.updateProfile(patch),
+    onMutate: (patch) => {
+      const before = client.getQueryData<ChatProfile>(chatKeys.profile());
+      if (before) {
+        client.setQueryData<ChatProfile>(chatKeys.profile(), {
+          ...before,
+          ...patch,
+        });
+      }
+      return { before };
+    },
+    onError: (_error, _patch, context) => {
+      if (context?.before) {
+        client.setQueryData(chatKeys.profile(), context.before);
+      }
+    },
+    onSuccess: (profile) => {
+      client.setQueryData(chatKeys.profile(), profile);
+      // Ticks and "last seen" depend on it.
+      void client.invalidateQueries({ queryKey: chatKeys.rooms() });
+      void client.invalidateQueries({
+        queryKey: [...chatKeys.all, "room"],
+      });
+    },
   });
 }

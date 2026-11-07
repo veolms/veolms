@@ -5,6 +5,10 @@ import type { Kysely } from "kysely";
 import { config } from "../../../config.ts";
 import { createChatHub, type ChatHub } from "../realtime/chat-hub.ts";
 import {
+  createPresenceTracker,
+  type PresenceTracker,
+} from "../realtime/presence.ts";
+import {
   createReceiptsBatcher,
   type ReceiptsBatcher,
 } from "../realtime/receipts-batcher.ts";
@@ -31,6 +35,7 @@ export interface ChatRuntime {
   hub: ChatHub;
   receipts: ReceiptsBatcher;
   updates: UpdateCoalescer;
+  presence: PresenceTracker;
 }
 
 const runtimes = new WeakMap<Kysely<Database>, ChatRuntime>();
@@ -43,23 +48,31 @@ export function getChatRuntime(
   if (existing) return existing;
 
   const repository = createChatRepository();
+  // DATABASE_URL is the writer on every server: LISTEN does not work on a
+  // replica. The connection opens with the first stream.
+  const hub = createChatHub({
+    connectionString: config.DATABASE_URL,
+    logger: app.log,
+  });
   const runtime: ChatRuntime = {
     database,
     repository,
     access: createChatAccess(repository),
-    // DATABASE_URL is the writer on every server: LISTEN does not work on a
-    // replica. The connection opens with the first stream.
-    hub: createChatHub({
-      connectionString: config.DATABASE_URL,
-      logger: app.log,
-    }),
+    hub,
     receipts: createReceiptsBatcher({ database, repository, logger: app.log }),
     updates: createUpdateCoalescer(app.log),
+    presence: createPresenceTracker({
+      database,
+      repository,
+      hub,
+      logger: app.log,
+    }),
   };
   runtimes.set(database, runtime);
   app.addHook("onClose", async () => {
     runtimes.delete(database);
     runtime.updates.stop();
+    runtime.presence.stop();
     await runtime.receipts.stop();
     await runtime.hub.stop();
   });

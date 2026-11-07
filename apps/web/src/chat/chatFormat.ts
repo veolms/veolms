@@ -104,3 +104,16 @@ export function initials(name: string): string {
     ).toUpperCase() || "?"
   );
 }
+
+/** WhatsApp's "last seen today at 10:02" / "yesterday at" / a date. */
+export function lastSeenLabel(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const days = Math.round(
+    (startOfDay(new Date()) - startOfDay(date)) / 86_400_000,
+  );
+  const time = timeFormat.format(date);
+  if (days <= 0) return `last seen today at ${time}`;
+  if (days === 1) return `last seen yesterday at ${time}`;
+  return `last seen ${dateFormat.format(date)} at ${time}`;
+}

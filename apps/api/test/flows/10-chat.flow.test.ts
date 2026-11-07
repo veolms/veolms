@@ -2,7 +2,8 @@
  * Chat, through the real API: course groups (announcement mode, sending,
  * retries, history and catch-up, edits, deletes, reactions), slow mode,
  * mutes, bans, helpers, private chats with requests and blocks, reports,
- * and live delivery over the stream.
+ * live delivery over the stream (also of a group turned on later), group
+ * ticks and Message info, and chat privacy settings.
  */
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -635,6 +636,191 @@ await test("the live stream delivers new messages to the group", async () => {
   );
   assert.ok(all.includes("Live Q&A starts now"));
   request.destroy();
+});
+
+/** Opens a chat stream as this person; everything it receives, as text. */
+async function openStream(client: FlowClient) {
+  const { port } = flow.app.server.address() as AddressInfo;
+  const cookie = [...client.cookies]
+    .map(([name, value]) => `${name}=${value}`)
+    .join("; ");
+  const received: string[] = [];
+  const request = http.get({
+    host: "127.0.0.1",
+    port,
+    path: "/v1/chat/stream",
+    headers: { cookie },
+  });
+  const response = await new Promise<http.IncomingMessage>(
+    (resolve, reject) => {
+      request.on("response", resolve);
+      request.on("error", reject);
+    },
+  );
+  assert.equal(response.statusCode, 200);
+  response.setEncoding("utf8");
+  response.on("data", (chunk: string) => received.push(chunk));
+  const text = () => received.join("");
+  async function waitFor(needle: string, what: string) {
+    for (let i = 0; i < 80 && !text().includes(needle); i += 1)
+      await sleep(100);
+    assert.ok(text().includes(needle), what);
+  }
+  await waitFor("event: ready", "the stream says ready");
+  return { text, waitFor, close: () => request.destroy() };
+}
+
+await test("a group turned on while a learner has Chats open reaches them live", async () => {
+  const later = await createCourse(flow, {
+    title: "Later Chat Course",
+    pricing: "free",
+  });
+  await enrollForFree(a.client, later);
+  const stream = await openStream(a.client);
+  await sleep(500);
+
+  const room = ok<{ room: Room }>(
+    await admin.post(`/v1/chat/courses/${later.id}/room`),
+  ).room;
+  await stream.waitFor(
+    `event: chat.room_added
+data: {"roomId":"${room.id}"}`,
+    "the learner's open stream is told about the new group",
+  );
+  ok(await send(admin, room.id, "Welcome to the new group"), 201);
+  await stream.waitFor(
+    "Welcome to the new group",
+    "its first message arrives live, without reconnecting",
+  );
+  stream.close();
+});
+
+await test("group ticks: two once everyone received it, blue once all read it; Message info lists them", async () => {
+  const ticks = await createCourse(flow, {
+    title: "Ticks Course",
+    pricing: "free",
+  });
+  await enrollForFree(a.client, ticks);
+  await enrollForFree(b.client, ticks);
+  const room = ok<{ room: Room }>(
+    await admin.post(`/v1/chat/courses/${ticks.id}/room`),
+  ).room;
+  ok(
+    await admin.patch(`/v1/chat/rooms/${room.id}/settings`, {
+      postingPolicy: "everyone",
+    }),
+  );
+  // Each opens the group once (that makes them members).
+  for (const client of [admin, a.client, b.client]) {
+    await messages(client, room.id);
+  }
+  const sent = ok<{ message: Message }>(
+    await send(a.client, room.id, "Did everyone get this?"),
+    201,
+  ).message;
+
+  type Ticked = Room & {
+    peerDeliveredSeq: number | null;
+    peerReadSeq: number | null;
+  };
+  async function aSees() {
+    return (await myRooms(a.client)).rooms.find(
+      (r) => r.id === room.id,
+    ) as Ticked;
+  }
+  let seen = await aSees();
+  assert.ok(
+    (seen.peerDeliveredSeq ?? 0) < sent.seq,
+    "one tick while nobody has it",
+  );
+
+  ok(
+    await admin.post("/v1/chat/receipts", {
+      receipts: [{ roomId: room.id, deliveredSeq: sent.seq }],
+    }),
+  );
+  ok(
+    await b.client.post("/v1/chat/receipts", {
+      receipts: [{ roomId: room.id, deliveredSeq: sent.seq }],
+    }),
+  );
+  // Positions are written in batches every few seconds.
+  for (let i = 0; i < 60 && (seen.peerDeliveredSeq ?? 0) < sent.seq; i += 1) {
+    await sleep(200);
+    seen = await aSees();
+  }
+  assert.ok(
+    (seen.peerDeliveredSeq ?? 0) >= sent.seq,
+    "two ticks once all received it",
+  );
+  assert.ok(
+    (seen.peerReadSeq ?? 0) < sent.seq,
+    "not blue while nobody read it",
+  );
+
+  ok(
+    await b.client.post("/v1/chat/receipts", {
+      receipts: [{ roomId: room.id, readSeq: sent.seq }],
+    }),
+  );
+  for (let i = 0; i < 25; i += 1) await sleep(200);
+  seen = await aSees();
+  assert.ok(
+    (seen.peerReadSeq ?? 0) < sent.seq,
+    "still not blue: the admin has not read it",
+  );
+
+  const info = ok<{
+    readBy: Array<{ id: string }>;
+    deliveredTo: Array<{ id: string }>;
+    waiting: number;
+  }>(await a.client.get(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/info`));
+  assert.deepEqual(
+    info.readBy.map((p) => p.id),
+    [b.userId],
+  );
+  assert.equal(info.deliveredTo.length, 1, "the admin received it");
+  assert.equal(info.waiting, 0);
+  refused(
+    await b.client.get(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/info`),
+    403,
+    "CHAT_NOT_YOUR_MESSAGE",
+  );
+
+  ok(
+    await admin.post("/v1/chat/receipts", {
+      receipts: [{ roomId: room.id, readSeq: sent.seq }],
+    }),
+  );
+  for (let i = 0; i < 60 && (seen.peerReadSeq ?? 0) < sent.seq; i += 1) {
+    await sleep(200);
+    seen = await aSees();
+  }
+  assert.ok((seen.peerReadSeq ?? 0) >= sent.seq, "blue once everyone read it");
+});
+
+await test("chat privacy: last seen and read receipts are saved per person", async () => {
+  const before = ok<{
+    showPresence: boolean;
+    readReceipts: boolean;
+    enterToSend: boolean;
+  }>(await a.client.get("/v1/chat/me/profile"));
+  assert.deepEqual(before, {
+    showPresence: true,
+    readReceipts: true,
+    enterToSend: true,
+  });
+  const after = ok<{ showPresence: boolean; readReceipts: boolean }>(
+    await a.client.patch("/v1/chat/me/profile", { readReceipts: false }),
+  );
+  assert.equal(after.readReceipts, false);
+  assert.equal(after.showPresence, true);
+  assert.equal(
+    ok<{ readReceipts: boolean }>(await a.client.get("/v1/chat/me/profile"))
+      .readReceipts,
+    false,
+  );
+  ok(await a.client.patch("/v1/chat/me/profile", { readReceipts: true }));
 });
 
 await flow.close();

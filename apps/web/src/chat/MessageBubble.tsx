@@ -1,8 +1,5 @@
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
-import { CheckIcon as Check } from "@phosphor-icons/react/Check";
-import { ChecksIcon as Checks } from "@phosphor-icons/react/Checks";
-import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
@@ -11,6 +8,7 @@ import type { ChatMessage } from "@veolms/contracts";
 import { useRef, useState, type ReactNode } from "react";
 
 import { cn } from "../lib/utils";
+import { StatusTicks } from "./ChatTicks";
 import { messageTime, nameTone, ROLE_LABEL } from "./chatFormat";
 import { MessageAttachments, type ViewableMedia } from "./MessageAttachments";
 import { MessageMenu, type MessageAction } from "./MessageMenu";
@@ -20,8 +18,9 @@ export interface BubbleContext {
   viewerId: string | null;
   isGroup: boolean;
   isDirect: boolean;
-  peerReadSeq: number;
-  peerDeliveredSeq: number;
+  /** How far the others have read / received (null: not shown). */
+  peerReadSeq: number | null;
+  peerDeliveredSeq: number | null;
   canModerate: boolean;
   isHelper: boolean;
   starred: ReadonlySet<string>;
@@ -65,7 +64,7 @@ export function MessageBubble({
   if (message.kind === "system") {
     return (
       <div className="my-1.5 flex justify-center px-4">
-        <span className="rounded-lg bg-(--card-surface-raised) px-3 py-1.5 text-center text-[0.78rem] text-(--text-secondary) shadow-sm">
+        <span className="rounded-lg bg-(--chat-in) px-3 py-1.5 text-center text-[0.78rem] text-(--text-secondary) shadow-sm">
           {message.body}
         </span>
       </div>
@@ -136,7 +135,7 @@ export function MessageBubble({
       {dragX > 0 ? (
         <span
           aria-hidden="true"
-          className="absolute top-1/2 left-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-(--card-surface-raised) text-(--muted)"
+          className="absolute top-1/2 left-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-(--chat-in) text-(--muted)"
           style={{ opacity: dragX / SWIPE_TO_REPLY_PX }}
         >
           <ArrowBendUpLeft size={16} />
@@ -145,9 +144,7 @@ export function MessageBubble({
       <div
         className={cn(
           "relative max-w-[min(65%,560px)] min-w-24 rounded-lg px-2 pt-1.5 pb-1 text-[0.92rem] leading-[1.38] text-(--text) shadow-[0_1px_0.5px_rgb(0_0_0/0.13)] max-[640px]:max-w-[85%]",
-          outgoing
-            ? "bg-[color-mix(in_srgb,var(--accent)_24%,var(--card-surface-raised))]"
-            : "bg-(--card-surface-raised)",
+          outgoing ? "bg-(--chat-out)" : "bg-(--chat-in)",
           firstOfRun && (outgoing ? "rounded-tr-none" : "rounded-tl-none"),
           onlyMedia && "p-1",
           reactions.length > 0 && "pb-3.5",
@@ -229,7 +226,7 @@ export function MessageBubble({
         {!deleted ? (
           <div
             className={cn(
-              "absolute top-0.5 right-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100",
+              "absolute top-0 right-0 opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100",
               menuOpen && "opacity-100",
             )}
           >
@@ -241,7 +238,15 @@ export function MessageBubble({
               onOpenChange={setMenuOpen}
               onAction={(action) => onAction(action, message)}
               trigger={
-                <span className="inline-flex size-6 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--card-surface-raised)_85%,transparent)] text-(--muted) shadow-sm">
+                <span
+                  className={cn(
+                    // WhatsApp: the chevron sits on a soft fade of the bubble.
+                    "inline-flex h-6 w-8 items-start justify-end rounded-tr-lg pt-1 pr-1 text-(--muted)",
+                    outgoing
+                      ? "bg-[radial-gradient(at_top_right,var(--chat-out)_55%,transparent_75%)]"
+                      : "bg-[radial-gradient(at_top_right,var(--chat-in)_55%,transparent_75%)]",
+                  )}
+                >
                   <CaretDown size={14} weight="bold" />
                 </span>
               }
@@ -254,7 +259,7 @@ export function MessageBubble({
             type="button"
             onClick={() => onAction("react-toggle", message)}
             className={cn(
-              "absolute -bottom-3.5 flex cursor-pointer items-center gap-0.5 rounded-full border-2 border-solid border-(--canvas) bg-(--card-surface-raised) px-1.5 py-px text-[0.78rem] text-(--text-secondary) shadow-sm",
+              "absolute -bottom-3.5 flex cursor-pointer items-center gap-0.5 rounded-full border-2 border-solid border-(--chat-bg) bg-(--chat-in) px-1.5 py-px text-[0.78rem] text-(--text-secondary) shadow-sm",
               outgoing ? "right-2" : "left-2",
             )}
             aria-label={`Reactions: ${reactions.map(([e, c]) => `${e} ${c}`).join(", ")}`}
@@ -285,8 +290,8 @@ function Tail({ outgoing }: { outgoing: boolean }) {
       className={cn(
         "absolute top-0 h-3.25 w-2",
         outgoing
-          ? "-right-2 fill-[color-mix(in_srgb,var(--accent)_24%,var(--card-surface-raised))]"
-          : "-left-2 -scale-x-100 fill-(--card-surface-raised)",
+          ? "-right-2 fill-(--chat-out)"
+          : "-left-2 -scale-x-100 fill-(--chat-in)",
       )}
     >
       <path d="M0 0h8L1.5 9.5C1 10.3 0 10 0 9z" />
@@ -327,23 +332,15 @@ function Meta({
   );
 }
 
-/** Clock while sending, ✓ sent, ✓✓ delivered, blue ✓✓ read (private chats). */
+/** Clock, ✓ sent, ✓✓ delivered, blue ✓✓ read (groups: by everyone). */
 function Ticks({ message, ctx }: { message: ChatMessage; ctx: BubbleContext }) {
-  if (message.seq <= 0) return <Clock size={13} aria-label="Sending" />;
-  if (ctx.isDirect && ctx.peerReadSeq >= message.seq) {
-    return (
-      <Checks
-        size={15}
-        weight="bold"
-        className="text-[#34b7f1]"
-        aria-label="Read"
-      />
-    );
-  }
-  if (ctx.isDirect && ctx.peerDeliveredSeq >= message.seq) {
-    return <Checks size={15} weight="bold" aria-label="Delivered" />;
-  }
-  return <Check size={14} weight="bold" aria-label="Sent" />;
+  return (
+    <StatusTicks
+      seq={message.seq}
+      deliveredSeq={ctx.peerDeliveredSeq}
+      readSeq={ctx.peerReadSeq}
+    />
+  );
 }
 
 export function FailedMark() {

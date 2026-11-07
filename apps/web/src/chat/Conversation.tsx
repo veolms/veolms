@@ -49,7 +49,8 @@ import {
   ReportDialog,
   RestrictDialog,
 } from "./ChatDialogs";
-import { ROLE_LABEL } from "./chatFormat";
+import { chatIconButton } from "./ChatControls";
+import { lastSeenLabel, ROLE_LABEL } from "./chatFormat";
 import { Composer, type ComposerHandle } from "./Composer";
 import { EmojiPanel } from "./EmojiPanel";
 import { MediaViewer } from "./MediaViewer";
@@ -74,6 +75,7 @@ export function Conversation({
   viewerId,
   onBack,
   onOpenInfo,
+  onOpenMessageInfo,
   onOpenChat,
   onToast,
   focusComposerToken,
@@ -82,6 +84,7 @@ export function Conversation({
   viewerId: string | null;
   onBack: () => void;
   onOpenInfo: () => void;
+  onOpenMessageInfo: (message: ChatMessage) => void;
   onOpenChat: (roomId: string) => void;
   onToast: (message: string) => void;
   focusComposerToken: number;
@@ -154,8 +157,8 @@ export function Conversation({
     viewerId,
     isGroup: room.kind !== "direct",
     isDirect: room.kind === "direct",
-    peerReadSeq: room.peerReadSeq ?? 0,
-    peerDeliveredSeq: room.peerDeliveredSeq ?? 0,
+    peerReadSeq: room.peerReadSeq,
+    peerDeliveredSeq: room.peerDeliveredSeq,
     canModerate: room.me.canModerate,
     isHelper: room.me.isHelper,
     starred: starredIds,
@@ -207,6 +210,9 @@ export function Conversation({
       case "reply":
         setEditing(null);
         setReplyTo(message);
+        return;
+      case "info":
+        onOpenMessageInfo(message);
         return;
       case "copy":
         void navigator.clipboard
@@ -267,31 +273,38 @@ export function Conversation({
     room.kind === "direct" &&
     room.directStatus === "requested" &&
     room.requestedByMe === false;
+  // WhatsApp's header line: typing, then online / last seen (private
+  // chats) or the members' names (groups).
+  const presence = room.peerPresence;
   const subtitle =
     typing.length > 0
       ? room.kind === "direct"
         ? "typing…"
         : `${typing.slice(0, 2).join(", ")} ${typing.length === 1 ? "is" : "are"} typing…`
       : room.kind === "direct"
-        ? room.peer
-          ? (ROLE_LABEL[room.peer.role] ?? "Click here for contact info")
-          : ""
-        : room.memberCount
-          ? `${room.memberCount.toLocaleString()} member${room.memberCount === 1 ? "" : "s"} · click here for group info`
-          : "Click here for group info";
-  const iconButton =
-    "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--hover) hover:text-(--text)";
+        ? presence?.online
+          ? "online"
+          : presence?.lastSeenAt
+            ? lastSeenLabel(presence.lastSeenAt)
+            : room.peer
+              ? (ROLE_LABEL[room.peer.role] ?? "click here for contact info")
+              : ""
+        : room.memberNames.length > 0
+          ? ["You", ...room.memberNames].join(", ") +
+            ((room.memberCount ?? 0) > room.memberNames.length + 1 ? "…" : "")
+          : "click here for group info";
+  const iconButton = chatIconButton;
 
   return (
     <section
       aria-label={room.title}
-      className="relative flex h-full min-w-0 flex-1 flex-col bg-(--canvas)"
+      className="relative flex h-full min-w-0 flex-1 flex-col bg-(--chat-bg)"
       onDragEnter={(event) => {
         if (event.dataTransfer.types.includes("Files") && room.me.canPost)
           setDragging(true);
       }}
     >
-      <header className="z-10 flex h-16 shrink-0 items-center gap-2 border-b border-solid border-(--border) bg-(--surface) px-2 @[720px]/chat:px-4">
+      <header className="z-10 flex h-16 shrink-0 items-center gap-1 border-b border-solid border-(--chat-line) bg-(--chat-panel) pr-2 pl-2 @[720px]/chat:pl-4">
         <button
           type="button"
           className={cn(iconButton, "@[720px]/chat:hidden")}
@@ -303,7 +316,7 @@ export function Conversation({
         <button
           type="button"
           onClick={onOpenInfo}
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 border-0 bg-transparent p-0 text-left text-(--text)"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent py-1 pr-2 pl-0 text-left text-(--text)"
           aria-label={room.kind === "direct" ? "Contact info" : "Group info"}
         >
           <ChatAvatar
@@ -313,13 +326,15 @@ export function Conversation({
             size="md"
           />
           <span className="min-w-0">
-            <span className="block truncate text-[0.98rem] font-semibold">
+            <span className="block truncate text-[1rem] font-semibold">
               {room.title}
             </span>
             <span
               className={cn(
-                "block truncate text-[0.78rem]",
-                typing.length > 0 ? "text-(--accent-ink)" : "text-(--muted)",
+                "block truncate text-[0.8rem]",
+                typing.length > 0 || presence?.online
+                  ? "text-(--accent-ink)"
+                  : "text-(--muted)",
               )}
             >
               {subtitle}
@@ -418,7 +433,7 @@ export function Conversation({
             void jumpTo(shownPin.seq);
             setPinnedIndex((i) => i + 1);
           }}
-          className="z-10 flex w-full shrink-0 cursor-pointer items-center gap-2.5 border-0 border-b border-solid border-(--border) bg-(--surface) px-4 py-2 text-left text-(--text)"
+          className="z-10 flex w-full shrink-0 cursor-pointer items-center gap-2.5 border-0 border-b border-solid border-(--chat-line) bg-(--chat-panel) px-4 py-2 text-left text-(--text)"
           aria-label="Pinned message"
         >
           {pinned.length > 1 ? (
@@ -430,7 +445,7 @@ export function Conversation({
                     "w-0.75 flex-1 rounded-full",
                     i === pinnedIndex % pinned.length
                       ? "bg-(--accent)"
-                      : "bg-(--border-strong)",
+                      : "bg-(--chat-line-strong)",
                   )}
                 />
               ))}
@@ -496,7 +511,7 @@ export function Conversation({
       </div>
 
       {isRequestForMe ? (
-        <div className="flex flex-col items-center gap-3 border-t border-solid border-(--border) bg-(--surface) px-4 py-4">
+        <div className="flex flex-col items-center gap-3 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-4 py-4">
           <p className="m-0 text-center text-[0.9rem] text-(--text-secondary)">
             {room.title} is not in your chats. You both take the same course.
           </p>
@@ -510,7 +525,7 @@ export function Conversation({
                   { onSuccess: onBack, onError: fail },
                 )
               }
-              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-solid border-red-500/50 bg-transparent px-5 font-semibold text-red-500 hover:bg-(--hover)"
+              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-solid border-red-500/50 bg-transparent px-5 font-semibold text-red-500 hover:bg-(--chat-hover)"
             >
               <Prohibit size={16} /> Block
             </button>
@@ -522,7 +537,7 @@ export function Conversation({
                   { onSuccess: onBack, onError: fail },
                 )
               }
-              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-solid border-(--border-strong) bg-transparent px-5 font-semibold text-(--text) hover:bg-(--hover)"
+              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-solid border-(--chat-line-strong) bg-transparent px-5 font-semibold text-(--text) hover:bg-(--chat-hover)"
             >
               <Flag size={16} /> Decline
             </button>
@@ -534,7 +549,7 @@ export function Conversation({
                   { onError: fail },
                 )
               }
-              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-solid border-(--accent-border) bg-transparent px-5 font-semibold text-(--accent-ink) hover:bg-(--hover)"
+              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-solid border-(--accent-border) bg-transparent px-5 font-semibold text-(--accent-ink) hover:bg-(--chat-hover)"
             >
               <Check size={16} /> Accept
             </button>

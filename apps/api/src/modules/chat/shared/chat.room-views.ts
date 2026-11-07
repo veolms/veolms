@@ -181,13 +181,26 @@ export function createRoomViews(runtime: ChatRuntime) {
     restrictions: RestrictionRow[],
   ): Promise<ChatRoomSummary[]> {
     const directIds = rows.filter((r) => r.kind === "direct").map((r) => r.id);
-    const [peers, blocks] = await Promise.all([
+    const groupIds = rows.filter((r) => r.kind !== "direct").map((r) => r.id);
+    const [peers, blocks, groups] = await Promise.all([
       repository.listDirectPeers(db, userId, directIds),
       directIds.length > 0
         ? repository.listBlocksInvolving(db, userId)
         : Promise.resolve([]),
+      repository.groupPositions(db, groupIds),
     ]);
     const peerByRoom = new Map(peers.map((p) => [p.room_id, p]));
+    const groupByRoom = new Map(groups.map((g) => [g.room_id, g]));
+    // Read receipts are reciprocal in private chats (WhatsApp): off on
+    // either side hides blue ticks both ways.
+    const profiles =
+      peers.length > 0
+        ? await repository.getProfiles(db, [userId, ...peers.map((p) => p.id)])
+        : [];
+    const receiptsOn = new Map(
+      profiles.map((p) => [p.user_id, p.read_receipts]),
+    );
+    const myReceipts = receiptsOn.get(userId) ?? true;
     const blockedWith = new Set(
       blocks.map((b) =>
         b.blocker_id === userId ? b.blocked_id : b.blocker_id,
@@ -275,8 +288,11 @@ export function createRoomViews(runtime: ChatRuntime) {
               },
         lastMessageAt: row.last_message_at?.toISOString() ?? null,
         unreadCount: Math.max(0, lastSeq - lastReadSeq),
-        peerDeliveredSeq: peer ? Number(peer.last_delivered_seq) : null,
-        peerReadSeq: peer ? Number(peer.last_read_seq) : null,
+        ...ticks(row.kind, peer, groupByRoom.get(row.id), (id) =>
+          id === userId
+            ? myReceipts
+            : myReceipts && (receiptsOn.get(id) ?? true),
+        ),
         me: {
           roomRole: (row.room_role ?? "member") as
             "owner" | "moderator" | "member",
@@ -300,6 +316,37 @@ export function createRoomViews(runtime: ChatRuntime) {
       });
     }
     return result;
+  }
+
+  function ticks(
+    kind: string,
+    peer:
+      | {
+          id: string;
+          last_delivered_seq: string | null;
+          last_read_seq: string | null;
+        }
+      | undefined,
+    group: { delivered: string; read: string; members: string } | undefined,
+    /** Whether blue ticks show between the viewer and this person. */
+    receiptsWith: (peerId: string) => boolean,
+  ) {
+    if (kind === "direct") {
+      if (!peer) return { peerDeliveredSeq: null, peerReadSeq: null };
+      const showRead = receiptsWith(peer.id);
+      return {
+        peerDeliveredSeq: Number(peer.last_delivered_seq ?? 0),
+        peerReadSeq: showRead ? Number(peer.last_read_seq ?? 0) : null,
+      };
+    }
+    // Alone in the group: nobody else can receive it.
+    if (!group || Number(group.members) < 2) {
+      return { peerDeliveredSeq: null, peerReadSeq: null };
+    }
+    return {
+      peerDeliveredSeq: Number(group.delivered),
+      peerReadSeq: Number(group.read),
+    };
   }
 
   /** The rooms a person sees in their list (and gets live events for). */
@@ -336,18 +383,44 @@ export function createRoomViews(runtime: ChatRuntime) {
     return [...ids];
   }
 
+  /**
+   * The other person's "online" / "last seen", or null when either of you
+   * hides it (reciprocal, as in WhatsApp).
+   */
+  async function presenceBetween(
+    db: Executor,
+    viewerId: string,
+    peerId: string,
+  ): Promise<{ online: boolean; lastSeenAt: string | null } | null> {
+    const profiles = await repository.getProfiles(db, [viewerId, peerId]);
+    const mine = profiles.find((p) => p.user_id === viewerId);
+    const theirs = profiles.find((p) => p.user_id === peerId);
+    if (mine && !mine.show_presence) return null;
+    if (theirs && !theirs.show_presence) return null;
+    if (!theirs) return { online: false, lastSeenAt: null };
+    return {
+      online:
+        theirs.online_until !== null &&
+        theirs.online_until.getTime() > Date.now(),
+      lastSeenAt: theirs.last_seen_at?.toISOString() ?? null,
+    };
+  }
+
   async function detail(
     db: Executor,
     userId: string,
     roomAccess: RoomAccess,
   ): Promise<ChatRoomDetail> {
     const { room } = roomAccess;
-    const [rows, pinned, memberCount] = await Promise.all([
+    const [rows, pinned, memberCount, names] = await Promise.all([
       repository.listRoomsForUser(db, userId, [room.id]),
       repository.listPinned(db, userId, room.id),
       room.kind === "direct"
         ? Promise.resolve(2)
         : repository.countActiveMembers(db, room.id),
+      room.kind === "direct"
+        ? Promise.resolve([])
+        : repository.memberNames(db, room.id, 12),
     ]);
     const [summary] = await summaries(
       db,
@@ -383,6 +456,13 @@ export function createRoomViews(runtime: ChatRuntime) {
     return {
       ...summary,
       me: { ...summary.me, isHelper: roomAccess.isHelper },
+      memberNames: names
+        .filter((n) => n.id !== userId)
+        .map((n) => n.display_name),
+      peerPresence:
+        room.kind === "direct" && summary.peer
+          ? await presenceBetween(db, userId, summary.peer.id)
+          : null,
       description: room.description,
       directMessagesAllowed: room.direct_messages_allowed,
       attachmentsAllowed: room.attachments_allowed,

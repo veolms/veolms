@@ -382,6 +382,19 @@ export function createChatRepository() {
       return rows.map((row) => row.room_id);
     },
 
+    /** The private chats a person is in (where their presence is shown). */
+    async listDirectRoomIds(db: Executor, userId: string) {
+      const rows = await db
+        .selectFrom("chat_members as cm")
+        .innerJoin("chat_rooms as r", "r.id", "cm.room_id")
+        .select("cm.room_id")
+        .where("cm.user_id", "=", userId)
+        .where("r.kind", "=", "direct")
+        .where("cm.state", "in", ["active", "pending"])
+        .execute();
+      return rows.map((row) => row.room_id);
+    },
+
     async listRoomsForUser(
       db: Executor,
       userId: string,
@@ -450,8 +463,137 @@ export function createChatRepository() {
       if (roomIds.length === 0) return [];
       return db
         .selectFrom("chat_rooms")
-        .select(["id", "last_seq", "last_event_seq"])
+        .select(["id", "kind", "last_seq", "last_event_seq"])
         .where("id", "in", roomIds)
+        .execute();
+    },
+
+    /**
+     * For each group: the lowest received and read positions among its
+     * active members, and how many there are (the group ticks).
+     */
+    async groupPositions(db: Executor, roomIds: readonly string[]) {
+      if (roomIds.length === 0) return [];
+      return db
+        .selectFrom("chat_members")
+        .select([
+          "room_id",
+          sql<string>`min(last_delivered_seq)`.as("delivered"),
+          sql<string>`min(last_read_seq)`.as("read"),
+          sql<string>`count(*)`.as("members"),
+        ])
+        .where("room_id", "in", roomIds)
+        .where("state", "=", "active")
+        .groupBy("room_id")
+        .execute();
+    },
+
+    /** Who has received one message (its "Message info"), others first by name. */
+    async messageReceipts(
+      db: Executor,
+      roomId: string,
+      seq: number,
+      senderId: string,
+      limit: number,
+    ) {
+      const [reached, waiting] = await Promise.all([
+        db
+          .selectFrom("chat_members as cm")
+          .innerJoin("users as u", "u.id", "cm.user_id")
+          .select([
+            "u.id",
+            "u.display_name",
+            "u.avatar_data_url",
+            "u.is_deleted",
+            "cm.last_read_seq",
+          ])
+          .where("cm.room_id", "=", roomId)
+          .where("cm.state", "=", "active")
+          .where("cm.user_id", "<>", senderId)
+          .where("cm.last_delivered_seq", ">=", String(seq))
+          .orderBy("u.display_name")
+          .limit(limit)
+          .execute(),
+        db
+          .selectFrom("chat_members")
+          .select(sql<string>`count(*)`.as("n"))
+          .where("room_id", "=", roomId)
+          .where("state", "=", "active")
+          .where("user_id", "<>", senderId)
+          .where("last_delivered_seq", "<", String(seq))
+          .executeTakeFirstOrThrow(),
+      ]);
+      return { reached, waiting: Number(waiting.n) };
+    },
+
+    /** A few active members' names, for a group header. */
+    async memberNames(db: Executor, roomId: string, limit: number) {
+      const rows = await db
+        .selectFrom("chat_members as cm")
+        .innerJoin("users as u", "u.id", "cm.user_id")
+        .select(["u.id", "u.display_name"])
+        .where("cm.room_id", "=", roomId)
+        .where("cm.state", "=", "active")
+        .where("u.is_deleted", "=", false)
+        .orderBy("cm.joined_at")
+        .limit(limit)
+        .execute();
+      return rows;
+    },
+
+    // ------------------------------------------------------------- profiles
+    async getProfiles(db: Executor, userIds: readonly string[]) {
+      if (userIds.length === 0) return [];
+      return db
+        .selectFrom("chat_profiles")
+        .selectAll()
+        .where("user_id", "in", userIds)
+        .execute();
+    },
+
+    async saveProfile(
+      db: Executor,
+      userId: string,
+      patch: {
+        show_presence?: boolean;
+        read_receipts?: boolean;
+        enter_to_send?: boolean;
+      },
+    ) {
+      return db
+        .insertInto("chat_profiles")
+        .values({ user_id: userId, ...patch })
+        .onConflict((oc) =>
+          oc
+            .column("user_id")
+            .doUpdateSet({ ...patch, updated_at: new Date() }),
+        )
+        .returningAll()
+        .executeTakeFirstOrThrow();
+    },
+
+    /** These people have Chats open: online for the next `seconds`. */
+    async markOnline(
+      db: Executor,
+      userIds: readonly string[],
+      seconds: number,
+    ) {
+      if (userIds.length === 0) return;
+      await sql`
+        insert into chat_profiles (user_id, online_until)
+        select id, now() + make_interval(secs => ${seconds})
+        from unnest(${sql.val([...userIds])}::uuid[]) as t(id)
+        where exists (select 1 from users u where u.id = t.id)
+        on conflict (user_id) do update set online_until = excluded.online_until
+      `.execute(db);
+    },
+
+    /** Their last chat tab closed: away now, last seen now. */
+    async markAway(db: Executor, userId: string) {
+      await db
+        .updateTable("chat_profiles")
+        .set({ online_until: new Date(), last_seen_at: new Date() })
+        .where("user_id", "=", userId)
         .execute();
     },
 
@@ -704,6 +846,19 @@ export function createChatRepository() {
           )
         `.execute(trx);
         const row = result.rows[0]!;
+        if (row.outcome === "sent" && row.message_seq !== null) {
+          // Sending means you have seen the chat up to your own message, so
+          // a group's "everyone has read" (the ticks) can count you in.
+          await trx
+            .updateTable("chat_members")
+            .set({
+              last_read_seq: sql`greatest(last_read_seq, ${row.message_seq}::bigint)`,
+              last_delivered_seq: sql`greatest(last_delivered_seq, ${row.message_seq}::bigint)`,
+            })
+            .where("room_id", "=", input.roomId)
+            .where("user_id", "=", input.senderId)
+            .execute();
+        }
         if (row.outcome === "sent" && inTransaction) await inTransaction(trx);
         return row;
       });

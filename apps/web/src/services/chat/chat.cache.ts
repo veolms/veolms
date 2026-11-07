@@ -160,7 +160,11 @@ export function applyReceipt(
         room
           ? {
               ...room,
-              peerReadSeq: Math.max(room.peerReadSeq ?? 0, receipt.readSeq),
+              // Null: read receipts are off between you (stays hidden).
+              peerReadSeq:
+                room.peerReadSeq === null
+                  ? null
+                  : Math.max(room.peerReadSeq, receipt.readSeq),
               peerDeliveredSeq: Math.max(
                 room.peerDeliveredSeq ?? 0,
                 receipt.deliveredSeq,
@@ -183,7 +187,10 @@ export function applyReceipt(
       }
       return {
         ...room,
-        peerReadSeq: Math.max(room.peerReadSeq ?? 0, receipt.readSeq),
+        peerReadSeq:
+          room.peerReadSeq === null
+            ? null
+            : Math.max(room.peerReadSeq, receipt.readSeq),
         peerDeliveredSeq: Math.max(
           room.peerDeliveredSeq ?? 0,
           receipt.deliveredSeq,
@@ -198,6 +205,55 @@ export function applyReceipt(
         .reduce((sum, r) => sum + r.unreadCount, 0),
     };
   });
+}
+
+/** A group's "everyone has received / read up to" moved: its ticks. */
+export function applyGroupRead(
+  client: QueryClient,
+  event: { roomId: string; deliveredSeq: number; readSeq: number },
+) {
+  const apply = <
+    T extends { peerDeliveredSeq: number | null; peerReadSeq: number | null },
+  >(
+    room: T,
+  ): T => ({
+    ...room,
+    peerDeliveredSeq: Math.max(room.peerDeliveredSeq ?? 0, event.deliveredSeq),
+    peerReadSeq: Math.max(room.peerReadSeq ?? 0, event.readSeq),
+  });
+  client.setQueryData<ChatRoomDetail>(chatKeys.room(event.roomId), (room) =>
+    room ? apply(room) : room,
+  );
+  client.setQueryData<ChatRoomList>(chatKeys.rooms(), (list) =>
+    list
+      ? {
+          ...list,
+          rooms: list.rooms.map((room) =>
+            room.id === event.roomId ? apply(room) : room,
+          ),
+        }
+      : list,
+  );
+}
+
+/** Someone you have a private chat with came online or went away. */
+export function applyPresence(
+  client: QueryClient,
+  event: { userId: string; online: boolean; lastSeenAt: string | null },
+) {
+  for (const [key, room] of client.getQueriesData<ChatRoomDetail>({
+    queryKey: [...chatKeys.all, "room"],
+  })) {
+    // Null: hidden between you; it stays hidden.
+    if (!room || room.peer?.id !== event.userId || !room.peerPresence) continue;
+    client.setQueryData<ChatRoomDetail>(key, {
+      ...room,
+      peerPresence: {
+        online: event.online,
+        lastSeenAt: event.lastSeenAt ?? room.peerPresence.lastSeenAt,
+      },
+    });
+  }
 }
 
 /** Marks a chat read up to `seq` in the list, right away (the server follows). */

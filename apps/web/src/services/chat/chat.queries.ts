@@ -141,3 +141,24 @@ export function useStarredMessages(enabled: boolean) {
     enabled,
   });
 }
+
+/** Your chat privacy and preferences (defaults until it loads). */
+export function useChatProfile(enabled = true) {
+  return useQuery({
+    queryKey: chatKeys.profile(),
+    queryFn: () => chatService.getProfile(),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Message info: who read and who received your message. */
+export function useMessageInfo(roomId: string, seq: number | null) {
+  return useQuery({
+    queryKey: chatKeys.messageInfo(roomId, seq ?? 0),
+    queryFn: () => chatService.messageInfo(roomId, seq!),
+    enabled: seq !== null && seq > 0,
+    // Receipts are written every few seconds: look again while it is open.
+    refetchInterval: 5_000,
+  });
+}

@@ -1,34 +1,50 @@
 import { ArchiveIcon as Archive } from "@phosphor-icons/react/Archive";
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { BellSlashIcon as BellSlash } from "@phosphor-icons/react/BellSlash";
-import { ChatCircleTextIcon as ChatCircleText } from "@phosphor-icons/react/ChatCircleText";
+import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { ChecksIcon as Checks } from "@phosphor-icons/react/Checks";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
+import { KeyboardIcon as Keyboard } from "@phosphor-icons/react/Keyboard";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { NotePencilIcon as NotePencil } from "@phosphor-icons/react/NotePencil";
+import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
+import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
+import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
+import { XIcon as X } from "@phosphor-icons/react/X";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ChatRoomSummary } from "@veolms/contracts";
 import { useMemo, useState } from "react";
 
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import { cn } from "../lib/utils";
 import {
+  markRoomRead,
+  queueReceipt,
+  useBlockUser,
   useChatCandidates,
+  useLeaveChat,
   useStarredMessages,
+  useTypingNames,
   useUpdateMyChatState,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { chatIconButton, ListPanelHeader } from "./ChatControls";
+import { StatusTicks } from "./ChatTicks";
 import { listTime, messageTime } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
 
 type Filter = "all" | "unread" | "courses" | "direct" | "requests";
-export type ListPanel = "chats" | "archived" | "new" | "starred";
+export type ListPanel =
+  "chats" | "archived" | "new" | "starred" | "settings" | "groups";
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: "all", label: "All" },
@@ -38,8 +54,62 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: "requests", label: "Requests" },
 ];
 
-const iconButton =
-  "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--hover) hover:text-(--text)";
+/** The rounded search box at the top of the list panels. */
+function SearchBox({
+  id,
+  value,
+  placeholder,
+  label,
+  autoFocus = false,
+  onChange,
+  onEnter,
+  onEscape,
+}: {
+  id?: string;
+  value: string;
+  placeholder: string;
+  label: string;
+  autoFocus?: boolean;
+  onChange: (value: string) => void;
+  onEnter?: () => void;
+  onEscape?: () => void;
+}) {
+  return (
+    <label className="mx-3 mb-2 flex h-10 shrink-0 items-center gap-3 rounded-full bg-(--chat-input) px-4 focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-(--accent)">
+      <MagnifyingGlass
+        size={17}
+        className="shrink-0 text-(--muted)"
+        aria-hidden="true"
+      />
+      <span className="sr-only">{label}</span>
+      <input
+        id={id}
+        autoFocus={autoFocus}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="min-w-0 flex-1 border-0 bg-transparent text-[0.9rem] text-(--text) outline-none placeholder:text-(--muted)"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            if (value) onChange("");
+            else onEscape?.();
+          }
+          if (event.key === "Enter") onEnter?.();
+        }}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          aria-label="Clear search"
+          className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:text-(--text)"
+        >
+          <X size={15} />
+        </button>
+      ) : null}
+    </label>
+  );
+}
 
 export function ChatList({
   rooms,
@@ -47,6 +117,7 @@ export function ChatList({
   requestsCount,
   selectedId,
   viewerId,
+  isStaff,
   panel,
   onPanel,
   onSelect,
@@ -59,6 +130,7 @@ export function ChatList({
   requestsCount: number;
   selectedId: string | null;
   viewerId: string | null;
+  isStaff: boolean;
   panel: ListPanel;
   onPanel: (panel: ListPanel) => void;
   onSelect: (roomId: string) => void;
@@ -110,83 +182,81 @@ export function ChatList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-16 shrink-0 items-center gap-1 px-4">
-        {archivedView ? (
-          <>
+      {archivedView ? (
+        <ListPanelHeader title="Archived" onBack={() => onPanel("chats")} />
+      ) : (
+        <div className="flex h-16 shrink-0 items-center gap-0.5 pr-2 pl-5">
+          <h1 className="m-0 flex-1 text-[1.4rem] font-bold tracking-[-0.01em] text-(--text)">
+            Chats
+          </h1>
+          {isStaff ? (
             <button
               type="button"
-              className={iconButton}
-              onClick={() => onPanel("chats")}
-              aria-label="Back"
+              className={chatIconButton}
+              onClick={() => onPanel("groups")}
+              aria-label="Course groups"
+              title="Course groups"
             >
-              <ArrowLeft size={20} />
+              <UsersThree size={22} />
             </button>
-            <h1 className="m-0 flex-1 text-[1.15rem] font-bold text-(--text)">
-              Archived
-            </h1>
-          </>
-        ) : (
-          <>
-            <h1 className="m-0 flex-1 text-[1.35rem] font-bold text-(--text)">
-              Chats
-            </h1>
-            <button
-              type="button"
-              className={iconButton}
-              onClick={() => onPanel("new")}
-              aria-label="New chat"
-              title="New chat (Ctrl+Alt+N)"
-            >
-              <NotePencil size={21} />
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger className={iconButton} aria-label="Menu">
-                <DotsThreeVertical size={22} weight="bold" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-52 min-w-0">
-                <DropdownMenuItem onClick={() => onPanel("starred")}>
-                  <Star size={16} aria-hidden="true" /> Starred messages
+          ) : null}
+          <button
+            type="button"
+            className={chatIconButton}
+            onClick={() => onPanel("new")}
+            aria-label="New chat"
+            title="New chat (Ctrl+Alt+N)"
+          >
+            <NotePencil size={21} />
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger className={chatIconButton} aria-label="Menu">
+              <DotsThreeVertical size={22} weight="bold" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 min-w-0">
+              {isStaff ? (
+                <DropdownMenuItem onClick={() => onPanel("groups")}>
+                  <UsersThree size={17} aria-hidden="true" /> Course groups
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onPanel("archived")}>
-                  <Archive size={16} aria-hidden="true" /> Archived chats
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onShowShortcuts}>
-                  <ChatCircleText size={16} aria-hidden="true" /> Keyboard
-                  shortcuts
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        )}
-      </div>
+              ) : null}
+              <DropdownMenuItem onClick={() => onPanel("starred")}>
+                <Star size={17} aria-hidden="true" /> Starred messages
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onPanel("archived")}>
+                <Archive size={17} aria-hidden="true" /> Archived chats
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onPanel("settings")}>
+                <GearSix size={17} aria-hidden="true" /> Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onShowShortcuts}>
+                <Keyboard size={17} aria-hidden="true" /> Keyboard shortcuts
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
 
-      <label className="mx-3 mb-2 flex h-10 shrink-0 items-center gap-3 rounded-full bg-(--surface-strong) px-4">
-        <MagnifyingGlass
-          size={17}
-          className="text-(--muted)"
-          aria-hidden="true"
-        />
-        <span className="sr-only">Search chats</span>
-        <input
-          id="chat-search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search or start a new chat"
-          className="min-w-0 flex-1 border-0 bg-transparent text-[0.9rem] text-(--text) outline-none placeholder:text-(--muted)"
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setSearch("");
-            if (event.key === "Enter" && visible[0]) onSelect(visible[0].id);
-          }}
-        />
-      </label>
+      <SearchBox
+        id="chat-search"
+        value={search}
+        onChange={setSearch}
+        label="Search chats"
+        placeholder={
+          archivedView ? "Search archived chats" : "Search or start a new chat"
+        }
+        onEnter={() => visible[0] && onSelect(visible[0].id)}
+      />
 
       {!archivedView ? (
         <div
-          className="flex shrink-0 gap-2 overflow-x-auto px-3 pb-2"
+          className="flex shrink-0 gap-2 overflow-x-auto px-3 pt-0.5 pb-2.5 [scrollbar-width:none]"
           role="tablist"
           aria-label="Filter chats"
         >
-          {FILTERS.map((item) => (
+          {FILTERS.filter(
+            (item) => item.id !== "requests" || requestsCount > 0,
+          ).map((item) => (
             <button
               key={item.id}
               type="button"
@@ -194,41 +264,49 @@ export function ChatList({
               aria-selected={filter === item.id}
               onClick={() => setFilter(item.id)}
               className={cn(
-                "h-8 shrink-0 cursor-pointer rounded-full border border-solid px-3.5 text-[0.84rem] font-medium",
+                "h-8 shrink-0 cursor-pointer rounded-full border-0 px-3.5 text-[0.85rem] font-medium transition-colors",
                 filter === item.id
-                  ? "border-transparent bg-(--accent-soft) text-(--accent-ink)"
-                  : "border-(--border) bg-transparent text-(--muted) hover:bg-(--hover)",
+                  ? "bg-(--accent-soft) text-(--accent-ink)"
+                  : "bg-(--chat-input) text-(--muted) hover:text-(--text)",
               )}
             >
               {item.label}
-              {item.id === "requests" && requestsCount > 0
-                ? ` ${requestsCount}`
-                : ""}
+              {item.id === "requests" ? ` ${requestsCount}` : ""}
             </button>
           ))}
         </div>
-      ) : null}
+      ) : (
+        <p className="m-0 mx-5 mb-2 text-[0.8rem] leading-snug text-(--muted)">
+          Archived chats stay here when new messages arrive. Unarchive one from
+          its menu.
+        </p>
+      )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-gutter:stable]">
         {!archivedView && archivedCount > 0 && filter === "all" && !term ? (
           <button
             type="button"
             onClick={() => onPanel("archived")}
-            className="flex h-13 w-full cursor-pointer items-center gap-4 border-0 bg-transparent px-6 text-left text-(--text) hover:bg-(--hover)"
+            className="flex h-13 w-full cursor-pointer items-center gap-3 rounded-xl border-0 bg-transparent px-2.5 text-left text-(--text) hover:bg-(--chat-hover)"
           >
-            <Archive
-              size={20}
-              className="text-(--accent-ink)"
-              aria-hidden="true"
-            />
-            <span className="flex-1 text-[0.95rem] font-medium">Archived</span>
-            <span className="text-[0.8rem] text-(--muted)">
+            <span className="flex size-12 shrink-0 items-center justify-center">
+              <Archive
+                size={21}
+                className="text-(--accent-ink)"
+                aria-hidden="true"
+              />
+            </span>
+            <span className="flex-1 text-[0.98rem]">Archived</span>
+            <span className="pr-1 text-[0.8rem] font-semibold text-(--accent-ink)">
               {archivedCount}
             </span>
           </button>
         ) : null}
         {loading && !rooms ? <ChatListSkeleton /> : null}
-        <ul className="m-0 list-none p-0" aria-label="Chats">
+        <ul
+          className="m-0 flex list-none flex-col gap-0.5 p-0"
+          aria-label="Chats"
+        >
           {visible.map((room) => (
             <ChatRow
               key={room.id}
@@ -240,19 +318,52 @@ export function ChatList({
           ))}
         </ul>
         {rooms && visible.length === 0 ? (
-          <p className="m-0 px-8 py-10 text-center text-[0.88rem] text-(--muted)">
-            {term
-              ? "No chats match your search."
-              : archivedView
-                ? "No archived chats."
-                : filter === "all"
-                  ? "No chats yet. Your course groups appear here once their instructor turns chat on."
-                  : "Nothing here."}
-          </p>
+          <div className="px-8 py-12 text-center">
+            <p className="m-0 text-[0.9rem] text-(--muted)">
+              {term
+                ? `No chats match “${search.trim()}”.`
+                : archivedView
+                  ? "No archived chats."
+                  : filter === "unread"
+                    ? "No unread chats. You’re all caught up."
+                    : filter === "requests"
+                      ? "No message requests."
+                      : filter !== "all"
+                        ? "Nothing here yet."
+                        : isStaff
+                          ? "No chats yet. Turn on a course group or start a chat."
+                          : "No chats yet. Your course groups appear here once their instructor turns chat on."}
+            </p>
+            {!term && !archivedView && filter === "all" ? (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {isStaff ? (
+                  <button
+                    type="button"
+                    onClick={() => onPanel("groups")}
+                    className="h-9 cursor-pointer rounded-full border-0 bg-(--accent) px-4 text-[0.85rem] font-semibold text-(--on-accent)"
+                  >
+                    Course groups
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onPanel("new")}
+                  className="h-9 cursor-pointer rounded-full border border-solid border-(--chat-line-strong) bg-transparent px-4 text-[0.85rem] font-semibold text-(--text)"
+                >
+                  New chat
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>
   );
+}
+
+/** The list shows text, not the *bold* / _italic_ / ~strike~ / `code` marks. */
+function plainPreview(text: string): string {
+  return text.replace(/([*_~`])(\S(?:[^]*?\S)?)\1/g, "$2");
 }
 
 function ChatRow({
@@ -266,10 +377,16 @@ function ChatRow({
   viewerId: string | null;
   onSelect: (roomId: string) => void;
 }) {
+  const client = useQueryClient();
   const myState = useUpdateMyChatState();
+  const block = useBlockUser();
+  const leave = useLeaveChat();
+  const typing = useTypingNames(room.id);
+  const [menuOpen, setMenuOpen] = useState(false);
   const last = room.lastMessage;
-  const mine = last?.senderId === viewerId;
+  const mine = Boolean(last && viewerId && last.senderId === viewerId);
   const unread = room.unreadCount > 0;
+  const muted = room.me.notifyLevel === "none";
   const isRequest =
     room.kind === "direct" &&
     room.directStatus === "requested" &&
@@ -279,10 +396,13 @@ function ChatRow({
       ? mine
         ? "You deleted this message"
         : "This message was deleted"
-      : `${room.kind !== "direct" && last.senderName && !mine ? `${last.senderName.split(" ")[0]}: ` : ""}${last.preview}`
+      : `${room.kind !== "direct" && last.senderName && !mine ? `${last.senderName.split(" ")[0]}: ` : ""}${plainPreview(last.preview)}`
     : room.kind === "direct"
       ? ""
       : "No messages yet";
+
+  const setState = (patch: Parameters<typeof myState.mutate>[0]["patch"]) =>
+    myState.mutate({ roomId: room.id, patch });
 
   return (
     <li className="group/row relative">
@@ -291,8 +411,12 @@ function ChatRow({
         onClick={() => onSelect(room.id)}
         aria-current={selected ? "true" : undefined}
         className={cn(
-          "flex h-18 w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-3 text-left text-(--text)",
-          selected ? "bg-(--selected)" : "hover:bg-(--hover)",
+          "flex h-18 w-full cursor-pointer items-center gap-3 rounded-xl border-0 px-2.5 text-left text-(--text) transition-colors",
+          selected
+            ? "bg-(--chat-selected)"
+            : menuOpen
+              ? "bg-(--chat-hover)"
+              : "bg-transparent hover:bg-(--chat-hover)",
         )}
       >
         <ChatAvatar
@@ -300,118 +424,171 @@ function ChatRow({
           url={room.peer?.avatarUrl ?? null}
           group={room.kind !== "direct"}
         />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5 border-b border-solid border-[color-mix(in_srgb,var(--border)_60%,transparent)] py-3 group-last/row:border-transparent">
-          <span className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-[0.98rem] font-medium">
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="flex items-baseline gap-2">
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate text-[1rem]",
+                unread ? "font-semibold" : "font-medium",
+              )}
+            >
               {room.title}
             </span>
             <span
               className={cn(
-                "shrink-0 text-[0.72rem]",
-                unread ? "font-semibold text-(--accent-ink)" : "text-(--muted)",
+                "shrink-0 text-[0.74rem] tabular-nums",
+                unread && !muted
+                  ? "font-semibold text-(--accent-ink)"
+                  : "text-(--muted)",
               )}
             >
               {last ? listTime(last.createdAt) : ""}
             </span>
           </span>
-          <span className="flex items-center gap-1.5 text-[0.84rem] text-(--muted)">
-            {mine && last && !last.deleted && room.kind === "direct" ? (
-              <Checks
-                size={16}
-                weight="bold"
-                className={cn(
-                  "shrink-0",
-                  (room.peerReadSeq ?? 0) >= last.seq && "text-[#34b7f1]",
-                )}
-                aria-label={
-                  (room.peerReadSeq ?? 0) >= last.seq ? "Read" : "Delivered"
-                }
-              />
-            ) : null}
+          <span className="flex h-5 items-center gap-1 text-[0.86rem] text-(--muted)">
+            {typing.length > 0 ? (
+              <span className="min-w-0 flex-1 truncate font-medium text-(--accent-ink)">
+                {room.kind === "direct"
+                  ? "typing…"
+                  : `${typing[0]!.split(" ")[0]} is typing…`}
+              </span>
+            ) : (
+              <>
+                {mine && last && !last.deleted ? (
+                  <StatusTicks
+                    seq={last.seq}
+                    deliveredSeq={room.peerDeliveredSeq}
+                    readSeq={room.peerReadSeq}
+                  />
+                ) : null}
+                {last?.deleted ? (
+                  <Prohibit size={14} className="shrink-0" aria-hidden="true" />
+                ) : null}
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate",
+                    last?.deleted && "italic",
+                    unread && !muted && "text-(--text-secondary)",
+                  )}
+                >
+                  {isRequest ? (
+                    <span className="font-semibold text-(--accent-ink)">
+                      Message request ·{" "}
+                    </span>
+                  ) : null}
+                  {preview}
+                </span>
+              </>
+            )}
+            {/* Room for the hover chevron, as in WhatsApp. */}
             <span
               className={cn(
-                "min-w-0 flex-1 truncate",
-                last?.deleted && "italic",
+                "flex shrink-0 items-center gap-1 transition-[margin] duration-150 group-hover/row:mr-7",
+                menuOpen && "mr-7",
               )}
             >
-              {isRequest ? (
-                <span className="font-semibold text-(--accent-ink)">
-                  Message request ·{" "}
+              {muted ? (
+                <BellSlash size={16} className="shrink-0" aria-label="Muted" />
+              ) : null}
+              {room.me.pinned ? (
+                <PushPin
+                  size={16}
+                  weight="fill"
+                  className="shrink-0"
+                  aria-label="Pinned"
+                />
+              ) : null}
+              {unread ? (
+                <span
+                  className={cn(
+                    "min-w-5 rounded-full px-1.5 text-center text-[0.72rem] leading-5 font-bold tabular-nums",
+                    muted
+                      ? "bg-(--chat-line-strong) text-(--text)"
+                      : "bg-(--accent) text-(--on-accent)",
+                  )}
+                  aria-label={`${room.unreadCount} unread`}
+                >
+                  {room.unreadCount > 99 ? "99+" : room.unreadCount}
                 </span>
               ) : null}
-              {preview}
             </span>
-            {room.me.notifyLevel === "none" ? (
-              <BellSlash size={15} className="shrink-0" aria-label="Muted" />
-            ) : null}
-            {room.me.pinned ? (
-              <PushPin
-                size={15}
-                weight="fill"
-                className="shrink-0"
-                aria-label="Pinned"
-              />
-            ) : null}
-            {unread ? (
-              <span
-                className={cn(
-                  "min-w-5 shrink-0 rounded-full px-1.5 text-center text-[0.7rem] leading-5 font-bold",
-                  room.me.notifyLevel === "none"
-                    ? "bg-(--border-strong) text-(--text)"
-                    : "bg-(--accent) text-(--on-accent)",
-                )}
-                aria-label={`${room.unreadCount} unread`}
-              >
-                {room.unreadCount > 99 ? "99+" : room.unreadCount}
-              </span>
-            ) : null}
           </span>
         </span>
       </button>
-      <div className="absolute top-1/2 right-2 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100">
-        <DropdownMenu>
+      <div
+        className={cn(
+          "absolute right-2 bottom-3 translate-x-1 opacity-0 transition-[opacity,translate] duration-150 group-hover/row:translate-x-0 group-hover/row:opacity-100 focus-within:translate-x-0 focus-within:opacity-100",
+          menuOpen && "translate-x-0 opacity-100",
+        )}
+      >
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger
-            aria-label={`Options for ${room.title}`}
-            className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full border-0 bg-(--surface) text-(--muted) shadow-sm"
+            aria-label={`Chat options for ${room.title}`}
+            className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:text-(--text)"
           >
-            <DotsThreeVertical size={16} weight="bold" />
+            <CaretDown size={18} weight="bold" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-48 min-w-0">
-            <DropdownMenuItem
-              onClick={() =>
-                myState.mutate({
-                  roomId: room.id,
-                  patch: { archived: !room.me.archived },
-                })
-              }
-            >
-              {room.me.archived ? "Unarchive chat" : "Archive chat"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() =>
-                myState.mutate({
-                  roomId: room.id,
-                  patch: {
-                    notifyLevel:
-                      room.me.notifyLevel === "none" ? "all" : "none",
-                  },
-                })
-              }
-            >
-              {room.me.notifyLevel === "none"
-                ? "Unmute notifications"
-                : "Mute notifications"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() =>
-                myState.mutate({
-                  roomId: room.id,
-                  patch: { pinned: !room.me.pinned },
-                })
-              }
-            >
-              {room.me.pinned ? "Unpin chat" : "Pin chat"}
-            </DropdownMenuItem>
+          <DropdownMenuContent align="start" className="w-56 min-w-0">
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() => setState({ archived: !room.me.archived })}
+              >
+                <Archive size={17} aria-hidden="true" />
+                {room.me.archived ? "Unarchive chat" : "Archive chat"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  setState({ notifyLevel: muted ? "all" : "none" })
+                }
+              >
+                <BellSlash size={17} aria-hidden="true" />
+                {muted ? "Unmute notifications" : "Mute notifications"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setState({ pinned: !room.me.pinned })}
+              >
+                <PushPin size={17} aria-hidden="true" />
+                {room.me.pinned ? "Unpin chat" : "Pin chat"}
+              </DropdownMenuItem>
+              {unread ? (
+                <DropdownMenuItem
+                  onClick={() => {
+                    queueReceipt(room.id, { readSeq: room.lastSeq });
+                    markRoomRead(client, room.id, room.lastSeq);
+                  }}
+                >
+                  <Checks size={17} aria-hidden="true" /> Mark as read
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuGroup>
+            {room.kind === "direct" && room.peer ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-500"
+                  onClick={() =>
+                    block.mutate({
+                      userId: room.peer!.id,
+                      blocked: room.me.cannotPostReason !== "blocked",
+                    })
+                  }
+                >
+                  <Prohibit size={17} aria-hidden="true" />
+                  {room.me.cannotPostReason === "blocked" ? "Unblock" : "Block"}
+                </DropdownMenuItem>
+              </>
+            ) : null}
+            {room.kind === "team" ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-500"
+                  onClick={() => leave.mutate(room.id)}
+                >
+                  <SignOut size={17} aria-hidden="true" /> Exit group
+                </DropdownMenuItem>
+              </>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -437,54 +614,39 @@ function NewChatPanel({
       <button
         type="button"
         onClick={() => onStartDirect(p.id)}
-        className="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-2.5 text-left text-(--text) hover:bg-(--hover)"
+        className="flex h-16 w-full cursor-pointer items-center gap-3 rounded-xl border-0 bg-transparent px-3 text-left text-(--text) hover:bg-(--chat-hover)"
       >
-        <ChatAvatar name={p.name} url={p.avatarUrl} size="md" />
+        <ChatAvatar name={p.name} url={p.avatarUrl} />
         <span className="min-w-0">
-          <span className="block truncate text-[0.95rem]">{p.name}</span>
-          <span className="block truncate text-[0.78rem] text-(--muted)">
+          <span className="block truncate text-[0.98rem]">{p.name}</span>
+          <span className="block truncate text-[0.8rem] text-(--muted)">
             {note}
           </span>
         </span>
       </button>
     </li>
   );
+  const heading = (text: string) => (
+    <h3 className="m-0 px-4 pt-4 pb-1.5 text-[0.82rem] font-semibold text-(--accent-ink)">
+      {text}
+    </h3>
+  );
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-16 shrink-0 items-center gap-2 px-3">
-        <button
-          type="button"
-          className={iconButton}
-          onClick={onBack}
-          aria-label="Back"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <h2 className="m-0 text-[1.1rem] font-bold text-(--text)">New chat</h2>
-      </div>
-      <label className="mx-3 mb-2 flex h-10 shrink-0 items-center gap-3 rounded-full bg-(--surface-strong) px-4">
-        <MagnifyingGlass
-          size={17}
-          className="text-(--muted)"
-          aria-hidden="true"
-        />
-        <span className="sr-only">Search name</span>
-        <input
-          autoFocus
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search name"
-          className="min-w-0 flex-1 border-0 bg-transparent text-[0.9rem] text-(--text) outline-none placeholder:text-(--muted)"
-          onKeyDown={(event) => event.key === "Escape" && onBack()}
-        />
-      </label>
-      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+      <ListPanelHeader title="New chat" onBack={onBack} />
+      <SearchBox
+        autoFocus
+        value={search}
+        onChange={setSearch}
+        label="Search name"
+        placeholder="Search name"
+        onEscape={onBack}
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {candidates.isLoading ? <ChatListSkeleton /> : null}
         {candidates.data && candidates.data.staff.length > 0 ? (
           <>
-            <h3 className="m-0 px-4 pt-3 pb-1 text-[0.8rem] font-semibold text-(--accent-ink)">
-              Staff of your courses
-            </h3>
+            {heading("Teachers of your courses")}
             <ul className="m-0 list-none p-0">
               {candidates.data.staff.map((p) => person(p, "Instructor"))}
             </ul>
@@ -492,27 +654,34 @@ function NewChatPanel({
         ) : null}
         {candidates.data?.courses.map((course) => (
           <section key={course.courseId}>
-            <h3 className="m-0 px-4 pt-3 pb-1 text-[0.8rem] font-semibold text-(--accent-ink)">
-              Classmates · {course.title}
-            </h3>
+            {heading(`Classmates · ${course.title}`)}
             {course.directAllowed ? (
               course.people.length > 0 ? (
                 <ul className="m-0 list-none p-0">
                   {course.people.map((p) => person(p, "Learner"))}
                 </ul>
               ) : (
-                <p className="m-0 px-4 py-2 text-[0.82rem] text-(--muted)">
+                <p className="m-0 px-4 py-2 text-[0.84rem] text-(--muted)">
                   Nobody from this course has opened its group yet.
                 </p>
               )
             ) : (
-              <p className="m-0 px-4 py-2 text-[0.82rem] text-(--muted)">
+              <p className="m-0 px-4 py-2 text-[0.84rem] text-(--muted)">
                 The instructor hasn’t turned on private chats between learners
                 in this course.
               </p>
             )}
           </section>
         ))}
+        {candidates.data &&
+        candidates.data.staff.length === 0 &&
+        candidates.data.courses.length === 0 ? (
+          <p className="m-0 px-8 py-10 text-center text-[0.88rem] text-(--muted)">
+            {search.trim()
+              ? `Nobody called “${search.trim()}” you can message.`
+              : "There’s nobody you can message yet. Join a course to chat with its teachers and classmates."}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -529,26 +698,15 @@ function StarredPanel({
   const messages = useMemo(() => stars.data?.messages ?? [], [stars.data]);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-16 shrink-0 items-center gap-2 px-3">
-        <button
-          type="button"
-          className={iconButton}
-          onClick={onBack}
-          aria-label="Back"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <h2 className="m-0 text-[1.1rem] font-bold text-(--text)">
-          Starred messages
-        </h2>
-      </div>
-      <ul className="m-0 min-h-0 flex-1 list-none overflow-y-auto p-0">
+      <ListPanelHeader title="Starred messages" onBack={onBack} />
+      <ul className="m-0 flex min-h-0 flex-1 list-none flex-col gap-0.5 overflow-y-auto px-2 pb-4">
+        {stars.isLoading ? <ChatListSkeleton /> : null}
         {messages.map((message) => (
           <li key={message.id}>
             <button
               type="button"
               onClick={() => onOpen(message.roomId, message.seq)}
-              className="flex w-full cursor-pointer flex-col gap-1 border-0 border-b border-solid border-(--border) bg-transparent px-4 py-3 text-left text-(--text) hover:bg-(--hover)"
+              className="flex w-full cursor-pointer flex-col gap-1 rounded-xl border-0 bg-transparent px-4 py-3 text-left text-(--text) hover:bg-(--chat-hover)"
             >
               <span className="flex items-center gap-2 text-[0.78rem] text-(--muted)">
                 <span className="min-w-0 flex-1 truncate">
@@ -563,9 +721,16 @@ function StarredPanel({
           </li>
         ))}
         {stars.data && messages.length === 0 ? (
-          <p className="m-0 px-8 py-10 text-center text-[0.88rem] text-(--muted)">
-            Star messages from their menu to find them here later.
-          </p>
+          <li className="px-8 py-12 text-center">
+            <Star
+              size={40}
+              className="mx-auto text-(--muted)"
+              aria-hidden="true"
+            />
+            <p className="m-0 mt-3 text-[0.88rem] text-(--muted)">
+              Star a message from its menu to find it here later.
+            </p>
+          </li>
         ) : null}
       </ul>
     </div>

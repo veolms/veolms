@@ -69,7 +69,7 @@ export function EmojiPanel({
       role="dialog"
       aria-label="Emoji"
       className={cn(
-        "max-h-72 overflow-y-auto rounded-xl border border-(--border) bg-(--surface) p-2 shadow-[0_18px_48px_rgb(0_0_0/0.3)]",
+        "max-h-72 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-2 shadow-[0_18px_48px_rgb(0_0_0/0.3)]",
         className,
       )}
     >
@@ -87,7 +87,7 @@ export function EmojiPanel({
                   rememberEmoji(emoji);
                   onPick(emoji);
                 }}
-                className="flex size-9 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-xl hover:bg-(--hover)"
+                className="flex size-9 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-xl hover:bg-(--chat-hover)"
                 aria-label={emoji}
               >
                 {emoji}

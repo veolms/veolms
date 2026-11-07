@@ -48,8 +48,30 @@ export interface ChatHub {
   countFor(userId: string): number;
   count(): number;
   isListening(): boolean;
+  /**
+   * How to find a person's chats (the same lookup a stream makes when it
+   * opens). Needed when a course group opens: its readers are not listed
+   * anywhere, so each connected person is asked again.
+   */
+  setRoomLoader(loader: RoomLoader): void;
+  /** Told when a person's first stream here opens and their last one closes. */
+  setPresenceHooks(hooks: PresenceHooks): void;
+  /** Everyone with a stream open in this process. */
+  userIds(): string[];
   stop(): Promise<void>;
 }
+
+export interface PresenceHooks {
+  online(userId: string): void;
+  away(userId: string): void;
+}
+
+export type RoomLoader = (
+  userId: string,
+) => Promise<Array<{ id: string } & RoomHead>>;
+
+/** People checked at once when a course group opens. */
+const OPENED_CONCURRENCY = 8;
 
 export function sse(event: string, data: string): string {
   return `event: ${event}\ndata: ${data}\n\n`;
@@ -73,6 +95,8 @@ export function createChatHub({
   let stopped = false;
   let retryTimer: NodeJS.Timeout | undefined;
   let retryDelay = RECONNECT_MIN_MS;
+  let loadRooms: RoomLoader | null = null;
+  let presence: PresenceHooks | null = null;
 
   function index<K>(
     map: Map<K, Set<ChatStreamConnection>>,
@@ -134,7 +158,13 @@ export function createChatHub({
     const peek = peekChatEvent(payload);
     if (!peek) return;
     // Most events concern one chat: stop here when nobody has it open.
-    if (peek.kind !== "d" && peek.kind !== "a" && !byRoom.has(peek.roomId)) {
+    if (
+      peek.kind !== "d" &&
+      peek.kind !== "a" &&
+      peek.kind !== "o" &&
+      peek.kind !== "l" &&
+      !byRoom.has(peek.roomId)
+    ) {
       return;
     }
     const event = decodeChatEvent(payload);
@@ -191,6 +221,42 @@ export function createChatHub({
           ),
         );
         return;
+      case "opened":
+        void joinReaders(event.roomId);
+        return;
+      case "group_read":
+        broadcastRoom(
+          event.roomId,
+          Buffer.from(
+            sse(
+              "chat.group_read",
+              JSON.stringify({
+                roomId: event.roomId,
+                deliveredSeq: event.deliveredSeq,
+                readSeq: event.readSeq,
+              }),
+            ),
+          ),
+        );
+        return;
+      case "presence": {
+        const chunk = Buffer.from(
+          sse(
+            "chat.presence",
+            JSON.stringify({
+              userId: event.userId,
+              online: event.online,
+              lastSeenAt: event.lastSeenAt
+                ? new Date(event.lastSeenAt).toISOString()
+                : null,
+            }),
+          ),
+        );
+        for (const roomId of event.roomIds) {
+          broadcastRoom(roomId, chunk, event.userId);
+        }
+        return;
+      }
       case "added": {
         const chunk = Buffer.from(
           sse("chat.room_added", JSON.stringify({ roomId: event.roomId })),
@@ -233,12 +299,76 @@ export function createChatHub({
           // Their own tabs (badges), and in a private chat the other person
           // ("Seen" ticks). Never the whole of a group.
           sendToUser(receipt.userId, chunk);
-          if (receipt.direct)
-            broadcastRoom(receipt.roomId, chunk, receipt.userId);
+          if (receipt.direct) {
+            const shared = receipt.hideRead
+              ? Buffer.from(
+                  sse(
+                    "chat.read",
+                    JSON.stringify({
+                      roomId: receipt.roomId,
+                      userId: receipt.userId,
+                      readSeq: 0,
+                      deliveredSeq: receipt.deliveredSeq,
+                    }),
+                  ),
+                )
+              : chunk;
+            broadcastRoom(receipt.roomId, shared, receipt.userId);
+          }
         }
         return;
       }
     }
+  }
+
+  /**
+   * A course group just opened (or came back from the archive): everyone
+   * connected here who may read it joins it, checked with the same lookup
+   * as a new stream (access, bans). Rare (an admin action), so the cost of
+   * one lookup per connected person is fine; at most a few at a time.
+   */
+  async function joinReaders(roomId: string) {
+    if (!loadRooms) return;
+    const loader: RoomLoader = loadRooms;
+    const userIds = [...byUser.keys()].filter((userId) =>
+      [...(byUser.get(userId) ?? [])].some((s) => !s.rooms.has(roomId)),
+    );
+    const added = Buffer.from(
+      sse("chat.room_added", JSON.stringify({ roomId })),
+    );
+    let next = 0;
+    async function worker() {
+      while (next < userIds.length) {
+        const userId = userIds[next++]!;
+        try {
+          const rooms = await loader(userId);
+          const head = rooms.find((room) => room.id === roomId);
+          if (!head) continue;
+          const known = heads.get(roomId);
+          if (!known)
+            heads.set(roomId, {
+              lastSeq: head.lastSeq,
+              lastEventSeq: head.lastEventSeq,
+            });
+          for (const stream of [...(byUser.get(userId) ?? [])]) {
+            if (stream.rooms.has(roomId)) continue;
+            joinRoom(stream, roomId);
+            stream.write(added);
+          }
+        } catch (error) {
+          logger.warn(
+            { err: error, roomId },
+            "Chat group could not be added to a stream",
+          );
+        }
+      }
+    }
+    await Promise.all(
+      Array.from(
+        { length: Math.min(OPENED_CONCURRENCY, userIds.length) },
+        worker,
+      ),
+    );
   }
 
   function onNotificationPayload(payload: string | undefined) {
@@ -330,7 +460,9 @@ export function createChatHub({
         void connect();
       }
       streams.add(stream);
+      const first = !byUser.has(stream.userId);
       index(byUser, stream.userId, stream);
+      if (first) presence?.online(stream.userId);
       for (const [roomId, head] of roomHeads) {
         joinRoom(stream, roomId);
         const known = heads.get(roomId);
@@ -346,11 +478,19 @@ export function createChatHub({
       if (!streams.delete(stream)) return;
       unindex(byUser, stream.userId, stream);
       for (const roomId of [...stream.rooms]) leaveRoom(stream, roomId);
+      if (!byUser.has(stream.userId)) presence?.away(stream.userId);
     },
     head: (roomId) => heads.get(roomId),
     countFor: (userId) => byUser.get(userId)?.size ?? 0,
     count: () => streams.size,
     isListening: () => listening,
+    setRoomLoader(loader) {
+      loadRooms = loader;
+    },
+    setPresenceHooks(hooks) {
+      presence = hooks;
+    },
+    userIds: () => [...byUser.keys()],
     async stop() {
       stopped = true;
       listening = false;

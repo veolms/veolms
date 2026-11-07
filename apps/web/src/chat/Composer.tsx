@@ -34,6 +34,7 @@ import {
   chatService,
   enqueueMessage,
   useChatMembers,
+  useChatProfile,
   useEditMessage,
   type OutgoingFile,
 } from "../services/chat";
@@ -112,6 +113,9 @@ export const Composer = forwardRef<
   const recorder = useVoiceRecorder();
   const editMessage = useEditMessage();
   const isGroup = room.kind !== "direct";
+  // Settings › Chats › Enter is send (off: Enter starts a new line and
+  // Ctrl/⌘ + Enter sends).
+  const enterToSend = useChatProfile().data?.enterToSend ?? true;
   const members = useChatMembers(
     isGroup && mentionQuery !== null ? room.id : null,
     mentionQuery ?? "",
@@ -304,7 +308,7 @@ export const Composer = forwardRef<
 
   if (!room.me.canPost) {
     return (
-      <div className="border-t border-solid border-(--border) bg-(--surface) px-4 py-4 text-center text-[0.88rem] text-(--muted)">
+      <div className="border-t border-solid border-(--chat-line) bg-(--chat-panel) px-4 py-4 text-center text-[0.88rem] text-(--muted)">
         {room.me.cannotPostReason === "muted" && room.me.restriction?.until
           ? `You can't send messages to this group until ${new Date(room.me.restriction.until).toLocaleString()}.`
           : (CANNOT_POST_TEXT[room.me.cannotPostReason ?? ""] ??
@@ -317,10 +321,10 @@ export const Composer = forwardRef<
   const canSend =
     (text.trim().length > 0 || files.length > 0) && slowLeft === 0;
   const iconButton =
-    "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40";
+    "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--chat-hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
-    <div className="relative border-t border-solid border-(--border) bg-(--surface) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+    <div className="relative border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       {replyTo || editing ? (
         <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
           {editing ? (
@@ -363,7 +367,7 @@ export const Composer = forwardRef<
           {files.map((file) => (
             <div
               key={file.localId}
-              className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-(--surface-strong)"
+              className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-(--chat-input)"
             >
               {file.kind === "image" && file.previewUrl ? (
                 <img
@@ -402,7 +406,7 @@ export const Composer = forwardRef<
       ) : null}
 
       {mentionQuery !== null ? (
-        <div className="absolute right-3 bottom-full left-3 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--border) bg-(--surface) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
+        <div className="absolute right-3 bottom-full left-3 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
           {room.me.canModerate &&
           "everyone".startsWith(mentionQuery.toLowerCase()) ? (
             <MentionOption
@@ -525,7 +529,7 @@ export const Composer = forwardRef<
           >
             <Smiley size={22} />
           </button>
-          <label className="flex min-h-10 min-w-0 flex-1 items-center rounded-2xl bg-(--surface-strong) px-3.5">
+          <label className="flex min-h-10 min-w-0 flex-1 items-center rounded-2xl bg-(--chat-input) px-3.5">
             <span className="sr-only">Type a message</span>
             <textarea
               id="chat-composer"
@@ -548,16 +552,20 @@ export const Composer = forwardRef<
                 if (
                   event.key === "Enter" &&
                   !event.shiftKey &&
-                  !event.nativeEvent.isComposing
+                  !event.nativeEvent.isComposing &&
+                  mentionQuery !== null &&
+                  members.data?.pages[0]?.members[0]
                 ) {
                   event.preventDefault();
-                  if (
-                    mentionQuery !== null &&
-                    members.data?.pages[0]?.members[0]
-                  ) {
-                    insertMention(members.data.pages[0].members[0]);
-                    return;
-                  }
+                  insertMention(members.data.pages[0].members[0]);
+                } else if (
+                  event.key === "Enter" &&
+                  !event.nativeEvent.isComposing &&
+                  (enterToSend
+                    ? !event.shiftKey
+                    : event.ctrlKey || event.metaKey)
+                ) {
+                  event.preventDefault();
                   send();
                 } else if (event.key === "Escape") {
                   if (mentionQuery !== null) setMentionQuery(null);
@@ -665,7 +673,7 @@ function MentionOption({
       type="button"
       onMouseDown={(event) => event.preventDefault()}
       onClick={onPick}
-      className="flex w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 py-2 text-left text-[0.88rem] text-(--text) hover:bg-(--hover)"
+      className="flex w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 py-2 text-left text-[0.88rem] text-(--text) hover:bg-(--chat-hover)"
     >
       <span className="font-semibold">@{name}</span>
       {note ? (

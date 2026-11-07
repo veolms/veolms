@@ -22,3 +22,33 @@
 :root[data-theme="light"] .chat-wallpaper {
   opacity: 0.06;
 }
+
+/*
+ * Chats fill the shell's main area edge to edge, as WhatsApp Web does: the
+ * page sets `data-chat-page` on the root while it is open, and the main
+ * area drops its padding and becomes the box the page fills.
+ *
+ * Why plain CSS: the main area is the shell's element, outside this page's
+ * markup (the course wizard takes its padding off the same way). Not on
+ * phones, where the shell keeps room for its bottom navigation.
+ */
+@media (min-width: 641px) {
+  :root[data-chat-page] .courses-main {
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+/* Settings › Chats › Wallpaper doodles off. */
+:root[data-chat-doodles="off"] .chat-wallpaper {
+  display: none;
+}
+
+/* Phones: edge to edge too, keeping the room for the bottom navigation. */
+@media (max-width: 640px) {
+  :root[data-chat-page] .courses-main {
+    padding-top: 0;
+    padding-inline: 0;
+  }
+}

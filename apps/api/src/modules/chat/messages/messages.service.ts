@@ -17,7 +17,11 @@ import { createOutboxService } from "../../../events/outbox.service.ts";
 import { encodeChatEvent } from "../realtime/chat-bus.ts";
 import { ROLE_LEVEL } from "../shared/chat.access.ts";
 import { ChatErrors } from "../shared/chat.errors.ts";
-import { presentMessage, preview } from "../shared/chat.presenters.ts";
+import {
+  presentMessage,
+  presentPerson,
+  preview,
+} from "../shared/chat.presenters.ts";
 import { createRoomViews, type RoomAccess } from "../shared/chat.room-views.ts";
 import type { ChatRuntime } from "../shared/chat.runtime.ts";
 
@@ -25,6 +29,9 @@ const HOUR_MS = 60 * 60 * 1000;
 /** One emoji (with skin tones / joiners), like WhatsApp reactions. */
 const EMOJI =
   /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:[\p{Emoji_Modifier}‍️\p{Extended_Pictographic}\p{Regional_Indicator}])*$/u;
+
+/** People listed in Message info (big groups show the first ones). */
+const MESSAGE_INFO_LIMIT = 200;
 
 export function createMessagesService(runtime: ChatRuntime) {
   const { database, repository, access, receipts, updates } = runtime;
@@ -167,6 +174,42 @@ export function createMessagesService(runtime: ChatRuntime) {
       const ctx = await views.assertCanRead(database, userId, roomId);
       await assertCanPost(userId, ctx);
       return ctx;
+    },
+
+    /**
+     * "Message info" for your own message (WhatsApp): who has read it and
+     * who has only received it. In a private chat with read receipts off on
+     * either side, "read" is not told apart from "received".
+     */
+    async info(userId: string, roomId: string, seq: number) {
+      const ctx = await views.assertCanRead(database, userId, roomId);
+      const row = await loadMessage(roomId, seq);
+      if (row.sender_id !== userId) throw ChatErrors.notYourMessage();
+      const { reached, waiting } = await repository.messageReceipts(
+        database,
+        roomId,
+        seq,
+        userId,
+        MESSAGE_INFO_LIMIT,
+      );
+      let receiptsHidden = false;
+      if (ctx.room.kind === "direct") {
+        const profiles = await repository.getProfiles(database, [
+          userId,
+          ...reached.map((r) => r.id),
+        ]);
+        receiptsHidden = profiles.some((p) => !p.read_receipts);
+      }
+      const readBy = receiptsHidden
+        ? []
+        : reached.filter((r) => Number(r.last_read_seq) >= seq);
+      const read = new Set(readBy.map((r) => r.id));
+      return {
+        readBy: readBy.map(presentPerson),
+        deliveredTo: reached.filter((r) => !read.has(r.id)).map(presentPerson),
+        waiting,
+        receiptsHidden,
+      };
     },
 
     async list(

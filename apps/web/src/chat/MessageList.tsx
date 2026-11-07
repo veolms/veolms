@@ -205,7 +205,7 @@ export function MessageList({
             {loadingOlder ? <LoadingSpinnerIcon /> : null}
           </div>
         ) : (
-          <div className="mx-auto mb-3 max-w-md rounded-lg bg-(--card-surface-raised) px-3 py-2 text-center text-[0.75rem] text-(--muted) shadow-sm">
+          <div className="mx-auto mb-3 max-w-md rounded-lg bg-(--chat-in) px-3 py-2 text-center text-[0.75rem] text-(--muted) shadow-sm">
             {thread.oldestSeq && thread.oldestSeq > 1
               ? "Older messages are removed after the retention period."
               : ctx.isDirect
@@ -241,7 +241,7 @@ export function MessageList({
             >
               {newDay ? (
                 <div className="sticky top-1 z-10 my-2 flex justify-center">
-                  <span className="rounded-lg bg-(--card-surface-raised) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--text-secondary) uppercase shadow-sm">
+                  <span className="rounded-lg bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--text-secondary) uppercase shadow-sm">
                     {dayLabel(message.createdAt)}
                   </span>
                 </div>
@@ -249,9 +249,9 @@ export function MessageList({
               {showUnread ? (
                 <div
                   data-unread-divider
-                  className="my-2 flex justify-center bg-[color-mix(in_srgb,var(--card-surface-raised)_70%,transparent)] py-1"
+                  className="my-2 flex justify-center bg-[color-mix(in_srgb,var(--chat-in)_70%,transparent)] py-1"
                 >
-                  <span className="rounded-full bg-(--card-surface-raised) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--accent-ink) uppercase shadow-sm">
+                  <span className="rounded-full bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--accent-ink) uppercase shadow-sm">
                     {unreadCount} unread message{unreadCount === 1 ? "" : "s"}
                   </span>
                 </div>
@@ -288,7 +288,7 @@ export function MessageList({
               ? `${newBelow} new messages, scroll to bottom`
               : "Scroll to bottom"
           }
-          className="absolute right-5 bottom-4 inline-flex size-11 cursor-pointer items-center justify-center rounded-full border-0 bg-(--surface) text-(--muted) shadow-[0_2px_8px_rgb(0_0_0/0.25)] hover:text-(--text)"
+          className="absolute right-5 bottom-4 inline-flex size-11 cursor-pointer items-center justify-center rounded-full border-0 bg-(--chat-in) text-(--muted) shadow-[0_2px_8px_rgb(0_0_0/0.25)] hover:text-(--text)"
         >
           <CaretDown size={20} weight="bold" />
           {newBelow > 0 ? (

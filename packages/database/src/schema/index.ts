@@ -154,6 +154,7 @@ import type {
   ChatMemberTable,
   ChatMessageTable,
   ChatModerationLogTable,
+  ChatProfileTable,
   ChatReactionTable,
   ChatReportTable,
   ChatRestrictionTable,
@@ -286,6 +287,7 @@ export interface Database {
   chat_members: ChatMemberTable;
   chat_messages: ChatMessageTable;
   chat_uploads: ChatUploadTable;
+  chat_profiles: ChatProfileTable;
   chat_reactions: ChatReactionTable;
   chat_stars: ChatStarTable;
   chat_hidden_messages: ChatHiddenMessageTable;

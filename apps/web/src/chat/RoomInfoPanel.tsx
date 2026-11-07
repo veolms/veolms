@@ -1,6 +1,5 @@
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
-import { XIcon as X } from "@phosphor-icons/react/X";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatRoomDetail } from "@veolms/contracts";
 import { useState } from "react";
@@ -25,6 +24,7 @@ import {
   type ChatThread,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { DrawerHeader, ChatToggle as Toggle } from "./ChatControls";
 import { RestrictDialog } from "./ChatDialogs";
 import { ROLE_LABEL } from "./chatFormat";
 
@@ -35,37 +35,6 @@ const SLOW_MODES = [
   { label: "1 minute", seconds: 60 },
   { label: "5 minutes", seconds: 300 },
 ];
-
-function Toggle({
-  checked,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "relative h-6 w-10.5 shrink-0 cursor-pointer rounded-full border-0 transition-colors",
-        checked ? "bg-(--accent)" : "bg-(--border-strong)",
-      )}
-    >
-      <span
-        className={cn(
-          "absolute top-0.75 size-4.5 rounded-full bg-white transition-[left]",
-          checked ? "left-5.25" : "left-0.75",
-        )}
-      />
-    </button>
-  );
-}
 
 function Row({
   title,
@@ -91,9 +60,9 @@ function Row({
   );
 }
 
-const section = "border-b-8 border-solid border-(--canvas)";
+const section = "border-b-8 border-solid border-(--chat-bg)";
 const select =
-  "h-9 rounded-lg border border-solid border-(--border-strong) bg-(--surface-strong) px-2 text-[0.84rem] text-(--text)";
+  "h-9 rounded-lg border border-solid border-(--chat-line-strong) bg-(--chat-input) px-2 text-[0.84rem] text-(--text)";
 
 export function RoomInfoPanel({
   room,
@@ -140,21 +109,12 @@ export function RoomInfoPanel({
   return (
     <aside
       aria-label={isGroup ? "Group info" : "Contact info"}
-      className="flex h-full min-h-0 w-full flex-col bg-(--surface)"
+      className="flex h-full min-h-0 w-full flex-col bg-(--chat-panel)"
     >
-      <div className="flex h-16 shrink-0 items-center gap-4 border-b border-solid border-(--border) px-4">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--hover)"
-        >
-          <X size={20} />
-        </button>
-        <h2 className="m-0 text-[1rem] font-semibold text-(--text)">
-          {isGroup ? "Group info" : "Contact info"}
-        </h2>
-      </div>
+      <DrawerHeader
+        title={isGroup ? "Group info" : "Contact info"}
+        onClose={onClose}
+      />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn(
@@ -197,7 +157,7 @@ export function RoomInfoPanel({
                   href={chatService.fileUrl(a)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block aspect-square overflow-hidden rounded-md bg-(--surface-strong)"
+                  className="block aspect-square overflow-hidden rounded-md bg-(--chat-input)"
                 >
                   {a.kind === "image" ? (
                     <img
@@ -327,7 +287,7 @@ export function RoomInfoPanel({
                   : "Members"}
               </span>
             </div>
-            <label className="mx-4 mb-1 flex h-9 items-center gap-2 rounded-full bg-(--surface-strong) px-3">
+            <label className="mx-4 mb-1 flex h-9 items-center gap-2 rounded-full bg-(--chat-input) px-3">
               <MagnifyingGlass
                 size={15}
                 className="text-(--muted)"
@@ -378,7 +338,7 @@ export function RoomInfoPanel({
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             aria-label={`Options for ${member.name}`}
-                            className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--hover)"
+                            className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--chat-hover)"
                           >
                             <DotsThreeVertical size={18} weight="bold" />
                           </DropdownMenuTrigger>

@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 
 import { cn } from "../lib/utils";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { CHAT_THEME } from "./chatTheme";
 
 /** A centred dialog in WhatsApp's shape: title, text, actions right-aligned. */
 export function ChatDialog({
@@ -37,7 +38,10 @@ export function ChatDialog({
   }, [onClose]);
   return createPortal(
     <div
-      className="fixed inset-0 z-250 flex items-center justify-center bg-black/50 p-4"
+      className={cn(
+        "fixed inset-0 z-250 flex items-center justify-center bg-black/50 p-4",
+        CHAT_THEME,
+      )}
       onClick={onClose}
     >
       <div
@@ -57,7 +61,7 @@ export function ChatDialog({
 }
 
 const pill =
-  "h-10 cursor-pointer rounded-full border border-solid border-(--border-strong) bg-transparent px-5 text-[0.88rem] font-semibold text-(--accent-ink) hover:bg-(--hover) disabled:opacity-50";
+  "h-10 cursor-pointer rounded-full border border-solid border-(--chat-line-strong) bg-transparent px-5 text-[0.88rem] font-semibold text-(--accent-ink) hover:bg-(--chat-hover) disabled:opacity-50";
 const dangerPill = cn(pill, "border-red-500/50 text-red-500");
 
 export function DeleteMessageDialog({
@@ -198,7 +202,7 @@ export function RestrictDialog({
         <select
           value={reason}
           onChange={(event) => setReason(event.target.value as ChatReason)}
-          className="h-10 rounded-lg border border-solid border-(--border-strong) bg-(--surface-strong) px-2 text-[0.92rem] text-(--text)"
+          className="h-10 rounded-lg border border-solid border-(--chat-line-strong) bg-(--chat-input) px-2 text-[0.92rem] text-(--text)"
         >
           {REASONS.map((r) => (
             <option key={r.value} value={r.value}>
@@ -298,7 +302,7 @@ export function ReportDialog({
           maxLength={1000}
           onChange={(e) => setDetails(e.target.value)}
           placeholder="Anything that helps (optional)"
-          className="w-full resize-none rounded-lg border border-solid border-(--border-strong) bg-(--surface-strong) px-3 py-2 text-[0.9rem] text-(--text)"
+          className="w-full resize-none rounded-lg border border-solid border-(--chat-line-strong) bg-(--chat-input) px-3 py-2 text-[0.9rem] text-(--text)"
         />
       </label>
       <label className="mb-4 flex cursor-pointer items-center gap-3 text-[0.9rem]">

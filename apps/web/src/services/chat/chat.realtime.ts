@@ -1,6 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type {
   ChatMessage,
+  ChatStreamGroupReadEvent,
+  ChatStreamPresenceEvent,
   ChatStreamReadEvent,
   ChatStreamReadyEvent,
   ChatStreamTypingEvent,
@@ -8,7 +10,9 @@ import type {
 
 import { notificationKeys } from "../notifications";
 import {
+  applyGroupRead,
   applyMessages,
+  applyPresence,
   applyReceipt,
   applyToRoomList,
   type ChatThread,
@@ -42,6 +46,15 @@ let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let retryDelay = REFUSED_RETRY_MIN_MS;
 let live = false;
 const liveListeners = new Set<() => void>();
+
+/** The chats this tab's stream carries (from `ready`, then added/removed). */
+const streamRooms = new Set<string>();
+/** Chats a reconnect was already tried for: never loop on one. */
+const reconnectTried = new Set<string>();
+const RECONNECT_GAP_MS = 30_000;
+/** "Delivered" already reported per chat, so a list refresh does not repeat it. */
+const deliveredSent = new Map<string, number>();
+let lastReconnectAt = 0;
 
 /** Chats on screen right now: their new messages are read, not unread. */
 const visibleRooms = new Set<string>();
@@ -122,6 +135,52 @@ function parse<T>(event: MessageEvent<string>): T | null {
   }
 }
 
+/**
+ * Brings a cached chat up to the numbers the server reported (room list,
+ * room detail): a message the stream did not carry still shows up.
+ */
+export function syncThreadTo(roomId: string, lastEventSeq: number) {
+  if (!client) return;
+  const thread = client.getQueryData<ChatThread>(chatKeys.messages(roomId));
+  if (thread && lastEventSeq > thread.lastEventSeq) void catchUp(roomId);
+}
+
+/**
+ * Called with every chat list: catches up cached chats that moved on, and
+ * reconnects the stream when the list holds a chat it does not carry (a
+ * course you joined after the stream opened), so its messages arrive live.
+ */
+export function syncWithRoomList(
+  rooms: ReadonlyArray<{
+    id: string;
+    lastSeq: number;
+    lastEventSeq: number;
+    unreadCount: number;
+  }>,
+) {
+  for (const room of rooms) {
+    syncThreadTo(room.id, room.lastEventSeq);
+    // Your app has these messages now: the senders' second tick.
+    if (
+      room.unreadCount > 0 &&
+      room.lastSeq > (deliveredSent.get(room.id) ?? 0)
+    ) {
+      deliveredSent.set(room.id, room.lastSeq);
+      queueReceipt(room.id, { deliveredSeq: room.lastSeq });
+    }
+  }
+  if (!source || !live) return;
+  const missing = rooms.filter(
+    (room) => !streamRooms.has(room.id) && !reconnectTried.has(room.id),
+  );
+  if (missing.length === 0) return;
+  if (Date.now() - lastReconnectAt < RECONNECT_GAP_MS) return;
+  for (const room of missing) reconnectTried.add(room.id);
+  lastReconnectAt = Date.now();
+  close();
+  open();
+}
+
 async function catchUp(roomId: string) {
   if (!client) return;
   const thread = client.getQueryData<ChatThread>(chatKeys.messages(roomId));
@@ -182,6 +241,8 @@ function attach(next: EventSource) {
     setLive(true);
     const ready = parse<ChatStreamReadyEvent>(event as MessageEvent<string>);
     if (!client || !ready) return;
+    streamRooms.clear();
+    for (const head of ready.rooms) streamRooms.add(head.id);
     for (const head of ready.rooms) {
       const thread = client.getQueryData<ChatThread>(
         chatKeys.messages(head.id),
@@ -217,6 +278,14 @@ function attach(next: EventSource) {
     const data = parse<ChatStreamReadEvent>(event as MessageEvent<string>);
     if (data && client) applyReceipt(client, data, viewer);
   });
+  next.addEventListener("chat.group_read", (event) => {
+    const data = parse<ChatStreamGroupReadEvent>(event as MessageEvent<string>);
+    if (data && client) applyGroupRead(client, data);
+  });
+  next.addEventListener("chat.presence", (event) => {
+    const data = parse<ChatStreamPresenceEvent>(event as MessageEvent<string>);
+    if (data && client) applyPresence(client, data);
+  });
   next.addEventListener("chat.typing", (event) => {
     const data = parse<ChatStreamTypingEvent>(event as MessageEvent<string>);
     if (data) onTyping(data);
@@ -230,12 +299,14 @@ function attach(next: EventSource) {
   next.addEventListener("chat.room_added", (event) => {
     const data = parse<{ roomId: string }>(event as MessageEvent<string>);
     if (!data || !client) return;
+    streamRooms.add(data.roomId);
     void client.invalidateQueries({ queryKey: chatKeys.rooms() });
     void client.invalidateQueries({ queryKey: chatKeys.room(data.roomId) });
   });
   next.addEventListener("chat.removed", (event) => {
     const data = parse<{ roomId: string }>(event as MessageEvent<string>);
     if (!data || !client) return;
+    streamRooms.delete(data.roomId);
     void client.invalidateQueries({ queryKey: chatKeys.rooms() });
     void client.invalidateQueries({ queryKey: chatKeys.room(data.roomId) });
     client.removeQueries({ queryKey: chatKeys.messages(data.roomId) });

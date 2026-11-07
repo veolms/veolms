@@ -10,5 +10,9 @@ export {
   type OutgoingFile,
   type OutgoingMessage,
 } from "./chat.outbox";
-export { setChatOnScreen } from "./chat.realtime";
+export {
+  setChatOnScreen,
+  syncThreadTo,
+  syncWithRoomList,
+} from "./chat.realtime";
 export { flushReceipts, queueReceipt } from "./chat.receipts";

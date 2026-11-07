@@ -52,6 +52,21 @@ export function createReceiptsBatcher({
         batch.slice(i, i + FLUSH_CHUNK),
       );
       if (rows.length === 0) continue;
+      await publishGroups(
+        rows.filter((row) => row.kind !== "direct").map((row) => row.room_id),
+      );
+      // Read receipts off (Settings › Privacy): in private chats the other
+      // person learns only that it arrived.
+      const directUsers = [
+        ...new Set(
+          rows.filter((row) => row.kind === "direct").map((row) => row.user_id),
+        ),
+      ];
+      const hidden = new Set(
+        (await repository.getProfiles(database, directUsers))
+          .filter((profile) => !profile.read_receipts)
+          .map((profile) => profile.user_id),
+      );
       await repository.publish(
         database,
         encodeChatEvent({
@@ -62,10 +77,41 @@ export function createReceiptsBatcher({
             readSeq: Number(row.last_read_seq),
             deliveredSeq: Number(row.last_delivered_seq),
             direct: row.kind === "direct",
+            hideRead: row.kind === "direct" && hidden.has(row.user_id),
           })),
         }),
       );
     }
+  }
+
+  /** Last group positions announced, so only moves are sent. */
+  const announced = new Map<string, string>();
+
+  /**
+   * Groups whose read positions moved: their "everyone has received / read
+   * up to" (the ticks), to everyone in the group, only when it changed.
+   */
+  async function publishGroups(roomIds: string[]) {
+    const unique = [...new Set(roomIds)];
+    if (unique.length === 0) return;
+    const positions = await repository.groupPositions(database, unique);
+    const payloads: string[] = [];
+    for (const group of positions) {
+      if (Number(group.members) < 2) continue;
+      const key = `${group.delivered}|${group.read}`;
+      if (announced.get(group.room_id) === key) continue;
+      announced.set(group.room_id, key);
+      payloads.push(
+        ...encodeChatEvent({
+          type: "group_read",
+          roomId: group.room_id,
+          deliveredSeq: Number(group.delivered),
+          readSeq: Number(group.read),
+        }),
+      );
+    }
+    if (announced.size > 50_000) announced.clear();
+    if (payloads.length > 0) await repository.publish(database, payloads);
   }
 
   async function flush(): Promise<void> {

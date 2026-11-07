@@ -2,6 +2,8 @@ import type {
   ChatAttachment,
   ChatChangesResponse,
   ChatMessage,
+  ChatMessageInfo,
+  ChatProfile,
   ChatReason,
   ChatRestrictionType,
   ChatRoomDetail,
@@ -79,6 +81,11 @@ export interface ChatUploadStart {
 
 export const chatService = {
   listRooms: () => api.get<ChatRoomList>("/chat/rooms"),
+  getProfile: () => api.get<ChatProfile>("/chat/me/profile"),
+  updateProfile: (patch: Partial<ChatProfile>) =>
+    api.patch<ChatProfile>("/chat/me/profile", patch),
+  messageInfo: (roomId: string, seq: number) =>
+    api.get<ChatMessageInfo>(`/chat/rooms/${roomId}/messages/${seq}/info`),
   getRoom: (roomId: string) =>
     api.get<{ room: ChatRoomDetail }>(`/chat/rooms/${roomId}`),
   listMessages: (

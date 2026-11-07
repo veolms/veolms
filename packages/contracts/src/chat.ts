@@ -244,7 +244,12 @@ export const chatRoomSummarySchema = z.object({
     .nullable(),
   lastMessageAt: isoDate.nullable(),
   unreadCount: z.number().int(),
-  /** Private chats: how far the other person has received and read. */
+  /**
+   * How far the others have received and read your messages (the ticks).
+   * Private chats: the other person (read is null when either of you turned
+   * read receipts off). Groups: everyone else in the group (WhatsApp: two
+   * ticks once all have it, blue once all read it); null with nobody else.
+   */
   peerDeliveredSeq: z.number().int().nullable(),
   peerReadSeq: z.number().int().nullable(),
   me: z.object({
@@ -295,8 +300,42 @@ export const chatRoomDetailSchema = chatRoomSummarySchema.extend({
   attachmentsAllowed: z.boolean(),
   memberCount: z.number().int().nullable(),
   pinnedMessages: z.array(chatMessageSchema),
+  /** Groups: a few members' names for the header ("You, Asha, Ravi…"). */
+  memberNames: z.array(z.string()),
+  /**
+   * Private chats: the other person's "online" / "last seen". Null when
+   * either of you hides it (Settings › Privacy), as in WhatsApp.
+   */
+  peerPresence: z
+    .object({ online: z.boolean(), lastSeenAt: isoDate.nullable() })
+    .nullable(),
 });
 export type ChatRoomDetail = z.infer<typeof chatRoomDetailSchema>;
+
+/** Message info for your own message: who has read and received it. */
+export const chatMessageInfoSchema = z.object({
+  readBy: z.array(chatPersonSchema),
+  deliveredTo: z.array(chatPersonSchema),
+  /** Members it has not reached yet. */
+  waiting: z.number().int(),
+  /** Read receipts are off for this private chat (yours or theirs). */
+  receiptsHidden: z.boolean(),
+});
+export type ChatMessageInfo = z.infer<typeof chatMessageInfoSchema>;
+
+/** Your chat privacy and preferences (WhatsApp Settings › Privacy, Chats). */
+export const chatProfileSchema = z.object({
+  showPresence: z.boolean(),
+  readReceipts: z.boolean(),
+  enterToSend: z.boolean(),
+});
+export type ChatProfile = z.infer<typeof chatProfileSchema>;
+export const updateChatProfileRequestSchema = chatProfileSchema
+  .partial()
+  .strict();
+export type UpdateChatProfileRequest = z.infer<
+  typeof updateChatProfileRequestSchema
+>;
 
 export const chatMessageListQuerySchema = z.strictObject({
   before: seqSchema.optional(),
@@ -605,6 +644,8 @@ export const chatStreamEventNames = [
   "chat.message_updated",
   "chat.read",
   "chat.typing",
+  "chat.group_read",
+  "chat.presence",
   "chat.room_updated",
   "chat.room_added",
   "chat.removed",
@@ -631,6 +672,18 @@ export interface ChatStreamReadEvent {
   userId: string;
   readSeq: number;
   deliveredSeq: number;
+}
+/** A group's "everyone has received / read up to" moved (ticks). */
+export interface ChatStreamGroupReadEvent {
+  roomId: string;
+  deliveredSeq: number;
+  readSeq: number;
+}
+/** Someone you have a private chat with came online or went away. */
+export interface ChatStreamPresenceEvent {
+  userId: string;
+  online: boolean;
+  lastSeenAt: string | null;
 }
 export interface ChatStreamTypingEvent {
   roomId: string;

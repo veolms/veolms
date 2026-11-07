@@ -211,3 +211,14 @@ export interface ChatModerationLogTable {
   details: JSONColumnType<Record<string, unknown>, string | undefined, string>;
   created_at: Generated<Date>;
 }
+
+/** Presence and chat privacy, one row per person who has used chat. */
+export interface ChatProfileTable {
+  user_id: string;
+  show_presence: Generated<boolean>;
+  read_receipts: Generated<boolean>;
+  enter_to_send: Generated<boolean>;
+  online_until: Date | null;
+  last_seen_at: Date | null;
+  updated_at: Generated<Date>;
+}

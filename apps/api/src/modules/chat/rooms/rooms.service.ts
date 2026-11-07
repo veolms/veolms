@@ -118,6 +118,7 @@ export function createRoomsService(runtime: ChatRuntime) {
               roomId: existing.id,
               eventSeq: Number(updated.last_event_seq),
             });
+            await publish({ type: "opened", roomId: existing.id });
           }
         }
         return roomDetail(userId, existing.id);
@@ -138,6 +139,9 @@ export function createRoomsService(runtime: ChatRuntime) {
         roomId: created.id,
         details: { courseId },
       });
+      // Everyone who may read it and has Chats open gets it now, not at
+      // their next reconnect.
+      await publish({ type: "opened", roomId: created.id });
       return roomDetail(userId, created.id);
     },
 

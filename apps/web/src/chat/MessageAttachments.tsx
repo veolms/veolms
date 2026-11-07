@@ -103,7 +103,7 @@ function MediaTile({
           : `Open photo ${attachment.name}`
       }
       className={cn(
-        "relative block cursor-pointer overflow-hidden rounded-lg border-0 bg-(--surface-strong) p-0",
+        "relative block cursor-pointer overflow-hidden rounded-lg border-0 bg-(--chat-input) p-0",
         single ? "w-72 max-w-full" : "aspect-square w-full",
       )}
       style={single ? { aspectRatio: `1 / ${ratio}` } : undefined}
