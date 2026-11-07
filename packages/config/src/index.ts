@@ -845,6 +845,40 @@ function resolveEmailTransport(parsed: ParsedServerConfig): "smtp" | "console" {
     : "smtp";
 }
 
+// Android apps sign passkeys with an origin of the form
+// `android:apk-key-hash:<base64url SHA-256 of the signing cert>`. That is not
+// a web URL: `new URL()` accepts it but reports its origin as the string
+// "null", which would both lose the entry and allow opaque (sandboxed) pages.
+const ANDROID_ORIGIN_PREFIX = "android:apk-key-hash:";
+
+function isAndroidOrigin(origin: string): boolean {
+  return origin.startsWith(ANDROID_ORIGIN_PREFIX);
+}
+
+// One comma-separated origins entry, normalised: http(s) URLs become their
+// origin, Android key-hash origins are kept exactly as written (only when
+// allowed), anything unparseable is kept as written, and "null" never passes.
+function normalizeOriginEntry(
+  entry: string,
+  options: { allowAndroid: boolean },
+): string | undefined {
+  const trimmed = entry.trim();
+  if (!trimmed) return undefined;
+  if (isAndroidOrigin(trimmed)) {
+    return options.allowAndroid ? trimmed : undefined;
+  }
+  let normalized = trimmed;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      normalized = url.origin;
+    }
+  } catch {
+    // Not a URL: keep as written.
+  }
+  return normalized === "null" ? undefined : normalized;
+}
+
 function resolveWebAuthnOrigins(parsed: ParsedServerConfig): string[] {
   const origins = new Set<string>();
 
@@ -856,14 +890,8 @@ function resolveWebAuthnOrigins(parsed: ParsedServerConfig): string[] {
 
   if (parsed.WEBAUTHN_ORIGINS) {
     for (const origin of parsed.WEBAUTHN_ORIGINS.split(",")) {
-      const trimmed = origin.trim();
-      if (trimmed) {
-        try {
-          origins.add(new URL(trimmed).origin);
-        } catch {
-          origins.add(trimmed);
-        }
-      }
+      const normalized = normalizeOriginEntry(origin, { allowAndroid: true });
+      if (normalized) origins.add(normalized);
     }
   }
 
@@ -899,6 +927,8 @@ function resolveWebAuthnRpIds(
     rpIds.add(resolvedRpId);
   }
   for (const origin of origins) {
+    // Android key-hash origins carry no host; the app's RP ID is the website's.
+    if (isAndroidOrigin(origin)) continue;
     try {
       const hostname = new URL(origin).hostname;
       if (hostname) {
@@ -912,18 +942,16 @@ function resolveWebAuthnRpIds(
 }
 
 function resolveCorsOrigins(parsed: ParsedServerConfig): string[] {
-  const origins = new Set(resolveWebAuthnOrigins(parsed));
+  // Browsers never send an Android key-hash origin, so CORS takes only the
+  // web origins of the WebAuthn list.
+  const origins = new Set(
+    resolveWebAuthnOrigins(parsed).filter((origin) => !isAndroidOrigin(origin)),
+  );
 
   if (parsed.CORS_ORIGINS) {
     for (const origin of parsed.CORS_ORIGINS.split(",")) {
-      const trimmed = origin.trim();
-      if (trimmed) {
-        try {
-          origins.add(new URL(trimmed).origin);
-        } catch {
-          origins.add(trimmed);
-        }
-      }
+      const normalized = normalizeOriginEntry(origin, { allowAndroid: false });
+      if (normalized) origins.add(normalized);
     }
   }
 
