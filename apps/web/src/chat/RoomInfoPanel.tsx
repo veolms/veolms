@@ -1,4 +1,9 @@
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { SpeakerSlashIcon as SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatRoomDetail } from "@veolms/contracts";
@@ -16,6 +21,8 @@ import {
   chatKeys,
   chatService,
   useChatMembers,
+  useChatReports,
+  useChatRestrictions,
   useRestrictMember,
   useSetHelper,
   useStartDirect,
@@ -24,7 +31,13 @@ import {
   type ChatThread,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
-import { DrawerHeader, ChatToggle as Toggle } from "./ChatControls";
+import {
+  chatIconButton,
+  ChatSelect,
+  DrawerHeader,
+  ChatToggle as Toggle,
+} from "./ChatControls";
+import { ReportsView, RestrictedView } from "./ModerationViews";
 import { RestrictDialog } from "./ChatDialogs";
 import { ROLE_LABEL } from "./chatFormat";
 
@@ -61,8 +74,6 @@ function Row({
 }
 
 const section = "border-b-8 border-solid border-(--chat-bg)";
-const select =
-  "h-9 rounded-lg border border-solid border-(--chat-line-strong) bg-(--chat-input) px-2 text-[0.84rem] text-(--text)";
 
 export function RoomInfoPanel({
   room,
@@ -70,14 +81,18 @@ export function RoomInfoPanel({
   onClose,
   onOpenChat,
   onToast,
+  onJumpTo,
 }: {
   room: ChatRoomDetail;
   viewerId: string | null;
   onClose: () => void;
   onOpenChat: (roomId: string) => void;
   onToast: (message: string) => void;
+  onJumpTo: (seq: number) => void;
 }) {
   const client = useQueryClient();
+  const [view, setView] = useState<"info" | "reports" | "restricted">("info");
+  const [editingAbout, setEditingAbout] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [restricting, setRestricting] = useState<{
     id: string;
@@ -105,6 +120,47 @@ export function RoomInfoPanel({
 
   const patch = (change: Parameters<typeof chatService.updateSettings>[1]) =>
     settings.mutate({ roomId: room.id, patch: change }, { onError: fail });
+  const moderator = isGroup && (room.me.canModerate || room.me.isHelper);
+  const reports = useChatReports(room.id, admin);
+  const restricted = useChatRestrictions(room.id, moderator);
+  const openReports = reports.data?.reports.length ?? 0;
+  const restrictedCount = restricted.data?.restrictions.length ?? 0;
+
+  if (view !== "info") {
+    return (
+      <aside
+        aria-label={
+          view === "reports" ? "Reported messages" : "Muted and removed"
+        }
+        className="flex h-full min-h-0 w-full flex-col bg-(--chat-panel)"
+      >
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-solid border-(--chat-line) px-3">
+          <button
+            type="button"
+            className={chatIconButton}
+            onClick={() => setView("info")}
+            aria-label="Back to group info"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <h2 className="m-0 text-[1.05rem] font-semibold text-(--text)">
+            {view === "reports" ? "Reported messages" : "Muted and removed"}
+          </h2>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {view === "reports" ? (
+            <ReportsView
+              roomId={room.id}
+              onToast={onToast}
+              onJumpTo={onJumpTo}
+            />
+          ) : (
+            <RestrictedView roomId={room.id} onToast={onToast} />
+          )}
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside
@@ -138,12 +194,61 @@ export function RoomInfoPanel({
           </p>
         </div>
 
-        {room.description ? (
+        {room.description || admin ? (
           <div className={cn(section, "px-6 py-4")}>
-            <div className="text-[0.8rem] text-(--muted)">Description</div>
-            <p className="m-0 mt-1 text-[0.9rem] whitespace-pre-wrap text-(--text)">
-              {room.description}
-            </p>
+            <div className="flex items-center justify-between text-[0.8rem] text-(--muted)">
+              Description
+              {admin && editingAbout === null ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingAbout(room.description ?? "")}
+                  aria-label="Edit description"
+                  className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--chat-hover) hover:text-(--text)"
+                >
+                  <PencilSimple size={16} />
+                </button>
+              ) : null}
+            </div>
+            {editingAbout !== null ? (
+              <div className="mt-1">
+                <textarea
+                  autoFocus
+                  value={editingAbout}
+                  maxLength={1000}
+                  rows={4}
+                  onChange={(e) => setEditingAbout(e.target.value)}
+                  placeholder="Rules, links, class timings…"
+                  className="w-full resize-y rounded-xl border-0 bg-(--chat-input) px-3 py-2 text-[0.9rem] text-(--text) outline-none focus-visible:outline-2 focus-visible:outline-(--accent)"
+                />
+                <div className="mt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingAbout(null)}
+                    className="h-8 cursor-pointer rounded-full border-0 bg-transparent px-3 text-[0.82rem] font-semibold text-(--muted)"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      patch({ description: editingAbout.trim() || null });
+                      setEditingAbout(null);
+                    }}
+                    className="h-8 cursor-pointer rounded-full border-0 bg-(--accent) px-4 text-[0.82rem] font-semibold text-(--on-accent)"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="m-0 mt-1 text-[0.9rem] whitespace-pre-wrap text-(--text)">
+                {room.description || (
+                  <span className="text-(--muted)">
+                    Add rules, links or class timings for the group.
+                  </span>
+                )}
+              </p>
+            )}
           </div>
         ) : null}
 
@@ -183,29 +288,27 @@ export function RoomInfoPanel({
         <div className={section}>
           <Row
             title="Notifications"
-            note="Group messages only raise the unread count; @mentions notify you."
+            note={
+              isGroup
+                ? "Group messages raise the unread count; @mentions also alert you."
+                : "New messages alert you."
+            }
           >
-            <select
-              aria-label="Notifications"
-              className={select}
+            <ChatSelect<"all" | "mentions" | "none">
+              ariaLabel="Notifications"
               value={room.me.notifyLevel}
-              onChange={(e) =>
+              onValueChange={(level) =>
                 myState.mutate(
-                  {
-                    roomId: room.id,
-                    patch: {
-                      notifyLevel: e.target.value as
-                        "all" | "mentions" | "none",
-                    },
-                  },
+                  { roomId: room.id, patch: { notifyLevel: level } },
                   { onError: fail },
                 )
               }
-            >
-              <option value="all">All</option>
-              <option value="mentions">Mentions only</option>
-              <option value="none">Muted</option>
-            </select>
+              options={[
+                ["all", "All messages"],
+                ["mentions", "Mentions only"],
+                ["none", "Muted"],
+              ]}
+            />
           </Row>
         </div>
 
@@ -218,38 +321,30 @@ export function RoomInfoPanel({
               title="Send messages"
               note="Only admins: an announcement group."
             >
-              <select
-                aria-label="Who can send messages"
-                className={select}
+              <ChatSelect<"everyone" | "staff_only">
+                ariaLabel="Who can send messages"
                 value={room.postingPolicy}
-                onChange={(e) =>
-                  patch({
-                    postingPolicy: e.target.value as "everyone" | "staff_only",
-                  })
-                }
-              >
-                <option value="everyone">All members</option>
-                <option value="staff_only">Only admins</option>
-              </select>
+                onValueChange={(policy) => patch({ postingPolicy: policy })}
+                options={[
+                  ["everyone", "All members"],
+                  ["staff_only", "Only admins"],
+                ]}
+              />
             </Row>
             <Row
               title="Slow mode"
               note="Time each member waits between messages. Admins are exempt."
             >
-              <select
-                aria-label="Slow mode"
-                className={select}
-                value={room.slowModeSeconds}
-                onChange={(e) =>
-                  patch({ slowModeSeconds: Number(e.target.value) })
+              <ChatSelect
+                ariaLabel="Slow mode"
+                value={String(room.slowModeSeconds)}
+                onValueChange={(value) =>
+                  patch({ slowModeSeconds: Number(value) })
                 }
-              >
-                {SLOW_MODES.map((m) => (
-                  <option key={m.seconds} value={m.seconds}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+                options={SLOW_MODES.map(
+                  (m) => [String(m.seconds), m.label] as const,
+                )}
+              />
             </Row>
             {room.kind === "course" ? (
               <Row
@@ -264,6 +359,16 @@ export function RoomInfoPanel({
               </Row>
             ) : null}
             <Row
+              title="Members can send files"
+              note="Photos, videos, voice messages and documents."
+            >
+              <Toggle
+                label="Members can send files"
+                checked={room.attachmentsAllowed}
+                onChange={(next) => patch({ attachmentsAllowed: next })}
+              />
+            </Row>
+            <Row
               title="Lock group"
               note="Nobody can send messages. For finished batches."
             >
@@ -275,6 +380,56 @@ export function RoomInfoPanel({
                 }
               />
             </Row>
+          </div>
+        ) : null}
+
+        {moderator ? (
+          <div className={cn(section, "py-2")}>
+            <h4 className="m-0 px-6 pt-2 pb-1 text-[0.8rem] font-semibold text-(--accent-ink)">
+              Moderation
+            </h4>
+            {admin ? (
+              <button
+                type="button"
+                onClick={() => setView("reports")}
+                className="flex w-full cursor-pointer items-center gap-4 border-0 bg-transparent px-6 py-3 text-left text-(--text) hover:bg-(--chat-hover)"
+              >
+                <Flag size={20} className="text-(--muted)" aria-hidden="true" />
+                <span className="flex-1 text-[0.92rem]">Reported messages</span>
+                {openReports > 0 ? (
+                  <span className="min-w-5 rounded-full bg-red-500 px-1.5 text-center text-[0.72rem] leading-5 font-bold text-white">
+                    {openReports}
+                  </span>
+                ) : null}
+                <CaretRight
+                  size={16}
+                  className="text-(--muted)"
+                  aria-hidden="true"
+                />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setView("restricted")}
+              className="flex w-full cursor-pointer items-center gap-4 border-0 bg-transparent px-6 py-3 text-left text-(--text) hover:bg-(--chat-hover)"
+            >
+              <SpeakerSlash
+                size={20}
+                className="text-(--muted)"
+                aria-hidden="true"
+              />
+              <span className="flex-1 text-[0.92rem]">Muted and removed</span>
+              {restrictedCount > 0 ? (
+                <span className="text-[0.8rem] text-(--muted)">
+                  {restrictedCount}
+                </span>
+              ) : null}
+              <CaretRight
+                size={16}
+                className="text-(--muted)"
+                aria-hidden="true"
+              />
+            </button>
           </div>
         ) : null}
 

@@ -13,8 +13,11 @@ import { encodeChatEvent } from "./chat-bus.ts";
  * slightly high, which is harmless.
  */
 
-const FLUSH_MS = 3_000;
+/** Short, so the second and blue ticks follow within about a second. */
+const FLUSH_MS = 1_000;
 const MAX_PENDING = 20_000;
+/** Groups up to this size keep when each member received and read. */
+const MARKED_GROUP_MAX = 1_024;
 const FLUSH_CHUNK = 1_000;
 
 interface Pending {
@@ -47,14 +50,24 @@ export function createReceiptsBatcher({
 
   async function flushOnce(batch: Pending[]) {
     for (let i = 0; i < batch.length; i += FLUSH_CHUNK) {
-      const rows = await repository.flushReceipts(
-        database,
-        batch.slice(i, i + FLUSH_CHUNK),
-      );
+      const chunk = batch.slice(i, i + FLUSH_CHUNK);
+      const rows = await repository.flushReceipts(database, chunk);
       if (rows.length === 0) continue;
-      await publishGroups(
+      const members = await publishGroups(
         rows.filter((row) => row.kind !== "direct").map((row) => row.room_id),
       );
+
+      // When each position moved, for Message info's times: private chats
+      // and groups up to MARKED_GROUP_MAX members (WhatsApp's group size).
+      await repository.insertReceiptMarks(
+        database,
+        rows.filter(
+          (row) =>
+            row.kind === "direct" ||
+            (members.get(row.room_id) ?? Infinity) <= MARKED_GROUP_MAX,
+        ),
+      );
+
       // Read receipts off (Settings › Privacy): in private chats the other
       // person learns only that it arrived.
       const directUsers = [
@@ -67,11 +80,24 @@ export function createReceiptsBatcher({
           .filter((profile) => !profile.read_receipts)
           .map((profile) => profile.user_id),
       );
+      // Only "delivered" moved in a group: nobody's own tabs need it (it
+      // changes no unread count); the group's ticks went out above.
+      const readMoved = new Set(
+        chunk
+          .filter((entry) => entry.readSeq > 0)
+          .map((entry) => `${entry.roomId}|${entry.userId}`),
+      );
+      const told = rows.filter(
+        (row) =>
+          row.kind === "direct" ||
+          readMoved.has(`${row.room_id}|${row.user_id}`),
+      );
+      if (told.length === 0) continue;
       await repository.publish(
         database,
         encodeChatEvent({
           type: "receipts",
-          receipts: rows.map((row) => ({
+          receipts: told.map((row) => ({
             roomId: row.room_id,
             userId: row.user_id,
             readSeq: Number(row.last_read_seq),
@@ -92,11 +118,13 @@ export function createReceiptsBatcher({
    * up to" (the ticks), to everyone in the group, only when it changed.
    */
   async function publishGroups(roomIds: string[]) {
+    const members = new Map<string, number>();
     const unique = [...new Set(roomIds)];
-    if (unique.length === 0) return;
+    if (unique.length === 0) return members;
     const positions = await repository.groupPositions(database, unique);
     const payloads: string[] = [];
     for (const group of positions) {
+      members.set(group.room_id, Number(group.members));
       if (Number(group.members) < 2) continue;
       const key = `${group.delivered}|${group.read}`;
       if (announced.get(group.room_id) === key) continue;
@@ -112,6 +140,7 @@ export function createReceiptsBatcher({
     }
     if (announced.size > 50_000) announced.clear();
     if (payloads.length > 0) await repository.publish(database, payloads);
+    return members;
   }
 
   async function flush(): Promise<void> {

@@ -32,6 +32,7 @@ const EMOJI =
 
 /** People listed in Message info (big groups show the first ones). */
 const MESSAGE_INFO_LIMIT = 200;
+const SEARCH_PAGE = 30;
 
 export function createMessagesService(runtime: ChatRuntime) {
   const { database, repository, access, receipts, updates } = runtime;
@@ -204,11 +205,39 @@ export function createMessagesService(runtime: ChatRuntime) {
         ? []
         : reached.filter((r) => Number(r.last_read_seq) >= seq);
       const read = new Set(readBy.map((r) => r.id));
+      const withTime = (row: (typeof reached)[number], at: Date | null) => ({
+        ...presentPerson(row),
+        at: at ? new Date(at).toISOString() : null,
+      });
       return {
-        readBy: readBy.map(presentPerson),
-        deliveredTo: reached.filter((r) => !read.has(r.id)).map(presentPerson),
+        readBy: readBy.map((r) => withTime(r, r.read_at)),
+        deliveredTo: reached
+          .filter((r) => !read.has(r.id))
+          .map((r) => withTime(r, r.delivered_at)),
         waiting,
         receiptsHidden,
+      };
+    },
+
+    /** "Search in this chat": newest matches first, 30 at a time. */
+    async search(
+      userId: string,
+      roomId: string,
+      term: string,
+      before: number | undefined,
+    ) {
+      await views.assertCanRead(database, userId, roomId);
+      const page = await repository.searchMessages(
+        database,
+        userId,
+        roomId,
+        term,
+        before ?? null,
+        SEARCH_PAGE,
+      );
+      return {
+        messages: page.rows.map(presentMessage),
+        hasMore: page.hasMore,
       };
     },
 

@@ -143,7 +143,7 @@ export function MessageBubble({
       ) : null}
       <div
         className={cn(
-          "relative max-w-[min(65%,560px)] min-w-24 rounded-lg px-2 pt-1.5 pb-1 text-[0.92rem] leading-[1.38] text-(--text) shadow-[0_1px_0.5px_rgb(0_0_0/0.13)] max-[640px]:max-w-[85%]",
+          "relative max-w-[min(65%,560px)] min-w-24 rounded-lg px-2 pt-1.5 pb-1 text-(length:--chat-text,0.92rem) leading-[1.38] text-(--text) shadow-[0_1px_0.5px_rgb(0_0_0/0.13)] max-[640px]:max-w-[85%]",
           outgoing ? "bg-(--chat-out)" : "bg-(--chat-in)",
           firstOfRun && (outgoing ? "rounded-tr-none" : "rounded-tl-none"),
           onlyMedia && "p-1",

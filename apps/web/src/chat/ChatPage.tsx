@@ -27,12 +27,17 @@ import { CHAT_THEME } from "./chatTheme";
 import { Conversation } from "./Conversation";
 import { CourseGroupsPanel } from "./CourseGroupsPanel";
 import { MessageInfoPanel } from "./MessageInfoPanel";
+import { MessageSearchPanel } from "./MessageSearchPanel";
 import { RoomInfoPanel } from "./RoomInfoPanel";
 import { useChatListWidth } from "./useChatListWidth";
-import { useChatWallpaper } from "./useChatWallpaper";
+import { useChatPrefs } from "../store/chatPrefs.store";
+import { CHAT_TEXT_SIZES, CHAT_WALLPAPERS } from "./chatWallpapers";
 import { useChatShortcuts } from "./useChatShortcuts";
 
-type Drawer = { kind: "info" } | { kind: "message"; message: ChatMessage };
+type Drawer =
+  | { kind: "info" }
+  | { kind: "search" }
+  | { kind: "message"; message: ChatMessage };
 
 /**
  * Chats, laid out like WhatsApp Web and filling the app's main area edge
@@ -68,20 +73,18 @@ export function ChatPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [focusComposer, setFocusComposer] = useState(0);
+  // "Go to this message" from search or a report: the open chat jumps.
+  const [jump, setJump] = useState<{ seq: number; token: number } | null>(null);
+  const jumpTo = (seq: number) =>
+    setJump((current) => ({ seq, token: (current?.token ?? 0) + 1 }));
 
-  const [doodles] = useChatWallpaper();
-  // The shell's padding comes off while Chats is open, and the wallpaper
-  // follows Settings › Chats (chat.css).
+  const prefs = useChatPrefs();
+  // The shell's padding comes off while Chats is open (chat.css).
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute("data-chat-page", "");
     return () => root.removeAttribute("data-chat-page");
   }, []);
-  useEffect(() => {
-    const root = document.documentElement;
-    root.setAttribute("data-chat-doodles", doodles ? "on" : "off");
-    return () => root.removeAttribute("data-chat-doodles");
-  }, [doodles]);
 
   // Messages the stream did not carry, and chats it does not cover yet.
   useEffect(() => {
@@ -222,7 +225,15 @@ export function ChatPage() {
         "min-[641px]:absolute min-[641px]:inset-0",
         "max-[640px]:h-[calc(100dvh-84px)]",
       )}
-      style={{ "--chat-list-w": `${listWidth}px` } as React.CSSProperties}
+      // Settings › Chats: wallpaper, its pattern and the text size.
+      data-chat-pattern={prefs.pattern}
+      style={
+        {
+          "--chat-list-w": `${listWidth}px`,
+          "--chat-wall": CHAT_WALLPAPERS[prefs.wallpaper].value,
+          "--chat-text": CHAT_TEXT_SIZES[prefs.textSize].size,
+        } as React.CSSProperties
+      }
     >
       <div
         className={cn(
@@ -261,6 +272,8 @@ export function ChatPage() {
             onOpenMessageInfo={(message) =>
               setDrawer({ kind: "message", message })
             }
+            onOpenSearch={() => setDrawer({ kind: "search" })}
+            jumpRequest={jump}
             onOpenChat={(id) => open(id)}
             onToast={setToast}
             focusComposerToken={focusComposer}
@@ -307,6 +320,13 @@ export function ChatPage() {
               onClose={() => setDrawer(null)}
               onOpenChat={(id) => open(id)}
               onToast={setToast}
+              onJumpTo={jumpTo}
+            />
+          ) : drawer.kind === "search" ? (
+            <MessageSearchPanel
+              roomId={current.id}
+              onClose={() => setDrawer(null)}
+              onJumpTo={jumpTo}
             />
           ) : (
             <MessageInfoPanel

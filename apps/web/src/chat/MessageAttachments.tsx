@@ -146,19 +146,37 @@ function MediaTile({
   );
 }
 
+/** WhatsApp-style document colours by type. */
+function fileTone(extension: string): string {
+  if (extension === "PDF") return "bg-[#e5484d]";
+  if (["DOC", "DOCX", "TXT", "MD"].includes(extension)) return "bg-[#2f6fde]";
+  if (["XLS", "XLSX", "CSV"].includes(extension)) return "bg-[#1f9d55]";
+  if (["PPT", "PPTX"].includes(extension)) return "bg-[#e8710a]";
+  return "bg-[#7a8699]";
+}
+
 function FileTile({ attachment }: { attachment: ChatAttachment }) {
   const extension = attachment.name.split(".").pop()?.toUpperCase() ?? "FILE";
   return (
     <a
       href={chatService.fileUrl(attachment, true)}
-      className="flex w-72 max-w-full items-center gap-3 rounded-lg bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-3 py-2.5 text-(--text) no-underline hover:bg-[color-mix(in_srgb,var(--text)_11%,transparent)]"
+      className="flex w-72 max-w-full items-center gap-3 rounded-lg bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2.5 py-2.5 text-(--text) no-underline hover:bg-[color-mix(in_srgb,var(--text)_11%,transparent)]"
       download={attachment.name}
     >
-      <FileText
-        size={30}
-        className="shrink-0 text-(--accent)"
+      <span
+        className={cn(
+          "relative flex h-11 w-9 shrink-0 items-end justify-center rounded-md pb-1 text-[0.58rem] font-bold tracking-wide text-white",
+          fileTone(extension),
+        )}
         aria-hidden="true"
-      />
+      >
+        <FileText
+          size={16}
+          weight="fill"
+          className="absolute top-1.5 opacity-60"
+        />
+        {extension.slice(0, 4)}
+      </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[0.88rem] font-semibold">
           {attachment.name}

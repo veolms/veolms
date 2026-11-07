@@ -4,6 +4,7 @@ import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatMessage, ChatRoomDetail } from "@veolms/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -76,6 +77,8 @@ export function Conversation({
   onBack,
   onOpenInfo,
   onOpenMessageInfo,
+  onOpenSearch,
+  jumpRequest,
   onOpenChat,
   onToast,
   focusComposerToken,
@@ -85,6 +88,8 @@ export function Conversation({
   onBack: () => void;
   onOpenInfo: () => void;
   onOpenMessageInfo: (message: ChatMessage) => void;
+  onOpenSearch: () => void;
+  jumpRequest: { seq: number; token: number } | null;
   onOpenChat: (roomId: string) => void;
   onToast: (message: string) => void;
   focusComposerToken: number;
@@ -138,6 +143,12 @@ export function Conversation({
   useEffect(() => {
     if (focusComposerToken > 0) composerRef.current?.focus();
   }, [focusComposerToken]);
+
+  // A search result or a report asked to show this message.
+  const jumpToken = jumpRequest?.token ?? 0;
+  useEffect(() => {
+    if (jumpRequest) void jumpTo(jumpRequest.seq);
+  }, [jumpToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onAtBottom = useCallback(
     (lastSeq: number) => {
@@ -298,7 +309,8 @@ export function Conversation({
   return (
     <section
       aria-label={room.title}
-      className="relative flex h-full min-w-0 flex-1 flex-col bg-(--chat-bg)"
+      // A size container: the media preview fills its height (cqh).
+      className="relative flex h-full min-w-0 flex-1 flex-col bg-(--chat-bg) [container-type:size]"
       onDragEnter={(event) => {
         if (event.dataTransfer.types.includes("Files") && room.me.canPost)
           setDragging(true);
@@ -341,6 +353,15 @@ export function Conversation({
             </span>
           </span>
         </button>
+        <button
+          type="button"
+          className={iconButton}
+          onClick={onOpenSearch}
+          aria-label="Search messages"
+          title="Search messages"
+        >
+          <MagnifyingGlass size={20} />
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger className={iconButton} aria-label="Menu">
             <DotsThreeVertical size={22} weight="bold" />
@@ -349,6 +370,9 @@ export function Conversation({
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={onOpenInfo}>
                 {room.kind === "direct" ? "Contact info" : "Group info"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onOpenSearch}>
+                Search messages
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() =>
@@ -466,7 +490,7 @@ export function Conversation({
         </button>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-(--chat-wall,var(--chat-bg))">
         <div className="chat-wallpaper" aria-hidden="true" />
         {thread.data ? (
           <MessageList

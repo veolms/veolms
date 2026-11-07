@@ -18,6 +18,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * small batches. Safe to run on several processes at once: each batch
  * deletes or clears rows that are still there.
  */
+const RECEIPT_MARK_DAYS = 30;
+
 export function createChatRetention(storage?: S3StorageService) {
   const repository = createChatRepository();
 
@@ -48,6 +50,18 @@ export function createChatRetention(storage?: S3StorageService) {
         cleared += done;
         if (done < BATCH) break;
       }
+      // Message info's times are kept 30 days.
+      let marks = 0;
+      const marksCutoff = new Date(Date.now() - RECEIPT_MARK_DAYS * DAY_MS);
+      for (let i = 0; i < MAX_BATCHES; i += 1) {
+        const removed = await repository.pruneReceiptMarks(
+          database,
+          marksCutoff,
+          BATCH * 10,
+        );
+        marks += removed;
+        if (removed < BATCH * 10) break;
+      }
       // Files nobody can read any more: never sent, or whose message is gone.
       let removedFiles = 0;
       if (
@@ -76,6 +90,7 @@ export function createChatRetention(storage?: S3StorageService) {
         removedFiles,
         purgedMessages: purged,
         clearedDeletedBodies: cleared,
+        prunedReceiptMarks: marks,
         retentionMonths: settings.course_retention_months,
       };
     },

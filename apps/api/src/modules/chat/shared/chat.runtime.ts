@@ -68,6 +68,10 @@ export function getChatRuntime(
       logger: app.log,
     }),
   };
+  // A new message pushed to someone's open app counts as delivered.
+  hub.setDeliveryHook((roomId, userId, seq) =>
+    runtime.receipts.add({ roomId, userId, readSeq: 0, deliveredSeq: seq }),
+  );
   runtimes.set(database, runtime);
   app.addHook("onClose", async () => {
     runtimes.delete(database);

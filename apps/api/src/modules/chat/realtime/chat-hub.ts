@@ -58,8 +58,16 @@ export interface ChatHub {
   setPresenceHooks(hooks: PresenceHooks): void;
   /** Everyone with a stream open in this process. */
   userIds(): string[];
+  /** Told for each person a new message reached (their open app has it). */
+  setDeliveryHook(hook: DeliveryHook): void;
   stop(): Promise<void>;
 }
+
+export type DeliveryHook = (
+  roomId: string,
+  userId: string,
+  seq: number,
+) => void;
 
 export interface PresenceHooks {
   online(userId: string): void;
@@ -97,6 +105,7 @@ export function createChatHub({
   let retryDelay = RECONNECT_MIN_MS;
   let loadRooms: RoomLoader | null = null;
   let presence: PresenceHooks | null = null;
+  let delivered: DeliveryHook | null = null;
 
   function index<K>(
     map: Map<K, Set<ChatStreamConnection>>,
@@ -188,6 +197,16 @@ export function createChatHub({
             pointer: true,
           });
         broadcastRoom(event.roomId, Buffer.from(sse(name, data)));
+        // Reached someone's open app: delivered (the sender's second tick),
+        // as WhatsApp counts a phone that is online. Batched, no query here.
+        if (event.type === "message" && delivered) {
+          const seen = new Set<string>();
+          for (const stream of byRoom.get(event.roomId) ?? []) {
+            if (seen.has(stream.userId)) continue;
+            seen.add(stream.userId);
+            delivered(event.roomId, stream.userId, event.seq);
+          }
+        }
         return;
       }
       case "typing":
@@ -491,6 +510,9 @@ export function createChatHub({
       presence = hooks;
     },
     userIds: () => [...byUser.keys()],
+    setDeliveryHook(hook) {
+      delivered = hook;
+    },
     async stop() {
       stopped = true;
       listening = false;

@@ -313,9 +313,13 @@ export const chatRoomDetailSchema = chatRoomSummarySchema.extend({
 export type ChatRoomDetail = z.infer<typeof chatRoomDetailSchema>;
 
 /** Message info for your own message: who has read and received it. */
+/** A person in Message info, with when it reached them (null: not known). */
+export const chatReceiptPersonSchema = chatPersonSchema.extend({
+  at: isoDate.nullable(),
+});
 export const chatMessageInfoSchema = z.object({
-  readBy: z.array(chatPersonSchema),
-  deliveredTo: z.array(chatPersonSchema),
+  readBy: z.array(chatReceiptPersonSchema),
+  deliveredTo: z.array(chatReceiptPersonSchema),
   /** Members it has not reached yet. */
   waiting: z.number().int(),
   /** Read receipts are off for this private chat (yours or theirs). */
@@ -335,6 +339,19 @@ export const updateChatProfileRequestSchema = chatProfileSchema
   .strict();
 export type UpdateChatProfileRequest = z.infer<
   typeof updateChatProfileRequestSchema
+>;
+
+/** "Search in this chat": words anywhere in a message, newest first. */
+export const chatMessageSearchQuerySchema = z.strictObject({
+  q: z.string().trim().min(2).max(100),
+  before: seqSchema.optional(),
+});
+export const chatMessageSearchResponseSchema = z.object({
+  messages: z.array(chatMessageSchema),
+  hasMore: z.boolean(),
+});
+export type ChatMessageSearchResponse = z.infer<
+  typeof chatMessageSearchResponseSchema
 >;
 
 export const chatMessageListQuerySchema = z.strictObject({
@@ -433,6 +450,7 @@ export const chatRoomSettingsRequestSchema = z
     postingPolicy: chatPostingPolicySchema.optional(),
     slowModeSeconds: z.number().int().min(0).max(3_600).optional(),
     directMessagesAllowed: z.boolean().optional(),
+    attachmentsAllowed: z.boolean().optional(),
     status: chatRoomStatusSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "Nothing to change");
@@ -477,6 +495,8 @@ export const chatCandidatesQuerySchema = z.strictObject({
   search: z.string().trim().max(80).optional(),
 });
 export const chatCandidatesResponseSchema = z.object({
+  /** With a search: everyone found whom you may message. */
+  results: z.array(chatSenderSchema),
   staff: z.array(chatSenderSchema),
   courses: z.array(
     z.object({
@@ -695,3 +715,6 @@ export type ChatChangesResponse = z.infer<typeof chatChangesResponseSchema>;
 export type ChatMessageListResponse = z.infer<
   typeof chatMessageListResponseSchema
 >;
+
+export type ChatReport = z.infer<typeof chatReportSchema>;
+export type ChatRestriction = z.infer<typeof chatRestrictionSchema>;

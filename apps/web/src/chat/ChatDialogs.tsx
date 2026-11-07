@@ -197,20 +197,32 @@ export function RestrictDialog({
           ))}
         </fieldset>
       ) : null}
-      <label className="mb-3 flex flex-col gap-1.5 text-[0.82rem] text-(--muted)">
-        Reason
-        <select
-          value={reason}
-          onChange={(event) => setReason(event.target.value as ChatReason)}
-          className="h-10 rounded-lg border border-solid border-(--chat-line-strong) bg-(--chat-input) px-2 text-[0.92rem] text-(--text)"
+      <div className="mb-3">
+        <div className="mb-1.5 text-[0.82rem] text-(--muted)">Reason</div>
+        <div
+          role="radiogroup"
+          aria-label="Reason"
+          className="flex flex-wrap gap-2"
         >
           {REASONS.map((r) => (
-            <option key={r.value} value={r.value}>
+            <button
+              key={r.value}
+              type="button"
+              role="radio"
+              aria-checked={reason === r.value}
+              onClick={() => setReason(r.value)}
+              className={cn(
+                "h-8 cursor-pointer rounded-full border border-solid px-3 text-[0.82rem] font-medium",
+                reason === r.value
+                  ? "border-transparent bg-(--accent-soft) text-(--accent-ink)"
+                  : "border-(--chat-line-strong) bg-transparent text-(--text-secondary) hover:bg-(--chat-hover)",
+              )}
+            >
               {r.label}
-            </option>
+            </button>
           ))}
-        </select>
-      </label>
+        </div>
+      </div>
       {canRestrictEverywhere && !helperOnly ? (
         <label className="mb-4 flex cursor-pointer items-center gap-3 text-[0.9rem]">
           <input

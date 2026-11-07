@@ -823,4 +823,78 @@ await test("chat privacy: last seen and read receipts are saved per person", asy
   ok(await a.client.patch("/v1/chat/me/profile", { readReceipts: true }));
 });
 
+await test("a message reaching someone's open app is delivered at once; search and Message info times", async () => {
+  const quick = await createCourse(flow, {
+    title: "Quick Ticks",
+    pricing: "free",
+  });
+  await enrollForFree(a.client, quick);
+  await enrollForFree(b.client, quick);
+  const room = ok<{ room: Room }>(
+    await admin.post(`/v1/chat/courses/${quick.id}/room`),
+  ).room;
+  ok(
+    await admin.patch(`/v1/chat/rooms/${room.id}/settings`, {
+      postingPolicy: "everyone",
+    }),
+  );
+  for (const client of [admin, a.client, b.client]) {
+    await messages(client, room.id);
+  }
+  // Both have the app open; nobody posts a receipt by hand.
+  const streams = await Promise.all([openStream(admin), openStream(b.client)]);
+  await sleep(500);
+  const sent = ok<{ message: Message }>(
+    await send(a.client, room.id, "Homework is due on Friday"),
+    201,
+  ).message;
+  type Ticked = Room & { peerDeliveredSeq: number | null };
+  let seen: Ticked | undefined;
+  for (let i = 0; i < 25; i += 1) {
+    await sleep(200);
+    seen = (await myRooms(a.client)).rooms.find(
+      (r) => r.id === room.id,
+    ) as Ticked;
+    if ((seen.peerDeliveredSeq ?? 0) >= sent.seq) break;
+  }
+  assert.ok(
+    (seen?.peerDeliveredSeq ?? 0) >= sent.seq,
+    "two ticks within seconds, from the open apps alone",
+  );
+  for (const stream of streams) stream.close();
+
+  const info = ok<{ deliveredTo: Array<{ at: string | null }> }>(
+    await a.client.get(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/info`),
+  );
+  assert.equal(info.deliveredTo.length, 2);
+  assert.ok(
+    info.deliveredTo.every((p) => p.at !== null),
+    "Message info says when it reached each of them",
+  );
+
+  const found = ok<{ messages: Message[] }>(
+    await b.client.get(`/v1/chat/rooms/${room.id}/search?q=friday`),
+  );
+  assert.deepEqual(
+    found.messages.map((m) => m.seq),
+    [sent.seq],
+  );
+  const none = ok<{ messages: Message[] }>(
+    await b.client.get(`/v1/chat/rooms/${room.id}/search?q=tuesday`),
+  );
+  assert.equal(none.messages.length, 0);
+});
+
+await test("New chat: an admin finds any learner by name", async () => {
+  const name = (
+    await a.client.get<{ id: string; displayName: string }>("/v1/auth/me")
+  ).body.data!.displayName;
+  const found = ok<{ results: Array<{ id: string }> }>(
+    await admin.get(
+      `/v1/chat/direct/candidates?search=${encodeURIComponent(name.slice(0, 8))}`,
+    ),
+  );
+  assert.ok(found.results.some((p) => p.id === a.userId));
+});
+
 await flow.close();

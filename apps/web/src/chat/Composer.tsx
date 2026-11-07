@@ -1,6 +1,8 @@
 import { CameraIcon as Camera } from "@phosphor-icons/react/Camera";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { ImagesIcon as Images } from "@phosphor-icons/react/Images";
 import { MicrophoneIcon as Microphone } from "@phosphor-icons/react/Microphone";
+import { MusicNotesIcon as MusicNotes } from "@phosphor-icons/react/MusicNotes";
 import { PaperPlaneRightIcon as PaperPlaneRight } from "@phosphor-icons/react/PaperPlaneRight";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
@@ -42,6 +44,7 @@ import { getApiError } from "../lib/api-error";
 import { ChatFileError, prepareFile } from "./chatMedia";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
+import { MediaStage } from "./MediaStage";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 
 export interface ComposerHandle {
@@ -109,6 +112,20 @@ export const Composer = forwardRef<
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  // The media preview covers the messages down to this box's top.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [rootHeight, setRootHeight] = useState(72);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setRootHeight(entry.borderBoxSize[0]?.blockSize ?? 72);
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
   const lastTypingRef = useRef(0);
   const recorder = useVoiceRecorder();
   const editMessage = useEditMessage();
@@ -324,7 +341,10 @@ export const Composer = forwardRef<
     "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--chat-hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
-    <div className="relative border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+    <div
+      ref={rootRef}
+      className="relative border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+    >
       {replyTo || editing ? (
         <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
           {editing ? (
@@ -363,46 +383,26 @@ export const Composer = forwardRef<
       ) : null}
 
       {files.length > 0 ? (
-        <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
-          {files.map((file) => (
-            <div
-              key={file.localId}
-              className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-(--chat-input)"
-            >
-              {file.kind === "image" && file.previewUrl ? (
-                <img
-                  src={file.previewUrl}
-                  alt={file.name}
-                  className="size-full object-cover"
-                />
-              ) : file.kind === "video" && file.previewUrl ? (
-                <video
-                  src={file.previewUrl}
-                  muted
-                  className="size-full object-cover"
-                />
-              ) : (
-                <span className="flex flex-col items-center gap-1 px-1 text-center text-[0.65rem] text-(--muted)">
-                  <FileText size={22} aria-hidden="true" />
-                  <span className="line-clamp-2 break-all">{file.name}</span>
-                </span>
-              )}
-              <button
-                type="button"
-                aria-label={`Remove ${file.name}`}
-                onClick={() =>
-                  setFiles((current) => {
-                    if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
-                    return current.filter((f) => f.localId !== file.localId);
-                  })
-                }
-                className="absolute top-1 right-1 inline-flex size-6 cursor-pointer items-center justify-center rounded-full border-0 bg-black/60 text-white"
-              >
-                <X size={12} weight="bold" />
-              </button>
-            </div>
-          ))}
-        </div>
+        <MediaStage
+          files={files}
+          composerHeight={rootHeight}
+          onAddMore={() => mediaInputRef.current?.click()}
+          onClear={() =>
+            setFiles((current) => {
+              for (const file of current) {
+                if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+              }
+              return [];
+            })
+          }
+          onRemove={(localId) =>
+            setFiles((current) => {
+              const gone = current.find((f) => f.localId === localId);
+              if (gone?.previewUrl) URL.revokeObjectURL(gone.previewUrl);
+              return current.filter((f) => f.localId !== localId);
+            })
+          }
+        />
       ) : null}
 
       {mentionQuery !== null ? (
@@ -498,26 +498,33 @@ export const Composer = forwardRef<
             <DropdownMenuContent
               side="top"
               align="start"
-              className="w-56 min-w-0"
+              className="w-60 min-w-0 p-1.5"
             >
-              <DropdownMenuItem onClick={() => mediaInputRef.current?.click()}>
-                <Camera
-                  size={18}
-                  className="text-[#3b82f6]"
-                  aria-hidden="true"
-                />{" "}
-                Photos &amp; videos
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => documentInputRef.current?.click()}
-              >
-                <FileText
-                  size={18}
-                  className="text-[#8b5cf6]"
-                  aria-hidden="true"
-                />{" "}
-                Document
-              </DropdownMenuItem>
+              {(
+                [
+                  ["Document", FileText, "bg-[#7f66ff]", documentInputRef],
+                  ["Photos & videos", Images, "bg-[#007bfc]", mediaInputRef],
+                  ["Camera", Camera, "bg-[#ff2e74]", cameraInputRef],
+                  ["Audio", MusicNotes, "bg-[#ff7a1a]", audioInputRef],
+                ] as const
+              ).map(([label, Icon, tone, inputRef]) => (
+                <DropdownMenuItem
+                  key={label}
+                  onClick={() => inputRef.current?.click()}
+                  className="gap-3 py-2"
+                >
+                  <span
+                    className={cn(
+                      "flex size-8 items-center justify-center rounded-full text-white",
+                      tone,
+                    )}
+                    aria-hidden="true"
+                  >
+                    <Icon size={17} weight="fill" />
+                  </span>
+                  {label}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
           <button
@@ -637,6 +644,28 @@ export const Composer = forwardRef<
         ref={mediaInputRef}
         type="file"
         accept={MEDIA_ACCEPT}
+        multiple
+        hidden
+        onChange={(event) => {
+          void addFiles([...(event.target.files ?? [])]);
+          event.target.value = "";
+        }}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*,video/*"
+        capture="environment"
+        hidden
+        onChange={(event) => {
+          void addFiles([...(event.target.files ?? [])]);
+          event.target.value = "";
+        }}
+      />
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept={(CHAT_UPLOAD_MIME_TYPES.audio as readonly string[]).join(",")}
         multiple
         hidden
         onChange={(event) => {

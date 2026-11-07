@@ -37,6 +37,7 @@ export function createRoomsController({ service }: { service: RoomsService }) {
             postingPolicy?: "everyone" | "staff_only";
             slowModeSeconds?: number;
             directMessagesAllowed?: boolean;
+            attachmentsAllowed?: boolean;
             status?: "active" | "locked" | "archived";
           };
         }

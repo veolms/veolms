@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type {
   ChatMessage,
+  ChatRoomSummary,
   ChatStreamGroupReadEvent,
   ChatStreamPresenceEvent,
   ChatStreamReadEvent,
@@ -8,6 +9,8 @@ import type {
   ChatStreamTypingEvent,
 } from "@veolms/contracts";
 
+import { setChatStreamCarriesNotifications } from "../../lib/tabLiveStream";
+import { getChatPrefs } from "../../store/chatPrefs.store";
 import { notificationKeys } from "../notifications";
 import {
   applyGroupRead,
@@ -67,6 +70,7 @@ export function setChatOnScreen(roomId: string, onScreen: boolean) {
 function setLive(next: boolean) {
   if (live === next) return;
   live = next;
+  setChatStreamCarriesNotifications(next);
   for (const listener of liveListeners) listener();
 }
 
@@ -197,6 +201,81 @@ async function catchUp(roomId: string) {
   }
 }
 
+// ------------------------------------------------------------------ alerts
+const SOUND_GAP_MS = 2_000;
+let lastSoundAt = 0;
+let audio: AudioContext | null = null;
+
+/** A soft two-note chime, made on the spot (no sound file to load). */
+function chime() {
+  if (Date.now() - lastSoundAt < SOUND_GAP_MS) return;
+  lastSoundAt = Date.now();
+  try {
+    audio ??= new AudioContext();
+    const now = audio.currentTime;
+    for (const [i, freq] of [880, 1320].entries()) {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + i * 0.09);
+      gain.gain.exponentialRampToValueAtTime(0.08, now + i * 0.09 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.09 + 0.22);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(now + i * 0.09);
+      osc.stop(now + i * 0.09 + 0.25);
+    }
+  } catch {
+    // No sound before the page has been interacted with, or no audio.
+  }
+}
+
+/**
+ * Settings › Notifications: a sound and (in the background) a desktop
+ * alert for a private message, or an @mention in a group, unless the chat
+ * is muted or already on screen.
+ */
+function alertFor(message: ChatMessage) {
+  if (!client || message.kind === "system" || message.sender?.id === viewer) {
+    return;
+  }
+  const list = client.getQueryData<{ rooms: ChatRoomSummary[] }>(
+    chatKeys.rooms(),
+  );
+  const room = list?.rooms.find((r) => r.id === message.roomId);
+  if (!room || room.me.notifyLevel === "none") return;
+  const mentioned = Boolean(
+    viewer && (message.mentions.includes(viewer) || message.mentionAll),
+  );
+  const wanted =
+    room.kind === "direct" ? room.me.notifyLevel === "all" : mentioned;
+  if (!wanted) return;
+  const hidden = document.visibilityState === "hidden";
+  if (!hidden && visibleRooms.has(message.roomId)) return;
+  const prefs = getChatPrefs();
+  if (prefs.sounds) chime();
+  if (
+    hidden &&
+    prefs.desktopAlerts &&
+    typeof Notification !== "undefined" &&
+    Notification.permission === "granted"
+  ) {
+    const who = message.sender?.name ?? "Someone";
+    const body = prefs.previews
+      ? message.body ||
+        (message.attachments[0]?.kind === "audio" ? "Voice message" : "Media")
+      : "New message";
+    const alert = new Notification(
+      room.kind === "direct" ? who : `${who} @ ${room.title}`,
+      { body, tag: message.roomId },
+    );
+    alert.onclick = () => {
+      window.focus();
+      window.location.assign(`/chat/${message.roomId}`);
+      alert.close();
+    };
+  }
+}
+
 function onMessage(
   message: ChatMessage | { pointer: true; roomId: string },
   isNew: boolean,
@@ -218,6 +297,7 @@ function onMessage(
     visibleRooms.has(message.roomId) && document.visibilityState === "visible";
   applyToRoomList(client, message, { viewerId: viewer, isNew, open });
   if (isNew) {
+    alertFor(message);
     stopTyping(message.roomId, message.sender?.id);
     if (message.sender?.id !== viewer) {
       queueReceipt(

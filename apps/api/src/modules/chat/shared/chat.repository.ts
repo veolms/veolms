@@ -506,6 +506,18 @@ export function createChatRepository() {
             "u.avatar_data_url",
             "u.is_deleted",
             "cm.last_read_seq",
+            // The first time their position reached the message (marks are
+            // kept 30 days; null before that or for very big groups).
+            sql<Date | null>`(
+              select min(k.at) from chat_receipt_marks k
+              where k.room_id = cm.room_id and k.user_id = cm.user_id
+                and k.delivered_seq >= ${String(seq)}::bigint
+            )`.as("delivered_at"),
+            sql<Date | null>`(
+              select min(k.at) from chat_receipt_marks k
+              where k.room_id = cm.room_id and k.user_id = cm.user_id
+                and k.read_seq >= ${String(seq)}::bigint
+            )`.as("read_at"),
           ])
           .where("cm.room_id", "=", roomId)
           .where("cm.state", "=", "active")
@@ -524,6 +536,92 @@ export function createChatRepository() {
           .executeTakeFirstOrThrow(),
       ]);
       return { reached, waiting: Number(waiting.n) };
+    },
+
+    /** When members' positions moved (Message info's times). */
+    async insertReceiptMarks(
+      db: Executor,
+      rows: ReadonlyArray<{
+        room_id: string;
+        user_id: string;
+        last_read_seq: string;
+        last_delivered_seq: string;
+      }>,
+    ) {
+      if (rows.length === 0) return;
+      await db
+        .insertInto("chat_receipt_marks")
+        .values(
+          rows.map((row) => ({
+            room_id: row.room_id,
+            user_id: row.user_id,
+            read_seq: row.last_read_seq,
+            delivered_seq: row.last_delivered_seq,
+          })),
+        )
+        .execute();
+    },
+
+    async pruneReceiptMarks(db: Executor, before: Date, limit: number) {
+      const result = await sql`
+        delete from chat_receipt_marks
+        where ctid in (
+          select ctid from chat_receipt_marks where at < ${before} limit ${limit}
+        )
+      `.execute(db);
+      return Number(result.numAffectedRows ?? 0);
+    },
+
+    /**
+     * Messages in one chat whose text contains `term` (trigram index),
+     * newest first, as the viewer sees them (not deleted, not hidden).
+     */
+    async searchMessages(
+      db: Executor,
+      viewerId: string,
+      roomId: string,
+      term: string,
+      beforeSeq: number | null,
+      limit: number,
+    ) {
+      const pattern = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      let query = messageQuery(db, viewerId)
+        .where("m.room_id", "=", roomId)
+        .where("m.deleted_at", "is", null)
+        .where("m.body", "ilike", pattern);
+      if (beforeSeq !== null)
+        query = query.where("m.seq", "<", String(beforeSeq));
+      const rows = (await query
+        .orderBy("m.seq", "desc")
+        .limit(limit + 1)
+        .execute()) as MessageRow[];
+      return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
+    },
+
+    /** People by name or username (and e-mail, for staff), for New chat. */
+    async searchPeople(
+      db: Executor,
+      term: string,
+      excludeId: string,
+      withEmail: boolean,
+      limit: number,
+    ) {
+      const pattern = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      return db
+        .selectFrom("users as u")
+        .select(["u.id", "u.display_name", "u.avatar_data_url", "u.is_deleted"])
+        .where("u.id", "<>", excludeId)
+        .where("u.is_deleted", "=", false)
+        .where((eb) =>
+          eb.or([
+            eb("u.display_name", "ilike", pattern),
+            eb("u.username", "ilike", pattern),
+            ...(withEmail ? [eb("u.email", "ilike", pattern)] : []),
+          ]),
+        )
+        .orderBy("u.display_name")
+        .limit(limit)
+        .execute();
     },
 
     /** A few active members' names, for a group header. */

@@ -1,11 +1,18 @@
 import { ChecksIcon as Checks } from "@phosphor-icons/react/Checks";
-import type { ChatMessage, ChatPerson } from "@veolms/contracts";
+import type { ChatMessage, ChatMessageInfo } from "@veolms/contracts";
 
 import { getApiError } from "../lib/api-error";
 import { useMessageInfo } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
 import { DrawerHeader } from "./ChatControls";
-import { messageTime } from "./chatFormat";
+import { listTime, messageTime } from "./chatFormat";
+
+/** "10:42 AM" today, "Yesterday 9:15 PM", or a date and time. */
+function receiptTime(iso: string): string {
+  const day = listTime(iso);
+  const time = messageTime(iso);
+  return day === time ? time : `${day}, ${time}`;
+}
 
 /**
  * WhatsApp's "Message info" for your own message: the message, then who
@@ -115,7 +122,7 @@ function Section({
   single,
 }: {
   title: string;
-  people: ChatPerson[];
+  people: ChatMessageInfo["readBy"];
   empty: string;
   read?: boolean;
   single: boolean;
@@ -141,8 +148,15 @@ function Section({
           {people.map((person) => (
             <li key={person.id} className="flex items-center gap-3 px-6 py-2">
               <ChatAvatar name={person.name} url={person.avatarUrl} size="md" />
-              <span className="min-w-0 flex-1 truncate text-[0.92rem] text-(--text)">
-                {person.name}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[0.92rem] text-(--text)">
+                  {person.name}
+                </span>
+                {person.at ? (
+                  <span className="block text-[0.78rem] text-(--muted)">
+                    {receiptTime(person.at)}
+                  </span>
+                ) : null}
               </span>
             </li>
           ))}

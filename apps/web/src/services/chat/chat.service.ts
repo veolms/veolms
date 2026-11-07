@@ -3,8 +3,11 @@ import type {
   ChatChangesResponse,
   ChatMessage,
   ChatMessageInfo,
+  ChatMessageSearchResponse,
   ChatProfile,
   ChatReason,
+  ChatReport,
+  ChatRestriction,
   ChatRestrictionType,
   ChatRoomDetail,
   ChatRoomSummary,
@@ -44,6 +47,13 @@ export interface ChatMemberPage {
 }
 
 export interface ChatCandidates {
+  /** With a search: everyone found whom you may message. */
+  results: Array<{
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+    role: ChatSenderRole;
+  }>;
   staff: Array<{
     id: string;
     name: string;
@@ -84,6 +94,29 @@ export const chatService = {
   getProfile: () => api.get<ChatProfile>("/chat/me/profile"),
   updateProfile: (patch: Partial<ChatProfile>) =>
     api.patch<ChatProfile>("/chat/me/profile", patch),
+  searchMessages: (roomId: string, q: string, before?: number) =>
+    api.get<ChatMessageSearchResponse>(`/chat/rooms/${roomId}/search`, {
+      params: before ? { q, before } : { q },
+    }),
+  listReports: (params: {
+    roomId?: string;
+    status?: "open" | "actioned" | "dismissed";
+  }) =>
+    api.get<{ reports: ChatReport[]; nextCursor: string | null }>(
+      "/chat/reports",
+      { params },
+    ),
+  handleReport: (id: string, status: "actioned" | "dismissed") =>
+    api.patch<{ ok: true }>(`/chat/reports/${id}`, { status }),
+  listRestrictions: (params: { roomId?: string; active?: boolean }) =>
+    api.get<{ restrictions: ChatRestriction[] }>("/chat/restrictions", {
+      params: {
+        ...(params.roomId ? { roomId: params.roomId } : {}),
+        ...(params.active !== undefined
+          ? { active: String(params.active) }
+          : {}),
+      },
+    }),
   messageInfo: (roomId: string, seq: number) =>
     api.get<ChatMessageInfo>(`/chat/rooms/${roomId}/messages/${seq}/info`),
   getRoom: (roomId: string) =>
@@ -165,6 +198,7 @@ export const chatService = {
       postingPolicy?: "everyone" | "staff_only";
       slowModeSeconds?: number;
       directMessagesAllowed?: boolean;
+      attachmentsAllowed?: boolean;
       status?: "active" | "locked" | "archived";
     },
   ) =>

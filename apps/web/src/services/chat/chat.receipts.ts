@@ -1,12 +1,13 @@
 import { chatService } from "./chat.service";
 
 /**
- * Read and delivered positions, sent in one request every few seconds
+ * Read and delivered positions, sent in one request about once a second
  * (CHAT_ROOM_PLAN §14.5): scrolling through a busy group never becomes a
  * request per message. Positions only move forward.
  */
 
-const FLUSH_MS = 3_000;
+/** Short: blue ticks follow reading within a second or two (WhatsApp). */
+const FLUSH_MS = 800;
 
 const pending = new Map<string, { readSeq: number; deliveredSeq: number }>();
 let timer: ReturnType<typeof setTimeout> | undefined;

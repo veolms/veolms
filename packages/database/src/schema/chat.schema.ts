@@ -222,3 +222,12 @@ export interface ChatProfileTable {
   last_seen_at: Date | null;
   updated_at: Generated<Date>;
 }
+
+/** When a member's received / read position moved (Message info's times). */
+export interface ChatReceiptMarkTable {
+  room_id: string;
+  user_id: string;
+  read_seq: ColumnType<string, number | string, number | string>;
+  delivered_seq: ColumnType<string, number | string, number | string>;
+  at: Generated<Date>;
+}

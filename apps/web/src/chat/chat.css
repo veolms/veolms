@@ -40,8 +40,15 @@
   }
 }
 
-/* Settings › Chats › Wallpaper doodles off. */
-:root[data-chat-doodles="off"] .chat-wallpaper {
+/* Settings › Chats › Wallpaper pattern: dots, or none. */
+[data-chat-pattern="dots"] .chat-wallpaper {
+  -webkit-mask-image: radial-gradient(circle, #000 1.2px, transparent 1.6px);
+  mask-image: radial-gradient(circle, #000 1.2px, transparent 1.6px);
+  -webkit-mask-size: 18px 18px;
+  mask-size: 18px 18px;
+}
+
+[data-chat-pattern="none"] .chat-wallpaper {
   display: none;
 }
 

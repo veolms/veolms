@@ -10,6 +10,8 @@ import type { ChatRuntime } from "../shared/chat.runtime.ts";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CANDIDATES_PER_COURSE = 20;
 const CANDIDATE_COURSES = 10;
+/** People a New chat search checks (each against the private-chat rules). */
+const SEARCH_LIMIT = 25;
 
 /**
  * Private chats (CHAT_ROOM_PLAN.md §4.3, decision 1: "course peers").
@@ -235,7 +237,43 @@ export function createDirectService(runtime: ChatRuntime) {
               CANDIDATES_PER_COURSE,
             );
 
+      // A search looks through everyone, then keeps whom you may message:
+      // platform staff reach anyone; others, the private-chat rules.
+      const term = search?.trim() ?? "";
+      let results: Array<
+        ReturnType<typeof presentPerson> & { role: ChatSenderRole }
+      > = [];
+      if (term.length >= 2) {
+        const found = await repository.searchPeople(
+          database,
+          term,
+          userId,
+          userStaff,
+          SEARCH_LIMIT,
+        );
+        const allowed: typeof found = [];
+        for (const person of found) {
+          if (
+            await access.directAllowed(
+              database,
+              settings.direct_policy,
+              userId,
+              person.id,
+            )
+          ) {
+            allowed.push(person);
+          }
+        }
+        results = await Promise.all(
+          allowed.map(async (person) => ({
+            ...presentPerson(person),
+            role: await staffRole(person.id),
+          })),
+        );
+      }
+
       return {
+        results,
         staff: staffPeople.map((p) => ({
           ...presentPerson(p),
           role: "instructor" as const,

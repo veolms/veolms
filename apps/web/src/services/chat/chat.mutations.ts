@@ -273,3 +273,26 @@ export function useUpdateChatProfile() {
     },
   });
 }
+
+export function useHandleReport() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; status: "actioned" | "dismissed" }) =>
+      chatService.handleReport(v.id, v.status),
+    onSuccess: () =>
+      void client.invalidateQueries({
+        queryKey: [...chatKeys.all, "reports"],
+      }),
+  });
+}
+
+export function useLiftRestriction() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => chatService.liftRestriction(id),
+    onSuccess: () =>
+      void client.invalidateQueries({
+        queryKey: [...chatKeys.all, "restrictions"],
+      }),
+  });
+}

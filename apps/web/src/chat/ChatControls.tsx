@@ -2,6 +2,8 @@ import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import type { ReactNode } from "react";
 
+import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
+
 import { cn } from "../lib/utils";
 
 /** A round 40 px icon button (WhatsApp's header and panel icons). */
@@ -161,5 +163,35 @@ export function SettingsRow({
     </button>
   ) : (
     <div className={className}>{body}</div>
+  );
+}
+
+/**
+ * The app's own select (ThemedSelect), sized for a settings row and shaped
+ * like chat's inputs: a rounded pill of fixed width beside the label.
+ */
+export function ChatSelect<Value extends string>({
+  value,
+  options,
+  ariaLabel,
+  onValueChange,
+  width = "w-40",
+}: {
+  value: Value;
+  options: readonly ThemedSelectOption<Value>[];
+  ariaLabel: string;
+  onValueChange: (value: Value) => void;
+  width?: string;
+}) {
+  return (
+    <span className={cn("block shrink-0", width)}>
+      <ThemedSelect<Value>
+        ariaLabel={ariaLabel}
+        value={value}
+        options={options}
+        onValueChange={onValueChange}
+        triggerClassName="h-9! w-full! rounded-full! border-0! bg-(--chat-input)! px-3.5! text-[0.85rem]! font-medium! text-(--text)! shadow-none!"
+      />
+    </span>
   );
 }

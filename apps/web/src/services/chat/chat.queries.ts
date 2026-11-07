@@ -162,3 +162,44 @@ export function useMessageInfo(roomId: string, seq: number | null) {
     refetchInterval: 5_000,
   });
 }
+
+/** "Search in this chat": newest matches first, more on demand. */
+export function useMessageSearch(roomId: string, q: string) {
+  return useInfiniteQuery({
+    queryKey: chatKeys.search(roomId, q),
+    queryFn: ({ pageParam }) =>
+      chatService.searchMessages(roomId, q, pageParam ?? undefined),
+    initialPageParam: null as number | null,
+    getNextPageParam: (last) =>
+      last.hasMore ? (last.messages.at(-1)?.seq ?? null) : null,
+    enabled: q.trim().length >= 2,
+    staleTime: 30_000,
+  });
+}
+
+/** Staff: reports about this chat's messages, and who is muted or removed. */
+export function useChatReports(roomId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: chatKeys.reports(roomId),
+    queryFn: () =>
+      chatService.listReports({
+        status: "open",
+        ...(roomId ? { roomId } : {}),
+      }),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useChatRestrictions(roomId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: chatKeys.restrictions(roomId),
+    queryFn: () =>
+      chatService.listRestrictions({
+        active: true,
+        ...(roomId ? { roomId } : {}),
+      }),
+    enabled,
+    staleTime: 30_000,
+  });
+}

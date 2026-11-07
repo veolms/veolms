@@ -25,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import { useDebounce } from "../hooks/useDebounce";
 import { cn } from "../lib/utils";
 import {
   markRoomRead,
@@ -39,7 +40,7 @@ import {
 import { ChatAvatar } from "./ChatAvatar";
 import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
-import { listTime, messageTime } from "./chatFormat";
+import { listTime, messageTime, ROLE_LABEL } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
 
 type Filter = "all" | "unread" | "courses" | "direct" | "requests";
@@ -605,7 +606,9 @@ function NewChatPanel({
   onStartDirect: (userId: string) => void;
 }) {
   const [search, setSearch] = useState("");
-  const candidates = useChatCandidates(search.trim(), true);
+  // One search per pause in typing, not per key.
+  const term = useDebounce(search.trim(), 250);
+  const candidates = useChatCandidates(term, true);
   const person = (
     p: { id: string; name: string; avatarUrl: string | null },
     note: string,
@@ -644,6 +647,22 @@ function NewChatPanel({
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {candidates.isLoading ? <ChatListSkeleton /> : null}
+        {search.trim().length >= 2 && candidates.data ? (
+          candidates.data.results.length > 0 ? (
+            <>
+              {heading("People")}
+              <ul className="m-0 list-none p-0">
+                {candidates.data.results.map((p) =>
+                  person(p, ROLE_LABEL[p.role] ?? "Learner"),
+                )}
+              </ul>
+            </>
+          ) : null
+        ) : (
+          <p className="m-0 px-4 pt-1 pb-2 text-[0.8rem] text-(--muted)">
+            Type a name or username to find anyone you can message.
+          </p>
+        )}
         {candidates.data && candidates.data.staff.length > 0 ? (
           <>
             {heading("Teachers of your courses")}
@@ -674,8 +693,9 @@ function NewChatPanel({
           </section>
         ))}
         {candidates.data &&
+        candidates.data.results.length === 0 &&
         candidates.data.staff.length === 0 &&
-        candidates.data.courses.length === 0 ? (
+        candidates.data.courses.every((c) => c.people.length === 0) ? (
           <p className="m-0 px-8 py-10 text-center text-[0.88rem] text-(--muted)">
             {search.trim()
               ? `Nobody called “${search.trim()}” you can message.`

@@ -5,6 +5,8 @@ import {
   chatEditMessageRequestSchema,
   chatMessageListQuerySchema,
   chatMessageInfoSchema,
+  chatMessageSearchQuerySchema,
+  chatMessageSearchResponseSchema,
   chatMessageListResponseSchema,
   chatMessageParamsSchema,
   chatMessageResponseSchema,
@@ -64,6 +66,29 @@ const messagesRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.list,
+  );
+
+  app.get(
+    "/chat/rooms/:roomId/search",
+    {
+      config: { rateLimit: perUser(60, "1 minute") },
+      preHandler,
+      schema: {
+        operationId: "searchChatMessages",
+        tags,
+        summary: "Search this chat's messages (words anywhere), newest first",
+        params: chatRoomParamsSchema,
+        querystring: chatMessageSearchQuerySchema,
+        response: {
+          200: jsonResponse(
+            "Matching messages",
+            chatMessageSearchResponseSchema,
+          ),
+          ...common,
+        },
+      },
+    },
+    controller.search,
   );
 
   app.get(

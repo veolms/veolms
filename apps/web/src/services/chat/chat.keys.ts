@@ -10,6 +10,8 @@ export const chatKeys = {
   blocks: () => [...chatKeys.all, "blocks"] as const,
   stars: () => [...chatKeys.all, "stars"] as const,
   profile: () => [...chatKeys.all, "profile"] as const,
+  search: (roomId: string, q: string) =>
+    [...chatKeys.all, "search", roomId, q] as const,
   messageInfo: (roomId: string, seq: number) =>
     [...chatKeys.all, "message-info", roomId, seq] as const,
   reports: (roomId: string | null) =>

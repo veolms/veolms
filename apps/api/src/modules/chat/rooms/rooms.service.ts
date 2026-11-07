@@ -155,6 +155,7 @@ export function createRoomsService(runtime: ChatRuntime) {
         postingPolicy?: "everyone" | "staff_only";
         slowModeSeconds?: number;
         directMessagesAllowed?: boolean;
+        attachmentsAllowed?: boolean;
         status?: "active" | "locked" | "archived";
       },
     ) {
@@ -178,6 +179,9 @@ export function createRoomsService(runtime: ChatRuntime) {
           : {}),
         ...(patch.directMessagesAllowed !== undefined
           ? { direct_messages_allowed: patch.directMessagesAllowed }
+          : {}),
+        ...(patch.attachmentsAllowed !== undefined
+          ? { attachments_allowed: patch.attachmentsAllowed }
           : {}),
         ...(patch.status !== undefined ? { status: patch.status } : {}),
       });
