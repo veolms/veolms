@@ -27,7 +27,10 @@ const stackedAlign: Record<HomePageFestiveAlign, string> = {
  * The festive greeting in the home hero, where the quote stands the rest of
  * the year: a lit diya, the greeting ("Happy Diwali" unless an admin set
  * another) in gold script with a stroke drawn under it, and the message
- * beside it; stacked where the hero is narrow (see `stackedAlign`).
+ * beside it; stacked where the hero is narrow (see `stackedAlign`). The
+ * message gives way first: it narrows to share the line with the greeting
+ * (which grows with the hero, e.g. when the page is zoomed out) and only
+ * goes under it when less than 13rem would be left.
  *
  * The gold is light by night and a deep amber by day, so it reads on the
  * navy of the night picture and on the cream wall of the day one.
@@ -87,7 +90,7 @@ export function DiwaliHeroGreeting({
             aria-hidden="true"
             className="hidden h-11 w-px shrink-0 bg-linear-to-b from-transparent via-[#E9B872]/45 to-transparent @[50rem]/home:block [:root[data-theme=light]_&]:via-[#B4610E]/35"
           />
-          <p className="max-w-[19rem] text-[0.9375rem] leading-[1.45] text-balance text-slate-300 @[50rem]/home:max-w-[17.5rem] @[50rem]/home:text-pretty [:root[data-theme=light]_&]:text-slate-700">
+          <p className="max-w-[19rem] text-[0.9375rem] leading-[1.45] text-balance text-slate-300 @[50rem]/home:min-w-0 @[50rem]/home:max-w-[17.5rem] @[50rem]/home:flex-[1_1_13rem] @[50rem]/home:text-pretty [:root[data-theme=light]_&]:text-slate-700">
             {message}
           </p>
         </>
