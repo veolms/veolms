@@ -6,7 +6,7 @@ import type {
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 
 import { ChatErrors } from "./chat.errors.ts";
-import { chatUploadUrl, presentMessage, preview } from "./chat.presenters.ts";
+import { chatRoomIconUrl, presentMessage, preview } from "./chat.presenters.ts";
 import type { ChatRuntime } from "./chat.runtime.ts";
 import type {
   ChatRoomRow,
@@ -252,12 +252,8 @@ export function createRoomViews(runtime: ChatRuntime) {
                 : "Private chat"
               : (row.title ?? "Team"),
         courseId: row.course_id,
-        iconUrl:
-          row.kind === "direct"
-            ? null
-            : row.icon_upload_id
-              ? chatUploadUrl(row.icon_upload_id)
-              : (row.course_thumbnail ?? null),
+        iconUrl: chatRoomIconUrl(row),
+        customIcon: row.kind !== "direct" && Boolean(row.icon_upload_id),
         peer: peer
           ? {
               id: peer.id,

@@ -288,6 +288,36 @@ await test("edit, delete for everyone or for me, and reactions", async () => {
     "CHAT_INVALID_REACTION",
   );
 
+  // Who reacted (tap the reactions): you first, then the others.
+  ok(
+    await a.client.put(
+      `/v1/chat/rooms/${roomId}/messages/${mine.seq}/reaction`,
+      { emoji: "❤️" },
+    ),
+  );
+  type Reactions = { reactions: { id: string; emoji: string }[] };
+  const whoReacted = async (client: typeof a.client) =>
+    ok<Reactions>(
+      await client.get(
+        `/v1/chat/rooms/${roomId}/messages/${mine.seq}/reactions`,
+      ),
+    ).reactions.map((r) => [r.id, r.emoji]);
+  assert.deepEqual(await whoReacted(b.client), [
+    [b.userId, "👍"],
+    [a.userId, "❤️"],
+  ]);
+  assert.deepEqual(await whoReacted(a.client), [
+    [a.userId, "❤️"],
+    [b.userId, "👍"],
+  ]);
+  ok(
+    await a.client.put(
+      `/v1/chat/rooms/${roomId}/messages/${mine.seq}/reaction`,
+      { emoji: null },
+    ),
+  );
+  assert.deepEqual(await whoReacted(b.client), [[b.userId, "👍"]]);
+
   ok(
     await b.client.delete(
       `/v1/chat/rooms/${roomId}/messages/${mine.seq}?for=me`,
@@ -599,6 +629,46 @@ await test("files: signed direct uploads, allowed types only, never sent unfinis
     }),
     403,
     "CHAT_JOIN_COURSE_FIRST",
+  );
+});
+
+await test("group icon: only admins set it, an unfinished upload can't be one, and the picture is read through the API", async () => {
+  type Summary = { iconUrl: string | null; customIcon: boolean };
+  const before = ok<{ room: Summary }>(
+    await b.client.get(`/v1/chat/rooms/${roomId}`),
+  ).room;
+  // This course has no picture and no icon was set: nothing to show.
+  assert.equal(before.customIcon, false);
+  assert.equal(before.iconUrl, null);
+  refused(
+    await b.client.get(`/v1/chat/rooms/${roomId}/icon`),
+    404,
+    "CHAT_UPLOAD_NOT_FOUND",
+  );
+
+  const started = ok<{ uploadId: string }>(
+    await admin.post(`/v1/chat/rooms/${roomId}/uploads`, {
+      kind: "image",
+      name: "icon.jpg",
+      mimeType: "image/jpeg",
+      size: 2_000,
+      width: 64,
+      height: 64,
+    }),
+  );
+  refused(
+    await b.client.patch(`/v1/chat/rooms/${roomId}/settings`, {
+      iconUploadId: started.uploadId,
+    }),
+    403,
+    "CHAT_NOT_ADMIN",
+  );
+  refused(
+    await admin.patch(`/v1/chat/rooms/${roomId}/settings`, {
+      iconUploadId: started.uploadId,
+    }),
+    400,
+    "CHAT_ICON_INVALID",
   );
 });
 

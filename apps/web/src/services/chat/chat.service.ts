@@ -3,6 +3,7 @@ import type {
   ChatChangesResponse,
   ChatMessage,
   ChatMessageInfo,
+  ChatMessageReactions,
   ChatMessageSearchResponse,
   ChatProfile,
   ChatReason,
@@ -119,6 +120,10 @@ export const chatService = {
     }),
   messageInfo: (roomId: string, seq: number) =>
     api.get<ChatMessageInfo>(`/chat/rooms/${roomId}/messages/${seq}/info`),
+  messageReactions: (roomId: string, seq: number) =>
+    api.get<ChatMessageReactions>(
+      `/chat/rooms/${roomId}/messages/${seq}/reactions`,
+    ),
   getRoom: (roomId: string) =>
     api.get<{ room: ChatRoomDetail }>(`/chat/rooms/${roomId}`),
   listMessages: (
@@ -275,6 +280,7 @@ export const chatService = {
     roomId: string,
     file: File,
     size: { width?: number; height?: number },
+    onProgress: (fraction: number) => void = () => {},
   ) => {
     const start = await chatService.startUpload(roomId, {
       kind: "image",
@@ -283,7 +289,7 @@ export const chatService = {
       size: file.size,
       ...size,
     });
-    await chatService.putFile(start, file, () => {});
+    await chatService.putFile(start, file, onProgress);
     await chatService.completeUpload(start.uploadId);
     return chatService.updateSettings(roomId, {
       iconUploadId: start.uploadId,

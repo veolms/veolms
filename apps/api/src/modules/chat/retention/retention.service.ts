@@ -13,7 +13,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Retention (decision 4): course-group messages older than the platform's
- * retention (12 months by default; pinned ones are kept), and the text of
+ * retention (120 months by default; pinned ones are kept), and the text of
  * messages deleted more than 7 days ago (the restore window), removed in
  * small batches. Safe to run on several processes at once: each batch
  * deletes or clears rows that are still there.

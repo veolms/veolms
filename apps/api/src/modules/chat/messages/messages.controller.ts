@@ -39,6 +39,14 @@ export function createMessagesController({
       );
     },
 
+    async reactions(request: FastifyRequest<MessageParams>) {
+      return service.reactions(
+        request.user!.id,
+        request.params.roomId,
+        request.params.seq,
+      );
+    },
+
     async search(
       request: FastifyRequest<
         RoomParams & { Querystring: { q: string; before?: number } }

@@ -224,6 +224,24 @@ export function useMessageInfo(roomId: string, seq: number | null) {
   });
 }
 
+/**
+ * Who reacted to a message, while its reactions list is open. `version`
+ * is the message's emoji counts, so a new reaction loads the list again.
+ */
+export function useMessageReactions(
+  roomId: string,
+  seq: number,
+  version: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: chatKeys.messageReactions(roomId, seq, version),
+    queryFn: () => chatService.messageReactions(roomId, seq),
+    enabled,
+    placeholderData: (previous) => previous,
+  });
+}
+
 /** "Search in this chat": newest matches first, more on demand. */
 export function useMessageSearch(roomId: string, q: string) {
   return useInfiniteQuery({

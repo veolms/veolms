@@ -13,6 +13,7 @@ import { messageTime, nameTone, ROLE_LABEL } from "./chatFormat";
 import { MessageAttachments, type ViewableMedia } from "./MessageAttachments";
 import { MessageMenu, type MessageAction } from "./MessageMenu";
 import { MessageText } from "./MessageText";
+import { ReactionDetails } from "./ReactionDetails";
 
 export interface BubbleContext {
   viewerId: string | null;
@@ -298,27 +299,13 @@ export function MessageBubble({
         ) : null}
 
         {reactions.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => onAction("react-toggle", message)}
-            className={cn(
-              "absolute -bottom-3.5 flex cursor-pointer items-center gap-0.5 rounded-full border-2 border-solid border-(--chat-bg) bg-(--chat-in) px-1.5 py-px text-[0.78rem] text-(--text-secondary) shadow-sm",
-              outgoing ? "right-2" : "left-2",
-            )}
-            aria-label={`Reactions: ${reactions.map(([e, c]) => `${e} ${c}`).join(", ")}`}
-          >
-            {reactions
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 3)
-              .map(([emoji]) => (
-                <span key={emoji}>{emoji}</span>
-              ))}
-            {reactions.reduce((sum, [, c]) => sum + c, 0) > 1 ? (
-              <span className="ml-0.5 tabular-nums">
-                {reactions.reduce((sum, [, c]) => sum + c, 0)}
-              </span>
-            ) : null}
-          </button>
+          <ReactionDetails
+            message={message}
+            reactions={reactions}
+            viewerId={ctx.viewerId}
+            outgoing={outgoing}
+            onAction={onAction}
+          />
         ) : null}
       </div>
     </div>
