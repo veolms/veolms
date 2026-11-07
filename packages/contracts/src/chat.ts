@@ -223,10 +223,13 @@ export const chatRoomSummarySchema = z.object({
   title: z.string(),
   courseId: z.uuid().nullable(),
   /**
-   * Groups: the icon an admin set, else (course groups) the course's
-   * picture; null for none. Private chats use the person's picture.
+   * Groups: the icon an admin set (an API path, like attachments); null for
+   * none. Private chats use the person's picture.
    */
   iconUrl: z.string().nullable(),
+  /** Course groups without an icon of their own show the course picture. */
+  courseThumbnailMediaId: z.string().nullable(),
+  courseThumbnailUrl: z.string().nullable(),
   /** Private chats: the other person. */
   peer: chatSenderSchema.nullable(),
   directStatus: chatDirectStatusSchema.nullable(),

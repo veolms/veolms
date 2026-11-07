@@ -253,11 +253,11 @@ export function createRoomViews(runtime: ChatRuntime) {
               : (row.title ?? "Team"),
         courseId: row.course_id,
         iconUrl:
-          row.kind === "direct"
-            ? null
-            : row.icon_upload_id
-              ? chatUploadUrl(row.icon_upload_id)
-              : (row.course_thumbnail ?? null),
+          row.kind !== "direct" && row.icon_upload_id
+            ? chatUploadUrl(row.icon_upload_id)
+            : null,
+        courseThumbnailMediaId: row.course_thumbnail_media_id ?? null,
+        courseThumbnailUrl: row.course_thumbnail ?? null,
         peer: peer
           ? {
               id: peer.id,

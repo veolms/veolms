@@ -45,6 +45,7 @@ import {
   useUpdateMyChatState,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { roomAvatarUrl } from "./chatIcon";
 import {
   DeleteMessageDialog,
   ReportDialog,
@@ -333,7 +334,7 @@ export function Conversation({
         >
           <ChatAvatar
             name={room.title}
-            url={room.peer?.avatarUrl ?? room.iconUrl}
+            url={roomAvatarUrl(room)}
             group={room.kind !== "direct"}
             size="md"
           />

@@ -84,6 +84,7 @@ export interface RoomListRow extends ChatRoomRow {
   member_pinned_at: Date | null;
   course_title: string | null;
   course_thumbnail: string | null;
+  course_thumbnail_media_id: string | null;
   lm_seq: string | null;
   lm_sender_id: string | null;
   lm_sender_name: string | null;
@@ -430,6 +431,7 @@ export function createChatRepository() {
           "m.pinned_at as member_pinned_at",
           "c.title as course_title",
           "c.thumbnail_url as course_thumbnail",
+          "c.thumbnail_media_id as course_thumbnail_media_id",
           "lm.seq as lm_seq",
           "lm.sender_id as lm_sender_id",
           "lu.display_name as lm_sender_name",
