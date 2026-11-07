@@ -295,7 +295,9 @@ export function getMobilePrimaryNavigation(
   role: string,
   navigation: readonly NavigationItemWithMetadata[],
 ): NavigationItemWithMetadata[] {
-  const capacity = role === "student" ? 3 : 4;
+  // Learners: Home, Courses, Discussions and Chats, then "You" (Chats would
+  // otherwise only be reachable from the side menu on a phone).
+  const capacity = 4;
   return navigation.slice(0, capacity);
 }
 
