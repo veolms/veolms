@@ -38,6 +38,7 @@ export function createRoomsController({ service }: { service: RoomsService }) {
             slowModeSeconds?: number;
             directMessagesAllowed?: boolean;
             attachmentsAllowed?: boolean;
+            iconUploadId?: string | null;
             status?: "active" | "locked" | "archived";
           };
         }

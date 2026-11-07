@@ -69,6 +69,14 @@ export function createDirectService(runtime: ChatRuntime) {
       ) {
         throw ChatErrors.blocked();
       }
+      // Learners don't open chats with their instructors or admins: staff
+      // write first (the chat then exists and the learner can reply).
+      if (
+        !(await access.isChatStaff(database, userId)) &&
+        (await access.isChatStaff(database, peerId))
+      ) {
+        throw ChatErrors.staffFirst();
+      }
       const restrictions = await repository.listActiveRestrictions(
         database,
         userId,
@@ -287,8 +295,22 @@ export function createDirectService(runtime: ChatRuntime) {
             allowed.push(person);
           }
         }
+        // Learners can't open a chat with staff (staff write first).
+        const reachable = userStaff
+          ? allowed
+          : (
+              await Promise.all(
+                allowed.map(async (person) =>
+                  (await access.isChatStaff(database, person.id))
+                    ? null
+                    : person,
+                ),
+              )
+            ).filter(
+              (person): person is (typeof allowed)[number] => person !== null,
+            );
         results = await Promise.all(
-          allowed.map(async (person) => ({
+          reachable.map(async (person) => ({
             ...presentPerson(person),
             role: await staffRole(person.id),
           })),
@@ -297,7 +319,9 @@ export function createDirectService(runtime: ChatRuntime) {
 
       return {
         results,
-        staff: staffPeople.map((p) => ({
+        // Staff appear for learners only once they have written (the chat
+        // is then in the list); New chat offers them to staff only.
+        staff: (userStaff ? staffPeople : []).map((p) => ({
           ...presentPerson(p),
           role: "instructor" as const,
         })),

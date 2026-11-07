@@ -1,4 +1,7 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { CameraIcon as Camera } from "@phosphor-icons/react/Camera";
+import { ImageSquareIcon as ImageSquare } from "@phosphor-icons/react/ImageSquare";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
@@ -7,7 +10,7 @@ import { SpeakerSlashIcon as SpeakerSlash } from "@phosphor-icons/react/SpeakerS
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatRoomDetail } from "@veolms/contracts";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   DropdownMenu,
@@ -121,6 +124,32 @@ export function RoomInfoPanel({
   const patch = (change: Parameters<typeof chatService.updateSettings>[1]) =>
     settings.mutate({ roomId: room.id, patch: change }, { onError: fail });
   const moderator = isGroup && (room.me.canModerate || room.me.isHelper);
+  const iconInputRef = useRef<HTMLInputElement>(null);
+  const [iconBusy, setIconBusy] = useState(false);
+  async function changeIcon(file: File) {
+    setIconBusy(true);
+    try {
+      const size = await new Promise<{ width?: number; height?: number }>(
+        (resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            URL.revokeObjectURL(img.src);
+          };
+          img.onerror = () => resolve({});
+          img.src = URL.createObjectURL(file);
+        },
+      );
+      await chatService.setGroupIcon(room.id, file, size);
+      await client.invalidateQueries({ queryKey: chatKeys.room(room.id) });
+      await client.invalidateQueries({ queryKey: chatKeys.rooms() });
+      onToast("Group icon changed.");
+    } catch (error) {
+      fail(error);
+    } finally {
+      setIconBusy(false);
+    }
+  }
   const reports = useChatReports(room.id, admin);
   const restricted = useChatRestrictions(room.id, moderator);
   const openReports = reports.data?.reports.length ?? 0;
@@ -178,11 +207,60 @@ export function RoomInfoPanel({
             "flex flex-col items-center px-6 py-6 text-center",
           )}
         >
-          <ChatAvatar
-            name={room.title}
-            url={room.peer?.avatarUrl ?? null}
-            group={isGroup}
-            size="xl"
+          {admin ? (
+            // Group admins (admins, the instructor, the course's creator)
+            // change the icon; WhatsApp's camera on the group's picture.
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label="Change group icon"
+                className="group/icon relative cursor-pointer rounded-full border-0 bg-transparent p-0"
+              >
+                <ChatAvatar
+                  name={room.title}
+                  url={room.iconUrl}
+                  group
+                  size="xl"
+                />
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-full bg-black/55 text-[0.7rem] font-semibold text-white opacity-0 transition-opacity group-hover/icon:opacity-100 group-focus-visible/icon:opacity-100">
+                  <Camera size={22} aria-hidden="true" />
+                  {iconBusy ? "Saving…" : "Change icon"}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-52 min-w-0">
+                <DropdownMenuItem onClick={() => iconInputRef.current?.click()}>
+                  <ImageSquare size={17} aria-hidden="true" /> Upload photo
+                </DropdownMenuItem>
+                {room.iconUrl ? (
+                  <DropdownMenuItem
+                    className="text-red-500"
+                    onClick={() => patch({ iconUploadId: null })}
+                  >
+                    <Trash size={17} aria-hidden="true" />
+                    {room.kind === "course"
+                      ? "Use course picture"
+                      : "Remove icon"}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <ChatAvatar
+              name={room.title}
+              url={room.peer?.avatarUrl ?? room.iconUrl}
+              group={isGroup}
+              size="xl"
+            />
+          )}
+          <input
+            ref={iconInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void changeIcon(file);
+            }}
           />
           <h3 className="m-0 mt-3 text-[1.2rem] font-semibold text-(--text)">
             {room.title}

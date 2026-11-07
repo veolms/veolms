@@ -433,6 +433,19 @@ await test("private chats: only where allowed, as a request first; blocks stop t
   const dm = started.room.id;
   ok(await send(a.client, dm, "Hi! Could you share your notes?"), 201);
   refused(await send(a.client, dm, "hello??"), 403, "CHAT_REQUEST_PENDING");
+  // While it is a request, the sender sees no ticks: B opening it is not
+  // answering it.
+  ok(
+    await b.client.post("/v1/chat/receipts", {
+      receipts: [{ roomId: dm, readSeq: 1 }],
+    }),
+  );
+  await sleep(1_500);
+  const pending = (await myRooms(a.client)).rooms.find((r) => r.id === dm) as
+    | (Room & { peerReadSeq: number | null; peerDeliveredSeq: number | null })
+    | undefined;
+  assert.equal(pending?.peerReadSeq, null);
+  assert.equal(pending?.peerDeliveredSeq, null);
 
   const bView = await myRooms(b.client);
   assert.equal(bView.requestsCount, 1);
@@ -922,16 +935,41 @@ await test("New chat: an admin finds any learner by name", async () => {
   assert.ok(byEmail.results.some((p) => p.id === a.userId));
 });
 
-await test("a learner's search finds the staff they may message", async () => {
+await test("a learner can't open a chat with staff; staff write first, then the learner replies", async () => {
   const staff = (
     await admin.get<{ id: string; displayName: string }>("/v1/auth/me")
   ).body.data!;
+  refused(
+    await c.client.post("/v1/chat/direct", { userId: staff.id }),
+    403,
+    "CHAT_STAFF_FIRST",
+  );
   const found = ok<{ results: Array<{ id: string }> }>(
-    await a.client.get(
+    await c.client.get(
       `/v1/chat/direct/candidates?search=${encodeURIComponent(staff.displayName.slice(0, 4))}`,
     ),
   );
-  assert.ok(found.results.some((p) => p.id === staff.id));
+  assert.equal(
+    found.results.some((p) => p.id === staff.id),
+    false,
+  );
+
+  // Staff open the chat; until they write, the learner can't.
+  const opened = ok<{ room: Room }>(
+    await admin.post("/v1/chat/direct", { userId: c.userId }),
+    201,
+  ).room;
+  const before = ok<{ room: Room }>(
+    await c.client.get(`/v1/chat/rooms/${opened.id}`),
+  ).room;
+  assert.equal(before.me.cannotPostReason, "staff_first");
+  refused(
+    await send(c.client, opened.id, "Hello sir"),
+    403,
+    "CHAT_STAFF_FIRST",
+  );
+  ok(await send(admin, opened.id, "Hi! How is the course going?"), 201);
+  ok(await send(c.client, opened.id, "Going well, thank you"), 201);
 });
 
 await test("a learner finds a classmate only by the whole e-mail, not a part of it", async () => {

@@ -71,6 +71,18 @@ export const ChatErrors = {
       "CHAT_REQUEST_DECLINED",
       "You can't send messages to this person.",
     ),
+  staffFirst: () =>
+    new AppError(
+      403,
+      "CHAT_STAFF_FIRST",
+      "Your instructor messages you first. Until then, ask in your course group.",
+    ),
+  iconInvalid: () =>
+    new AppError(
+      400,
+      "CHAT_ICON_INVALID",
+      "Use a photo uploaded to this group as its icon.",
+    ),
   directNotAllowed: () =>
     new AppError(
       403,

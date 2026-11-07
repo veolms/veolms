@@ -74,6 +74,8 @@ const CANNOT_POST_TEXT: Record<string, string> = {
   direct_not_allowed: "You can't send messages to this person.",
   blocked: "You can't send messages to this person.",
   not_joined: "Join this course to send messages in its group.",
+  staff_first:
+    "Your instructor messages you first. Until then, ask in your course group.",
 };
 
 export const Composer = forwardRef<

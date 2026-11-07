@@ -199,6 +199,7 @@ export const chatService = {
       slowModeSeconds?: number;
       directMessagesAllowed?: boolean;
       attachmentsAllowed?: boolean;
+      iconUploadId?: string | null;
       status?: "active" | "locked" | "archived";
     },
   ) =>
@@ -266,6 +267,28 @@ export const chatService = {
     api.post<{ attachment: ChatAttachment }>(
       `/chat/uploads/${uploadId}/complete`,
     ),
+  /**
+   * A photo for a group's icon: uploaded like a message's photo (signed,
+   * straight to storage), then set by the group's admin.
+   */
+  setGroupIcon: async (
+    roomId: string,
+    file: File,
+    size: { width?: number; height?: number },
+  ) => {
+    const start = await chatService.startUpload(roomId, {
+      kind: "image",
+      name: file.name,
+      mimeType: file.type,
+      size: file.size,
+      ...size,
+    });
+    await chatService.putFile(start, file, () => {});
+    await chatService.completeUpload(start.uploadId);
+    return chatService.updateSettings(roomId, {
+      iconUploadId: start.uploadId,
+    });
+  },
   /** The live stream (one per tab). */
   openStream: () =>
     new EventSource(getApiRequestUrl("/chat/stream"), {

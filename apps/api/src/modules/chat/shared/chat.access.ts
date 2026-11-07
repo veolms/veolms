@@ -39,6 +39,11 @@ const courseGateCache = createCache<CourseGateRow | null>({
   ttlMs: 30_000,
   maxBytes: 2 * 1024 * 1024,
 });
+const chatStaffCache = createCache<boolean>({
+  name: "chat.staff",
+  ttlMs: 60_000,
+  maxBytes: 1024 * 1024,
+});
 const courseAccessCache = createCache<boolean>({
   name: "chat.course-access",
   ttlMs: 30_000,
@@ -55,6 +60,19 @@ export function createChatAccess(repository: ChatRepository) {
 
   function isPlatformModerator(db: Executor, userId: string) {
     return hasAcademyPermission(db, userId, "chat.moderate");
+  }
+
+  /**
+   * Staff for private chats: platform chat staff, or anyone who teaches a
+   * course (its creator). Learners wait for them to write first.
+   */
+  async function isChatStaff(db: Executor, userId: string) {
+    return chatStaffCache.fetch(
+      userId,
+      async () =>
+        (await isPlatformModerator(db, userId)) ||
+        (await repository.createsAnyCourse(db, userId)),
+    );
   }
 
   function isManager(db: Executor, userId: string) {
@@ -217,6 +235,7 @@ export function createChatAccess(repository: ChatRepository) {
 
   return {
     isPlatformModerator,
+    isChatStaff,
     isManager,
     courseGate,
     canReadCourse,

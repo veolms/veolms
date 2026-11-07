@@ -102,7 +102,8 @@ export function createReceiptsBatcher({
             userId: row.user_id,
             readSeq: Number(row.last_read_seq),
             deliveredSeq: Number(row.last_delivered_seq),
-            direct: row.kind === "direct",
+            // A request not accepted yet tells the sender nothing.
+            direct: row.kind === "direct" && row.direct_status !== "requested",
             hideRead: row.kind === "direct" && hidden.has(row.user_id),
           })),
         }),

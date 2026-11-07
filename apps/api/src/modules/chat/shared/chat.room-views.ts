@@ -6,7 +6,7 @@ import type {
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 
 import { ChatErrors } from "./chat.errors.ts";
-import { presentMessage, preview } from "./chat.presenters.ts";
+import { chatUploadUrl, presentMessage, preview } from "./chat.presenters.ts";
 import type { ChatRuntime } from "./chat.runtime.ts";
 import type {
   ChatRoomRow,
@@ -252,6 +252,12 @@ export function createRoomViews(runtime: ChatRuntime) {
                 : "Private chat"
               : (row.title ?? "Team"),
         courseId: row.course_id,
+        iconUrl:
+          row.kind === "direct"
+            ? null
+            : row.icon_upload_id
+              ? chatUploadUrl(row.icon_upload_id)
+              : (row.course_thumbnail ?? null),
         peer: peer
           ? {
               id: peer.id,
@@ -288,11 +294,15 @@ export function createRoomViews(runtime: ChatRuntime) {
               },
         lastMessageAt: row.last_message_at?.toISOString() ?? null,
         unreadCount: Math.max(0, lastSeq - lastReadSeq),
-        ...ticks(row.kind, peer, groupByRoom.get(row.id), (id) =>
-          id === userId
-            ? myReceipts
-            : myReceipts && (receiptsOn.get(id) ?? true),
-        ),
+        // A request not accepted yet shows no ticks either way: opening it
+        // is not answering it.
+        ...(row.kind === "direct" && row.direct_status === "requested"
+          ? { peerDeliveredSeq: null, peerReadSeq: null }
+          : ticks(row.kind, peer, groupByRoom.get(row.id), (id) =>
+              id === userId
+                ? myReceipts
+                : myReceipts && (receiptsOn.get(id) ?? true),
+            )),
         me: {
           roomRole: (row.room_role ?? "member") as
             "owner" | "moderator" | "member",
@@ -438,6 +448,17 @@ export function createRoomViews(runtime: ChatRuntime) {
     ) {
       summary.me.canPost = false;
       summary.me.cannotPostReason = "not_joined";
+    }
+    if (
+      room.kind === "direct" &&
+      summary.me.canPost &&
+      summary.peer &&
+      (await access.isChatStaff(db, summary.peer.id)) &&
+      !(await access.isChatStaff(db, userId)) &&
+      (await repository.countSenderMessages(db, room.id, summary.peer.id)) === 0
+    ) {
+      summary.me.canPost = false;
+      summary.me.cannotPostReason = "staff_first";
     }
     if (room.kind === "direct" && summary.me.canPost && summary.peer) {
       // A private chat stays writable only while the policy allows it.

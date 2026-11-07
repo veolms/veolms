@@ -333,7 +333,7 @@ export function Conversation({
         >
           <ChatAvatar
             name={room.title}
-            url={room.peer?.avatarUrl ?? null}
+            url={room.peer?.avatarUrl ?? room.iconUrl}
             group={room.kind !== "direct"}
             size="md"
           />

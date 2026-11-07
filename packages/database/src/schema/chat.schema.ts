@@ -50,6 +50,12 @@ export interface ChatRoomTable {
   slow_mode_seconds: Generated<number>;
   attachments_allowed: Generated<boolean>;
   direct_messages_allowed: Generated<boolean>;
+  /** An uploaded photo shown as the group's icon. */
+  icon_upload_id: ColumnType<
+    string | null,
+    string | null | undefined,
+    string | null
+  >;
   status: Generated<ChatRoomStatus>;
   last_seq: GeneratedBigInt;
   last_event_seq: GeneratedBigInt;

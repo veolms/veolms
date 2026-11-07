@@ -156,12 +156,37 @@ export function createRoomsService(runtime: ChatRuntime) {
         slowModeSeconds?: number;
         directMessagesAllowed?: boolean;
         attachmentsAllowed?: boolean;
+        iconUploadId?: string | null;
         status?: "active" | "locked" | "archived";
       },
     ) {
       const ctx = await views.assertCanRead(database, userId, roomId);
       if (ctx.room.kind === "direct") throw ChatErrors.wrongRoomKind();
+      // Group admins only (admins, the course's instructor and creator):
+      // name, icon, description and the rules.
       if (!ctx.canModerate) throw ChatErrors.notModerator();
+      if (patch.iconUploadId) {
+        const upload = await repository.findUpload(
+          database,
+          patch.iconUploadId,
+        );
+        if (
+          !upload ||
+          upload.room_id !== roomId ||
+          upload.kind !== "image" ||
+          upload.status === "pending"
+        ) {
+          throw ChatErrors.iconInvalid();
+        }
+        await repository.attachIconUpload(database, upload.id);
+      }
+      if (
+        patch.iconUploadId !== undefined &&
+        ctx.room.icon_upload_id &&
+        ctx.room.icon_upload_id !== patch.iconUploadId
+      ) {
+        await repository.releaseIconUpload(database, ctx.room.icon_upload_id);
+      }
       if (ctx.room.kind === "course" && patch.title !== undefined) {
         // A course group is named after its course.
         delete patch.title;
@@ -182,6 +207,9 @@ export function createRoomsService(runtime: ChatRuntime) {
           : {}),
         ...(patch.attachmentsAllowed !== undefined
           ? { attachments_allowed: patch.attachmentsAllowed }
+          : {}),
+        ...(patch.iconUploadId !== undefined
+          ? { icon_upload_id: patch.iconUploadId }
           : {}),
         ...(patch.status !== undefined ? { status: patch.status } : {}),
       });

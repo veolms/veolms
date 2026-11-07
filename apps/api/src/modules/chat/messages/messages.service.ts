@@ -129,6 +129,17 @@ export function createMessagesService(runtime: ChatRuntime) {
       const peer = peers[0];
       if (!peer) throw ChatErrors.noAccess();
       if (
+        (await access.isChatStaff(database, peer.user_id)) &&
+        !(await access.isChatStaff(database, userId)) &&
+        (await repository.countSenderMessages(
+          database,
+          room.id,
+          peer.user_id,
+        )) === 0
+      ) {
+        throw ChatErrors.staffFirst();
+      }
+      if (
         (await repository.blocksBetween(database, userId, peer.user_id))
           .length > 0
       ) {

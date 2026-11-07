@@ -472,7 +472,7 @@ function ChatRow({
       {photoOpen ? (
         <ProfilePhotoPreview
           name={room.title}
-          url={room.peer?.avatarUrl ?? null}
+          url={room.peer?.avatarUrl ?? room.iconUrl}
           group={room.kind !== "direct"}
           onClose={() => setPhotoOpen(false)}
           onMessage={() => {
@@ -504,7 +504,7 @@ function ChatRow({
       >
         <ChatAvatar
           name={room.title}
-          url={room.peer?.avatarUrl ?? null}
+          url={room.peer?.avatarUrl ?? room.iconUrl}
           group={room.kind !== "direct"}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">

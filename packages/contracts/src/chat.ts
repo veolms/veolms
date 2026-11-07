@@ -222,6 +222,11 @@ export const chatRoomSummarySchema = z.object({
   kind: chatRoomKindSchema,
   title: z.string(),
   courseId: z.uuid().nullable(),
+  /**
+   * Groups: the icon an admin set, else (course groups) the course's
+   * picture; null for none. Private chats use the person's picture.
+   */
+  iconUrl: z.string().nullable(),
   /** Private chats: the other person. */
   peer: chatSenderSchema.nullable(),
   directStatus: chatDirectStatusSchema.nullable(),
@@ -272,6 +277,8 @@ export const chatRoomSummarySchema = z.object({
         "blocked",
         /** Reading an open free course's group without having joined it. */
         "not_joined",
+        /** A learner's chat with staff: the staff member writes first. */
+        "staff_first",
       ])
       .nullable(),
     canModerate: z.boolean(),
@@ -451,6 +458,8 @@ export const chatRoomSettingsRequestSchema = z
     slowModeSeconds: z.number().int().min(0).max(3_600).optional(),
     directMessagesAllowed: z.boolean().optional(),
     attachmentsAllowed: z.boolean().optional(),
+    /** An uploaded photo (chat upload) as the group's icon; null: none. */
+    iconUploadId: z.uuid().nullable().optional(),
     status: chatRoomStatusSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "Nothing to change");

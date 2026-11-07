@@ -83,6 +83,7 @@ export interface RoomListRow extends ChatRoomRow {
   archived_at: Date | null;
   member_pinned_at: Date | null;
   course_title: string | null;
+  course_thumbnail: string | null;
   lm_seq: string | null;
   lm_sender_id: string | null;
   lm_sender_name: string | null;
@@ -428,6 +429,7 @@ export function createChatRepository() {
           "m.archived_at",
           "m.pinned_at as member_pinned_at",
           "c.title as course_title",
+          "c.thumbnail_url as course_thumbnail",
           "lm.seq as lm_seq",
           "lm.sender_id as lm_sender_id",
           "lu.display_name as lm_sender_name",
@@ -743,6 +745,36 @@ export function createChatRepository() {
         .where("seq", "in", seqs.map(String))
         .execute();
       return new Set(rows.map((row) => Number(row.seq)));
+    },
+
+    /** Whether this person teaches any course (its creator). */
+    async createsAnyCourse(db: Executor, userId: string) {
+      const row = await db
+        .selectFrom("courses")
+        .select(sql`1`.as("one"))
+        .where("creator_id", "=", userId)
+        .limit(1)
+        .executeTakeFirst();
+      return Boolean(row);
+    },
+
+    /** An upload made the group's icon (kept like a sent file). */
+    async attachIconUpload(db: Executor, uploadId: string) {
+      await db
+        .updateTable("chat_uploads")
+        .set({ status: "attached" })
+        .where("id", "=", uploadId)
+        .execute();
+    },
+
+    /** A replaced icon: readable no more, removed by the retention job. */
+    async releaseIconUpload(db: Executor, uploadId: string) {
+      await db
+        .updateTable("chat_uploads")
+        .set({ status: "ready" })
+        .where("id", "=", uploadId)
+        .where("message_seq", "is", null)
+        .execute();
     },
 
     /** A few active members' names, for a group header. */
@@ -1494,6 +1526,7 @@ export function createChatRepository() {
           last_read_seq: string;
           last_delivered_seq: string;
           kind: string;
+          direct_status: string | null;
         }>`
           update chat_members m set
             last_read_seq = greatest(m.last_read_seq, least(v.read_seq, r.last_seq)),
@@ -1514,7 +1547,7 @@ export function createChatRepository() {
               m.last_read_seq < least(v.read_seq, r.last_seq)
               or m.last_delivered_seq < least(greatest(v.delivered_seq, v.read_seq), r.last_seq)
             )
-          returning m.room_id, m.user_id, m.last_read_seq, m.last_delivered_seq, r.kind
+          returning m.room_id, m.user_id, m.last_read_seq, m.last_delivered_seq, r.kind, r.direct_status
         `.execute(trx);
         return result.rows;
       });
