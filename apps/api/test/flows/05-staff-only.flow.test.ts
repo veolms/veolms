@@ -125,6 +125,65 @@ await test("a learner cannot archive or unpublish a course", async () => {
   );
 });
 
+await test("the administrator publishes a course with a thumbnail and banner just uploaded", async () => {
+  const course = await createCourse(flow, { status: "draft", pricing: "free" });
+
+  async function uploadPicture(filename: string) {
+    const presigned = await admin.post<{
+      uploadUrl: string;
+      mediaAssetId: string;
+    }>("/v1/media/presign", {
+      filename,
+      contentType: "image/png",
+      fileSize: 1000,
+      type: "image",
+      visibility: "public",
+    });
+    assert.equal(
+      presigned.status,
+      200,
+      JSON.stringify(presigned.body.error ?? null),
+    );
+    const { uploadUrl, mediaAssetId } = presigned.body.data!;
+    flow.storage.upload(uploadUrl);
+    const confirmed = await admin.post<{ status: string }>(
+      `/v1/media/${mediaAssetId}/upload-complete`,
+    );
+    assert.equal(confirmed.status, 200);
+    assert.equal(confirmed.body.data?.status, "ready");
+    return mediaAssetId;
+  }
+
+  const thumbnailMediaId = await uploadPicture("thumbnail.png");
+  const bannerMediaId = await uploadPicture("banner.png");
+
+  const editor = await admin.get<{ course: { version: number } }>(
+    `/v1/courses/${course.id}/editor`,
+  );
+  assert.equal(editor.status, 200);
+  const saved = await admin.patch(`/v1/courses/${course.id}/basics`, {
+    thumbnailMediaId,
+    bannerMediaId,
+    version: editor.body.data!.course.version,
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body.error ?? null));
+
+  const published = await admin.post<{ status: string }>(
+    `/v1/courses/${course.id}/publish`,
+  );
+  assert.equal(
+    published.status,
+    200,
+    JSON.stringify(published.body.error ?? null),
+  );
+  assert.equal(published.body.data?.status, "published");
+  assert.equal(
+    (await play(flow.visitor(), course, 1)).status,
+    200,
+    "visitors can open it",
+  );
+});
+
 await test("a learner cannot change the academy's settings", async () => {
   const { client } = await signedUpLearner(flow);
   const response = await client.patch("/v1/platform/settings", {

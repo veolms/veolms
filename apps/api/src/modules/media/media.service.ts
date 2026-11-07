@@ -33,7 +33,6 @@ import { listLessonSubtitlesForPlayback } from "../courses/subtitles/subtitles.p
 import { findLessonResourceForDownload } from "../courses/curriculum/lesson-resource.download.service.ts";
 import * as mediaRepo from "./media.repository.ts";
 import { findYoutubeImportProgress } from "./youtube-import/youtube-import.progress.ts";
-import { enqueueImageJob } from "@veolms/database";
 import { probeVideoSource } from "../../lib/video-prober.ts";
 import { getCdnDeliveryUrl } from "../../services/cdn-delivery.ts";
 import {
@@ -848,14 +847,16 @@ export function createMediaService({
       media.size_bytes = metadata.contentLength;
     }
 
-    await mediaRepo.updateMediaAssetStatus(database, mediaId, "uploaded");
-
+    // A picture is ready once it is in storage: the CDN Worker makes its
+    // sizes when they are first asked for. Nothing processes `image_jobs`
+    // any more, so a queued picture used to stay at "processing", and a
+    // course with it as thumbnail could not be published.
     if (media.type === "image") {
-      const jobId = crypto.randomUUID();
-      await enqueueImageJob(database, { id: jobId, media_id: mediaId });
-      await mediaRepo.updateMediaAssetStatus(database, mediaId, "processing");
-      return { status: "processing" };
+      await mediaRepo.updateMediaAssetStatus(database, mediaId, "ready");
+      return { status: "ready" };
     }
+
+    await mediaRepo.updateMediaAssetStatus(database, mediaId, "uploaded");
 
     // Once video is uploaded, automatically queue and dispatch it for processing
     if (media.type === "video" && logger) {

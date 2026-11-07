@@ -10,6 +10,7 @@ import "./flow-env.ts";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import type { EmailContent, EmailService } from "@veolms/services";
 
+import { FakeObjectStorage } from "./fake-object-storage.ts";
 import {
   FakePaymentGateway,
   fakePaymentGateways,
@@ -74,6 +75,8 @@ export interface FlowApp {
   database: ReturnType<typeof createDatabase>;
   email: CapturingEmailService;
   gateway: FakePaymentGateway;
+  /** Where uploads go: a test sends a file to the link the API signed. */
+  storage: FakeObjectStorage;
   /** A new visitor with an address of their own (rate limits are per address). */
   visitor(): FlowClient;
   close(): Promise<void>;
@@ -94,11 +97,13 @@ export async function startFlowApp(
   });
   const email = new CapturingEmailService();
   const gateway = new FakePaymentGateway();
+  const storage = new FakeObjectStorage();
   const services = {
     ...createServices({ config, logger: silentLogger }),
     email,
     paymentGateways: fakePaymentGateways(gateway),
   };
+  storage.install(services.storage);
   const app = await createApp({
     database,
     logger: options.logErrors ? { level: "error" } : false,
@@ -111,6 +116,7 @@ export async function startFlowApp(
     database,
     email,
     gateway,
+    storage,
     visitor: () => {
       addressCounter += 1;
       // A documentation range (TEST-NET-2), one address per visitor.
