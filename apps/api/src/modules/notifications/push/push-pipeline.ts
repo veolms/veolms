@@ -12,6 +12,17 @@ import {
 } from "./push-sender.ts";
 
 /**
+ * Whether this server sends pushes at all (PUSH_ENABLED and at least one
+ * app in PUSH_APPS). Producers that queue work only for push (chat
+ * messages) check this first, so nothing is queued while push is off.
+ */
+export function isPushConfigured(
+  config: Pick<ServerConfig, "PUSH_ENABLED" | "PUSH_APPS">,
+): boolean {
+  return config.PUSH_ENABLED && pushAppsFor(config.PUSH_APPS).configured;
+}
+
+/**
  * The push sender for this process, or null while push is off
  * (PUSH_ENABLED=false) or no app is set up (PUSH_APPS). Problems reading
  * PUSH_APPS or a key file are logged here, once, at start.
