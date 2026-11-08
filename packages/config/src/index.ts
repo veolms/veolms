@@ -728,6 +728,8 @@ const serverConfigSchema = z.object({
         .join(","),
     )
     .optional(),
+  /** Optional storyboard preference sent as template job metadata. */
+  MEDIACONVERT_GENERATE_STORYBOARD: booleanEnvironmentValueSchema.optional(),
   /**
    * ClearKey DRM master key (hex). When set alongside DRM_MASTER_KEY_VERSION
    * the dispatcher injects drmKeySystem / drmMasterKeyVersion into the job's
