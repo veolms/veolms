@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const notificationChannelSchema = z.enum(["in_app", "email"]);
+export const notificationChannelSchema = z.enum(["in_app", "email", "push"]);
 export const notificationCategorySchema = z.enum([
   "transactional",
   "social",

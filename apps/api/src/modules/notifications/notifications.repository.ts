@@ -223,6 +223,28 @@ export async function getPreference(
   return row?.enabled;
 }
 
+/** Of `userIds`, those who turned `notificationType` off on `channel`. */
+export async function listUsersWithPreferenceOff(
+  database: DatabaseExecutor,
+  userIds: readonly string[],
+  notificationType: string,
+  channel: NotificationChannel,
+): Promise<Set<string>> {
+  const off = new Set<string>();
+  for (let i = 0; i < userIds.length; i += 1000) {
+    const rows = await database
+      .selectFrom("notification_preferences")
+      .select("user_id")
+      .where("user_id", "in", userIds.slice(i, i + 1000))
+      .where("notification_type", "=", notificationType)
+      .where("channel", "=", channel)
+      .where("enabled", "=", false)
+      .execute();
+    for (const row of rows) off.add(row.user_id);
+  }
+  return off;
+}
+
 /**
  * Saves a set of preferences in one statement. Each (type, channel) pair may
  * appear only once: Postgres rejects an upsert that touches a row twice.

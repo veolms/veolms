@@ -10,3 +10,7 @@ export {
   encodeChatEvent,
   type ChatBusEvent,
 } from "./realtime/chat-bus.ts";
+export {
+  createChatPushSource,
+  chatMessageSentEventSchema,
+} from "./push/chat-push.service.ts";

@@ -504,6 +504,46 @@ const serverConfigSchema = z.object({
     .max(50)
     .default(8),
 
+  // Mobile push (Firebase Cloud Messaging)
+  /**
+   * Sends phone pushes for notifications and chat messages. Off, nothing is
+   * queued or sent; phones keep registering, so turning it on later works.
+   */
+  PUSH_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * The apps that may receive pushes and the Firebase key each is sent
+   * with, as JSON: `[{"applicationId":"com.procodrr.app",
+   * "serviceAccountPath":"/etc/veolms-api/fcm-procodrr.json"}]`. Instead of
+   * a path, `"serviceAccountBase64"` holds the key file itself. A phone
+   * whose app is not listed cannot register. Unset: push is off.
+   */
+  PUSH_APPS: z.string().trim().optional(),
+  /**
+   * The HTTP v1 message field the install is named in. Firebase now uses
+   * `fid`; `token` (deprecated) also accepts a Firebase Installation ID
+   * during the transition, so it is the fallback if `fid` is refused.
+   */
+  PUSH_TARGET_FIELD: z.enum(["fid", "token"]).default("fid"),
+  /** Firebase's address; changed only to test against a local stand-in. */
+  PUSH_FCM_ENDPOINT: z.url().default("https://fcm.googleapis.com"),
+  /** Sends per push before it is marked failed. */
+  PUSH_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+  /** Pushes sent at the same time by one worker. */
+  PUSH_SEND_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(16),
+  /** Phones one account may register; the least recently seen goes first. */
+  PUSH_MAX_DEVICES_PER_USER: z.coerce.number().int().min(1).max(50).default(10),
+  /**
+   * Pushes notifications that go to everyone in a course (a course
+   * published, a quiz assigned). Off, they still appear in-app.
+   */
+  NOTIFICATION_COURSE_WIDE_PUSH: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Groups with more members than this push only mentions (and @everyone),
+   * not every message: one message would otherwise wake thousands of
+   * phones. Private chats always push.
+   */
+  CHAT_PUSH_GROUP_MAX_MEMBERS: z.coerce.number().int().min(2).default(256),
+
   // Chat (course groups, team groups, private chats)
   /**
    * Kill switch for chat. Off, every /chat route answers 404 and the live

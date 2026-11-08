@@ -946,6 +946,75 @@ export function createChatRepository() {
       return rows.map((row) => row.user_id);
     },
 
+    /**
+     * Who gets a phone push for message `seq`: active members other than
+     * the sender, not deactivated, who have not read it yet, whose mute
+     * level lets it through (all, or mentions when they are mentioned), who
+     * have not blocked the sender. `mentionsOnly` limits it to the people
+     * mentioned (large groups). Each with their unread count, capped at 99.
+     */
+    async listPushRecipients(
+      db: Executor,
+      input: {
+        roomId: string;
+        seq: number;
+        senderId: string;
+        mentionsOnly: boolean;
+      },
+    ) {
+      const result = await sql<{
+        user_id: string;
+        is_mention: boolean;
+        unread: string;
+      }>`
+        select
+          cm.user_id,
+          (m.mention_all or cm.user_id = any (m.mentions)) as is_mention,
+          (
+            select count(*) from (
+              select 1 from chat_messages um
+              where um.room_id = cm.room_id
+                and um.seq > cm.last_read_seq
+                and um.seq <= m.seq
+                and um.kind = 'text'
+                and um.deleted_at is null
+                and um.sender_id is distinct from cm.user_id
+              limit 99
+            ) unread_rows
+          ) as unread
+        from chat_messages m
+        join chat_members cm on cm.room_id = m.room_id
+        join users u on u.id = cm.user_id
+        where m.room_id = ${input.roomId}
+          and m.seq = ${String(input.seq)}
+          and cm.state = 'active'
+          and cm.user_id <> ${input.senderId}
+          and cm.last_read_seq < m.seq
+          and u.is_deleted = false
+          and (
+            cm.notify_level = 'all'
+            or (
+              cm.notify_level = 'mentions'
+              and (m.mention_all or cm.user_id = any (m.mentions))
+            )
+          )
+          and (
+            ${!input.mentionsOnly}
+            or m.mention_all
+            or cm.user_id = any (m.mentions)
+          )
+          and not exists (
+            select 1 from chat_user_blocks b
+            where b.blocker_id = cm.user_id and b.blocked_id = ${input.senderId}
+          )
+      `.execute(db);
+      return result.rows.map((row) => ({
+        userId: row.user_id,
+        isMention: row.is_mention,
+        unreadCount: Number(row.unread),
+      }));
+    },
+
     async countPinnedChats(db: Executor, userId: string) {
       const row = await db
         .selectFrom("chat_members")
