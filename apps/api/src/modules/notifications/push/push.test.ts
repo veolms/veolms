@@ -384,3 +384,19 @@ await test("chat pushes read like WhatsApp: sender in a group, name in a private
   assert.equal(payload.title, "Asha (message request)");
   assert.equal(payload.body, "Is the quiz open?");
 });
+
+await test("push counts as set up only when on and an app is listed", async () => {
+  const { isPushConfigured } = await import("./push-pipeline.ts");
+  const apps = JSON.stringify([
+    { applicationId: "com.procodrr.app", serviceAccountPath: "/nowhere.json" },
+  ]);
+  assert.equal(isPushConfigured({ PUSH_ENABLED: true, PUSH_APPS: apps }), true);
+  assert.equal(
+    isPushConfigured({ PUSH_ENABLED: false, PUSH_APPS: apps }),
+    false,
+  );
+  assert.equal(
+    isPushConfigured({ PUSH_ENABLED: true, PUSH_APPS: undefined }),
+    false,
+  );
+});
