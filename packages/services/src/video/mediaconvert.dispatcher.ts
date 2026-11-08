@@ -445,6 +445,9 @@ export function createMediaConvertDispatcher(options: {
     let jobInput: CreateJobCommandInput;
 
     if (jobTemplate) {
+      if (config.MEDIACONVERT_VIDEO_QUALITIES !== undefined) {
+        userMetadata.videoQualities = config.MEDIACONVERT_VIDEO_QUALITIES;
+      }
       if (payload.thumbnailDestination) {
         logger.warn(
           "[video-dispatch:mediaconvert] Template mode requires the template to generate thumbnails; the template also controls the quality ladder",
