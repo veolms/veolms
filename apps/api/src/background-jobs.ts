@@ -3,7 +3,10 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { config } from "./config.ts";
 import type { AppServices } from "./services/index.ts";
-import { createAuthService } from "./modules/auth/index.ts";
+import {
+  createAuthService,
+  createSessionService,
+} from "./modules/auth/index.ts";
 import { createEnrollmentAudienceService } from "./modules/commerce/index.ts";
 import { createPaymentWorker } from "./modules/commerce/fulfillment/payment.worker.ts";
 import {
@@ -16,8 +19,15 @@ import { findIdsMentionedInCourseContent } from "./modules/courses/curriculum/co
 import { createDiscussionUploadStore } from "./modules/discussion-uploads/index.ts";
 import { createAttachmentsRepository } from "./modules/learning/discussions/attachments/attachments.repository.ts";
 import { createAttachmentsService } from "./modules/learning/discussions/attachments/attachments.service.ts";
-import { createNotificationProcessor } from "./modules/notifications/index.ts";
-import { createChatRetention } from "./modules/chat/index.ts";
+import {
+  createNotificationProcessor,
+  createPushPipeline,
+  getPushDeliveryBacklog,
+} from "./modules/notifications/index.ts";
+import {
+  createChatPushSource,
+  createChatRetention,
+} from "./modules/chat/index.ts";
 import { startYoutubeImportWorker } from "./modules/media/youtube-import/youtube-import.worker.ts";
 import { getYoutubeImportTools } from "./modules/media/youtube-import/youtube-import.tools.ts";
 import { getHeroVideoReadyWatch } from "./modules/home/home-hero-video-ready.ts";
@@ -438,11 +448,13 @@ function startOpsHeartbeat(
     if (running) return;
     running = true;
     try {
-      const [webhookQueue, outbox, emailBacklog] = await Promise.all([
-        webhookRepo.getWebhookQueueDepth(database),
-        outboxRepo.getOutboxDepth(database),
-        notificationRepo.getEmailDeliveryBacklog(database),
-      ]);
+      const [webhookQueue, outbox, emailBacklog, pushBacklog] =
+        await Promise.all([
+          webhookRepo.getWebhookQueueDepth(database),
+          outboxRepo.getOutboxDepth(database),
+          notificationRepo.getEmailDeliveryBacklog(database),
+          getPushDeliveryBacklog(database),
+        ]);
       app.log.info(
         {
           job: "ops-heartbeat",
@@ -451,6 +463,7 @@ function startOpsHeartbeat(
           webhookQueue,
           outbox,
           emailBacklog,
+          pushBacklog,
         },
         "Ops heartbeat",
       );
@@ -499,6 +512,16 @@ function startInlineNotificationLoop(
     email: services.email,
     logger: app.log,
     config,
+    push: createPushPipeline({
+      database,
+      logger: app.log,
+      config,
+      sessions: createSessionService({ database }),
+    }),
+    chat: createChatPushSource({
+      database,
+      groupMaxMembers: config.CHAT_PUSH_GROUP_MAX_MEMBERS,
+    }),
     attachments: createInvoiceAttachmentResolver(
       createInvoiceService({
         database,
@@ -537,7 +560,13 @@ function startInlineNotificationLoop(
             result.outbox.failed +
             result.email.sent +
             result.email.retried +
-            result.email.failed >
+            result.email.failed +
+            (result.push
+              ? result.push.sent +
+                result.push.retried +
+                result.push.failed +
+                result.push.devicesRemoved
+              : 0) >
           0;
         if (didWork) {
           app.log.info(

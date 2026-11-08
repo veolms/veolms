@@ -11,12 +11,15 @@ import {
   UnknownNotificationEventError,
 } from "./notifications.handlers.ts";
 import * as notificationRepository from "./notifications.repository.ts";
-import type {
-  NotificationAttachmentResolver,
-  NotificationEmailAttachment,
-  NotificationHandlerDependencies,
-  NotificationRecipientDirectory,
+import {
+  CHAT_MESSAGE_SENT_EVENT,
+  type ChatPushSource,
+  type NotificationAttachmentResolver,
+  type NotificationEmailAttachment,
+  type NotificationHandlerDependencies,
+  type NotificationRecipientDirectory,
 } from "./notifications.types.ts";
+import type { PushSender, PushSendResult } from "./push/push-sender.ts";
 import { createNotificationService } from "./notifications.service.ts";
 
 const emailDeliveryPayloadSchema = z.strictObject({
@@ -33,6 +36,8 @@ const emailDeliveryPayloadSchema = z.strictObject({
 export interface NotificationProcessorResult {
   outbox: { processed: number; retried: number; failed: number };
   email: { sent: number; retried: number; failed: number };
+  /** Null while push is off. */
+  push: PushSendResult | null;
   cleanedUp: number;
 }
 
@@ -64,6 +69,8 @@ export function createNotificationProcessor({
   handlers,
   recipients,
   attachments,
+  push,
+  chat,
 }: {
   database: Kysely<Database>;
   email: EmailService;
@@ -82,11 +89,19 @@ export function createNotificationProcessor({
     | "NOTIFICATION_RETRY_SECONDS"
     | "NOTIFICATION_OUTBOX_RETENTION_DAYS"
     | "NOTIFICATION_COURSE_WIDE_EMAIL"
+    | "NOTIFICATION_COURSE_WIDE_PUSH"
   >;
   handlers: NotificationHandlerDependencies;
   recipients: NotificationRecipientDirectory;
+  /** Phone pushes; absent or null while push is off or not set up. */
+  push?: PushSender | null;
+  /** Who gets a chat message's push (the chat module's rules). */
+  chat?: ChatPushSource;
 }): NotificationProcessor {
-  const service = createNotificationService({ database });
+  const service = createNotificationService({
+    database,
+    pushEnabled: Boolean(push),
+  });
   const log = logger.child({ job: "notification-worker" });
 
   async function processOutbox() {
@@ -109,12 +124,30 @@ export function createNotificationProcessor({
             `${event.event_type}@v${event.event_version}`,
           );
         }
+        if (event.event_type === CHAT_MESSAGE_SENT_EVENT) {
+          // Chat messages are pushed only: the chat is their in-app view.
+          const message =
+            push && chat ? await chat.resolveMessagePush(event.payload) : null;
+          const { queued } = await service.processChatMessageEvent(
+            event,
+            message,
+          );
+          result.processed += 1;
+          if (queued > 0) {
+            log.debug(
+              { eventId: event.id, pushesQueued: queued },
+              "Chat message pushes queued",
+            );
+          }
+          continue;
+        }
         const intents = await createNotificationIntents(
           event.event_type,
           event.payload,
           {
             ...handlers,
             courseWideEmail: config.NOTIFICATION_COURSE_WIDE_EMAIL,
+            courseWidePush: config.NOTIFICATION_COURSE_WIDE_PUSH,
           },
         );
         const outcome = await service.processClaimedEvent(
@@ -310,6 +343,14 @@ export function createNotificationProcessor({
   async function process(): Promise<NotificationProcessorResult> {
     const outbox = await processOutbox();
     const emailResult = await processEmail();
+    const pushResult = push ? await push.process() : null;
+    if (push) {
+      await push
+        .maintain(config.NOTIFICATION_OUTBOX_RETENTION_DAYS)
+        .catch((error: unknown) => {
+          log.warn({ err: error }, "Push upkeep failed; tried again later");
+        });
+    }
     const olderThan = new Date(
       Date.now() -
         config.NOTIFICATION_OUTBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000,
@@ -318,7 +359,7 @@ export function createNotificationProcessor({
       database,
       olderThan,
     );
-    return { outbox, email: emailResult, cleanedUp };
+    return { outbox, email: emailResult, push: pushResult, cleanedUp };
   }
 
   return { process };

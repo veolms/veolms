@@ -3,14 +3,21 @@ import Fastify from "fastify";
 
 import { config } from "../config.ts";
 import { logger } from "../lib/logger.ts";
-import { createAuthService } from "../modules/auth/index.ts";
+import {
+  createAuthService,
+  createSessionService,
+} from "../modules/auth/index.ts";
+import { createChatPushSource } from "../modules/chat/index.ts";
 import { createEnrollmentAudienceService } from "../modules/commerce/index.ts";
 import {
   createInvoiceService,
   invoiceStorage,
 } from "../modules/commerce/invoices/invoice.service.ts";
 import { createInvoiceAttachmentResolver } from "../modules/commerce/invoices/invoice-email-attachment.ts";
-import { createNotificationProcessor } from "../modules/notifications/index.ts";
+import {
+  createNotificationProcessor,
+  createPushPipeline,
+} from "../modules/notifications/index.ts";
 import { createServices } from "../services/index.ts";
 import { createEmailService } from "@veolms/services/email";
 
@@ -41,6 +48,16 @@ try {
     email,
     logger: app.log,
     config,
+    push: createPushPipeline({
+      database,
+      logger: app.log,
+      config,
+      sessions: createSessionService({ database }),
+    }),
+    chat: createChatPushSource({
+      database,
+      groupMaxMembers: config.CHAT_PUSH_GROUP_MAX_MEMBERS,
+    }),
     attachments: createInvoiceAttachmentResolver(
       createInvoiceService({ database, storage: invoiceStorage(storage) }),
     ),
@@ -76,6 +93,7 @@ try {
       if (
         result.outbox.processed > 0 ||
         result.email.sent > 0 ||
+        (result.push?.sent ?? 0) > 0 ||
         result.outbox.failed > 0
       ) {
         process.stdout.write(
@@ -93,7 +111,11 @@ try {
     process.stdout.write(
       `${JSON.stringify({ job: "notification-worker", ...result })}\n`,
     );
-    if (result.outbox.failed > 0 || result.email.failed > 0) {
+    if (
+      result.outbox.failed > 0 ||
+      result.email.failed > 0 ||
+      (result.push?.failed ?? 0) > 0
+    ) {
       process.exitCode = 2;
     }
   }

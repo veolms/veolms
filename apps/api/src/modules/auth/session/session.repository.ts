@@ -69,6 +69,24 @@ export async function revokeSession(
   evictCachedSession(sessionId);
 }
 
+export async function listRevokedSessionIds(
+  database: Executor,
+  sessionIds: readonly string[],
+): Promise<string[]> {
+  const found: string[] = [];
+  const ids = [...new Set(sessionIds)];
+  for (let i = 0; i < ids.length; i += 1000) {
+    const rows = await database
+      .selectFrom("sessions")
+      .select("id")
+      .where("id", "in", ids.slice(i, i + 1000))
+      .where("revoked_at", "is not", null)
+      .execute();
+    for (const row of rows) found.push(row.id);
+  }
+  return found;
+}
+
 export async function deleteAllUserSessions(
   database: Executor,
   userId: string,
