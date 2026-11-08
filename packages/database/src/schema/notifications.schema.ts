@@ -3,7 +3,7 @@ import type { Json } from "./json.schema.ts";
 
 export type NotificationCategory =
   "transactional" | "social" | "learning" | "system";
-export type NotificationChannel = "in_app" | "email";
+export type NotificationChannel = "in_app" | "email" | "push";
 export type NotificationDeliveryStatus =
   "pending" | "processing" | "sent" | "failed" | "skipped";
 
@@ -43,4 +43,47 @@ export interface NotificationPreferenceTable {
   notification_type: string;
   channel: NotificationChannel;
   enabled: boolean;
+}
+
+export type PushPlatform = "android" | "ios";
+export type PushDeliverySource = "notification" | "chat";
+
+/** One app install that can receive pushes, keyed by its Firebase Installation ID. */
+export interface PushDeviceTable {
+  id: string;
+  user_id: string;
+  fid: string;
+  /** Android package name or iOS bundle identifier. */
+  application_id: string;
+  platform: PushPlatform;
+  app_version: string | null;
+  device_label: string | null;
+  session_id: string | null;
+  push_allowed: Generated<boolean>;
+  failure_count: Generated<number>;
+  last_error: string | null;
+  created_at: Generated<Date>;
+  last_seen_at: Generated<Date>;
+  last_success_at: Date | null;
+}
+
+/** The push queue: one row per message per user. */
+export interface PushDeliveryTable {
+  id: string;
+  user_id: string;
+  source: PushDeliverySource;
+  notification_id: string | null;
+  dedupe_key: string;
+  payload: Json;
+  status: Generated<NotificationDeliveryStatus>;
+  /** Installs still to receive it; null until sending starts (= all). */
+  pending_device_ids: string[] | null;
+  attempt_count: Generated<number>;
+  next_attempt_at: Generated<Date>;
+  locked_until: Date | null;
+  last_error: string | null;
+  sent_at: Date | null;
+  expires_at: Date;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
 }

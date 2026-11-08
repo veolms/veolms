@@ -594,6 +594,13 @@ export function createSessionService({ database }: SessionServiceOptions) {
     purgeOldSessions,
     authenticate,
     reportPlayback,
+    /**
+     * Of `sessionIds`, those signed out (logout, sign-out elsewhere,
+     * password reset). Expired sessions are not: a login that ran out was
+     * not a sign-out. Phone pushes stop for the signed-out ones.
+     */
+    listRevokedSessionIds: (sessionIds: readonly string[]) =>
+      sessionRepository.listRevokedSessionIds(database, sessionIds),
   };
 }
 

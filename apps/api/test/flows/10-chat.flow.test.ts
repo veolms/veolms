@@ -16,6 +16,7 @@ import {
   startFlowApp,
   type FlowClient,
 } from "./setup/flow-app.ts";
+import { createChatRepository } from "../../src/modules/chat/shared/chat.repository.ts";
 import { createCourse, enrollForFree } from "./setup/flow-courses.ts";
 
 const flow = await startFlowApp();
@@ -670,6 +671,53 @@ await test("group icon: only admins set it, an unfinished upload can't be one, a
     400,
     "CHAT_ICON_INVALID",
   );
+});
+
+await test("file cleanup keeps a group's icon (it belongs to no message) and removes orphaned files", async () => {
+  const start = async (name: string) =>
+    ok<{ uploadId: string }>(
+      await admin.post(`/v1/chat/rooms/${roomId}/uploads`, {
+        kind: "image",
+        name,
+        mimeType: "image/jpeg",
+        size: 2_000,
+      }),
+    ).uploadId;
+  const icon = await start("icon.jpg");
+  const orphan = await start("orphan.jpg");
+  // As after "Change icon": both finished and attached, only one is the
+  // group's icon, and neither belongs to a message.
+  await flow.database
+    .updateTable("chat_uploads")
+    .set({ status: "attached" })
+    .where("id", "in", [icon, orphan])
+    .execute();
+  await flow.database
+    .updateTable("chat_rooms")
+    .set({ icon_upload_id: icon })
+    .where("id", "=", roomId)
+    .execute();
+
+  const later = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+  const removable = (
+    await createChatRepository().listRemovableUploads(
+      flow.database,
+      later,
+      later,
+      10_000,
+    )
+  ).map((row) => row.id);
+  assert.ok(
+    !removable.includes(icon),
+    "a group's icon is never cleaned up while the group uses it",
+  );
+  assert.ok(removable.includes(orphan), "an orphaned file is cleaned up");
+
+  await flow.database
+    .updateTable("chat_rooms")
+    .set({ icon_upload_id: null })
+    .where("id", "=", roomId)
+    .execute();
 });
 
 await test("the live stream delivers new messages to the group", async () => {

@@ -45,9 +45,19 @@ async function loadEmailBrand(
   }
 }
 import type {
+  ChatMessagePush,
   NotificationIntent,
   NotificationRecipientDirectory,
 } from "./notifications.types.ts";
+import type { NotificationChannel } from "@veolms/database";
+import { insertPushDeliveries } from "./push/push-deliveries.repository.ts";
+import { listUsersWithPushDevices } from "./push/push-devices.repository.ts";
+import {
+  CHAT_MESSAGE_PUSH_TYPE,
+  chatPushDeliveries,
+  isPushedType,
+  notificationPushDelivery,
+} from "./push/push-payloads.ts";
 
 export interface NotificationService {
   list(
@@ -77,6 +87,14 @@ export interface NotificationService {
     intents: NotificationIntent[],
     recipients: NotificationRecipientDirectory,
   ): Promise<ProcessedNotificationEvent>;
+  /**
+   * Queues the phone pushes for one chat message (`chat.message_sent`) and
+   * marks the event processed. Null `message`: nothing to push.
+   */
+  processChatMessageEvent(
+    event: ClaimedOutboxEvent,
+    message: ChatMessagePush | null,
+  ): Promise<{ queued: number }>;
   /**
    * Tells every API process that these users' notifications changed, so
    * their open notification streams refetch. Call after the change commits.
@@ -163,8 +181,11 @@ function presentReadState(row: {
 
 export function createNotificationService({
   database,
+  pushEnabled = false,
 }: {
   database: Kysely<Database>;
+  /** Queue phone pushes (PUSH_ENABLED and at least one app set up). */
+  pushEnabled?: boolean;
 }): NotificationService {
   async function signalUsersChanged(userIds: readonly string[]) {
     for (const payload of encodeNotificationSignal(userIds)) {
@@ -364,6 +385,16 @@ export function createNotificationService({
     let created = 0;
     let skipped = 0;
     const notifiedUserIds = new Set<string>();
+    // Push only to people with a phone that can receive it: one query for
+    // the whole event instead of a push row per learner of a big course.
+    const anyPushed =
+      pushEnabled &&
+      intents.some(
+        (intent) => intent.push !== false && isPushedType(intent.type),
+      );
+    const phoneUsers = anyPushed
+      ? await listUsersWithPushDevices(database, recipientIds)
+      : new Set<string>();
 
     for (let start = 0; start < intents.length; start += CHUNK_SIZE) {
       const chunk = intents.slice(start, start + CHUNK_SIZE);
@@ -387,8 +418,18 @@ export function createNotificationService({
               continue;
             }
 
-            const enabledChannels = [] as Array<"in_app" | "email">;
-            for (const channel of intent.channels) {
+            const channels: NotificationChannel[] = [...intent.channels];
+            if (
+              intent.push !== false &&
+              isPushedType(intent.type) &&
+              phoneUsers.has(intent.recipientUserId) &&
+              !channels.includes("push")
+            ) {
+              channels.push("push");
+            }
+
+            const enabledChannels: NotificationChannel[] = [];
+            for (const channel of channels) {
               let enabled: boolean | undefined = intent.mandatory
                 ? true
                 : await notificationRepository.getPreference(
@@ -465,6 +506,19 @@ export function createNotificationService({
                 sentAt: null,
               });
             }
+            if (enabledChannels.includes("push")) {
+              const push = notificationPushDelivery({
+                notificationId,
+                recipientUserId: intent.recipientUserId,
+                type: intent.type,
+                category: intent.category,
+                title: rendered.inApp.title,
+                body: rendered.inApp.body,
+                deepLink: intent.deepLink,
+                now: new Date(),
+              });
+              if (push) await insertPushDeliveries(transaction, [push]);
+            }
             chunkCreated += 1;
             notifiedUserIds.add(intent.recipientUserId);
           }
@@ -488,6 +542,38 @@ export function createNotificationService({
     return { created, skipped, notifiedUserIds: [...notifiedUserIds] };
   }
 
+  async function processChatMessageEvent(
+    event: ClaimedOutboxEvent,
+    message: ChatMessagePush | null,
+  ) {
+    let queued = 0;
+    if (pushEnabled && message && message.recipients.length > 0) {
+      const userIds = message.recipients.map((recipient) => recipient.userId);
+      const [phoneUsers, optedOut] = await Promise.all([
+        listUsersWithPushDevices(database, userIds),
+        notificationRepository.listUsersWithPreferenceOff(
+          database,
+          userIds,
+          CHAT_MESSAGE_PUSH_TYPE,
+          "push",
+        ),
+      ]);
+      const wanted = new Set(
+        userIds.filter((id) => phoneUsers.has(id) && !optedOut.has(id)),
+      );
+      const deliveries = chatPushDeliveries(message, wanted, new Date());
+      await insertPushDeliveries(database, deliveries);
+      queued = deliveries.length;
+    }
+    await outboxRepository.markProcessed(
+      database,
+      event.id,
+      new Date(),
+      event.locked_until!,
+    );
+    return { queued };
+  }
+
   return {
     list,
     getSummary,
@@ -498,6 +584,7 @@ export function createNotificationService({
     getPreferences,
     updatePreferences,
     processClaimedEvent,
+    processChatMessageEvent,
     signalUsersChanged,
   };
 }

@@ -83,6 +83,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       templateKey: "course.published",
       templateData: { courseTitle: event.courseTitle },
       channels: courseWideChannels(dependencies),
+      push: dependencies.courseWidePush !== false,
       mandatory: false,
       deepLink: `/courses/${event.courseSlug}`,
     }));
@@ -508,6 +509,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         lessonTitle: event.lessonTitle,
       },
       channels: courseWideChannels(dependencies),
+      push: dependencies.courseWidePush !== false,
       mandatory: false,
       deepLink: event.deepLink,
     }));

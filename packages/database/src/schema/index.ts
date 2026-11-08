@@ -121,6 +121,8 @@ import type {
   NotificationTable,
   NotificationDeliveryTable,
   NotificationPreferenceTable,
+  PushDeviceTable,
+  PushDeliveryTable,
 } from "./notifications.schema.ts";
 
 import type {
@@ -257,6 +259,8 @@ export interface Database {
   notifications: NotificationTable;
   notification_deliveries: NotificationDeliveryTable;
   notification_preferences: NotificationPreferenceTable;
+  push_devices: PushDeviceTable;
+  push_deliveries: PushDeliveryTable;
 
   // Learner state
   quizzes: QuizTable;

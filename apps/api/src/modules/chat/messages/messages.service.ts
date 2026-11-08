@@ -15,6 +15,12 @@ import type { ChatAttachmentRef } from "@veolms/database";
 
 import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
+import { config } from "../../../config.ts";
+import {
+  CHAT_MESSAGE_SENT_EVENT,
+  isPushConfigured,
+} from "../../notifications/index.ts";
+import type { ChatMessageSentEvent } from "../push/chat-push.service.ts";
 import { encodeChatEvent } from "../realtime/chat-bus.ts";
 import { ROLE_LEVEL } from "../shared/chat.access.ts";
 import { ChatErrors } from "../shared/chat.errors.ts";
@@ -197,6 +203,25 @@ export function createMessagesService(runtime: ChatRuntime) {
           },
         });
       }
+    });
+  }
+
+  /**
+   * Queues the phone pushes for a new message, through the outbox: the
+   * notification worker asks the chat module (chat-push.service.ts) who
+   * gets one, then sends them. Nothing is queued while this server
+   * sends no pushes (push off or no app set up).
+   */
+  async function queueMessagePush(event: ChatMessageSentEvent) {
+    if (!isPushConfigured(config)) return;
+    await database.transaction().execute(async (trx) => {
+      await outbox.publish(trx, {
+        type: CHAT_MESSAGE_SENT_EVENT,
+        version: 1,
+        dedupeKey: `${CHAT_MESSAGE_SENT_EVENT}:${event.messageId}`,
+        occurredAt: new Date(),
+        payload: event,
+      });
     });
   }
 
@@ -542,6 +567,15 @@ export function createMessagesService(runtime: ChatRuntime) {
       const message = presentMessage(await loadMessage(roomId, seq));
       if (result.outcome === "sent") {
         await publishMessage("message", message);
+        // Phone pushes: the notification worker decides who gets one.
+        await queueMessagePush({
+          roomId,
+          messageId: id,
+          seq,
+          senderId: userId,
+        }).catch(() => {
+          // The message is sent; a lost push is not fatal.
+        });
         // Replying to a request accepts it, as in WhatsApp.
         if (recipientOfRequest) {
           await acceptRequest(room.id);
