@@ -31,6 +31,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { inlineCriticalCss } from "./inline-critical-css.mjs";
@@ -171,6 +172,19 @@ function pageFiles(pathname) {
  */
 function withoutBuildTime(contents) {
   return contents?.replace(/(builtAt(?:\\*"),)\d+/gu, "$1") ?? null;
+}
+
+/**
+ * A short fingerprint of a page as it reads without its build time. Only
+ * fingerprints of the pages before the refresh are kept: the Node.js course
+ * alone has hundreds of lesson pages of about half a megabyte each, and
+ * holding them all (old and new) ran the refresh out of memory.
+ */
+function fingerprint(contents) {
+  const comparable = withoutBuildTime(contents);
+  return comparable === null
+    ? null
+    : createHash("sha256").update(comparable).digest("base64");
 }
 
 async function readIfExists(filePath) {
@@ -322,7 +336,11 @@ async function main() {
   }
   const handler = createRequestHandler(build, "production");
 
-  const rendered = new Map();
+  // Each page is written over its old files as soon as it is rendered, so
+  // only a few pages are in memory at a time; the old ones are remembered by
+  // fingerprint to tell whether the finished page (with its critical CSS)
+  // differs.
+  const previous = new Map();
   await mapWithConcurrency(paths, RENDER_CONCURRENCY, async (pathname) => {
     const dataUrl = new URL(
       pathname === "/" ? "/_.data" : `${pathname}.data`,
@@ -354,22 +372,19 @@ async function main() {
     if (!html.includes("window.__reactRouterContext =")) {
       throw new Error(`Rendered HTML for ${pathname} is missing router data.`);
     }
-    rendered.set(pathname, { html, data });
-  });
-
-  // Written over the old files; the old ones are kept to tell whether the
-  // finished page (with its critical CSS) differs.
-  const previous = new Map();
-  for (const [pathname, { html, data }] of rendered) {
     const files = pageFiles(pathname);
+    const [htmlBefore, dataBefore] = await Promise.all([
+      readIfExists(files.html),
+      readIfExists(files.data),
+    ]);
     previous.set(pathname, {
-      html: await readIfExists(files.html),
-      data: await readIfExists(files.data),
+      html: fingerprint(htmlBefore),
+      data: fingerprint(dataBefore),
     });
     await mkdir(path.dirname(files.html), { recursive: true });
     await writeFile(files.html, html, "utf8");
     await writeFile(files.data, data, "utf8");
-  }
+  });
 
   // Only the pages written above are processed; the others already were.
   await inlineCriticalCss(clientDirectory, { quiet: true });
@@ -389,8 +404,8 @@ async function main() {
       readIfExists(files.data),
     ]);
     if (
-      withoutBuildTime(html) !== withoutBuildTime(before.html) ||
-      withoutBuildTime(data) !== withoutBuildTime(before.data)
+      fingerprint(html) !== before.html ||
+      fingerprint(data) !== before.data
     ) {
       updatedPages += 1;
       console.log(`Updated ${pathname}`);
@@ -398,7 +413,7 @@ async function main() {
     }
   }
   console.log(
-    `${updatedPages} of ${rendered.size} pages changed for ${courses.length} of ${requested.length} requested courses.`,
+    `${updatedPages} of ${previous.size} pages changed for ${courses.length} of ${requested.length} requested courses.`,
   );
   if (process.env.GITHUB_OUTPUT) {
     await appendFile(process.env.GITHUB_OUTPUT, `changed=${changed}\n`);
