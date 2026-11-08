@@ -1531,12 +1531,20 @@ export function createChatRepository() {
       deletedBefore: Date,
       limit: number,
     ) {
+      // A group's icon is attached to the group, not to a message: it is
+      // never removable while a group uses it (deleting it would also clear
+      // the group's icon, through the foreign key).
       const result = await sql<{ id: string; storage_key: string }>`
         select u.id, u.storage_key from chat_uploads u
         left join chat_messages m on m.room_id = u.room_id and m.seq = u.message_seq
-        where (u.status <> 'attached' and u.created_at < ${olderThan})
-           or (u.status = 'attached' and m.room_id is null)
-           or (u.status = 'attached' and m.deleted_at < ${deletedBefore})
+        where (
+             (u.status <> 'attached' and u.created_at < ${olderThan})
+          or (u.status = 'attached' and m.room_id is null)
+          or (u.status = 'attached' and m.deleted_at < ${deletedBefore})
+        )
+          and not exists (
+            select 1 from chat_rooms r where r.icon_upload_id = u.id
+          )
         limit ${limit}
       `.execute(db);
       return result.rows;
