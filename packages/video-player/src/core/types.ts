@@ -213,6 +213,8 @@ export interface VideoStreamingConfiguration {
    */
   holdVideoHeight?: number;
   abrRestrictions?: AbrRestrictions;
+  /** Whether Shaka disables video variants when dropped frame ratio exceeds threshold. */
+  abrDroppedFrames?: boolean;
   /**
    * Bits per second assumed before the first segment is measured. Left out,
    * the Shaka engine starts from what it measured on the previous video.

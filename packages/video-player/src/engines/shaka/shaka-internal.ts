@@ -123,6 +123,7 @@ export interface ShakaPreloadManagerLike {
 export interface ShakaManifestLike {
   variants: ReadonlyArray<{
     id: number | string;
+    disabledUntilTime?: number;
     video?: {
       segmentIndex?: {
         find(time: number): number | null;
@@ -287,6 +288,13 @@ export const SHAKA_ABR_DEFAULTS = {
   switchInterval: 4,
   bandwidthUpgradeTarget: 0.85,
   bandwidthDowngradeTarget: 0.95,
+  /**
+   * Keep dropped frames from disabling video streams in Shaka. On emulators,
+   * mobile devices with background load or brief stalls, frame drop counters
+   * exceed 15% and cause Shaka to ban streams for 30s, removing them from
+   * the visible qualities list (veolms#334).
+   */
+  droppedFrames: false,
 } as const;
 
 const MIN_REMEMBERED_BANDWIDTH = 300_000;
@@ -721,17 +729,12 @@ export function createShakaConfiguration(
   const heldHeight = shakaHeldVideoHeight(source);
   const capHeight =
     preferredHeight ?? heldHeight ?? shakaStartVideoHeight(source);
-  // A chosen quality: the first variant is the highest not above it (every
-  // variant looks affordable at this estimate, so ABR takes the top one the
-  // restriction leaves), and ABR stays off so playback stays there. The
-  // height limit is always given, so going back to auto (a `configure`,
-  // which merges) lifts the one a chosen quality set.
+  // Explicit caller restrictions (if any); preferred/start height guides
+  // initial track selection via targetVideoHeight/startAtPreferredQuality and
+  // must not hard-restrict manifest variants from being discovered in the UI.
   const restrictions = {
     ...streaming?.abrRestrictions,
-    maxHeight: Math.min(
-      streaming?.abrRestrictions?.maxHeight ?? Infinity,
-      capHeight ?? Infinity,
-    ),
+    maxHeight: streaming?.abrRestrictions?.maxHeight ?? Infinity,
   };
   result.abr = {
     enabled: isShakaAutoQuality(source) && heldHeight === null,
@@ -750,6 +753,8 @@ export function createShakaConfiguration(
       streaming?.abrBandwidthDowngradeTarget ??
       SHAKA_ABR_DEFAULTS.bandwidthDowngradeTarget,
     restrictions,
+    droppedFrames:
+      streaming?.abrDroppedFrames ?? SHAKA_ABR_DEFAULTS.droppedFrames,
   };
 
   if (networking?.manifestRetry) {

@@ -707,6 +707,23 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       });
     }
 
+    try {
+      const manifestVariant = player
+        .getManifest?.()
+        ?.variants.find(
+          (candidate) => String(candidate.id) === String(track.id),
+        );
+      if (
+        manifestVariant &&
+        typeof manifestVariant.disabledUntilTime === "number" &&
+        manifestVariant.disabledUntilTime > 0
+      ) {
+        manifestVariant.disabledUntilTime = 0;
+      }
+    } catch {
+      // Manifest inspection is best-effort.
+    }
+
     player.configure({ abr: { enabled: false } });
     this.#qualityChoice = "manual";
     this.#heldHeight = null;
@@ -1019,7 +1036,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   private targetVideoHeight(source: VideoSource): number | null {
     const chosen = shakaPreferredVideoHeight(source);
     if (chosen !== null) return chosen;
-    return this.#qualityChoice === null ? this.#heldHeight : null;
+    if (this.#qualityChoice !== null) return null;
+    return this.#heldHeight ?? shakaStartVideoHeight(source);
   }
 
   /**
@@ -1759,6 +1777,22 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const player = this.#player;
     if (!player) {
       return;
+    }
+
+    try {
+      const manifestVariants = player.getManifest?.()?.variants;
+      if (manifestVariants) {
+        for (const variant of manifestVariants) {
+          if (
+            typeof variant.disabledUntilTime === "number" &&
+            variant.disabledUntilTime > 0
+          ) {
+            variant.disabledUntilTime = 0;
+          }
+        }
+      }
+    } catch {
+      // Manifest inspection is best-effort.
     }
 
     this.clearTrackMaps();

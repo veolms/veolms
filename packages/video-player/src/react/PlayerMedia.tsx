@@ -23,8 +23,15 @@ export type PlayerMediaProps = Omit<
 
 type Slot = 0 | 1;
 
-/** The standby is laid over the visible element, unseen and inert. */
-const STANDBY_CLASSES = "opacity-0";
+/**
+ * The standby is laid over the visible element, unseen and inert.
+ * Both opacity-0 and invisible (visibility: hidden) are required:
+ * on Android emulators and WebViews, hardware-accelerated video overlays
+ * bypass CSS opacity, so visibility: hidden ensures the compositor does not
+ * draw the standby video surface over the active video.
+ */
+const STANDBY_CLASSES = ["opacity-0", "invisible"] as const;
+const STANDBY_CLASS_STRING = "opacity-0 invisible";
 
 export const PlayerMedia = forwardRef<HTMLVideoElement, PlayerMediaProps>(
   function PlayerMedia(
@@ -87,7 +94,9 @@ export const PlayerMedia = forwardRef<HTMLVideoElement, PlayerMediaProps>(
         for (const [index, element] of slotsRef.current.entries()) {
           if (!element) continue;
           const standby = index !== slot;
-          element.classList.toggle(STANDBY_CLASSES, standby);
+          for (const cls of STANDBY_CLASSES) {
+            element.classList.toggle(cls, standby);
+          }
           element.toggleAttribute("data-player-standby", standby);
         }
         setActiveSlot(slot);
@@ -111,7 +120,7 @@ export const PlayerMedia = forwardRef<HTMLVideoElement, PlayerMediaProps>(
       const standby = slot !== activeSlot;
       return {
         ...props,
-        className: `${className ?? ""} absolute inset-0 ${standby ? STANDBY_CLASSES : ""}`,
+        className: `${className ?? ""} absolute inset-0 ${standby ? STANDBY_CLASS_STRING : ""}`,
         preload,
         "data-player-standby": standby ? "" : undefined,
         "aria-hidden": standby ? true : props["aria-hidden"],
