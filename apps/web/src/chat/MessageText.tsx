@@ -13,7 +13,9 @@ import { useState, type ReactNode } from "react";
 const TOKEN =
   /(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])|(@[\p{L}\p{N}_.-]+(?:\s[\p{Lu}][\p{L}]+)?)|(`[^`\n]+`)|(\*[^*\n]+\*)|(_[^_\n]+_)|(~[^~\n]+~)/gu;
 
-const FENCE = /```([^\n`]*)\n?([\s\S]*?)```/g;
+// A language name only counts on the fence's own line ("```js" + newline);
+// "```const x = 1```" on one line is all code.
+const FENCE = /```(?:([\w+#.-]+)?[ \t]*\n)?([\s\S]*?)```/g;
 
 export function MessageText({
   text,
@@ -26,8 +28,9 @@ export function MessageText({
   let at = 0;
   for (const match of text.matchAll(FENCE)) {
     const index = match.index ?? 0;
-    if (index > at)
-      blocks.push(<Inline key={`t${at}`} text={text.slice(at, index)} />);
+    // The line breaks around a block belong to the block, not the text.
+    const before = text.slice(at, index).replace(/\n$/, "");
+    if (before) blocks.push(<Inline key={`t${at}`} text={before} />);
     blocks.push(
       <CodeBlock
         key={`c${index}`}
@@ -36,6 +39,7 @@ export function MessageText({
       />,
     );
     at = index + match[0].length;
+    if (text[at] === "\n") at += 1;
   }
   if (at < text.length)
     blocks.push(<Inline key={`t${at}`} text={text.slice(at)} />);

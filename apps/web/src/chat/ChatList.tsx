@@ -424,7 +424,16 @@ export function ChatList({
 
 /** The list shows text, not the *bold* / _italic_ / ~strike~ / `code` marks. */
 function plainPreview(text: string): string {
-  return text.replace(/([*_~`])(\S(?:[^]*?\S)?)\1/g, "$2");
+  return (
+    text
+      // A code block reads as its code, on one line (the server's preview
+      // is already one line: "```js const a = 1 ```").
+      .replace(
+        /```(?:(?:js|jsx|ts|tsx|javascript|typescript|py|python|java|c|cpp|cs|go|rust|rs|sql|html|css|json|bash|sh|shell|yaml|yml|php|rb|ruby|kotlin|swift|dart|md|txt)(?=\s))?\s*([^]*?)\s*(?:```|$)/gi,
+        "$1",
+      )
+      .replace(/([*_~`])(\S(?:[^]*?\S)?)\1/g, "$2")
+  );
 }
 
 function ChatRow({
