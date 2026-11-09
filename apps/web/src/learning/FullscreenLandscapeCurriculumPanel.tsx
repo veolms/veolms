@@ -454,13 +454,17 @@ export function FullscreenLandscapeCurriculumPanel({
           className="h-[calc(100%-28px)] w-0.5 rounded-full bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--accent)_64%,var(--border))_16%,color-mix(in_srgb,var(--accent)_64%,var(--border))_84%,transparent)] opacity-80 shadow-[0_0_0_transparent] transition-[width,opacity,box-shadow] duration-160 group-hover/resize:w-0.75 group-hover/resize:opacity-100 group-hover/resize:shadow-[0_0_14px_color-mix(in_srgb,var(--accent)_42%,transparent)] group-focus-visible/resize:w-0.75 group-focus-visible/resize:opacity-100"
         />
       </div>
+      <div className="h-full min-h-0 overflow-hidden">{children}</div>
       {/* An open section reaches to 1px from the panel's edges, so its left
-          side runs down the resize line. The strip under the line fades out
-          at the bottom with it (the same 14px and 16% as the line's own
-          fade), and the rest of the list is drawn whole. */}
-      <div className="h-full min-h-0 overflow-hidden [mask-image:linear-gradient(to_right,transparent_3px,black_3px),linear-gradient(to_top,transparent_14px,black_calc(14px_+_16%))] [mask-size:100%_100%,3px_100%] [mask-repeat:no-repeat]">
-        {children}
-      </div>
+          side runs down the resize line. The 3px strip under the line fades
+          into the panel at the bottom with it (the same 14px and 16% as the
+          line's own fade), painted over the list rather than masking it: a
+          mask would make the list a layer of its own, and keep the elastic
+          scroller, raised while it is held, under the resize handle. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 z-40 h-[calc(14px_+_16%)] w-[3px] bg-[linear-gradient(to_top,color-mix(in_srgb,var(--surface)_91%,var(--canvas))_14px,transparent)]"
+      />
     </div>
   );
 }
