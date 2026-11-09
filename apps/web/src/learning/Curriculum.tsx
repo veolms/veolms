@@ -96,10 +96,11 @@ const JUMP_CHIP_CLASS =
  * the next 20, kept above the line until then, moves down over it (a
  * gradient itself cannot be transitioned) — sliding when the halves met
  * slowly (`data-collision`), at once after a flick. The panel has no handle
- * over the line, so there it stays whole.
+ * over the line, so there it stays whole; so does the Lessons panel beside
+ * a full-screen video, at any width (`phone-sheet`, styles.css).
  */
 const JUMP_CHIP_DIVIDER_CLASS =
-  "relative before:pointer-events-none before:absolute before:inset-y-0 before:w-px before:bg-[linear-gradient(to_bottom,transparent,color-mix(in_srgb,color-mix(in_srgb,var(--accent)_75%,white)_5%,transparent)_14%,color-mix(in_srgb,color-mix(in_srgb,var(--accent)_75%,white)_40%,transparent)_32%,color-mix(in_srgb,var(--accent)_75%,white)_50%,color-mix(in_srgb,color-mix(in_srgb,var(--accent)_75%,white)_40%,transparent)_68%,color-mix(in_srgb,color-mix(in_srgb,var(--accent)_75%,white)_5%,transparent)_86%,transparent)] before:opacity-(--bar-stick,0) before:content-[''] max-[820px]:before:[mask-image:linear-gradient(to_bottom,transparent_10px,black_30px)] max-[820px]:before:[mask-size:100%_calc(100%_+_30px)] max-[820px]:before:[mask-repeat:no-repeat] max-[820px]:before:[mask-position:0_-30px] max-[820px]:[[data-stuck]>&]:before:[mask-position:0_0] max-[820px]:[[data-collision]>&]:before:transition-[mask-position] max-[820px]:[[data-collision]>&]:before:duration-300 max-[820px]:[[data-collision]>&]:before:ease-out motion-reduce:before:transition-none";
+  "relative before:pointer-events-none before:absolute before:inset-y-0 before:w-px before:bg-[linear-gradient(to_bottom,transparent,color-mix(in_srgb,color-mix(in_srgb,var(--accent)_75%,white)_5%,transparent)_14%,color-mix(in_srgb,color-mix(in_srgb,var(--accent)_75%,white)_40%,transparent)_32%,color-mix(in_srgb,var(--accent)_75%,white)_50%,color-mix(in_srgb,color-mix(in_srgb,var(--accent)_75%,white)_40%,transparent)_68%,color-mix(in_srgb,color-mix(in_srgb,var(--accent)_75%,white)_5%,transparent)_86%,transparent)] before:opacity-(--bar-stick,0) before:content-[''] phone-sheet:before:[mask-image:linear-gradient(to_bottom,transparent_10px,black_30px)] phone-sheet:before:[mask-size:100%_calc(100%_+_30px)] phone-sheet:before:[mask-repeat:no-repeat] phone-sheet:before:[mask-position:0_-30px] phone-sheet:[[data-stuck]>&]:before:[mask-position:0_0] phone-sheet:[[data-collision]>&]:before:transition-[mask-position] phone-sheet:[[data-collision]>&]:before:duration-300 phone-sheet:[[data-collision]>&]:before:ease-out motion-reduce:before:transition-none";
 /**
  * The moment the two halves meet, when they met slowly (the bar marked
  * `data-collision`, see useStuckSectionHeadings; a flick lands them met
@@ -135,11 +136,13 @@ const JUMP_CHIP_LAST_CLASS = `${JUMP_CHIP_DIVIDER_CLASS} ${JUMP_CHIP_RIPPLE_CLAS
  * the grab handle over their top, 10px deep and a little wider than the
  * handle, so the line between them is not seen above the handle; it lets
  * presses through. `--curriculum-top-radius` tells the buttons the radius
- * of the corners they grow into.
+ * of the corners they grow into. The Lessons panel beside a full-screen
+ * video has no handle, so it keeps the wide panel's bar on every phone
+ * (`phone-sheet`, styles.css).
  */
 // Written out in full: Tailwind only generates classes it can read whole.
 const STICKY_BAR_CLASS =
-  "sticky top-0 z-4 flex min-w-0 shrink-0 [padding:calc(10px_*_(1_-_var(--bar-stick,0)))_calc(16px_*_(1_-_var(--bar-stick,0)))_calc(8px_*_(1_-_var(--bar-stick,0)))] [gap:calc(6px_*_(1_-_var(--bar-stick,0)))] [--curriculum-top-radius:var(--control-radius-learning-panel,8px)] bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] max-[820px]:[--curriculum-top-radius:0px] max-[820px]:bg-(--canvas) max-[820px]:before:pointer-events-none max-[820px]:before:absolute max-[820px]:before:top-0 max-[820px]:before:left-1/2 max-[820px]:before:z-1 max-[820px]:before:h-2.5 max-[820px]:before:w-28 max-[820px]:before:-translate-x-1/2 max-[820px]:before:rounded-b-lg max-[820px]:before:bg-(--canvas) max-[820px]:before:opacity-(--bar-stick,0) max-[820px]:before:content-['']";
+  "sticky top-0 z-4 flex min-w-0 shrink-0 [padding:calc(10px_*_(1_-_var(--bar-stick,0)))_calc(16px_*_(1_-_var(--bar-stick,0)))_calc(8px_*_(1_-_var(--bar-stick,0)))] [gap:calc(6px_*_(1_-_var(--bar-stick,0)))] [--curriculum-top-radius:var(--control-radius-learning-panel,8px)] bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] phone-sheet:[--curriculum-top-radius:0px] phone-sheet:bg-(--canvas) phone-sheet:before:pointer-events-none phone-sheet:before:absolute phone-sheet:before:top-0 phone-sheet:before:left-1/2 phone-sheet:before:z-1 phone-sheet:before:h-2.5 phone-sheet:before:w-28 phone-sheet:before:-translate-x-1/2 phone-sheet:before:rounded-b-lg phone-sheet:before:bg-(--canvas) phone-sheet:before:opacity-(--bar-stick,0) phone-sheet:before:content-['']";
 /**
  * How far down the panel an open section's heading holds: under the bar of
  * chips as it stands once stuck (56px, the two buttons) and the room kept
@@ -1454,6 +1457,8 @@ export const Curriculum = memo(function Curriculum({
                   // 1px from the panel's edges, and draws back in as it shuts.
                   // On a phone every block already runs 1px short of the sheet's
                   // edges (learning.css), so there is nothing to reach out to.
+                  // Beside a full-screen video it reaches out at every width,
+                  // as in the wide panel (`phone-sheet`, styles.css).
                   //
                   // The mini player's rows are dense and keep their faint
                   // hairline between sections, half a pixel thick: a full
@@ -1461,7 +1466,7 @@ export const Curriculum = memo(function Curriculum({
                   className={
                     hideHero
                       ? "learning-curriculum__section relative after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:origin-bottom after:scale-y-50 after:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] after:content-['']"
-                      : `learning-curriculum__section relative transition-[margin] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${isOpen ? "-mx-[13px] max-[820px]:mx-0" : "mx-0"}`
+                      : `learning-curriculum__section relative transition-[margin] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${isOpen ? "-mx-[13px] phone-sheet:mx-0" : "mx-0"}`
                   }
                   data-fixed-radius={hideHero ? undefined : ""}
                   // The lessons it numbers, and whether every one is done,

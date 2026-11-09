@@ -392,7 +392,7 @@ export function FullscreenLandscapeCurriculumPanel({
   return (
     <div
       data-lesson-theme={lessonTheme}
-      className={`relative z-20 h-full min-w-0 flex-1 touch-pan-y overflow-hidden border-l border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] text-(--text) shadow-[-18px_0_40px_rgba(0,0,0,0.2)] will-change-transform [&_.learning-curriculum]:h-full [&_.learning-curriculum]:rounded-none [&_.learning-curriculum]:bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] [&_.learning-curriculum]:shadow-none ${motionMode === "settling" || motionMode === "dismissing" ? "transition-transform duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none" : "transition-none"}`}
+      className={`relative z-20 h-full min-w-0 flex-1 touch-pan-y overflow-hidden rounded-(--control-radius-learning-panel,8px) bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] text-(--text) shadow-[-18px_0_40px_rgba(0,0,0,0.2)] will-change-transform [&_.learning-curriculum]:h-full [&_.learning-curriculum]:rounded-none [&_.learning-curriculum]:bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] [&_.learning-curriculum]:shadow-none ${motionMode === "settling" || motionMode === "dismissing" ? "transition-transform duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none" : "transition-none"}`}
       style={{
         transform:
           "translate3d(var(--learning-fullscreen-panel-offset-x, 0px), 0, 0)",
@@ -454,7 +454,13 @@ export function FullscreenLandscapeCurriculumPanel({
           className="h-[calc(100%-28px)] w-0.5 rounded-full bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--accent)_64%,var(--border))_16%,color-mix(in_srgb,var(--accent)_64%,var(--border))_84%,transparent)] opacity-80 shadow-[0_0_0_transparent] transition-[width,opacity,box-shadow] duration-160 group-hover/resize:w-0.75 group-hover/resize:opacity-100 group-hover/resize:shadow-[0_0_14px_color-mix(in_srgb,var(--accent)_42%,transparent)] group-focus-visible/resize:w-0.75 group-focus-visible/resize:opacity-100"
         />
       </div>
-      <div className="h-full min-h-0 overflow-hidden">{children}</div>
+      {/* An open section reaches to 1px from the panel's edges, so its left
+          side runs down the resize line. The strip under the line fades out
+          at the bottom with it (the same 14px and 16% as the line's own
+          fade), and the rest of the list is drawn whole. */}
+      <div className="h-full min-h-0 overflow-hidden [mask-image:linear-gradient(to_right,transparent_3px,black_3px),linear-gradient(to_top,transparent_14px,black_calc(14px_+_16%))] [mask-size:100%_100%,3px_100%] [mask-repeat:no-repeat]">
+        {children}
+      </div>
     </div>
   );
 }

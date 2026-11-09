@@ -697,9 +697,13 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   padding: 10px 14px calc(16px + var(--curriculum-reveal-space, 0px));
 }
 
-/* On a phone the blocks run 1px short of the sheet's edges, open or closed. */
+/* On a phone the blocks run 1px short of the sheet's edges, open or closed.
+   Not in the Lessons panel beside a full-screen video: there they sit in the
+   gutter and an open one reaches out, as in the wide panel, on every phone. */
 @media (max-width: 820px) {
-  .learning-curriculum:not(.learning-curriculum--compact)
+  .learning-curriculum:not(.learning-curriculum--compact):not(
+      [data-learning-fullscreen-course-panel] *
+    )
     .learning-curriculum__lesson-list {
     padding-inline: 1px;
   }
