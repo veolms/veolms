@@ -197,6 +197,21 @@ export const CouponsAccessDenied = lazy(() =>
     default: module.CouponsAccessDenied,
   })),
 );
+export const WorkshopsAdminPage = lazy(() =>
+  import("../workshops/WorkshopsAdminPage").then((module) => ({
+    default: module.WorkshopsAdminPage,
+  })),
+);
+export const WorkshopBuilderPage = lazy(() =>
+  import("../workshops/WorkshopBuilderPage").then((module) => ({
+    default: module.WorkshopBuilderPage,
+  })),
+);
+export const WorkshopsAccessDenied = lazy(() =>
+  import("../workshops/WorkshopsAccessDenied").then((module) => ({
+    default: module.WorkshopsAccessDenied,
+  })),
+);
 export const TeamPage = lazy(() =>
   import("../team/TeamPage").then((module) => ({
     default: module.TeamPage,

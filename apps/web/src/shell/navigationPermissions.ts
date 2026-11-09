@@ -34,6 +34,7 @@ export const NAVIGATION_PERMISSIONS: Readonly<
   ],
   "/team": ["team.read", "role.read"],
   "/support-inbox": ["support.read", "support.manage"],
+  "/workshops-admin": ["workshop.read", "workshop.manage"],
 };
 
 /**
@@ -43,6 +44,7 @@ export const NAVIGATION_PERMISSIONS: Readonly<
 const ACTION_PAGE_PERMISSIONS: readonly (readonly [string, string])[] = [
   ["/courses/create", "course.create"],
   ["/coupons/", "coupon.manage"],
+  ["/workshops-admin/", "workshop.manage"],
 ];
 
 /** "/coupons/abc" → "/coupons". */

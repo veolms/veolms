@@ -71,6 +71,9 @@ import {
   InvitePage,
   CouponBuilderPage,
   CouponsAccessDenied,
+  WorkshopsAdminPage,
+  WorkshopBuilderPage,
+  WorkshopsAccessDenied,
 } from "../academyLazyPages";
 import {
   CourseEditorRouteFallback,
@@ -89,6 +92,7 @@ import type { ExtensionPageOutletContext } from "../extensionPageOutlet";
 export interface UseAcademyPageContentArgs {
   assignmentId: string | undefined;
   couponId: string | undefined;
+  workshopId: string | undefined;
   courseSlug: string | undefined;
   discussionTab: string;
   initialCourseCurriculum: CourseCurriculumPreview | undefined;
@@ -225,6 +229,7 @@ export function useAcademyPageContent({
   assignmentId,
   couponId,
   courseSlug,
+  workshopId,
   discussionTab,
   initialCourseCurriculum,
   initialGuestHomeCopy,
@@ -682,6 +687,35 @@ export function useAcademyPageContent({
       return (
         <Suspense fallback={<AcademyPageFallback />}>
           <InvitePage onNavigatePage={onNavigatePage} />
+        </Suspense>
+      );
+    }
+    if (surfacePage === "workshop-builder") {
+      if (!isAuthReady) return <AcademyPageFallback />;
+      if (!activeUser || !isStaffRole(userRoles)) {
+        return (
+          <Suspense fallback={<AcademyPageFallback />}>
+            <WorkshopsAccessDenied onNavigatePage={onNavigatePage} />
+          </Suspense>
+        );
+      }
+      return (
+        <Suspense fallback={<AcademyPageFallback />}>
+          <WorkshopBuilderPage
+            workshopId={workshopId}
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        </Suspense>
+      );
+    }
+    if (surfacePage === "workshops" || isSectionPage("Workshops")) {
+      return (
+        <Suspense fallback={<AcademyPageFallback />}>
+          <WorkshopsAdminPage
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
         </Suspense>
       );
     }

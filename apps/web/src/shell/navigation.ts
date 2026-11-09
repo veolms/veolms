@@ -11,6 +11,7 @@ import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircl
 import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
+import { VideoConferenceIcon as VideoConference } from "@phosphor-icons/react/VideoConference";
 import type { Icon } from "@phosphor-icons/react";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 import { canOpenNavigationPath } from "./navigationPermissions";
@@ -74,6 +75,12 @@ const creatorNavigation: readonly NavigationItem[] = [
     "/analytics",
   ),
   createNavigationItem("creator-orders", "Orders", Tote, "/orders"),
+  createNavigationItem(
+    "creator-workshops",
+    "Workshops",
+    VideoConference,
+    "/workshops-admin",
+  ),
   createNavigationItem("creator-settings", "Settings", GearSix, "/settings"),
 ];
 
@@ -96,6 +103,13 @@ const adminNavigation: readonly NavigationItem[] = [
     "/analytics",
   ),
   createNavigationItem("admin-coupons", "Coupons", Tag, "/coupons"),
+  // Live sessions: schedule, publish, run.
+  createNavigationItem(
+    "admin-workshops",
+    "Workshops",
+    VideoConference,
+    "/workshops-admin",
+  ),
   // Problems learners report and the feedback they send.
   createNavigationItem("admin-support", "Support", Lifebuoy, "/support-inbox"),
   // Academy-wide settings, the home page among them.

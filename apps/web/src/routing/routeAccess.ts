@@ -47,6 +47,7 @@ const RESERVED_PROFILE_PATHS = new Set([
   "/support",
   "/support-inbox",
   "/coupons",
+  "/workshops-admin",
   "/home-page",
   "/platform",
   "/team",
@@ -97,6 +98,8 @@ export function isCourseAuthorPath(pathname: string): boolean {
     normalized.startsWith("/analytics/") ||
     normalized === "/coupons" ||
     normalized.startsWith("/coupons/") ||
+    normalized === "/workshops-admin" ||
+    normalized.startsWith("/workshops-admin/") ||
     normalized === "/support-inbox" ||
     normalized.startsWith("/support-inbox/") ||
     normalized === "/home-page" ||

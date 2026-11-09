@@ -126,6 +126,9 @@ export const permissions = [
   "chat.moderate",
   "chat.manage",
   "chat.restrict_platform",
+  // Workshops: live sessions with registration, reminders and recordings.
+  "workshop.read",
+  "workshop.manage",
 ] as const;
 
 /** Every key that opens a section of the Analytics page. */

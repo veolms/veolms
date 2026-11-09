@@ -111,6 +111,7 @@ interface CoursesPageProps {
   assignmentId?: string;
   username?: string;
   couponId?: string;
+  workshopId?: string;
   miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
@@ -158,6 +159,7 @@ export function CoursesPage({
   assignmentId,
   username,
   couponId,
+  workshopId,
   miniPlayerCourseId = null,
   learningBackground = null,
   learningOriginSection = null,
@@ -983,6 +985,7 @@ export function CoursesPage({
   const { renderPageContent } = useAcademyPageContent({
     assignmentId,
     couponId,
+    workshopId,
     courseSlug,
     discussionTab,
     initialCourseCurriculum,

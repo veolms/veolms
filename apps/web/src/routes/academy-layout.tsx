@@ -399,7 +399,8 @@ export default function AcademyLayout() {
   const matches = useMatches();
   const location = useLocation();
   const navigate = useNavigate();
-  const { courseSlug, quizId, assignmentId, username, couponId } = useParams();
+  const { courseSlug, quizId, assignmentId, username, couponId, workshopId } =
+    useParams();
   const applicationScrollPositionsRef = useRef(
     new Map<string, ApplicationScrollRestorationEntry>(),
   );
@@ -2071,6 +2072,7 @@ export default function AcademyLayout() {
           assignmentId={assignmentId}
           username={username}
           couponId={couponId}
+          workshopId={workshopId}
           miniPlayerCourseId={resolveMiniPlayerCourseId({
             presentation: playerPresentation,
             persistentCourseRouteKey: persistentPlayer?.courseRouteKey,

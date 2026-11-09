@@ -161,6 +161,18 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "coupon-edit",
       caseSensitive: true,
     }),
+    route("workshops-admin", marker, {
+      id: "workshops-admin",
+      caseSensitive: true,
+    }),
+    route("workshops-admin/create", marker, {
+      id: "workshop-create",
+      caseSensitive: true,
+    }),
+    route("workshops-admin/:workshopId", marker, {
+      id: "workshop-edit",
+      caseSensitive: true,
+    }),
     route("logout", marker, { id: "logout", caseSensitive: true }),
     route(":username", marker, {
       id: "public-profile",

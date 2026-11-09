@@ -19,6 +19,7 @@ export * from "./quotes.schema.ts";
 export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
+export * from "./workshops.schema.ts";
 export * from "./chat.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
@@ -152,6 +153,11 @@ import type {
   SupportMessageTable,
   SupportTicketTable,
 } from "./support.schema.ts";
+import type {
+  WorkshopRegistrationTable,
+  WorkshopSessionTable,
+  WorkshopTable,
+} from "./workshops.schema.ts";
 import type {
   ChatHiddenMessageTable,
   ChatMemberTable,
@@ -287,6 +293,11 @@ export interface Database {
   support_tickets: SupportTicketTable;
   support_messages: SupportMessageTable;
   support_attachments: SupportAttachmentTable;
+
+  // Workshops
+  workshops: WorkshopTable;
+  workshop_sessions: WorkshopSessionTable;
+  workshop_registrations: WorkshopRegistrationTable;
 
   // Chat
   chat_settings: ChatSettingsTable;
