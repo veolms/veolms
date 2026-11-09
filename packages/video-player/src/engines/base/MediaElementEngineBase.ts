@@ -611,6 +611,25 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     });
   }
 
+  /**
+   * Given a fatal media failure (the element could not decode what it was
+   * handed, the media source broke) before it is shown. True when the
+   * engine is putting it right itself, so the failure is not reported as
+   * the player's error; false to show it. The base engine shows every one.
+   */
+  protected recoverFromMediaFailure(_error: VideoEngineError): boolean {
+    return false;
+  }
+
+  /**
+   * A load has run for LOAD_TIMEOUT_MS without finishing. True when the
+   * engine starts it over instead of failing it (a request that hung is
+   * dropped with it); false to report the failure. The base engine reports.
+   */
+  protected retryTimedOutLoad(): boolean {
+    return false;
+  }
+
   protected async onAttached(_media: HTMLMediaElement): Promise<void> {}
 
   protected async onDetaching(_media: HTMLMediaElement): Promise<void> {}
@@ -635,6 +654,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     this.#loadTimeout = setTimeout(() => {
       this.#loadTimeout = null;
       if (this.#snapshot.lifecycle !== "loading") return;
+      if (this.retryTimedOutLoad()) return;
       this.emitError(
         new VideoEngineError({
           category: "NETWORK",
@@ -741,9 +761,15 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       this.recoverFromMediaError();
       this.refreshNativeTextTracks();
     });
-    listen("error", () =>
-      this.emitError(mediaErrorToVideoEngineError(media.error)),
-    );
+    listen("error", () => {
+      const error = mediaErrorToVideoEngineError(media.error);
+      if (error.fatal && this.recoverFromMediaFailure(error)) return;
+      // A fetch the element gave up on (MEDIA_ERR_ABORTED, MEDIA_ERR_NETWORK)
+      // is not the end of the video: the streaming engine fetches the
+      // segments itself and carries on. Shown as the player's error, it put
+      // "Something went wrong" over a video that played on.
+      this.emitError(error, error.fatal);
+    });
   }
 
   private unbindMediaEvents(media: HTMLMediaElement): void {

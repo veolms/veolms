@@ -149,6 +149,27 @@ const LOAD_RETRY_LIMIT = 3;
 const LOAD_RETRY_FIRST_DELAY_MS = 1_000;
 /** With the browser offline, a load retry waits for `online` up to this long. */
 const LOAD_RETRY_OFFLINE_WAIT_MS = 20_000;
+/**
+ * A decoder that fails mid-lesson (the browser's MEDIA_ERR_DECODE, Shaka's
+ * VIDEO_ERROR or a media source that threw) is the second most common error
+ * students met after a video had started, often half an hour in, and the
+ * only way on was the Try again button, which loads the video again where
+ * it was. That reload is now made for them: the video is loaded again at
+ * its position and played on, with the loader up for the moment it takes
+ * (its segments are on the device, see segmentCache.ts). This many times
+ * within the window; a video that keeps failing then shows its error.
+ */
+const MEDIA_RECOVERY_LIMIT = 3;
+const MEDIA_RECOVERY_WINDOW_MS = 10 * 60_000;
+/**
+ * A decoder that failed twice in the window is probably struggling with
+ * the picture itself (1080p is High profile level 4.2; the renditions below
+ * are lighter): automatic quality stays at or under this height for the
+ * rest of the video. A quality the viewer picks still applies.
+ */
+const MEDIA_RECOVERY_MAX_HEIGHT = 720;
+/** A load that times out (see LOAD_TIMEOUT_MS) is started over this many times. */
+const TIMED_OUT_LOAD_RETRY_LIMIT = 1;
 
 /** Resolves true once `media` has a decoded frame to show, false on timeout. */
 function waitForFirstFrame(
@@ -493,6 +514,14 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #loadGeneration = 0;
   /** Set while the browser is offline and a stream waits for `online`. */
   #retryOnOnline = false;
+  /** When each self-recovery from a media failure began (see above). */
+  #mediaRecoveries: number[] = [];
+  #mediaRecoveryInFlight = false;
+  /** Set once the decoder has failed twice on this source (see above). */
+  #mediaRecoveryMaxHeight: number | null = null;
+  /** The source and options of the load most recently asked for. */
+  #lastLoad: { src: string; options: VideoLoadOptions } | null = null;
+  #timedOutLoadRetries = 0;
   #stopWatchingSpeculativePreloads: (() => void) | null = null;
   /** Drops a source's streaming settings still waiting for its first frame. */
   #cancelDeferredStreaming: (() => void) | null = null;
@@ -566,6 +595,14 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     source: VideoSource,
     options: VideoLoadOptions = {},
   ): Promise<void> {
+    if (this.#lastLoad?.src !== source.src) {
+      // Another video: what the last one's decoder could not take says
+      // nothing about this one.
+      this.#mediaRecoveries = [];
+      this.#mediaRecoveryMaxHeight = null;
+      this.#timedOutLoadRetries = 0;
+    }
+    this.#lastLoad = { src: source.src, options };
     for (let attempt = 0; ; attempt += 1) {
       try {
         await this.loadOnce(source, options, attempt);
@@ -599,6 +636,99 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         if (!this.isCurrentOperation(generation)) return;
       }
     }
+  }
+
+  /**
+   * See `MediaElementEngineBase.recoverFromMediaFailure` and
+   * `MEDIA_RECOVERY_LIMIT`. The same failure reaches here twice (from the
+   * media element and from Shaka): the second finds the recovery under way.
+   */
+  protected override recoverFromMediaFailure(error: VideoEngineError): boolean {
+    const media = this.mediaElement;
+    const source = this.getSnapshot().source;
+    if (
+      !media ||
+      !source ||
+      this.getSnapshot().lifecycle !== "ready" ||
+      error.category === "UNSUPPORTED"
+    ) {
+      return false;
+    }
+    if (this.#mediaRecoveryInFlight) return true;
+    const now = Date.now();
+    this.#mediaRecoveries = this.#mediaRecoveries.filter(
+      (at) => now - at < MEDIA_RECOVERY_WINDOW_MS,
+    );
+    if (this.#mediaRecoveries.length >= MEDIA_RECOVERY_LIMIT) return false;
+    this.#mediaRecoveries.push(now);
+    this.#mediaRecoveryInFlight = true;
+    if (this.#mediaRecoveries.length >= 2) {
+      this.#mediaRecoveryMaxHeight = MEDIA_RECOVERY_MAX_HEIGHT;
+    }
+    const startTime = media.currentTime;
+    const wasPlaying = !media.paused && !media.ended;
+    markPlayback("media-recovery", {
+      attempt: this.#mediaRecoveries.length,
+      code: error.code,
+      startTime,
+      maxHeight: this.#mediaRecoveryMaxHeight,
+    });
+    // Told to whoever listens, as a failure the player got over.
+    this.emit("error", {
+      error: new VideoEngineError({
+        category: error.category,
+        code: error.code,
+        message: error.message,
+        fatal: false,
+        recoverable: true,
+        cause: error.cause,
+        details: error.details,
+      }),
+    });
+    void (async () => {
+      // Let Shaka finish dispatching the failure first.
+      await Promise.resolve();
+      try {
+        await this.load(source, { startTime });
+        if (
+          this.#mediaRecoveryMaxHeight !== null &&
+          this.#qualityChoice !== "manual"
+        ) {
+          const runtime = this.#runtime;
+          const player = this.#player;
+          if (runtime && player) {
+            player.configure({ abr: this.abrConfiguration(source, runtime) });
+          }
+        }
+        if (wasPlaying) await this.play();
+      } catch {
+        // The load showed its own failure.
+      } finally {
+        this.#mediaRecoveryInFlight = false;
+      }
+    })();
+    return true;
+  }
+
+  /** See `MediaElementEngineBase.retryTimedOutLoad`. */
+  protected override retryTimedOutLoad(): boolean {
+    const last = this.#lastLoad;
+    if (!last || this.#timedOutLoadRetries >= TIMED_OUT_LOAD_RETRY_LIMIT) {
+      return false;
+    }
+    const source = this.getSnapshot().source;
+    if (!source || source.src !== last.src) return false;
+    this.#timedOutLoadRetries += 1;
+    markPlayback("load-timeout-retry", { attempt: this.#timedOutLoadRetries });
+    this.emit("streamingretry", {
+      attempt: this.#timedOutLoadRetries,
+      delaySeconds: 0,
+      code: "LOAD_TIMEOUT",
+      httpStatus: null,
+      offline: browserOffline(),
+    });
+    void this.load(source, last.options).catch(() => undefined);
+    return true;
   }
 
   /**
@@ -1190,7 +1320,24 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       ),
       runtime,
     ).abr as Record<string, unknown>;
-    return { ...abr, enabled: auto };
+    return { ...abr, ...this.mediaRecoveryRestrictions(abr), enabled: auto };
+  }
+
+  /**
+   * ABR restrictions after a decoder failed twice (see
+   * `MEDIA_RECOVERY_MAX_HEIGHT`), on top of the source's own.
+   */
+  private mediaRecoveryRestrictions(abr: Record<string, unknown>): {
+    restrictions?: Record<string, unknown>;
+  } {
+    const cap = this.#mediaRecoveryMaxHeight;
+    if (cap === null) return {};
+    const restrictions = (abr.restrictions ?? {}) as Record<string, unknown>;
+    const maxHeight =
+      typeof restrictions.maxHeight === "number"
+        ? Math.min(restrictions.maxHeight, cap)
+        : cap;
+    return { restrictions: { ...restrictions, maxHeight } };
   }
 
   /** The height the source is to play at: chosen, or held while on auto. */
@@ -1847,6 +1994,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         "UNKNOWN",
       );
       if (this.retryFailedStreaming(player, error)) return;
+      if (
+        error.fatal &&
+        error.category === "MEDIA" &&
+        this.recoverFromMediaFailure(error)
+      ) {
+        return;
+      }
       // While a video loads, a network failure is the load's to handle:
       // `load` tries again before showing anything (the same error also
       // rejects Shaka's load promise). Shown here first, the retry found
