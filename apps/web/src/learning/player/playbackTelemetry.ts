@@ -68,6 +68,11 @@ function segmentCacheSince(
 
 /** A gap between two time updates larger than this is a seek, not play. */
 const MAX_TIMEUPDATE_STEP_SECONDS = 2;
+/**
+ * Play asked for this long ago with no frame shown yet, when the playback
+ * is given up on: reported as a failed start (`STUCK_START`).
+ */
+const STUCK_START_MS = 8_000;
 
 /**
  * Turns the player's events into one {@link PlaybackSummary} per video
@@ -98,6 +103,11 @@ export function createPlaybackTelemetry(
     if (!courseKey) return;
     const now = Date.now();
     const device = readDeviceTier();
+    const stuckStart =
+      reason !== "error" &&
+      playback.firstFrameAt === null &&
+      playback.playRequestedAt !== null &&
+      performance.now() - playback.playRequestedAt >= STUCK_START_MS;
     const summary: PlaybackSummary = {
       playbackId: playback.playbackId,
       courseKey,
@@ -118,8 +128,16 @@ export function createPlaybackTelemetry(
                   ),
               ),
             ),
-      startFailed: playback.firstFrameAt === null && reason === "error",
-      ...(playback.errorCode ? { errorCode: playback.errorCode } : {}),
+      // A video whose first frame never came, given up on (the page
+      // left, another lesson opened) after waiting this long, failed to
+      // start as surely as one that errored; it used to go unreported.
+      startFailed:
+        playback.firstFrameAt === null && (reason === "error" || stuckStart),
+      ...(playback.errorCode
+        ? { errorCode: playback.errorCode }
+        : stuckStart
+          ? { errorCode: "STUCK_START" }
+          : {}),
       ...(playback.errorHttpStatus !== undefined
         ? { errorHttpStatus: playback.errorHttpStatus }
         : {}),

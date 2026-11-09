@@ -170,6 +170,19 @@ const MEDIA_RECOVERY_WINDOW_MS = 10 * 60_000;
 const MEDIA_RECOVERY_MAX_HEIGHT = 720;
 /** A load that times out (see LOAD_TIMEOUT_MS) is started over this many times. */
 const TIMED_OUT_LOAD_RETRY_LIMIT = 1;
+/**
+ * The watchdog looks at a playing video this often for the freezes the
+ * browser reports no error for (see `watchPlayback`): the playhead not
+ * moving although this much is buffered in front of it, a key the browser
+ * is waiting for, or video frames no longer being drawn while the sound
+ * goes on (a black picture). Each counts as a media failure after it has
+ * lasted this long, and is mended the way a decoder failure is.
+ */
+const WATCHDOG_INTERVAL_MS = 1_000;
+const WATCHDOG_BUFFERED_AHEAD_SECONDS = 2;
+const WATCHDOG_FROZEN_PLAYHEAD_MS = 8_000;
+const WATCHDOG_WAITING_FOR_KEY_MS = 8_000;
+const WATCHDOG_NO_FRAMES_MS = 6_000;
 
 /** Resolves true once `media` has a decoded frame to show, false on timeout. */
 function waitForFirstFrame(
@@ -522,6 +535,14 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   /** The source and options of the load most recently asked for. */
   #lastLoad: { src: string; options: VideoLoadOptions } | null = null;
   #timedOutLoadRetries = 0;
+  /** The watchdog's timer and what it last saw (see `watchPlayback`). */
+  #watchdog: number | null = null;
+  #watchdogMedia: HTMLMediaElement | null = null;
+  #lastPlayheadTime = -1;
+  #playheadStillSince = 0;
+  #lastFrameCount = -1;
+  #framesStillSince = 0;
+  #waitingForKeySince = 0;
   #stopWatchingSpeculativePreloads: (() => void) | null = null;
   /** Drops a source's streaming settings still waiting for its first frame. */
   #cancelDeferredStreaming: (() => void) | null = null;
@@ -1163,6 +1184,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   protected override async onDetaching(
     _media: HTMLMediaElement,
   ): Promise<void> {
+    this.stopWatchdog();
     this.#selectedTextTrackId = null;
     this.#cancelDeferredStreaming?.();
     this.revealVideo();
@@ -1178,6 +1200,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     if (typeof window !== "undefined") {
       window.removeEventListener("online", this.handleOnline);
     }
+    this.stopWatchdog();
     this.#retryOnOnline = false;
     this.#cancelDeferredStreaming?.();
     rememberShakaBandwidthEstimate(this.#player);
@@ -1621,7 +1644,147 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   ): Promise<void> {
     this.refreshTracks(true);
     this.finishLoading(source);
+    this.startWatchdog();
     void this.addSourceTextTracks(player, source, generation);
+  }
+
+  /** Watches the loaded video for silent freezes (see WATCHDOG_INTERVAL_MS). */
+  private startWatchdog(): void {
+    this.stopWatchdog();
+    const media = this.mediaElement;
+    if (!media || typeof window === "undefined") return;
+    this.#watchdogMedia = media;
+    this.#lastPlayheadTime = -1;
+    this.#lastFrameCount = -1;
+    this.#waitingForKeySince = 0;
+    media.addEventListener("waitingforkey", this.handleWaitingForKey);
+    this.#watchdog = window.setInterval(
+      () => this.watchPlayback(),
+      WATCHDOG_INTERVAL_MS,
+    );
+  }
+
+  private stopWatchdog(): void {
+    if (this.#watchdog !== null) {
+      window.clearInterval(this.#watchdog);
+      this.#watchdog = null;
+    }
+    this.#watchdogMedia?.removeEventListener(
+      "waitingforkey",
+      this.handleWaitingForKey,
+    );
+    this.#watchdogMedia = null;
+  }
+
+  private readonly handleWaitingForKey = (): void => {
+    if (this.#waitingForKeySince === 0) {
+      this.#waitingForKeySince = Date.now();
+      markPlayback("waiting-for-key");
+    }
+  };
+
+  /**
+   * One look at the playing video. Nothing here runs while it is paused,
+   * ended, hidden with the page, or waiting on the network (nothing
+   * buffered ahead), so a slow connection is never taken for a freeze.
+   */
+  private watchPlayback(): void {
+    const media = this.mediaElement;
+    if (
+      !media ||
+      media !== this.#watchdogMedia ||
+      this.#mediaRecoveryInFlight ||
+      this.getSnapshot().lifecycle !== "ready"
+    ) {
+      return;
+    }
+    const now = Date.now();
+    const wantsToPlay = !media.paused && !media.ended && media.playbackRate > 0;
+    if (!wantsToPlay) {
+      this.#playheadStillSince = 0;
+      this.#framesStillSince = 0;
+      this.#waitingForKeySince = 0;
+      this.#lastPlayheadTime = media.currentTime;
+      return;
+    }
+    const ahead = bufferedAheadSeconds(media);
+    const time = media.currentTime;
+    const moved = time !== this.#lastPlayheadTime;
+    this.#lastPlayheadTime = time;
+
+    // A key the browser is still waiting for: the licence never came for
+    // this part of the video, or the key is not the one it holds.
+    if (this.#waitingForKeySince !== 0) {
+      if (moved) {
+        this.#waitingForKeySince = 0;
+      } else if (
+        now - this.#waitingForKeySince >=
+        WATCHDOG_WAITING_FOR_KEY_MS
+      ) {
+        this.#waitingForKeySince = 0;
+        this.recoverFromFreeze("WAITING_FOR_KEY", { ahead });
+        return;
+      }
+    }
+
+    // Data in front of the playhead, play asked for, and no movement.
+    if (moved || ahead < WATCHDOG_BUFFERED_AHEAD_SECONDS) {
+      this.#playheadStillSince = 0;
+    } else if (this.#playheadStillSince === 0) {
+      this.#playheadStillSince = now;
+    } else if (now - this.#playheadStillSince >= WATCHDOG_FROZEN_PLAYHEAD_MS) {
+      this.#playheadStillSince = 0;
+      this.recoverFromFreeze("PLAYHEAD_FROZEN", {
+        ahead,
+        readyState: media.readyState,
+      });
+      return;
+    }
+
+    // The sound goes on but no frame has been drawn for a while: a black
+    // picture. Only while the page is shown; a hidden tab draws nothing.
+    const quality =
+      typeof document !== "undefined" &&
+      document.visibilityState === "visible" &&
+      media instanceof HTMLVideoElement &&
+      media.videoWidth > 0 &&
+      typeof media.getVideoPlaybackQuality === "function"
+        ? media.getVideoPlaybackQuality()
+        : null;
+    if (!quality || !moved) {
+      this.#framesStillSince = 0;
+      if (quality) this.#lastFrameCount = quality.totalVideoFrames;
+      return;
+    }
+    const frames = quality.totalVideoFrames;
+    if (this.#lastFrameCount === -1 || frames !== this.#lastFrameCount) {
+      this.#lastFrameCount = frames;
+      this.#framesStillSince = 0;
+      return;
+    }
+    if (this.#framesStillSince === 0) {
+      this.#framesStillSince = now;
+    } else if (now - this.#framesStillSince >= WATCHDOG_NO_FRAMES_MS) {
+      this.#framesStillSince = 0;
+      this.recoverFromFreeze("NO_VIDEO_FRAMES", { frames });
+    }
+  }
+
+  /** A freeze the watchdog found, mended as a decoder failure is. */
+  private recoverFromFreeze(
+    code: string,
+    detail: Record<string, unknown>,
+  ): void {
+    markPlayback("watchdog", { code, ...detail });
+    const error = new VideoEngineError({
+      category: "MEDIA",
+      code,
+      message: `Playback stopped silently (${code}).`,
+    });
+    if (!this.recoverFromMediaFailure(error)) {
+      // Mended as often as allowed already: the failure is the player's.
+      this.emitError(error);
+    }
   }
 
   /**
