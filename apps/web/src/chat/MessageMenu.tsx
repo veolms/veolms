@@ -4,6 +4,7 @@ import { ChatCircleIcon as ChatCircle } from "@phosphor-icons/react/ChatCircle";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
+import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
@@ -30,6 +31,7 @@ export type MessageAction =
   | "reply"
   | "info"
   | "copy"
+  | "copy-link"
   | "edit"
   | "pin"
   | "unpin"
@@ -135,6 +137,11 @@ export function MessageMenu({
           {message.body ? (
             <DropdownMenuItem onClick={() => onAction("copy")}>
               <Copy size={16} aria-hidden="true" /> Copy
+            </DropdownMenuItem>
+          ) : null}
+          {message.seq > 0 ? (
+            <DropdownMenuItem onClick={() => onAction("copy-link")}>
+              <LinkSimple size={16} aria-hidden="true" /> Copy link
             </DropdownMenuItem>
           ) : null}
           {editable ? (

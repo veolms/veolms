@@ -32,7 +32,9 @@ import { chatService } from "./chat.service";
  * Nothing depends on an event arriving: messages carry gapless numbers, so
  * a gap, a reconnect (`ready`) or `resync` fetches what was missed with
  * GET .../changes?since=. The stream closes 2 minutes after the tab is
- * hidden and reopens when it is shown (CHAT_ROOM_PLAN §14.3).
+ * hidden and reopens when it is shown (CHAT_ROOM_PLAN §14.3), except while
+ * desktop notifications are on: then it stays open so they keep coming, as
+ * on WhatsApp Web.
  */
 
 const HIDDEN_GRACE_MS = 2 * 60_000;
@@ -60,6 +62,21 @@ const RECONNECT_GAP_MS = 30_000;
 /** "Delivered" already reported per chat, so a list refresh does not repeat it. */
 const deliveredSent = new Map<string, number>();
 let lastReconnectAt = 0;
+
+/** Opens a chat link in the app (set by useChatStream); else a page load. */
+let openLink: ((path: string) => void) | null = null;
+export function setChatLinkOpener(opener: ((path: string) => void) | null) {
+  openLink = opener;
+}
+
+/** Desktop notifications turned on here and allowed by the browser. */
+function desktopAlertsOn() {
+  return (
+    getChatPrefs().desktopAlerts &&
+    typeof Notification !== "undefined" &&
+    Notification.permission === "granted"
+  );
+}
 
 /** Chats on screen right now: their new messages are read, not unread. */
 const visibleRooms = new Set<string>();
@@ -251,28 +268,33 @@ function alertFor(message: ChatMessage) {
   const wanted =
     room.kind === "direct" ? room.me.notifyLevel === "all" : mentioned;
   if (!wanted) return;
-  const hidden = document.visibilityState === "hidden";
-  if (!hidden && visibleRooms.has(message.roomId)) return;
+  // Another tab or app in front counts as away, as on WhatsApp Web.
+  const away = document.visibilityState === "hidden" || !document.hasFocus();
+  if (!away && visibleRooms.has(message.roomId)) return;
   const prefs = getChatPrefs();
   if (prefs.sounds) chime();
-  if (
-    hidden &&
-    prefs.desktopAlerts &&
-    typeof Notification !== "undefined" &&
-    Notification.permission === "granted"
-  ) {
+  if (away && desktopAlertsOn()) {
     const who = message.sender?.name ?? "Someone";
     const body = prefs.previews
       ? message.body ||
         (message.attachments[0]?.kind === "audio" ? "Voice message" : "Media")
       : "New message";
+    const icon = message.sender?.avatarUrl;
     const alert = new Notification(
       room.kind === "direct" ? who : `${who} @ ${room.title}`,
-      { body, tag: message.roomId },
+      {
+        body,
+        // One per chat: a newer message replaces the last one's alert.
+        tag: message.roomId,
+        ...(icon && /^https?:\/\//.test(icon) ? { icon } : {}),
+      },
     );
     alert.onclick = () => {
       window.focus();
-      window.location.assign(`/chat/${message.roomId}`);
+      // The chat opens at this message, blinking.
+      const path = `/chat/${message.roomId}?seq=${message.seq}`;
+      if (openLink) openLink(path);
+      else window.location.assign(path);
       alert.close();
     };
   }
@@ -435,7 +457,9 @@ function close() {
 function onVisibilityChange() {
   if (document.visibilityState === "hidden") {
     clearTimeout(hiddenTimer);
-    hiddenTimer = setTimeout(close, HIDDEN_GRACE_MS);
+    hiddenTimer = setTimeout(() => {
+      if (!desktopAlertsOn()) close();
+    }, HIDDEN_GRACE_MS);
     return;
   }
   clearTimeout(hiddenTimer);

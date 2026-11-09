@@ -1145,6 +1145,20 @@ export function createChatRepository() {
     },
 
     // --------------------------------------------------------------- people
+    async getPersonCard(db: Executor, userId: string) {
+      return db
+        .selectFrom("users")
+        .select([
+          "id",
+          "display_name",
+          "avatar_data_url",
+          "is_deleted",
+          "username",
+        ])
+        .where("id", "=", userId)
+        .executeTakeFirst();
+    },
+
     async getPeople(db: Executor, userIds: readonly string[]) {
       if (userIds.length === 0) return [] as PersonRow[];
       return db

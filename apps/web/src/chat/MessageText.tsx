@@ -17,12 +17,17 @@ const TOKEN =
 // "```const x = 1```" on one line is all code.
 const FENCE = /```(?:([\w+#.-]+)?[ \t]*\n)?([\s\S]*?)```/g;
 
+type OnMention = (name: string, anchor: HTMLElement) => void;
+
 export function MessageText({
   text,
   mentionsMe = false,
+  onMention,
 }: {
   text: string;
   mentionsMe?: boolean;
+  /** An @name was clicked (shows that person's card). */
+  onMention?: OnMention;
 }) {
   const blocks: ReactNode[] = [];
   let at = 0;
@@ -30,7 +35,10 @@ export function MessageText({
     const index = match.index ?? 0;
     // The line breaks around a block belong to the block, not the text.
     const before = text.slice(at, index).replace(/\n$/, "");
-    if (before) blocks.push(<Inline key={`t${at}`} text={before} />);
+    if (before)
+      blocks.push(
+        <Inline key={`t${at}`} text={before} onMention={onMention} />,
+      );
     blocks.push(
       <CodeBlock
         key={`c${index}`}
@@ -42,7 +50,9 @@ export function MessageText({
     if (text[at] === "\n") at += 1;
   }
   if (at < text.length)
-    blocks.push(<Inline key={`t${at}`} text={text.slice(at)} />);
+    blocks.push(
+      <Inline key={`t${at}`} text={text.slice(at)} onMention={onMention} />,
+    );
   return (
     <span
       className={
@@ -83,7 +93,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   );
 }
 
-function Inline({ text }: { text: string }) {
+function Inline({ text, onMention }: { text: string; onMention?: OnMention }) {
   const parts: ReactNode[] = [];
   let last = 0;
   let key = 0;
@@ -105,9 +115,23 @@ function Inline({ text }: { text: string }) {
       );
     } else if (mention) {
       parts.push(
-        <span key={key++} className="font-semibold text-(--accent-ink)">
-          {mention}
-        </span>,
+        onMention && mention !== "@all" && mention !== "@everyone" ? (
+          <button
+            key={key++}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onMention(mention.slice(1), event.currentTarget);
+            }}
+            className="inline cursor-pointer border-0 bg-transparent p-0 font-semibold text-(--accent-ink) hover:underline"
+          >
+            {mention}
+          </button>
+        ) : (
+          <span key={key++} className="font-semibold text-(--accent-ink)">
+            {mention}
+          </span>
+        ),
       );
     } else if (code) {
       parts.push(

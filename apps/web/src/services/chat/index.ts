@@ -11,6 +11,7 @@ export {
   type OutgoingMessage,
 } from "./chat.outbox";
 export {
+  setChatLinkOpener,
   setChatOnScreen,
   syncThreadTo,
   syncWithRoomList,

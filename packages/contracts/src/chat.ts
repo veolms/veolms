@@ -551,6 +551,36 @@ export const chatCandidatesResponseSchema = z.object({
   ),
 });
 
+/**
+ * The card a name or picture in a chat opens (WhatsApp's contact pop-up,
+ * Telegram's profile): enough to message them, mention them or open their
+ * profile, and the groups you share.
+ */
+export const chatPersonCardResponseSchema = z.object({
+  person: chatPersonSchema.extend({
+    /** Their public profile address, when they have one. */
+    username: z.string().nullable(),
+  }),
+  /** Your private chat with them, when there is one. */
+  directRoomId: z.uuid().nullable(),
+  /** Why "Message" can't start a chat now; null when it can. */
+  messageBlocked: z
+    .enum(["self", "deleted", "blocked", "staffFirst", "notAllowed"])
+    .nullable(),
+  /** You blocked them. */
+  blockedByMe: z.boolean(),
+  commonGroups: z.array(
+    z.object({
+      id: z.uuid(),
+      title: z.string(),
+      iconUrl: z.string().nullable(),
+    }),
+  ),
+});
+export type ChatPersonCardResponse = z.infer<
+  typeof chatPersonCardResponseSchema
+>;
+
 export const chatBlockListResponseSchema = z.object({
   blocked: z.array(chatPersonSchema.extend({ blockedAt: isoDate })),
 });

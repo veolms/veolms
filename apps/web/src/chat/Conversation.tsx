@@ -60,7 +60,8 @@ import { EmojiPanel } from "./EmojiPanel";
 import { MediaViewer } from "./MediaViewer";
 import type { ViewableMedia } from "./MessageAttachments";
 import type { BubbleContext } from "./MessageBubble";
-import { MessageList } from "./MessageList";
+import { MessageList, type MessageFocus } from "./MessageList";
+import { PersonCard, type CardPerson } from "./PersonCard";
 import type { MessageAction } from "./MessageMenu";
 import { ChatThreadSkeleton } from "./ChatSkeletons";
 
@@ -111,7 +112,11 @@ export function Conversation({
     items: ViewableMedia[];
     index: number;
   } | null>(null);
-  const [highlightSeq, setHighlightSeq] = useState<number | null>(null);
+  const [focus, setFocus] = useState<MessageFocus | null>(null);
+  const [person, setPerson] = useState<{
+    person: CardPerson;
+    anchor: HTMLElement | null;
+  } | null>(null);
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [, forceRender] = useState(0);
@@ -142,6 +147,7 @@ export function Conversation({
     setReplyTo(null);
     setEditing(null);
     setPinnedIndex(0);
+    setPerson(null);
     return () => setChatOnScreen(room.id, false);
   }, [room.id]);
 
@@ -149,11 +155,17 @@ export function Conversation({
     if (focusComposerToken > 0) composerRef.current?.focus();
   }, [focusComposerToken]);
 
-  // A search result or a report asked to show this message.
+  // A search result, a report or a link (notification) asked to show this
+  // message: once the chat's messages are in.
   const jumpToken = jumpRequest?.token ?? 0;
+  const handledJumpRef = useRef(0);
+  const threadReady = Boolean(thread.data);
   useEffect(() => {
-    if (jumpRequest) void jumpTo(jumpRequest.seq);
-  }, [jumpToken]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!jumpRequest || !threadReady) return;
+    if (handledJumpRef.current === jumpRequest.token) return;
+    handledJumpRef.current = jumpRequest.token;
+    void jumpTo(jumpRequest.seq);
+  }, [jumpToken, threadReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onAtBottom = useCallback(
     (lastSeq: number) => {
@@ -169,6 +181,45 @@ export function Conversation({
     [stars.data],
   );
 
+  /** Who an @name in a message is, from the people this chat has seen. */
+  function resolveMention(
+    name: string,
+    ids: readonly string[],
+  ): CardPerson | null {
+    const known = new Map<string, CardPerson>();
+    for (const message of thread.data?.messages ?? []) {
+      if (message.sender) known.set(message.sender.id, message.sender);
+    }
+    for (const [, page] of client.getQueriesData<{
+      pages: Array<{ members: CardPerson[] }>;
+    }>({ queryKey: ["chat", "members", room.id] })) {
+      for (const p of page?.pages ?? []) {
+        for (const member of p.members) {
+          if (!known.has(member.id)) known.set(member.id, member);
+        }
+      }
+    }
+    if (room.peer) known.set(room.peer.id, room.peer);
+    const wanted = name.toLowerCase().trim();
+    const fits = (p: CardPerson) => {
+      const full = p.name.toLowerCase();
+      return (
+        full === wanted ||
+        full.startsWith(`${wanted} `) ||
+        wanted.startsWith(`${full} `)
+      );
+    };
+    for (const id of ids) {
+      const p = known.get(id);
+      if (p && fits(p)) return p;
+    }
+    if (ids.length === 1) {
+      return known.get(ids[0]!) ?? { id: ids[0]!, name, avatarUrl: null };
+    }
+    for (const p of known.values()) if (fits(p)) return p;
+    return null;
+  }
+
   const ctx: BubbleContext = {
     viewerId,
     isGroup: room.kind !== "direct",
@@ -179,11 +230,13 @@ export function Conversation({
     isHelper: room.me.isHelper,
     starred: starredIds,
     myReactions,
+    onOpenPerson: (who, anchor) => setPerson({ person: who, anchor }),
+    resolveMention,
   };
 
   const fail = (error: unknown) => onToast(getApiError(error).message);
 
-  async function jumpTo(seq: number) {
+  async function jumpTo(seq: number, from?: number) {
     const present = thread.data?.messages.some((m) => m.seq === seq);
     if (!present) {
       try {
@@ -197,13 +250,12 @@ export function Conversation({
         return;
       }
     }
-    requestAnimationFrame(() => {
-      document
-        .getElementById(`chat-message-${seq}`)
-        ?.scrollIntoView({ block: "center", behavior: "smooth" });
-      setHighlightSeq(seq);
-      setTimeout(() => setHighlightSeq(null), 1600);
-    });
+    // The list brings it to the middle and blinks it (MessageList).
+    setFocus((current) => ({
+      seq,
+      token: (current?.token ?? 0) + 1,
+      ...(from !== undefined ? { from } : {}),
+    }));
   }
 
   function onAction(action: MessageAction, message: ChatMessage) {
@@ -241,6 +293,14 @@ export function Conversation({
         void navigator.clipboard
           ?.writeText(message.body)
           .then(() => onToast("Message copied"));
+        return;
+      case "copy-link":
+        // Opens this chat at this message, blinking (for the people in it).
+        void navigator.clipboard
+          ?.writeText(
+            `${window.location.origin}/chat/${room.id}?seq=${message.seq}`,
+          )
+          .then(() => onToast("Link copied"));
         return;
       case "edit":
         setReplyTo(null);
@@ -525,12 +585,12 @@ export function Conversation({
             outgoing={outgoing}
             ctx={ctx}
             unreadAfterSeq={unreadAfterRef.current.seq}
-            highlightSeq={highlightSeq}
+            focus={focus}
             loadingOlder={thread.loadingOlder}
             onLoadOlder={() => void thread.loadOlder()}
             onAction={onAction}
             onOpenMedia={(items, index) => setViewer({ items, index })}
-            onJumpTo={(seq) => void jumpTo(seq)}
+            onJumpTo={(seq, from) => void jumpTo(seq, from)}
             onAtBottom={onAtBottom}
             onRetry={(clientId) =>
               retryMessage(client, viewerId, room.id, clientId)
@@ -712,6 +772,21 @@ export function Conversation({
             />
           </div>
         </div>
+      ) : null}
+      {person ? (
+        <PersonCard
+          person={person.person}
+          anchor={person.anchor}
+          viewerId={viewerId}
+          onMention={
+            room.kind !== "direct" && room.me.canPost
+              ? (who) => composerRef.current?.mention(who)
+              : undefined
+          }
+          onOpenChat={onOpenChat}
+          onClose={() => setPerson(null)}
+          onToast={onToast}
+        />
       ) : null}
       {viewer ? (
         <MediaViewer

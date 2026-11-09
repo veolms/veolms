@@ -6,6 +6,7 @@ import type {
   ChatMessageReactions,
   ChatUploadLink,
   ChatMessageSearchResponse,
+  ChatPersonCardResponse,
   ChatProfile,
   ChatReason,
   ChatReport,
@@ -230,6 +231,9 @@ export const chatService = {
     api.get<ChatCandidates>("/chat/direct/candidates", {
       params: search ? { search } : {},
     }),
+  /** A person's card: your chat with them and the groups you share. */
+  personCard: (userId: string) =>
+    api.get<ChatPersonCardResponse>(`/chat/people/${userId}`),
   startDirect: (userId: string) =>
     api.post<{ room: ChatRoomDetail; created: boolean }>("/chat/direct", {
       userId,
