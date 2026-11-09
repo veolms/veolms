@@ -275,6 +275,22 @@ export async function createVeoLMSApi<
   registerErrorHandler(app);
   // Before any route: an overloaded process answers what can wait at once.
   registerLoadShedding(app);
+  // Short-circuit requests where the client already disconnected before the
+  // handler starts. Fastify v5 provides `request.signal` (an AbortSignal)
+  // that is aborted when `request.raw` emits "close". Checking it at
+  // `preHandler` — after auth, validation and routing — avoids wasting any
+  // further DB or business-logic work whose result can never reach the client.
+  //
+  // Route handlers that dispatch their own background work (payment
+  // processing, audit logs, outbox events) should NOT use `request.signal`
+  // for those operations, since they must complete regardless of whether the
+  // client is still connected. The `statement_timeout` on the connection pool
+  // remains the primary safety net for queries that are already in-flight.
+  app.addHook("preHandler", async (request, reply) => {
+    if (request.signal.aborted) {
+      await reply.code(499).send();
+    }
+  });
   // GET and HEAD read from this server's own database copy when there is
   // one (DATABASE_READ_URL); writes and transactions in them still go to the
   // boss. A client that must see the boss itself sends
