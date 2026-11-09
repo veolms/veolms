@@ -1,4 +1,5 @@
 import {
+  addWorkshopRegistrantRequestSchema,
   cancelWorkshopRequestSchema,
   createWorkshopRequestSchema,
   heroVideoPlaybackSchema,
@@ -13,6 +14,9 @@ import {
   workshopPublishCheckSchema,
   workshopPublicListResponseSchema,
   workshopPublicSchema,
+  workshopHomeCardSchema,
+  workshopRegistrantParamsSchema,
+  workshopRegistrantsResponseSchema,
   workshopRegistrationResponseSchema,
   workshopSessionParamsSchema,
   workshopSlugParamsSchema,
@@ -49,7 +53,10 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
     authorization: createAuthorizationService(options.database),
     paymentGateways: options.services.paymentGateways,
   });
-  const controller = createWorkshopsController({ service });
+  const controller = createWorkshopsController({
+    service,
+    database: options.database,
+  });
   const tags = ["Workshops"];
   const reads = requires(["workshop.read", "workshop.manage"], "platform");
   const manages = requires("workshop.manage", "platform");
@@ -277,7 +284,114 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
     controller.setRecording,
   );
 
+  app.get(
+    "/workshops/admin/:workshopId/registrants",
+    {
+      preHandler: reads,
+      schema: {
+        operationId: "listWorkshopRegistrants",
+        tags,
+        summary: "Who is registered: name, email, when, how, sessions joined",
+        params: workshopIdParamsSchema,
+        response: {
+          200: jsonResponse("Newest first.", workshopRegistrantsResponseSchema),
+          ...common,
+          404: errorResponse("Workshop not found"),
+        },
+      },
+    },
+    controller.listRegistrants,
+  );
+
+  app.get(
+    "/workshops/admin/:workshopId/registrants.csv",
+    {
+      preHandler: reads,
+      schema: {
+        operationId: "downloadWorkshopRegistrants",
+        tags,
+        summary: "The registrants as a CSV file",
+        params: workshopIdParamsSchema,
+        response: {
+          ...common,
+          404: errorResponse("Workshop not found"),
+        },
+      },
+    },
+    controller.registrantsCsv,
+  );
+
+  app.post(
+    "/workshops/admin/:workshopId/registrants",
+    {
+      preHandler: manages,
+      schema: {
+        operationId: "addWorkshopRegistrant",
+        tags,
+        summary: "Register the account with this email (seats are not counted)",
+        params: workshopIdParamsSchema,
+        body: addWorkshopRegistrantRequestSchema,
+        response: {
+          201: jsonResponse(
+            "The registrants after the change.",
+            workshopRegistrantsResponseSchema,
+          ),
+          400: errorResponse("Invalid request"),
+          ...common,
+          404: errorResponse(
+            "Workshop not found, or no account has that email",
+          ),
+          409: errorResponse("The workshop was cancelled"),
+        },
+      },
+    },
+    controller.addRegistrant,
+  );
+
+  app.delete(
+    "/workshops/admin/:workshopId/registrants/:userId",
+    {
+      preHandler: manages,
+      schema: {
+        operationId: "removeWorkshopRegistrant",
+        tags,
+        summary: "Take a seat back (a paid seat is refunded from its order)",
+        params: workshopRegistrantParamsSchema,
+        response: {
+          200: jsonResponse(
+            "The registrants after the change.",
+            workshopRegistrantsResponseSchema,
+          ),
+          ...common,
+          404: errorResponse("Workshop not found"),
+        },
+      },
+    },
+    controller.removeRegistrant,
+  );
+
   // --- Learners ---
+
+  app.get(
+    "/workshops/me/next",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "getMyNextWorkshop",
+        tags,
+        summary:
+          "The next session the learner is registered for, else the soonest open workshop (null when none)",
+        response: {
+          200: jsonResponse(
+            "The card the home shows, or null.",
+            workshopHomeCardSchema.nullable(),
+          ),
+          401: errorResponse("Authentication required"),
+        },
+      },
+    },
+    controller.myNextWorkshop,
+  );
 
   app.get(
     "/workshops",

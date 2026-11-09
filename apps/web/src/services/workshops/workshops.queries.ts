@@ -1,5 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type {
+  WorkshopRegistrantsResponse,
+  WorkshopHomeCard,
   WorkshopAdmin,
   WorkshopAdminListResponse,
   WorkshopAdminTab,
@@ -105,5 +107,24 @@ export function useWorkshopViewer(
     enabled: Boolean(slug) && options.enabled,
     staleTime: 15 * 1000,
     refetchInterval: options.refetchInterval ?? false,
+  });
+}
+
+export function useWorkshopRegistrants(workshopId: string | null | undefined) {
+  return useQuery<WorkshopRegistrantsResponse, ApiError>({
+    queryKey: workshopKeys.registrants(workshopId ?? ""),
+    queryFn: () => workshopsService.listRegistrants(workshopId!),
+    enabled: Boolean(workshopId),
+    staleTime: 15 * 1000,
+  });
+}
+
+/** The workshop the learner's home points at; null when nothing is upcoming. */
+export function useWorkshopHomeCard(options: { enabled: boolean }) {
+  return useQuery<WorkshopHomeCard | null, ApiError>({
+    queryKey: workshopPublicKeys.home(),
+    queryFn: () => workshopsPublicService.homeCard(),
+    enabled: options.enabled,
+    staleTime: 60 * 1000,
   });
 }

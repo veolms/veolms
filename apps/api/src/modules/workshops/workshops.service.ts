@@ -16,6 +16,8 @@ import {
   type WorkshopRegistrationReason,
   type WorkshopSessionInput,
   type WorkshopViewer,
+  type WorkshopRegistrant,
+  type WorkshopRegistrantsResponse,
   type VideoPlaybackToken,
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
@@ -118,6 +120,19 @@ export interface WorkshopsService {
     sessionId: string,
     userId: string,
   ): Promise<VideoPlaybackToken>;
+  listRegistrants(workshopId: string): Promise<WorkshopRegistrantsResponse>;
+  registrantsCsv(
+    workshopId: string,
+  ): Promise<{ filename: string; csv: string }>;
+  /** Register the account with this email (source admin); 404 when none. */
+  addRegistrant(
+    workshopId: string,
+    email: string,
+  ): Promise<WorkshopRegistrantsResponse>;
+  removeRegistrant(
+    workshopId: string,
+    userId: string,
+  ): Promise<WorkshopRegistrantsResponse>;
 }
 
 /** Did a session that registrants already knew change its time? */
@@ -820,6 +835,140 @@ export function createWorkshopsService({
     }
   }
 
+  // --- Registrants ---
+
+  function presentRegistrant(
+    row: repository.WorkshopRegistrantRow,
+  ): WorkshopRegistrant {
+    return {
+      registrationId: row.registration_id,
+      userId: row.user_id,
+      name: row.display_name,
+      username: row.username,
+      email: row.email,
+      avatarUrl: row.avatar_data_url,
+      source: row.source,
+      orderId: row.order_id,
+      registeredAt: new Date(row.registered_at).toISOString(),
+      joinedSessionIds: row.joined_session_ids,
+    };
+  }
+
+  async function listRegistrants(
+    workshopId: string,
+  ): Promise<WorkshopRegistrantsResponse> {
+    await load(workshopId);
+    const rows = await repository.listRegistrants(database, workshopId);
+    return { items: rows.map(presentRegistrant) };
+  }
+
+  /** The registrants as a spreadsheet: one row each, sessions as columns. */
+  async function registrantsCsv(
+    workshopId: string,
+  ): Promise<{ filename: string; csv: string }> {
+    const row = await load(workshopId);
+    const [registrants, sessions] = await Promise.all([
+      repository.listRegistrants(database, workshopId),
+      repository.listSessions(database, workshopId),
+    ]);
+    const cell = (value: string | null | undefined): string => {
+      const text = value ?? "";
+      return /[",\r\n]/.test(text)
+        ? '"' + text.replace(/"/g, '""') + '"'
+        : text;
+    };
+    const sourceLabel = {
+      free: "Free",
+      order: "Paid",
+      admin: "Added by staff",
+    };
+    const header = [
+      "Name",
+      "Username",
+      "Email",
+      "Registered at",
+      "How",
+      "Order",
+      ...sessions.map(
+        (session, index) =>
+          "Joined " + (session.title ?? "session " + (index + 1)),
+      ),
+    ];
+    const lines = registrants.map((registrant) =>
+      [
+        registrant.display_name,
+        registrant.username ?? "",
+        registrant.email ?? "",
+        new Date(registrant.registered_at).toISOString(),
+        sourceLabel[registrant.source],
+        registrant.order_id ?? "",
+        ...sessions.map((session) =>
+          registrant.joined_session_ids.includes(session.id) ? "yes" : "no",
+        ),
+      ]
+        .map(cell)
+        .join(","),
+    );
+    return {
+      filename: row.slug + "-registrants.csv",
+      csv: [header.map(cell).join(","), ...lines].join("\r\n") + "\r\n",
+    };
+  }
+
+  /**
+   * Staff add someone by the email of their account: a guest speaker, a
+   * learner who paid elsewhere. Seats are not counted for them, and they
+   * get the same confirmation as anyone registering.
+   */
+  async function addRegistrant(
+    workshopId: string,
+    email: string,
+  ): Promise<WorkshopRegistrantsResponse> {
+    const row = await load(workshopId);
+    if (row.status === "cancelled") throw reasonError("cancelled");
+    const userId = await repository.findUserIdByEmail(database, email);
+    if (!userId) {
+      throw new AppError(
+        404,
+        "USER_NOT_FOUND",
+        "No account has that email. They need to sign up first.",
+      );
+    }
+    const existing = await repository.findRegistration(
+      database,
+      workshopId,
+      userId,
+    );
+    if (!existing || existing.cancelled_at) {
+      await database.transaction().execute(async (trx) => {
+        await createRegistration(trx, {
+          workshop: row,
+          userId,
+          source: "admin",
+          orderId: null,
+          ...(existing ? { existingId: existing.id } : {}),
+          now: new Date(),
+        });
+      });
+    }
+    return await listRegistrants(workshopId);
+  }
+
+  /** Takes a seat back. A paid seat is refunded from the orders page, not here. */
+  async function removeRegistrant(
+    workshopId: string,
+    userId: string,
+  ): Promise<WorkshopRegistrantsResponse> {
+    await load(workshopId);
+    await repository.cancelRegistration(
+      database,
+      workshopId,
+      userId,
+      new Date(),
+    );
+    return await listRegistrants(workshopId);
+  }
+
   // --- Recordings ---
 
   /** Registrants, the linked course's learners and staff may watch. */
@@ -1060,5 +1209,9 @@ export function createWorkshopsService({
     markReadyRecordings,
     recordingPlayback,
     recordingPlaybackToken,
+    listRegistrants,
+    registrantsCsv,
+    addRegistrant,
+    removeRegistrant,
   };
 }

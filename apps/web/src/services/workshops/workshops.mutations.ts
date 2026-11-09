@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
+  WorkshopRegistrantsResponse,
   CancelWorkshopRequest,
   CreateWorkshopRequest,
   UpdateWorkshopRequest,
@@ -140,5 +141,45 @@ export function useSetWorkshopRecording() {
     mutationFn: ({ workshopId, sessionId, mediaId }) =>
       workshopsService.setRecording(workshopId, sessionId, { mediaId }),
     onSuccess: (workshop) => refresh(workshop),
+  });
+}
+
+function useRefreshRegistrants() {
+  const queryClient = useQueryClient();
+  return (workshopId: string, registrants: WorkshopRegistrantsResponse) => {
+    queryClient.setQueryData(workshopKeys.registrants(workshopId), registrants);
+    // The seat count on the workshop itself changed too.
+    void queryClient.invalidateQueries({
+      queryKey: workshopKeys.adminDetail(workshopId),
+    });
+    void queryClient.invalidateQueries({ queryKey: workshopKeys.adminLists() });
+  };
+}
+
+export function useAddWorkshopRegistrant() {
+  const refresh = useRefreshRegistrants();
+  return useMutation<
+    WorkshopRegistrantsResponse,
+    ApiError,
+    { workshopId: string; email: string }
+  >({
+    mutationFn: ({ workshopId, email }) =>
+      workshopsService.addRegistrant(workshopId, { email }),
+    onSuccess: (registrants, { workshopId }) =>
+      refresh(workshopId, registrants),
+  });
+}
+
+export function useRemoveWorkshopRegistrant() {
+  const refresh = useRefreshRegistrants();
+  return useMutation<
+    WorkshopRegistrantsResponse,
+    ApiError,
+    { workshopId: string; userId: string }
+  >({
+    mutationFn: ({ workshopId, userId }) =>
+      workshopsService.removeRegistrant(workshopId, userId),
+    onSuccess: (registrants, { workshopId }) =>
+      refresh(workshopId, registrants),
   });
 }

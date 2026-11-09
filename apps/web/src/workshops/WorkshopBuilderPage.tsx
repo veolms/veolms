@@ -45,6 +45,7 @@ import {
   type SessionDraft,
 } from "./WorkshopSessionsField";
 import { WorkshopRecordingField } from "./WorkshopRecordingField";
+import { WorkshopRegistrantsSection } from "./WorkshopRegistrantsSection";
 import { WorkshopStatusPanel } from "./WorkshopStatusPanel";
 import { WorkshopsAccessDenied } from "./WorkshopsAccessDenied";
 import { WORKSHOPS_ADMIN_PATH } from "./WorkshopsAdminPage";
@@ -695,6 +696,18 @@ export function WorkshopBuilderPage({
                   ) : null,
                 )}
               </div>
+            </Section>
+          ) : null}
+
+          {workshop ? (
+            <Section
+              title="Registrants"
+              description="Who has a seat, how they got it, and whether they joined. Download the list or add someone by the email of their account."
+            >
+              <WorkshopRegistrantsSection
+                workshop={workshop}
+                canManage={canManage}
+              />
             </Section>
           ) : null}
 

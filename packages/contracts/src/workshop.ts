@@ -444,3 +444,67 @@ export const setWorkshopRecordingRequestSchema = z.strictObject({
 export type SetWorkshopRecordingRequest = z.infer<
   typeof setWorkshopRecordingRequestSchema
 >;
+
+// --- Step 6: registrants and the home card ---
+
+export const workshopRegistrantSourceSchema = z.enum([
+  "free",
+  "order",
+  "admin",
+]);
+
+export const workshopRegistrantSchema = z.strictObject({
+  registrationId: z.uuid(),
+  userId: z.uuid(),
+  name: z.string(),
+  username: z.string().nullable(),
+  email: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  /** How they got the seat: registered free, paid (an order), or added by staff. */
+  source: workshopRegistrantSourceSchema,
+  orderId: z.uuid().nullable(),
+  registeredAt: z.iso.datetime(),
+  /** Sessions they pressed Join on. */
+  joinedSessionIds: z.array(z.uuid()),
+});
+export type WorkshopRegistrant = z.infer<typeof workshopRegistrantSchema>;
+
+export const workshopRegistrantsResponseSchema = z.strictObject({
+  items: z.array(workshopRegistrantSchema),
+});
+export type WorkshopRegistrantsResponse = z.infer<
+  typeof workshopRegistrantsResponseSchema
+>;
+
+export const addWorkshopRegistrantRequestSchema = z.strictObject({
+  email: z.string().trim().email().max(320),
+});
+export type AddWorkshopRegistrantRequest = z.infer<
+  typeof addWorkshopRegistrantRequestSchema
+>;
+
+export const workshopRegistrantParamsSchema = z.strictObject({
+  workshopId: z.uuid(),
+  userId: z.uuid(),
+});
+
+/**
+ * The one workshop a learner's home points at: the next session of a
+ * workshop they are registered for, or, with none, the soonest upcoming
+ * workshop they could still register for.
+ */
+export const workshopHomeCardSchema = z.strictObject({
+  id: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  coverUrl: z.string().nullable(),
+  registered: z.boolean(),
+  sessionId: z.uuid(),
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+  timeZone: z.string(),
+  state: workshopSessionStateSchema,
+  priceMinor: z.number().int().nonnegative().nullable(),
+  currency: z.string().length(3),
+});
+export type WorkshopHomeCard = z.infer<typeof workshopHomeCardSchema>;

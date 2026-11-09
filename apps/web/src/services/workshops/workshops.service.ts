@@ -1,6 +1,7 @@
 import { api } from "../../lib/api-client";
 import type {
   CancelWorkshopRequest,
+  AddWorkshopRegistrantRequest,
   CreateWorkshopRequest,
   HeroVideoPlayback,
   SetWorkshopRecordingRequest,
@@ -13,6 +14,8 @@ import type {
   WorkshopPublic,
   WorkshopPublicListResponse,
   WorkshopRegistrationResponse,
+  WorkshopRegistrantsResponse,
+  WorkshopHomeCard,
   WorkshopViewer,
 } from "@veolms/contracts";
 
@@ -63,6 +66,28 @@ export const workshopsService = {
       `${ADMIN_BASE}/${workshopId}/sessions/${sessionId}/recording`,
       payload,
     ),
+
+  listRegistrants: (workshopId: string): Promise<WorkshopRegistrantsResponse> =>
+    api.get<WorkshopRegistrantsResponse>(
+      ADMIN_BASE + "/" + workshopId + "/registrants",
+    ),
+
+  addRegistrant: (
+    workshopId: string,
+    payload: AddWorkshopRegistrantRequest,
+  ): Promise<WorkshopRegistrantsResponse> =>
+    api.post<WorkshopRegistrantsResponse>(
+      ADMIN_BASE + "/" + workshopId + "/registrants",
+      payload,
+    ),
+
+  removeRegistrant: (
+    workshopId: string,
+    userId: string,
+  ): Promise<WorkshopRegistrantsResponse> =>
+    api.delete<WorkshopRegistrantsResponse>(
+      ADMIN_BASE + "/" + workshopId + "/registrants/" + userId,
+    ),
 };
 
 // --- Learners ---
@@ -76,6 +101,9 @@ export const workshopsPublicService = {
 
   viewer: (slug: string): Promise<WorkshopViewer> =>
     api.get<WorkshopViewer>(`/workshops/${encodeURIComponent(slug)}/me`),
+
+  homeCard: (): Promise<WorkshopHomeCard | null> =>
+    api.get<WorkshopHomeCard | null>("/workshops/me/next"),
 
   register: (workshopId: string): Promise<WorkshopRegistrationResponse> =>
     api.post<WorkshopRegistrationResponse>(`/workshops/${workshopId}/register`),

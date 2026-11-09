@@ -8,6 +8,8 @@ export const workshopKeys = {
     [...workshopKeys.adminDetails(), workshopId] as const,
   publishCheck: (workshopId: string) =>
     [...workshopKeys.all, "admin", "publish-check", workshopId] as const,
+  registrants: (workshopId: string) =>
+    [...workshopKeys.all, "admin", "registrants", workshopId] as const,
 };
 
 export const workshopPublicKeys = {
@@ -17,4 +19,5 @@ export const workshopPublicKeys = {
     [...workshopPublicKeys.all, "detail", slug] as const,
   viewer: (slug: string) =>
     [...workshopPublicKeys.all, "viewer", slug] as const,
+  home: () => [...workshopPublicKeys.all, "home"] as const,
 };

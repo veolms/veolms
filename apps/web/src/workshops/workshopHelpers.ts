@@ -340,3 +340,8 @@ export function workshopJoinUrl(workshopId: string, sessionId: string): string {
     `/workshops/${workshopId}/sessions/${sessionId}/join`,
   );
 }
+
+/** The registrants as a spreadsheet, straight from the API. */
+export function workshopRegistrantsCsvUrl(workshopId: string): string {
+  return getApiRequestUrl(`/workshops/admin/${workshopId}/registrants.csv`);
+}

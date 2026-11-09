@@ -675,3 +675,122 @@ export async function listPaidRegistrations(
     Boolean(row.order_id),
   );
 }
+
+// --- Step 6: registrants and the home card ---
+
+export interface WorkshopRegistrantRow {
+  registration_id: string;
+  user_id: string;
+  display_name: string;
+  username: string | null;
+  email: string | null;
+  avatar_data_url: string | null;
+  source: "free" | "order" | "admin";
+  order_id: string | null;
+  registered_at: Date;
+  joined_session_ids: string[];
+}
+
+/** Active registrants with who they are, newest first. */
+export async function listRegistrants(
+  database: DatabaseExecutor,
+  workshopId: string,
+): Promise<WorkshopRegistrantRow[]> {
+  return (await database
+    .selectFrom("workshop_registrations as r")
+    .innerJoin("users", "users.id", "r.user_id")
+    .select([
+      "r.id as registration_id",
+      "r.user_id",
+      "users.display_name",
+      "users.username",
+      "users.email",
+      "users.avatar_data_url",
+      "r.source",
+      "r.order_id",
+      "r.registered_at",
+      "r.joined_session_ids",
+    ])
+    .where("r.workshop_id", "=", workshopId)
+    .where("r.cancelled_at", "is", null)
+    .orderBy("r.registered_at", "desc")
+    .execute()) as WorkshopRegistrantRow[];
+}
+
+export async function findUserIdByEmail(
+  database: DatabaseExecutor,
+  email: string,
+): Promise<string | undefined> {
+  const row = await database
+    .selectFrom("users")
+    .select("id")
+    .where(sql`lower(email)`, "=", email.trim().toLowerCase())
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+  return row?.id;
+}
+
+export interface HomeSessionRow {
+  workshop_id: string;
+  slug: string;
+  title: string;
+  cover_url: string | null;
+  price_minor: number | null;
+  currency: string;
+  session_id: string;
+  starts_at: Date;
+  ends_at: Date;
+  time_zone: string;
+}
+
+const homeSessionColumns = [
+  "w.id as workshop_id",
+  "w.slug",
+  "w.title",
+  "w.cover_url",
+  "w.price_minor",
+  "w.currency",
+  "s.id as session_id",
+  "s.starts_at",
+  "s.ends_at",
+  "s.time_zone",
+] as const;
+
+/** The learner's next registered session that has not ended. */
+export async function findNextRegisteredSession(
+  database: DatabaseExecutor,
+  userId: string,
+  now: Date,
+): Promise<HomeSessionRow | undefined> {
+  return (await database
+    .selectFrom("workshop_sessions as s")
+    .innerJoin("workshops as w", "w.id", "s.workshop_id")
+    .innerJoin("workshop_registrations as r", "r.workshop_id", "w.id")
+    .select(homeSessionColumns)
+    .where("r.user_id", "=", userId)
+    .where("r.cancelled_at", "is", null)
+    .where("w.status", "=", "published")
+    .where("w.deleted_at", "is", null)
+    .where("s.ends_at", ">", now)
+    .orderBy("s.starts_at", "asc")
+    .limit(1)
+    .executeTakeFirst()) as HomeSessionRow | undefined;
+}
+
+/** The soonest upcoming session of any published, open workshop. */
+export async function findSoonestUpcomingSession(
+  database: DatabaseExecutor,
+  now: Date,
+): Promise<HomeSessionRow | undefined> {
+  return (await database
+    .selectFrom("workshop_sessions as s")
+    .innerJoin("workshops as w", "w.id", "s.workshop_id")
+    .select(homeSessionColumns)
+    .where("w.status", "=", "published")
+    .where("w.deleted_at", "is", null)
+    .where("w.course_id", "is", null)
+    .where("s.ends_at", ">", now)
+    .orderBy("s.starts_at", "asc")
+    .limit(1)
+    .executeTakeFirst()) as HomeSessionRow | undefined;
+}

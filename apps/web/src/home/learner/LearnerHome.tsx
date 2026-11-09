@@ -23,6 +23,7 @@ import {
 import { GUEST_HOME_COURSES_PER_SECTION } from "../guestHomeLimits";
 import { getHomeTimeGreeting } from "../homeGreeting";
 import { LearnerCoursesSection } from "./LearnerCoursesSection";
+import { LearnerWorkshopCard } from "./LearnerWorkshopCard";
 import {
   LearnerCoursesSubtitle,
   rememberLearnerStarted,
@@ -344,6 +345,11 @@ export function LearnerHome({
       />
 
       <div className={learnerHomeBodyClasses}>
+        <LearnerWorkshopCard
+          enabled={Boolean(currentUser)}
+          onNavigatePage={onNavigatePage}
+        />
+
         {listedCourses.length > 0 ? (
           <LearnerCoursesSection
             courses={listedCourses}

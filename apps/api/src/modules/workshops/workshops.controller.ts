@@ -1,4 +1,5 @@
 import type {
+  AddWorkshopRegistrantRequest,
   CancelWorkshopRequest,
   CreateWorkshopRequest,
   SetWorkshopRecordingRequest,
@@ -7,14 +8,19 @@ import type {
 } from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
+import type { DatabaseExecutor } from "@veolms/database";
+
 import type { WorkshopsService } from "./workshops.service.ts";
+import { learnerHomeWorkshop } from "./workshop-home.ts";
 
 type WorkshopParams = { Params: { workshopId: string } };
 
 export function createWorkshopsController({
   service,
+  database,
 }: {
   service: WorkshopsService;
+  database: DatabaseExecutor;
 }) {
   async function list(
     request: FastifyRequest<{ Querystring: WorkshopAdminListQuery }>,
@@ -169,6 +175,51 @@ export function createWorkshopsController({
     );
   }
 
+  async function listRegistrants(request: FastifyRequest<WorkshopParams>) {
+    return await service.listRegistrants(request.params.workshopId);
+  }
+
+  async function registrantsCsv(
+    request: FastifyRequest<WorkshopParams>,
+    reply: FastifyReply,
+  ) {
+    const file = await service.registrantsCsv(request.params.workshopId);
+    return reply
+      .type("text/csv; charset=utf-8")
+      .header(
+        "Content-Disposition",
+        'attachment; filename="' + file.filename + '"',
+      )
+      .header("Cache-Control", "no-store")
+      .send(file.csv);
+  }
+
+  async function addRegistrant(
+    request: FastifyRequest<
+      WorkshopParams & { Body: AddWorkshopRegistrantRequest }
+    >,
+    reply: FastifyReply,
+  ) {
+    const result = await service.addRegistrant(
+      request.params.workshopId,
+      request.body.email,
+    );
+    return reply.status(201).send(result);
+  }
+
+  async function removeRegistrant(
+    request: FastifyRequest<{ Params: { workshopId: string; userId: string } }>,
+  ) {
+    return await service.removeRegistrant(
+      request.params.workshopId,
+      request.params.userId,
+    );
+  }
+
+  async function myNextWorkshop(request: FastifyRequest) {
+    return await learnerHomeWorkshop(database, request.user!.id, new Date());
+  }
+
   return {
     list,
     getOne,
@@ -189,6 +240,11 @@ export function createWorkshopsController({
     setRecording,
     recordingPlayback,
     recordingPlaybackToken,
+    listRegistrants,
+    registrantsCsv,
+    addRegistrant,
+    removeRegistrant,
+    myNextWorkshop,
   };
 }
 

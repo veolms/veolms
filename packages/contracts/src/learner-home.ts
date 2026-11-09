@@ -2,6 +2,7 @@ import { z } from "zod";
 import { enrolledCourseSchema } from "./commerce/enrollment.ts";
 import { learningSummaryResponseSchema } from "./learning-goals.ts";
 import { learningProgressResumeContextResponseSchema } from "./learning-progress.ts";
+import { workshopHomeCardSchema } from "./workshop.ts";
 
 /**
  * A signed-in learner's home in one answer: what its hero and its course
@@ -32,5 +33,10 @@ export const learnerHomeResponseSchema = z.strictObject({
    * can no longer be opened: the course's own endpoint says why.
    */
   resume: learningProgressResumeContextResponseSchema.nullable(),
+  /**
+   * The next workshop session they are registered for, else the soonest
+   * upcoming workshop; null when there is neither. Absent from older servers.
+   */
+  workshop: workshopHomeCardSchema.nullable().optional(),
 });
 export type LearnerHomeResponse = z.infer<typeof learnerHomeResponseSchema>;
