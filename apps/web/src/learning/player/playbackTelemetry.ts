@@ -30,6 +30,8 @@ interface OpenPlayback {
   firstFrameAt: number | null;
   errorCode: string | undefined;
   errorHttpStatus: number | undefined;
+  /** Errors the player got over by itself (see `recoveredErrors`). */
+  recoveredErrors: number;
   /** Streaming retries the engine reported (see `streamingretry`). */
   streamingRetries: number;
   /** The token renewal counts when the load started. */
@@ -122,6 +124,7 @@ export function createPlaybackTelemetry(
         ? { errorHttpStatus: playback.errorHttpStatus }
         : {}),
       streamingRetries: playback.streamingRetries,
+      recoveredErrors: playback.recoveredErrors,
       tokenRefreshFailures:
         getTokenRefreshStats().failures - playback.tokenRefreshAtStart.failures,
       ...(device.deviceMemoryGb !== null
@@ -164,6 +167,7 @@ export function createPlaybackTelemetry(
           firstFrameAt: null,
           errorCode: undefined,
           errorHttpStatus: undefined,
+          recoveredErrors: 0,
           streamingRetries: 0,
           tokenRefreshAtStart: getTokenRefreshStats(),
           bufferingSince: null,
@@ -250,10 +254,19 @@ export function createPlaybackTelemetry(
       }
       case "error": {
         if (!open) return;
-        const error = event.detail.error as { code?: unknown };
+        const error = event.detail.error;
+        // An error the player got over by itself (Shaka switching away
+        // from a quality the CDN refused, a decode hiccup it reset) used to
+        // close the summary as a failure, so the rest of the lesson went
+        // unrecorded and the Viewing tab counted an error no learner saw.
+        // It is counted and the playback goes on.
+        if (!error.fatal) {
+          open.recoveredErrors += 1;
+          return;
+        }
         open.errorCode =
-          error && error.code !== undefined ? String(error.code) : "unknown";
-        const status = networkFailureHttpStatus(event.detail.error);
+          error.code !== undefined ? String(error.code) : "unknown";
+        const status = networkFailureHttpStatus(error);
         open.errorHttpStatus = status === null ? undefined : status;
         finish("error");
         return;

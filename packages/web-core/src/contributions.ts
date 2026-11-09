@@ -336,6 +336,13 @@ export interface PlaybackSummary {
   streamingRetries?: number;
   /** Playback token renewals that failed or timed out during this playback. */
   tokenRefreshFailures?: number;
+  /**
+   * Errors the player got over by itself (Shaka moving to another quality
+   * when one was refused, a media pipeline it reset): the learner saw at
+   * most a moment's loading. A fatal error ends the summary instead
+   * (`errorCode`).
+   */
+  recoveredErrors?: number;
   /** Gigabytes of memory the browser reports (Chromium), if it does. */
   deviceMemoryGb?: number;
   /** Logical processor cores the browser reports, if it does. */

@@ -973,7 +973,10 @@ export function LessonVideoPlayer({
       } else if (
         event.type === "streamingrecovered" ||
         event.type === "loaded" ||
-        event.type === "error"
+        // A failure the player got over by itself (Shaka moving to
+        // another quality while one is refused) is reported too, and is
+        // not the end of the wait.
+        (event.type === "error" && event.detail.error.fatal)
       ) {
         setStreamingRetries(0);
       }

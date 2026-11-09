@@ -221,6 +221,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/**
+ * An init segment (`init-p003.m4s`, `init.mp4`): fetched again whenever a
+ * quality switches back, so a repeat of one says nothing about the token.
+ */
+const INIT_SEGMENT = /\/init[^/]*$/iu;
+
 /** A segment's address without its token: the same for every try. */
 function requestIdentity(uri: string): string {
   try {
@@ -325,6 +331,7 @@ function createTokenRequestFilter(options?: LearningHlsRequestOptions) {
     );
     if (!uri) return false;
     const key = requestIdentity(uri);
+    if (INIT_SEGMENT.test(key.replace(/[?#].*$/u, ""))) return false;
     const now = Date.now();
     const last = recentRequests.get(key);
     recentRequests.delete(key);
