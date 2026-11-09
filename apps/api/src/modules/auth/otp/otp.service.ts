@@ -513,6 +513,24 @@ export function createOtpService({
     await sendOtpWithPurpose(phoneNo, "phone", "phone_verification", requester);
   }
 
+  /**
+   * A code to the email address or number on the account now, proving it
+   * before it is changed (contact-change). Its own purpose, so it can
+   * neither sign anyone in nor confirm a new address.
+   */
+  async function sendContactChangeOtp(
+    identifier: string,
+    identifierType: IdentifierType,
+    requester: OtpRequester = {},
+  ): Promise<void> {
+    await sendOtpWithPurpose(
+      identifier,
+      identifierType,
+      "contact_change",
+      requester,
+    );
+  }
+
   async function sendEmailVerificationOtp(
     email: string,
     requester: OtpRequester = {},
@@ -569,7 +587,9 @@ export function createOtpService({
   }
 
   function failureStatusFor(purpose: OtpPurpose): number {
-    return purpose === "phone_verification" || purpose === "email_verification"
+    return purpose === "phone_verification" ||
+      purpose === "email_verification" ||
+      purpose === "contact_change"
       ? 400
       : 401;
   }
@@ -725,6 +745,7 @@ export function createOtpService({
     sendOtp,
     sendPhoneVerificationOtp,
     sendEmailVerificationOtp,
+    sendContactChangeOtp,
     recordRefusedSend,
     assertOtpMatches,
     verifyAndConsumeOtp,
