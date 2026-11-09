@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { courseThumbnailVariantSchema } from "../course/course.ts";
-import { outsideRefundSchema, refundSchema } from "./refund.ts";
+import {
+  learnerOrderRefundSchema,
+  outsideRefundSchema,
+  refundSchema,
+} from "./refund.ts";
 
 export const bundleStatusSchema = z.enum(["draft", "published", "archived"]);
 export type BundleStatus = z.infer<typeof bundleStatusSchema>;
@@ -648,6 +652,8 @@ export const learnerOrderSchema = z.strictObject({
   paymentSummary: orderPaymentSummarySchema.nullable(),
   items: z.array(orderItemSummarySchema),
   createdAt: z.string().or(z.date()),
+  /** The refund option, on a paid purchase with something to return. */
+  refund: learnerOrderRefundSchema.optional(),
 });
 export type LearnerOrder = z.infer<typeof learnerOrderSchema>;
 

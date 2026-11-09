@@ -28,6 +28,7 @@ const refundRoutes: RoutePlugin = async (app, options) => {
   const requestService = createRefundRequestService({
     database: options.database,
     refundService: service,
+    log: app.log,
   });
   const requestController = createRefundRequestController({
     service: requestService,

@@ -20,6 +20,10 @@ import { createCache } from "@veolms/api-core";
 import { getAcademyId } from "../../auth/index.ts";
 import * as orderRepo from "./order.repository.ts";
 import { toAdminOrder, toLearnerOrder } from "./order.mapper.ts";
+import {
+  createRefundEligibilityService,
+  toLearnerOrderRefund,
+} from "../refunds/refund-eligibility.service.ts";
 
 export interface OrderService {
   getOrderById(scope: OrderScope, orderId: string): Promise<OrderResponse>;
@@ -83,8 +87,11 @@ export function createOrderService({
   database,
   studentsService = createStudentsService({ database }),
   courseCards,
+  log,
 }: {
   database: Executor;
+  /** The server's log, for what goes wrong without failing the request. */
+  log?: { error(details: object, message: string): void };
   studentsService?: Pick<StudentsService, "resolveStudentAvatars">;
   /**
    * The courses' pictures (the course module's `listCourseCardsByIds`),
@@ -99,6 +106,8 @@ export function createOrderService({
     }>
   >;
 }): OrderService {
+  const refundEligibility = createRefundEligibilityService({ database });
+
   /**
    * A learner's orders with each item's course picture: the course it
    * opens, for part of a course. One lookup for the whole page.
@@ -143,6 +152,37 @@ export function createOrderService({
     }));
   }
 
+  /**
+   * A learner's orders with their refund option, on each paid purchase
+   * that has one (see refund-eligibility.ts). The option only adds to the
+   * list: should working it out fail, the list is still the list.
+   */
+  async function withRefundOptions(
+    userId: string,
+    orders: LearnerOrder[],
+  ): Promise<LearnerOrder[]> {
+    let assessments: Awaited<ReturnType<typeof refundEligibility.assessOrders>>;
+    try {
+      assessments = await refundEligibility.assessOrders(
+        userId,
+        orders.map((order) => order.id),
+      );
+    } catch (err) {
+      // Not silent: without this, refunds would quietly stop being offered.
+      log?.error(
+        { err, userId },
+        "refund options could not be worked out; purchase history shows none",
+      );
+      return orders;
+    }
+    return orders.map((order) => {
+      const assessment = assessments.get(order.id);
+      return assessment
+        ? { ...order, refund: toLearnerOrderRefund(assessment) }
+        : order;
+    });
+  }
+
   async function getOrderById(
     scope: OrderScope,
     orderId: string,
@@ -169,9 +209,10 @@ export function createOrderService({
     ]);
 
     if (scope.type === "user") {
-      const [learnerOrder] = await withThumbnails([
-        toLearnerOrder(order, items, payments[0]),
-      ]);
+      const [learnerOrder] = await withRefundOptions(
+        scope.id,
+        await withThumbnails([toLearnerOrder(order, items, payments[0])]),
+      );
       return learnerOrder!;
     }
 
@@ -283,12 +324,15 @@ export function createOrderService({
 
     if (scope.type === "user") {
       return {
-        orders: await withThumbnails(
-          pageRows.map((order) =>
-            toLearnerOrder(
-              order,
-              itemsByOrderId.get(order.id) ?? [],
-              paymentsByOrderId.get(order.id),
+        orders: await withRefundOptions(
+          scope.id,
+          await withThumbnails(
+            pageRows.map((order) =>
+              toLearnerOrder(
+                order,
+                itemsByOrderId.get(order.id) ?? [],
+                paymentsByOrderId.get(order.id),
+              ),
             ),
           ),
         ),

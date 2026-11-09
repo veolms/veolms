@@ -117,7 +117,8 @@ export function getCoursePurchasePerks({
 
 export const coursePurchaseGuarantee: CoursePurchaseGuarantee = {
   title: "30-day money-back guarantee",
-  detail: "Not the right fit? Get a full refund within 30 days.",
+  detail:
+    "Not the right fit? Get a full refund within 30 days, if you've watched no more than 10% of the course or 10 hours, whichever is less.",
 };
 
 /** Said under the button of a course that is paid for. */
