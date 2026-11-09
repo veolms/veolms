@@ -52,9 +52,10 @@ export function createDirectService(runtime: ChatRuntime) {
           existing.id,
           userId,
         );
-        if (member && member.state !== "active") {
+        if (member && (member.state !== "active" || member.deleted_at)) {
           await repository.updateMember(database, existing.id, userId, {
             state: "active",
+            deleted_at: null,
           });
         }
         const ctx = await views.assertCanRead(database, userId, existing.id);

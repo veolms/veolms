@@ -92,6 +92,14 @@ export function MessageList({
   const firstSeqRef = useRef<number | null>(null);
   const heightBeforeRef = useRef(0);
   const initialisedRef = useRef(false);
+  /**
+   * Where the view is held while rows settle: rows render at a guessed
+   * height (content-visibility) and photos load after the first paint, so
+   * the list keeps growing for a moment. Until the reader scrolls, the view
+   * stays at the bottom (or at the unread divider), as in WhatsApp.
+   */
+  const anchorRef = useRef<"bottom" | "divider" | null>("bottom");
+  const contentRef = useRef<HTMLDivElement>(null);
   const [showJump, setShowJump] = useState(false);
   const [newBelow, setNewBelow] = useState(0);
   const lastSeq = thread.messages.at(-1)?.seq ?? 0;
@@ -124,11 +132,48 @@ export function MessageList({
     initialisedRef.current = true;
     const divider = box.querySelector<HTMLElement>("[data-unread-divider]");
     if (divider && unreadCount > 0) {
+      anchorRef.current = "divider";
+      atBottomRef.current = false;
       box.scrollTop = Math.max(0, divider.offsetTop - 80);
     } else {
+      anchorRef.current = "bottom";
       box.scrollTop = box.scrollHeight;
     }
   }, [thread.messages.length, unreadCount]);
+
+  // Rows growing to their real height (and photos loading) keep the view
+  // where it was put: at the bottom while the reader is there, or at the
+  // unread divider until they scroll.
+  useEffect(() => {
+    const box = scrollRef.current;
+    const content = contentRef.current;
+    if (!box || !content || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (!initialisedRef.current) return;
+      if (anchorRef.current === "divider") {
+        const divider = box.querySelector<HTMLElement>("[data-unread-divider]");
+        if (divider) box.scrollTop = Math.max(0, divider.offsetTop - 80);
+      } else if (atBottomRef.current) {
+        box.scrollTop = box.scrollHeight;
+      }
+    });
+    observer.observe(content);
+    // The reader taking over ends the hold at the divider.
+    const release = () => {
+      if (anchorRef.current === "divider") anchorRef.current = null;
+    };
+    box.addEventListener("wheel", release, { passive: true });
+    box.addEventListener("touchmove", release, { passive: true });
+    box.addEventListener("keydown", release);
+    box.addEventListener("pointerdown", release);
+    return () => {
+      observer.disconnect();
+      box.removeEventListener("wheel", release);
+      box.removeEventListener("touchmove", release);
+      box.removeEventListener("keydown", release);
+      box.removeEventListener("pointerdown", release);
+    };
+  }, []);
 
   // Older history loaded above: keep the reader where they were.
   useLayoutEffect(() => {
@@ -174,7 +219,9 @@ export function MessageList({
     if (!box) return;
     const distance = box.scrollHeight - box.scrollTop - box.clientHeight;
     const atBottom = distance < STICK_PX;
-    atBottomRef.current = atBottom;
+    // Held at the divider, a scroll the page made (not the reader) leaves
+    // the bottom flag alone.
+    if (anchorRef.current !== "divider") atBottomRef.current = atBottom;
     setShowJump(distance > 400);
     if (atBottom) {
       lastSeenSeqRef.current = lastSeq;
@@ -195,6 +242,19 @@ export function MessageList({
   }
 
   const rows = [...thread.messages, ...pending.map((p) => p.message)];
+  // One block per day: a date label is sticky inside its own day only, so
+  // the next day's label pushes it away instead of piling on top of it.
+  const days: Array<{ key: string; label: string; start: number }> = [];
+  rows.forEach((message, index) => {
+    const previous = rows[index - 1];
+    if (!previous || !sameDay(previous.createdAt, message.createdAt)) {
+      days.push({
+        key: message.seq > 0 ? `d${message.seq}` : `dp${message.id}`,
+        label: dayLabel(message.createdAt),
+        start: index,
+      });
+    }
+  });
 
   return (
     <div className="relative min-h-0 flex-1">
@@ -220,68 +280,82 @@ export function MessageList({
                 : "Messages are visible to everyone in this group. Be kind and keep it on topic."}
           </div>
         )}
-        {rows.map((message, index) => {
-          const previous = rows[index - 1];
-          const newDay =
-            !previous || !sameDay(previous.createdAt, message.createdAt);
-          const firstOfRun =
-            newDay ||
-            !previous ||
-            previous.kind === "system" ||
-            previous.sender?.id !== message.sender?.id ||
-            new Date(message.createdAt).getTime() -
-              new Date(previous.createdAt).getTime() >
-              RUN_GAP_MS;
-          const showUnread =
-            unreadCount > 0 &&
-            message.seq > unreadAfterSeq &&
-            (previous?.seq ?? 0) <= unreadAfterSeq &&
-            message.sender?.id !== ctx.viewerId &&
-            message.seq > 0;
-          const pendingInfo =
-            message.seq === 0
-              ? pending.find((p) => p.message.id === message.id)?.outgoing
-              : undefined;
-          return (
-            <Fragment
-              key={message.seq > 0 ? `m${message.seq}` : `p${message.id}`}
-            >
-              {newDay ? (
-                <div className="sticky top-1 z-10 my-2 flex justify-center">
-                  <span className="rounded-lg bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--text-secondary) uppercase shadow-sm">
-                    {dayLabel(message.createdAt)}
-                  </span>
-                </div>
-              ) : null}
-              {showUnread ? (
-                <div
-                  data-unread-divider
-                  className="my-2 flex justify-center bg-[color-mix(in_srgb,var(--chat-in)_70%,transparent)] py-1"
-                >
-                  <span className="rounded-full bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--accent-ink) uppercase shadow-sm">
-                    {unreadCount} unread message{unreadCount === 1 ? "" : "s"}
-                  </span>
-                </div>
-              ) : null}
-              <MessageBubble
-                message={message}
-                ctx={ctx}
-                firstOfRun={firstOfRun}
-                highlighted={highlightSeq === message.seq && message.seq > 0}
-                onAction={onAction}
-                onOpenMedia={onOpenMedia}
-                onJumpTo={onJumpTo}
-              />
-              {pendingInfo ? (
-                <PendingStatus
-                  outgoing={pendingInfo}
-                  onRetry={() => onRetry(pendingInfo.clientId)}
-                  onDiscard={() => onDiscard(pendingInfo.clientId)}
-                />
-              ) : null}
-            </Fragment>
-          );
-        })}
+        <div ref={contentRef}>
+          {days.map((day, dayIndex) => (
+            <section key={day.key} aria-label={day.label}>
+              <div className="sticky top-1 z-10 my-2 flex justify-center">
+                <span className="rounded-lg bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--text-secondary) uppercase shadow-sm">
+                  {day.label}
+                </span>
+              </div>
+              {rows
+                .slice(day.start, days[dayIndex + 1]?.start ?? rows.length)
+                .map((message, offset) => {
+                  const index = day.start + offset;
+                  const previous = rows[index - 1];
+                  const newDay =
+                    !previous ||
+                    !sameDay(previous.createdAt, message.createdAt);
+                  const firstOfRun =
+                    newDay ||
+                    !previous ||
+                    previous.kind === "system" ||
+                    previous.sender?.id !== message.sender?.id ||
+                    new Date(message.createdAt).getTime() -
+                      new Date(previous.createdAt).getTime() >
+                      RUN_GAP_MS;
+                  const showUnread =
+                    unreadCount > 0 &&
+                    message.seq > unreadAfterSeq &&
+                    (previous?.seq ?? 0) <= unreadAfterSeq &&
+                    message.sender?.id !== ctx.viewerId &&
+                    message.seq > 0;
+                  const pendingInfo =
+                    message.seq === 0
+                      ? pending.find((p) => p.message.id === message.id)
+                          ?.outgoing
+                      : undefined;
+                  return (
+                    <Fragment
+                      key={
+                        message.seq > 0 ? `m${message.seq}` : `p${message.id}`
+                      }
+                    >
+                      {showUnread ? (
+                        <div
+                          data-unread-divider
+                          className="my-2 flex justify-center bg-[color-mix(in_srgb,var(--chat-in)_70%,transparent)] py-1"
+                        >
+                          <span className="rounded-full bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--accent-ink) uppercase shadow-sm">
+                            {unreadCount} unread message
+                            {unreadCount === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                      ) : null}
+                      <MessageBubble
+                        message={message}
+                        ctx={ctx}
+                        firstOfRun={firstOfRun}
+                        highlighted={
+                          highlightSeq === message.seq && message.seq > 0
+                        }
+                        onAction={onAction}
+                        onOpenMedia={onOpenMedia}
+                        onJumpTo={onJumpTo}
+                      />
+                      {pendingInfo ? (
+                        <PendingStatus
+                          outgoing={pendingInfo}
+                          onRetry={() => onRetry(pendingInfo.clientId)}
+                          onDiscard={() => onDiscard(pendingInfo.clientId)}
+                        />
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+            </section>
+          ))}
+        </div>
       </div>
       {showJump || newBelow > 0 ? (
         <button

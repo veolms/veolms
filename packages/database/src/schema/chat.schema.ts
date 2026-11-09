@@ -75,6 +75,10 @@ export interface ChatMemberTable {
   notify_level: Generated<ChatNotifyLevel>;
   archived_at: Date | null;
   pinned_at: Date | null;
+  /** Messages up to here are cleared for this member ("Clear chat"). */
+  cleared_seq: GeneratedBigInt;
+  /** "Delete chat": out of their list until a newer message arrives. */
+  deleted_at: Date | null;
   joined_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

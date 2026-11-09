@@ -1,4 +1,5 @@
 import {
+  chatClearRoomRequestSchema,
   chatCourseParamsSchema,
   chatCreateTeamRoomRequestSchema,
   chatMemberListQuerySchema,
@@ -180,6 +181,27 @@ const roomsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.removeMember,
+  );
+
+  app.post(
+    "/chat/rooms/:roomId/clear",
+    {
+      preHandler,
+      schema: {
+        operationId: "clearChat",
+        tags,
+        summary:
+          "Clear a chat for you, or delete a private chat from your list",
+        params: chatRoomParamsSchema,
+        body: chatClearRoomRequestSchema,
+        response: {
+          200: jsonResponse("Cleared", chatOkResponseSchema),
+          400: errorResponse("Only private chats can be deleted"),
+          ...common,
+        },
+      },
+    },
+    controller.clear,
   );
 
   app.post(

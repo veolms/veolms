@@ -167,8 +167,22 @@ export const chatCompleteUploadResponseSchema = z.object({
 });
 export const chatReadUploadQuerySchema = z.strictObject({
   download: z.enum(["1", "0"]).optional(),
+  /** "1": answer with the short-lived link as JSON (the preview reads text). */
+  link: z.enum(["1"]).optional(),
 });
+export const chatUploadLinkResponseSchema = z.object({ url: z.string() });
+export type ChatUploadLink = z.infer<typeof chatUploadLinkResponseSchema>;
+
 /** `v` only makes the address change when the picture does (caching). */
+/**
+ * Clear chat (your copy of its messages, up to now) or, for a private chat,
+ * delete it from your list until either of you writes again.
+ */
+export const chatClearRoomRequestSchema = z.strictObject({
+  deleteChat: z.boolean().optional(),
+});
+export type ChatClearRoomRequest = z.infer<typeof chatClearRoomRequestSchema>;
+
 export const chatRoomIconQuerySchema = z.strictObject({
   v: z.string().max(200).optional(),
 });

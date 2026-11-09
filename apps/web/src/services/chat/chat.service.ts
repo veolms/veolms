@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   ChatMessageInfo,
   ChatMessageReactions,
+  ChatUploadLink,
   ChatMessageSearchResponse,
   ChatProfile,
   ChatReason,
@@ -222,6 +223,9 @@ export const chatService = {
       : api.delete<{ ok: true }>(`/chat/rooms/${roomId}/helpers/${userId}`),
   leave: (roomId: string) =>
     api.post<{ ok: true }>(`/chat/rooms/${roomId}/leave`),
+  /** Clear a chat for you, or (private chats) delete it from your list. */
+  clearChat: (roomId: string, deleteChat: boolean) =>
+    api.post<{ ok: true }>(`/chat/rooms/${roomId}/clear`, { deleteChat }),
   candidates: (search: string) =>
     api.get<ChatCandidates>("/chat/direct/candidates", {
       params: search ? { search } : {},
@@ -300,6 +304,25 @@ export const chatService = {
     new EventSource(getApiRequestUrl("/chat/stream"), {
       withCredentials: true,
     }),
+  /**
+   * A document's text for the preview: the API answers with a short-lived
+   * link (object storage), read without cookies; in development the API
+   * serves the file itself.
+   */
+  readFileText: async (
+    attachment: Pick<ChatAttachment, "url">,
+    signal?: AbortSignal,
+  ) => {
+    const path = attachment.url.replace(/^\/v1/, "");
+    const { url } = await api.get<ChatUploadLink>(`${path}?link=1`);
+    const viaApi = url.startsWith("/v1/");
+    const response = await fetch(
+      viaApi ? getApiRequestUrl(url.replace(/^\/v1/, "")) : url,
+      { signal, credentials: viaApi ? "include" : "omit" },
+    );
+    if (!response.ok) throw new Error(`File read failed (${response.status})`);
+    return response.text();
+  },
   /** An attachment's address, read with the session cookie. */
   fileUrl: (attachment: Pick<ChatAttachment, "url">, download = false) => {
     // A file still on its way is shown from this browser's copy.

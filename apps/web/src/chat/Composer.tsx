@@ -41,6 +41,7 @@ import {
   type OutgoingFile,
 } from "../services/chat";
 import { getApiError } from "../lib/api-error";
+import { chatDrafts as drafts } from "../store/chatDrafts.store";
 import { ChatFileError, prepareFile } from "./chatMedia";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
@@ -60,9 +61,6 @@ const MEDIA_ACCEPT = [
   ...CHAT_UPLOAD_MIME_TYPES.video,
 ].join(",");
 const TYPING_EVERY_MS = 3_000;
-
-/** Drafts survive switching chats (as in WhatsApp), for this tab. */
-const drafts = new Map<string, string>();
 
 const CANNOT_POST_TEXT: Record<string, string> = {
   staff_only: "Only admins can send messages",

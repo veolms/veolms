@@ -42,11 +42,13 @@ import {
   useStarredMessages,
   useStartDirect,
   useTypingNames,
+  useClearChat,
   useUpdateMyChatState,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
 import { roomAvatarUrl } from "./chatIcon";
 import {
+  ClearChatDialog,
   DeleteMessageDialog,
   ReportDialog,
   RestrictDialog,
@@ -70,6 +72,7 @@ type DialogState =
   | { kind: "report"; message: ChatMessage }
   | { kind: "restrict"; message: ChatMessage; mode: "mute" | "ban" }
   | { kind: "react"; message: ChatMessage }
+  | { kind: "clear-chat"; mode: "clear" | "delete" }
   | null;
 
 export function Conversation({
@@ -132,6 +135,7 @@ export function Conversation({
   const block = useBlockUser();
   const myState = useUpdateMyChatState();
   const leave = useLeaveChat();
+  const clearChat = useClearChat();
 
   useEffect(() => {
     setChatOnScreen(room.id, true);
@@ -420,6 +424,21 @@ export function Conversation({
               >
                 {room.me.archived ? "Unarchive chat" : "Archive chat"}
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setDialog({ kind: "clear-chat", mode: "clear" })}
+              >
+                Clear chat
+              </DropdownMenuItem>
+              {room.kind === "direct" ? (
+                <DropdownMenuItem
+                  className="text-red-500"
+                  onClick={() =>
+                    setDialog({ kind: "clear-chat", mode: "delete" })
+                  }
+                >
+                  Delete chat
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
             {room.kind === "direct" && room.peer ? (
               <>
@@ -498,7 +517,7 @@ export function Conversation({
         </button>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col bg-(--chat-wall,var(--chat-bg))">
+      <div className="relative flex min-h-0 flex-1 flex-col [background:var(--chat-wall,var(--chat-bg))]">
         <div className="chat-wallpaper" aria-hidden="true" />
         {thread.data ? (
           <MessageList
@@ -601,6 +620,23 @@ export function Conversation({
         />
       )}
 
+      {dialog?.kind === "clear-chat" ? (
+        <ClearChatDialog
+          mode={dialog.mode}
+          name={room.title}
+          onClose={() => setDialog(null)}
+          onConfirm={() => {
+            const deleteChat = dialog.mode === "delete";
+            setDialog(null);
+            clearChat.mutate(
+              { roomId: room.id, deleteChat },
+              { onError: fail },
+            );
+            if (deleteChat) onBack();
+            else onToast("Chat cleared");
+          }}
+        />
+      ) : null}
       {dialog?.kind === "delete" ? (
         <DeleteMessageDialog
           message={dialog.message}
