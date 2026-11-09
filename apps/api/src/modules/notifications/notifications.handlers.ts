@@ -4,6 +4,8 @@ import {
   authPasskeyAddedEventSchema,
   authSessionRevokedEventSchema,
   certificateGeneratedEventSchema,
+  chatMentionedEventSchema,
+  chatPlatformRestrictionEventSchema,
   coursePublishedEventSchema,
   discussionAnswerAcceptedEventSchema,
   discussionReplyCreatedEventSchema,
@@ -81,6 +83,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       templateKey: "course.published",
       templateData: { courseTitle: event.courseTitle },
       channels: courseWideChannels(dependencies),
+      push: dependencies.courseWidePush !== false,
       mandatory: false,
       deepLink: `/courses/${event.courseSlug}`,
     }));
@@ -390,6 +393,47 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
     ];
   },
+  "chat.mentioned": async (payload) => {
+    const event = chatMentionedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "chat.mentioned",
+        category: "social",
+        templateKey: "chat.mentioned",
+        templateData: {
+          actorName: event.actorName,
+          roomTitle: event.roomTitle,
+          snippet: event.snippet,
+        },
+        // Chat is live already; email for every mention would be noise.
+        channels: ["in_app"] as const,
+        mandatory: false,
+        deepLink: event.deepLink,
+      },
+    ];
+  },
+  "chat.platform_restriction": async (payload) => {
+    const event = chatPlatformRestrictionEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "chat.platform_restriction",
+        category: "transactional",
+        templateKey: "chat.platform_restriction",
+        templateData: {
+          actorName: event.actorName,
+          targetName: event.targetName,
+          restriction: event.restriction,
+          reason: event.reason,
+        },
+        channels: ["in_app"] as const,
+        // A staff alert (decision 5), not a preference.
+        mandatory: true,
+        deepLink: event.deepLink,
+      },
+    ];
+  },
   "support.reply_posted": async (payload) => {
     const event = supportReplyPostedEventSchema.parse(payload);
     return [
@@ -465,6 +509,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         lessonTitle: event.lessonTitle,
       },
       channels: courseWideChannels(dependencies),
+      push: dependencies.courseWidePush !== false,
       mandatory: false,
       deepLink: event.deepLink,
     }));

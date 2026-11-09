@@ -486,6 +486,92 @@ const serverConfigSchema = z.object({
    * the sending domain rate-limited by Gmail, delaying sign-in codes too.
    */
   NOTIFICATION_COURSE_WIDE_EMAIL: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Serves GET /notifications/stream, a Server-Sent Events stream that tells
+   * a signed-in browser the moment its notifications change, so the badge
+   * and list refresh without waiting for the next poll. Off, the endpoint
+   * answers 503 and the web app falls back to polling every 2 minutes.
+   */
+  NOTIFICATION_STREAM_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Open notification streams one user may hold on one API process (one
+   * per browser tab). Beyond it the stream is refused and that tab polls.
+   */
+  NOTIFICATION_STREAM_MAX_PER_USER: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .default(8),
+
+  // Mobile push (Firebase Cloud Messaging)
+  /**
+   * Sends phone pushes for notifications and chat messages. Off, nothing is
+   * queued or sent; phones keep registering, so turning it on later works.
+   */
+  PUSH_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * The apps that may receive pushes and the Firebase key each is sent
+   * with, as JSON: `[{"applicationId":"com.procodrr.app",
+   * "serviceAccountPath":"/etc/veolms-api/fcm-procodrr.json"}]`. Instead of
+   * a path, `"serviceAccountBase64"` holds the key file itself. A phone
+   * whose app is not listed cannot register. Unset: push is off.
+   */
+  PUSH_APPS: z.string().trim().optional(),
+  /**
+   * The HTTP v1 message field the install is named in. Firebase now uses
+   * `fid`; `token` (deprecated) also accepts a Firebase Installation ID
+   * during the transition, so it is the fallback if `fid` is refused.
+   */
+  PUSH_TARGET_FIELD: z.enum(["fid", "token"]).default("fid"),
+  /** Firebase's address; changed only to test against a local stand-in. */
+  PUSH_FCM_ENDPOINT: z.url().default("https://fcm.googleapis.com"),
+  /** Sends per push before it is marked failed. */
+  PUSH_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+  /** Pushes sent at the same time by one worker. */
+  PUSH_SEND_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(16),
+  /** Phones one account may register; the least recently seen goes first. */
+  PUSH_MAX_DEVICES_PER_USER: z.coerce.number().int().min(1).max(50).default(10),
+  /**
+   * Pushes notifications that go to everyone in a course (a course
+   * published, a quiz assigned). Off, they still appear in-app.
+   */
+  NOTIFICATION_COURSE_WIDE_PUSH: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Groups with more members than this push only mentions (and @everyone),
+   * not every message: one message would otherwise wake thousands of
+   * phones. Private chats always push.
+   */
+  CHAT_PUSH_GROUP_MAX_MEMBERS: z.coerce.number().int().min(2).default(256),
+
+  // Chat (course groups, team groups, private chats)
+  /**
+   * Kill switch for chat. Off, every /chat route answers 404 and the live
+   * stream sends no chat events; nothing is deleted.
+   */
+  CHAT_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /** Open chat streams one user may hold on one API process (one per tab). */
+  CHAT_STREAM_MAX_PER_USER: z.coerce.number().int().min(1).max(50).default(8),
+  /**
+   * Open chat streams one API process holds. Beyond it new streams get 503
+   * with Retry-After, and the browser reconnects later (maybe elsewhere).
+   */
+  CHAT_STREAM_MAX_PER_PROCESS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(100_000)
+    .default(4_000),
+  /**
+   * How often the chat retention job runs (course-group messages older than
+   * the platform's retention, bodies of messages deleted over 7 days ago).
+   * 0 turns it off.
+   */
+  CHAT_RETENTION_INTERVAL_HOURS: z.coerce
+    .number()
+    .min(0)
+    .max(24 * 7)
+    .default(6),
 
   // SMS Delivery
   /**
@@ -799,6 +885,40 @@ function resolveEmailTransport(parsed: ParsedServerConfig): "smtp" | "console" {
     : "smtp";
 }
 
+// Android apps sign passkeys with an origin of the form
+// `android:apk-key-hash:<base64url SHA-256 of the signing cert>`. That is not
+// a web URL: `new URL()` accepts it but reports its origin as the string
+// "null", which would both lose the entry and allow opaque (sandboxed) pages.
+const ANDROID_ORIGIN_PREFIX = "android:apk-key-hash:";
+
+function isAndroidOrigin(origin: string): boolean {
+  return origin.startsWith(ANDROID_ORIGIN_PREFIX);
+}
+
+// One comma-separated origins entry, normalised: http(s) URLs become their
+// origin, Android key-hash origins are kept exactly as written (only when
+// allowed), anything unparseable is kept as written, and "null" never passes.
+function normalizeOriginEntry(
+  entry: string,
+  options: { allowAndroid: boolean },
+): string | undefined {
+  const trimmed = entry.trim();
+  if (!trimmed) return undefined;
+  if (isAndroidOrigin(trimmed)) {
+    return options.allowAndroid ? trimmed : undefined;
+  }
+  let normalized = trimmed;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      normalized = url.origin;
+    }
+  } catch {
+    // Not a URL: keep as written.
+  }
+  return normalized === "null" ? undefined : normalized;
+}
+
 function resolveWebAuthnOrigins(parsed: ParsedServerConfig): string[] {
   const origins = new Set<string>();
 
@@ -810,14 +930,8 @@ function resolveWebAuthnOrigins(parsed: ParsedServerConfig): string[] {
 
   if (parsed.WEBAUTHN_ORIGINS) {
     for (const origin of parsed.WEBAUTHN_ORIGINS.split(",")) {
-      const trimmed = origin.trim();
-      if (trimmed) {
-        try {
-          origins.add(new URL(trimmed).origin);
-        } catch {
-          origins.add(trimmed);
-        }
-      }
+      const normalized = normalizeOriginEntry(origin, { allowAndroid: true });
+      if (normalized) origins.add(normalized);
     }
   }
 
@@ -853,6 +967,8 @@ function resolveWebAuthnRpIds(
     rpIds.add(resolvedRpId);
   }
   for (const origin of origins) {
+    // Android key-hash origins carry no host; the app's RP ID is the website's.
+    if (isAndroidOrigin(origin)) continue;
     try {
       const hostname = new URL(origin).hostname;
       if (hostname) {
@@ -866,18 +982,16 @@ function resolveWebAuthnRpIds(
 }
 
 function resolveCorsOrigins(parsed: ParsedServerConfig): string[] {
-  const origins = new Set(resolveWebAuthnOrigins(parsed));
+  // Browsers never send an Android key-hash origin, so CORS takes only the
+  // web origins of the WebAuthn list.
+  const origins = new Set(
+    resolveWebAuthnOrigins(parsed).filter((origin) => !isAndroidOrigin(origin)),
+  );
 
   if (parsed.CORS_ORIGINS) {
     for (const origin of parsed.CORS_ORIGINS.split(",")) {
-      const trimmed = origin.trim();
-      if (trimmed) {
-        try {
-          origins.add(new URL(trimmed).origin);
-        } catch {
-          origins.add(trimmed);
-        }
-      }
+      const normalized = normalizeOriginEntry(origin, { allowAndroid: false });
+      if (normalized) origins.add(normalized);
     }
   }
 

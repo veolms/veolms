@@ -2,6 +2,7 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type {
   GuestHomePageResponse,
   HomeDiscoveryResponse,
+  HomeFestiveResponse,
   HomePageDiscussionListResponse,
   HomePageLessonVideoOptionsResponse,
   HomePageOptionsResponse,
@@ -92,6 +93,21 @@ export function prefetchGuestHomePage(queryClient: QueryClient) {
     queryKey: homeKeys.guestPage(),
     queryFn: loadGuestHomePage,
     staleTime: GUEST_HOME_PAGE_SESSION_MAX_AGE_MS,
+  });
+}
+
+/**
+ * The festive greeting and offer (see `HomePageFestive`), read once per
+ * visit: the sidebar shows its offer on every page, and the home heroes
+ * its greeting.
+ */
+export function useHomeFestive() {
+  return useQuery<HomeFestiveResponse, ApiError>({
+    queryKey: homeKeys.festive(),
+    queryFn: () => homeService.getFestive(),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 }
 

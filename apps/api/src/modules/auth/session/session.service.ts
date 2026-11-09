@@ -38,8 +38,15 @@ import {
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import type { Executor } from "../shared/repository.types.ts";
 import { runSignInClaim } from "../shared/sign-in-claim.ts";
-import { type SessionLocation } from "../shared/request-location.ts";
+import {
+  formatSessionLocation,
+  type SessionLocation,
+} from "../shared/request-location.ts";
 import { createPlatformSettingsService } from "../../platform/platform-settings.service.ts";
+import type {
+  LearningProgressPlayback,
+  LearningProgressPlaying,
+} from "@veolms/contracts";
 
 export interface SessionServiceOptions {
   database: Kysely<Database>;
@@ -479,6 +486,95 @@ export function createSessionService({ database }: SessionServiceOptions) {
     return context;
   }
 
+  async function reportPlayback(
+    user: { id: string; roles: readonly string[]; email?: string | null },
+    sessionId: string,
+    playing: LearningProgressPlaying | undefined,
+  ): Promise<LearningProgressPlayback> {
+    const limit =
+      isStaffAccount(user.roles) || isTestLoginAccount(user.email)
+        ? null
+        : await platformSettings.maxSimultaneousStreams();
+
+    if (limit === null) {
+      return { allowed: true };
+    }
+
+    if (!playing) {
+      await sessionRepository.clearPlaybackClaim(database, sessionId);
+      return { allowed: true };
+    }
+
+    return await database.transaction().execute(async (trx) => {
+      await sessionRepository.lockUserForSignIn(trx, user.id);
+      const now = new Date();
+      // Dynamic stale window: 2 * sync interval + 10s (130 s under default 60 s sync).
+      const staleWindowMs =
+        (2 * config.LEARNING_PROGRESS_SYNC_SECONDS + 10) * 1000;
+      const since = new Date(now.getTime() - staleWindowMs);
+      const live = await sessionRepository.listLivePlaybackClaims(
+        trx,
+        user.id,
+        since,
+        now,
+      );
+
+      const mine = live.find((s) => s.id === sessionId);
+      // play event = user just pressed play => always the newest claim.
+      // heartbeat with no live claim = own claim went stale (network drop,
+      // throttled hidden tab, pagehide beacon closed the previous tab).
+      // Rank it as epoch-zero so any device that actually pressed play wins.
+      const claimedAt =
+        playing.event === "play"
+          ? now
+          : (mine?.playing_claimed_at ?? new Date(0));
+      const others = live.filter((s) => s.id !== sessionId);
+
+      const allClaims: Array<{
+        id: string;
+        claimedAt: Date;
+        claim?: sessionRepository.LivePlaybackClaim;
+      }> = [
+        ...others.map((o) => ({
+          id: o.id,
+          claimedAt: o.playing_claimed_at,
+          claim: o,
+        })),
+        { id: sessionId, claimedAt },
+      ];
+
+      allClaims.sort((a, b) => {
+        const diff = b.claimedAt.getTime() - a.claimedAt.getTime();
+        if (diff !== 0) return diff;
+        return a.id.localeCompare(b.id);
+      });
+
+      const allowed =
+        allClaims.findIndex((item) => item.id === sessionId) < limit;
+
+      if (allowed) {
+        await sessionRepository.setPlaybackClaim(trx, sessionId, {
+          lessonId: playing.lessonId,
+          claimedAt,
+          at: now,
+        });
+        return { allowed: true };
+      }
+
+      await sessionRepository.clearPlaybackClaim(trx, sessionId);
+      const newest = allClaims[0]?.claim;
+      return {
+        allowed: false,
+        playingOn: {
+          userAgent: newest?.user_agent ?? null,
+          location: newest ? formatSessionLocation(newest) : null,
+          lessonTitle: newest?.lesson_title ?? null,
+          since: (newest?.playing_claimed_at ?? now).toISOString(),
+        },
+      };
+    });
+  }
+
   return {
     resolveMfaState,
     userHasAnyMfaFactor,
@@ -497,6 +593,14 @@ export function createSessionService({ database }: SessionServiceOptions) {
     revokeAllSessions,
     purgeOldSessions,
     authenticate,
+    reportPlayback,
+    /**
+     * Of `sessionIds`, those signed out (logout, sign-out elsewhere,
+     * password reset). Expired sessions are not: a login that ran out was
+     * not a sign-out. Phone pushes stop for the signed-out ones.
+     */
+    listRevokedSessionIds: (sessionIds: readonly string[]) =>
+      sessionRepository.listRevokedSessionIds(database, sessionIds),
   };
 }
 

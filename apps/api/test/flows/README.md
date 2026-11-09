@@ -5,16 +5,18 @@ buy a course, watch its lessons, save progress, and what only staff may do.
 Each test signs people up, makes courses and calls the API exactly as the web
 app does; nothing is mocked inside the API.
 
-| File                                   | What it covers                                                        |
-| -------------------------------------- | --------------------------------------------------------------------- |
-| `01-sign-in.flow.test.ts`              | Emailed codes, wrong/used/expired codes, sign-out, the device limit   |
-| `02-course-access.flow.test.ts`        | Which lessons play for whom: previews, free, paid, grants, archived   |
-| `03-buying-a-course.flow.test.ts`      | Checkout, payment confirmation, webhooks, forged or repeated payments |
-| `04-learning-progress.flow.test.ts`    | Completion, course progress, resume on another device, late positions |
-| `05-staff-only.flow.test.ts`           | The admin area refuses learners and visitors                          |
-| `06-coupons-and-refunds.flow.test.ts`  | What coupons take off, refused coupons, refunds and what they revoke  |
-| `07-international-prices.flow.test.ts` | Dollar prices for buyers outside India, coupons on them, revenue in ₹ |
-| `08-course-order.flow.test.ts`         | The admin's course order, on every list; who may set it               |
+| File                                   | What it covers                                                         |
+| -------------------------------------- | ---------------------------------------------------------------------- |
+| `01-sign-in.flow.test.ts`              | Emailed codes, wrong/used/expired codes, sign-out, the device limit    |
+| `02-course-access.flow.test.ts`        | Which lessons play for whom: previews, free, paid, grants, archived    |
+| `03-buying-a-course.flow.test.ts`      | Checkout, payment confirmation, webhooks, forged or repeated payments  |
+| `04-learning-progress.flow.test.ts`    | Completion, course progress, resume on another device, late positions  |
+| `05-staff-only.flow.test.ts`           | The admin area refuses learners and visitors; uploading and publishing |
+| `06-coupons-and-refunds.flow.test.ts`  | What coupons take off, refused coupons, refunds and what they revoke   |
+| `07-international-prices.flow.test.ts` | Dollar prices for buyers outside India, coupons on them, revenue in ₹  |
+| `08-course-order.flow.test.ts`         | The admin's course order, on every list; who may set it                |
+| `09-coupon-course-rates.flow.test.ts`  | One coupon with a different discount per course; rates it refuses      |
+| `10-chat.flow.test.ts`                 | Chat: groups, retries, catch-up, mutes, helpers, private chats, live   |
 
 ## Running them
 
@@ -50,6 +52,10 @@ Only what lies outside the API:
   (`setup/flow-courses.ts`). The API builds the video's CDN link and token
   without fetching anything, and storage points at an address that answers
   nothing, so a test that reached it would fail.
+- **Uploads**: an in-memory store (`setup/fake-object-storage.ts`). The API
+  signs upload links as usual; `flow.storage.upload(uploadUrl)` stands for
+  the browser sending the file, and the API's check that the file arrived
+  answers from it.
 
 The same setup (this folder's `setup/`) also runs the API for the browser
 tests in `apps/web/tests/journeys/`, on a database of their own

@@ -25,6 +25,7 @@ export function useUpdateHomePageSettings() {
       // be holding the page as it was before them.
       clearSessionGuestHomePage();
       void queryClient.invalidateQueries({ queryKey: homeKeys.guestPage() });
+      queryClient.setQueryData(homeKeys.festive(), saved.settings.festive);
     },
   });
 }

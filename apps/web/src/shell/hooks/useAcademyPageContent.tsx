@@ -84,6 +84,7 @@ import type { CourseCurriculumPreview } from "../../courses/staticCurriculum";
 import type { AuthUser } from "../../store/auth.store";
 import type { useMyCourses } from "../../services/courses";
 import type { ApiError } from "../../lib/api-error";
+import type { ExtensionPageOutletContext } from "../extensionPageOutlet";
 
 export interface UseAcademyPageContentArgs {
   assignmentId: string | undefined;
@@ -837,7 +838,15 @@ export function useAcademyPageContent({
     }
     if (surfacePage === "extension") {
       // A plugin page: the matched child route of the academy layout.
-      return <Outlet />;
+      return (
+        <Outlet
+          context={
+            {
+              onNavigateBack: showPageBackButton ? onNavigateBack : undefined,
+            } satisfies ExtensionPageOutletContext
+          }
+        />
+      );
     }
     if (surfacePage === "placeholder") {
       return (

@@ -29,7 +29,10 @@ const learningProgressRoutes: RoutePlugin = async (app, options) => {
     database: options.database,
     services: options.services,
   });
-  const controller = createLearningProgressController({ service });
+  const controller = createLearningProgressController({
+    service,
+    sessionService,
+  });
 
   app.get(
     "/learning-progress/:courseKey",

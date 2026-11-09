@@ -145,6 +145,39 @@ export type CartResponse = z.infer<typeof cartResponseSchema>;
 export const couponDiscountTypeSchema = z.enum(["percentage", "fixed"]);
 export type CouponDiscountType = z.infer<typeof couponDiscountTypeSchema>;
 
+/**
+ * A course's or bundle's own discount under a coupon. The coupon's own
+ * discount is the default for every other item it applies to; a rule's
+ * target must be one the coupon applies to.
+ */
+export const couponDiscountRuleSchema = z
+  .strictObject({
+    targetType: z.enum(["course", "bundle"]),
+    targetId: z.uuid(),
+    discountType: couponDiscountTypeSchema,
+    discountValue: z.number().int().positive(),
+    maxDiscountAmount: z.number().int().positive().nullable().default(null),
+  })
+  .refine(
+    (rule) => rule.discountType !== "percentage" || rule.discountValue <= 100,
+    {
+      message: "Percentage discount cannot exceed 100%.",
+      path: ["discountValue"],
+    },
+  );
+export type CouponDiscountRule = z.infer<typeof couponDiscountRuleSchema>;
+
+/** At most one rule per course or bundle; 200 is far above any real coupon. */
+export const couponDiscountRulesSchema = z
+  .array(couponDiscountRuleSchema)
+  .max(200)
+  .refine(
+    (rules) =>
+      new Set(rules.map((r) => `${r.targetType}:${r.targetId}`)).size ===
+      rules.length,
+    { message: "A course or bundle can have only one discount per coupon." },
+  );
+
 export const couponSchema = z.strictObject({
   id: z.uuid(),
   code: z.string().min(1).max(50).toUpperCase(),
@@ -159,6 +192,9 @@ export const couponSchema = z.strictObject({
   perUserLimit: z.number().int().positive().default(1),
   isActive: z.boolean().default(true),
   restrictedCourseIds: z.array(z.uuid()).nullable().optional(),
+  restrictedBundleIds: z.array(z.uuid()).nullable().optional(),
+  /** Own discounts for some courses or bundles; empty when there are none. */
+  discountRules: z.array(couponDiscountRuleSchema).default([]),
 });
 export type Coupon = z.infer<typeof couponSchema>;
 
@@ -223,6 +259,7 @@ export const createCouponRequestSchema = z.strictObject({
   isActive: z.boolean().default(true),
   restrictedCourseIds: z.array(z.uuid()).optional(),
   restrictedBundleIds: z.array(z.uuid()).optional(),
+  discountRules: couponDiscountRulesSchema.optional(),
 });
 export type CreateCouponRequest = z.infer<typeof createCouponRequestSchema>;
 
@@ -239,6 +276,8 @@ export const updateCouponRequestSchema = z.strictObject({
   isActive: z.boolean().optional(),
   restrictedCourseIds: z.array(z.uuid()).nullable().optional(),
   restrictedBundleIds: z.array(z.uuid()).nullable().optional(),
+  /** Replaces the whole set; left out, the rules stay as they are. */
+  discountRules: couponDiscountRulesSchema.optional(),
 });
 export type UpdateCouponRequest = z.infer<typeof updateCouponRequestSchema>;
 

@@ -34,6 +34,11 @@ export const OPTIONAL_NOTIFICATION_GROUPS = {
     "quiz.attempt.failed_final",
   ],
   purchases: ["purchase.completed", "payment.failed", "refund.completed"],
+  // In the app only: someone @mentioned you in a chat group.
+  // "chat.message": a new chat message, sent as a phone push only (the
+  // chat itself is the in-app view). Turning it off for `push` silences
+  // chat pushes everywhere; each chat can also be muted on its own.
+  chat: ["chat.mentioned", "chat.message"],
 } as const;
 
 export type OptionalNotificationGroup =

@@ -13,6 +13,7 @@ import { sql, type Kysely, type Selectable } from "kysely";
 import { exactCursorTimestamp } from "../../lib/keyset.ts";
 import { escapeLikePattern } from "../../lib/like-pattern.ts";
 import { fuzzyMatchesAny } from "../../lib/fuzzy-search.ts";
+import { NOTIFICATION_SIGNAL_CHANNEL } from "./notification-signal.ts";
 
 export interface NotificationCursor {
   createdAt: Date;
@@ -220,6 +221,28 @@ export async function getPreference(
     .where("channel", "=", channel)
     .executeTakeFirst();
   return row?.enabled;
+}
+
+/** Of `userIds`, those who turned `notificationType` off on `channel`. */
+export async function listUsersWithPreferenceOff(
+  database: DatabaseExecutor,
+  userIds: readonly string[],
+  notificationType: string,
+  channel: NotificationChannel,
+): Promise<Set<string>> {
+  const off = new Set<string>();
+  for (let i = 0; i < userIds.length; i += 1000) {
+    const rows = await database
+      .selectFrom("notification_preferences")
+      .select("user_id")
+      .where("user_id", "in", userIds.slice(i, i + 1000))
+      .where("notification_type", "=", notificationType)
+      .where("channel", "=", channel)
+      .where("enabled", "=", false)
+      .execute();
+    for (const row of rows) off.add(row.user_id);
+  }
+  return off;
 }
 
 /**
@@ -486,4 +509,18 @@ export async function markDeliveryFailed(
     .where("status", "=", "processing")
     .where("locked_until", "=", input.lockedUntil)
     .execute();
+}
+
+/**
+ * Sends one notification signal (see notification-signal.ts) to every
+ * listening API process. pg_notify counts as a write, so it reaches the
+ * primary even from the read-replica API.
+ */
+export async function publishSignal(
+  database: Kysely<Database>,
+  payload: string,
+): Promise<void> {
+  await sql`select pg_notify(${NOTIFICATION_SIGNAL_CHANNEL}, ${payload})`.execute(
+    database,
+  );
 }

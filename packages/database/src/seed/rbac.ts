@@ -236,6 +236,10 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "coupon.read",
     "coupon.manage",
     "enrollment.read",
+    // Chat: their own course groups. Restricting across all chats is
+    // limited to learners they teach, and admins are told.
+    "chat.moderate",
+    "chat.restrict_platform",
   ],
   teaching_assistant: [
     "course.read",
@@ -246,6 +250,7 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "submission.grade",
     "discussion.read",
     "discussion.moderate",
+    "chat.moderate",
   ],
   reviewer: [
     "course.read",

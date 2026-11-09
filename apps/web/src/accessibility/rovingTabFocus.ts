@@ -9,7 +9,7 @@ const TAB_SELECTOR = '[role="tab"]:not([disabled])';
  * require two taps.
  */
 export function scrollKeyboardFocusedTabIntoView(
-  event: FocusEvent<HTMLButtonElement>,
+  event: FocusEvent<HTMLElement>,
 ) {
   if (!event.currentTarget.matches(":focus-visible")) return;
   event.currentTarget.scrollIntoView({
@@ -19,12 +19,11 @@ export function scrollKeyboardFocusedTabIntoView(
 }
 
 /**
- * Applies the WAI-ARIA tablist keyboard model to an existing tab button.
+ * Applies the WAI-ARIA tablist keyboard model to an existing tab (a button,
+ * or a link where each tab is its own address).
  * Selection remains owned by each feature through its normal click handler.
  */
-export function handleRovingTabKeyDown(
-  event: KeyboardEvent<HTMLButtonElement>,
-) {
+export function handleRovingTabKeyDown(event: KeyboardEvent<HTMLElement>) {
   const { key } = event;
   if (
     key !== "ArrowLeft" &&
@@ -38,7 +37,7 @@ export function handleRovingTabKeyDown(
 
   const tablist = event.currentTarget.closest<HTMLElement>('[role="tablist"]');
   if (!tablist) return;
-  const tabs = [...tablist.querySelectorAll<HTMLButtonElement>(TAB_SELECTOR)];
+  const tabs = [...tablist.querySelectorAll<HTMLElement>(TAB_SELECTOR)];
   const currentIndex = tabs.indexOf(event.currentTarget);
   if (currentIndex < 0 || tabs.length === 0) return;
 

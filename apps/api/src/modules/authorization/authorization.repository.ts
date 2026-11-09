@@ -31,6 +31,41 @@ export interface LessonResourceScope extends ResourceScope {
   lessonId: string;
 }
 
+/**
+ * People who hold `permissionKey` through a role that reaches every course
+ * (not an own-courses-only role), e.g. to tell the chat managers about a
+ * restriction. A deny on any of their roles leaves them out.
+ */
+export async function listPlatformPermissionHolders(
+  database: Executor,
+  permissionKey: string,
+  limit = 100,
+): Promise<string[]> {
+  const result = await sql<{ user_id: string }>`
+    with grants as (
+      select ur.user_id, rp.effect
+      from user_roles ur
+      join roles r on r.id = ur.role_id and r.own_courses_only = false
+      join role_permissions rp on rp.role_id = ur.role_id
+      join permissions p on p.id = rp.permission_id and p.permission_key = ${permissionKey}
+      union all
+      select ra.user_id, rp.effect
+      from role_assignments ra
+      join roles r on r.id = ra.role_id and r.own_courses_only = false
+      join role_permissions rp on rp.role_id = ra.role_id
+      join permissions p on p.id = rp.permission_id and p.permission_key = ${permissionKey}
+      where ra.scope_type = 'platform'
+        and (ra.expires_at is null or ra.expires_at > current_timestamp)
+    )
+    select g.user_id from grants g
+    join users u on u.id = g.user_id and u.is_deleted = false
+    group by g.user_id
+    having bool_and(g.effect <> 'deny') and bool_or(g.effect = 'allow')
+    limit ${limit}
+  `.execute(database);
+  return result.rows.map((row) => row.user_id);
+}
+
 export async function checkUserPermission(
   database: Executor,
   context: PermissionCheckContext,

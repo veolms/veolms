@@ -1,0 +1,726 @@
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
+import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { useQueryClient } from "@tanstack/react-query";
+import type { ChatMessage, ChatRoomDetail } from "@veolms/contracts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
+import { getApiError } from "../lib/api-error";
+import { cn } from "../lib/utils";
+import {
+  applyMessages,
+  chatService,
+  discardMessage,
+  markRoomRead,
+  queueReceipt,
+  retryMessage,
+  setChatOnScreen,
+  useAnswerRequest,
+  useBlockUser,
+  useChatThread,
+  useDeleteMessage,
+  useLeaveChat,
+  useOutgoingMessages,
+  usePinMessage,
+  useReactToMessage,
+  useReportMessage,
+  useRestoreMessage,
+  useRestrictMember,
+  useStarMessage,
+  useStarredMessages,
+  useStartDirect,
+  useTypingNames,
+  useClearChat,
+  useUpdateMyChatState,
+} from "../services/chat";
+import { ChatAvatar } from "./ChatAvatar";
+import { roomAvatarUrl } from "./chatIcon";
+import {
+  ClearChatDialog,
+  DeleteMessageDialog,
+  ReportDialog,
+  RestrictDialog,
+} from "./ChatDialogs";
+import { chatIconButton } from "./ChatControls";
+import { lastSeenLabel, ROLE_LABEL } from "./chatFormat";
+import { Composer, type ComposerHandle } from "./Composer";
+import { EmojiPanel } from "./EmojiPanel";
+import { MediaViewer } from "./MediaViewer";
+import type { ViewableMedia } from "./MessageAttachments";
+import type { BubbleContext } from "./MessageBubble";
+import { MessageList } from "./MessageList";
+import type { MessageAction } from "./MessageMenu";
+import { ChatThreadSkeleton } from "./ChatSkeletons";
+
+/** Your own reactions, remembered for this tab (the server keeps counts). */
+const myReactions = new Map<string, string>();
+
+type DialogState =
+  | { kind: "delete"; message: ChatMessage }
+  | { kind: "report"; message: ChatMessage }
+  | { kind: "restrict"; message: ChatMessage; mode: "mute" | "ban" }
+  | { kind: "react"; message: ChatMessage }
+  | { kind: "clear-chat"; mode: "clear" | "delete" }
+  | null;
+
+export function Conversation({
+  room,
+  viewerId,
+  onBack,
+  onOpenInfo,
+  onOpenMessageInfo,
+  onOpenSearch,
+  jumpRequest,
+  onOpenChat,
+  onToast,
+  focusComposerToken,
+}: {
+  room: ChatRoomDetail;
+  viewerId: string | null;
+  onBack: () => void;
+  onOpenInfo: () => void;
+  onOpenMessageInfo: (message: ChatMessage) => void;
+  onOpenSearch: () => void;
+  jumpRequest: { seq: number; token: number } | null;
+  onOpenChat: (roomId: string) => void;
+  onToast: (message: string) => void;
+  focusComposerToken: number;
+}) {
+  const client = useQueryClient();
+  const thread = useChatThread(room.id);
+  const outgoing = useOutgoingMessages(room.id);
+  const typing = useTypingNames(room.id);
+  const stars = useStarredMessages(true);
+  const composerRef = useRef<ComposerHandle>(null);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [viewer, setViewer] = useState<{
+    items: ViewableMedia[];
+    index: number;
+  } | null>(null);
+  const [highlightSeq, setHighlightSeq] = useState<number | null>(null);
+  const [pinnedIndex, setPinnedIndex] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [, forceRender] = useState(0);
+  const unreadAfterRef = useRef<{ roomId: string; seq: number }>({
+    roomId: room.id,
+    seq: room.me.lastReadSeq,
+  });
+  if (unreadAfterRef.current.roomId !== room.id) {
+    unreadAfterRef.current = { roomId: room.id, seq: room.me.lastReadSeq };
+  }
+
+  const deleteMessage = useDeleteMessage();
+  const restoreMessage = useRestoreMessage();
+  const pinMessage = usePinMessage();
+  const react = useReactToMessage();
+  const star = useStarMessage();
+  const report = useReportMessage();
+  const restrict = useRestrictMember();
+  const startDirect = useStartDirect();
+  const answer = useAnswerRequest();
+  const block = useBlockUser();
+  const myState = useUpdateMyChatState();
+  const leave = useLeaveChat();
+  const clearChat = useClearChat();
+
+  useEffect(() => {
+    setChatOnScreen(room.id, true);
+    setReplyTo(null);
+    setEditing(null);
+    setPinnedIndex(0);
+    return () => setChatOnScreen(room.id, false);
+  }, [room.id]);
+
+  useEffect(() => {
+    if (focusComposerToken > 0) composerRef.current?.focus();
+  }, [focusComposerToken]);
+
+  // A search result or a report asked to show this message.
+  const jumpToken = jumpRequest?.token ?? 0;
+  useEffect(() => {
+    if (jumpRequest) void jumpTo(jumpRequest.seq);
+  }, [jumpToken]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onAtBottom = useCallback(
+    (lastSeq: number) => {
+      if (document.visibilityState !== "visible" || lastSeq <= 0) return;
+      queueReceipt(room.id, { readSeq: lastSeq });
+      markRoomRead(client, room.id, lastSeq);
+    },
+    [client, room.id],
+  );
+
+  const starredIds = useMemo(
+    () => new Set((stars.data?.messages ?? []).map((m) => m.id)),
+    [stars.data],
+  );
+
+  const ctx: BubbleContext = {
+    viewerId,
+    isGroup: room.kind !== "direct",
+    isDirect: room.kind === "direct",
+    peerReadSeq: room.peerReadSeq,
+    peerDeliveredSeq: room.peerDeliveredSeq,
+    canModerate: room.me.canModerate,
+    isHelper: room.me.isHelper,
+    starred: starredIds,
+    myReactions,
+  };
+
+  const fail = (error: unknown) => onToast(getApiError(error).message);
+
+  async function jumpTo(seq: number) {
+    const present = thread.data?.messages.some((m) => m.seq === seq);
+    if (!present) {
+      try {
+        const page = await chatService.listMessages(room.id, {
+          around: seq,
+          limit: 40,
+        });
+        applyMessages(client, room.id, page.messages);
+      } catch (error) {
+        fail(error);
+        return;
+      }
+    }
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`chat-message-${seq}`)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+      setHighlightSeq(seq);
+      setTimeout(() => setHighlightSeq(null), 1600);
+    });
+  }
+
+  function onAction(action: MessageAction, message: ChatMessage) {
+    const base = { roomId: room.id, seq: message.seq };
+    if (action === "react-remove") {
+      const previous = myReactions.get(message.id) ?? null;
+      myReactions.delete(message.id);
+      forceRender((n) => n + 1);
+      react.mutate({ ...base, emoji: null, previous }, { onError: fail });
+      return;
+    }
+    if (action.startsWith("react:") || action === "react-toggle") {
+      const previous = myReactions.get(message.id) ?? null;
+      const picked = action === "react-toggle" ? previous : action.slice(6);
+      if (action === "react-toggle" && !previous) {
+        setDialog({ kind: "react", message });
+        return;
+      }
+      const emoji = picked === previous ? null : picked;
+      if (emoji) myReactions.set(message.id, emoji);
+      else myReactions.delete(message.id);
+      forceRender((n) => n + 1);
+      react.mutate({ ...base, emoji, previous }, { onError: fail });
+      return;
+    }
+    switch (action) {
+      case "reply":
+        setEditing(null);
+        setReplyTo(message);
+        return;
+      case "info":
+        onOpenMessageInfo(message);
+        return;
+      case "copy":
+        void navigator.clipboard
+          ?.writeText(message.body)
+          .then(() => onToast("Message copied"));
+        return;
+      case "edit":
+        setReplyTo(null);
+        setEditing(message);
+        return;
+      case "pin":
+      case "unpin":
+        pinMessage.mutate(
+          { ...base, pinned: action === "pin" },
+          { onError: fail },
+        );
+        return;
+      case "star":
+      case "unstar":
+        star.mutate({ ...base, starred: action === "star" }, { onError: fail });
+        return;
+      case "restore":
+        restoreMessage.mutate(base, { onError: fail });
+        return;
+      case "react-more":
+        setDialog({ kind: "react", message });
+        return;
+      case "delete":
+        setDialog({ kind: "delete", message });
+        return;
+      case "report":
+        setDialog({ kind: "report", message });
+        return;
+      case "mute-sender":
+        setDialog({ kind: "restrict", message, mode: "mute" });
+        return;
+      case "message-sender":
+        if (message.sender) {
+          startDirect.mutate(message.sender.id, {
+            onSuccess: ({ room: direct }) => onOpenChat(direct.id),
+            onError: fail,
+          });
+        }
+        return;
+    }
+  }
+
+  function editLast() {
+    const last = [...(thread.data?.messages ?? [])]
+      .reverse()
+      .find((m) => m.sender?.id === viewerId && !m.deleted && m.body);
+    if (last) onAction("edit", last);
+  }
+
+  const pinned = room.pinnedMessages;
+  const shownPin = pinned[pinnedIndex % Math.max(1, pinned.length)];
+  const isRequestForMe =
+    room.kind === "direct" &&
+    room.directStatus === "requested" &&
+    room.requestedByMe === false;
+  // WhatsApp's header line: typing, then online / last seen (private
+  // chats) or the members' names (groups).
+  const presence = room.peerPresence;
+  const subtitle =
+    typing.length > 0
+      ? room.kind === "direct"
+        ? "typing…"
+        : `${typing.slice(0, 2).join(", ")} ${typing.length === 1 ? "is" : "are"} typing…`
+      : room.kind === "direct"
+        ? presence?.online
+          ? "online"
+          : presence?.lastSeenAt
+            ? lastSeenLabel(presence.lastSeenAt)
+            : room.peer
+              ? (ROLE_LABEL[room.peer.role] ?? "click here for contact info")
+              : ""
+        : room.memberNames.length > 0
+          ? ["You", ...room.memberNames].join(", ") +
+            ((room.memberCount ?? 0) > room.memberNames.length + 1 ? "…" : "")
+          : "click here for group info";
+  const iconButton = chatIconButton;
+
+  return (
+    <section
+      aria-label={room.title}
+      // A size container: the media preview fills its height (cqh).
+      className="relative flex h-full min-w-0 flex-1 flex-col bg-(--chat-bg) [container-type:size]"
+      onDragEnter={(event) => {
+        if (event.dataTransfer.types.includes("Files") && room.me.canPost)
+          setDragging(true);
+      }}
+    >
+      <header className="z-10 flex h-16 shrink-0 items-center gap-1 border-b border-solid border-(--chat-line) bg-(--chat-panel) pr-2 pl-2 @[720px]/chat:pl-4">
+        <button
+          type="button"
+          className={cn(iconButton, "@[720px]/chat:hidden")}
+          onClick={onBack}
+          aria-label="Back to chats"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenInfo}
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent py-1 pr-2 pl-0 text-left text-(--text)"
+          aria-label={room.kind === "direct" ? "Contact info" : "Group info"}
+        >
+          <ChatAvatar
+            name={room.title}
+            url={roomAvatarUrl(room)}
+            group={room.kind !== "direct"}
+            size="md"
+          />
+          <span className="min-w-0">
+            <span className="block truncate text-[1rem] font-semibold">
+              {room.title}
+            </span>
+            <span
+              className={cn(
+                "block truncate text-[0.8rem]",
+                typing.length > 0 || presence?.online
+                  ? "text-(--accent-ink)"
+                  : "text-(--muted)",
+              )}
+            >
+              {subtitle}
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className={iconButton}
+          onClick={onOpenSearch}
+          aria-label="Search messages"
+          title="Search messages"
+        >
+          <MagnifyingGlass size={20} />
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger className={iconButton} aria-label="Menu">
+            <DotsThreeVertical size={22} weight="bold" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56 min-w-0">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={onOpenInfo}>
+                {room.kind === "direct" ? "Contact info" : "Group info"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onOpenSearch}>
+                Search messages
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  myState.mutate(
+                    {
+                      roomId: room.id,
+                      patch: {
+                        notifyLevel:
+                          room.me.notifyLevel === "none" ? "all" : "none",
+                      },
+                    },
+                    { onError: fail },
+                  )
+                }
+              >
+                {room.me.notifyLevel === "none"
+                  ? "Unmute notifications"
+                  : "Mute notifications"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  myState.mutate(
+                    { roomId: room.id, patch: { pinned: !room.me.pinned } },
+                    { onError: fail },
+                  )
+                }
+              >
+                {room.me.pinned ? "Unpin chat" : "Pin chat"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  myState.mutate(
+                    { roomId: room.id, patch: { archived: !room.me.archived } },
+                    { onError: fail },
+                  )
+                }
+              >
+                {room.me.archived ? "Unarchive chat" : "Archive chat"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setDialog({ kind: "clear-chat", mode: "clear" })}
+              >
+                Clear chat
+              </DropdownMenuItem>
+              {room.kind === "direct" ? (
+                <DropdownMenuItem
+                  className="text-red-500"
+                  onClick={() =>
+                    setDialog({ kind: "clear-chat", mode: "delete" })
+                  }
+                >
+                  Delete chat
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuGroup>
+            {room.kind === "direct" && room.peer ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-500"
+                  onClick={() =>
+                    block.mutate(
+                      {
+                        userId: room.peer!.id,
+                        blocked: room.me.cannotPostReason !== "blocked",
+                      },
+                      { onError: fail },
+                    )
+                  }
+                >
+                  {room.me.cannotPostReason === "blocked" ? "Unblock" : "Block"}{" "}
+                  {room.peer.name}
+                </DropdownMenuItem>
+              </>
+            ) : null}
+            {room.kind === "team" ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-500"
+                  onClick={() =>
+                    leave.mutate(room.id, { onSuccess: onBack, onError: fail })
+                  }
+                >
+                  Exit group
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+
+      {shownPin ? (
+        <button
+          type="button"
+          onClick={() => {
+            void jumpTo(shownPin.seq);
+            setPinnedIndex((i) => i + 1);
+          }}
+          className="z-10 flex w-full shrink-0 cursor-pointer items-center gap-2.5 border-0 border-b border-solid border-(--chat-line) bg-(--chat-panel) px-4 py-2 text-left text-(--text)"
+          aria-label="Pinned message"
+        >
+          {pinned.length > 1 ? (
+            <span aria-hidden="true" className="flex h-7 flex-col gap-0.5">
+              {pinned.map((p, i) => (
+                <span
+                  key={p.seq}
+                  className={cn(
+                    "w-0.75 flex-1 rounded-full",
+                    i === pinnedIndex % pinned.length
+                      ? "bg-(--accent)"
+                      : "bg-(--chat-line-strong)",
+                  )}
+                />
+              ))}
+            </span>
+          ) : null}
+          <PushPin
+            size={16}
+            weight="fill"
+            className="shrink-0 text-(--muted)"
+            aria-hidden="true"
+          />
+          <span className="min-w-0 flex-1 truncate text-[0.86rem] text-(--text-secondary)">
+            {shownPin.body ||
+              (shownPin.attachments[0]?.kind === "audio"
+                ? "Voice message"
+                : "Media")}
+          </span>
+        </button>
+      ) : null}
+
+      <div className="relative flex min-h-0 flex-1 flex-col [background:var(--chat-wall,var(--chat-bg))]">
+        <div className="chat-wallpaper" aria-hidden="true" />
+        {thread.data ? (
+          <MessageList
+            thread={thread.data}
+            outgoing={outgoing}
+            ctx={ctx}
+            unreadAfterSeq={unreadAfterRef.current.seq}
+            highlightSeq={highlightSeq}
+            loadingOlder={thread.loadingOlder}
+            onLoadOlder={() => void thread.loadOlder()}
+            onAction={onAction}
+            onOpenMedia={(items, index) => setViewer({ items, index })}
+            onJumpTo={(seq) => void jumpTo(seq)}
+            onAtBottom={onAtBottom}
+            onRetry={(clientId) =>
+              retryMessage(client, viewerId, room.id, clientId)
+            }
+            onDiscard={(clientId) => discardMessage(room.id, clientId)}
+          />
+        ) : thread.isError ? (
+          <div className="relative flex flex-1 items-center justify-center p-6 text-center text-(--muted)">
+            {getApiError(thread.error).message}
+          </div>
+        ) : (
+          <ChatThreadSkeleton />
+        )}
+
+        {dragging ? (
+          <div
+            className="absolute inset-3 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-(--accent) bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] text-[0.95rem] font-semibold text-(--text)"
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              composerRef.current?.addFiles([...event.dataTransfer.files]);
+            }}
+          >
+            Drop files to send
+          </div>
+        ) : null}
+      </div>
+
+      {isRequestForMe ? (
+        <div className="flex flex-col items-center gap-3 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-4 py-4">
+          <p className="m-0 text-center text-[0.9rem] text-(--text-secondary)">
+            {room.title} is not in your chats. You both take the same course.
+          </p>
+          <div className="flex flex-wrap justify-center gap-2.5">
+            <button
+              type="button"
+              onClick={() =>
+                room.peer &&
+                block.mutate(
+                  { userId: room.peer.id, blocked: true },
+                  { onSuccess: onBack, onError: fail },
+                )
+              }
+              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-solid border-red-500/50 bg-transparent px-5 font-semibold text-red-500 hover:bg-(--chat-hover)"
+            >
+              <Prohibit size={16} /> Block
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                answer.mutate(
+                  { roomId: room.id, accept: false },
+                  { onSuccess: onBack, onError: fail },
+                )
+              }
+              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-solid border-(--chat-line-strong) bg-transparent px-5 font-semibold text-(--text) hover:bg-(--chat-hover)"
+            >
+              <Flag size={16} /> Decline
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                answer.mutate(
+                  { roomId: room.id, accept: true },
+                  { onError: fail },
+                )
+              }
+              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-solid border-(--accent-border) bg-transparent px-5 font-semibold text-(--accent-ink) hover:bg-(--chat-hover)"
+            >
+              <Check size={16} /> Accept
+            </button>
+          </div>
+        </div>
+      ) : (
+        <Composer
+          ref={composerRef}
+          room={room}
+          viewerId={viewerId}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          editing={editing}
+          onDoneEditing={() => setEditing(null)}
+          onEditLast={editLast}
+          onError={onToast}
+        />
+      )}
+
+      {dialog?.kind === "clear-chat" ? (
+        <ClearChatDialog
+          mode={dialog.mode}
+          name={room.title}
+          onClose={() => setDialog(null)}
+          onConfirm={() => {
+            const deleteChat = dialog.mode === "delete";
+            setDialog(null);
+            clearChat.mutate(
+              { roomId: room.id, deleteChat },
+              { onError: fail },
+            );
+            if (deleteChat) onBack();
+            else onToast("Chat cleared");
+          }}
+        />
+      ) : null}
+      {dialog?.kind === "delete" ? (
+        <DeleteMessageDialog
+          message={dialog.message}
+          own={dialog.message.sender?.id === viewerId}
+          asAdmin={room.me.canModerate || room.me.isHelper}
+          onClose={() => setDialog(null)}
+          onDelete={(scope) => {
+            deleteMessage.mutate(
+              { roomId: room.id, seq: dialog.message.seq, scope },
+              { onError: fail },
+            );
+            setDialog(null);
+          }}
+        />
+      ) : null}
+      {dialog?.kind === "report" ? (
+        <ReportDialog
+          name={dialog.message.sender?.name ?? "this person"}
+          privateChat={room.kind === "direct"}
+          onClose={() => setDialog(null)}
+          onSubmit={(input) => {
+            report.mutate(
+              { roomId: room.id, seq: dialog.message.seq, ...input },
+              {
+                onSuccess: () => onToast("Report sent. Thank you."),
+                onError: fail,
+              },
+            );
+            setDialog(null);
+          }}
+        />
+      ) : null}
+      {dialog?.kind === "restrict" && dialog.message.sender ? (
+        <RestrictDialog
+          name={dialog.message.sender.name}
+          mode={dialog.mode}
+          helperOnly={!room.me.canModerate && room.me.isHelper}
+          canRestrictEverywhere={room.me.canModerate}
+          onClose={() => setDialog(null)}
+          onSubmit={(input) => {
+            restrict.mutate(
+              {
+                userId: dialog.message.sender!.id,
+                roomId: input.everywhere ? null : room.id,
+                type: dialog.mode,
+                durationMinutes: input.durationMinutes,
+                reason: input.reason,
+              },
+              {
+                onSuccess: () =>
+                  onToast(
+                    `${dialog.message.sender!.name} was ${dialog.mode === "mute" ? "muted" : "removed"}.`,
+                  ),
+                onError: fail,
+              },
+            );
+            setDialog(null);
+          }}
+        />
+      ) : null}
+      {dialog?.kind === "react" ? (
+        <div
+          className="fixed inset-0 z-250 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setDialog(null)}
+        >
+          <div onClick={(event) => event.stopPropagation()}>
+            <EmojiPanel
+              className="w-[min(22rem,90vw)]"
+              onPick={(emoji) => {
+                onAction(`react:${emoji}`, dialog.message);
+                setDialog(null);
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+      {viewer ? (
+        <MediaViewer
+          items={viewer.items}
+          index={viewer.index}
+          onIndex={(index) => setViewer((v) => (v ? { ...v, index } : v))}
+          onClose={() => setViewer(null)}
+        />
+      ) : null}
+    </section>
+  );
+}
