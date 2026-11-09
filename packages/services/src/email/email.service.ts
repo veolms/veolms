@@ -12,6 +12,16 @@ export interface EmailTransportConfig {
   pass?: string | undefined;
   /** Envelope sender; must be a verified identity with the SMTP provider. */
   from: string;
+  /** Where replies go; a mailbox someone reads. Unset: replies go to `from`. */
+  replyTo?: string | undefined;
+  /**
+   * Messages per second this process may hand the provider. Nodemailer
+   * holds further messages in its pool queue, so a burst of queued mail
+   * never arrives at the provider as a burst.
+   */
+  ratePerSecond?: number | undefined;
+  /** SMTP connections kept open at once. */
+  maxConnections?: number | undefined;
 }
 
 export interface EmailServiceOptions {
@@ -28,6 +38,12 @@ export interface EmailAttachment {
 
 export interface EmailSendOptions {
   attachments?: readonly EmailAttachment[];
+  /**
+   * Extra message headers: `List-Unsubscribe`, `List-Unsubscribe-Post`,
+   * `Precedence`, `X-Entity-Ref-ID`. Set by the queue for notification
+   * mail; sign-in codes and other direct sends carry none.
+   */
+  headers?: Readonly<Record<string, string>>;
 }
 
 export type EmailDeliveryResult =
@@ -40,7 +56,9 @@ export interface EmailService {
    * Dispatches a message. Never throws: delivery is routinely invoked as
    * fire-and-forget from request handlers, where a rejected promise would take
    * the process down rather than fail the one email. Failures are logged and
-   * surfaced through the returned result for callers that care.
+   * surfaced through the returned result for callers that care. The error
+   * keeps nodemailer's `code`, `responseCode` and `response`, so the queue
+   * can tell a dead address from a throttled provider.
    */
   send(
     to: string,
@@ -68,6 +86,15 @@ export function createEmailService({
       secure: config.port === 465,
       requireTLS: config.port !== 465,
       pool: true,
+      // Two connections: one for the queue worker, one for a sign-in code
+      // sent inside a request. Nodemailer's default of five, in every API
+      // process, used to hit providers with a dozen parallel connections.
+      maxConnections: config.maxConnections ?? 2,
+      maxMessages: 100,
+      // The rate limit is per transporter, so per process; the queue sends
+      // from one process (an advisory lock), so this is the account's rate.
+      rateDelta: 1000,
+      rateLimit: config.ratePerSecond ?? 5,
       // Nodemailer's defaults are ~2min connect / 10min socket — and the
       // OTP path sends synchronously inside the login request, so a slow
       // SMTP server used to be able to hold logins for minutes.
@@ -96,6 +123,7 @@ export function createEmailService({
           subject: content.subject,
           body: content.text,
           attachments: attachments.map((file) => file.filename),
+          headers: options.headers,
         },
         "Email not dispatched (console transport)",
       );
@@ -106,9 +134,11 @@ export function createEmailService({
       const info = await getTransporter().sendMail({
         from: config.from,
         to,
+        ...(config.replyTo ? { replyTo: config.replyTo } : {}),
         subject: content.subject,
         text: content.text,
         html: content.html,
+        ...(options.headers ? { headers: { ...options.headers } } : {}),
         ...(attachments.length > 0
           ? {
               attachments: attachments.map((file) => ({

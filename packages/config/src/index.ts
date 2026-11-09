@@ -467,6 +467,22 @@ const serverConfigSchema = z.object({
    * derives a sensible value from `NODE_ENV` and `SMTP_HOST`.
    */
   EMAIL_TRANSPORT: z.enum(["smtp", "console"]).optional(),
+  /**
+   * Where replies to platform mail go: a mailbox someone reads. Without it,
+   * replies go to EMAIL_FROM.
+   */
+  EMAIL_REPLY_TO: z.email().optional(),
+  /**
+   * Messages per second the SMTP provider accepts from one process. The
+   * worker never sends faster, whatever is queued.
+   */
+  EMAIL_RATE_PER_SECOND: z.coerce.number().int().min(1).max(100).default(5),
+  /**
+   * The address emails reach the API at (https://api.example.com), for
+   * links that must hit the API itself, such as one-click unsubscribe.
+   * Unset, WEB_URL/api is assumed.
+   */
+  EMAIL_API_URL: z.url().optional(),
 
   // Notification outbox and email worker
   NOTIFICATION_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(50),
@@ -486,6 +502,27 @@ const serverConfigSchema = z.object({
    * the sending domain rate-limited by Gmail, delaying sign-in codes too.
    */
   NOTIFICATION_COURSE_WIDE_EMAIL: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Bulk-lane emails (course-wide notices, reminders) sent per worker cycle.
+   * Transactional mail is never capped. 20 every 5 seconds is ~14,000 an
+   * hour, under what most providers allow a new sending domain.
+   */
+  NOTIFICATION_BULK_PER_CYCLE: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(500)
+    .default(20),
+  /**
+   * How long a lane rests after the provider throttles us or refuses a
+   * message for policy, before the worker tries that lane again.
+   */
+  NOTIFICATION_THROTTLE_PAUSE_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(30)
+    .max(86_400)
+    .default(900),
   /**
    * Serves GET /notifications/stream, a Server-Sent Events stream that tells
    * a signed-in browser the moment its notifications change, so the badge

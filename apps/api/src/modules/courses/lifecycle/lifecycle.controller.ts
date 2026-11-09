@@ -1,3 +1,4 @@
+import type { PublishCourseQuery } from "@veolms/contracts";
 import type { FastifyRequest } from "fastify";
 import type { LifecycleService } from "./lifecycle.service.ts";
 
@@ -16,11 +17,16 @@ export function createLifecycleController({
   }
 
   async function publishCourse(
-    request: FastifyRequest<{ Params: { id: string } }>,
+    request: FastifyRequest<{
+      Params: { id: string };
+      Querystring: PublishCourseQuery;
+    }>,
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.publishCourse(id, creatorId, request.user?.roles);
+    return await service.publishCourse(id, creatorId, request.user?.roles, {
+      notifyLearners: request.query.notifyLearners,
+    });
   }
 
   async function unpublishCourse(

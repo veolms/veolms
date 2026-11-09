@@ -84,6 +84,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       templateData: { courseTitle: event.courseTitle },
       channels: courseWideChannels(dependencies),
       push: dependencies.courseWidePush !== false,
+      lane: "bulk",
       mandatory: false,
       deepLink: `/courses/${event.courseSlug}`,
     }));
@@ -510,6 +511,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
       channels: courseWideChannels(dependencies),
       push: dependencies.courseWidePush !== false,
+      lane: "bulk",
       mandatory: false,
       deepLink: event.deepLink,
     }));
@@ -544,6 +546,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         channels: commonChannels,
         mandatory: false,
         deepLink: "/",
+        lane: "bulk",
       },
     ];
   },

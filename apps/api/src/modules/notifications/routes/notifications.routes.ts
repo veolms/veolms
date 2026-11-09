@@ -4,11 +4,15 @@ import {
   notificationIdParamsSchema,
   notificationListQuerySchema,
   notificationListResponseSchema,
+  emailUnsubscribeParamsSchema,
+  emailUnsubscribeResponseSchema,
   notificationPreferencesResponseSchema,
   notificationReadStateSchema,
   notificationSummarySchema,
   updateNotificationPreferencesSchema,
 } from "@veolms/contracts";
+
+import { z } from "zod";
 
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
@@ -237,6 +241,60 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.updatePreferences,
+  );
+
+  // One-click unsubscribe (RFC 8058). Mail clients POST to the address in
+  // the List-Unsubscribe header without showing a page; the footer link
+  // opens the GET page, whose button POSTs the same address. No sign-in:
+  // the signed token is the proof (see email-unsubscribe.ts).
+  if (!app.hasContentTypeParser("application/x-www-form-urlencoded")) {
+    app.addContentTypeParser(
+      "application/x-www-form-urlencoded",
+      { parseAs: "string" },
+      (_request, body, done) => {
+        done(null, body);
+      },
+    );
+  }
+
+  app.get(
+    "/email/unsubscribe/:token",
+    {
+      schema: {
+        operationId: "showEmailUnsubscribePage",
+        tags: ["Notification Preferences"],
+        summary: "The page behind an email's unsubscribe link",
+        description:
+          "HTML. Shows which emails the link turns off and a button that " +
+          "POSTs to the same address; `?done=1` shows the confirmation.",
+        params: emailUnsubscribeParamsSchema,
+        querystring: z.object({ done: z.enum(["1"]).optional() }),
+      },
+    },
+    controller.showUnsubscribePage,
+  );
+
+  app.post(
+    "/email/unsubscribe/:token",
+    {
+      schema: {
+        operationId: "unsubscribeByEmailLink",
+        tags: ["Notification Preferences"],
+        summary: "Turn off the emails an unsubscribe link names",
+        description:
+          "One-click unsubscribe: the body, if any, is ignored. A browser " +
+          "(Accept: text/html) is sent back to the page's confirmation.",
+        params: emailUnsubscribeParamsSchema,
+        response: {
+          200: jsonResponse(
+            "Emails of that group are turned off for the person the link names",
+            emailUnsubscribeResponseSchema,
+          ),
+          404: errorResponse("The link is invalid or has expired"),
+        },
+      },
+    },
+    controller.unsubscribe,
   );
 };
 

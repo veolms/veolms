@@ -2,6 +2,7 @@ import type {
   NotificationCategory,
   NotificationChannel,
 } from "@veolms/contracts";
+import type { NotificationDeliveryLane } from "@veolms/database";
 import type { EmailAttachment } from "@veolms/services/email";
 
 export type NotificationTemplateKey =
@@ -65,6 +66,12 @@ export interface NotificationIntent {
    * all is PUSH_ROUTES in the contracts, not the handlers.
    */
   push?: boolean;
+  /**
+   * Which email queue it waits in. `bulk` for notices sent to everyone in a
+   * course or to many people at once: they go out a few at a time behind
+   * `transactional` mail, which one person's own action caused.
+   */
+  lane?: NotificationDeliveryLane;
 }
 
 /**

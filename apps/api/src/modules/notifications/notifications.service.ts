@@ -5,11 +5,13 @@ import type {
   NotificationPreference,
   NotificationReadState,
   NotificationSummary,
+  OptionalNotificationGroup,
   UpdateNotificationPreferences,
 } from "@veolms/contracts";
 import {
   isKnownNotificationPreferenceType,
   LEGACY_NOTIFICATION_TYPE_ALIASES,
+  OPTIONAL_NOTIFICATION_GROUPS,
 } from "@veolms/contracts";
 import type { Database, Json } from "@veolms/database";
 import type { Kysely } from "kysely";
@@ -50,6 +52,13 @@ import type {
   NotificationRecipientDirectory,
 } from "./notifications.types.ts";
 import type { NotificationChannel } from "@veolms/database";
+import { listSuppressedEmails } from "./email-suppressions.repository.ts";
+import {
+  readUnsubscribeToken,
+  unsubscribeHeaders,
+  unsubscribeUrlFor,
+  withUnsubscribeFooter,
+} from "./email-unsubscribe.ts";
 import { insertPushDeliveries } from "./push/push-deliveries.repository.ts";
 import { listUsersWithPushDevices } from "./push/push-devices.repository.ts";
 import {
@@ -82,6 +91,10 @@ export interface NotificationService {
     userId: string,
     input: UpdateNotificationPreferences,
   ): Promise<{ preferences: NotificationPreference[] }>;
+  /** See the implementation: null for an invalid or expired link. */
+  unsubscribeByToken(
+    token: string,
+  ): Promise<{ group: OptionalNotificationGroup } | null>;
   processClaimedEvent(
     event: ClaimedOutboxEvent,
     intents: NotificationIntent[],
@@ -342,6 +355,30 @@ export function createNotificationService({
     return await getPreferences(userId);
   }
 
+  /**
+   * Turns off the email group a signed unsubscribe link names, for the
+   * person it names. Null when the link is invalid or expired. No sign-in
+   * is involved: holding the email is the proof, and the link can only turn
+   * emails off.
+   */
+  async function unsubscribeByToken(
+    token: string,
+  ): Promise<{ group: OptionalNotificationGroup } | null> {
+    const claims = readUnsubscribeToken(token);
+    if (!claims) return null;
+    const types = OPTIONAL_NOTIFICATION_GROUPS[claims.group];
+    await notificationRepository.upsertPreferences(
+      database,
+      claims.userId,
+      types.map((notificationType) => ({
+        notificationType,
+        channel: "email" as const,
+        enabled: false,
+      })),
+    );
+    return { group: claims.group };
+  }
+
   async function processClaimedEvent(
     event: ClaimedOutboxEvent,
     intents: NotificationIntent[],
@@ -395,6 +432,13 @@ export function createNotificationService({
     const phoneUsers = anyPushed
       ? await listUsersWithPushDevices(database, recipientIds)
       : new Set<string>();
+    // Addresses the provider said are dead get no email queued at all.
+    const suppressedEmails = await listSuppressedEmails(
+      database,
+      [...recipientRecords.values()].flatMap((recipient) =>
+        recipient?.email ? [recipient.email] : [],
+      ),
+    );
 
     for (let start = 0; start < intents.length; start += CHUNK_SIZE) {
       const chunk = intents.slice(start, start + CHUNK_SIZE);
@@ -486,15 +530,36 @@ export function createNotificationService({
               });
             }
             if (enabledChannels.includes("email")) {
+              const lane = intent.lane ?? "transactional";
+              // Optional notices carry a one-click unsubscribe link and the
+              // headers mail clients read it from; mandatory ones do not.
+              const unsubscribeUrl = intent.mandatory
+                ? null
+                : unsubscribeUrlFor(intent.recipientUserId, intent.type);
+              const emailContent = withUnsubscribeFooter(
+                rendered.email,
+                unsubscribeUrl,
+              );
+              const headers: Record<string, string> = {
+                ...(unsubscribeUrl ? unsubscribeHeaders(unsubscribeUrl) : {}),
+                ...(lane === "bulk"
+                  ? { Precedence: "bulk", "Auto-Submitted": "auto-generated" }
+                  : {}),
+              };
+              const address = recipient.email?.trim().toLowerCase() ?? null;
+              const suppressed =
+                address !== null && suppressedEmails.has(address);
               await notificationRepository.createDelivery(transaction, {
                 notificationId,
                 channel: "email",
-                status: recipient.email ? "pending" : "skipped",
+                lane,
+                status: recipient.email && !suppressed ? "pending" : "skipped",
                 destination: recipient.email,
                 payload: {
-                  subject: rendered.email.subject,
-                  text: rendered.email.text,
-                  html: rendered.email.html,
+                  subject: emailContent.subject,
+                  text: emailContent.text,
+                  html: emailContent.html,
+                  ...(Object.keys(headers).length > 0 ? { headers } : {}),
                   ...(intent.emailAttachments?.length
                     ? {
                         attachments: intent.emailAttachments.map(
@@ -583,6 +648,7 @@ export function createNotificationService({
     archive,
     getPreferences,
     updatePreferences,
+    unsubscribeByToken,
     processClaimedEvent,
     processChatMessageEvent,
     signalUsersChanged,

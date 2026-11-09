@@ -104,6 +104,8 @@ export function createServices({
     user: config.SMTP_USER,
     pass: config.SMTP_PASS,
     from: config.EMAIL_FROM,
+    replyTo: config.EMAIL_REPLY_TO,
+    ratePerSecond: config.EMAIL_RATE_PER_SECOND,
   };
 
   const smsConfig: SmsTransportConfig = {

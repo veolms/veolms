@@ -3,6 +3,7 @@ import {
   courseStatusResponseSchema,
   courseValidationResponseSchema,
   courseEditorDataResponseSchema,
+  publishCourseQuerySchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../../lib/errors.ts";
@@ -51,6 +52,7 @@ const lifecycleRoutes: RoutePlugin = async (app, options) => {
         tags: ["Course Lifecycle"],
         summary: "Publish course draft to learners",
         params: z.object({ id: z.uuid() }),
+        querystring: publishCourseQuerySchema,
         response: {
           200: jsonResponse(
             "Course published successfully",
