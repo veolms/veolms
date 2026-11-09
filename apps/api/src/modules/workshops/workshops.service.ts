@@ -9,12 +9,14 @@ import {
   type WorkshopAdmin,
   type WorkshopAdminListQuery,
   type WorkshopAdminListResponse,
+  type HeroVideoPlayback,
   type WorkshopPublic,
   type WorkshopPublicListResponse,
   type WorkshopPublishCheck,
   type WorkshopRegistrationReason,
   type WorkshopSessionInput,
   type WorkshopViewer,
+  type VideoPlaybackToken,
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
@@ -23,6 +25,11 @@ import { config } from "../../config.ts";
 import { createOutboxService } from "../../events/outbox.service.ts";
 import { AppError } from "../../lib/errors.ts";
 import { createAccessService } from "../access/index.ts";
+import type { AuthorizationService } from "../authorization/authorization.service.ts";
+import type {
+  MediaService,
+  VideoAssetForPlayback,
+} from "../media/media.service.ts";
 import {
   decryptSecret,
   encryptSecret,
@@ -43,6 +50,14 @@ import * as repository from "./workshops.repository.ts";
 
 export interface WorkshopsServiceDependencies {
   database: Kysely<Database>;
+  mediaService: Pick<
+    MediaService,
+    | "getMediaAsset"
+    | "getMediaAssets"
+    | "getVideoAssetPlayback"
+    | "getVideoAssetPlaybackToken"
+  >;
+  authorization: Pick<AuthorizationService, "check">;
 }
 
 export interface WorkshopsService {
@@ -75,6 +90,24 @@ export interface WorkshopsService {
   ): Promise<{ filename: string; ics: string }>;
   /** The meeting link to send a registrant to, or an error saying why not. */
   join(workshopId: string, sessionId: string, userId: string): Promise<string>;
+  /** Attach (or clear) a session's recording; registrants are told once it is ready. */
+  setRecording(
+    workshopId: string,
+    sessionId: string,
+    mediaId: string | null,
+  ): Promise<WorkshopAdmin>;
+  /** Marks recordings the media pipeline has finished; returns how many. */
+  markReadyRecordings(now: Date): Promise<number>;
+  recordingPlayback(
+    workshopId: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<HeroVideoPlayback>;
+  recordingPlaybackToken(
+    workshopId: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<VideoPlaybackToken>;
 }
 
 function notFound(): AppError {
@@ -83,6 +116,8 @@ function notFound(): AppError {
 
 export function createWorkshopsService({
   database,
+  mediaService,
+  authorization,
 }: WorkshopsServiceDependencies): WorkshopsService {
   const access = createAccessService();
   const outbox = createOutboxService();
@@ -489,6 +524,9 @@ export function createWorkshopsService({
       : undefined;
     const reason = await registrationReason(row, userId, registration, now);
     const active = Boolean(registration && !registration.cancelled_at);
+    const canWatch = userId
+      ? await canWatchRecordings(row, userId, registration)
+      : false;
     const joinable =
       active && registration
         ? (await repository.listSessions(database, row.id))
@@ -516,6 +554,7 @@ export function createWorkshopsService({
       canRegister: reason === "ok",
       reason,
       joinable,
+      canWatchRecordings: canWatch,
     };
   }
 
@@ -688,6 +727,225 @@ export function createWorkshopsService({
     return url;
   }
 
+  // --- Recordings ---
+
+  /** Registrants, the linked course's learners and staff may watch. */
+  async function canWatchRecordings(
+    row: repository.WorkshopListRow,
+    userId: string,
+    registration: repository.WorkshopRegistrationRow | undefined,
+  ): Promise<boolean> {
+    if (registration && !registration.cancelled_at) return true;
+    if (
+      row.course_id &&
+      (await access.hasActiveAccess(database, userId, row.course_id))
+    ) {
+      return true;
+    }
+    const staff = await authorization.check({
+      userId,
+      permission: "workshop.read",
+    });
+    return staff.allowed;
+  }
+
+  async function setRecording(
+    workshopId: string,
+    sessionId: string,
+    mediaId: string | null,
+  ): Promise<WorkshopAdmin> {
+    const now = new Date();
+    const row = await load(workshopId);
+    const session = await repository.findSession(
+      database,
+      workshopId,
+      sessionId,
+    );
+    if (!session) throw notFound();
+    if (mediaId === null) {
+      await repository.setSessionRecording(
+        database,
+        sessionId,
+        null,
+        null,
+        now,
+      );
+      return await getAdmin(workshopId);
+    }
+    const asset = await mediaService.getMediaAsset(mediaId);
+    if (!asset || asset.type !== "video") {
+      throw new AppError(
+        400,
+        "WORKSHOP_RECORDING_INVALID",
+        "The recording must be a video upload or import.",
+      );
+    }
+    if (asset.status === "failed") {
+      throw new AppError(
+        400,
+        "WORKSHOP_RECORDING_FAILED",
+        "That video could not be processed. Upload or import it again.",
+      );
+    }
+    const ready = asset.status === "ready";
+    await database.transaction().execute(async (trx) => {
+      await repository.setSessionRecording(
+        trx,
+        sessionId,
+        mediaId,
+        ready ? now : null,
+        now,
+      );
+      if (ready) await publishRecordingReady(trx, row, session, mediaId, now);
+    });
+    return await getAdmin(workshopId);
+  }
+
+  async function publishRecordingReady(
+    trx: Parameters<typeof outbox.publish>[0],
+    workshop: { id: string; slug: string; title: string; status: string },
+    session: { id: string; title: string | null },
+    mediaId: string,
+    now: Date,
+  ): Promise<void> {
+    // A draft has nobody to tell yet.
+    if (workshop.status === "draft") return;
+    await outbox.publish(trx, {
+      type: "workshop.recording_ready",
+      version: 1,
+      dedupeKey: `workshop.recording_ready:${session.id}:${mediaId}`,
+      occurredAt: now,
+      payload: {
+        workshopId: workshop.id,
+        workshopSlug: workshop.slug,
+        workshopTitle: workshop.title,
+        sessionId: session.id,
+        sessionTitle: session.title,
+        mediaId,
+      },
+    });
+  }
+
+  /**
+   * Recordings attached while still processing: once the media pipeline
+   * reports them ready, mark them so and tell the registrants. Called by
+   * the workshop worker every minute.
+   */
+  async function markReadyRecordings(now: Date): Promise<number> {
+    const waiting = await repository.listSessionsAwaitingRecording(database);
+    if (waiting.length === 0) return 0;
+    const assets = await mediaService.getMediaAssets(
+      waiting.map((row) => row.recording_media_id),
+    );
+    const statusById = new Map(
+      assets.map((asset) => [asset.id, asset.status] as const),
+    );
+    let marked = 0;
+    for (const row of waiting) {
+      if (statusById.get(row.recording_media_id) !== "ready") continue;
+      await database.transaction().execute(async (trx) => {
+        const changed = await repository.markRecordingReady(
+          trx,
+          row.session_id,
+          row.recording_media_id,
+          now,
+        );
+        if (!changed) return;
+        marked += 1;
+        await publishRecordingReady(
+          trx,
+          {
+            id: row.workshop_id,
+            slug: row.slug,
+            title: row.title,
+            status: row.status,
+          },
+          { id: row.session_id, title: row.session_title },
+          row.recording_media_id,
+          now,
+        );
+      });
+    }
+    return marked;
+  }
+
+  async function recordingMedia(
+    workshopId: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<{ media: VideoAssetForPlayback; title: string }> {
+    const now = new Date();
+    const row = await repository.findPublicById(database, workshopId, now);
+    if (!row) throw notFound();
+    const session = await repository.findSession(
+      database,
+      workshopId,
+      sessionId,
+    );
+    if (!session?.recording_media_id || !session.recording_ready_at) {
+      throw new AppError(
+        404,
+        "WORKSHOP_RECORDING_NOT_FOUND",
+        "This session has no recording yet.",
+      );
+    }
+    const registration = await repository.findRegistration(
+      database,
+      workshopId,
+      userId,
+    );
+    if (!(await canWatchRecordings(row, userId, registration))) {
+      throw new AppError(
+        403,
+        "WORKSHOP_NOT_REGISTERED",
+        "Recordings are for the workshop's registrants.",
+      );
+    }
+    const asset = await mediaService.getMediaAsset(session.recording_media_id);
+    if (!asset) {
+      throw new AppError(
+        404,
+        "WORKSHOP_RECORDING_NOT_FOUND",
+        "The recording is no longer available.",
+      );
+    }
+    return {
+      media: {
+        id: asset.id,
+        type: asset.type,
+        status: asset.status,
+        storageKey: asset.storage_key,
+        durationSeconds: asset.duration_seconds,
+      },
+      title: session.title ? `${row.title} — ${session.title}` : row.title,
+    };
+  }
+
+  async function recordingPlayback(
+    workshopId: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<HeroVideoPlayback> {
+    const { media, title } = await recordingMedia(
+      workshopId,
+      sessionId,
+      userId,
+    );
+    return await mediaService.getVideoAssetPlayback(media, {
+      mediaKey: `workshop-recording-${sessionId}`,
+      title,
+    });
+  }
+
+  async function recordingPlaybackToken(
+    workshopId: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<VideoPlaybackToken> {
+    const { media } = await recordingMedia(workshopId, sessionId, userId);
+    return await mediaService.getVideoAssetPlaybackToken(media);
+  }
+
   return {
     list,
     getAdmin,
@@ -705,5 +963,9 @@ export function createWorkshopsService({
     unregister,
     calendar,
     join,
+    setRecording,
+    markReadyRecordings,
+    recordingPlayback,
+    recordingPlaybackToken,
   };
 }

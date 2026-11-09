@@ -128,3 +128,17 @@ export function useUnregisterFromWorkshop() {
     onSuccess: (_result, { slug }) => refresh(slug),
   });
 }
+
+/** Attach, replace or remove a session's recording. */
+export function useSetWorkshopRecording() {
+  const refresh = useRefreshWorkshops();
+  return useMutation<
+    WorkshopAdmin,
+    ApiError,
+    { workshopId: string; sessionId: string; mediaId: string | null }
+  >({
+    mutationFn: ({ workshopId, sessionId, mediaId }) =>
+      workshopsService.setRecording(workshopId, sessionId, { mediaId }),
+    onSuccess: (workshop) => refresh(workshop),
+  });
+}

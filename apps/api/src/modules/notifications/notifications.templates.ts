@@ -527,6 +527,17 @@ export function renderNotificationTemplate(
               };
       break;
     }
+    case "workshop.recording_ready": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const sessionTitle = optionalString(data, "sessionTitle");
+      inApp = {
+        title: "Recording is ready",
+        body: sessionTitle
+          ? `${workshopTitle} — ${sessionTitle}: watch the recording on the workshop page.`
+          : `${workshopTitle}: watch the recording on the workshop page.`,
+      };
+      break;
+    }
     case "learning.reminder": {
       const streakDays = numberValue(data, "streakDays");
       inApp =

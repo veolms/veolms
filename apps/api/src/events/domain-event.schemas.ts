@@ -275,3 +275,12 @@ export const workshopReminderEventSchema = z.strictObject({
   /** A day before, an hour before, or at the start. */
   window: z.enum(["day", "hour", "now"]),
 });
+
+export const workshopRecordingReadyEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  sessionId: z.uuid(),
+  sessionTitle: z.string().nullable(),
+  mediaId: z.uuid(),
+});

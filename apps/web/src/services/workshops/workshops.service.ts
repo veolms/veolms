@@ -2,6 +2,9 @@ import { api } from "../../lib/api-client";
 import type {
   CancelWorkshopRequest,
   CreateWorkshopRequest,
+  HeroVideoPlayback,
+  SetWorkshopRecordingRequest,
+  VideoPlaybackToken,
   UpdateWorkshopRequest,
   WorkshopAdmin,
   WorkshopAdminListQuery,
@@ -50,6 +53,16 @@ export const workshopsService = {
 
   remove: (workshopId: string): Promise<{ deleted: true }> =>
     api.delete<{ deleted: true }>(`${ADMIN_BASE}/${workshopId}`),
+
+  setRecording: (
+    workshopId: string,
+    sessionId: string,
+    payload: SetWorkshopRecordingRequest,
+  ): Promise<WorkshopAdmin> =>
+    api.put<WorkshopAdmin>(
+      `${ADMIN_BASE}/${workshopId}/sessions/${sessionId}/recording`,
+      payload,
+    ),
 };
 
 // --- Learners ---
@@ -69,4 +82,20 @@ export const workshopsPublicService = {
 
   unregister: (workshopId: string): Promise<{ registered: false }> =>
     api.delete<{ registered: false }>(`/workshops/${workshopId}/register`),
+
+  recordingPlayback: (
+    workshopId: string,
+    sessionId: string,
+  ): Promise<HeroVideoPlayback> =>
+    api.get<HeroVideoPlayback>(
+      `/workshops/${workshopId}/sessions/${sessionId}/recording/playback`,
+    ),
+
+  recordingPlaybackToken: (
+    workshopId: string,
+    sessionId: string,
+  ): Promise<VideoPlaybackToken> =>
+    api.get<VideoPlaybackToken>(
+      `/workshops/${workshopId}/sessions/${sessionId}/recording/playback-token`,
+    ),
 };

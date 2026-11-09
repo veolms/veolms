@@ -5,6 +5,7 @@ import {
   type CreateWorkshopRequest,
   type UpdateWorkshopRequest,
   type WorkshopAdmin,
+  type WorkshopSessionAdmin,
   type WorkshopSessionInput,
 } from "@veolms/contracts";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
@@ -43,6 +44,7 @@ import {
   sessionDraftInstants,
   type SessionDraft,
 } from "./WorkshopSessionsField";
+import { WorkshopRecordingField } from "./WorkshopRecordingField";
 import { WorkshopStatusPanel } from "./WorkshopStatusPanel";
 import { WorkshopsAccessDenied } from "./WorkshopsAccessDenied";
 import { WORKSHOPS_ADMIN_PATH } from "./WorkshopsAdminPage";
@@ -86,6 +88,11 @@ function FieldLabel({
       {hint ? <span className="text-[12px] text-(--muted)">{hint}</span> : null}
     </div>
   );
+}
+
+/** A session gets a recording slot once it has ended, or already has one. */
+function recordable(session: WorkshopSessionAdmin): boolean {
+  return session.state === "ended" || session.recordingMediaId !== null;
 }
 
 function Section({
@@ -669,6 +676,27 @@ export function WorkshopBuilderPage({
               defaultTimeZone={defaultZone}
             />
           </Section>
+
+          {workshop && workshop.sessions.some(recordable) ? (
+            <Section
+              title="Recordings"
+              description="After a session ends, attach its recording here. Registrants are told once it is ready and watch it on the workshop page."
+            >
+              <div className="grid gap-3">
+                {workshop.sessions.map((session, index) =>
+                  recordable(session) ? (
+                    <WorkshopRecordingField
+                      key={session.id}
+                      workshopId={workshop.id}
+                      session={session}
+                      index={index}
+                      disabled={!canManage}
+                    />
+                  ) : null,
+                )}
+              </div>
+            </Section>
+          ) : null}
 
           <Section title="Seats and price">
             <div className="grid gap-4 sm:grid-cols-2">

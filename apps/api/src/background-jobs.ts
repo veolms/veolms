@@ -16,6 +16,9 @@ import {
 import { CommerceFulfillmentScheduler } from "./modules/commerce/fulfillment/fulfillment.scheduler.ts";
 import { LearningReminderWorker } from "./modules/learning-progress/learning-reminder.worker.ts";
 import { WorkshopReminderWorker } from "./modules/workshops/workshop-reminder.worker.ts";
+import { createWorkshopsService } from "./modules/workshops/workshops.service.ts";
+import { createMediaService } from "./modules/media/media.service.ts";
+import { createAuthorizationService } from "./modules/authorization/authorization.service.ts";
 import { listActiveRegistrantUserIds } from "./modules/workshops/workshops.repository.ts";
 import { findIdsMentionedInCourseContent } from "./modules/courses/curriculum/course-content-reference.service.ts";
 import { createDiscussionUploadStore } from "./modules/discussion-uploads/index.ts";
@@ -100,9 +103,15 @@ export function registerBackgroundJobs(
   });
   learningReminderWorker.start();
 
+  const workshopsService = createWorkshopsService({
+    database,
+    mediaService: createMediaService({ database, services }),
+    authorization: createAuthorizationService(database),
+  });
   const workshopReminderWorker = new WorkshopReminderWorker({
     database,
     logger: app.log,
+    markReadyRecordings: (now) => workshopsService.markReadyRecordings(now),
   });
   workshopReminderWorker.start();
 

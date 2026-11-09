@@ -346,6 +346,13 @@ export async function signedUpLearner(
 /** The academy's administrator, signed in. */
 export async function signedInAdmin(flow: FlowApp): Promise<FlowClient> {
   const client = flow.visitor();
+  // Every flow file signs the admin in once, from a fresh process but into
+  // the same database, so the codes of the earlier files would count
+  // against the admin's daily limit; they are spent, so they go.
+  await flow.database
+    .deleteFrom("otp_codes")
+    .where("identifier", "=", FLOW_ADMIN.email)
+    .execute();
   const response = await client.signIn(FLOW_ADMIN.email);
   if (response.status !== 200) {
     throw new Error(

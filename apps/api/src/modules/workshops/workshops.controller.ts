@@ -1,6 +1,7 @@
 import type {
   CancelWorkshopRequest,
   CreateWorkshopRequest,
+  SetWorkshopRecordingRequest,
   UpdateWorkshopRequest,
   WorkshopAdminListQuery,
 } from "@veolms/contracts";
@@ -124,6 +125,43 @@ export function createWorkshopsController({
     return reply.header("Cache-Control", "no-store").redirect(url, 302);
   }
 
+  async function setRecording(
+    request: FastifyRequest<{
+      Params: { workshopId: string; sessionId: string };
+      Body: SetWorkshopRecordingRequest;
+    }>,
+  ) {
+    return await service.setRecording(
+      request.params.workshopId,
+      request.params.sessionId,
+      request.body.mediaId,
+    );
+  }
+
+  async function recordingPlayback(
+    request: FastifyRequest<{
+      Params: { workshopId: string; sessionId: string };
+    }>,
+  ) {
+    return await service.recordingPlayback(
+      request.params.workshopId,
+      request.params.sessionId,
+      request.user!.id,
+    );
+  }
+
+  async function recordingPlaybackToken(
+    request: FastifyRequest<{
+      Params: { workshopId: string; sessionId: string };
+    }>,
+  ) {
+    return await service.recordingPlaybackToken(
+      request.params.workshopId,
+      request.params.sessionId,
+      request.user!.id,
+    );
+  }
+
   return {
     list,
     getOne,
@@ -141,6 +179,9 @@ export function createWorkshopsController({
     unregister,
     calendar,
     join,
+    setRecording,
+    recordingPlayback,
+    recordingPlaybackToken,
   };
 }
 

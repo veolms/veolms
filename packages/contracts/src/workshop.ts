@@ -371,6 +371,8 @@ export const workshopViewerSchema = z.strictObject({
   joinable: z.array(
     z.strictObject({ sessionId: z.uuid(), passcode: z.string().nullable() }),
   ),
+  /** Registrants, the linked course's learners and staff may watch recordings. */
+  canWatchRecordings: z.boolean(),
 });
 export type WorkshopViewer = z.infer<typeof workshopViewerSchema>;
 
@@ -430,3 +432,13 @@ export const workshopSessionParamsSchema = z.strictObject({
   workshopId: z.uuid(),
   sessionId: z.uuid(),
 });
+
+// --- Step 4: recordings ---
+
+/** Attach a processed-or-processing video as the session's recording; null removes it. */
+export const setWorkshopRecordingRequestSchema = z.strictObject({
+  mediaId: z.uuid().nullable(),
+});
+export type SetWorkshopRecordingRequest = z.infer<
+  typeof setWorkshopRecordingRequestSchema
+>;

@@ -63,6 +63,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       "lesson.video.update",
       "course.thumbnail.update",
       "lesson.thumbnail.update",
+      "workshop.manage",
     ]),
   ];
 

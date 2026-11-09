@@ -10,6 +10,7 @@ import { CalendarPlusIcon as CalendarPlus } from "@phosphor-icons/react/Calendar
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { LinkIcon as Link } from "@phosphor-icons/react/Link";
+import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { VideoConferenceIcon as VideoConference } from "@phosphor-icons/react/VideoConference";
 import { Button } from "../components/Button";
@@ -29,6 +30,7 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { WorkshopHostAvatar } from "./WorkshopHostAvatar";
 import { WorkshopJoinButton } from "./WorkshopJoinButton";
+import { WorkshopRecordingPlayer } from "./WorkshopRecordingPlayer";
 import { WORKSHOPS_PATH } from "./WorkshopsPage";
 import {
   browserTimeZone,
@@ -344,8 +346,14 @@ export function WorkshopDetailPage({
   const unregisterMutation = useUnregisterFromWorkshop();
   const [error, setError] = useState<string | null>(null);
   const timeZone = browserTimeZone();
+  const [recordingSessionId, setRecordingSessionId] = useState<string | null>(
+    null,
+  );
 
   const workshop = workshopQuery.data;
+  const recordingSession = recordingSessionId
+    ? workshop?.sessions.find((session) => session.id === recordingSessionId)
+    : undefined;
 
   if (workshopQuery.isLoading) {
     return (
@@ -476,6 +484,19 @@ export function WorkshopDetailPage({
             <p className="mt-0.5 text-xs text-(--muted)">
               Times are shown in your time zone ({timeZone.replace(/_/g, " ")}).
             </p>
+            {recordingSession ? (
+              <div className="mt-4">
+                <WorkshopRecordingPlayer
+                  workshopId={workshop.id}
+                  sessionId={recordingSession.id}
+                  title={
+                    recordingSession.title ??
+                    formatSessionDay(recordingSession.startsAt, timeZone)
+                  }
+                  onClose={() => setRecordingSessionId(null)}
+                />
+              </div>
+            ) : null}
             <ol className="mt-4 grid gap-3">
               {workshop.sessions.map((session, index) => (
                 <li
@@ -508,6 +529,22 @@ export function WorkshopDetailPage({
                     const joinable = (viewerQuery.data?.joinable ?? []).find(
                       (entry) => entry.sessionId === session.id,
                     );
+                    if (session.hasRecording) {
+                      return viewerQuery.data?.canWatchRecordings ? (
+                        <button
+                          type="button"
+                          onClick={() => setRecordingSessionId(session.id)}
+                          className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xl bg-(--accent) px-3.5 text-[13px] font-semibold text-(--on-accent) shadow-sm transition hover:opacity-90"
+                        >
+                          <PlayCircle size={16} weight="fill" />
+                          Watch recording
+                        </button>
+                      ) : (
+                        <span className="rounded-full bg-(--canvas) px-2.5 py-1 text-[11px] font-semibold text-(--muted)">
+                          Recording for registrants
+                        </span>
+                      );
+                    }
                     return joinable ? (
                       <WorkshopJoinButton
                         workshopId={workshop.id}

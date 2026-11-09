@@ -554,3 +554,75 @@ export async function recordJoin(
     .where("cancelled_at", "is", null)
     .execute();
 }
+
+// --- Step 4: recordings ---
+
+/** Points a session at its recording (or clears it); readiness starts over. */
+export async function setSessionRecording(
+  database: DatabaseExecutor,
+  sessionId: string,
+  mediaId: string | null,
+  readyAt: Date | null,
+  now: Date,
+): Promise<void> {
+  await database
+    .updateTable("workshop_sessions")
+    .set({
+      recording_media_id: mediaId,
+      recording_ready_at: mediaId ? readyAt : null,
+      updated_at: now,
+    })
+    .where("id", "=", sessionId)
+    .execute();
+}
+
+export interface SessionAwaitingRecordingRow {
+  session_id: string;
+  session_title: string | null;
+  recording_media_id: string;
+  workshop_id: string;
+  slug: string;
+  title: string;
+  status: string;
+}
+
+/** Sessions whose recording is attached but not yet known to be ready. */
+export async function listSessionsAwaitingRecording(
+  database: DatabaseExecutor,
+): Promise<SessionAwaitingRecordingRow[]> {
+  const rows = await database
+    .selectFrom("workshop_sessions as s")
+    .innerJoin("workshops as w", "w.id", "s.workshop_id")
+    .select([
+      "s.id as session_id",
+      "s.title as session_title",
+      "s.recording_media_id",
+      "w.id as workshop_id",
+      "w.slug",
+      "w.title",
+      "w.status",
+    ])
+    .where("s.recording_media_id", "is not", null)
+    .where("s.recording_ready_at", "is", null)
+    .where("w.deleted_at", "is", null)
+    .limit(200)
+    .execute();
+  return rows as SessionAwaitingRecordingRow[];
+}
+
+/** Marks the recording ready if it is still the same one; true when it was. */
+export async function markRecordingReady(
+  database: DatabaseExecutor,
+  sessionId: string,
+  mediaId: string,
+  now: Date,
+): Promise<boolean> {
+  const result = await database
+    .updateTable("workshop_sessions")
+    .set({ recording_ready_at: now, updated_at: now })
+    .where("id", "=", sessionId)
+    .where("recording_media_id", "=", mediaId)
+    .where("recording_ready_at", "is", null)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows) > 0;
+}

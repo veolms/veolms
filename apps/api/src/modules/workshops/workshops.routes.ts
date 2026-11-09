@@ -1,6 +1,9 @@
 import {
   cancelWorkshopRequestSchema,
   createWorkshopRequestSchema,
+  heroVideoPlaybackSchema,
+  setWorkshopRecordingRequestSchema,
+  videoPlaybackTokenSchema,
   updateWorkshopRequestSchema,
   workshopAdminListQuerySchema,
   workshopAdminListResponseSchema,
@@ -20,7 +23,11 @@ import {
 import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
-import { createPermissionPreHandlers } from "../authorization/index.ts";
+import {
+  createAuthorizationService,
+  createPermissionPreHandlers,
+} from "../authorization/index.ts";
+import { createMediaService } from "../media/media.service.ts";
 import { createWorkshopsController } from "./workshops.controller.ts";
 import { createWorkshopsService } from "./workshops.service.ts";
 
@@ -33,7 +40,14 @@ import { createWorkshopsService } from "./workshops.service.ts";
  */
 const workshopsRoutes: RoutePlugin = async (app, options) => {
   const { signedIn, requires } = createPermissionPreHandlers(options.database);
-  const service = createWorkshopsService({ database: options.database });
+  const service = createWorkshopsService({
+    database: options.database,
+    mediaService: createMediaService({
+      database: options.database,
+      services: options.services,
+    }),
+    authorization: createAuthorizationService(options.database),
+  });
   const controller = createWorkshopsController({ service });
   const tags = ["Workshops"];
   const reads = requires(["workshop.read", "workshop.manage"], "platform");
@@ -237,6 +251,31 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
     controller.remove,
   );
 
+  app.put(
+    "/workshops/admin/:workshopId/sessions/:sessionId/recording",
+    {
+      preHandler: manages,
+      schema: {
+        operationId: "setWorkshopSessionRecording",
+        tags,
+        summary:
+          "Attach an uploaded or imported video as the session's recording (null removes it); registrants are told once it is ready",
+        params: workshopSessionParamsSchema,
+        body: setWorkshopRecordingRequestSchema,
+        response: {
+          200: jsonResponse(
+            "The workshop after the change.",
+            workshopAdminSchema,
+          ),
+          400: errorResponse("Not a video, or its processing failed"),
+          ...common,
+          404: errorResponse("Workshop or session not found"),
+        },
+      },
+    },
+    controller.setRecording,
+  );
+
   // --- Learners ---
 
   app.get(
@@ -378,6 +417,50 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.join,
+  );
+
+  app.get(
+    "/workshops/:workshopId/sessions/:sessionId/recording/playback",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "getWorkshopRecordingPlayback",
+        tags,
+        summary:
+          "Play a session's recording (registrants, the linked course's learners and staff)",
+        params: workshopSessionParamsSchema,
+        response: {
+          200: jsonResponse("The recording's stream.", heroVideoPlaybackSchema),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Not registered"),
+          404: errorResponse("No recording"),
+          409: errorResponse("The recording is still being processed"),
+          503: errorResponse("CDN delivery is not configured"),
+        },
+      },
+    },
+    controller.recordingPlayback,
+  );
+
+  app.get(
+    "/workshops/:workshopId/sessions/:sessionId/recording/playback-token",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "getWorkshopRecordingPlaybackToken",
+        tags,
+        summary: "A fresh segment token for the recording's stream",
+        params: workshopSessionParamsSchema,
+        response: {
+          200: jsonResponse("The token.", videoPlaybackTokenSchema),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Not registered"),
+          404: errorResponse("No recording"),
+          409: errorResponse("Not ready, or no token needed"),
+        },
+      },
+    },
+    controller.recordingPlaybackToken,
   );
 };
 

@@ -12,6 +12,8 @@ import {
 
 export interface WorkshopReminderWorkerOptions {
   database: Kysely<Database>;
+  /** Marks recordings the media pipeline has finished; see the service. */
+  markReadyRecordings?: (now: Date) => Promise<number>;
   logger?: FastifyBaseLogger;
   /** Interval between scans. Default: one minute. */
   intervalMs?: number;
@@ -40,6 +42,7 @@ export class WorkshopReminderWorker {
   private readonly database: Kysely<Database>;
   private readonly logger?: FastifyBaseLogger;
   private readonly intervalMs: number;
+  private readonly markReadyRecordings?: (now: Date) => Promise<number>;
   private readonly outbox = createOutboxService();
   private timer: NodeJS.Timeout | null = null;
   private initialTimer: NodeJS.Timeout | null = null;
@@ -50,6 +53,7 @@ export class WorkshopReminderWorker {
     this.database = options.database;
     this.logger = options.logger;
     this.intervalMs = options.intervalMs ?? 60_000;
+    this.markReadyRecordings = options.markReadyRecordings;
   }
 
   start(): void {
@@ -105,11 +109,19 @@ export class WorkshopReminderWorker {
       `.execute(connection);
       if (!lock.rows[0]?.locked) return;
       try {
-        const published = await this.publishDue(new Date());
+        const now = new Date();
+        const published = await this.publishDue(now);
         if (published > 0) {
           this.logger?.info(
             { job: "workshop-reminder-worker", published },
             "Workshop reminders published",
+          );
+        }
+        const recordings = (await this.markReadyRecordings?.(now)) ?? 0;
+        if (recordings > 0) {
+          this.logger?.info(
+            { job: "workshop-reminder-worker", recordings },
+            "Workshop recordings marked ready",
           );
         }
       } finally {

@@ -33,7 +33,8 @@ export type NotificationTemplateKey =
   | "learning.streak_milestone"
   | "learning.reminder"
   | "workshop.registered"
-  | "workshop.reminder";
+  | "workshop.reminder"
+  | "workshop.recording_ready";
 
 export type NotificationTemplateData = Record<
   string,
