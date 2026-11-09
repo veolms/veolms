@@ -585,8 +585,13 @@ export function LessonVideoPlayer({
   const playerTheme =
     presentation === "mini" ? MINI_PLAYER_THEME : lessonPlayerTheme;
   // The mini window, over other pages, leaves their number keys alone.
+  const layoutPreferences = usePlayerLayoutPreferences();
   const numberKeysSeekVideo =
-    usePlayerLayoutPreferences().numberKeysSeekVideo && presentation === "full";
+    layoutPreferences.numberKeysSeekVideo && presentation === "full";
+  // Settings > Advanced can take the minimize key off the player; I and the
+  // swipe down still minimize.
+  const minimizeKeyShown =
+    !layoutPreferences.hiddenPlayerControls.includes("minimize");
   useEffect(
     () => (numberKeysSeekVideo ? claimNumberKeysForVideo() : undefined),
     [numberKeysSeekVideo],
@@ -1767,7 +1772,7 @@ export function LessonVideoPlayer({
             controlsHidden={readingControlsHidden}
             onTap={toggleReadingControls}
           />
-        ) : presentation === "full" && onMinimize ? (
+        ) : presentation === "full" && onMinimize && minimizeKeyShown ? (
           <LessonPlayerMinimizeControl
             icon={<MinimizeIcon size={22} />}
             onMinimize={minimizePlayerFromControl}
