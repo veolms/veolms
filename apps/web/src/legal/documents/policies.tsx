@@ -7,7 +7,7 @@ export const policiesDocument: LegalDocument = {
   description:
     "Refund and cancellation, digital delivery, and contact policies for ProCodrr courses bought on procodrr.com and used on the ProCodrr learning platform and Android app.",
   heading: "Refund, Delivery & Contact Policies",
-  effective: "Effective date: October 18, 2026",
+  effective: "Effective date: November 9, 2026",
   intro: (
     <>
       <p>
@@ -54,25 +54,31 @@ export const policiesDocument: LegalDocument = {
           of a pass with 10 quizzes.
         </p>
         <p>
+          If you bought part of a course and then upgraded to the whole course,
+          the part’s price was taken off the upgrade, so that part cannot be
+          refunded on its own.
+        </p>
+        <p>
           If <strong>Request refund</strong> is greyed out, the purchase is not
           eligible for a refund, and the menu shows why. Emailing us will not
           change that.
         </p>
         <p>
-          Approved refunds are returned to the original payment method through
-          our payment provider, Razorpay, or by bank transfer if that is how you
-          paid. They normally appear within 5 to 10 business days, depending on
-          your bank. Your access to the refunded course ends when the refund is
-          issued.
+          A refund covers the whole purchase. It is returned to your original
+          payment method through the payment provider you paid with, or by bank
+          transfer if that is how you paid, and normally appears within 5 to 10
+          business days, depending on your bank. Your access to every course in
+          the refunded purchase ends when the refund is issued.
         </p>
         <p>
           Refunds are not available after 30 days, where more than 10% of the
           course or 10 hours of it has been watched, where more than 10% of a
-          quiz pass’s quizzes have been attempted, for purchases made with a
-          promotional or bundle discount where the offer terms say so, or where
-          an account has been terminated for breaching our Terms of Service.
-          Nothing here limits your rights under the Consumer Protection Act,
-          2019.
+          quiz pass’s quizzes have been attempted, for part of a course whose
+          price was counted towards an upgrade to the whole course, for
+          purchases made with a promotional or bundle discount where the offer
+          terms say so, or where an account has been terminated for breaching
+          our Terms of Service. Nothing here limits your rights under the
+          Consumer Protection Act, 2019.
         </p>
         <p>
           <strong>Android app:</strong> courses cannot be bought inside the
