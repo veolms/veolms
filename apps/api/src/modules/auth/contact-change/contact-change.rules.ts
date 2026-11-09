@@ -10,6 +10,8 @@
  * it for them.
  */
 
+import { SUPPORTED_COUNTRIES } from "@veolms/contracts/auth/phone-countries";
+
 export type ContactChannel = "email" | "phone";
 
 /** How long a change stays open once started. */
@@ -42,13 +44,18 @@ export function maskEmail(email: string): string {
   return `${name[0]}${"*".repeat(Math.max(name.length - 1, 1))}${email.slice(at)}`;
 }
 
-/** "+919876543210" → "+91 •••••• 3210". */
+/** The calling codes a number can be entered with, longest first. */
+const DIAL_CODES = [
+  ...new Set(SUPPORTED_COUNTRIES.map((country) => country.dialCode)),
+].sort((a, b) => b.length - a.length);
+
+/**
+ * "+919876543210" → "+91 •••••• 3210": the calling code, read from the
+ * supported countries, and the number's last four digits. A calling code
+ * not on that list is left out rather than guessed.
+ */
 export function maskPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  const last = digits.slice(-4);
-  // Indian numbers are the common case: a two-digit code before ten digits.
-  const country = phone.startsWith("+")
-    ? digits.slice(0, Math.max(digits.length - 10, 1))
-    : "";
-  return `${country ? `+${country} ` : ""}•••••• ${last}`;
+  const last = phone.replace(/\D/g, "").slice(-4);
+  const dialCode = DIAL_CODES.find((code) => phone.startsWith(code));
+  return `${dialCode ? `${dialCode} ` : ""}•••••• ${last}`;
 }

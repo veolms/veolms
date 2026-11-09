@@ -916,21 +916,6 @@
   flex: 0 1 auto;
 }
 
-/* Verified, with Change beside it: one group at the end of the field, the
-   same for the email address and the number. Apart, each pushed itself to
-   the end and they split the free space between them. */
-.settings-profile__verified-actions {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.settings-profile__verified-actions > .settings-profile__inline-verify-action {
-  margin-left: 0;
-}
-
 .settings-profile__verify-action,
 .settings-profile__inline-verify-action,
 .settings-profile__verification-panel button {

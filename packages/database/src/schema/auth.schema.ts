@@ -22,6 +22,11 @@ export interface ContactChangeTable {
   current_value: string | null;
   /** When the current value was proven; set at once when it had nothing to prove. */
   current_proven_at: Date | null;
+  /**
+   * Whether the current value had to be proven. False when it was never
+   * confirmed: the change then stops applying if it becomes confirmed.
+   */
+  proof_required: Generated<boolean>;
   /** The value a code was last sent to, to replace it with. */
   new_value: string | null;
   expires_at: Date;

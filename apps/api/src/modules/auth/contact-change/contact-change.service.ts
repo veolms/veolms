@@ -12,7 +12,7 @@ import { z } from "zod";
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
 import type { OtpRequester, OtpService } from "../otp/otp.service.ts";
-import type { SessionService } from "../session/session.service.ts";
+import { revokeOtherUserSessions } from "../session/session.repository.ts";
 import { normalizePhoneIdentifier } from "../shared/auth.utils.ts";
 import { evictCachedUserSessions } from "../shared/session-auth-cache.ts";
 import * as repo from "./contact-change.repository.ts";
@@ -26,6 +26,9 @@ import {
 
 type ChangeRow = NonNullable<
   Awaited<ReturnType<typeof repo.findContactChange>>
+>;
+type AccountRow = NonNullable<
+  Awaited<ReturnType<typeof repo.findAccountContact>>
 >;
 
 const emailValue = z.string().trim().toLowerCase().email().max(255);
@@ -76,6 +79,80 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
+function accountNotFound(): AppError {
+  return new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+}
+
+function currentOf(account: AccountRow, channel: ContactChannel) {
+  return channel === "email"
+    ? { value: account.email, confirmed: !!account.email_verified_at }
+    : { value: account.phone_no, confirmed: !!account.phone_verified_at };
+}
+
+/**
+ * The change, if there is one, at `step`. Anything else is told plainly:
+ * gone, over, or a step taken out of turn. Asked again inside the write's
+ * transaction, on the locked row, so a change that ran out or was
+ * completed in the meantime is refused there too.
+ */
+function assertOpenAt(
+  change: ChangeRow | undefined,
+  step: "prove_current" | "confirm_new",
+  now: Date,
+): ChangeRow {
+  if (!change) {
+    throw new AppError(
+      404,
+      "CONTACT_CHANGE_NOT_FOUND",
+      "This change was not found. Start again.",
+    );
+  }
+  const at = contactChangeStep(change, now);
+  if (at === "expired") {
+    throw new AppError(
+      400,
+      "CONTACT_CHANGE_EXPIRED",
+      "This change has expired. Start again.",
+    );
+  }
+  if (at === "completed") {
+    throw new AppError(
+      400,
+      "CONTACT_CHANGE_COMPLETED",
+      "This change is already done.",
+    );
+  }
+  if (at !== step) {
+    throw new AppError(
+      400,
+      "CONTACT_CHANGE_OUT_OF_ORDER",
+      step === "confirm_new"
+        ? `Confirm your current ${WHAT[change.channel]} first.`
+        : `Your current ${WHAT[change.channel]} is already confirmed.`,
+    );
+  }
+  return change;
+}
+
+/**
+ * The change still applies to the account as it is now: it holds the value
+ * the change set out to replace, and a change that skipped proof (the value
+ * was never confirmed) has not since seen it confirmed.
+ */
+function assertStillApplies(change: ChangeRow, account: AccountRow): void {
+  const current = currentOf(account, change.channel);
+  if (
+    current.value !== change.current_value ||
+    (!change.proof_required && current.confirmed)
+  ) {
+    throw new AppError(
+      409,
+      "CONTACT_CHANGED_MEANWHILE",
+      `Your ${WHAT[change.channel]} changed in the meantime. Start again.`,
+    );
+  }
+}
+
 export interface ContactChangeLog {
   error(details: object, message: string): void;
 }
@@ -109,7 +186,6 @@ export interface ContactChangeService {
 export function createContactChangeService({
   database,
   otpService,
-  sessionService,
   services,
   getAcademyBrand,
   log,
@@ -121,11 +197,10 @@ export function createContactChangeService({
     | "sendContactChangeOtp"
     | "sendEmailVerificationOtp"
     | "sendPhoneVerificationOtp"
-    | "verifyAndConsumeOtp"
     | "assertOtpMatches"
+    | "consumeOtpWithin"
     | "recordRefusedSend"
   >;
-  sessionService: Pick<SessionService, "revokeOtherSessions">;
   services: Pick<AppServices, "email">;
   getAcademyBrand: () => Promise<AcademyBrandResponse>;
   log?: ContactChangeLog;
@@ -147,79 +222,10 @@ export function createContactChangeService({
     };
   }
 
-  async function accountOf(userId: string) {
+  async function accountOf(userId: string): Promise<AccountRow> {
     const account = await repo.findAccountContact(database, userId);
-    if (!account) {
-      throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
-    }
+    if (!account) throw accountNotFound();
     return account;
-  }
-
-  function currentOf(
-    account: Awaited<ReturnType<typeof accountOf>>,
-    channel: ContactChannel,
-  ) {
-    return channel === "email"
-      ? { value: account.email, confirmed: !!account.email_verified_at }
-      : { value: account.phone_no, confirmed: !!account.phone_verified_at };
-  }
-
-  /**
-   * The change, if it is this user's and at `step`. Anything else is told
-   * plainly: gone, over, or a step taken out of turn.
-   */
-  async function changeAt(
-    userId: string,
-    changeId: string,
-    step: "prove_current" | "confirm_new",
-  ): Promise<ChangeRow> {
-    const change = await repo.findContactChange(database, userId, changeId);
-    if (!change) {
-      throw new AppError(
-        404,
-        "CONTACT_CHANGE_NOT_FOUND",
-        "This change was not found. Start again.",
-      );
-    }
-    const at = contactChangeStep(change, now());
-    if (at === "expired") {
-      throw new AppError(
-        400,
-        "CONTACT_CHANGE_EXPIRED",
-        "This change has expired. Start again.",
-      );
-    }
-    if (at === "completed") {
-      throw new AppError(
-        400,
-        "CONTACT_CHANGE_COMPLETED",
-        "This change is already done.",
-      );
-    }
-    if (at !== step) {
-      throw new AppError(
-        400,
-        "CONTACT_CHANGE_OUT_OF_ORDER",
-        step === "confirm_new"
-          ? `Confirm your current ${WHAT[change.channel]} first.`
-          : `Your current ${WHAT[change.channel]} is already confirmed.`,
-      );
-    }
-    return change;
-  }
-
-  /** The account must still hold what the change set out to replace. */
-  function assertUnchangedMeanwhile(
-    change: ChangeRow,
-    account: Awaited<ReturnType<typeof accountOf>>,
-  ) {
-    if (currentOf(account, change.channel).value !== change.current_value) {
-      throw new AppError(
-        409,
-        "CONTACT_CHANGED_MEANWHILE",
-        `Your ${WHAT[change.channel]} changed in the meantime. Start again.`,
-      );
-    }
   }
 
   async function start(
@@ -227,8 +233,7 @@ export function createContactChangeService({
     channel: ContactChannel,
     requester: OtpRequester,
   ): Promise<ContactChangeResponse> {
-    const account = await accountOf(userId);
-    const current = currentOf(account, channel);
+    const current = currentOf(await accountOf(userId), channel);
     // A value never confirmed proves nothing (staff may have typed it, or
     // mistyped it): there is nothing to prove, only a new value to confirm.
     const needsProof = Boolean(current.value && current.confirmed);
@@ -242,14 +247,34 @@ export function createContactChangeService({
       });
     }
 
-    const startedAt = now();
-    const change = await repo.startContactChange(database, {
-      id: crypto.randomUUID(),
-      user_id: userId,
-      channel,
-      current_value: current.value,
-      current_proven_at: needsProof ? null : startedAt,
-      expires_at: new Date(startedAt.getTime() + CONTACT_CHANGE_TTL_MS),
+    const change = await database.transaction().execute(async (trx) => {
+      // The account's row, held: two starts at once write one after the
+      // other, and the second closes the first.
+      const account = await repo.findAccountContact(trx, userId, {
+        forUpdate: true,
+      });
+      if (!account) throw accountNotFound();
+      const locked = currentOf(account, channel);
+      if (
+        locked.value !== current.value ||
+        locked.confirmed !== current.confirmed
+      ) {
+        throw new AppError(
+          409,
+          "CONTACT_CHANGED_MEANWHILE",
+          `Your ${WHAT[channel]} changed in the meantime. Start again.`,
+        );
+      }
+      const startedAt = now();
+      return repo.startContactChange(trx, {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        channel,
+        current_value: current.value,
+        current_proven_at: needsProof ? null : startedAt,
+        proof_required: needsProof,
+        expires_at: new Date(startedAt.getTime() + CONTACT_CHANGE_TTL_MS),
+      });
     });
     return toResponse(change, needsProof ? current.value : null);
   }
@@ -259,16 +284,39 @@ export function createContactChangeService({
     changeId: string,
     code: string,
   ): Promise<ContactChangeResponse> {
-    const change = await changeAt(userId, changeId, "prove_current");
-    assertUnchangedMeanwhile(change, await accountOf(userId));
-    await otpService.verifyAndConsumeOtp(
+    const change = assertOpenAt(
+      await repo.findContactChange(database, userId, changeId),
+      "prove_current",
+      now(),
+    );
+    assertStillApplies(change, await accountOf(userId));
+    // A wrong guess is counted here; the code is spent with the write below,
+    // so a write that fails leaves it usable.
+    await otpService.assertOtpMatches(
       change.current_value!,
       change.channel,
       "contact_change",
       code,
     );
-    const proven = await repo.updateContactChange(database, change.id, {
-      current_proven_at: now(),
+
+    const proven = await database.transaction().execute(async (trx) => {
+      const locked = assertOpenAt(
+        await repo.findContactChange(trx, userId, changeId, {
+          forUpdate: true,
+        }),
+        "prove_current",
+        now(),
+      );
+      await otpService.consumeOtpWithin(
+        trx,
+        locked.current_value!,
+        locked.channel,
+        "contact_change",
+        code,
+      );
+      return repo.updateContactChange(trx, locked.id, {
+        current_proven_at: now(),
+      });
     });
     return toResponse(proven, null);
   }
@@ -279,10 +327,13 @@ export function createContactChangeService({
     rawValue: string,
     requester: OtpRequester,
   ): Promise<ContactChangeResponse> {
-    const change = await changeAt(userId, changeId, "confirm_new");
+    const change = assertOpenAt(
+      await repo.findContactChange(database, userId, changeId),
+      "confirm_new",
+      now(),
+    );
     const value = normalizeContactValue(change.channel, rawValue);
-    const account = await accountOf(userId);
-    assertUnchangedMeanwhile(change, account);
+    assertStillApplies(change, await accountOf(userId));
     if (value === change.current_value) {
       throw new AppError(
         400,
@@ -332,7 +383,11 @@ export function createContactChangeService({
     code: string,
     currentSessionId: string,
   ): Promise<ContactChangeCompletedResponse> {
-    const change = await changeAt(userId, changeId, "confirm_new");
+    const change = assertOpenAt(
+      await repo.findContactChange(database, userId, changeId),
+      "confirm_new",
+      now(),
+    );
     const value = normalizeContactValue(change.channel, rawValue);
     if (value !== change.new_value) {
       throw new AppError(
@@ -341,8 +396,7 @@ export function createContactChangeService({
         `Enter the code sent to the new ${WHAT[change.channel]}.`,
       );
     }
-    const account = await accountOf(userId);
-    assertUnchangedMeanwhile(change, account);
+    assertStillApplies(change, await accountOf(userId));
 
     const purpose =
       change.channel === "email" ? "email_verification" : "phone_verification";
@@ -354,39 +408,59 @@ export function createContactChangeService({
       value,
     );
     if (holder && holder.id !== userId) throw taken(change.channel);
-    await otpService.verifyAndConsumeOtp(value, change.channel, purpose, code);
 
-    const confirmedAt = now();
+    // Everything that makes the change happens together or not at all: the
+    // code spent, the value replaced, the change completed and the other
+    // devices signed out. All of it is checked again here, on the account's
+    // and the change's rows, held, so nothing between the checks above and
+    // these writes (a verification, a staff edit, another change, the time
+    // running out) can be overwritten.
+    let previous: AccountRow;
     try {
-      await database.transaction().execute(async (trx) => {
-        // One completion per change, even for two requests at once.
-        const locked = await repo.findContactChange(trx, userId, change.id, {
+      previous = await database.transaction().execute(async (trx) => {
+        const account = await repo.findAccountContact(trx, userId, {
           forUpdate: true,
         });
-        if (!locked || locked.completed_at) {
+        if (!account) throw accountNotFound();
+        const locked = assertOpenAt(
+          await repo.findContactChange(trx, userId, changeId, {
+            forUpdate: true,
+          }),
+          "confirm_new",
+          now(),
+        );
+        assertStillApplies(locked, account);
+        if (locked.new_value !== value) {
           throw new AppError(
             400,
-            "CONTACT_CHANGE_COMPLETED",
-            "This change is already done.",
+            "CONTACT_CHANGE_VALUE_MISMATCH",
+            `Enter the code sent to the new ${WHAT[locked.channel]}.`,
           );
         }
+
+        await otpService.consumeOtpWithin(
+          trx,
+          value,
+          locked.channel,
+          purpose,
+          code,
+        );
+        const confirmedAt = now();
         const updated = await repo.replaceAccountContact(
           trx,
           userId,
-          change.channel,
+          locked.channel,
           value,
           confirmedAt,
         );
-        if (!updated) {
-          throw new AppError(
-            404,
-            "USER_NOT_FOUND",
-            "User account was not found.",
-          );
-        }
-        await repo.updateContactChange(trx, change.id, {
+        if (!updated) throw accountNotFound();
+        await repo.updateContactChange(trx, locked.id, {
           completed_at: confirmedAt,
         });
+        // Whoever else held a session (a stolen one included) signs in
+        // again, now with the new value.
+        await revokeOtherUserSessions(trx, userId, currentSessionId);
+        return account;
       });
     } catch (err) {
       // Taken by another account between the check and the write.
@@ -394,21 +468,21 @@ export function createContactChangeService({
       throw err;
     }
 
+    // Dropped after the commit as well: a request between the revocation
+    // and the commit could have cached the sessions as they were.
     evictCachedUserSessions(userId);
-    // Whoever else held a session (a stolen one included) signs in again,
-    // now with the new value.
-    await sessionService.revokeOtherSessions(userId, currentSessionId);
-    await notifyChange(account, change.channel, value);
+    await notifyChange(previous, change.channel, value);
     return { channel: change.channel, value };
   }
 
   /**
    * Tells the account's confirmed email address (the old one, when the
-   * email changed) that the change was made. Best effort: the change stands
-   * whether or not the message goes out.
+   * email changed) that the change was made. Sent only once the change has
+   * committed, and best effort: the change stands whether or not the
+   * message goes out.
    */
   async function notifyChange(
-    account: Awaited<ReturnType<typeof accountOf>>,
+    account: AccountRow,
     channel: ContactChannel,
     newValue: string,
   ) {

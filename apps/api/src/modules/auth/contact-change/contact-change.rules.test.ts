@@ -56,3 +56,13 @@ await test("a number is shown with only its last four digits", () => {
   assert.equal(maskPhone("+919876543210"), "+91 •••••• 3210");
   assert.equal(maskPhone("+14155550123"), "+1 •••••• 0123");
 });
+
+await test("a number's calling code is read, not guessed from its length", () => {
+  // Nine national digits: "all but the last ten" would have said "+9".
+  assert.equal(maskPhone("+971501234567"), "+971 •••••• 4567");
+  assert.equal(maskPhone("+61412345678"), "+61 •••••• 5678");
+});
+
+await test("a number with a calling code not on the list shows no code", () => {
+  assert.equal(maskPhone("+99912345678"), "•••••• 5678");
+});

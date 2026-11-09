@@ -7,8 +7,8 @@ import type {
 
 /**
  * Changing one's own email address or mobile number: a code to the current
- * value first, then one to the new value. Kept out of `auth.service`, which
- * every page loads: only the change dialog needs these.
+ * value first, then one to the new value. Used through the hooks in
+ * contact-change.mutations.
  */
 export const contactChangeService = {
   start: (channel: ContactChannel): Promise<ContactChangeResponse> =>

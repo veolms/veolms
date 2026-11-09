@@ -268,4 +268,144 @@ await test("a confirmed number is not replaced through the add-a-number route", 
   assert.equal(reconfirm.status, 200, JSON.stringify(reconfirm.body));
 });
 
+/** Proves the learner's email and sends a code to `next`; returns the change id. */
+async function emailChangeUpToNewCode(
+  client: FlowClient,
+  email: string,
+  next: string,
+) {
+  const started = await start(client, "email");
+  const changeId = started.body.data!.id;
+  await proveCurrent(client, changeId, flow.email.lastCodeFor(email));
+  assert.equal((await sendToNew(client, changeId, next)).status, 200);
+  return changeId;
+}
+
+async function emailOf(userId: string) {
+  const row = await flow.database
+    .selectFrom("users")
+    .select("email")
+    .where("id", "=", userId)
+    .executeTakeFirstOrThrow();
+  return row.email;
+}
+
+await test("a number confirmed after its code was sent is not replaced by verifying the code", async () => {
+  const { client, userId } = await signedUpLearner(flow);
+  const asked = newNumber();
+  assert.equal(
+    (await client.post("/v1/auth/me/phone/otp/send", { phoneNo: asked }))
+      .status,
+    200,
+  );
+  // A different number is confirmed on the account meanwhile.
+  const confirmed = await confirmedNumber(userId);
+
+  const verify = await client.post("/v1/auth/me/phone/otp/verify", {
+    phoneNo: asked,
+    code: flow.sms.lastCodeFor(asked),
+  });
+
+  assert.equal(verify.status, 409);
+  assert.equal(verify.body.error?.code, "PHONE_CHANGE_NEEDS_PROOF");
+  const row = await flow.database
+    .selectFrom("users")
+    .select("phone_no")
+    .where("id", "=", userId)
+    .executeTakeFirstOrThrow();
+  assert.equal(row.phone_no, confirmed);
+});
+
+await test("a change that runs out after the new code is sent is not completed", async () => {
+  const { client, learner, userId } = await signedUpLearner(flow);
+  const next = newLearner("late").email;
+  const changeId = await emailChangeUpToNewCode(client, learner.email, next);
+  await flow.database
+    .updateTable("contact_changes")
+    .set({ expires_at: new Date(Date.now() - 1000) })
+    .where("id", "=", changeId)
+    .execute();
+
+  const done = await confirmNew(
+    client,
+    changeId,
+    next,
+    flow.email.lastCodeFor(next),
+  );
+
+  assert.equal(done.status, 400);
+  assert.equal(done.body.error?.code, "CONTACT_CHANGE_EXPIRED");
+  assert.equal(await emailOf(userId), learner.email);
+});
+
+await test("an email changed by staff meanwhile is not overwritten by the learner's change", async () => {
+  const { client, learner, userId } = await signedUpLearner(flow);
+  const next = newLearner("mine").email;
+  const changeId = await emailChangeUpToNewCode(client, learner.email, next);
+  const byStaff = newLearner("staff").email;
+  await flow.database
+    .updateTable("users")
+    .set({ email: byStaff })
+    .where("id", "=", userId)
+    .execute();
+
+  const done = await confirmNew(
+    client,
+    changeId,
+    next,
+    flow.email.lastCodeFor(next),
+  );
+
+  assert.equal(done.status, 409);
+  assert.equal(done.body.error?.code, "CONTACT_CHANGED_MEANWHILE");
+  assert.equal(await emailOf(userId), byStaff);
+});
+
+await test("a change that skipped proof stops once the number is confirmed", async () => {
+  const { client, userId } = await signedUpLearner(flow);
+  const unconfirmed = newNumber();
+  await flow.database
+    .updateTable("users")
+    .set({ phone_no: unconfirmed, phone_verified_at: null })
+    .where("id", "=", userId)
+    .execute();
+  const started = await start(client, "phone");
+  assert.equal(started.body.data?.step, "confirm_new");
+  // The owner confirms the number while the change is open.
+  await confirmedNumber(userId, unconfirmed);
+
+  const sent = await sendToNew(client, started.body.data!.id, newNumber());
+
+  assert.equal(sent.status, 409);
+  assert.equal(sent.body.error?.code, "CONTACT_CHANGED_MEANWHILE");
+});
+
+await test("two starts at once leave one change open", async () => {
+  const { client, userId } = await signedUpLearner(flow);
+  // An unconfirmed number: no code is sent, so neither start waits on one.
+  await flow.database
+    .updateTable("users")
+    .set({ phone_no: newNumber(), phone_verified_at: null })
+    .where("id", "=", userId)
+    .execute();
+
+  const both = await Promise.all([
+    start(client, "phone"),
+    start(client, "phone"),
+  ]);
+
+  assert.deepEqual(
+    both.map((response) => response.status),
+    [200, 200],
+  );
+  const open = await flow.database
+    .selectFrom("contact_changes")
+    .select("id")
+    .where("user_id", "=", userId)
+    .where("completed_at", "is", null)
+    .where("expires_at", ">", new Date())
+    .execute();
+  assert.equal(open.length, 1);
+});
+
 await flow.close();

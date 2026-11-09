@@ -1,9 +1,18 @@
 import type { Executor } from "../shared/repository.types.ts";
 import type { ContactChannel } from "./contact-change.rules.ts";
 
-/** The account's email address and mobile number, and whether each is confirmed. */
-export function findAccountContact(database: Executor, userId: string) {
-  return database
+/**
+ * The account's email address and mobile number, and whether each is
+ * confirmed. Locked with `forUpdate`, inside a transaction: a change is
+ * started or completed against values nothing else can alter meanwhile
+ * (another change, a verification, a staff edit).
+ */
+export function findAccountContact(
+  database: Executor,
+  userId: string,
+  options: { forUpdate?: boolean } = {},
+) {
+  let query = database
     .selectFrom("users")
     .select([
       "id",
@@ -13,8 +22,9 @@ export function findAccountContact(database: Executor, userId: string) {
       "phone_verified_at",
     ])
     .where("id", "=", userId)
-    .where("is_deleted", "=", false)
-    .executeTakeFirst();
+    .where("is_deleted", "=", false);
+  if (options.forUpdate) query = query.forUpdate();
+  return query.executeTakeFirst();
 }
 
 /** Whether any account (a deactivated one included) holds this value. */
@@ -36,12 +46,15 @@ export interface NewContactChange {
   channel: ContactChannel;
   current_value: string | null;
   current_proven_at: Date | null;
+  proof_required: boolean;
   expires_at: Date;
 }
 
 /**
  * Starts a change, closing any the account still had open on the same
- * channel: only the newest one can be completed.
+ * channel: only the newest one can be completed. Run inside a transaction
+ * that holds the account's row (`findAccountContact` with `forUpdate`), so
+ * two starts at once cannot both leave a change open.
  */
 export async function startContactChange(
   database: Executor,

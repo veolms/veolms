@@ -812,6 +812,17 @@ export function createAuthService({
       new Date(),
     );
     if (!updatedUser) {
+      // Nothing written: the account is gone, or a different number was
+      // confirmed on it since the check above.
+      const now = await userRepository.findUserContactById(database, userId);
+      if (!now) {
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found.",
+        );
+      }
+      assertNotReplacingConfirmedPhone(now, normalizedPhoneNo);
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
     forgetCachedAccount(userId);

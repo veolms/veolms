@@ -33,7 +33,6 @@ const contactChangeRoutes: RoutePlugin = async (app, options) => {
     createContactChangeService({
       database: options.database,
       otpService: context.otpService,
-      sessionService: context.sessionService,
       services: options.services,
       getAcademyBrand: academyBrand.getBrand,
       log: app.log,

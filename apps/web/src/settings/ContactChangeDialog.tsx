@@ -1,16 +1,23 @@
 import { useEffect, useId, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
 import { PhoneIcon as Phone } from "@phosphor-icons/react/Phone";
 import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import { useQueryClient } from "@tanstack/react-query";
 import type { ContactChangeResponse, ContactChannel } from "@veolms/contracts";
 
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import { useBackDismiss } from "../navigation/useBackDismiss";
-import { authKeys } from "../services/auth/auth.keys";
-import { contactChangeService } from "../services/auth/contact-change.service";
+import {
+  useConfirmNewContact,
+  useProveCurrentContact,
+  useSendNewContactCode,
+  useStartContactChange,
+} from "../services/auth";
+
+const FOCUSABLE =
+  'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])';
 
 type Step =
   | { kind: "starting" }
@@ -45,43 +52,78 @@ export function ContactChangeDialog({
   channel: ContactChannel;
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
   const titleId = useId();
   const descriptionId = useId();
   const errorId = useId();
   const codeFieldId = useId();
   const valueFieldId = useId();
+  const cardRef = useRef<HTMLFormElement | null>(null);
   const [step, setStep] = useState<Step>({ kind: "starting" });
   const [code, setCode] = useState("");
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  useBackDismiss({ open: true, onDismiss: onClose });
+  const startChange = useStartContactChange();
+  const proveCurrent = useProveCurrentContact();
+  const sendNewCode = useSendNewContactCode();
+  const confirmNew = useConfirmNewContact();
+  const busy =
+    startChange.isPending ||
+    proveCurrent.isPending ||
+    sendNewCode.isPending ||
+    confirmNew.isPending;
 
+  // Closing also steps back over the dialog's history entry, so a Back
+  // pressed afterwards leaves the page instead of landing on the dialog.
+  const dismiss = useBackDismiss({ open: true, onDismiss: onClose });
+  const close = () => dismiss(() => undefined);
+
+  // Focus goes back to what opened the dialog (the Change button).
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    return () => {
+      if (opener?.isConnected) opener.focus();
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
+
+  /** Escape closes; Tab and Shift+Tab stay among the dialog's controls. */
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLFormElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      return;
+    }
+    if (event.key !== "Tab" || !cardRef.current) return;
+    const focusable = [
+      ...cardRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+    ];
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setError(null);
-    setBusy(true);
     try {
       await action();
     } catch (err) {
       setError(messageOf(err));
-    } finally {
-      setBusy(false);
     }
   };
 
   const begin = () =>
     run(async () => {
-      const change = await contactChangeService.start(channel);
+      const change = await startChange.mutateAsync(channel);
       setCode("");
       setStep(
         change.step === "prove_current"
@@ -103,10 +145,10 @@ export function ContactChangeDialog({
   const sendToNew = (newValue: string) =>
     run(async () => {
       if (step.kind !== "new" && step.kind !== "newCode") return;
-      const change = await contactChangeService.sendToNew(
-        step.change.id,
-        newValue,
-      );
+      const change = await sendNewCode.mutateAsync({
+        changeId: step.change.id,
+        value: newValue,
+      });
       setCode("");
       setStep({ kind: "newCode", change, value: newValue });
     });
@@ -114,10 +156,10 @@ export function ContactChangeDialog({
   const submit = () => {
     if (step.kind === "current") {
       return run(async () => {
-        const change = await contactChangeService.proveCurrent(
-          step.change.id,
+        const change = await proveCurrent.mutateAsync({
+          changeId: step.change.id,
           code,
-        );
+        });
         setCode("");
         setStep({ kind: "new", change });
       });
@@ -125,12 +167,12 @@ export function ContactChangeDialog({
     if (step.kind === "new") return sendToNew(value.trim());
     if (step.kind === "newCode") {
       return run(async () => {
-        const done = await contactChangeService.confirmNew(
-          step.change.id,
-          step.value,
+        // The account and its sessions are read again (useConfirmNewContact).
+        const done = await confirmNew.mutateAsync({
+          changeId: step.change.id,
+          value: step.value,
           code,
-        );
-        await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+        });
         setStep({ kind: "done", value: done.value });
       });
     }
@@ -145,17 +187,17 @@ export function ContactChangeDialog({
     step.kind === "done"
       ? `${channel === "email" ? "Email address" : "Mobile number"} changed`
       : step.kind === "current"
-        ? "Confirm it’s you"
+        ? "Confirm itâ€™s you"
         : `Change your ${what}`;
   const description =
     step.kind === "starting"
-      ? `Sending a code to your current ${what}…`
+      ? `Sending a code to your current ${what}â€¦`
       : step.kind === "current"
         ? `We sent a 6-digit code to your current ${what}, `
         : step.kind === "newCode"
           ? "We sent a 6-digit code to "
           : step.kind === "new"
-            ? `Enter your new ${what}. We’ll send a code to it to confirm it’s yours.`
+            ? `Enter your new ${what}. Weâ€™ll send a code to it to confirm itâ€™s yours.`
             : "Your other devices were signed out.";
   const sentTo = askingCode ? step.change.sentTo : null;
 
@@ -168,7 +210,9 @@ export function ContactChangeDialog({
       aria-describedby={descriptionId}
     >
       <form
+        ref={cardRef}
         className="settings-profile__verification-dialog-card"
+        onKeyDown={onKeyDown}
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
@@ -182,7 +226,7 @@ export function ContactChangeDialog({
           type="button"
           className="settings-profile__verification-dialog-close"
           aria-label="Close"
-          onClick={onClose}
+          onClick={close}
         >
           <X size={14} weight="bold" />
         </button>
@@ -235,7 +279,7 @@ export function ContactChangeDialog({
             />
             <small>
               {step.kind === "current"
-                ? `Can’t reach your current ${what}? Contact support from the Help Center and our team will change it for you.`
+                ? `Canâ€™t reach your current ${what}? Contact support from the Help Center and our team will change it for you.`
                 : `Enter the code to confirm your new ${what}.`}
             </small>
           </div>
@@ -284,7 +328,7 @@ export function ContactChangeDialog({
             <p>
               {step.kind === "starting"
                 ? "The code was not sent."
-                : "Didn’t receive the code?"}
+                : "Didnâ€™t receive the code?"}
             </p>
             <button
               type="button"
@@ -304,7 +348,7 @@ export function ContactChangeDialog({
             <button
               type="button"
               className="settings-profile__verification-dialog-submit"
-              onClick={onClose}
+              onClick={close}
               autoFocus
             >
               Done
@@ -314,7 +358,7 @@ export function ContactChangeDialog({
               <button
                 type="button"
                 className="settings-profile__verification-dialog-cancel"
-                onClick={onClose}
+                onClick={close}
               >
                 Cancel
               </button>
