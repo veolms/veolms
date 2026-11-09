@@ -146,6 +146,26 @@ export interface AnalyticsTabProps {
    * tables once they are loaded, and with `null` while they are not.
    */
   onExportChange: (sections: AnalyticsExportSection[] | null) => void;
+  /**
+   * The page's own select (the one its course filter uses), so a tab's
+   * filters look and behave like the rest of the app: same trigger, menu,
+   * keyboard handling and optional search.
+   */
+  Select: ComponentType<AnalyticsSelectProps>;
+}
+
+/** What a tab passes the page's `Select`. */
+export interface AnalyticsSelectProps {
+  value: string;
+  onValueChange: (value: string) => void;
+  /** [value, label] pairs, in order. */
+  options: readonly (readonly [value: string, label: string])[];
+  /** Names the control for screen readers ("Lesson"). */
+  ariaLabel: string;
+  /** A search box at the top of the menu, for long lists. */
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  disabled?: boolean;
 }
 
 /**

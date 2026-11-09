@@ -12,6 +12,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useNavigate } from "react-router";
 
 import { upsertMessages, type ChatThread } from "./chat.cache";
 import { chatKeys } from "./chat.keys";
@@ -19,6 +20,7 @@ import { getOutboxSnapshot, subscribeOutbox } from "./chat.outbox";
 import {
   getTypingSnapshot,
   isChatStreamLive,
+  setChatLinkOpener,
   startChatStream,
   subscribeChatStreamLive,
   subscribeTyping,
@@ -147,10 +149,17 @@ export function useChatThread(roomId: string | null) {
 /** Keeps the tab's chat stream open while mounted. */
 export function useChatStream(viewerId: string | null, enabled = true) {
   const client = useQueryClient();
+  const navigate = useNavigate();
   useEffect(() => {
     if (!enabled) return;
     return startChatStream(client, viewerId);
   }, [client, viewerId, enabled]);
+  // A desktop notification opens its chat without reloading the page.
+  useEffect(() => {
+    if (!enabled) return;
+    setChatLinkOpener((path) => navigate(path));
+    return () => setChatLinkOpener(null);
+  }, [navigate, enabled]);
 }
 
 export function useTypingNames(roomId: string | null): string[] {
@@ -239,6 +248,16 @@ export function useMessageReactions(
     queryFn: () => chatService.messageReactions(roomId, seq),
     enabled,
     placeholderData: (previous) => previous,
+  });
+}
+
+/** The card a name or picture opens; kept a minute (opened again, instant). */
+export function useChatPersonCard(userId: string | null) {
+  return useQuery({
+    queryKey: chatKeys.person(userId ?? ""),
+    queryFn: () => chatService.personCard(userId!),
+    enabled: Boolean(userId),
+    staleTime: 60_000,
   });
 }
 

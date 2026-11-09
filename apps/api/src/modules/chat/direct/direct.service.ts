@@ -4,7 +4,7 @@ import { encodeChatEvent } from "../realtime/chat-bus.ts";
 import { directKey } from "../shared/chat.access.ts";
 import { listPlatformPermissionHolders } from "../../authorization/index.ts";
 import { ChatErrors } from "../shared/chat.errors.ts";
-import { presentPerson } from "../shared/chat.presenters.ts";
+import { chatRoomIconUrl, presentPerson } from "../shared/chat.presenters.ts";
 import { createRoomViews } from "../shared/chat.room-views.ts";
 import type { ChatRuntime } from "../shared/chat.runtime.ts";
 
@@ -37,7 +37,130 @@ export function createDirectService(runtime: ChatRuntime) {
     return "learner";
   }
 
+  /**
+   * Why `userId` may not open a new private chat with `peerId` (an existing
+   * one always reopens); null when they may. The checks of start(), in the
+   * same order, without the daily request limit.
+   */
+  async function newChatBlocker(
+    userId: string,
+    peerId: string,
+  ): Promise<"blocked" | "staffFirst" | "notAllowed" | null> {
+    if ((await repository.blocksBetween(database, userId, peerId)).length > 0) {
+      return "blocked";
+    }
+    // Learners don't open chats with their instructors or admins: staff
+    // write first (the chat then exists and the learner can reply).
+    if (
+      !(await access.isChatStaff(database, userId)) &&
+      (await access.isChatStaff(database, peerId))
+    ) {
+      return "staffFirst";
+    }
+    if ((await staffRole(userId)) === "learner") {
+      const restrictions = await repository.listActiveRestrictions(
+        database,
+        userId,
+      );
+      if (
+        restrictions.some(
+          (r) =>
+            (r.type === "no_direct" || r.type === "ban") && r.room_id === null,
+        )
+      ) {
+        return "notAllowed";
+      }
+    }
+    const settings = await repository.getSettings(database);
+    if (
+      !(await access.directAllowed(
+        database,
+        settings.direct_policy,
+        userId,
+        peerId,
+      ))
+    ) {
+      return "notAllowed";
+    }
+    return null;
+  }
+
   return {
+    /**
+     * A person's card: who they are, your chat with them, whether a new one
+     * can start, and the groups you share. Only for someone you share a chat
+     * with (or for chat staff), so it reveals nothing new.
+     */
+    async card(userId: string, peerId: string) {
+      const peer = await repository.getPersonCard(database, peerId);
+      if (!peer) throw ChatErrors.userNotFound();
+      const [mine, theirs] = await Promise.all(
+        [userId, peerId].map(async (id) =>
+          views.visibleRoomIds(
+            database,
+            id,
+            await repository.listActiveRestrictions(database, id),
+          ),
+        ),
+      );
+      const theirSet = new Set(theirs);
+      const rows = await repository.listRoomsForUser(
+        database,
+        userId,
+        mine!.filter((id) => theirSet.has(id)),
+      );
+      const groups = rows
+        .filter((row) => row.kind !== "direct" && row.status !== "archived")
+        .sort(
+          (a, b) =>
+            (b.last_message_at?.getTime() ?? 0) -
+            (a.last_message_at?.getTime() ?? 0),
+        );
+      const self = peerId === userId;
+      const direct = self
+        ? undefined
+        : await repository.findDirectRoom(database, directKey(userId, peerId));
+      const directRoomId =
+        direct && rows.some((row) => row.id === direct.id) ? direct.id : null;
+      if (
+        groups.length === 0 &&
+        !directRoomId &&
+        !self &&
+        !(await access.isChatStaff(database, userId))
+      ) {
+        throw ChatErrors.userNotFound();
+      }
+      const blocks = self
+        ? []
+        : await repository.blocksBetween(database, userId, peerId);
+      const messageBlocked = self
+        ? ("self" as const)
+        : peer.is_deleted
+          ? ("deleted" as const)
+          : directRoomId
+            ? null
+            : await newChatBlocker(userId, peerId);
+      return {
+        person: {
+          id: peer.id,
+          name: peer.is_deleted ? "Deleted user" : peer.display_name,
+          avatarUrl: peer.is_deleted ? null : peer.avatar_data_url,
+          username: peer.is_deleted ? null : peer.username || null,
+        },
+        directRoomId,
+        messageBlocked,
+        blockedByMe: blocks.some((b) => b.blocker_id === userId),
+        commonGroups: groups.slice(0, 20).map((row) => ({
+          id: row.id,
+          title:
+            row.kind === "course"
+              ? (row.course_title ?? row.title ?? "Course group")
+              : (row.title ?? "Team"),
+          iconUrl: chatRoomIconUrl(row),
+        })),
+      };
+    },
+
     /** Opens (or returns) the private chat with `peerId`. */
     async start(userId: string, peerId: string) {
       if (peerId === userId) throw ChatErrors.self();
@@ -52,9 +175,10 @@ export function createDirectService(runtime: ChatRuntime) {
           existing.id,
           userId,
         );
-        if (member && member.state !== "active") {
+        if (member && (member.state !== "active" || member.deleted_at)) {
           await repository.updateMember(database, existing.id, userId, {
             state: "active",
+            deleted_at: null,
           });
         }
         const ctx = await views.assertCanRead(database, userId, existing.id);
@@ -64,45 +188,13 @@ export function createDirectService(runtime: ChatRuntime) {
         };
       }
 
-      if (
-        (await repository.blocksBetween(database, userId, peerId)).length > 0
-      ) {
-        throw ChatErrors.blocked();
-      }
-      // Learners don't open chats with their instructors or admins: staff
-      // write first (the chat then exists and the learner can reply).
-      if (
-        !(await access.isChatStaff(database, userId)) &&
-        (await access.isChatStaff(database, peerId))
-      ) {
-        throw ChatErrors.staffFirst();
-      }
-      const restrictions = await repository.listActiveRestrictions(
-        database,
-        userId,
-      );
+      const blocker = await newChatBlocker(userId, peerId);
+      if (blocker === "blocked") throw ChatErrors.blocked();
+      if (blocker === "staffFirst") throw ChatErrors.staffFirst();
+      if (blocker === "notAllowed") throw ChatErrors.directNotAllowed();
       const userStaff = (await staffRole(userId)) !== "learner";
       const peerStaff = (await staffRole(peerId)) !== "learner";
-      if (
-        !userStaff &&
-        restrictions.some(
-          (r) =>
-            (r.type === "no_direct" || r.type === "ban") && r.room_id === null,
-        )
-      ) {
-        throw ChatErrors.directNotAllowed();
-      }
       const settings = await repository.getSettings(database);
-      if (
-        !(await access.directAllowed(
-          database,
-          settings.direct_policy,
-          userId,
-          peerId,
-        ))
-      ) {
-        throw ChatErrors.directNotAllowed();
-      }
 
       // Learner ↔ learner: a request, limited per day.
       const isRequest = !userStaff && !peerStaff;

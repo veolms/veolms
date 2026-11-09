@@ -47,8 +47,10 @@ function intFromEnv(name: string): number | undefined {
  *   and indefinitely instead of failing fast.
  * - `DATABASE_STATEMENT_TIMEOUT_MS` (default 30000) — bounds any single
  *   statement server-side so one runaway query cannot hold a connection
- *   (and locks) indefinitely. Set higher for one-off CLI/migration work if
- *   needed; migrations pass 0/unset to disable via env.
+ *   (and locks) indefinitely after a client disconnects or a query goes
+ *   rogue. 30 s gives headroom for the heaviest analytics aggregates;
+ *   reduce via env once the slowest production queries are profiled.
+ *   Migrations pass 0/unset to disable via env.
  */
 export interface DatabasePoolMetrics {
   /** The pool's application_name, to tell multiple pools apart. */

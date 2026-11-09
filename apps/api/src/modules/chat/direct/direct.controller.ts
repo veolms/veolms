@@ -31,6 +31,10 @@ export function createDirectController({
       return service.candidates(request.user!.id, request.query.search);
     },
 
+    async card(request: FastifyRequest<{ Params: { userId: string } }>) {
+      return service.card(request.user!.id, request.params.userId);
+    },
+
     async listBlocked(request: FastifyRequest) {
       return service.listBlocked(request.user!.id);
     },

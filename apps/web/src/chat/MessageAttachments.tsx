@@ -3,9 +3,12 @@ import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import type { ChatAttachment } from "@veolms/contracts";
 
+import { useState } from "react";
+
 import { chatService } from "../services/chat";
 import { cn } from "../lib/utils";
 import { formatBytes, formatDuration } from "./chatFormat";
+import { FilePreview, previewKind } from "./FilePreview";
 import { VoiceMessage } from "./VoiceMessage";
 
 export interface ViewableMedia {
@@ -157,39 +160,54 @@ function fileTone(extension: string): string {
 
 function FileTile({ attachment }: { attachment: ChatAttachment }) {
   const extension = attachment.name.split(".").pop()?.toUpperCase() ?? "FILE";
+  const [previewing, setPreviewing] = useState(false);
+  const canPreview = previewKind(attachment) !== null;
   return (
-    <a
-      href={chatService.fileUrl(attachment, true)}
-      className="flex w-72 max-w-full items-center gap-3 rounded-lg bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2.5 py-2.5 text-(--text) no-underline hover:bg-[color-mix(in_srgb,var(--text)_11%,transparent)]"
-      download={attachment.name}
-    >
-      <span
-        className={cn(
-          "relative flex h-11 w-9 shrink-0 items-end justify-center rounded-md pb-1 text-[0.58rem] font-bold tracking-wide text-white",
-          fileTone(extension),
-        )}
-        aria-hidden="true"
+    <div className="flex w-72 max-w-full items-center rounded-lg bg-[color-mix(in_srgb,var(--text)_7%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_11%,transparent)]">
+      <button
+        type="button"
+        onClick={() => setPreviewing(true)}
+        aria-label={`${canPreview ? "Open" : "Show"} ${attachment.name}`}
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 border-0 bg-transparent py-2.5 pl-2.5 text-left text-(--text)"
       >
-        <FileText
-          size={16}
-          weight="fill"
-          className="absolute top-1.5 opacity-60"
+        <span
+          className={cn(
+            "relative flex h-11 w-9 shrink-0 items-end justify-center rounded-md pb-1 text-[0.58rem] font-bold tracking-wide text-white",
+            fileTone(extension),
+          )}
+          aria-hidden="true"
+        >
+          <FileText
+            size={16}
+            weight="fill"
+            className="absolute top-1.5 opacity-60"
+          />
+          {extension.slice(0, 4)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[0.88rem] font-semibold">
+            {attachment.name}
+          </span>
+          <span className="block text-[0.72rem] text-(--muted)">
+            {extension} · {formatBytes(attachment.size)}
+            {canPreview ? " · Tap to open" : ""}
+          </span>
+        </span>
+      </button>
+      <a
+        href={chatService.fileUrl(attachment, true)}
+        download={attachment.name}
+        aria-label={`Download ${attachment.name}`}
+        className="flex size-11 shrink-0 items-center justify-center text-(--muted) hover:text-(--text)"
+      >
+        <DownloadSimple size={20} />
+      </a>
+      {previewing ? (
+        <FilePreview
+          attachment={attachment}
+          onClose={() => setPreviewing(false)}
         />
-        {extension.slice(0, 4)}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[0.88rem] font-semibold">
-          {attachment.name}
-        </span>
-        <span className="block text-[0.72rem] text-(--muted)">
-          {extension} · {formatBytes(attachment.size)}
-        </span>
-      </span>
-      <DownloadSimple
-        size={20}
-        className="shrink-0 text-(--muted)"
-        aria-label="Download"
-      />
-    </a>
+      ) : null}
+    </div>
   );
 }

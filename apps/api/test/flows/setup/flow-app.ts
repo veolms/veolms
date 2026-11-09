@@ -56,6 +56,19 @@ class CapturingEmailService implements EmailService {
   }
 }
 
+/** Keeps every text message the API sends; nothing leaves the machine. */
+class CapturingSms {
+  readonly sent: { to: string; text: string }[] = [];
+
+  /** The six-digit code in the last text sent to `to`. */
+  lastCodeFor(to: string): string {
+    const sms = this.sent.findLast((message) => message.to === to);
+    const code = sms?.text.match(/\b(\d{6})\b/u)?.[1];
+    if (!code) throw new Error(`No code was texted to ${to}`);
+    return code;
+  }
+}
+
 const silentLogger = {
   level: "silent",
   fatal() {},
@@ -74,6 +87,7 @@ export interface FlowApp {
   app: FastifyInstance;
   database: ReturnType<typeof createDatabase>;
   email: CapturingEmailService;
+  sms: CapturingSms;
   gateway: FakePaymentGateway;
   /** Where uploads go: a test sends a file to the link the API signed. */
   storage: FakeObjectStorage;
@@ -98,9 +112,18 @@ export async function startFlowApp(
   const email = new CapturingEmailService();
   const gateway = new FakePaymentGateway();
   const storage = new FakeObjectStorage();
+  const sms = new CapturingSms();
+  const created = createServices({ config, logger: silentLogger });
   const services = {
-    ...createServices({ config, logger: silentLogger }),
+    ...created,
     email,
+    sms: {
+      ...created.sms,
+      async send(to: string, content: { text: string }) {
+        sms.sent.push({ to, text: content.text });
+        return { status: "logged" as const };
+      },
+    },
     paymentGateways: fakePaymentGateways(gateway),
   };
   storage.install(services.storage);
@@ -115,6 +138,7 @@ export async function startFlowApp(
     app,
     database,
     email,
+    sms,
     gateway,
     storage,
     visitor: () => {

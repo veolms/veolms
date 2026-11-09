@@ -53,6 +53,58 @@
 }
 
 /*
+ * More wallpaper patterns (Settings › Chats › Wallpaper), drawn the same
+ * way as the doodles: an SVG mask tinted by the theme. Generated; each a
+ * small tile, so the browser paints them cheaply.
+ */
+[data-chat-pattern="code"] .chat-wallpaper {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg fill='%23000' stroke='none' font-family='ui-monospace,Menlo,Consolas,monospace' font-weight='600'%3E %3Ctext x='14' y='34' font-size='22'%3E{ }%3C/text%3E %3Ctext x='110' y='40' font-size='20'%3E&lt;/&gt;%3C/text%3E %3Ctext x='40' y='92' font-size='18'%3E=&gt;%3C/text%3E %3Ctext x='132' y='104' font-size='22'%3E( )%3C/text%3E %3Ctext x='10' y='150' font-size='18'%3E//%3C/text%3E %3Ctext x='74' y='146' font-size='20'%3E[ ]%3C/text%3E %3Ctext x='150' y='160' font-size='20'%3E;%3C/text%3E %3Ctext x='30' y='192' font-size='18'%3E&amp;&amp;%3C/text%3E %3Ctext x='104' y='190' font-size='18'%3E%23!%3C/text%3E %3Ctext x='168' y='62' font-size='16'%3E$%3C/text%3E %3C/g%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg fill='%23000' stroke='none' font-family='ui-monospace,Menlo,Consolas,monospace' font-weight='600'%3E %3Ctext x='14' y='34' font-size='22'%3E{ }%3C/text%3E %3Ctext x='110' y='40' font-size='20'%3E&lt;/&gt;%3C/text%3E %3Ctext x='40' y='92' font-size='18'%3E=&gt;%3C/text%3E %3Ctext x='132' y='104' font-size='22'%3E( )%3C/text%3E %3Ctext x='10' y='150' font-size='18'%3E//%3C/text%3E %3Ctext x='74' y='146' font-size='20'%3E[ ]%3C/text%3E %3Ctext x='150' y='160' font-size='20'%3E;%3C/text%3E %3Ctext x='30' y='192' font-size='18'%3E&amp;&amp;%3C/text%3E %3Ctext x='104' y='190' font-size='18'%3E%23!%3C/text%3E %3Ctext x='168' y='62' font-size='16'%3E$%3C/text%3E %3C/g%3E%3C/svg%3E");
+  -webkit-mask-size: 200px 200px;
+  mask-size: 200px 200px;
+}
+
+[data-chat-pattern="science"] .chat-wallpaper {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='44' cy='44' rx='28' ry='10'/%3E%3Cellipse cx='44' cy='44' rx='28' ry='10' transform='rotate(60 44 44)'/%3E%3Cellipse cx='44' cy='44' rx='28' ry='10' transform='rotate(120 44 44)'/%3E%3Ccircle cx='44' cy='44' r='3'/%3E %3Cpath d='M140 22h20 M146 22v22l-16 30a6 6 0 0 0 5 9h30a6 6 0 0 0 5-9l-16-30v-22 M136 62h28'/%3E %3Ccircle cx='40' cy='150' r='7'/%3E%3Ccircle cx='74' cy='132' r='7'/%3E%3Ccircle cx='74' cy='172' r='7'/%3E%3Cpath d='M46 146l22-10 M46 154l22 14 M74 139v26'/%3E %3Cpath d='M120 160q12-24 24 0t24 0t24 0'/%3E %3Cpath d='M160 120l6 6 M166 120l-6 6'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='44' cy='44' rx='28' ry='10'/%3E%3Cellipse cx='44' cy='44' rx='28' ry='10' transform='rotate(60 44 44)'/%3E%3Cellipse cx='44' cy='44' rx='28' ry='10' transform='rotate(120 44 44)'/%3E%3Ccircle cx='44' cy='44' r='3'/%3E %3Cpath d='M140 22h20 M146 22v22l-16 30a6 6 0 0 0 5 9h30a6 6 0 0 0 5-9l-16-30v-22 M136 62h28'/%3E %3Ccircle cx='40' cy='150' r='7'/%3E%3Ccircle cx='74' cy='132' r='7'/%3E%3Ccircle cx='74' cy='172' r='7'/%3E%3Cpath d='M46 146l22-10 M46 154l22 14 M74 139v26'/%3E %3Cpath d='M120 160q12-24 24 0t24 0t24 0'/%3E %3Cpath d='M160 120l6 6 M166 120l-6 6'/%3E%3C/svg%3E");
+  -webkit-mask-size: 220px 220px;
+  mask-size: 220px 220px;
+}
+
+[data-chat-pattern="space"] .chat-wallpaper {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='60' cy='58' r='20'/%3E%3Cellipse cx='60' cy='58' rx='36' ry='9' transform='rotate(-18 60 58)'/%3E %3Cpath d='M160 34l3 8 8 3-8 3-3 8-3-8-8-3 8-3z'/%3E %3Cpath d='M30 150l2 5 5 2-5 2-2 5-2-5-5-2 5-2z'/%3E %3Cpath d='M170 150a22 22 0 1 0 14 34 18 18 0 1 1-14-34z'/%3E %3Ccircle cx='110' cy='110' r='1.6'/%3E%3Ccircle cx='196' cy='96' r='1.6'/%3E%3Ccircle cx='96' cy='196' r='1.6'/%3E%3Ccircle cx='20' cy='96' r='1.6'/%3E %3Cpath d='M96 30l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='60' cy='58' r='20'/%3E%3Cellipse cx='60' cy='58' rx='36' ry='9' transform='rotate(-18 60 58)'/%3E %3Cpath d='M160 34l3 8 8 3-8 3-3 8-3-8-8-3 8-3z'/%3E %3Cpath d='M30 150l2 5 5 2-5 2-2 5-2-5-5-2 5-2z'/%3E %3Cpath d='M170 150a22 22 0 1 0 14 34 18 18 0 1 1-14-34z'/%3E %3Ccircle cx='110' cy='110' r='1.6'/%3E%3Ccircle cx='196' cy='96' r='1.6'/%3E%3Ccircle cx='96' cy='196' r='1.6'/%3E%3Ccircle cx='20' cy='96' r='1.6'/%3E %3Cpath d='M96 30l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z'/%3E%3C/svg%3E");
+  -webkit-mask-size: 220px 220px;
+  mask-size: 220px 220px;
+}
+
+[data-chat-pattern="geometric"] .chat-wallpaper {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M30 14l18 30h-36z'/%3E %3Cpath d='M110 20l14 8v16l-14 8-14-8v-16z'/%3E %3Ccircle cx='40' cy='110' r='14'/%3E %3Crect x='96' y='96' width='26' height='26' rx='3' transform='rotate(20 109 109)'/%3E %3Cpath d='M74 70h12 M80 64v12'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M30 14l18 30h-36z'/%3E %3Cpath d='M110 20l14 8v16l-14 8-14-8v-16z'/%3E %3Ccircle cx='40' cy='110' r='14'/%3E %3Crect x='96' y='96' width='26' height='26' rx='3' transform='rotate(20 109 109)'/%3E %3Cpath d='M74 70h12 M80 64v12'/%3E%3C/svg%3E");
+  -webkit-mask-size: 160px 160px;
+  mask-size: 160px 160px;
+}
+
+[data-chat-pattern="waves"] .chat-wallpaper {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M0 20q15-12 30 0t30 0t30 0t30 0'/%3E %3Cpath d='M0 60q15-12 30 0t30 0t30 0t30 0'/%3E %3Cpath d='M0 100q15-12 30 0t30 0t30 0t30 0'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M0 20q15-12 30 0t30 0t30 0t30 0'/%3E %3Cpath d='M0 60q15-12 30 0t30 0t30 0t30 0'/%3E %3Cpath d='M0 100q15-12 30 0t30 0t30 0t30 0'/%3E%3C/svg%3E");
+  -webkit-mask-size: 120px 120px;
+  mask-size: 120px 120px;
+}
+
+/* Grid: graph paper. */
+[data-chat-pattern="grid"] .chat-wallpaper {
+  -webkit-mask-image:
+    linear-gradient(#000 1px, transparent 1px),
+    linear-gradient(90deg, #000 1px, transparent 1px);
+  mask-image:
+    linear-gradient(#000 1px, transparent 1px),
+    linear-gradient(90deg, #000 1px, transparent 1px);
+  -webkit-mask-size: 24px 24px;
+  mask-size: 24px 24px;
+}
+
+/*
  * Phones: Chats is a fixed screen above the bottom bar (ChatPage), so the
  * page behind it must not scroll: no rubber band, no bar hiding on scroll.
  */
@@ -65,5 +117,75 @@
 
   :root[data-chat-page] .courses-main {
     padding: 0;
+  }
+}
+
+/*
+ * A message opened from a notification, a reply quote, search, a pin or a
+ * link blinks twice, as in WhatsApp (MessageList.flash).
+ */
+@keyframes chat-flash {
+  0%,
+  100% {
+    box-shadow: 0 1px 0.5px rgb(0 0 0 / 0.13);
+    filter: none;
+  }
+  15%,
+  55% {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent),
+      0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
+    filter: brightness(1.18);
+  }
+  35%,
+  75% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+    filter: brightness(1.04);
+  }
+}
+
+.chat-flash {
+  animation: chat-flash 2.6s ease-in-out;
+}
+
+/* The colour wash over the bubble: three pulses that fade out. */
+@keyframes chat-flash-fill {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  12%,
+  46% {
+    opacity: 0.4;
+  }
+  29%,
+  63% {
+    opacity: 0.1;
+  }
+  80% {
+    opacity: 0.28;
+  }
+}
+
+.chat-flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: var(--accent);
+  pointer-events: none;
+  opacity: 0;
+  animation: chat-flash-fill 2.6s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-flash::after {
+    animation: none;
+  }
+
+  .chat-flash {
+    animation-duration: 0.01s;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent);
   }
 }

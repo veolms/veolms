@@ -6,6 +6,7 @@ import {
   chatReadUploadQuerySchema,
   chatRoomIconQuerySchema,
   chatRoomParamsSchema,
+  chatUploadLinkResponseSchema,
   chatUploadParamsSchema,
 } from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -174,13 +175,19 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
         summary: "Open a file sent in a chat (redirects to a short-lived link)",
         params: chatUploadParamsSchema,
         querystring: chatReadUploadQuerySchema,
-        response: { ...common },
+        response: {
+          200: jsonResponse(
+            "With link=1: the short-lived link",
+            chatUploadLinkResponseSchema,
+          ),
+          ...common,
+        },
       },
     },
     async (
       request: FastifyRequest<{
         Params: { uploadId: string };
-        Querystring: { download?: "1" | "0" };
+        Querystring: { download?: "1" | "0"; link?: "1" };
       }>,
       reply: FastifyReply,
     ) => {
@@ -190,6 +197,18 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
         request.query.download === "1",
       );
       reply.header("X-Content-Type-Options", "nosniff");
+      if (request.query.link === "1") {
+        // The link itself, for the app to read a document's text (a
+        // redirect can't be followed with the session cookie across sites).
+        reply.header("Cache-Control", "private, no-store");
+        if (result.kind !== "redirect") result.stream.destroy();
+        return {
+          url:
+            result.kind === "redirect"
+              ? result.url
+              : `/v1/chat/uploads/${request.params.uploadId}`,
+        };
+      }
       if (result.kind === "redirect") {
         reply.header("Cache-Control", `private, max-age=${result.maxAge}`);
         return reply.redirect(result.url, 302);

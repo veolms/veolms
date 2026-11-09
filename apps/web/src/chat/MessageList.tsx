@@ -1,3 +1,4 @@
+import { AtIcon as At } from "@phosphor-icons/react/At";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import type { ChatMessage } from "@veolms/contracts";
 import {
@@ -10,6 +11,7 @@ import {
 } from "react";
 
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
+import { cn } from "../lib/utils";
 import type { ChatThread, OutgoingMessage } from "../services/chat";
 import { dayLabel, sameDay } from "./chatFormat";
 import { FailedMark, MessageBubble, type BubbleContext } from "./MessageBubble";
@@ -17,6 +19,33 @@ import type { MessageAction } from "./MessageMenu";
 import type { ViewableMedia } from "./MessageAttachments";
 
 const STICK_PX = 140;
+/** How long a message opened from a link, reply or search blinks. */
+const FLASH_MS = 2_600;
+
+/** A message to bring into view (and blink), and the one it was opened from. */
+export interface MessageFocus {
+  seq: number;
+  token: number;
+  /** A reply's own message: the down arrow returns there first. */
+  from?: number;
+}
+
+/** Puts a message in the middle of the list. */
+function centre(box: HTMLElement, row: HTMLElement) {
+  box.scrollTop = Math.max(
+    0,
+    row.offsetTop - box.clientHeight / 2 + row.offsetHeight / 2,
+  );
+}
+
+/** WhatsApp's blink on a message just opened: restarts if already on. */
+function flash(row: HTMLElement) {
+  const bubble = row.querySelector<HTMLElement>("[data-bubble]") ?? row;
+  bubble.classList.remove("chat-flash");
+  void bubble.offsetWidth;
+  bubble.classList.add("chat-flash");
+  setTimeout(() => bubble.classList.remove("chat-flash"), FLASH_MS);
+}
 const RUN_GAP_MS = 5 * 60_000;
 
 /** A message on its way, drawn as a bubble (clock tick, local previews). */
@@ -62,7 +91,7 @@ export function MessageList({
   outgoing,
   ctx,
   unreadAfterSeq,
-  highlightSeq,
+  focus,
   loadingOlder,
   onLoadOlder,
   onAction,
@@ -77,12 +106,13 @@ export function MessageList({
   ctx: BubbleContext;
   /** Your read position when the chat opened: the "unread" divider goes after it. */
   unreadAfterSeq: number;
-  highlightSeq: number | null;
+  /** Bring this message into view and blink it. */
+  focus: MessageFocus | null;
   loadingOlder: boolean;
   onLoadOlder: () => void;
   onAction: (action: MessageAction, message: ChatMessage) => void;
   onOpenMedia: (items: ViewableMedia[], index: number) => void;
-  onJumpTo: (seq: number) => void;
+  onJumpTo: (seq: number, from?: number) => void;
   onAtBottom: (lastSeq: number) => void;
   onRetry: (clientId: string) => void;
   onDiscard: (clientId: string) => void;
@@ -92,7 +122,26 @@ export function MessageList({
   const firstSeqRef = useRef<number | null>(null);
   const heightBeforeRef = useRef(0);
   const initialisedRef = useRef(false);
+  /**
+   * Where the view is held while rows settle: rows render at a guessed
+   * height (content-visibility) and photos load after the first paint, so
+   * the list keeps growing for a moment. Until the reader scrolls, the view
+   * stays at the bottom (or at the unread divider), as in WhatsApp.
+   */
+  const anchorRef = useRef<"bottom" | "divider" | { seq: number } | null>(
+    "bottom",
+  );
+  /** Held somewhere other than the bottom until the reader scrolls. */
+  const held = () =>
+    anchorRef.current !== null && anchorRef.current !== "bottom";
+  const contentRef = useRef<HTMLDivElement>(null);
   const [showJump, setShowJump] = useState(false);
+  /** After following a reply to its quote: the message to come back to. */
+  const [returnSeq, setReturnSeq] = useState<number | null>(null);
+  /** @mentions of you already jumped to (or scrolled past) this visit. */
+  const [seenMentions, setSeenMentions] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  );
   const [newBelow, setNewBelow] = useState(0);
   const lastSeq = thread.messages.at(-1)?.seq ?? 0;
   const lastSeenSeqRef = useRef(lastSeq);
@@ -124,11 +173,73 @@ export function MessageList({
     initialisedRef.current = true;
     const divider = box.querySelector<HTMLElement>("[data-unread-divider]");
     if (divider && unreadCount > 0) {
+      anchorRef.current = "divider";
+      atBottomRef.current = false;
       box.scrollTop = Math.max(0, divider.offsetTop - 80);
     } else {
+      anchorRef.current = "bottom";
       box.scrollTop = box.scrollHeight;
     }
   }, [thread.messages.length, unreadCount]);
+
+  // Rows growing to their real height (and photos loading) keep the view
+  // where it was put: at the bottom while the reader is there, or at the
+  // unread divider until they scroll.
+  useEffect(() => {
+    const box = scrollRef.current;
+    const content = contentRef.current;
+    if (!box || !content || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (!initialisedRef.current) return;
+      const anchor = anchorRef.current;
+      if (anchor === "divider") {
+        const divider = box.querySelector<HTMLElement>("[data-unread-divider]");
+        if (divider) box.scrollTop = Math.max(0, divider.offsetTop - 80);
+      } else if (anchor && typeof anchor === "object") {
+        const row = document.getElementById(`chat-message-${anchor.seq}`);
+        if (row) centre(box, row);
+      } else if (atBottomRef.current) {
+        box.scrollTop = box.scrollHeight;
+      }
+    });
+    observer.observe(content);
+    // The reader taking over ends the hold at the divider or a message.
+    const release = () => {
+      if (anchorRef.current !== "bottom") anchorRef.current = null;
+    };
+    box.addEventListener("wheel", release, { passive: true });
+    box.addEventListener("touchmove", release, { passive: true });
+    box.addEventListener("keydown", release);
+    box.addEventListener("pointerdown", release);
+    return () => {
+      observer.disconnect();
+      box.removeEventListener("wheel", release);
+      box.removeEventListener("touchmove", release);
+      box.removeEventListener("keydown", release);
+      box.removeEventListener("pointerdown", release);
+    };
+  }, []);
+
+  // A message asked for (notification, reply quote, search, pin, @): in the
+  // middle of the list, blinking, held there while rows settle. Waits for
+  // the message when it is still being fetched.
+  const handledFocusRef = useRef(0);
+  useLayoutEffect(() => {
+    const box = scrollRef.current;
+    if (!box || !focus || handledFocusRef.current === focus.token) return;
+    const row = document.getElementById(`chat-message-${focus.seq}`);
+    if (!row) return;
+    handledFocusRef.current = focus.token;
+    initialisedRef.current = true;
+    anchorRef.current = { seq: focus.seq };
+    atBottomRef.current = false;
+    centre(box, row);
+    flash(row);
+    setReturnSeq(focus.from ?? null);
+    setSeenMentions((seen) =>
+      seen.has(focus.seq) ? seen : new Set([...seen, focus.seq]),
+    );
+  }, [focus, thread.messages]);
 
   // Older history loaded above: keep the reader where they were.
   useLayoutEffect(() => {
@@ -174,11 +285,17 @@ export function MessageList({
     if (!box) return;
     const distance = box.scrollHeight - box.scrollTop - box.clientHeight;
     const atBottom = distance < STICK_PX;
-    atBottomRef.current = atBottom;
+    // Held at the divider or a message, a scroll the page made (not the
+    // reader) leaves the bottom flag alone.
+    if (!held()) atBottomRef.current = atBottom;
     setShowJump(distance > 400);
-    if (atBottom) {
+    if (atBottom && !held()) {
       lastSeenSeqRef.current = lastSeq;
       setNewBelow(0);
+      setReturnSeq(null);
+      if (unreadMentions.length > 0) {
+        setSeenMentions(new Set([...seenMentions, ...unreadMentions]));
+      }
       if (lastSeq > 0) onAtBottom(lastSeq);
     }
     // About two screens before the top: older messages are usually in
@@ -194,7 +311,52 @@ export function MessageList({
     }
   }
 
+  // Telegram's @ button: unread messages that mention you, oldest first.
+  const unreadMentions = ctx.viewerId
+    ? thread.messages
+        .filter(
+          (m) =>
+            m.seq > unreadAfterSeq &&
+            m.deleted === null &&
+            m.sender?.id !== ctx.viewerId &&
+            (m.mentions.includes(ctx.viewerId!) || m.mentionAll) &&
+            !seenMentions.has(m.seq),
+        )
+        .map((m) => m.seq)
+    : [];
+
+  function toBottom() {
+    const box = scrollRef.current;
+    if (!box) return;
+    if (returnSeq !== null) {
+      const row = document.getElementById(`chat-message-${returnSeq}`);
+      setReturnSeq(null);
+      if (row) {
+        anchorRef.current = { seq: returnSeq };
+        centre(box, row);
+        flash(row);
+        return;
+      }
+    }
+    anchorRef.current = "bottom";
+    atBottomRef.current = true;
+    box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
+  }
+
   const rows = [...thread.messages, ...pending.map((p) => p.message)];
+  // One block per day: a date label is sticky inside its own day only, so
+  // the next day's label pushes it away instead of piling on top of it.
+  const days: Array<{ key: string; label: string; start: number }> = [];
+  rows.forEach((message, index) => {
+    const previous = rows[index - 1];
+    if (!previous || !sameDay(previous.createdAt, message.createdAt)) {
+      days.push({
+        key: message.seq > 0 ? `d${message.seq}` : `dp${message.id}`,
+        label: dayLabel(message.createdAt),
+        start: index,
+      });
+    }
+  });
 
   return (
     <div className="relative min-h-0 flex-1">
@@ -220,81 +382,111 @@ export function MessageList({
                 : "Messages are visible to everyone in this group. Be kind and keep it on topic."}
           </div>
         )}
-        {rows.map((message, index) => {
-          const previous = rows[index - 1];
-          const newDay =
-            !previous || !sameDay(previous.createdAt, message.createdAt);
-          const firstOfRun =
-            newDay ||
-            !previous ||
-            previous.kind === "system" ||
-            previous.sender?.id !== message.sender?.id ||
-            new Date(message.createdAt).getTime() -
-              new Date(previous.createdAt).getTime() >
-              RUN_GAP_MS;
-          const showUnread =
-            unreadCount > 0 &&
-            message.seq > unreadAfterSeq &&
-            (previous?.seq ?? 0) <= unreadAfterSeq &&
-            message.sender?.id !== ctx.viewerId &&
-            message.seq > 0;
-          const pendingInfo =
-            message.seq === 0
-              ? pending.find((p) => p.message.id === message.id)?.outgoing
-              : undefined;
-          return (
-            <Fragment
-              key={message.seq > 0 ? `m${message.seq}` : `p${message.id}`}
-            >
-              {newDay ? (
-                <div className="sticky top-1 z-10 my-2 flex justify-center">
-                  <span className="rounded-lg bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--text-secondary) uppercase shadow-sm">
-                    {dayLabel(message.createdAt)}
-                  </span>
-                </div>
-              ) : null}
-              {showUnread ? (
-                <div
-                  data-unread-divider
-                  className="my-2 flex justify-center bg-[color-mix(in_srgb,var(--chat-in)_70%,transparent)] py-1"
-                >
-                  <span className="rounded-full bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--accent-ink) uppercase shadow-sm">
-                    {unreadCount} unread message{unreadCount === 1 ? "" : "s"}
-                  </span>
-                </div>
-              ) : null}
-              <MessageBubble
-                message={message}
-                ctx={ctx}
-                firstOfRun={firstOfRun}
-                highlighted={highlightSeq === message.seq && message.seq > 0}
-                onAction={onAction}
-                onOpenMedia={onOpenMedia}
-                onJumpTo={onJumpTo}
-              />
-              {pendingInfo ? (
-                <PendingStatus
-                  outgoing={pendingInfo}
-                  onRetry={() => onRetry(pendingInfo.clientId)}
-                  onDiscard={() => onDiscard(pendingInfo.clientId)}
-                />
-              ) : null}
-            </Fragment>
-          );
-        })}
+        <div ref={contentRef}>
+          {days.map((day, dayIndex) => (
+            <section key={day.key} aria-label={day.label}>
+              <div className="sticky top-1 z-10 my-2 flex justify-center">
+                <span className="rounded-lg bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--text-secondary) uppercase shadow-sm">
+                  {day.label}
+                </span>
+              </div>
+              {rows
+                .slice(day.start, days[dayIndex + 1]?.start ?? rows.length)
+                .map((message, offset) => {
+                  const index = day.start + offset;
+                  const previous = rows[index - 1];
+                  const newDay =
+                    !previous ||
+                    !sameDay(previous.createdAt, message.createdAt);
+                  const firstOfRun =
+                    newDay ||
+                    !previous ||
+                    previous.kind === "system" ||
+                    previous.sender?.id !== message.sender?.id ||
+                    new Date(message.createdAt).getTime() -
+                      new Date(previous.createdAt).getTime() >
+                      RUN_GAP_MS;
+                  const showUnread =
+                    unreadCount > 0 &&
+                    message.seq > unreadAfterSeq &&
+                    (previous?.seq ?? 0) <= unreadAfterSeq &&
+                    message.sender?.id !== ctx.viewerId &&
+                    message.seq > 0;
+                  const pendingInfo =
+                    message.seq === 0
+                      ? pending.find((p) => p.message.id === message.id)
+                          ?.outgoing
+                      : undefined;
+                  return (
+                    <Fragment
+                      key={
+                        message.seq > 0 ? `m${message.seq}` : `p${message.id}`
+                      }
+                    >
+                      {showUnread ? (
+                        <div
+                          data-unread-divider
+                          className="my-2 flex justify-center bg-[color-mix(in_srgb,var(--chat-in)_70%,transparent)] py-1"
+                        >
+                          <span className="rounded-full bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--accent-ink) uppercase shadow-sm">
+                            {unreadCount} unread message
+                            {unreadCount === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                      ) : null}
+                      <MessageBubble
+                        message={message}
+                        ctx={ctx}
+                        firstOfRun={firstOfRun}
+                        onAction={onAction}
+                        onOpenMedia={onOpenMedia}
+                        onJumpTo={onJumpTo}
+                      />
+                      {pendingInfo ? (
+                        <PendingStatus
+                          outgoing={pendingInfo}
+                          onRetry={() => onRetry(pendingInfo.clientId)}
+                          onDiscard={() => onDiscard(pendingInfo.clientId)}
+                        />
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+            </section>
+          ))}
+        </div>
       </div>
-      {showJump || newBelow > 0 ? (
+      {unreadMentions.length > 0 ? (
         <button
           type="button"
-          onClick={() => {
-            const box = scrollRef.current;
-            box?.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
-          }}
+          onClick={() => onJumpTo(unreadMentions[0]!)}
+          aria-label={`${unreadMentions.length} unread mention${unreadMentions.length === 1 ? "" : "s"}, go to the first`}
+          title="Go to your mention"
+          className={cn(
+            "absolute right-5 inline-flex size-11 cursor-pointer items-center justify-center rounded-full border-0 bg-(--chat-in) text-(--accent-ink) shadow-[0_2px_8px_rgb(0_0_0/0.25)] hover:text-(--text)",
+            showJump || newBelow > 0 || returnSeq !== null
+              ? "bottom-[4.5rem]"
+              : "bottom-4",
+          )}
+        >
+          <At size={20} weight="bold" />
+          <span className="absolute -top-1.5 -right-1 min-w-5 rounded-full bg-(--accent) px-1.5 text-[0.68rem] leading-5 font-bold text-(--on-accent)">
+            {unreadMentions.length}
+          </span>
+        </button>
+      ) : null}
+      {showJump || newBelow > 0 || returnSeq !== null ? (
+        <button
+          type="button"
+          onClick={toBottom}
           aria-label={
-            newBelow > 0
-              ? `${newBelow} new messages, scroll to bottom`
-              : "Scroll to bottom"
+            returnSeq !== null
+              ? "Back to the reply"
+              : newBelow > 0
+                ? `${newBelow} new messages, scroll to bottom`
+                : "Scroll to bottom"
           }
+          title={returnSeq !== null ? "Back to the reply" : undefined}
           className="absolute right-5 bottom-4 inline-flex size-11 cursor-pointer items-center justify-center rounded-full border-0 bg-(--chat-in) text-(--muted) shadow-[0_2px_8px_rgb(0_0_0/0.25)] hover:text-(--text)"
         >
           <CaretDown size={20} weight="bold" />

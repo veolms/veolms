@@ -167,8 +167,22 @@ export const chatCompleteUploadResponseSchema = z.object({
 });
 export const chatReadUploadQuerySchema = z.strictObject({
   download: z.enum(["1", "0"]).optional(),
+  /** "1": answer with the short-lived link as JSON (the preview reads text). */
+  link: z.enum(["1"]).optional(),
 });
+export const chatUploadLinkResponseSchema = z.object({ url: z.string() });
+export type ChatUploadLink = z.infer<typeof chatUploadLinkResponseSchema>;
+
 /** `v` only makes the address change when the picture does (caching). */
+/**
+ * Clear chat (your copy of its messages, up to now) or, for a private chat,
+ * delete it from your list until either of you writes again.
+ */
+export const chatClearRoomRequestSchema = z.strictObject({
+  deleteChat: z.boolean().optional(),
+});
+export type ChatClearRoomRequest = z.infer<typeof chatClearRoomRequestSchema>;
+
 export const chatRoomIconQuerySchema = z.strictObject({
   v: z.string().max(200).optional(),
 });
@@ -536,6 +550,36 @@ export const chatCandidatesResponseSchema = z.object({
     }),
   ),
 });
+
+/**
+ * The card a name or picture in a chat opens (WhatsApp's contact pop-up,
+ * Telegram's profile): enough to message them, mention them or open their
+ * profile, and the groups you share.
+ */
+export const chatPersonCardResponseSchema = z.object({
+  person: chatPersonSchema.extend({
+    /** Their public profile address, when they have one. */
+    username: z.string().nullable(),
+  }),
+  /** Your private chat with them, when there is one. */
+  directRoomId: z.uuid().nullable(),
+  /** Why "Message" can't start a chat now; null when it can. */
+  messageBlocked: z
+    .enum(["self", "deleted", "blocked", "staffFirst", "notAllowed"])
+    .nullable(),
+  /** You blocked them. */
+  blockedByMe: z.boolean(),
+  commonGroups: z.array(
+    z.object({
+      id: z.uuid(),
+      title: z.string(),
+      iconUrl: z.string().nullable(),
+    }),
+  ),
+});
+export type ChatPersonCardResponse = z.infer<
+  typeof chatPersonCardResponseSchema
+>;
 
 export const chatBlockListResponseSchema = z.object({
   blocked: z.array(chatPersonSchema.extend({ blockedAt: isoDate })),

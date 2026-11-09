@@ -1111,4 +1111,85 @@ await test("a learner finds a classmate only by the whole e-mail, not a part of 
   assert.ok(Array.isArray(whole.results));
 });
 
+await test("clear chat and delete chat are for you only; a deleted chat comes back with the next message", async () => {
+  const room = (
+    await admin.post<{ room: Room }>("/v1/chat/direct", { userId: c.userId })
+  ).body.data!.room;
+  ok(await send(admin, room.id, "One more thing"), 201);
+  type Listed = Room & { lastMessage: unknown };
+  const list = async (client: FlowClient) =>
+    ok<{ rooms: Listed[] }>(await client.get("/v1/chat/rooms")).rooms;
+
+  // Clear: the learner's copy is empty, the other person keeps theirs.
+  ok(await c.client.post(`/v1/chat/rooms/${room.id}/clear`, {}));
+  assert.deepEqual(await messages(c.client, room.id), []);
+  assert.ok((await messages(admin, room.id)).length > 0);
+  const cleared = (await list(c.client)).find((r) => r.id === room.id);
+  assert.ok(cleared, "a cleared chat stays in the list");
+  assert.equal(cleared.lastMessage, null);
+  assert.equal(cleared.unreadCount, 0);
+
+  // Delete: out of the learner's list; course groups can't be deleted.
+  ok(
+    await c.client.post(`/v1/chat/rooms/${room.id}/clear`, {
+      deleteChat: true,
+    }),
+  );
+  assert.equal(
+    (await list(c.client)).some((r) => r.id === room.id),
+    false,
+  );
+  refused(
+    await a.client.post(`/v1/chat/rooms/${roomId}/clear`, {
+      deleteChat: true,
+    }),
+    400,
+    "CHAT_WRONG_ROOM_KIND",
+  );
+
+  // The next message brings it back, with only that message.
+  ok(await send(admin, room.id, "Are you there?"), 201);
+  assert.ok((await list(c.client)).some((r) => r.id === room.id));
+  assert.deepEqual(
+    (await messages(c.client, room.id)).map((m) => m.body),
+    ["Are you there?"],
+  );
+});
+
+await test("a person’s card: groups in common, your chat, blocks, and nothing for strangers", async () => {
+  type Card = {
+    person: { id: string; name: string; username: string | null };
+    directRoomId: string | null;
+    messageBlocked: string | null;
+    blockedByMe: boolean;
+    commonGroups: Array<{ id: string; title: string }>;
+  };
+  const card = ok<Card>(await a.client.get(`/v1/chat/people/${b.userId}`));
+  assert.equal(card.person.id, b.userId);
+  assert.ok(card.commonGroups.some((g) => g.id === roomId));
+  // A and B have a private chat (the request B answered).
+  assert.ok(card.directRoomId);
+  assert.equal(card.messageBlocked, null);
+
+  const self = ok<Card>(await a.client.get(`/v1/chat/people/${a.userId}`));
+  assert.equal(self.messageBlocked, "self");
+
+  // "Blocked" on the card matches the blocks list.
+  const blocks = ok<{ blocked: Array<{ id: string }> }>(
+    await b.client.get("/v1/chat/blocks"),
+  );
+  const fromB = ok<Card>(await b.client.get(`/v1/chat/people/${a.userId}`));
+  assert.equal(
+    fromB.blockedByMe,
+    blocks.blocked.some((p) => p.id === a.userId),
+  );
+
+  // Someone you share no chat with: not found, as for anyone unknown.
+  refused(
+    await a.client.get(`/v1/chat/people/${crypto.randomUUID()}`),
+    404,
+    "CHAT_USER_NOT_FOUND",
+  );
+});
+
 await flow.close();

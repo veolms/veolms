@@ -8,6 +8,8 @@ import {
   useState,
 } from "react";
 import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from "react";
+import type { ContactChannel } from "@veolms/contracts";
+import { ContactChangeDialog } from "./ContactChangeDialog";
 import { createPortal } from "react-dom";
 import { AtIcon as At } from "@phosphor-icons/react/At";
 import { CameraIcon as Camera } from "@phosphor-icons/react/Camera";
@@ -487,6 +489,21 @@ export function ProfileSettings({
   const [usernameError, setUsernameError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [mobileError, setMobileError] = useState("");
+  // Changing the email or number (ContactChangeDialog), for the account that
+  // opened it: it closes if that account signs out or another signs in.
+  const [contactChange, setContactChange] = useState<{
+    channel: ContactChannel;
+    userId: string;
+  } | null>(null);
+  const activeUserId = activeUser?.id ?? null;
+  const openContactChange = (channel: ContactChannel) => {
+    if (activeUserId) setContactChange({ channel, userId: activeUserId });
+  };
+  useEffect(() => {
+    if (contactChange && contactChange.userId !== activeUserId) {
+      setContactChange(null);
+    }
+  }, [activeUserId, contactChange]);
   const [socialVisibilityErrors, setSocialVisibilityErrors] = useState<
     Partial<Record<SocialVisibilityField, string>>
   >({});
@@ -1495,30 +1512,44 @@ export function ProfileSettings({
                         aria-readonly="true"
                         disabled={!canEdit}
                       />
-                      {isEmailVerified ? (
-                        <span className="settings-profile__tag settings-profile__tag--success">
-                          <SealCheck size={14} weight="fill" /> Verified
-                        </span>
-                      ) : (
+                      {/* Verified or Verify now, with Change beside it: an
+                          address never verified (staff may have mistyped it)
+                          can be changed too. One group at the end of the
+                          field, like the number's. */}
+                      <span className="ml-auto inline-flex shrink-0 items-center gap-2">
+                        {isEmailVerified ? (
+                          <span className="settings-profile__tag settings-profile__tag--success">
+                            <SealCheck size={14} weight="fill" /> Verified
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="settings-profile__inline-verify-action ml-0!"
+                            onClick={() => void requestEmailVerification()}
+                            disabled={
+                              !activeUser ||
+                              !canEdit ||
+                              !activeEmail ||
+                              sendEmailVerificationMutation.isPending ||
+                              verifyEmailMutation.isPending
+                            }
+                            aria-expanded={emailVerificationRequested}
+                            aria-controls="profile-verification-dialog"
+                          >
+                            {sendEmailVerificationMutation.isPending
+                              ? "Sending..."
+                              : "Verify now"}
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className="settings-profile__inline-verify-action"
-                          onClick={() => void requestEmailVerification()}
-                          disabled={
-                            !activeUser ||
-                            !canEdit ||
-                            !activeEmail ||
-                            sendEmailVerificationMutation.isPending ||
-                            verifyEmailMutation.isPending
-                          }
-                          aria-expanded={emailVerificationRequested}
-                          aria-controls="profile-verification-dialog"
+                          className="settings-profile__inline-verify-action ml-0!"
+                          onClick={() => openContactChange("email")}
+                          disabled={!canEdit}
                         >
-                          {sendEmailVerificationMutation.isPending
-                            ? "Sending..."
-                            : "Verify now"}
+                          Change
                         </button>
-                      )}
+                      </span>
                     </span>
                   </LockedProfileControl>
                   {emailError && (
@@ -1589,18 +1620,19 @@ export function ProfileSettings({
                             )
                           }
                         />
-                        {isMobileVerified && (
-                          <span
-                            className="settings-profile__locked-icon"
-                            title="Verified mobile numbers cannot be changed here"
-                            aria-label="Verified mobile number locked"
-                          >
-                            <Lock size={15} aria-hidden="true" />
-                          </span>
-                        )}
                         {isMobileVerified ? (
-                          <span className="settings-profile__tag settings-profile__tag--success">
-                            <SealCheck size={14} weight="fill" /> Verified
+                          <span className="ml-auto inline-flex shrink-0 items-center gap-2">
+                            <span className="settings-profile__tag settings-profile__tag--success">
+                              <SealCheck size={14} weight="fill" /> Verified
+                            </span>
+                            <button
+                              type="button"
+                              className="settings-profile__inline-verify-action ml-0!"
+                              onClick={() => openContactChange("phone")}
+                              disabled={!canEdit}
+                            >
+                              Change
+                            </button>
                           </span>
                         ) : (
                           <button
@@ -2009,6 +2041,12 @@ export function ProfileSettings({
             )
           : null}
 
+        {contactChange && contactChange.userId === activeUserId && (
+          <ContactChangeDialog
+            channel={contactChange.channel}
+            onClose={() => setContactChange(null)}
+          />
+        )}
         {mobileVisibilityPromptOpen && (
           <dialog
             ref={mobileVisibilityDialogRef}

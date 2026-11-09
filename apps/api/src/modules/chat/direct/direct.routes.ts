@@ -3,6 +3,7 @@ import {
   chatCandidatesQuerySchema,
   chatCandidatesResponseSchema,
   chatOkResponseSchema,
+  chatPersonCardResponseSchema,
   chatRoomParamsSchema,
   chatRoomResponseSchema,
   chatStartDirectRequestSchema,
@@ -110,6 +111,26 @@ const directRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.candidates,
+  );
+
+  app.get(
+    "/chat/people/:userId",
+    {
+      config: { rateLimit: perUser(240, "1 hour") },
+      preHandler,
+      schema: {
+        operationId: "getChatPersonCard",
+        tags,
+        summary:
+          "A person's card: your chat with them and the groups you share",
+        params: chatUserParamsSchema,
+        response: {
+          200: jsonResponse("Person card", chatPersonCardResponseSchema),
+          ...common,
+        },
+      },
+    },
+    controller.card,
   );
 
   app.get(

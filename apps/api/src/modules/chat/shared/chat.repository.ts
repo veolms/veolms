@@ -82,6 +82,8 @@ export interface RoomListRow extends ChatRoomRow {
   notify_level: string | null;
   archived_at: Date | null;
   member_pinned_at: Date | null;
+  cleared_seq: string | null;
+  member_deleted_at: Date | null;
   course_title: string | null;
   course_thumbnail: string | null;
   course_thumbnail_media_id: string | null;
@@ -429,6 +431,8 @@ export function createChatRepository() {
           "m.notify_level",
           "m.archived_at",
           "m.pinned_at as member_pinned_at",
+          "m.cleared_seq",
+          "m.deleted_at as member_deleted_at",
           "c.title as course_title",
           "c.thumbnail_url as course_thumbnail",
           "c.thumbnail_media_id as course_thumbnail_media_id",
@@ -731,6 +735,46 @@ export function createChatRepository() {
       );
     },
 
+    /** Up to which message this member cleared the chat (0: never). */
+    async clearedSeq(db: Executor, roomId: string, userId: string) {
+      const row = await db
+        .selectFrom("chat_members")
+        .select("cleared_seq")
+        .where("room_id", "=", roomId)
+        .where("user_id", "=", userId)
+        .executeTakeFirst();
+      return Number(row?.cleared_seq ?? 0);
+    },
+
+    /**
+     * Clears the chat for one member up to `lastSeq` (read, too); deleting
+     * it also takes it out of their list, unpinned and unarchived.
+     */
+    async clearForMember(
+      db: Executor,
+      roomId: string,
+      userId: string,
+      lastSeq: number,
+      deleteChat: boolean,
+    ) {
+      const seq = String(lastSeq);
+      return db
+        .updateTable("chat_members")
+        .set({
+          cleared_seq: seq,
+          last_read_seq: sql`greatest(last_read_seq, ${seq}::bigint)`,
+          last_delivered_seq: sql`greatest(last_delivered_seq, ${seq}::bigint)`,
+          ...(deleteChat
+            ? { deleted_at: sql`now()`, pinned_at: null, archived_at: null }
+            : {}),
+          updated_at: sql`now()`,
+        })
+        .where("room_id", "=", roomId)
+        .where("user_id", "=", userId)
+        .returning("room_id")
+        .executeTakeFirst();
+    },
+
     /** Which of these messages this person deleted "for me". */
     async hiddenSeqs(
       db: Executor,
@@ -917,6 +961,7 @@ export function createChatRepository() {
         notify_level: "all" | "mentions" | "none";
         archived_at: Date | null;
         pinned_at: Date | null;
+        deleted_at: Date | null;
       }>,
     ) {
       return db
@@ -1100,6 +1145,20 @@ export function createChatRepository() {
     },
 
     // --------------------------------------------------------------- people
+    async getPersonCard(db: Executor, userId: string) {
+      return db
+        .selectFrom("users")
+        .select([
+          "id",
+          "display_name",
+          "avatar_data_url",
+          "is_deleted",
+          "username",
+        ])
+        .where("id", "=", userId)
+        .executeTakeFirst();
+    },
+
     async getPeople(db: Executor, userIds: readonly string[]) {
       if (userIds.length === 0) return [] as PersonRow[];
       return db

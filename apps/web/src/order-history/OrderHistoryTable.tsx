@@ -23,6 +23,7 @@ import {
   getOrderStatusStyle,
 } from "../orders/orderHelpers";
 import { ElevatedCard } from "../components/ElevatedCard";
+import { RefundMenuItem } from "./RefundMenuItem";
 
 export interface OrderHistoryTableProps {
   orders: readonly OrderHistoryItem[];
@@ -30,6 +31,8 @@ export interface OrderHistoryTableProps {
   onToggleSortOrder: () => void;
   onViewInvoice: (order: OrderHistoryItem) => void;
   onDownloadReceipt: (order: OrderHistoryItem) => void;
+  /** "Request refund" on a purchase that has a refund option. */
+  onRequestRefund?: (order: OrderHistoryItem) => void;
   onNavigatePage?: NavigateTo;
   setNotice?: (message: string) => void;
 }
@@ -40,6 +43,7 @@ function OrderActions({
   setOpen,
   onViewInvoice,
   onDownloadReceipt,
+  onRequestRefund,
   onNavigatePage,
   setNotice,
 }: {
@@ -48,6 +52,7 @@ function OrderActions({
   setOpen: (open: boolean) => void;
   onViewInvoice: (order: OrderHistoryItem) => void;
   onDownloadReceipt: (order: OrderHistoryItem) => void;
+  onRequestRefund?: (order: OrderHistoryItem) => void;
   onNavigatePage?: NavigateTo;
   setNotice?: (message: string) => void;
 }) {
@@ -129,6 +134,18 @@ function OrderActions({
           />
         </>
       )}
+      {order.refund && onRequestRefund && (
+        <>
+          <MenuDivider />
+          <RefundMenuItem
+            refund={order.refund}
+            onRequest={() => {
+              setOpen(false);
+              onRequestRefund(order);
+            }}
+          />
+        </>
+      )}
       <MenuDivider />
       <MenuAction
         Icon={Headset}
@@ -201,6 +218,7 @@ export function OrderHistoryTable({
   onToggleSortOrder,
   onViewInvoice,
   onDownloadReceipt,
+  onRequestRefund,
   onNavigatePage,
   setNotice,
 }: OrderHistoryTableProps) {
@@ -317,6 +335,7 @@ export function OrderHistoryTable({
                       setOpen={(open) => setOpenMenuId(open ? order.id : null)}
                       onViewInvoice={onViewInvoice}
                       onDownloadReceipt={onDownloadReceipt}
+                      onRequestRefund={onRequestRefund}
                       onNavigatePage={onNavigatePage}
                       setNotice={setNotice}
                     />
@@ -354,6 +373,7 @@ export function OrderHistoryTable({
                   }
                   onViewInvoice={onViewInvoice}
                   onDownloadReceipt={onDownloadReceipt}
+                  onRequestRefund={onRequestRefund}
                   onNavigatePage={onNavigatePage}
                   setNotice={setNotice}
                 />
