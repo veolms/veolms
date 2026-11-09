@@ -250,3 +250,15 @@ export const learningReminderEventSchema = z.strictObject({
   streakDays: z.number().int().nonnegative(),
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
 });
+
+export const workshopRegisteredEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  recipientUserId: z.uuid(),
+  /** The next session; null when every session is already over. */
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
+  timeZone: z.string().nullable(),
+  sessionCount: z.number().int().nonnegative(),
+});

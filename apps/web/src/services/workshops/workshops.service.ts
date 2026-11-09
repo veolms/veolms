@@ -7,6 +7,10 @@ import type {
   WorkshopAdminListQuery,
   WorkshopAdminListResponse,
   WorkshopPublishCheck,
+  WorkshopPublic,
+  WorkshopPublicListResponse,
+  WorkshopRegistrationResponse,
+  WorkshopViewer,
 } from "@veolms/contracts";
 
 const ADMIN_BASE = "/workshops/admin";
@@ -46,4 +50,23 @@ export const workshopsService = {
 
   remove: (workshopId: string): Promise<{ deleted: true }> =>
     api.delete<{ deleted: true }>(`${ADMIN_BASE}/${workshopId}`),
+};
+
+// --- Learners ---
+
+export const workshopsPublicService = {
+  list: (): Promise<WorkshopPublicListResponse> =>
+    api.get<WorkshopPublicListResponse>("/workshops"),
+
+  get: (slug: string): Promise<WorkshopPublic> =>
+    api.get<WorkshopPublic>(`/workshops/${encodeURIComponent(slug)}`),
+
+  viewer: (slug: string): Promise<WorkshopViewer> =>
+    api.get<WorkshopViewer>(`/workshops/${encodeURIComponent(slug)}/me`),
+
+  register: (workshopId: string): Promise<WorkshopRegistrationResponse> =>
+    api.post<WorkshopRegistrationResponse>(`/workshops/${workshopId}/register`),
+
+  unregister: (workshopId: string): Promise<{ registered: false }> =>
+    api.delete<{ registered: false }>(`/workshops/${workshopId}/register`),
 };

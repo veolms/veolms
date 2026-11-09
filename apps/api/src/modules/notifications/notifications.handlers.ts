@@ -25,6 +25,7 @@ import {
   refundCompletedEventSchema,
   userMentionedEventSchema,
   videoProcessingEventSchema,
+  workshopRegisteredEventSchema,
 } from "../../events/domain-event.schemas.ts";
 import type { Json } from "@veolms/database";
 
@@ -526,6 +527,28 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         channels: commonChannels,
         mandatory: false,
         deepLink: "/",
+      },
+    ];
+  },
+  "workshop.registered": async (payload) => {
+    const event = workshopRegisteredEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "workshop.registered",
+        category: "learning",
+        templateKey: "workshop.registered",
+        templateData: {
+          workshopTitle: event.workshopTitle,
+          workshopSlug: event.workshopSlug,
+          startsAt: event.startsAt ?? "",
+          endsAt: event.endsAt ?? "",
+          timeZone: event.timeZone ?? "",
+          sessionCount: event.sessionCount,
+        },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: `/workshops/${event.workshopSlug}`,
       },
     ];
   },

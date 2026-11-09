@@ -9,3 +9,12 @@ export const workshopKeys = {
   publishCheck: (workshopId: string) =>
     [...workshopKeys.all, "admin", "publish-check", workshopId] as const,
 };
+
+export const workshopPublicKeys = {
+  all: ["workshops", "public"] as const,
+  list: () => [...workshopPublicKeys.all, "list"] as const,
+  detail: (slug: string) =>
+    [...workshopPublicKeys.all, "detail", slug] as const,
+  viewer: (slug: string) =>
+    [...workshopPublicKeys.all, "viewer", slug] as const,
+};

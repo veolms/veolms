@@ -1,4 +1,4 @@
-import { formatMoney } from "@veolms/contracts";
+import { formatMoney, googleCalendarUrl } from "@veolms/contracts";
 import {
   discussionMentionEmail,
   discussionReplyEmail,
@@ -172,6 +172,89 @@ function discussionEmail(
         ? "follower"
         : "author",
   });
+}
+
+/** "Wed, 12 Nov 2026, 7:00 PM IST", in the session's own time zone. */
+function workshopWhenLabel(data: NotificationTemplateData): string | null {
+  const startsAt = optionalString(data, "startsAt");
+  const timeZone = optionalString(data, "timeZone") ?? "Asia/Kolkata";
+  if (!startsAt) return null;
+  const date = new Date(startsAt);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+      timeZoneName: "short",
+    }).format(date);
+  } catch {
+    return date.toUTCString();
+  }
+}
+
+/**
+ * The registration email: when it is, where to open it, and one-click
+ * "Add to Google Calendar". The .ics file is on the workshop page, where
+ * the download can check that the reader is the registrant.
+ */
+function workshopRegisteredEmail(
+  data: NotificationTemplateData,
+  deepLink: string | null,
+  brand: NotificationEmailBrand,
+): EmailContent {
+  const title = stringValue(data, "workshopTitle");
+  const when = workshopWhenLabel(data);
+  const startsAt = optionalString(data, "startsAt");
+  const endsAt = optionalString(data, "endsAt");
+  const sessionCount = numberValue(data, "sessionCount");
+  const pageUrl = absoluteUrl(deepLink);
+  const calendarUrl =
+    startsAt && endsAt
+      ? googleCalendarUrl({
+          title,
+          startsAt,
+          endsAt,
+          ...(pageUrl
+            ? { details: `Join from ${pageUrl}`, location: pageUrl }
+            : {}),
+        })
+      : null;
+  const subject = `You're registered: ${title}`;
+  const lines = [
+    `You're registered for ${title}.`,
+    when
+      ? sessionCount > 1
+        ? `First session: ${when} (${sessionCount} sessions in all).`
+        : `When: ${when}.`
+      : null,
+    "The Join button appears on the workshop page 15 minutes before the start. We'll remind you a day before and an hour before.",
+  ].filter((line): line is string => Boolean(line));
+  const settingsUrl = settingsPageUrl();
+  const text = [
+    ...lines,
+    pageUrl ? `\nOpen the workshop: ${pageUrl}` : null,
+    calendarUrl ? `Add to Google Calendar: ${calendarUrl}` : null,
+    `\nManage which emails you receive: ${settingsUrl}`,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+  const html = `<div style="font-family: sans-serif; line-height: 1.5; color: #222;"><h2>${escapeHtml(subject)}</h2>${lines
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join("")}${
+    pageUrl
+      ? `<p style="margin-top: 20px;"><a href="${escapeHtml(pageUrl)}">Open the workshop</a></p>`
+      : ""
+  }${
+    calendarUrl
+      ? `<p><a href="${escapeHtml(calendarUrl)}">Add to Google Calendar</a></p>`
+      : ""
+  }<p style="margin-top: 28px; font-size: 12px; color: #777;">You can choose which emails you receive in your <a href="${escapeHtml(settingsUrl)}" style="color: #777;">notification settings</a>.</p></div>`;
+  return { subject, text, html };
 }
 
 export function renderNotificationTemplate(
@@ -364,6 +447,17 @@ export function renderNotificationTemplate(
         body: `You hit your ${stringValue(data, "goalLabel")} learning goal today. Nice work!`,
       };
       break;
+    case "workshop.registered": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const when = workshopWhenLabel(data);
+      inApp = {
+        title: "You're registered",
+        body: when
+          ? `${workshopTitle} · ${when}. We'll remind you before it starts.`
+          : `${workshopTitle}. We'll remind you before it starts.`,
+      };
+      break;
+    }
     case "learning.reminder": {
       const streakDays = numberValue(data, "streakDays");
       inApp =
@@ -403,6 +497,8 @@ export function renderNotificationTemplate(
       templateKey === "user.mentioned" ||
       templateKey === "discussion.reply_created"
         ? discussionEmail(templateKey, data, deepLink, brand)
-        : emailContent(inApp.title, inApp.body, deepLink, brand),
+        : templateKey === "workshop.registered"
+          ? workshopRegisteredEmail(data, deepLink, brand)
+          : emailContent(inApp.title, inApp.body, deepLink, brand),
   };
 }

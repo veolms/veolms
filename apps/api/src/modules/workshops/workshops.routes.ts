@@ -8,6 +8,12 @@ import {
   workshopDeletedResponseSchema,
   workshopIdParamsSchema,
   workshopPublishCheckSchema,
+  workshopPublicListResponseSchema,
+  workshopPublicSchema,
+  workshopRegistrationResponseSchema,
+  workshopSlugParamsSchema,
+  workshopUnregisterResponseSchema,
+  workshopViewerSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../lib/errors.ts";
@@ -25,7 +31,7 @@ import { createWorkshopsService } from "./workshops.service.ts";
  * they may run workshops too, so the check is on the key alone.
  */
 const workshopsRoutes: RoutePlugin = async (app, options) => {
-  const { requires } = createPermissionPreHandlers(options.database);
+  const { signedIn, requires } = createPermissionPreHandlers(options.database);
   const service = createWorkshopsService({ database: options.database });
   const controller = createWorkshopsController({ service });
   const tags = ["Workshops"];
@@ -228,6 +234,128 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.remove,
+  );
+
+  // --- Learners ---
+
+  app.get(
+    "/workshops",
+    {
+      schema: {
+        operationId: "listWorkshops",
+        tags,
+        summary: "Published workshops: upcoming (soonest first) and past",
+        response: {
+          200: jsonResponse(
+            "Upcoming and past.",
+            workshopPublicListResponseSchema,
+          ),
+        },
+      },
+    },
+    controller.listPublic,
+  );
+
+  app.get(
+    "/workshops/:slug",
+    {
+      schema: {
+        operationId: "getWorkshop",
+        tags,
+        summary: "A published workshop as learners see it (no meeting links)",
+        params: workshopSlugParamsSchema,
+        response: {
+          200: jsonResponse("The workshop.", workshopPublicSchema),
+          404: errorResponse("Workshop not found"),
+        },
+      },
+    },
+    controller.getPublic,
+  );
+
+  app.get(
+    "/workshops/:slug/me",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "getWorkshopViewer",
+        tags,
+        summary:
+          "Whether the signed-in learner is registered, and may register",
+        params: workshopSlugParamsSchema,
+        response: {
+          200: jsonResponse("The viewer's standing.", workshopViewerSchema),
+          401: errorResponse("Authentication required"),
+          404: errorResponse("Workshop not found"),
+        },
+      },
+    },
+    controller.viewer,
+  );
+
+  app.post(
+    "/workshops/:workshopId/register",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "registerForWorkshop",
+        tags,
+        summary: "Register for a free workshop",
+        params: workshopIdParamsSchema,
+        response: {
+          201: jsonResponse("Registered.", workshopRegistrationResponseSchema),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Only the linked course's learners may register"),
+          404: errorResponse("Workshop not found"),
+          409: errorResponse(
+            "Full, ended, cancelled, or paid (not yet available)",
+          ),
+        },
+      },
+    },
+    controller.register,
+  );
+
+  app.delete(
+    "/workshops/:workshopId/register",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "unregisterFromWorkshop",
+        tags,
+        summary: "Cancel the signed-in learner's registration",
+        params: workshopIdParamsSchema,
+        response: {
+          200: jsonResponse(
+            "No longer registered.",
+            workshopUnregisterResponseSchema,
+          ),
+          401: errorResponse("Authentication required"),
+          404: errorResponse("Workshop not found"),
+        },
+      },
+    },
+    controller.unregister,
+  );
+
+  app.get(
+    "/workshops/:workshopId/calendar.ics",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "downloadWorkshopCalendar",
+        tags,
+        summary:
+          "The workshop's sessions as a calendar file (registrants only)",
+        params: workshopIdParamsSchema,
+        response: {
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Not registered"),
+          404: errorResponse("Workshop not found"),
+        },
+      },
+    },
+    controller.calendar,
   );
 };
 

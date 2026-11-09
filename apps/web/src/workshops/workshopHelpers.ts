@@ -2,10 +2,12 @@ import {
   WORKSHOP_DEFAULT_TIME_ZONE,
   formatMoney,
   type WorkshopAdminListItem,
+  type WorkshopPublicState,
   type WorkshopSessionState,
 } from "@veolms/contracts";
 
 import { elevatedCardClasses } from "../components/ElevatedCard";
+import { getApiRequestUrl } from "../lib/api-client";
 
 export const surfaceClass = `${elevatedCardClasses} overflow-hidden text-(--text)`;
 
@@ -286,4 +288,48 @@ export function timeZoneOptions(): readonly [string, string][] {
     return [zone, offset ? `${zone.replace(/_/g, " ")} (${offset})` : zone];
   });
   return cachedZoneOptions;
+}
+
+// --- Learner pages ---
+
+export function publicStateLabel(state: WorkshopPublicState): string {
+  switch (state) {
+    case "live":
+      return "Live now";
+    case "ended":
+      return "Ended";
+    case "upcoming":
+      return "Upcoming";
+  }
+}
+
+export function publicStateClass(state: WorkshopPublicState): string {
+  switch (state) {
+    case "live":
+      return "bg-emerald-500 text-white";
+    case "ended":
+      return "bg-black/60 text-white";
+    case "upcoming":
+      return "bg-(--accent) text-(--on-accent)";
+  }
+}
+
+/** One line for a card: "Tue, 10 Nov 2026 · 7:00 PM IST" in the viewer's zone. */
+export function formatNextSession(
+  iso: string | null,
+  timeZone: string,
+): string {
+  if (!iso) return "Date to be announced";
+  return `${formatSessionDay(iso, timeZone)} · ${formatSessionTime(iso, timeZone)} ${timeZoneShortName(timeZone, new Date(iso))}`;
+}
+
+export function seatsLeftLabel(seatsLeft: number | null): string | null {
+  if (seatsLeft === null) return null;
+  if (seatsLeft === 0) return "Full";
+  return seatsLeft === 1 ? "1 seat left" : `${seatsLeft} seats left`;
+}
+
+/** The signed-in learner's calendar file for a workshop they registered for. */
+export function workshopCalendarUrl(workshopId: string): string {
+  return getApiRequestUrl(`/workshops/${workshopId}/calendar.ics`);
 }

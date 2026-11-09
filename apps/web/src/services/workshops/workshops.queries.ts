@@ -4,11 +4,14 @@ import type {
   WorkshopAdminListResponse,
   WorkshopAdminTab,
   WorkshopPublishCheck,
+  WorkshopPublic,
+  WorkshopPublicListResponse,
+  WorkshopViewer,
 } from "@veolms/contracts";
 
 import type { ApiError } from "../../lib/api-error";
-import { workshopKeys } from "./workshops.keys";
-import { workshopsService } from "./workshops.service";
+import { workshopKeys, workshopPublicKeys } from "./workshops.keys";
+import { workshopsPublicService, workshopsService } from "./workshops.service";
 
 export function useWorkshopsAdminList(options: {
   tab: WorkshopAdminTab;
@@ -49,5 +52,38 @@ export function useWorkshopPublishCheck(
     queryKey: workshopKeys.publishCheck(workshopId ?? ""),
     queryFn: () => workshopsService.publishCheck(workshopId!),
     enabled: Boolean(workshopId) && (options?.enabled ?? true),
+  });
+}
+
+// --- Learners ---
+
+export function useWorkshopsPublic(options?: { enabled?: boolean }) {
+  return useQuery<WorkshopPublicListResponse, ApiError>({
+    queryKey: workshopPublicKeys.list(),
+    queryFn: () => workshopsPublicService.list(),
+    enabled: options?.enabled ?? true,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useWorkshopPublic(slug: string | null | undefined) {
+  return useQuery<WorkshopPublic, ApiError>({
+    queryKey: workshopPublicKeys.detail(slug ?? ""),
+    queryFn: () => workshopsPublicService.get(slug!),
+    enabled: Boolean(slug),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** The signed-in learner's standing; not asked while signed out. */
+export function useWorkshopViewer(
+  slug: string | null | undefined,
+  options: { enabled: boolean },
+) {
+  return useQuery<WorkshopViewer, ApiError>({
+    queryKey: workshopPublicKeys.viewer(slug ?? ""),
+    queryFn: () => workshopsPublicService.viewer(slug!),
+    enabled: Boolean(slug) && options.enabled,
+    staleTime: 15 * 1000,
   });
 }

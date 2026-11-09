@@ -212,6 +212,16 @@ export const WorkshopsAccessDenied = lazy(() =>
     default: module.WorkshopsAccessDenied,
   })),
 );
+export const WorkshopsPage = lazy(() =>
+  import("../workshops/WorkshopsPage").then((module) => ({
+    default: module.WorkshopsPage,
+  })),
+);
+export const WorkshopDetailPage = lazy(() =>
+  import("../workshops/WorkshopDetailPage").then((module) => ({
+    default: module.WorkshopDetailPage,
+  })),
+);
 export const TeamPage = lazy(() =>
   import("../team/TeamPage").then((module) => ({
     default: module.TeamPage,

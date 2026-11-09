@@ -48,6 +48,7 @@ const RESERVED_PROFILE_PATHS = new Set([
   "/support-inbox",
   "/coupons",
   "/workshops-admin",
+  "/workshops",
   "/home-page",
   "/platform",
   "/team",
@@ -149,6 +150,14 @@ export function isCoursesPublicPath(pathname: string): boolean {
   );
 }
 
+/** The Workshops page and a workshop's page: open to signed-out visitors. */
+export function isWorkshopsPublicPath(pathname: string): boolean {
+  const path = normalizeAppPath(pathname);
+  return (
+    path === "/workshops" || /^\/workshops\/[a-z0-9][a-z0-9-]*$/.test(path)
+  );
+}
+
 export function isPublicProfilePath(pathname: string): boolean {
   const path = normalizeAppPath(pathname);
   const match = /^\/([^/]+)$/.exec(path);
@@ -184,6 +193,7 @@ export function isPublicAcademyPath(pathname: string): boolean {
     isInvitePath(pathname) ||
     isSettingsPath(pathname) ||
     isCoursesPublicPath(pathname) ||
+    isWorkshopsPublicPath(pathname) ||
     isPublicProfilePath(pathname) ||
     (ALLOW_GUEST_LEARNING && isLearningPath(pathname))
   );

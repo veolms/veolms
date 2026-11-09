@@ -2,6 +2,7 @@ import type {
   Database,
   DatabaseExecutor,
   WorkshopResourceJson,
+  WorkshopRegistrationTable,
   WorkshopSessionTable,
   WorkshopStatus,
   WorkshopTable,
@@ -18,6 +19,7 @@ export interface WorkshopDetailRow extends WorkshopRow {
   host_username: string | null;
   host_avatar: string | null;
   course_title: string | null;
+  course_slug: string | null;
   registration_count: number;
 }
 
@@ -42,6 +44,7 @@ function withJoins(database: DatabaseExecutor) {
       "host.username as host_username",
       "host.avatar_data_url as host_avatar",
       "courses.title as course_title",
+      "courses.slug as course_slug",
       sql<number>`(
         select count(*)::int from workshop_registrations r
         where r.workshop_id = workshops.id and r.cancelled_at is null
@@ -348,4 +351,155 @@ export async function countAdminTabs(
     drafts: Number(row.drafts),
     cancelled: Number(row.cancelled),
   };
+}
+
+// --- Step 2: learners ---
+
+const listAggregates = (now: Date) => [
+  sql<number>`(
+    select count(*)::int from workshop_sessions s where s.workshop_id = workshops.id
+  )`.as("session_count"),
+  sql<Date | null>`(
+    select min(s.starts_at) from workshop_sessions s
+    where s.workshop_id = workshops.id and s.ends_at > ${now}
+  )`.as("next_session_at"),
+  sql<Date | null>`(
+    select min(s.starts_at) from workshop_sessions s where s.workshop_id = workshops.id
+  )`.as("first_session_at"),
+  sql<Date | null>`(
+    select max(s.ends_at) from workshop_sessions s where s.workshop_id = workshops.id
+  )`.as("last_session_ends_at"),
+];
+
+/** Every published workshop, the ones with a session still to come first. */
+export async function listPublicWorkshops(
+  database: Kysely<Database>,
+  now: Date,
+): Promise<WorkshopListRow[]> {
+  return (await withJoins(database)
+    .select(listAggregates(now))
+    .where("workshops.status", "=", "published")
+    .orderBy(sql`next_session_at`, "asc")
+    .orderBy(sql`last_session_ends_at`, "desc")
+    .limit(ADMIN_LIST_LIMIT)
+    .execute()) as WorkshopListRow[];
+}
+
+/** A published or cancelled workshop by its address; drafts are nobody's. */
+export async function findPublicBySlug(
+  database: Kysely<Database>,
+  slug: string,
+  now: Date,
+): Promise<WorkshopListRow | undefined> {
+  return (await withJoins(database)
+    .select(listAggregates(now))
+    .where("workshops.slug", "=", slug)
+    .where("workshops.status", "in", ["published", "cancelled"])
+    .executeTakeFirst()) as WorkshopListRow | undefined;
+}
+
+export async function findPublicById(
+  database: Kysely<Database>,
+  workshopId: string,
+  now: Date,
+): Promise<WorkshopListRow | undefined> {
+  return (await withJoins(database)
+    .select(listAggregates(now))
+    .where("workshops.id", "=", workshopId)
+    .where("workshops.status", "in", ["published", "cancelled"])
+    .executeTakeFirst()) as WorkshopListRow | undefined;
+}
+
+export type WorkshopRegistrationRow = Selectable<WorkshopRegistrationTable>;
+
+export async function findRegistration(
+  database: DatabaseExecutor,
+  workshopId: string,
+  userId: string,
+): Promise<WorkshopRegistrationRow | undefined> {
+  return await database
+    .selectFrom("workshop_registrations")
+    .selectAll()
+    .where("workshop_id", "=", workshopId)
+    .where("user_id", "=", userId)
+    .executeTakeFirst();
+}
+
+/** Locks the workshop row for the rest of the transaction. */
+export async function lockWorkshop(
+  database: DatabaseExecutor,
+  workshopId: string,
+): Promise<void> {
+  await database
+    .selectFrom("workshops")
+    .select("id")
+    .where("id", "=", workshopId)
+    .forUpdate()
+    .execute();
+}
+
+export async function countActiveRegistrations(
+  database: DatabaseExecutor,
+  workshopId: string,
+): Promise<number> {
+  const row = await database
+    .selectFrom("workshop_registrations")
+    .select((eb) => eb.fn.count<number>("id").as("total"))
+    .where("workshop_id", "=", workshopId)
+    .where("cancelled_at", "is", null)
+    .executeTakeFirst();
+  return Number(row?.total ?? 0);
+}
+
+/**
+ * Registers, or re-activates a cancelled registration. The unique key on
+ * (workshop, user) makes a repeat a no-op; the caller reads the row back.
+ */
+export async function upsertRegistration(
+  database: DatabaseExecutor,
+  input: {
+    id: string;
+    workshopId: string;
+    userId: string;
+    source: "free" | "order" | "admin";
+    orderId: string | null;
+    now: Date;
+  },
+): Promise<WorkshopRegistrationRow> {
+  return await database
+    .insertInto("workshop_registrations")
+    .values({
+      id: input.id,
+      workshop_id: input.workshopId,
+      user_id: input.userId,
+      source: input.source,
+      order_id: input.orderId,
+      registered_at: input.now,
+      cancelled_at: null,
+    })
+    .onConflict((conflict) =>
+      conflict.columns(["workshop_id", "user_id"]).doUpdateSet({
+        cancelled_at: null,
+        registered_at: input.now,
+        source: input.source,
+        order_id: input.orderId,
+      }),
+    )
+    .returningAll()
+    .executeTakeFirstOrThrow();
+}
+
+export async function cancelRegistration(
+  database: DatabaseExecutor,
+  workshopId: string,
+  userId: string,
+  now: Date,
+): Promise<void> {
+  await database
+    .updateTable("workshop_registrations")
+    .set({ cancelled_at: now })
+    .where("workshop_id", "=", workshopId)
+    .where("user_id", "=", userId)
+    .where("cancelled_at", "is", null)
+    .execute();
 }

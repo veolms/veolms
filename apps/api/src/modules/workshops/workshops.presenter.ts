@@ -3,6 +3,10 @@ import {
   type WorkshopAdmin,
   type WorkshopAdminListItem,
   type WorkshopSessionAdmin,
+  type WorkshopPublic,
+  type WorkshopPublicListItem,
+  type WorkshopPublicState,
+  type WorkshopSessionPublic,
 } from "@veolms/contracts";
 
 import { displayAvatarUrl } from "../avatars/index.ts";
@@ -98,5 +102,79 @@ export function presentWorkshopListItem(
     lastSessionEndsAt: isoOrNull(row.last_session_ends_at),
     registrationCount: Number(row.registration_count),
     updatedAt: iso(row.updated_at),
+  };
+}
+
+// --- Step 2: learners ---
+
+function publicState(row: WorkshopListRow, now: Date): WorkshopPublicState {
+  const lastEnd = row.last_session_ends_at
+    ? new Date(row.last_session_ends_at).getTime()
+    : null;
+  if (lastEnd !== null && lastEnd <= now.getTime()) return "ended";
+  const next = row.next_session_at
+    ? new Date(row.next_session_at).getTime()
+    : null;
+  return next !== null && next <= now.getTime() ? "live" : "upcoming";
+}
+
+export function presentWorkshopPublicListItem(
+  row: WorkshopListRow,
+  now: Date = new Date(),
+): WorkshopPublicListItem {
+  const registrationCount = Number(row.registration_count);
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    summary: row.summary,
+    coverUrl: row.cover_url,
+    host: host(row),
+    courseId: row.course_id,
+    courseTitle: row.course_title,
+    courseSlug: row.course_slug,
+    priceMinor: row.price_minor,
+    currency: row.currency,
+    capacity: row.capacity,
+    seatsLeft:
+      row.capacity === null
+        ? null
+        : Math.max(0, row.capacity - registrationCount),
+    registrationCount,
+    sessionCount: Number(row.session_count),
+    nextSessionAt: isoOrNull(row.next_session_at ?? row.first_session_at),
+    lastSessionEndsAt: isoOrNull(row.last_session_ends_at),
+    state: publicState(row, now),
+  };
+}
+
+export function presentSessionPublic(
+  row: WorkshopSessionRow,
+  now: Date,
+): WorkshopSessionPublic {
+  return {
+    id: row.id,
+    position: row.position,
+    title: row.title,
+    startsAt: iso(row.starts_at),
+    endsAt: iso(row.ends_at),
+    timeZone: row.time_zone,
+    state: workshopSessionState(row.starts_at, row.ends_at, now),
+    hasRecording: row.recording_ready_at !== null,
+  };
+}
+
+export function presentWorkshopPublic(
+  row: WorkshopListRow,
+  sessions: WorkshopSessionRow[],
+  now: Date = new Date(),
+): WorkshopPublic {
+  return {
+    ...presentWorkshopPublicListItem(row, now),
+    description: row.description,
+    resources: row.resources ?? [],
+    sessions: sessions.map((session) => presentSessionPublic(session, now)),
+    status: row.status === "cancelled" ? "cancelled" : "published",
+    cancelReason: row.cancel_reason,
   };
 }

@@ -62,6 +62,54 @@ export function createWorkshopsController({
     return { deleted: true as const };
   }
 
+  async function listPublic() {
+    return await service.listPublic();
+  }
+
+  async function getPublic(
+    request: FastifyRequest<{ Params: { slug: string } }>,
+  ) {
+    return await service.getPublic(request.params.slug);
+  }
+
+  async function viewer(request: FastifyRequest<{ Params: { slug: string } }>) {
+    return await service.viewer(request.params.slug, request.user!.id);
+  }
+
+  async function register(
+    request: FastifyRequest<WorkshopParams>,
+    reply: FastifyReply,
+  ) {
+    const result = await service.register(
+      request.params.workshopId,
+      request.user!.id,
+    );
+    await reply.status(201).send({
+      registered: true as const,
+      registrationId: result.registrationId,
+    });
+  }
+
+  async function unregister(request: FastifyRequest<WorkshopParams>) {
+    await service.unregister(request.params.workshopId, request.user!.id);
+    return { registered: false as const };
+  }
+
+  async function calendar(
+    request: FastifyRequest<WorkshopParams>,
+    reply: FastifyReply,
+  ) {
+    const file = await service.calendar(
+      request.params.workshopId,
+      request.user!.id,
+    );
+    return reply
+      .type("text/calendar; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="${file.filename}"`)
+      .header("Cache-Control", "no-store")
+      .send(file.ics);
+  }
+
   return {
     list,
     getOne,
@@ -72,6 +120,12 @@ export function createWorkshopsController({
     unpublish,
     cancel,
     remove,
+    listPublic,
+    getPublic,
+    viewer,
+    register,
+    unregister,
+    calendar,
   };
 }
 

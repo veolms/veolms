@@ -279,3 +279,128 @@ export type WorkshopPublishIssue = z.infer<typeof workshopPublishIssueSchema>;
 export const workshopDeletedResponseSchema = z.strictObject({
   deleted: z.literal(true),
 });
+
+// --- Step 2: what learners see, and registering ---
+
+/** A session as learners see it: no meeting link, no passcode. */
+export const workshopSessionPublicSchema = z.strictObject({
+  id: z.uuid(),
+  position: z.number().int().nonnegative(),
+  title: z.string().nullable(),
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+  timeZone: z.string(),
+  state: workshopSessionStateSchema,
+  hasRecording: z.boolean(),
+});
+export type WorkshopSessionPublic = z.infer<typeof workshopSessionPublicSchema>;
+
+/** Where the whole workshop is in time, for cards and tabs. */
+export const workshopPublicStates = ["upcoming", "live", "ended"] as const;
+export const workshopPublicStateSchema = z.enum(workshopPublicStates);
+export type WorkshopPublicState = z.infer<typeof workshopPublicStateSchema>;
+
+export const workshopPublicListItemSchema = z.strictObject({
+  id: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  summary: z.string().nullable(),
+  coverUrl: z.string().nullable(),
+  host: workshopHostSchema,
+  /** Set when only that course's learners may register. */
+  courseId: z.uuid().nullable(),
+  courseTitle: z.string().nullable(),
+  courseSlug: z.string().nullable(),
+  priceMinor: z.number().int().nonnegative().nullable(),
+  currency: z.string().length(3),
+  capacity: z.number().int().positive().nullable(),
+  /** Null when seats are unlimited. */
+  seatsLeft: z.number().int().nonnegative().nullable(),
+  registrationCount: z.number().int().nonnegative(),
+  sessionCount: z.number().int().nonnegative(),
+  nextSessionAt: z.iso.datetime().nullable(),
+  lastSessionEndsAt: z.iso.datetime().nullable(),
+  state: workshopPublicStateSchema,
+});
+export type WorkshopPublicListItem = z.infer<
+  typeof workshopPublicListItemSchema
+>;
+
+export const workshopPublicListResponseSchema = z.strictObject({
+  upcoming: z.array(workshopPublicListItemSchema),
+  past: z.array(workshopPublicListItemSchema),
+});
+export type WorkshopPublicListResponse = z.infer<
+  typeof workshopPublicListResponseSchema
+>;
+
+export const workshopPublicSchema = workshopPublicListItemSchema.extend({
+  description: z.string().nullable(),
+  resources: z.array(workshopResourceSchema),
+  sessions: z.array(workshopSessionPublicSchema),
+  status: z.enum(["published", "cancelled"]),
+  cancelReason: z.string().nullable(),
+});
+export type WorkshopPublic = z.infer<typeof workshopPublicSchema>;
+
+/** Why the Register button is, or is not, offered to this viewer. */
+export const workshopRegistrationReasons = [
+  "ok",
+  "sign_in",
+  "registered",
+  "course_required",
+  "full",
+  "payment_required",
+  "ended",
+  "cancelled",
+] as const;
+export const workshopRegistrationReasonSchema = z.enum(
+  workshopRegistrationReasons,
+);
+export type WorkshopRegistrationReason = z.infer<
+  typeof workshopRegistrationReasonSchema
+>;
+
+export const workshopViewerSchema = z.strictObject({
+  registered: z.boolean(),
+  registeredAt: z.iso.datetime().nullable(),
+  joinedSessionIds: z.array(z.uuid()),
+  canRegister: z.boolean(),
+  reason: workshopRegistrationReasonSchema,
+});
+export type WorkshopViewer = z.infer<typeof workshopViewerSchema>;
+
+export const workshopSlugParamsSchema = z.strictObject({
+  slug: z.string().min(1).max(80),
+});
+
+export const workshopRegistrationResponseSchema = z.strictObject({
+  registered: z.literal(true),
+  registrationId: z.uuid(),
+});
+export const workshopUnregisterResponseSchema = z.strictObject({
+  registered: z.literal(false),
+});
+
+/** The "Add to Google Calendar" link for one session. */
+export function googleCalendarUrl(input: {
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  details?: string;
+  location?: string;
+}): string {
+  const stamp = (iso: string) =>
+    new Date(iso).toISOString().replace(/[-:]|\.\d{3}/g, "");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: input.title,
+    dates: `${stamp(input.startsAt)}/${stamp(input.endsAt)}`,
+    ...(input.details ? { details: input.details } : {}),
+    ...(input.location ? { location: input.location } : {}),
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+export type WorkshopRegistrationResponse = z.infer<
+  typeof workshopRegistrationResponseSchema
+>;

@@ -4,11 +4,12 @@ import type {
   CreateWorkshopRequest,
   UpdateWorkshopRequest,
   WorkshopAdmin,
+  WorkshopRegistrationResponse,
 } from "@veolms/contracts";
 
 import type { ApiError } from "../../lib/api-error";
-import { workshopKeys } from "./workshops.keys";
-import { workshopsService } from "./workshops.service";
+import { workshopKeys, workshopPublicKeys } from "./workshops.keys";
+import { workshopsPublicService, workshopsService } from "./workshops.service";
 
 function useRefreshWorkshops() {
   const queryClient = useQueryClient();
@@ -85,5 +86,45 @@ export function useDeleteWorkshop() {
         queryKey: workshopKeys.adminDetail(workshopId),
       });
     },
+  });
+}
+
+// --- Learners ---
+
+function useRefreshViewer() {
+  const queryClient = useQueryClient();
+  return (slug: string) => {
+    void queryClient.invalidateQueries({
+      queryKey: workshopPublicKeys.viewer(slug),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: workshopPublicKeys.detail(slug),
+    });
+    void queryClient.invalidateQueries({ queryKey: workshopPublicKeys.list() });
+  };
+}
+
+export function useRegisterForWorkshop() {
+  const refresh = useRefreshViewer();
+  return useMutation<
+    WorkshopRegistrationResponse,
+    ApiError,
+    { workshopId: string; slug: string }
+  >({
+    mutationFn: ({ workshopId }) => workshopsPublicService.register(workshopId),
+    onSuccess: (_result, { slug }) => refresh(slug),
+  });
+}
+
+export function useUnregisterFromWorkshop() {
+  const refresh = useRefreshViewer();
+  return useMutation<
+    { registered: false },
+    ApiError,
+    { workshopId: string; slug: string }
+  >({
+    mutationFn: ({ workshopId }) =>
+      workshopsPublicService.unregister(workshopId),
+    onSuccess: (_result, { slug }) => refresh(slug),
   });
 }

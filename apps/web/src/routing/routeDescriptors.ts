@@ -30,6 +30,8 @@ export type ShellPage =
   | "coupon-builder"
   | "workshops"
   | "workshop-builder"
+  | "workshops-browse"
+  | "workshop-detail"
   | "home-page-settings"
   | "platform"
   | "team"
@@ -460,7 +462,7 @@ export const routeDescriptors = {
   "workshops-admin": {
     kind: "shell",
     page: "workshops",
-    section: "Workshops",
+    section: "Manage workshops",
     title: "Workshops",
     description:
       "Live sessions on Zoom, Google Meet or YouTube Live: schedule, publish and run them.",
@@ -468,16 +470,31 @@ export const routeDescriptors = {
   "workshop-create": {
     kind: "shell",
     page: "workshop-builder",
-    section: "Workshops",
+    section: "Manage workshops",
     title: "Create workshop",
     description: "Schedule a new live workshop for your learners.",
   },
   "workshop-edit": {
     kind: "shell",
     page: "workshop-builder",
-    section: "Workshops",
+    section: "Manage workshops",
     title: "Edit workshop",
     description: "Change a workshop's sessions, links and details.",
+  },
+  workshops: {
+    kind: "shell",
+    page: "workshops-browse",
+    section: "Workshops",
+    title: "Workshops",
+    description:
+      "Live sessions with the instructors: register, get reminders, join from here.",
+  },
+  "workshop-detail": {
+    kind: "shell",
+    page: "workshop-detail",
+    section: "Workshops",
+    title: "Workshop",
+    description: "A live workshop: sessions, host, and registration.",
   },
   // Help and feedback: pages that render their own route inside the shell.
   support: {
@@ -542,6 +559,8 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "workshops-admin": "/workshops-admin",
   "workshop-create": "/workshops-admin/create",
   "workshop-edit": "/workshops-admin/:workshopId",
+  workshops: "/workshops",
+  "workshop-detail": "/workshops/:workshopSlug",
   "create-course": "/courses/create",
   "edit-course": "/courses/:courseId/edit/basics",
   students: "/students",
@@ -607,6 +626,8 @@ const canonicalPathsByRouteId = {
   "workshops-admin": "/workshops-admin",
   "workshop-create": "/workshops-admin/create",
   "workshop-edit": "/workshops-admin/:workshopId",
+  workshops: "/workshops",
+  "workshop-detail": "/workshops/:workshopSlug",
   "course-create": "/courses/create",
   "course-create-tab": "/courses/create/:editTab",
   "course-edit": "/courses/:courseId/edit/:editTab",
@@ -752,6 +773,12 @@ export const getEffectiveRouteId = (
 
   if (routeId === "quiz-edit") {
     return /^\/quizzes\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "workshop-detail") {
+    return /^\/workshops\/[a-z0-9][a-z0-9-]*$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

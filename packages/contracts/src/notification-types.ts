@@ -26,6 +26,8 @@ export const OPTIONAL_NOTIFICATION_GROUPS = {
     "moderation.report_resolved",
   ],
   reminders: ["learning.reminder", "quiz.assigned"],
+  // Live workshops: your registration, reminders, the recording.
+  workshops: ["workshop.registered"],
   achievements: [
     "certificate.generated",
     "learning.goal_completed",
