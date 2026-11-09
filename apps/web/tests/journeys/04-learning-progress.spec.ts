@@ -51,9 +51,12 @@ async function watchToTheEnd(
         lesson.lessonId === lessonId && lesson.progressPercent === 100,
     ),
   );
-  await expect(lessonInList(page, lessonNumber)).toContainText("completed", {
-    timeout: 30_000,
-  });
+  await expect(lessonInList(page, lessonNumber)).toHaveAccessibleName(
+    /\bcompleted\b/u,
+    {
+      timeout: 30_000,
+    },
+  );
   await saved;
 }
 
@@ -116,8 +119,8 @@ test("a lesson watched halfway is saved as started, not as complete", async ({
 
   await page.reload();
   const row = lessonInList(page, 1);
-  await expect(row).toContainText(/\d+% complete/u);
-  await expect(row).not.toContainText("completed");
+  await expect(row).toHaveAccessibleName(/\d+% complete\b/u);
+  await expect(row).not.toHaveAccessibleName(/\bcompleted\b/u);
 
   await openCoursePage(page, course);
   await expect(progressBox(page)).toContainText("0 of 3 lessons");
@@ -231,7 +234,7 @@ test("progress never goes backwards: replaying the start of a finished lesson ke
   await replaySaved;
 
   await page.reload();
-  await expect(lessonInList(page, 1)).toContainText("completed");
+  await expect(lessonInList(page, 1)).toHaveAccessibleName(/\bcompleted\b/u);
   await openCoursePage(page, course);
   await expect(progressBox(page)).toContainText("1 of 3 lessons");
 });

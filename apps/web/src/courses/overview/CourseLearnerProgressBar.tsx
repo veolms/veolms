@@ -13,7 +13,10 @@ import type {
   CourseAccessEnrollment,
   CourseAccessResume,
 } from "@veolms/contracts";
-import { CourseEnrolmentDetails } from "./CourseEnrolmentDetails";
+import {
+  CourseEnrolmentDetails,
+  CourseEnrolmentDetailsPlaceholder,
+} from "./CourseEnrolmentDetails";
 import { describeEnrolmentWords } from "./enrolmentDetails";
 import { useKeptEnrolmentWords } from "./enrolmentWordsCopy";
 import { useLearningProgressResumeContext } from "../../services/learning-progress";
@@ -53,6 +56,13 @@ interface CourseLearnerProgressBarProps {
     accessExpiresAt: string | null;
     enrollment?: CourseAccessEnrollment | null;
   } | null;
+  /**
+   * The course's own access answer is still on its way (the band is drawn
+   * from the learner's list of courses): "Up next" and "Your enrollment"
+   * hold their places with placeholders, so the band does not grow when
+   * they come.
+   */
+  enrolmentPending?: boolean;
   onNavigatePage?: NavigateTo;
   /**
    * The lesson to carry on with, readied ahead of the press and opened
@@ -91,6 +101,7 @@ export function CourseLearnerProgressBar({
   totalLessons,
   resume,
   enrolment,
+  enrolmentPending = false,
   onNavigatePage,
   openIntent,
 }: CourseLearnerProgressBarProps) {
@@ -233,10 +244,19 @@ export function CourseLearnerProgressBar({
                 Lesson {lesson.lessonNumber} · {lesson.title}
               </span>
             </p>
+          ) : enrolmentPending && !isComplete ? (
+            // The line's own height, as "Up next" is drawn.
+            <p aria-hidden="true" className={`flex h-[1lh] ${upNextClasses}`}>
+              <span className={`${placeholder} h-[0.9em] w-52`} />
+            </p>
           ) : null}
         </div>
       </div>
-      {enrolment?.enrollment ? (
+      {enrolmentPending ? (
+        <div className={`${priceBarPaddingClasses} pt-0!`}>
+          <CourseEnrolmentDetailsPlaceholder />
+        </div>
+      ) : enrolment?.enrollment ? (
         <div className={`${priceBarPaddingClasses} pt-0!`}>
           <CourseEnrolmentDetails
             enrollment={enrolment.enrollment}

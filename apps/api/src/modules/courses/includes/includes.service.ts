@@ -45,7 +45,7 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     detail: string | null;
     icon: string | null;
     color: string | null;
-    kind: "custom" | "video";
+    kind: "custom" | "video" | "access";
   }): CourseIncludeItem {
     return {
       id: row.id,

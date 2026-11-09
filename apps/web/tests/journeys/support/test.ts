@@ -399,7 +399,14 @@ export async function expectNoVideo(page: Page) {
   expect(await lessonVideo(page)).toBeNull();
 }
 
-/** The lesson's row in the course's lesson list, e.g. "2. Lesson 2 00:12 , locked". */
+/**
+ * The lesson's row in the course's lesson list, announced as e.g. "2. Lesson
+ * 2 00:12, locked". Check its state ("locked", "completed") by what it
+ * announces (`toHaveAccessibleName`), never by its text: the row holds the
+ * words for every state, hidden but for its own, so a page drawn before its
+ * scripts run can show the right one (see CurriculumLessonCard), and its
+ * text has them all.
+ */
 export function lessonInList(page: Page, lessonNumber: number) {
   return page
     .getByRole("complementary", { name: "Course curriculum" })

@@ -136,7 +136,7 @@ export interface UseLessonHandlersArgs {
               detail?: string | null | undefined;
               icon?: string | null | undefined;
               color?: string | null | undefined;
-              kind?: "custom" | "video" | undefined;
+              kind?: "custom" | "video" | "access" | undefined;
             }[]
           | undefined;
       },
@@ -251,7 +251,7 @@ export interface UseLessonHandlersArgs {
               detail?: string | null | undefined;
               icon?: string | null | undefined;
               color?: string | null | undefined;
-              kind?: "custom" | "video" | undefined;
+              kind?: "custom" | "video" | "access" | undefined;
             }[]
           | undefined;
       },

@@ -9,6 +9,7 @@ import {
   useStaticCurriculum,
 } from "../../services/courses";
 import { keepCoursePrice } from "../liveCoursePrices";
+import { useHydrated } from "../viewerCourseState";
 import {
   curriculumToOverview,
   type CourseCurriculumPreview,
@@ -26,6 +27,12 @@ export interface CoursePageData {
   refetch: () => void;
   /** What the viewer may do with the course; undefined until it answers. */
   access: ProvisionalCourseAccess | undefined;
+  /**
+   * Whether `access` is the course's own answer (or this tab's copy of
+   * it), not drawn from the learner's list of courses: only that one says
+   * where they are and carries "Your enrollment".
+   */
+  accessAnswered: boolean;
   accessPending: boolean;
   /**
    * A signed-in learner's access answer failed and nothing else this tab
@@ -106,8 +113,22 @@ export function useCoursePageData({
       ? preview
       : undefined;
 
-  const accessQuery = useCourseAccess(courseSlug, { enabled });
-  const answeredAccess = accessQuery.data;
+  // From this tab's copy of the answer, when it has one, while the answer
+  // is on its way: the learner's band is then drawn whole at once, with
+  // where they are and "Your enrollment", not grown part by part as the
+  // answers come. Not while a built page hydrates, which must draw what it
+  // was built with; the copy is put in right after (see
+  // `startAccountSessionCopies`), as the head drew it.
+  const hydrated = useHydrated();
+  const accessQuery = useCourseAccess(courseSlug, {
+    enabled,
+    fromTabCopy: hydrated,
+  });
+  // Not while the page hydrates: it must draw what it was built with (no
+  // viewer, no price). The page's body hydrates after the rest of the page,
+  // and by then this tab's copy of the answer can already be in the cache
+  // (`startAccountSessionCopies`); the render right after uses it.
+  const answeredAccess = hydrated ? accessQuery.data : undefined;
   const provisionalAccess = useProvisionalCourseAccess(
     courseSlug,
     viewerKind,
@@ -243,6 +264,7 @@ export function useCoursePageData({
       if (isManager || publicCurriculumMissing) void personal.refetch();
     },
     access,
+    accessAnswered: Boolean(answeredAccess),
     accessPending:
       awaitsAccess && enabled && accessQuery.isPending && !provisionalAccess,
     accessFailed:
