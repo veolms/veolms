@@ -148,7 +148,42 @@
   animation: chat-flash 2.6s ease-in-out;
 }
 
+/* The colour wash over the bubble: three pulses that fade out. */
+@keyframes chat-flash-fill {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  12%,
+  46% {
+    opacity: 0.4;
+  }
+  29%,
+  63% {
+    opacity: 0.1;
+  }
+  80% {
+    opacity: 0.28;
+  }
+}
+
+.chat-flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: var(--accent);
+  pointer-events: none;
+  opacity: 0;
+  animation: chat-flash-fill 2.6s ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .chat-flash::after {
+    animation: none;
+  }
+
   .chat-flash {
     animation-duration: 0.01s;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent);
