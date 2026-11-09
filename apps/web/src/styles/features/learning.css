@@ -702,7 +702,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
    gutter and an open one reaches out, as in the wide panel, on every phone. */
 /* Below 820px, as `phone-sheet` (styles.css) is: at 820px itself the list
    would keep this inset while an open section reached out past it. */
-@media (max-width: 819.98px) {
+@media (width < 820px) {
   .learning-curriculum:not(.learning-curriculum--compact):not(
       [data-learning-fullscreen-course-panel] *
     )
