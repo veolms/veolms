@@ -3,6 +3,11 @@ import { useSyncExternalStore } from "react";
 import { coursesService } from "../services/courses/courses.service";
 import { formatCoursePricing } from "./courseAdapter";
 import { COURSE_PRICE_LINES_STORAGE_KEY } from "./coursePricesEarlyState";
+import {
+  earlyPriceBoxWords,
+  toOverviewPricingProps,
+  type EarlyPriceBoxWords,
+} from "./overview/coursePriceView";
 
 /**
  * Course prices, for every place that shows one: the course cards, the
@@ -73,6 +78,9 @@ function readState(): CoursePrices {
       kept = null;
     }
     state = { prices: kept, answered: false, failed: false };
+    // Kept by an earlier version, whose lines the head no longer reads: the
+    // next load draws them again.
+    if (kept) keepLinesIfMissing(kept);
   }
   return state;
 }
@@ -82,35 +90,56 @@ function setState(next: CoursePrices) {
   for (const listener of listeners) listener();
 }
 
-/** Each price as the course cards word it, for each region. */
+interface PriceLine {
+  p: string;
+  o: string;
+  x: string;
+  /** The course page's price box, for the same region. */
+  b: EarlyPriceBoxWords;
+}
+
+/**
+ * Each price as the course cards word it, and as the course page's price
+ * box does, for each region.
+ */
 function toPriceLines(prices: LiveCoursePrices) {
-  const lines: Record<
-    string,
-    {
-      d: { p: string; o: string; x: string };
-      i: { p: string; o: string; x: string } | null;
-    }
-  > = {};
+  const lines: Record<string, { d: PriceLine; i: PriceLine | null }> = {};
   for (const [courseId, pricing] of Object.entries(prices)) {
     const line = formatCoursePricing(pricing);
     if (!line) continue;
     const badge = line.showDiscountBadge === true;
+    const paid = pricing.pricingType === "paid";
+    const box = toOverviewPricingProps(pricing);
     lines[courseId] = {
       d: {
         p: line.price,
         o: line.originalPrice,
         x: badge ? line.discount : "",
+        b: earlyPriceBoxWords(box, paid),
       },
       i: line.international
         ? {
             p: line.international.price,
             o: line.international.originalPrice,
             x: badge ? line.international.discount : "",
+            b: earlyPriceBoxWords(box.international ?? box, paid),
           }
         : null,
     };
   }
   return lines;
+}
+
+function keepLinesIfMissing(prices: LiveCoursePrices) {
+  try {
+    if (sessionStorage.getItem(COURSE_PRICE_LINES_STORAGE_KEY) !== null) return;
+    sessionStorage.setItem(
+      COURSE_PRICE_LINES_STORAGE_KEY,
+      JSON.stringify(toPriceLines(prices)),
+    );
+  } catch {
+    // The next answer writes them.
+  }
 }
 
 function keep(prices: LiveCoursePrices) {

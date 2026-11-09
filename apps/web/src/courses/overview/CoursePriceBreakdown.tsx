@@ -17,7 +17,7 @@ export interface CoursePriceBreakdownData {
   totalSizeClassName: string;
 }
 
-const discountClasses =
+export const discountClasses =
   "m-0 text-right font-semibold whitespace-nowrap text-[color-mix(in_srgb,var(--success)_72%,var(--text))]";
 
 /**

@@ -28,6 +28,8 @@ export interface ExtrasStepPanelProps {
   totalSections: number;
   totalLessons: number;
   computedDuration: string;
+  /** The access line's title, from the Access rules step (see `accessIncludeTitle`). */
+  accessTitle: string | null;
   isReorderingIncludes: boolean;
   reorderIncludesMutation: UseMutationResult<
     { success: boolean },
@@ -74,6 +76,7 @@ export function ExtrasStepPanel({
   totalSections,
   totalLessons,
   computedDuration,
+  accessTitle,
   isReorderingIncludes,
   reorderIncludesMutation,
   extrasControlStatus,
@@ -379,6 +382,7 @@ export function ExtrasStepPanel({
               lessons: totalLessons,
               sections: totalSections,
             })}
+            accessTitle={accessTitle}
             busy={
               isReorderingIncludes ||
               reorderIncludesMutation.isPending ||

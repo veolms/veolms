@@ -157,7 +157,7 @@ export interface CourseIncludeTable {
   /** The icon's colour, `#rrggbb`; its square is a tint of the same. */
   color: string | null;
   /** 'video': the words are written from the curriculum when shown. */
-  kind: Generated<"custom" | "video">;
+  kind: Generated<"custom" | "video" | "access">;
   position: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;

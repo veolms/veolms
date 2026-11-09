@@ -41,6 +41,7 @@ import {
   type OutgoingFile,
 } from "../services/chat";
 import { getApiError } from "../lib/api-error";
+import { chatDrafts as drafts } from "../store/chatDrafts.store";
 import { ChatFileError, prepareFile } from "./chatMedia";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
@@ -50,6 +51,8 @@ import { useVoiceRecorder } from "./useVoiceRecorder";
 export interface ComposerHandle {
   addFiles: (files: File[]) => void;
   focus: () => void;
+  /** Adds "@name " where the caret is (Mention, on a person's card). */
+  mention: (person: { id: string; name: string }) => void;
 }
 
 const DOCUMENT_ACCEPT = (CHAT_UPLOAD_MIME_TYPES.file as readonly string[]).join(
@@ -60,9 +63,6 @@ const MEDIA_ACCEPT = [
   ...CHAT_UPLOAD_MIME_TYPES.video,
 ].join(",");
 const TYPING_EVERY_MS = 3_000;
-
-/** Drafts survive switching chats (as in WhatsApp), for this tab. */
-const drafts = new Map<string, string>();
 
 const CANNOT_POST_TEXT: Record<string, string> = {
   staff_only: "Only admins can send messages",
@@ -206,6 +206,18 @@ export const Composer = forwardRef<
   useImperativeHandle(ref, () => ({
     addFiles: (picked) => void addFiles(picked),
     focus: () => textareaRef.current?.focus({ preventScroll: true }),
+    mention: (person) => {
+      const area = textareaRef.current;
+      const caret = area?.selectionStart ?? text.length;
+      const lead = text.slice(0, caret);
+      const before = `${lead}${lead && !/\s$/.test(lead) ? " " : ""}@${person.name} `;
+      setMentions((current) => new Map(current).set(person.id, person.name));
+      updateText(before + text.slice(caret));
+      requestAnimationFrame(() => {
+        area?.focus({ preventScroll: true });
+        area?.setSelectionRange(before.length, before.length);
+      });
+    },
   }));
 
   function updateText(value: string) {

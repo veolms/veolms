@@ -371,8 +371,9 @@ export function createMessagesService(runtime: ChatRuntime) {
         before ?? null,
         SEARCH_PAGE,
       );
+      const cleared = await repository.clearedSeq(database, roomId, userId);
       return {
-        messages: page.rows.map(presentMessage),
+        messages: page.rows.map(presentMessage).filter((m) => m.seq > cleared),
         hasMore: page.hasMore,
       };
     },
@@ -400,17 +401,24 @@ export function createMessagesService(runtime: ChatRuntime) {
       const page = await pageCache.fetch(key, () =>
         readPage(roomId, query, limit),
       );
-      const hidden = await repository.hiddenSeqs(
-        database,
-        userId,
-        roomId,
-        page.messages.map((m) => m.seq),
-      );
+      const [hidden, cleared] = await Promise.all([
+        repository.hiddenSeqs(
+          database,
+          userId,
+          roomId,
+          page.messages.map((m) => m.seq),
+        ),
+        repository.clearedSeq(database, roomId, userId),
+      ]);
+      // A cleared chat starts after the cut: nothing older to load.
+      const reachesCut =
+        cleared > 0 && page.messages.some((m) => m.seq <= cleared);
       return {
         ...page,
+        ...(reachesCut ? { hasMoreBefore: false, oldestSeq: null } : {}),
         messages:
-          hidden.size > 0
-            ? page.messages.filter((m) => !hidden.has(m.seq))
+          hidden.size > 0 || cleared > 0
+            ? page.messages.filter((m) => m.seq > cleared && !hidden.has(m.seq))
             : page.messages,
         lastSeq: Number(ctx.room.last_seq),
         lastEventSeq: Number(ctx.room.last_event_seq),
@@ -437,9 +445,10 @@ export function createMessagesService(runtime: ChatRuntime) {
       if (rows.length > CHAT_CHANGES_MAX) {
         return { reset: true, messages: [], lastSeq, lastEventSeq };
       }
+      const cleared = await repository.clearedSeq(database, roomId, userId);
       return {
         reset: false,
-        messages: rows.map(presentMessage),
+        messages: rows.map(presentMessage).filter((m) => m.seq > cleared),
         lastSeq,
         lastEventSeq,
       };

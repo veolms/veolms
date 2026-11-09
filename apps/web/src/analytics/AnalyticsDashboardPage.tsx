@@ -22,6 +22,7 @@ import {
   ANALYTICS_DEFAULT_RANGE,
   ANALYTICS_DEFAULT_TAB,
   AnalyticsPageChrome,
+  AnalyticsSelect,
   AnalyticsPageLoading,
   AnalyticsTabLoading,
   formatDay,
@@ -315,6 +316,7 @@ function AnalyticsContent({
                 filters={filters}
                 isAdmin={isAdmin}
                 onExportChange={handleExportChange}
+                Select={AnalyticsSelect}
               />
             </Suspense>
           ) : null

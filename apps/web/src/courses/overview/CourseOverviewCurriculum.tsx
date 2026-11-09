@@ -1,7 +1,6 @@
 import { ArrowsInLineVertical } from "@phosphor-icons/react/ArrowsInLineVertical";
 import { ArrowsOutLineVertical } from "@phosphor-icons/react/ArrowsOutLineVertical";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
-import { CalendarCheck } from "@phosphor-icons/react/CalendarCheck";
 import { Check } from "@phosphor-icons/react/Check";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -431,8 +430,6 @@ interface CourseOverviewCurriculumProps {
   isPaidCourse?: boolean;
   /** For someone who manages the course: opens the curriculum editor. */
   onEdit?: () => void;
-  /** How long the course stays with a learner (see `courseValidityLabel`). */
-  validityLabel?: string | null;
   /**
    * How many sections the whole curriculum has, when `courseSections` holds
    * only the first ones (the page was built with those, see
@@ -461,7 +458,6 @@ export function CourseOverviewCurriculum({
   isReadOnlyPreview = false,
   isPaidCourse = false,
   onEdit,
-  validityLabel = null,
   totalSections,
   sectionsComplete = true,
   onRequestAllSections,
@@ -516,15 +512,6 @@ export function CourseOverviewCurriculum({
           <h2 id="cov-curriculum-heading" className={bandTitleClasses}>
             Curriculum
           </h2>
-          {validityLabel ? (
-            <p
-              data-course-validity=""
-              className="mt-1 inline-flex items-center gap-1.5 text-[0.82rem] text-(--muted)"
-            >
-              <CalendarCheck size={15} weight="bold" aria-hidden="true" />
-              {validityLabel}
-            </p>
-          ) : null}
         </div>
         <div className="flex items-center gap-5">
           {onEdit ? (

@@ -6,16 +6,41 @@ import { useSyncExternalStore } from "react";
  * alerts and message previews. Privacy and "Enter is send" live on the
  * server (they follow you); these follow the device.
  */
-export type ChatWallpaper =
-  | "default"
-  | "ocean"
-  | "forest"
-  | "sunset"
-  | "rose"
-  | "violet"
-  | "sand"
-  | "slate";
-export type ChatPattern = "doodles" | "dots" | "none";
+export const CHAT_WALLPAPER_IDS = [
+  "default",
+  "ocean",
+  "teal",
+  "mint",
+  "forest",
+  "sand",
+  "peach",
+  "sunset",
+  "rose",
+  "plum",
+  "violet",
+  "lavender",
+  "navy",
+  "midnight",
+  "coffee",
+  "slate",
+  "aurora",
+  "dusk",
+  "lagoon",
+  "ember",
+] as const;
+export type ChatWallpaper = (typeof CHAT_WALLPAPER_IDS)[number];
+export const CHAT_PATTERN_IDS = [
+  "doodles",
+  "code",
+  "science",
+  "space",
+  "geometric",
+  "waves",
+  "grid",
+  "dots",
+  "none",
+] as const;
+export type ChatPattern = (typeof CHAT_PATTERN_IDS)[number];
 export type ChatTextSize = "small" | "medium" | "large";
 
 export interface ChatPrefs {
@@ -48,7 +73,15 @@ function read(): ChatPrefs {
     const saved = JSON.parse(
       window.localStorage.getItem(STORAGE_KEY) ?? "{}",
     ) as Partial<ChatPrefs>;
-    return { ...DEFAULTS, ...saved };
+    const prefs = { ...DEFAULTS, ...saved };
+    // A choice this version doesn't have (an older or newer app) falls back.
+    if (!CHAT_WALLPAPER_IDS.includes(prefs.wallpaper)) {
+      prefs.wallpaper = DEFAULTS.wallpaper;
+    }
+    if (!CHAT_PATTERN_IDS.includes(prefs.pattern)) {
+      prefs.pattern = DEFAULTS.pattern;
+    }
+    return prefs;
   } catch {
     return DEFAULTS;
   }

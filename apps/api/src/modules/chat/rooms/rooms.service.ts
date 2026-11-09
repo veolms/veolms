@@ -40,7 +40,14 @@ export function createRoomsService(runtime: ChatRuntime) {
         userId,
       );
       const ids = await views.visibleRoomIds(database, userId, restrictions);
-      let rows = await repository.listRoomsForUser(database, userId, ids);
+      // A chat you deleted stays out of your list until a newer message.
+      let rows = (
+        await repository.listRoomsForUser(database, userId, ids)
+      ).filter(
+        (r) =>
+          r.member_deleted_at === null ||
+          Number(r.last_seq) > Number(r.cleared_seq ?? 0),
+      );
 
       // First time someone sees a course group: their read position starts now.
       const missing = rows.filter(
@@ -358,6 +365,31 @@ export function createRoomsService(runtime: ChatRuntime) {
     },
 
     /** "Exit group": team groups only; course groups follow enrolment. */
+    /**
+     * "Clear chat" (any chat) or "Delete chat" (a private chat): for you
+     * only, as in WhatsApp. The other person keeps their copy.
+     */
+    async clear(
+      userId: string,
+      roomId: string,
+      options: { deleteChat?: boolean | undefined },
+    ) {
+      const ctx = await views.assertCanRead(database, userId, roomId);
+      const deleteChat = options.deleteChat === true;
+      if (deleteChat && ctx.room.kind !== "direct") {
+        throw ChatErrors.wrongRoomKind();
+      }
+      const done = await repository.clearForMember(
+        database,
+        roomId,
+        userId,
+        Number(ctx.room.last_seq),
+        deleteChat,
+      );
+      if (!done) throw ChatErrors.noAccess();
+      return { ok: true as const };
+    },
+
     async leave(userId: string, roomId: string) {
       const ctx = await views.assertCanRead(database, userId, roomId);
       if (ctx.room.kind !== "team") throw ChatErrors.cannotLeave();

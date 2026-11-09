@@ -25,7 +25,11 @@ import {
   ListPanelHeader,
   SettingsRow,
 } from "./ChatControls";
-import { CHAT_TEXT_SIZES, CHAT_WALLPAPERS } from "./chatWallpapers";
+import {
+  CHAT_PATTERNS,
+  CHAT_TEXT_SIZES,
+  CHAT_WALLPAPERS,
+} from "./chatWallpapers";
 
 type Page = "root" | "privacy" | "chats" | "wallpaper" | "notifications";
 
@@ -213,21 +217,42 @@ export function ChatSettingsPanel({
           ))}
         </div>
         <Heading>Pattern</Heading>
-        <div role="radiogroup" aria-label="Wallpaper pattern">
-          {(
-            [
-              ["doodles", "Learning doodles", "Books, pencils, code and ideas"],
-              ["dots", "Dots", "A quiet dotted grid"],
-              ["none", "None", "Just the colour"],
-            ] as Array<[ChatPattern, string, string]>
-          ).map(([id, label, note]) => (
-            <RadioRow
+        <div
+          role="radiogroup"
+          aria-label="Wallpaper pattern"
+          className="grid grid-cols-3 gap-3 px-4 pt-1 pb-4"
+        >
+          {(Object.keys(CHAT_PATTERNS) as ChatPattern[]).map((id) => (
+            <button
               key={id}
-              checked={prefs.pattern === id}
-              label={label}
-              note={note}
-              onSelect={() => setChatPrefs({ pattern: id })}
-            />
+              type="button"
+              role="radio"
+              aria-checked={prefs.pattern === id}
+              onClick={() => setChatPrefs({ pattern: id })}
+              className="flex cursor-pointer flex-col items-center gap-1.5 border-0 bg-transparent p-0 text-[0.74rem] text-(--muted)"
+            >
+              <span
+                data-chat-pattern={id}
+                className={cn(
+                  "relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-xl border-2 border-solid",
+                  prefs.pattern === id
+                    ? "border-(--accent)"
+                    : "border-(--chat-line)",
+                )}
+                style={{ background: CHAT_WALLPAPERS[prefs.wallpaper].value }}
+              >
+                <span className="chat-wallpaper" />
+                {prefs.pattern === id ? (
+                  <Check
+                    size={18}
+                    weight="bold"
+                    className="relative text-(--accent-ink)"
+                    aria-hidden="true"
+                  />
+                ) : null}
+              </span>
+              {CHAT_PATTERNS[id].label}
+            </button>
           ))}
         </div>
       </>,
@@ -263,11 +288,9 @@ export function ChatSettingsPanel({
         <SettingsRow
           title="Wallpaper"
           note={`${CHAT_WALLPAPERS[prefs.wallpaper].label} · ${
-            prefs.pattern === "doodles"
-              ? "doodles"
-              : prefs.pattern === "dots"
-                ? "dots"
-                : "no pattern"
+            prefs.pattern === "none"
+              ? "no pattern"
+              : CHAT_PATTERNS[prefs.pattern].label.toLowerCase()
           }`}
           icon={<ImageSquare size={21} />}
           onClick={() => setPage("wallpaper")}
@@ -355,7 +378,9 @@ export function ChatSettingsPanel({
           <div className="mb-2 flex items-center gap-4 rounded-xl px-4 py-4">
             <ChatAvatar
               name={user.displayName}
-              url={user.avatarSrcSet.at(-1)?.url ?? null}
+              url={user.avatarDataUrl ?? user.avatarSrcSet.at(-1)?.url ?? null}
+              srcSet={user.avatarSrcSet}
+              size="xl"
               className="size-16 text-[1.2rem]"
             />
             <span className="min-w-0">

@@ -677,6 +677,9 @@ const processPage = async ({
   };
 };
 
+/** A string of its own, not a view into the larger string it was cut from. */
+const ownCopy = (text) => Buffer.from(text, "utf8").toString("utf8");
+
 /** A course's lesson pages: `learn/<course>/<lesson>/index.html`. */
 const isLessonPage = (page) => /^learn\/[^/]+\/[^/]+\/index\.html$/u.test(page);
 
@@ -699,7 +702,13 @@ const collectSharedTokens = async (root, pages) => {
       scanElements(await readFile(pagePath, "utf8")),
     );
     for (const kind of Object.keys(shared)) {
-      for (const token of tokens[kind]) shared[kind].add(token);
+      for (const token of tokens[kind]) {
+        // A token is a slice of its page's HTML, and V8 keeps the whole
+        // page alive behind a slice: kept as it is, every lesson page of a
+        // course stayed in memory (the Node.js course's 686 pages ran a
+        // refresh out of memory). A copy keeps only the token.
+        if (!shared[kind].has(token)) shared[kind].add(ownCopy(token));
+      }
     }
   }
   return shared;

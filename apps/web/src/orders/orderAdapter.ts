@@ -157,6 +157,7 @@ export function adaptOrderToOrderHistoryItem(
     courseTitle,
     itemCount,
     ...(firstLabel?.note ? { purchaseNote: firstLabel.note } : {}),
+    ...(order.refund ? { refund: order.refund } : {}),
     ...(firstItem?.thumbnail
       ? {
           thumbnail: {

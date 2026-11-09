@@ -2,7 +2,7 @@ import "./chat.css";
 
 import type { ChatMessage } from "@veolms/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { ToastNotification } from "../ToastNotification";
@@ -89,10 +89,39 @@ export function ChatPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [focusComposer, setFocusComposer] = useState(0);
-  // "Go to this message" from search or a report: the open chat jumps.
-  const [jump, setJump] = useState<{ seq: number; token: number } | null>(null);
-  const jumpTo = (seq: number) =>
-    setJump((current) => ({ seq, token: (current?.token ?? 0) + 1 }));
+  // "Go to this message" from search, a report, a starred message or a link
+  // (a notification's ?seq=): that chat opens at it, blinking.
+  const [jump, setJump] = useState<{
+    roomId: string;
+    seq: number;
+    token: number;
+  } | null>(null);
+  const jumpIn = useCallback(
+    (inRoom: string, seq: number) =>
+      setJump((current) => ({
+        roomId: inRoom,
+        seq,
+        token: (current?.token ?? 0) + 1,
+      })),
+    [],
+  );
+  const jumpTo = (seq: number) => {
+    if (roomId) jumpIn(roomId, seq);
+  };
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedSeq = Number(searchParams.get("seq"));
+  useEffect(() => {
+    if (!roomId || !Number.isInteger(linkedSeq) || linkedSeq <= 0) return;
+    jumpIn(roomId, linkedSeq);
+    // Once: a reload or Back does not jump again.
+    setSearchParams(
+      (params) => {
+        params.delete("seq");
+        return params;
+      },
+      { replace: true },
+    );
+  }, [roomId, linkedSeq, jumpIn, setSearchParams]);
 
   const prefs = useChatPrefs();
   // The shell's padding comes off while Chats is open (chat.css).
@@ -254,11 +283,13 @@ export function ChatPage() {
           open(id);
         }}
         onStartDirect={startChatWith}
-        onJumpToMessage={(id) => {
+        onJumpToMessage={(id, seq) => {
           setPanel("chats");
+          jumpIn(id, seq);
           open(id);
         }}
         onShowShortcuts={() => setShortcutsOpen(true)}
+        onToast={setToast}
       />
     );
 
@@ -326,7 +357,7 @@ export function ChatPage() {
               setDrawer({ kind: "message", message })
             }
             onOpenSearch={() => setDrawer({ kind: "search" })}
-            jumpRequest={jump}
+            jumpRequest={jump?.roomId === current.id ? jump : null}
             onOpenChat={(id) => open(id)}
             onToast={setToast}
             focusComposerToken={focusComposer}

@@ -582,6 +582,29 @@ export function createAuthService({
     });
   }
 
+  /**
+   * These routes add a number, or confirm the one on the account. Replacing
+   * a confirmed number takes proof of it first (contact-change): otherwise
+   * anyone holding a session could move the account to their own number,
+   * and sign in with it.
+   */
+  function assertNotReplacingConfirmedPhone(
+    account: { phone_no: string | null; phone_verified_at: Date | null },
+    phoneNo: string,
+  ): void {
+    if (
+      account.phone_verified_at &&
+      account.phone_no &&
+      account.phone_no !== phoneNo
+    ) {
+      throw new AppError(
+        409,
+        "PHONE_CHANGE_NEEDS_PROOF",
+        "To replace your confirmed number, use Change number: it asks for a code sent to your current number first.",
+      );
+    }
+  }
+
   async function sendPhoneVerificationOtp(
     userId: string,
     phoneNo: string,
@@ -605,6 +628,7 @@ export function createAuthService({
     if (!currentUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
+    assertNotReplacingConfirmedPhone(currentUser, normalizedPhoneNo);
 
     if (!otpService) {
       throw new AppError(
@@ -740,6 +764,7 @@ export function createAuthService({
     if (!currentUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
+    assertNotReplacingConfirmedPhone(currentUser, normalizedPhoneNo);
 
     if (!otpService) {
       throw new AppError(
@@ -787,6 +812,17 @@ export function createAuthService({
       new Date(),
     );
     if (!updatedUser) {
+      // Nothing written: the account is gone, or a different number was
+      // confirmed on it since the check above.
+      const now = await userRepository.findUserContactById(database, userId);
+      if (!now) {
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found.",
+        );
+      }
+      assertNotReplacingConfirmedPhone(now, normalizedPhoneNo);
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
     forgetCachedAccount(userId);

@@ -77,6 +77,15 @@ function thumbnailKey(metadata: unknown, storageKey: string): string {
 
 const DAY_SECONDS = 24 * 60 * 60;
 
+/** Documents the chat previews in the page (never HTML or scripts). */
+const PREVIEWABLE_DOCUMENTS = new Set([
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/json",
+]);
+
 function hasObjectStorage(): boolean {
   return Boolean(
     config.STORAGE_ACCESS_KEY_ID && config.STORAGE_SECRET_ACCESS_KEY,
@@ -314,11 +323,15 @@ export function createUploadsService(
           throw ChatErrors.uploadNotFound();
         }
       }
+      // Shown in the page: photos, videos, voice, and documents the app can
+      // preview (PDF, plain text, Markdown, CSV, JSON). Everything else is
+      // only ever downloaded.
       const inline =
         !download &&
         (upload.kind === "image" ||
           upload.kind === "video" ||
-          upload.kind === "audio");
+          upload.kind === "audio" ||
+          PREVIEWABLE_DOCUMENTS.has(upload.mime_type));
       const disposition = `${inline ? "inline" : "attachment"}; filename="${upload.file_name.replace(/[^\x20-\x7e]/g, "_")}"`;
 
       if (!hasObjectStorage()) {

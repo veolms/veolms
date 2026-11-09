@@ -1,4 +1,5 @@
 import { forgetChatCache } from "../lib/chatCacheDb";
+import { forgetChatDrafts } from "./chatDrafts.store";
 import { forgetSessionTabs } from "../routing/tabSessionState";
 
 /**
@@ -190,6 +191,7 @@ export function forgetAccountBrowserState(): void {
   forgetSessionTabs();
   // The chats kept for instant opening (lib/chatCacheDb.ts).
   forgetChatCache();
+  forgetChatDrafts();
   try {
     removeMatchingKeys(window.sessionStorage, isAccountSessionStorageKey);
   } catch {
