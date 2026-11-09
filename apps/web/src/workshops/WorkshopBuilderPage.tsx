@@ -5,7 +5,6 @@ import {
   type CreateWorkshopRequest,
   type UpdateWorkshopRequest,
   type WorkshopAdmin,
-  type WorkshopSessionAdmin,
   type WorkshopSessionInput,
 } from "@veolms/contracts";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
@@ -89,11 +88,6 @@ function FieldLabel({
       {hint ? <span className="text-[12px] text-(--muted)">{hint}</span> : null}
     </div>
   );
-}
-
-/** A session gets a recording slot once it has ended, or already has one. */
-function recordable(session: WorkshopSessionAdmin): boolean {
-  return session.state === "ended" || session.recordingMediaId !== null;
 }
 
 function Section({
@@ -481,8 +475,7 @@ export function WorkshopBuilderPage({
           {isEditMode ? form.title || "Edit workshop" : "Create workshop"}
         </h1>
         <p className="mt-1.5 mb-0 text-[0.88rem] leading-6 text-(--muted)">
-          Set the sessions and meeting links here. Learners register on the
-          platform, get reminders, and join with one button.
+          Set the sessions and meeting links, then publish when it is ready.
         </p>
       </header>
 
@@ -678,26 +671,29 @@ export function WorkshopBuilderPage({
             />
           </Section>
 
-          {workshop && workshop.sessions.some(recordable) ? (
-            <Section
-              title="Recordings"
-              description="After a session ends, attach its recording here. Registrants are told once it is ready and watch it on the workshop page."
-            >
+          <Section
+            title="Recordings"
+            description="Upload each session's recording or import it from YouTube, usually after it ends. It goes through the same video processing as lessons; registrants are told once it is ready."
+          >
+            {workshop && workshop.sessions.length > 0 ? (
               <div className="grid gap-3">
-                {workshop.sessions.map((session, index) =>
-                  recordable(session) ? (
-                    <WorkshopRecordingField
-                      key={session.id}
-                      workshopId={workshop.id}
-                      session={session}
-                      index={index}
-                      disabled={!canManage}
-                    />
-                  ) : null,
-                )}
+                {workshop.sessions.map((session, index) => (
+                  <WorkshopRecordingField
+                    key={session.id}
+                    workshopId={workshop.id}
+                    session={session}
+                    index={index}
+                    disabled={!canManage}
+                  />
+                ))}
               </div>
-            </Section>
-          ) : null}
+            ) : (
+              <p className="text-sm text-(--muted)">
+                Save the workshop with its sessions first; each session then
+                gets its own recording slot here.
+              </p>
+            )}
+          </Section>
 
           {workshop ? (
             <Section

@@ -80,8 +80,7 @@ export function WorkshopsAdminPage({
             Workshops
           </h1>
           <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
-            Live sessions on Zoom, Google Meet or YouTube Live. Schedule them
-            here; learners register, get reminders and join from the app.
+            Schedule live sessions on Zoom, Google Meet or YouTube Live.
           </p>
         </div>
         {canManage ? (
@@ -106,12 +105,6 @@ export function WorkshopsAdminPage({
                 : "Open a workshop to see its sessions and registrations."}
             </p>
           </div>
-          {canManage ? (
-            <Button className="hidden sm:inline-flex" onClick={openCreate}>
-              <Plus size={16} weight="bold" />
-              New workshop
-            </Button>
-          ) : null}
         </div>
 
         <WorkshopsAdminTabs
