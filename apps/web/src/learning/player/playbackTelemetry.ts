@@ -1,6 +1,14 @@
-import type { VideoPlayerEvent } from "@veolms/video-player";
+import {
+  networkFailureHttpStatus,
+  type VideoPlayerEvent,
+} from "@veolms/video-player";
 import type { PlaybackSummary } from "@veolms/web-core";
 import { trackPlayback } from "../../lib/analytics-track";
+import { readDeviceTier } from "./deviceTier";
+import {
+  getTokenRefreshStats,
+  type TokenRefreshStats,
+} from "./learningHlsConstants";
 import { getSegmentCacheStats, type SegmentCacheStats } from "./segmentCache";
 
 export interface PlaybackTelemetryContext {
@@ -21,6 +29,11 @@ interface OpenPlayback {
   playRequestedAt: number | null;
   firstFrameAt: number | null;
   errorCode: string | undefined;
+  errorHttpStatus: number | undefined;
+  /** Streaming retries the engine reported (see `streamingretry`). */
+  streamingRetries: number;
+  /** The token renewal counts when the load started. */
+  tokenRefreshAtStart: TokenRefreshStats;
   bufferingSince: number | null;
   bufferingCount: number;
   bufferingMs: number;
@@ -82,6 +95,7 @@ export function createPlaybackTelemetry(
     const courseKey = playback.courseKey ?? context.courseKey;
     if (!courseKey) return;
     const now = Date.now();
+    const device = readDeviceTier();
     const summary: PlaybackSummary = {
       playbackId: playback.playbackId,
       courseKey,
@@ -104,6 +118,16 @@ export function createPlaybackTelemetry(
             ),
       startFailed: playback.firstFrameAt === null && reason === "error",
       ...(playback.errorCode ? { errorCode: playback.errorCode } : {}),
+      ...(playback.errorHttpStatus !== undefined
+        ? { errorHttpStatus: playback.errorHttpStatus }
+        : {}),
+      streamingRetries: playback.streamingRetries,
+      tokenRefreshFailures:
+        getTokenRefreshStats().failures - playback.tokenRefreshAtStart.failures,
+      ...(device.deviceMemoryGb !== null
+        ? { deviceMemoryGb: device.deviceMemoryGb }
+        : {}),
+      ...(device.cpuCores !== null ? { cpuCores: device.cpuCores } : {}),
       bufferingCount: playback.bufferingCount,
       bufferingMs: Math.round(playback.bufferingMs),
       watchedSeconds: Math.round(playback.watchedSeconds),
@@ -139,6 +163,9 @@ export function createPlaybackTelemetry(
           playRequestedAt: null,
           firstFrameAt: null,
           errorCode: undefined,
+          errorHttpStatus: undefined,
+          streamingRetries: 0,
+          tokenRefreshAtStart: getTokenRefreshStats(),
           bufferingSince: null,
           bufferingCount: 0,
           bufferingMs: 0,
@@ -217,11 +244,17 @@ export function createPlaybackTelemetry(
         open.currentHeight = event.detail.quality?.height ?? null;
         return;
       }
+      case "streamingretry": {
+        if (open) open.streamingRetries += 1;
+        return;
+      }
       case "error": {
         if (!open) return;
         const error = event.detail.error as { code?: unknown };
         open.errorCode =
           error && error.code !== undefined ? String(error.code) : "unknown";
+        const status = networkFailureHttpStatus(event.detail.error);
+        open.errorHttpStatus = status === null ? undefined : status;
         finish("error");
         return;
       }

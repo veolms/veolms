@@ -324,6 +324,23 @@ export interface PlaybackSummary {
   /** Seconds played at each rendition height. */
   qualities: Array<{ height: number; seconds: number }>;
   /**
+   * The HTTP status behind a network error, when the error carried one
+   * (a 403 from the CDN, a 503 from the licence server).
+   */
+  errorHttpStatus?: number;
+  /**
+   * How often the engine asked for a stream again after a segment failed
+   * (see `streamingretry`), and how many of those waits passed 10 s. Both
+   * are 0 for a playback that never stumbled.
+   */
+  streamingRetries?: number;
+  /** Playback token renewals that failed or timed out during this playback. */
+  tokenRefreshFailures?: number;
+  /** Gigabytes of memory the browser reports (Chromium), if it does. */
+  deviceMemoryGb?: number;
+  /** Logical processor cores the browser reports, if it does. */
+  cpuCores?: number;
+  /**
    * What the on-device segment cache did during this playback (absent where
    * the browser keeps none).
    */

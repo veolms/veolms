@@ -115,6 +115,15 @@ import {
   type PlaybackDeniedPlayingOn,
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
+import { isLowMemoryDevice } from "./deviceTier";
+
+/**
+ * The stream has been waiting out failures for this many retries in a row
+ * (about 7 s with the engine's 1s, 2s, 4s waits) before the player says so
+ * over the loader: a single missed segment passes unremarked, as on any
+ * streaming site.
+ */
+const RECONNECTING_NOTICE_AFTER_RETRIES = 3;
 
 // Where the learner is, kept this often while the video plays: a reload
 // then starts within half a second of where it was (it is also kept the
@@ -895,6 +904,13 @@ export function LessonVideoPlayer({
 
   const [streamConflict, setStreamConflict] =
     useState<PlaybackDeniedPlayingOn | null>(null);
+  // Retries in a row the engine has made for a segment that would not
+  // come (see `streamingretry`); 0 once one does, or a video is loaded.
+  const [streamingRetries, setStreamingRetries] = useState(0);
+  const reconnecting = streamingRetries >= RECONNECTING_NOTICE_AFTER_RETRIES;
+  // A small device prepares no second video out of sight: the standby is
+  // a whole second media pipeline (see deviceTier.ts).
+  const [withStandby] = useState(() => !isLowMemoryDevice());
   const effectiveLessonId = lessonId ?? playbackBootstrap?.lessonId ?? null;
   const effectiveLessonIdRef = useRef(effectiveLessonId);
   useEffect(() => {
@@ -951,6 +967,15 @@ export function LessonVideoPlayer({
       playbackTelemetry.handle(event);
       if (event.type === "fullscreenchange") {
         setPlayerFullscreen(event.detail.active);
+      }
+      if (event.type === "streamingretry") {
+        setStreamingRetries(event.detail.attempt);
+      } else if (
+        event.type === "streamingrecovered" ||
+        event.type === "loaded" ||
+        event.type === "error"
+      ) {
+        setStreamingRetries(0);
       }
       if (event.type === "play" || event.type === "playing") {
         setStreamConflict(null);
@@ -2080,7 +2105,7 @@ export function LessonVideoPlayer({
         muted: restoreAutoplayRef.current !== null ? true : muted,
         // A hovered or next lesson is prepared in a hidden second element
         // and switched to at once when opened.
-        withStandby: true,
+        withStandby,
       }}
       className={cn(
         // A failure's message is drawn on the video, and the window is
@@ -2203,6 +2228,23 @@ export function LessonVideoPlayer({
       }
       overlays={
         <>
+          {reconnecting && !streamConflict && presentation === "full" ? (
+            // The engine is asking for segments that would not come (the
+            // connection is down, or the CDN refused them); the loader is
+            // up where the buffer ran out. Said in a word under the top
+            // row, as a status, never as a failure: the video goes on by
+            // itself once they arrive.
+            <div
+              className="pointer-events-none absolute inset-x-0 top-14 z-30 flex justify-center"
+              role="status"
+              aria-live="polite"
+              data-learning-player-reconnecting=""
+            >
+              <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-sm">
+                Reconnecting…
+              </span>
+            </div>
+          ) : null}
           {streamConflict ? (
             <VideoPlayerNotice
               className="z-35"
