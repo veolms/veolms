@@ -26,6 +26,7 @@ import {
   userMentionedEventSchema,
   videoProcessingEventSchema,
   workshopRegisteredEventSchema,
+  workshopReminderEventSchema,
 } from "../../events/domain-event.schemas.ts";
 import type { Json } from "@veolms/database";
 
@@ -551,6 +552,30 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         deepLink: `/workshops/${event.workshopSlug}`,
       },
     ];
+  },
+  "workshop.reminder": async (payload, dependencies) => {
+    const event = workshopReminderEventSchema.parse(payload);
+    const recipientUserIds =
+      (await dependencies.listWorkshopRegistrantUserIds?.(event.workshopId)) ??
+      [];
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "workshop.reminder",
+      category: "learning",
+      templateKey: "workshop.reminder",
+      templateData: {
+        workshopTitle: event.workshopTitle,
+        workshopSlug: event.workshopSlug,
+        sessionTitle: event.sessionTitle ?? "",
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        timeZone: event.timeZone,
+        window: event.window,
+      },
+      channels: commonChannels,
+      mandatory: false,
+      deepLink: `/workshops/${event.workshopSlug}`,
+    }));
   },
   "learning.reminder": async (payload) => {
     const event = learningReminderEventSchema.parse(payload);

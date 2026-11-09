@@ -257,6 +257,50 @@ function workshopRegisteredEmail(
   return { subject, text, html };
 }
 
+/** The three reminders: a day before, an hour before, and when it starts. */
+function workshopReminderEmail(
+  data: NotificationTemplateData,
+  deepLink: string | null,
+  brand: NotificationEmailBrand,
+): EmailContent {
+  const title = stringValue(data, "workshopTitle");
+  const sessionTitle = optionalString(data, "sessionTitle");
+  const when = workshopWhenLabel(data);
+  const window = optionalString(data, "window");
+  const pageUrl = absoluteUrl(deepLink);
+  const what = sessionTitle ? `${title} — ${sessionTitle}` : title;
+  const subject =
+    window === "now"
+      ? `Live now: ${title}`
+      : window === "hour"
+        ? `Starting in an hour: ${title}`
+        : `Tomorrow: ${title}`;
+  const lines = [
+    window === "now"
+      ? `${what} has started. Open the workshop page and press Join.`
+      : window === "hour"
+        ? `${what} starts in about an hour${when ? ` (${when})` : ""}. The Join button appears on the workshop page 15 minutes before the start.`
+        : `${what} is tomorrow${when ? `: ${when}` : ""}.`,
+  ];
+  const settingsUrl = settingsPageUrl();
+  const text = [
+    ...lines,
+    pageUrl ? `\nOpen the workshop: ${pageUrl}` : null,
+    `\nManage which emails you receive: ${settingsUrl}`,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+  const html = `<div style="font-family: sans-serif; line-height: 1.5; color: #222;"><h2>${escapeHtml(subject)}</h2>${lines
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join("")}${
+    pageUrl
+      ? `<p style="margin-top: 20px;"><a href="${escapeHtml(pageUrl)}">${window === "now" ? "Join now" : "Open the workshop"}</a></p>`
+      : ""
+  }<p style="margin-top: 28px; font-size: 12px; color: #777;">You can choose which emails you receive in your <a href="${escapeHtml(settingsUrl)}" style="color: #777;">notification settings</a>.</p></div>`;
+  void brand;
+  return { subject, text, html };
+}
+
 export function renderNotificationTemplate(
   templateKey: NotificationTemplateKey,
   data: NotificationTemplateData,
@@ -458,6 +502,31 @@ export function renderNotificationTemplate(
       };
       break;
     }
+    case "workshop.reminder": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const when = workshopWhenLabel(data);
+      const window = optionalString(data, "window");
+      inApp =
+        window === "now"
+          ? {
+              title: "Live now",
+              body: `${workshopTitle} has started. Open the workshop page and press Join.`,
+            }
+          : window === "hour"
+            ? {
+                title: "Starting in an hour",
+                body: when
+                  ? `${workshopTitle} starts at ${when}. The Join button appears 15 minutes before.`
+                  : `${workshopTitle} starts in about an hour.`,
+              }
+            : {
+                title: "Tomorrow: your workshop",
+                body: when
+                  ? `${workshopTitle} is on ${when}.`
+                  : `${workshopTitle} is tomorrow.`,
+              };
+      break;
+    }
     case "learning.reminder": {
       const streakDays = numberValue(data, "streakDays");
       inApp =
@@ -499,6 +568,8 @@ export function renderNotificationTemplate(
         ? discussionEmail(templateKey, data, deepLink, brand)
         : templateKey === "workshop.registered"
           ? workshopRegisteredEmail(data, deepLink, brand)
-          : emailContent(inApp.title, inApp.body, deepLink, brand),
+          : templateKey === "workshop.reminder"
+            ? workshopReminderEmail(data, deepLink, brand)
+            : emailContent(inApp.title, inApp.body, deepLink, brand),
   };
 }

@@ -18,6 +18,7 @@ import {
   createNotificationProcessor,
   createPushPipeline,
 } from "../modules/notifications/index.ts";
+import { listActiveRegistrantUserIds } from "../modules/workshops/workshops.repository.ts";
 import { createServices } from "../services/index.ts";
 import { createEmailService } from "@veolms/services/email";
 
@@ -64,6 +65,8 @@ try {
     handlers: {
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
+      listWorkshopRegistrantUserIds: (workshopId) =>
+        listActiveRegistrantUserIds(database, workshopId),
     },
     recipients: {
       findRecipient: async (userId) => {

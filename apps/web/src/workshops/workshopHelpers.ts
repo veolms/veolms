@@ -333,3 +333,10 @@ export function seatsLeftLabel(seatsLeft: number | null): string | null {
 export function workshopCalendarUrl(workshopId: string): string {
   return getApiRequestUrl(`/workshops/${workshopId}/calendar.ics`);
 }
+
+/** The Join redirect, opened in a new tab; the API records the attendance. */
+export function workshopJoinUrl(workshopId: string, sessionId: string): string {
+  return getApiRequestUrl(
+    `/workshops/${workshopId}/sessions/${sessionId}/join`,
+  );
+}

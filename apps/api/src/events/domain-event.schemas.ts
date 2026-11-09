@@ -262,3 +262,16 @@ export const workshopRegisteredEventSchema = z.strictObject({
   timeZone: z.string().nullable(),
   sessionCount: z.number().int().nonnegative(),
 });
+
+export const workshopReminderEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  sessionId: z.uuid(),
+  sessionTitle: z.string().nullable(),
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+  timeZone: z.string().min(1),
+  /** A day before, an hour before, or at the start. */
+  window: z.enum(["day", "hour", "now"]),
+});

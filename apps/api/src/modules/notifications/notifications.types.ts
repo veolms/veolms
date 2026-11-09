@@ -32,7 +32,8 @@ export type NotificationTemplateKey =
   | "learning.goal_completed"
   | "learning.streak_milestone"
   | "learning.reminder"
-  | "workshop.registered";
+  | "workshop.registered"
+  | "workshop.reminder";
 
 export type NotificationTemplateData = Record<
   string,
@@ -82,6 +83,8 @@ export interface NotificationHandlerDependencies {
   courseWideEmail?: boolean;
   /** False keeps course-wide notifications off phones. */
   courseWidePush?: boolean;
+  /** Everyone registered for a workshop, for its reminders. */
+  listWorkshopRegistrantUserIds?(workshopId: string): Promise<string[]>;
 }
 
 /** A chat message to push, with who should get it (from the chat module). */

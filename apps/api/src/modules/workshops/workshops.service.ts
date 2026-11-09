@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import {
   WORKSHOP_DEFAULT_CURRENCY,
+  workshopSessionState,
   workshopSlugSchema,
   type CreateWorkshopRequest,
   type UpdateWorkshopRequest,
@@ -72,6 +73,8 @@ export interface WorkshopsService {
     workshopId: string,
     userId: string,
   ): Promise<{ filename: string; ics: string }>;
+  /** The meeting link to send a registrant to, or an error saying why not. */
+  join(workshopId: string, sessionId: string, userId: string): Promise<string>;
 }
 
 function notFound(): AppError {
@@ -486,6 +489,22 @@ export function createWorkshopsService({
       : undefined;
     const reason = await registrationReason(row, userId, registration, now);
     const active = Boolean(registration && !registration.cancelled_at);
+    const joinable =
+      active && registration
+        ? (await repository.listSessions(database, row.id))
+            .filter((session) => {
+              const state = workshopSessionState(
+                session.starts_at,
+                session.ends_at,
+                now,
+              );
+              return state === "join_open" || state === "live";
+            })
+            .map((session) => ({
+              sessionId: session.id,
+              passcode: session.passcode,
+            }))
+        : [];
     return {
       registered: active,
       registeredAt:
@@ -496,6 +515,7 @@ export function createWorkshopsService({
         active && registration ? registration.joined_session_ids : [],
       canRegister: reason === "ok",
       reason,
+      joinable,
     };
   }
 
@@ -610,6 +630,64 @@ export function createWorkshopsService({
     };
   }
 
+  /**
+   * Where the Join button sends a registrant: the session's meeting link,
+   * once its window is open (15 minutes before the start until the end).
+   * The click is remembered on the registration as attendance.
+   */
+  async function join(
+    workshopId: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<string> {
+    const now = new Date();
+    const row = await repository.findPublicById(database, workshopId, now);
+    if (!row) throw notFound();
+    const session = await repository.findSession(
+      database,
+      workshopId,
+      sessionId,
+    );
+    if (!session) throw notFound();
+    const registration = await repository.findRegistration(
+      database,
+      workshopId,
+      userId,
+    );
+    if (!registration || registration.cancelled_at) {
+      throw new AppError(
+        403,
+        "WORKSHOP_NOT_REGISTERED",
+        "Register first to join this session.",
+      );
+    }
+    const state = workshopSessionState(session.starts_at, session.ends_at, now);
+    if (state === "upcoming") {
+      throw new AppError(
+        409,
+        "WORKSHOP_JOIN_NOT_OPEN",
+        "Joining opens 15 minutes before the session starts.",
+      );
+    }
+    if (state === "ended") {
+      throw new AppError(
+        409,
+        "WORKSHOP_SESSION_ENDED",
+        "This session has ended.",
+      );
+    }
+    const url = joinUrlOf(session);
+    if (!url) {
+      throw new AppError(
+        409,
+        "WORKSHOP_JOIN_LINK_MISSING",
+        "The meeting link is not set yet. Please check back shortly.",
+      );
+    }
+    await repository.recordJoin(database, workshopId, userId, sessionId);
+    return url;
+  }
+
   return {
     list,
     getAdmin,
@@ -626,5 +704,6 @@ export function createWorkshopsService({
     register,
     unregister,
     calendar,
+    join,
   };
 }

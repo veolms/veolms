@@ -24,9 +24,11 @@ import {
   useUnregisterFromWorkshop,
   useWorkshopPublic,
   useWorkshopViewer,
+  workshopRefetchInterval,
 } from "../services/workshops";
 import { useAuthStore } from "../store/auth.store";
 import { WorkshopHostAvatar } from "./WorkshopHostAvatar";
+import { WorkshopJoinButton } from "./WorkshopJoinButton";
 import { WORKSHOPS_PATH } from "./WorkshopsPage";
 import {
   browserTimeZone,
@@ -95,13 +97,48 @@ function RegisterPanel({
     case "registered":
       body = (
         <div className="grid gap-3">
+          {viewer?.joinable?.length ? (
+            <div className="grid gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+              <p className="flex items-center gap-2 text-sm font-semibold text-(--text)">
+                <span className="relative flex size-2.5">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
+                </span>
+                {workshop.state === "live"
+                  ? "The session is live"
+                  : "Starting soon — you can join now"}
+              </p>
+              {viewer.joinable.map((entry) => (
+                <WorkshopJoinButton
+                  key={entry.sessionId}
+                  workshopId={workshop.id}
+                  joinable={entry}
+                  label={
+                    workshop.sessions.length > 1
+                      ? `Join ${
+                          workshop.sessions.find(
+                            (session) => session.id === entry.sessionId,
+                          )?.title ??
+                          `session ${
+                            workshop.sessions.findIndex(
+                              (session) => session.id === entry.sessionId,
+                            ) + 1
+                          }`
+                        }`
+                      : "Join now"
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
           <p className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
             <CheckCircle size={18} weight="fill" />
             You&apos;re registered
           </p>
           <p className="text-[13px] leading-5 text-(--muted)">
             We&apos;ll remind you a day before and an hour before. The Join
-            button appears here 15 minutes before each session starts.
+            button appears here 15 minutes before each session starts, and this
+            page refreshes on its own.
           </p>
           <div className="grid gap-2">
             {calendarLink ? (
@@ -297,7 +334,12 @@ export function WorkshopDetailPage({
   const user = authUserFetched ? authUser : storeUser;
   const signedIn = Boolean(user);
   const workshopQuery = useWorkshopPublic(slug);
-  const viewerQuery = useWorkshopViewer(slug, { enabled: signedIn });
+  const viewerQuery = useWorkshopViewer(slug, {
+    enabled: signedIn,
+    refetchInterval: workshopRefetchInterval(
+      workshopQuery.data?.sessions ?? [],
+    ),
+  });
   const registerMutation = useRegisterForWorkshop();
   const unregisterMutation = useUnregisterFromWorkshop();
   const [error, setError] = useState<string | null>(null);
@@ -462,9 +504,29 @@ export function WorkshopDetailPage({
                       </p>
                     </div>
                   </div>
-                  <span className="rounded-full bg-(--canvas) px-2.5 py-1 text-[11px] font-semibold text-(--muted)">
-                    {sessionStateLabel(session.state)}
-                  </span>
+                  {(() => {
+                    const joinable = (viewerQuery.data?.joinable ?? []).find(
+                      (entry) => entry.sessionId === session.id,
+                    );
+                    return joinable ? (
+                      <WorkshopJoinButton
+                        workshopId={workshop.id}
+                        joinable={joinable}
+                        size="sm"
+                        label={session.state === "live" ? "Join now" : "Join"}
+                      />
+                    ) : (
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          session.state === "live"
+                            ? "bg-emerald-500 text-white"
+                            : "bg-(--canvas) text-(--muted)"
+                        }`}
+                      >
+                        {sessionStateLabel(session.state)}
+                      </span>
+                    );
+                  })()}
                 </li>
               ))}
             </ol>

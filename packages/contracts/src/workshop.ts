@@ -367,6 +367,10 @@ export const workshopViewerSchema = z.strictObject({
   joinedSessionIds: z.array(z.uuid()),
   canRegister: z.boolean(),
   reason: workshopRegistrationReasonSchema,
+  /** Sessions in their join window, for a registrant; empty otherwise. */
+  joinable: z.array(
+    z.strictObject({ sessionId: z.uuid(), passcode: z.string().nullable() }),
+  ),
 });
 export type WorkshopViewer = z.infer<typeof workshopViewerSchema>;
 
@@ -404,3 +408,25 @@ export function googleCalendarUrl(input: {
 export type WorkshopRegistrationResponse = z.infer<
   typeof workshopRegistrationResponseSchema
 >;
+
+// --- Step 3: reminders and joining ---
+
+export const workshopReminderWindows = ["day", "hour", "now"] as const;
+export const workshopReminderWindowSchema = z.enum(workshopReminderWindows);
+export type WorkshopReminderWindow = z.infer<
+  typeof workshopReminderWindowSchema
+>;
+
+/** A session the registrant may join right now, with its passcode if any. */
+export const workshopJoinableSessionSchema = z.strictObject({
+  sessionId: z.uuid(),
+  passcode: z.string().nullable(),
+});
+export type WorkshopJoinableSession = z.infer<
+  typeof workshopJoinableSessionSchema
+>;
+
+export const workshopSessionParamsSchema = z.strictObject({
+  workshopId: z.uuid(),
+  sessionId: z.uuid(),
+});

@@ -11,6 +11,7 @@ import {
   workshopPublicListResponseSchema,
   workshopPublicSchema,
   workshopRegistrationResponseSchema,
+  workshopSessionParamsSchema,
   workshopSlugParamsSchema,
   workshopUnregisterResponseSchema,
   workshopViewerSchema,
@@ -24,8 +25,8 @@ import { createWorkshopsController } from "./workshops.controller.ts";
 import { createWorkshopsService } from "./workshops.service.ts";
 
 /**
- * The admin side of workshops. Learner routes (list, page, register, join)
- * arrive in the next step and share this module.
+ * Workshops: the admin side (/workshops/admin) and the learner side (list,
+ * page, register, calendar, join).
  *
  * Scope "platform": an instructor's role is scoped to their courses, and
  * they may run workshops too, so the check is on the key alone.
@@ -356,6 +357,27 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.calendar,
+  );
+
+  app.get(
+    "/workshops/:workshopId/sessions/:sessionId/join",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "joinWorkshopSession",
+        tags,
+        summary:
+          "Send a registrant to the session's meeting link (from 15 minutes before the start until it ends) and note the attendance",
+        params: workshopSessionParamsSchema,
+        response: {
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Not registered"),
+          404: errorResponse("Workshop or session not found"),
+          409: errorResponse("Not open yet, ended, or no meeting link set"),
+        },
+      },
+    },
+    controller.join,
   );
 };
 

@@ -110,6 +110,20 @@ export function createWorkshopsController({
       .send(file.ics);
   }
 
+  async function join(
+    request: FastifyRequest<{
+      Params: { workshopId: string; sessionId: string };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const url = await service.join(
+      request.params.workshopId,
+      request.params.sessionId,
+      request.user!.id,
+    );
+    return reply.header("Cache-Control", "no-store").redirect(url, 302);
+  }
+
   return {
     list,
     getOne,
@@ -126,6 +140,7 @@ export function createWorkshopsController({
     register,
     unregister,
     calendar,
+    join,
   };
 }
 

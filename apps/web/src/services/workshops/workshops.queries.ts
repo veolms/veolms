@@ -13,6 +13,23 @@ import type { ApiError } from "../../lib/api-error";
 import { workshopKeys, workshopPublicKeys } from "./workshops.keys";
 import { workshopsPublicService, workshopsService } from "./workshops.service";
 
+/**
+ * How often the page should refresh so the Join button appears on time:
+ * every 30 s from an hour before a session until it ends, otherwise never.
+ */
+export function workshopRefetchInterval(
+  sessions: { startsAt: string; endsAt: string }[],
+  now = Date.now(),
+): number | false {
+  const HOUR = 60 * 60_000;
+  const near = sessions.some((session) => {
+    const starts = new Date(session.startsAt).getTime();
+    const ends = new Date(session.endsAt).getTime();
+    return now >= starts - HOUR && now <= ends;
+  });
+  return near ? 30_000 : false;
+}
+
 export function useWorkshopsAdminList(options: {
   tab: WorkshopAdminTab;
   search?: string;
@@ -72,18 +89,21 @@ export function useWorkshopPublic(slug: string | null | undefined) {
     queryFn: () => workshopsPublicService.get(slug!),
     enabled: Boolean(slug),
     staleTime: 60 * 1000,
+    refetchInterval: (query) =>
+      workshopRefetchInterval(query.state.data?.sessions ?? []),
   });
 }
 
 /** The signed-in learner's standing; not asked while signed out. */
 export function useWorkshopViewer(
   slug: string | null | undefined,
-  options: { enabled: boolean },
+  options: { enabled: boolean; refetchInterval?: number | false },
 ) {
   return useQuery<WorkshopViewer, ApiError>({
     queryKey: workshopPublicKeys.viewer(slug ?? ""),
     queryFn: () => workshopsPublicService.viewer(slug!),
     enabled: Boolean(slug) && options.enabled,
     staleTime: 15 * 1000,
+    refetchInterval: options.refetchInterval ?? false,
   });
 }

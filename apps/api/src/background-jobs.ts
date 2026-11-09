@@ -15,6 +15,8 @@ import {
 } from "./modules/commerce/webhooks/payment-event.queue.ts";
 import { CommerceFulfillmentScheduler } from "./modules/commerce/fulfillment/fulfillment.scheduler.ts";
 import { LearningReminderWorker } from "./modules/learning-progress/learning-reminder.worker.ts";
+import { WorkshopReminderWorker } from "./modules/workshops/workshop-reminder.worker.ts";
+import { listActiveRegistrantUserIds } from "./modules/workshops/workshops.repository.ts";
 import { findIdsMentionedInCourseContent } from "./modules/courses/curriculum/course-content-reference.service.ts";
 import { createDiscussionUploadStore } from "./modules/discussion-uploads/index.ts";
 import { createAttachmentsRepository } from "./modules/learning/discussions/attachments/attachments.repository.ts";
@@ -98,6 +100,12 @@ export function registerBackgroundJobs(
   });
   learningReminderWorker.start();
 
+  const workshopReminderWorker = new WorkshopReminderWorker({
+    database,
+    logger: app.log,
+  });
+  workshopReminderWorker.start();
+
   const stopNotificationLoop = config.NOTIFICATION_INLINE_WORKER
     ? startInlineNotificationLoop(app, database, services)
     : null;
@@ -158,6 +166,7 @@ export function registerBackgroundJobs(
     // shared Kysely instance is destroyed right after these hooks.
     await fulfillmentScheduler.stop();
     await learningReminderWorker.stop();
+    await workshopReminderWorker.stop();
     await stopNotificationLoop?.();
     await stopDiscussionUploadPurge?.();
     await stopInvoicePdfJob?.();
@@ -531,6 +540,8 @@ function startInlineNotificationLoop(
     handlers: {
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
+      listWorkshopRegistrantUserIds: (workshopId) =>
+        listActiveRegistrantUserIds(database, workshopId),
     },
     recipients: {
       findRecipient: async (userId) => {

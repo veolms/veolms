@@ -503,3 +503,54 @@ export async function cancelRegistration(
     .where("cancelled_at", "is", null)
     .execute();
 }
+
+// --- Step 3: reminders and joining ---
+
+/** Everyone with an active registration, for a reminder's fan-out. */
+export async function listActiveRegistrantUserIds(
+  database: DatabaseExecutor,
+  workshopId: string,
+): Promise<string[]> {
+  const rows = await database
+    .selectFrom("workshop_registrations")
+    .select("user_id")
+    .where("workshop_id", "=", workshopId)
+    .where("cancelled_at", "is", null)
+    .execute();
+  return rows.map((row) => row.user_id);
+}
+
+export async function findSession(
+  database: DatabaseExecutor,
+  workshopId: string,
+  sessionId: string,
+): Promise<WorkshopSessionRow | undefined> {
+  return await database
+    .selectFrom("workshop_sessions")
+    .selectAll()
+    .where("workshop_id", "=", workshopId)
+    .where("id", "=", sessionId)
+    .executeTakeFirst();
+}
+
+/** Remembers that this learner clicked Join on a session (once per session). */
+export async function recordJoin(
+  database: DatabaseExecutor,
+  workshopId: string,
+  userId: string,
+  sessionId: string,
+): Promise<void> {
+  await database
+    .updateTable("workshop_registrations")
+    .set({
+      joined_session_ids: sql`(
+        select array_agg(distinct x) from unnest(
+          array_append(joined_session_ids, ${sessionId}::uuid)
+        ) as x
+      )`,
+    })
+    .where("workshop_id", "=", workshopId)
+    .where("user_id", "=", userId)
+    .where("cancelled_at", "is", null)
+    .execute();
+}
