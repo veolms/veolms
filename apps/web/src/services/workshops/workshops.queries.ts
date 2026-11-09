@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type {
+  WorkshopCourseSectionsResponse,
   WorkshopRegistrantsResponse,
   WorkshopHomeCard,
   WorkshopAdmin,
@@ -124,6 +125,19 @@ export function useWorkshopHomeCard(options: { enabled: boolean }) {
   return useQuery<WorkshopHomeCard | null, ApiError>({
     queryKey: workshopPublicKeys.home(),
     queryFn: () => workshopsPublicService.homeCard(),
+    enabled: options.enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
+/** A course workshop's course sections, for the recording lesson's picker. */
+export function useWorkshopCourseSections(
+  workshopId: string,
+  options: { enabled: boolean },
+) {
+  return useQuery<WorkshopCourseSectionsResponse, ApiError>({
+    queryKey: [...workshopKeys.all, "admin", "course-sections", workshopId],
+    queryFn: () => workshopsService.courseSections(workshopId),
     enabled: options.enabled,
     staleTime: 60 * 1000,
   });

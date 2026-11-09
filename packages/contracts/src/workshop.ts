@@ -132,6 +132,9 @@ export const workshopSessionAdminSchema = z.strictObject({
   passcode: z.string().nullable(),
   recordingMediaId: z.uuid().nullable(),
   recordingReadyAt: z.iso.datetime().nullable(),
+  /** Course workshops: the lesson the recording was published as. */
+  recordingLessonId: z.uuid().nullable(),
+  recordingLessonPath: z.string().nullable(),
   state: workshopSessionStateSchema,
 });
 export type WorkshopSessionAdmin = z.infer<typeof workshopSessionAdminSchema>;
@@ -294,6 +297,8 @@ export const workshopSessionPublicSchema = z.strictObject({
   timeZone: z.string(),
   state: workshopSessionStateSchema,
   hasRecording: z.boolean(),
+  /** Course workshops: watch the recording as a lesson of the course. */
+  recordingLessonPath: z.string().nullable(),
 });
 export type WorkshopSessionPublic = z.infer<typeof workshopSessionPublicSchema>;
 
@@ -375,6 +380,8 @@ export const workshopViewerSchema = z.strictObject({
   ),
   /** Registrants, the linked course's learners and staff may watch recordings. */
   canWatchRecordings: z.boolean(),
+  /** In through the workshop's course, not a registration of their own. */
+  viaCourse: z.boolean(),
 });
 export type WorkshopViewer = z.infer<typeof workshopViewerSchema>;
 
@@ -440,6 +447,8 @@ export const workshopSessionParamsSchema = z.strictObject({
 /** Attach a processed-or-processing video as the session's recording; null removes it. */
 export const setWorkshopRecordingRequestSchema = z.strictObject({
   mediaId: z.uuid().nullable(),
+  /** Course workshops: the section of the course the lesson goes in. */
+  sectionId: z.uuid().nullable().optional(),
 });
 export type SetWorkshopRecordingRequest = z.infer<
   typeof setWorkshopRecordingRequestSchema
@@ -451,6 +460,7 @@ export const workshopRegistrantSourceSchema = z.enum([
   "free",
   "order",
   "admin",
+  "course",
 ]);
 
 export const workshopRegistrantSchema = z.strictObject({
@@ -508,3 +518,66 @@ export const workshopHomeCardSchema = z.strictObject({
   currency: z.string().length(3),
 });
 export type WorkshopHomeCard = z.infer<typeof workshopHomeCardSchema>;
+
+/**
+ * Publishing an open workshop may tell every learner about it. A course
+ * workshop always tells its course's learners on its first publish.
+ */
+export const publishWorkshopRequestSchema = z.strictObject({
+  announce: z.boolean().optional(),
+});
+export type PublishWorkshopRequest = z.infer<
+  typeof publishWorkshopRequestSchema
+>;
+
+/** Most rows one CSV import may hold. */
+export const WORKSHOP_IMPORT_MAX_ROWS = 2000;
+
+export const importWorkshopRegistrantsRequestSchema = z.strictObject({
+  rows: z
+    .array(
+      z.strictObject({
+        email: z.string().trim().max(320),
+        name: z.string().trim().max(100).optional(),
+      }),
+    )
+    .min(1)
+    .max(WORKSHOP_IMPORT_MAX_ROWS),
+  /** Create a student account for an email that has none (default yes). */
+  createAccounts: z.boolean().optional(),
+});
+export type ImportWorkshopRegistrantsRequest = z.infer<
+  typeof importWorkshopRegistrantsRequestSchema
+>;
+
+export const importWorkshopRegistrantsResponseSchema = z.strictObject({
+  /** Newly registered, accounts created for them included. */
+  added: z.number().int().nonnegative(),
+  /** Of those, how many got a new account. */
+  accountsCreated: z.number().int().nonnegative(),
+  alreadyRegistered: z.number().int().nonnegative(),
+  /** Rows that were not imported, with why (1-based, as in the file). */
+  skipped: z.array(
+    z.strictObject({
+      row: z.number().int().positive(),
+      email: z.string(),
+      reason: z.enum([
+        "invalid_email",
+        "no_account",
+        "deleted_account",
+        "duplicate",
+      ]),
+    }),
+  ),
+  items: z.array(workshopRegistrantSchema),
+});
+export type ImportWorkshopRegistrantsResponse = z.infer<
+  typeof importWorkshopRegistrantsResponseSchema
+>;
+
+export const workshopCourseSectionsResponseSchema = z.strictObject({
+  items: z.array(z.strictObject({ id: z.uuid(), title: z.string() })),
+});
+export type WorkshopCourseSectionsResponse = z.infer<
+  typeof workshopCourseSectionsResponseSchema
+>;

@@ -21,6 +21,8 @@ export interface WorkshopDetailRow extends WorkshopRow {
   course_title: string | null;
   course_slug: string | null;
   registration_count: number;
+  /** Registrations that take a seat (free and paid). */
+  seats_taken: number;
 }
 
 /** The list adds what its cards show about the sessions. */
@@ -49,6 +51,11 @@ function withJoins(database: DatabaseExecutor) {
         select count(*)::int from workshop_registrations r
         where r.workshop_id = workshops.id and r.cancelled_at is null
       )`.as("registration_count"),
+      sql<number>`(
+        select count(*)::int from workshop_registrations r
+        where r.workshop_id = workshops.id and r.cancelled_at is null
+          and r.source in ('free', 'order')
+      )`.as("seats_taken"),
     ])
     .where("workshops.deleted_at", "is", null);
 }
@@ -447,6 +454,7 @@ export async function countActiveRegistrations(
     .select((eb) => eb.fn.count<number>("id").as("total"))
     .where("workshop_id", "=", workshopId)
     .where("cancelled_at", "is", null)
+    .where("source", "in", ["free", "order"])
     .executeTakeFirst();
   return Number(row?.total ?? 0);
 }
@@ -461,7 +469,7 @@ export async function upsertRegistration(
     id: string;
     workshopId: string;
     userId: string;
-    source: "free" | "order" | "admin";
+    source: "free" | "order" | "admin" | "course";
     orderId: string | null;
     now: Date;
   },
@@ -564,12 +572,15 @@ export async function setSessionRecording(
   mediaId: string | null,
   readyAt: Date | null,
   now: Date,
+  /** The course lesson it was published as; undefined keeps the current one. */
+  lessonId?: string | null,
 ): Promise<void> {
   await database
     .updateTable("workshop_sessions")
     .set({
       recording_media_id: mediaId,
       recording_ready_at: mediaId ? readyAt : null,
+      ...(lessonId !== undefined ? { recording_lesson_id: lessonId } : {}),
       updated_at: now,
     })
     .where("id", "=", sessionId)
@@ -584,6 +595,8 @@ export interface SessionAwaitingRecordingRow {
   slug: string;
   title: string;
   status: string;
+  recording_lesson_id: string | null;
+  course_slug: string | null;
 }
 
 /** Sessions whose recording is attached but not yet known to be ready. */
@@ -593,10 +606,13 @@ export async function listSessionsAwaitingRecording(
   const rows = await database
     .selectFrom("workshop_sessions as s")
     .innerJoin("workshops as w", "w.id", "s.workshop_id")
+    .leftJoin("courses as c", "c.id", "w.course_id")
     .select([
       "s.id as session_id",
       "s.title as session_title",
       "s.recording_media_id",
+      "s.recording_lesson_id",
+      "c.slug as course_slug",
       "w.id as workshop_id",
       "w.slug",
       "w.title",
@@ -761,14 +777,27 @@ export async function findNextRegisteredSession(
   database: DatabaseExecutor,
   userId: string,
   now: Date,
+  courseIds: readonly string[] = [],
 ): Promise<HomeSessionRow | undefined> {
   return (await database
     .selectFrom("workshop_sessions as s")
     .innerJoin("workshops as w", "w.id", "s.workshop_id")
-    .innerJoin("workshop_registrations as r", "r.workshop_id", "w.id")
     .select(homeSessionColumns)
-    .where("r.user_id", "=", userId)
-    .where("r.cancelled_at", "is", null)
+    .where((eb) =>
+      eb.or([
+        eb.exists(
+          eb
+            .selectFrom("workshop_registrations as r")
+            .select("r.id")
+            .whereRef("r.workshop_id", "=", "w.id")
+            .where("r.user_id", "=", userId)
+            .where("r.cancelled_at", "is", null),
+        ),
+        ...(courseIds.length > 0
+          ? [eb("w.course_id", "in", [...courseIds])]
+          : []),
+      ]),
+    )
     .where("w.status", "=", "published")
     .where("w.deleted_at", "is", null)
     .where("s.ends_at", ">", now)
@@ -793,4 +822,37 @@ export async function findSoonestUpcomingSession(
     .orderBy("s.starts_at", "asc")
     .limit(1)
     .executeTakeFirst()) as HomeSessionRow | undefined;
+}
+
+// --- Course learners and announcements ---
+
+export async function findWorkshopCourseId(
+  database: DatabaseExecutor,
+  workshopId: string,
+): Promise<string | null> {
+  const row = await database
+    .selectFrom("workshops")
+    .select("course_id")
+    .where("id", "=", workshopId)
+    .executeTakeFirst();
+  return row?.course_id ?? null;
+}
+
+export async function listAllLearnerUserIds(
+  database: DatabaseExecutor,
+): Promise<string[]> {
+  const rows = await sql<{ id: string }>`
+    select u.id from users u
+    where u.is_deleted = false
+      and u.id in (
+        select ur.user_id from user_roles ur
+          join roles r on r.id = ur.role_id where r.name = 'student'
+        union
+        select ra.user_id from role_assignments ra
+          join roles r2 on r2.id = ra.role_id where r2.name = 'student'
+        union
+        select e.user_id from enrollments e
+      )
+  `.execute(database);
+  return rows.rows.map((row) => row.id);
 }

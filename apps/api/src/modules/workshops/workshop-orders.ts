@@ -29,7 +29,7 @@ export function workshopPurchaseRefusal(
     return "ended";
   }
   if (row.price_minor === null || row.price_minor <= 0) return "free";
-  if (row.capacity !== null && row.registration_count >= row.capacity) {
+  if (row.capacity !== null && Number(row.seats_taken) >= row.capacity) {
     return "full";
   }
   return null;
@@ -66,9 +66,11 @@ export async function createRegistration(
   input: {
     workshop: { id: string; slug: string; title: string };
     userId: string;
-    source: "free" | "order" | "admin";
+    source: "free" | "order" | "admin" | "course";
     orderId: string | null;
     existingId?: string;
+    /** False for a course learner noted on Join: no confirmation email. */
+    notify?: boolean;
     now: Date;
   },
 ): Promise<repository.WorkshopRegistrationRow> {
@@ -86,6 +88,7 @@ export async function createRegistration(
   const next =
     sessions.find((session) => session.ends_at.getTime() > now.getTime()) ??
     sessions[0];
+  if (input.notify === false) return registration;
   await outbox.publish(trx, {
     type: "workshop.registered",
     version: 1,

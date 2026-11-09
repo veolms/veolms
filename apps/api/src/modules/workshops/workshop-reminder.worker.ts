@@ -169,9 +169,12 @@ export class WorkshopReminderWorker {
         and w.deleted_at is null
         and s.starts_at > ${lowest}
         and s.starts_at <= ${highest}
-        and exists (
-          select 1 from workshop_registrations r
-          where r.workshop_id = w.id and r.cancelled_at is null
+        and (
+          w.course_id is not null
+          or exists (
+            select 1 from workshop_registrations r
+            where r.workshop_id = w.id and r.cancelled_at is null
+          )
         )
         and not exists (
           select 1 from outbox_events o

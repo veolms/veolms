@@ -17,6 +17,8 @@ import {
   type WorkshopSessionInput,
   type WorkshopViewer,
   type WorkshopRegistrant,
+  type ImportWorkshopRegistrantsRequest,
+  type ImportWorkshopRegistrantsResponse,
   type WorkshopRegistrantsResponse,
   type VideoPlaybackToken,
 } from "@veolms/contracts";
@@ -53,6 +55,8 @@ import {
 } from "./workshops.presenter.ts";
 import * as repository from "./workshops.repository.ts";
 import { createRegistration } from "./workshop-orders.ts";
+import type { WorkshopCourseLessons } from "./workshop-course-lessons.ts";
+import { lessonPathOf } from "./workshop-links.ts";
 
 export interface WorkshopsServiceDependencies {
   database: Kysely<Database>;
@@ -66,6 +70,17 @@ export interface WorkshopsServiceDependencies {
   authorization: Pick<AuthorizationService, "check">;
   /** For refunding paid registrations when a workshop is cancelled. */
   paymentGateways: PaymentGateways;
+  /** Publishes a course workshop's recording as a course lesson. */
+  courseLessons?: WorkshopCourseLessons;
+  /**
+   * Creates a student account for an email with none and returns its id;
+   * null when the email belongs to a deleted account. Optional: without it
+   * a CSV import only registers people who already have an account.
+   */
+  createStudentAccount?: (
+    input: { email: string; displayName: string },
+    actorUserId: string,
+  ) => Promise<string | null>;
 }
 
 export interface WorkshopsService {
@@ -80,7 +95,11 @@ export interface WorkshopsService {
     input: UpdateWorkshopRequest,
   ): Promise<WorkshopAdmin>;
   publishCheck(workshopId: string): Promise<WorkshopPublishCheck>;
-  publish(workshopId: string): Promise<WorkshopAdmin>;
+  /** First publish of a course workshop tells its learners; `announce` tells everyone. */
+  publish(
+    workshopId: string,
+    options?: { announce?: boolean },
+  ): Promise<WorkshopAdmin>;
   unpublish(workshopId: string): Promise<WorkshopAdmin>;
   cancel(
     workshopId: string,
@@ -107,7 +126,13 @@ export interface WorkshopsService {
     workshopId: string,
     sessionId: string,
     mediaId: string | null,
+    actor: { id: string; roles: readonly string[] },
+    options?: { sectionId?: string | null },
   ): Promise<WorkshopAdmin>;
+  /** A course workshop's course sections, for the recording's section picker. */
+  listCourseSections(
+    workshopId: string,
+  ): Promise<{ id: string; title: string }[]>;
   /** Marks recordings the media pipeline has finished; returns how many. */
   markReadyRecordings(now: Date): Promise<number>;
   recordingPlayback(
@@ -133,6 +158,11 @@ export interface WorkshopsService {
     workshopId: string,
     userId: string,
   ): Promise<WorkshopRegistrantsResponse>;
+  importRegistrants(
+    workshopId: string,
+    input: ImportWorkshopRegistrantsRequest,
+    actorUserId: string,
+  ): Promise<ImportWorkshopRegistrantsResponse>;
 }
 
 /** Did a session that registrants already knew change its time? */
@@ -160,6 +190,8 @@ export function createWorkshopsService({
   mediaService,
   authorization,
   paymentGateways,
+  createStudentAccount,
+  courseLessons,
 }: WorkshopsServiceDependencies): WorkshopsService {
   const access = createAccessService();
   const outbox = createOutboxService();
@@ -240,7 +272,7 @@ export function createWorkshopsService({
     return presentWorkshopAdmin(
       row,
       sessions.map((session) =>
-        presentSession(session, joinUrlOf(session), now),
+        presentSession(session, joinUrlOf(session), now, row.course_slug),
       ),
     );
   }
@@ -411,7 +443,10 @@ export function createWorkshopsService({
     return { canPublish: issues.length === 0, issues };
   }
 
-  async function publish(workshopId: string): Promise<WorkshopAdmin> {
+  async function publish(
+    workshopId: string,
+    options: { announce?: boolean } = {},
+  ): Promise<WorkshopAdmin> {
     const row = await load(workshopId);
     if (row.status === "published") return await getAdmin(workshopId);
     if (row.status === "cancelled") {
@@ -430,12 +465,46 @@ export function createWorkshopsService({
       );
     }
     const now = new Date();
-    await repository.updateWorkshop(
-      database,
-      workshopId,
-      { status: "published", published_at: row.published_at ?? now },
-      now,
-    );
+    // Told once, on the first publish: a course workshop to its learners
+    // (who are in without registering), an open one to everyone when asked.
+    const audience = row.published_at
+      ? null
+      : row.course_id
+        ? "course"
+        : options.announce
+          ? "all"
+          : null;
+    await database.transaction().execute(async (trx) => {
+      await repository.updateWorkshop(
+        trx,
+        workshopId,
+        { status: "published", published_at: row.published_at ?? now },
+        now,
+      );
+      if (!audience) return;
+      const sessions = await repository.listSessions(trx, workshopId);
+      const next =
+        sessions.find((session) => session.ends_at.getTime() > now.getTime()) ??
+        sessions[0];
+      await outbox.publish(trx, {
+        type: "workshop.announced",
+        version: 1,
+        dedupeKey: `workshop.announced:${workshopId}`,
+        occurredAt: now,
+        payload: {
+          workshopId,
+          workshopSlug: row.slug,
+          workshopTitle: row.title,
+          audience,
+          courseTitle: row.course_title ?? null,
+          priceMinor: row.price_minor,
+          currency: row.currency,
+          startsAt: next ? next.starts_at.toISOString() : null,
+          endsAt: next ? next.ends_at.toISOString() : null,
+          timeZone: next?.time_zone ?? null,
+        },
+      });
+    });
     return await getAdmin(workshopId);
   }
 
@@ -536,6 +605,38 @@ export function createWorkshopsService({
     return presentWorkshopPublic(row, sessions, now);
   }
 
+  /**
+   * Learners of the workshop's course are in without registering: they
+   * hear about it, get the reminders and may join, like registrants.
+   */
+  async function includedViaCourse(
+    row: { course_id: string | null },
+    userId: string | null,
+  ): Promise<boolean> {
+    if (!row.course_id || !userId) return false;
+    return await access.hasActiveAccess(database, userId, row.course_id);
+  }
+
+  /** May attend: an active registration, or the workshop's course. */
+  async function attends(
+    row: { id: string; course_id: string | null },
+    userId: string,
+  ): Promise<{
+    registration: repository.WorkshopRegistrationRow | undefined;
+    viaCourse: boolean;
+  } | null> {
+    const registration = await repository.findRegistration(
+      database,
+      row.id,
+      userId,
+    );
+    const active =
+      registration && !registration.cancelled_at ? registration : undefined;
+    const viaCourse = await includedViaCourse(row, userId);
+    if (!active && !viaCourse) return null;
+    return { registration: active, viaCourse };
+  }
+
   /** Why this viewer may, or may not, register right now. */
   async function registrationReason(
     row: repository.WorkshopListRow,
@@ -552,6 +653,7 @@ export function createWorkshopsService({
     }
     if (registration && !registration.cancelled_at) return "registered";
     if (!userId) return "sign_in";
+    if (await includedViaCourse(row, userId)) return "registered";
     if (
       row.course_id &&
       !(await access.hasActiveAccess(database, userId, row.course_id))
@@ -562,10 +664,7 @@ export function createWorkshopsService({
     if (row.price_minor !== null && row.price_minor > 0) {
       return "payment_required";
     }
-    if (
-      row.capacity !== null &&
-      Number(row.registration_count) >= row.capacity
-    ) {
+    if (row.capacity !== null && Number(row.seats_taken) >= row.capacity) {
       return "full";
     }
     return "ok";
@@ -613,34 +712,36 @@ export function createWorkshopsService({
       ? await repository.findRegistration(database, row.id, userId)
       : undefined;
     const reason = await registrationReason(row, userId, registration, now);
-    const active = Boolean(registration && !registration.cancelled_at);
+    const registeredRow = Boolean(registration && !registration.cancelled_at);
+    const viaCourse = await includedViaCourse(row, userId);
+    const active = registeredRow || viaCourse;
     const canWatch = userId
       ? await canWatchRecordings(row, userId, registration)
       : false;
-    const joinable =
-      active && registration
-        ? (await repository.listSessions(database, row.id))
-            .filter((session) => {
-              const state = workshopSessionState(
-                session.starts_at,
-                session.ends_at,
-                now,
-              );
-              return state === "join_open" || state === "live";
-            })
-            .map((session) => ({
-              sessionId: session.id,
-              passcode: session.passcode,
-            }))
-        : [];
+    const joinable = active
+      ? (await repository.listSessions(database, row.id))
+          .filter((session) => {
+            const state = workshopSessionState(
+              session.starts_at,
+              session.ends_at,
+              now,
+            );
+            return state === "join_open" || state === "live";
+          })
+          .map((session) => ({
+            sessionId: session.id,
+            passcode: session.passcode,
+          }))
+      : [];
     return {
       registered: active,
       registeredAt:
-        active && registration
+        registeredRow && registration
           ? new Date(registration.registered_at).toISOString()
           : null,
       joinedSessionIds:
-        active && registration ? registration.joined_session_ids : [],
+        registeredRow && registration ? registration.joined_session_ids : [],
+      viaCourse: viaCourse && !registeredRow,
       canRegister: reason === "ok",
       reason,
       joinable,
@@ -703,12 +804,7 @@ export function createWorkshopsService({
     const now = new Date();
     const row = await repository.findPublicById(database, workshopId, now);
     if (!row) throw notFound();
-    const registration = await repository.findRegistration(
-      database,
-      workshopId,
-      userId,
-    );
-    if (!registration || registration.cancelled_at) {
+    if (!(await attends(row, userId))) {
       throw new AppError(
         403,
         "WORKSHOP_NOT_REGISTERED",
@@ -757,12 +853,8 @@ export function createWorkshopsService({
       sessionId,
     );
     if (!session) throw notFound();
-    const registration = await repository.findRegistration(
-      database,
-      workshopId,
-      userId,
-    );
-    if (!registration || registration.cancelled_at) {
+    const attendance = await attends(row, userId);
+    if (!attendance) {
       throw new AppError(
         403,
         "WORKSHOP_NOT_REGISTERED",
@@ -791,6 +883,20 @@ export function createWorkshopsService({
         "WORKSHOP_JOIN_LINK_MISSING",
         "The meeting link is not set yet. Please check back shortly.",
       );
+    }
+    if (!attendance.registration) {
+      // A course learner: noted now, so their attendance shows in the
+      // registrants table. It takes no seat and sends no confirmation.
+      await database.transaction().execute(async (trx) => {
+        await createRegistration(trx, {
+          workshop: row,
+          userId,
+          source: "course",
+          orderId: null,
+          notify: false,
+          now,
+        });
+      });
     }
     await repository.recordJoin(database, workshopId, userId, sessionId);
     return url;
@@ -954,6 +1060,89 @@ export function createWorkshopsService({
     return await listRegistrants(workshopId);
   }
 
+  /**
+   * Registers a list of people at once, from a spreadsheet: existing
+   * accounts are registered; an email with no account gets a student
+   * account first (they sign in with an emailed code, like everyone), when
+   * `createAccounts` allows. Seats are not counted, as for one added by hand.
+   */
+  async function importRegistrants(
+    workshopId: string,
+    input: ImportWorkshopRegistrantsRequest,
+    actorUserId: string,
+  ): Promise<ImportWorkshopRegistrantsResponse> {
+    const row = await load(workshopId);
+    if (row.status === "cancelled") throw reasonError("cancelled");
+    const createAccounts = input.createAccounts !== false;
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const seen = new Set<string>();
+    const skipped: ImportWorkshopRegistrantsResponse["skipped"] = [];
+    let added = 0;
+    let accountsCreated = 0;
+    let alreadyRegistered = 0;
+
+    for (const [index, entry] of input.rows.entries()) {
+      const rowNumber = index + 1;
+      const email = entry.email.trim().toLowerCase();
+      if (!emailPattern.test(email)) {
+        skipped.push({
+          row: rowNumber,
+          email: entry.email,
+          reason: "invalid_email",
+        });
+        continue;
+      }
+      if (seen.has(email)) {
+        skipped.push({ row: rowNumber, email, reason: "duplicate" });
+        continue;
+      }
+      seen.add(email);
+
+      let userId = await repository.findUserIdByEmail(database, email);
+      if (!userId) {
+        if (!createAccounts || !createStudentAccount) {
+          skipped.push({ row: rowNumber, email, reason: "no_account" });
+          continue;
+        }
+        const created = await createStudentAccount(
+          { email, displayName: entry.name?.trim() || email.split("@")[0]! },
+          actorUserId,
+        );
+        if (!created) {
+          // The email belongs to a deleted account, which is not revived here.
+          skipped.push({ row: rowNumber, email, reason: "deleted_account" });
+          continue;
+        }
+        userId = created;
+        accountsCreated += 1;
+      }
+
+      const existing = await repository.findRegistration(
+        database,
+        workshopId,
+        userId,
+      );
+      if (existing && !existing.cancelled_at) {
+        alreadyRegistered += 1;
+        continue;
+      }
+      await database.transaction().execute(async (trx) => {
+        await createRegistration(trx, {
+          workshop: row,
+          userId: userId!,
+          source: "admin",
+          orderId: null,
+          ...(existing ? { existingId: existing.id } : {}),
+          now: new Date(),
+        });
+      });
+      added += 1;
+    }
+
+    const { items } = await listRegistrants(workshopId);
+    return { added, accountsCreated, alreadyRegistered, skipped, items };
+  }
+
   /** Takes a seat back. A paid seat is refunded from the orders page, not here. */
   async function removeRegistrant(
     workshopId: string,
@@ -995,6 +1184,8 @@ export function createWorkshopsService({
     workshopId: string,
     sessionId: string,
     mediaId: string | null,
+    actor: { id: string; roles: readonly string[] },
+    options: { sectionId?: string | null } = {},
   ): Promise<WorkshopAdmin> {
     const now = new Date();
     const row = await load(workshopId);
@@ -1005,12 +1196,15 @@ export function createWorkshopsService({
     );
     if (!session) throw notFound();
     if (mediaId === null) {
+      // The course lesson, if any, stays in the course: it is removed from
+      // the course editor like any other lesson.
       await repository.setSessionRecording(
         database,
         sessionId,
         null,
         null,
         now,
+        null,
       );
       return await getAdmin(workshopId);
     }
@@ -1030,6 +1224,26 @@ export function createWorkshopsService({
       );
     }
     const ready = asset.status === "ready";
+    // A course workshop's recording is published as a lesson of the course,
+    // beside its other lessons; the workshop page links to it.
+    let lessonId: string | null = null;
+    if (row.course_id) {
+      if (!courseLessons) {
+        throw new AppError(
+          503,
+          "WORKSHOP_COURSE_LESSONS_UNAVAILABLE",
+          "Course lessons cannot be created here.",
+        );
+      }
+      lessonId = await courseLessons.publishRecording({
+        courseId: row.course_id,
+        sectionId: options.sectionId ?? null,
+        title: session.title ? `${row.title} — ${session.title}` : row.title,
+        mediaId,
+        existingLessonId: session.recording_lesson_id ?? null,
+        actor,
+      });
+    }
     await database.transaction().execute(async (trx) => {
       await repository.setSessionRecording(
         trx,
@@ -1037,8 +1251,18 @@ export function createWorkshopsService({
         mediaId,
         ready ? now : null,
         now,
+        lessonId,
       );
-      if (ready) await publishRecordingReady(trx, row, session, mediaId, now);
+      if (ready) {
+        await publishRecordingReady(
+          trx,
+          row,
+          session,
+          mediaId,
+          now,
+          lessonPathOf(row.course_slug, lessonId),
+        );
+      }
     });
     return await getAdmin(workshopId);
   }
@@ -1049,6 +1273,7 @@ export function createWorkshopsService({
     session: { id: string; title: string | null },
     mediaId: string,
     now: Date,
+    lessonPath: string | null = null,
   ): Promise<void> {
     // A draft has nobody to tell yet.
     if (workshop.status === "draft") return;
@@ -1064,6 +1289,7 @@ export function createWorkshopsService({
         sessionId: session.id,
         sessionTitle: session.title,
         mediaId,
+        lessonPath,
       },
     });
   }
@@ -1105,6 +1331,7 @@ export function createWorkshopsService({
           { id: row.session_id, title: row.session_title },
           row.recording_media_id,
           now,
+          lessonPathOf(row.course_slug, row.recording_lesson_id),
         );
       });
     }
@@ -1213,5 +1440,11 @@ export function createWorkshopsService({
     registrantsCsv,
     addRegistrant,
     removeRegistrant,
+    importRegistrants,
+    async listCourseSections(workshopId: string) {
+      const row = await load(workshopId);
+      if (!row.course_id || !courseLessons) return [];
+      return await courseLessons.listSections(row.course_id);
+    },
   };
 }

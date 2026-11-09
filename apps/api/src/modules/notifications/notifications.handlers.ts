@@ -29,6 +29,7 @@ import {
   workshopReminderEventSchema,
   workshopRecordingReadyEventSchema,
   workshopUpdatedEventSchema,
+  workshopAnnouncedEventSchema,
 } from "../../events/domain-event.schemas.ts";
 import type { Json } from "@veolms/database";
 
@@ -596,7 +597,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
       channels: commonChannels,
       mandatory: false,
-      deepLink: `/workshops/${event.workshopSlug}`,
+      deepLink: event.lessonPath ?? `/workshops/${event.workshopSlug}`,
     }));
   },
   "workshop.updated": async (payload, dependencies) => {
@@ -622,6 +623,34 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       channels: commonChannels,
       // A cancellation or a new time is about something they signed up for.
       mandatory: true,
+      deepLink: `/workshops/${event.workshopSlug}`,
+    }));
+  },
+  "workshop.announced": async (payload, dependencies) => {
+    const event = workshopAnnouncedEventSchema.parse(payload);
+    const recipientUserIds =
+      event.audience === "all"
+        ? ((await dependencies.listAllLearnerUserIds?.()) ?? [])
+        : ((await dependencies.listWorkshopRegistrantUserIds?.(
+            event.workshopId,
+          )) ?? []);
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "workshop.announced",
+      category: "learning",
+      templateKey: "workshop.announced",
+      templateData: {
+        workshopTitle: event.workshopTitle,
+        workshopSlug: event.workshopSlug,
+        audience: event.audience,
+        courseTitle: event.courseTitle ?? "",
+        free: event.priceMinor ? "" : "yes",
+        startsAt: event.startsAt ?? "",
+        endsAt: event.endsAt ?? "",
+        timeZone: event.timeZone ?? "",
+      },
+      channels: commonChannels,
+      mandatory: false,
       deepLink: `/workshops/${event.workshopSlug}`,
     }));
   },

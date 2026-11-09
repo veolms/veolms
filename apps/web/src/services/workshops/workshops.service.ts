@@ -2,6 +2,9 @@ import { api } from "../../lib/api-client";
 import type {
   CancelWorkshopRequest,
   AddWorkshopRegistrantRequest,
+  ImportWorkshopRegistrantsRequest,
+  ImportWorkshopRegistrantsResponse,
+  WorkshopCourseSectionsResponse,
   CreateWorkshopRequest,
   HeroVideoPlayback,
   SetWorkshopRecordingRequest,
@@ -42,8 +45,10 @@ export const workshopsService = {
   publishCheck: (workshopId: string): Promise<WorkshopPublishCheck> =>
     api.get<WorkshopPublishCheck>(`${ADMIN_BASE}/${workshopId}/publish-check`),
 
-  publish: (workshopId: string): Promise<WorkshopAdmin> =>
-    api.post<WorkshopAdmin>(`${ADMIN_BASE}/${workshopId}/publish`),
+  publish: (workshopId: string, announce = false): Promise<WorkshopAdmin> =>
+    api.post<WorkshopAdmin>(`${ADMIN_BASE}/${workshopId}/publish`, {
+      announce,
+    }),
 
   unpublish: (workshopId: string): Promise<WorkshopAdmin> =>
     api.post<WorkshopAdmin>(`${ADMIN_BASE}/${workshopId}/unpublish`),
@@ -64,6 +69,22 @@ export const workshopsService = {
   ): Promise<WorkshopAdmin> =>
     api.put<WorkshopAdmin>(
       `${ADMIN_BASE}/${workshopId}/sessions/${sessionId}/recording`,
+      payload,
+    ),
+
+  courseSections: (
+    workshopId: string,
+  ): Promise<WorkshopCourseSectionsResponse> =>
+    api.get<WorkshopCourseSectionsResponse>(
+      `${ADMIN_BASE}/${workshopId}/course-sections`,
+    ),
+
+  importRegistrants: (
+    workshopId: string,
+    payload: ImportWorkshopRegistrantsRequest,
+  ): Promise<ImportWorkshopRegistrantsResponse> =>
+    api.post<ImportWorkshopRegistrantsResponse>(
+      `${ADMIN_BASE}/${workshopId}/registrants/import`,
       payload,
     ),
 

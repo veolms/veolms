@@ -35,7 +35,8 @@ export interface WorkshopStatusPanelProps {
   isBusy: boolean;
   canManage: boolean;
   onSave: () => void;
-  onPublish: () => void;
+  /** `announce`: tell every learner (open workshops only). */
+  onPublish: (announce: boolean) => void;
   onUnpublish: () => void;
   onCancel: (reason: string, refundPaid: boolean) => void;
   onDelete: () => void;
@@ -97,6 +98,7 @@ export function WorkshopStatusPanel({
   const [refundPaid, setRefundPaid] = useState(true);
   const isPaid = (workshop?.priceMinor ?? 0) > 0;
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [announce, setAnnounce] = useState(false);
   const status = displayStatus(workshop);
   const isDraft = !workshop || workshop.status === "draft";
   const issues = publishCheck?.issues ?? [];
@@ -177,15 +179,33 @@ export function WorkshopStatusPanel({
               </Button>
             ) : null}
             {workshop && isDraft ? (
-              <Button
-                onClick={onPublish}
-                disabled={isBusy || !ready}
-                variant={isDirty ? "quiet" : "primary"}
-                elevation={isDirty ? "flat" : "raised"}
-                className="w-full"
-              >
-                Publish
-              </Button>
+              <>
+                {workshop.courseId ? (
+                  <p className="text-[12px] leading-5 text-(--muted)">
+                    Learners of {workshop.courseTitle ?? "its course"} are told
+                    when you publish; they do not need to register.
+                  </p>
+                ) : !workshop.publishedAt ? (
+                  <label className="flex cursor-pointer items-start gap-2 text-[13px] text-(--text)">
+                    <input
+                      type="checkbox"
+                      checked={announce}
+                      onChange={(event) => setAnnounce(event.target.checked)}
+                      className="mt-0.5 size-4 accent-(--accent)"
+                    />
+                    <span>Announce to every learner by email</span>
+                  </label>
+                ) : null}
+                <Button
+                  onClick={() => onPublish(announce)}
+                  disabled={isBusy || !ready}
+                  variant={isDirty ? "quiet" : "primary"}
+                  elevation={isDirty ? "flat" : "raised"}
+                  className="w-full"
+                >
+                  Publish
+                </Button>
+              </>
             ) : null}
             {workshop?.status === "published" ? (
               <Button

@@ -138,7 +138,9 @@ function RegisterPanel({
           ) : null}
           <p className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
             <CheckCircle size={18} weight="fill" />
-            You&apos;re registered
+            {viewer?.viaCourse
+              ? "Included with your course"
+              : "You're registered"}
           </p>
           <p className="text-[13px] leading-5 text-(--muted)">
             We&apos;ll remind you a day before and an hour before. The Join
@@ -166,7 +168,7 @@ function RegisterPanel({
               Download calendar file (.ics)
             </a>
           </div>
-          {confirmLeave ? (
+          {viewer?.viaCourse ? null : confirmLeave ? (
             <div className="grid gap-2 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
               <p className="text-[13px] text-(--text)">
                 Cancel your registration? You can register again while seats are
@@ -527,6 +529,25 @@ export function WorkshopDetailPage({
                       (entry) => entry.sessionId === session.id,
                     );
                     if (session.hasRecording) {
+                      if (
+                        session.recordingLessonPath &&
+                        viewerQuery.data?.canWatchRecordings
+                      ) {
+                        const lessonPath = session.recordingLessonPath;
+                        return (
+                          <a
+                            href={lessonPath}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              onNavigatePage?.(lessonPath);
+                            }}
+                            className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xl bg-(--accent) px-3.5 text-[13px] font-semibold text-(--on-accent) shadow-sm transition hover:opacity-90"
+                          >
+                            <PlayCircle size={16} weight="fill" />
+                            Watch in course
+                          </a>
+                        );
+                      }
                       return viewerQuery.data?.canWatchRecordings ? (
                         <button
                           type="button"

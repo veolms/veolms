@@ -1,6 +1,7 @@
 import { workshopSessionState, type WorkshopHomeCard } from "@veolms/contracts";
 import type { DatabaseExecutor } from "@veolms/database";
 
+import { createAccessService } from "../access/index.ts";
 import * as repository from "./workshops.repository.ts";
 
 /**
@@ -14,10 +15,15 @@ export async function learnerHomeWorkshop(
   userId: string,
   now: Date,
 ): Promise<WorkshopHomeCard | null> {
+  // A workshop of one of their courses counts as registered.
+  const courseIds = [
+    ...(await createAccessService().listAccessScopes(database, userId)).keys(),
+  ];
   const registered = await repository.findNextRegisteredSession(
     database,
     userId,
     now,
+    courseIds,
   );
   const row =
     registered ?? (await repository.findSoonestUpcomingSession(database, now));

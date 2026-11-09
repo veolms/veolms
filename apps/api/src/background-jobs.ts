@@ -19,7 +19,10 @@ import { WorkshopReminderWorker } from "./modules/workshops/workshop-reminder.wo
 import { createWorkshopsService } from "./modules/workshops/workshops.service.ts";
 import { createMediaService } from "./modules/media/media.service.ts";
 import { createAuthorizationService } from "./modules/authorization/authorization.service.ts";
-import { listActiveRegistrantUserIds } from "./modules/workshops/workshops.repository.ts";
+import {
+  listAllLearnerUserIds,
+  listWorkshopAudienceUserIds,
+} from "./modules/workshops/workshop-audience.ts";
 import { findIdsMentionedInCourseContent } from "./modules/courses/curriculum/course-content-reference.service.ts";
 import { createDiscussionUploadStore } from "./modules/discussion-uploads/index.ts";
 import { createAttachmentsRepository } from "./modules/learning/discussions/attachments/attachments.repository.ts";
@@ -551,7 +554,10 @@ function startInlineNotificationLoop(
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
       listWorkshopRegistrantUserIds: (workshopId) =>
-        listActiveRegistrantUserIds(database, workshopId),
+        listWorkshopAudienceUserIds(database, workshopId, (courseId) =>
+          audience.listActiveUserIdsForCourse(courseId),
+        ),
+      listAllLearnerUserIds: () => listAllLearnerUserIds(database),
     },
     recipients: {
       findRecipient: async (userId) => {

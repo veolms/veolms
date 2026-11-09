@@ -18,7 +18,10 @@ import {
   createNotificationProcessor,
   createPushPipeline,
 } from "../modules/notifications/index.ts";
-import { listActiveRegistrantUserIds } from "../modules/workshops/workshops.repository.ts";
+import {
+  listAllLearnerUserIds,
+  listWorkshopAudienceUserIds,
+} from "../modules/workshops/workshop-audience.ts";
 import { createServices } from "../services/index.ts";
 import { createEmailService } from "@veolms/services/email";
 
@@ -66,7 +69,10 @@ try {
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
       listWorkshopRegistrantUserIds: (workshopId) =>
-        listActiveRegistrantUserIds(database, workshopId),
+        listWorkshopAudienceUserIds(database, workshopId, (courseId) =>
+          audience.listActiveUserIdsForCourse(courseId),
+        ),
+      listAllLearnerUserIds: () => listAllLearnerUserIds(database),
     },
     recipients: {
       findRecipient: async (userId) => {

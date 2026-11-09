@@ -35,7 +35,8 @@ export type NotificationTemplateKey =
   | "workshop.registered"
   | "workshop.reminder"
   | "workshop.recording_ready"
-  | "workshop.updated";
+  | "workshop.updated"
+  | "workshop.announced";
 
 export type NotificationTemplateData = Record<
   string,
@@ -87,6 +88,8 @@ export interface NotificationHandlerDependencies {
   courseWidePush?: boolean;
   /** Everyone registered for a workshop, for its reminders. */
   listWorkshopRegistrantUserIds?(workshopId: string): Promise<string[]>;
+  /** Every learner on the platform, for a workshop announced to everyone. */
+  listAllLearnerUserIds?(): Promise<string[]>;
 }
 
 /** A chat message to push, with who should get it (from the chat module). */

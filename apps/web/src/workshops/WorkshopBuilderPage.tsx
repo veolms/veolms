@@ -331,7 +331,7 @@ export function WorkshopBuilderPage({
     const sessions = sessionsPayload(form.sessions);
     if (typeof sessions === "string") return sessions;
     let priceMinor: number | null = null;
-    if (form.isPaid) {
+    if (form.isPaid && form.access !== "course") {
       const rupees = Number(form.priceRupees);
       if (!Number.isFinite(rupees) || rupees <= 0) {
         return "Enter the price, or switch the workshop back to free.";
@@ -681,6 +681,14 @@ export function WorkshopBuilderPage({
                   <WorkshopRecordingField
                     key={session.id}
                     workshopId={workshop.id}
+                    course={
+                      workshop.courseId
+                        ? {
+                            id: workshop.courseId,
+                            title: workshop.courseTitle ?? "the course",
+                          }
+                        : null
+                    }
                     session={session}
                     index={index}
                     disabled={!canManage}
@@ -709,45 +717,52 @@ export function WorkshopBuilderPage({
 
           <Section title="Seats and price">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-(--text)">
-                    Paid workshop
-                  </span>
-                  <ToggleSwitch
-                    checked={form.isPaid}
-                    onChange={(isPaid) => patch({ isPaid })}
-                    label="Paid workshop"
-                    disabled={readOnly}
-                  />
-                </div>
-                {form.isPaid ? (
-                  <div
-                    className={`${fieldClass} flex w-full items-center gap-2`}
-                  >
-                    <span className="text-sm font-semibold text-(--muted)">
-                      ₹
+              {form.access === "course" ? (
+                <p className="rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5 text-[13px] leading-5 text-(--muted)">
+                  Free for the course&apos;s learners: they are in without
+                  registering and are told when you publish.
+                </p>
+              ) : (
+                <div className="grid gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-(--text)">
+                      Paid workshop
                     </span>
-                    <input
-                      type="number"
-                      min={1}
-                      step="1"
-                      value={form.priceRupees}
-                      onChange={(event) =>
-                        patch({ priceRupees: event.target.value })
-                      }
-                      placeholder="499"
+                    <ToggleSwitch
+                      checked={form.isPaid}
+                      onChange={(isPaid) => patch({ isPaid })}
+                      label="Paid workshop"
                       disabled={readOnly}
-                      aria-label="Price in rupees"
-                      className="w-full border-0 bg-transparent outline-none"
                     />
                   </div>
-                ) : (
-                  <p className="text-[12px] text-(--muted)">
-                    Free: learners register with one click.
-                  </p>
-                )}
-              </div>
+                  {form.isPaid ? (
+                    <div
+                      className={`${fieldClass} flex w-full items-center gap-2`}
+                    >
+                      <span className="text-sm font-semibold text-(--muted)">
+                        ₹
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        step="1"
+                        value={form.priceRupees}
+                        onChange={(event) =>
+                          patch({ priceRupees: event.target.value })
+                        }
+                        placeholder="499"
+                        disabled={readOnly}
+                        aria-label="Price in rupees"
+                        className="w-full border-0 bg-transparent outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-(--muted)">
+                      Free: learners register with one click.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="grid gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-medium text-(--text)">
@@ -832,11 +847,21 @@ export function WorkshopBuilderPage({
           isBusy={isBusy}
           canManage={canManage}
           onSave={() => void save()}
-          onPublish={() =>
-            void run(async () => {
-              if (!workshop) return;
-              await publishMutation.mutateAsync(workshop.id);
-            }, "Workshop published. Learners can register now.")
+          onPublish={(announce) =>
+            void run(
+              async () => {
+                if (!workshop) return;
+                await publishMutation.mutateAsync({
+                  workshopId: workshop.id,
+                  announce,
+                });
+              },
+              workshop?.courseId
+                ? "Workshop published. The course's learners are being told."
+                : announce
+                  ? "Workshop published. Every learner is being told."
+                  : "Workshop published. Learners can register now.",
+            )
           }
           onUnpublish={() =>
             void run(async () => {

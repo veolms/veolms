@@ -13,7 +13,10 @@ import {
   useVideoJobProgress,
   useYoutubeImportAvailability,
 } from "../services/media";
-import { useSetWorkshopRecording } from "../services/workshops";
+import {
+  useSetWorkshopRecording,
+  useWorkshopCourseSections,
+} from "../services/workshops";
 import { browserTimeZone, formatSessionDay } from "./workshopHelpers";
 
 const insetClass =
@@ -91,12 +94,20 @@ export function WorkshopRecordingField({
   session,
   index,
   disabled,
+  course,
 }: {
   workshopId: string;
   session: WorkshopSessionAdmin;
   index: number;
   disabled: boolean;
+  /** Set for a course workshop: the recording becomes a lesson of it. */
+  course: { id: string; title: string } | null;
 }) {
+  const sections = useWorkshopCourseSections(workshopId, {
+    enabled: Boolean(course) && !session.recordingLessonId,
+  });
+  // Empty: a "Workshop recordings" section, created if the course has none.
+  const [sectionId, setSectionId] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const upload = useUploadVideo();
@@ -116,7 +127,12 @@ export function WorkshopRecordingField({
   const save = (mediaId: string | null) => {
     setProblem(null);
     attach.mutate(
-      { workshopId, sessionId: session.id, mediaId },
+      {
+        workshopId,
+        sessionId: session.id,
+        mediaId,
+        ...(course && mediaId ? { sectionId: sectionId || null } : {}),
+      },
       {
         onError: (error) =>
           setProblem(error.message || "The recording could not be saved."),
@@ -171,11 +187,23 @@ export function WorkshopRecordingField({
           {session.recordingReadyAt ? (
             <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
               <CheckCircle size={16} weight="fill" />
-              Recording is ready and visible to registrants
+              {course
+                ? "Recording is ready in the course"
+                : "Recording is ready and visible to registrants"}
             </p>
           ) : (
             <ProcessingStatus mediaId={session.recordingMediaId} />
           )}
+          {session.recordingLessonPath ? (
+            <a
+              href={session.recordingLessonPath}
+              target="_blank"
+              rel="noreferrer"
+              className="justify-self-start text-xs font-semibold text-(--accent) hover:underline"
+            >
+              Published as a lesson of {course?.title ?? "the course"}. Open it
+            </a>
+          ) : null}
           <button
             type="button"
             onClick={() => save(null)}
@@ -184,6 +212,33 @@ export function WorkshopRecordingField({
           >
             Remove recording
           </button>
+        </div>
+      ) : null}
+
+      {course && !session.recordingLessonId ? (
+        <div className="grid gap-1">
+          <label
+            htmlFor={`recording-section-${session.id}`}
+            className="text-xs font-medium text-(--muted)"
+          >
+            Section of {course.title} the lesson goes in
+          </label>
+          <select
+            id={`recording-section-${session.id}`}
+            value={sectionId}
+            onChange={(event) => setSectionId(event.target.value)}
+            disabled={busy}
+            className="h-10 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--surface) px-3 text-sm text-(--text)"
+          >
+            <option value="">
+              Workshop recordings (new section if needed)
+            </option>
+            {(sections.data?.items ?? []).map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.title}
+              </option>
+            ))}
+          </select>
         </div>
       ) : null}
 
@@ -248,8 +303,9 @@ export function WorkshopRecordingField({
               : "Upload the recording"}
           </button>
           <p className="mt-1.5 text-xs text-(--muted)">
-            Up to 5 GB. Learners stream it from the workshop page; the file
-            itself is never handed out.
+            {course
+              ? `Up to 5 GB. It is published as a lesson of ${course.title}, processed like any lesson video.`
+              : "Up to 5 GB. Learners stream it from the workshop page; the file itself is never handed out."}
           </p>
         </div>
       )}

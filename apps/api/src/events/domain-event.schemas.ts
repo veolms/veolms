@@ -283,6 +283,8 @@ export const workshopRecordingReadyEventSchema = z.strictObject({
   sessionId: z.uuid(),
   sessionTitle: z.string().nullable(),
   mediaId: z.uuid(),
+  /** For a course workshop: the course lesson to watch it in. */
+  lessonPath: z.string().nullable().optional(),
 });
 
 /** A change registrants must hear about: the workshop was cancelled or moved. */
@@ -295,6 +297,20 @@ export const workshopUpdatedEventSchema = z.strictObject({
   /** Paid registrations are being refunded (cancellations only). */
   refunding: z.boolean(),
   /** The next session after the change, if any. */
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
+  timeZone: z.string().nullable(),
+});
+
+/** A workshop was published: tell its course's learners, or everyone. */
+export const workshopAnnouncedEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  audience: z.enum(["course", "all"]),
+  courseTitle: z.string().nullable(),
+  priceMinor: z.number().int().nonnegative().nullable(),
+  currency: z.string().length(3),
   startsAt: z.iso.datetime().nullable(),
   endsAt: z.iso.datetime().nullable(),
   timeZone: z.string().nullable(),

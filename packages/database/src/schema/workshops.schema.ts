@@ -1,7 +1,7 @@
 import type { Generated, JSONColumnType } from "kysely";
 
 export type WorkshopStatus = "draft" | "published" | "cancelled";
-export type WorkshopRegistrationSource = "free" | "order" | "admin";
+export type WorkshopRegistrationSource = "free" | "order" | "admin" | "course";
 
 /** A link shown with the workshop. */
 export interface WorkshopResourceJson {
@@ -54,6 +54,8 @@ export interface WorkshopSessionTable {
   passcode: string | null;
   recording_media_id: string | null;
   recording_ready_at: Date | null;
+  /** For a course workshop: the course lesson the recording was published as. */
+  recording_lesson_id: Generated<string | null>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

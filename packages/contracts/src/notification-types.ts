@@ -31,6 +31,7 @@ export const OPTIONAL_NOTIFICATION_GROUPS = {
     "workshop.registered",
     "workshop.reminder",
     "workshop.recording_ready",
+    "workshop.announced",
   ],
   achievements: [
     "certificate.generated",

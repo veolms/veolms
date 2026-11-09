@@ -1,5 +1,7 @@
 import type {
   AddWorkshopRegistrantRequest,
+  ImportWorkshopRegistrantsRequest,
+  PublishWorkshopRequest,
   CancelWorkshopRequest,
   CreateWorkshopRequest,
   SetWorkshopRecordingRequest,
@@ -50,8 +52,14 @@ export function createWorkshopsController({
     return await service.publishCheck(request.params.workshopId);
   }
 
-  async function publish(request: FastifyRequest<WorkshopParams>) {
-    return await service.publish(request.params.workshopId);
+  async function publish(
+    request: FastifyRequest<
+      WorkshopParams & { Body: PublishWorkshopRequest | undefined }
+    >,
+  ) {
+    return await service.publish(request.params.workshopId, {
+      announce: request.body?.announce ?? false,
+    });
   }
 
   async function unpublish(request: FastifyRequest<WorkshopParams>) {
@@ -148,6 +156,8 @@ export function createWorkshopsController({
       request.params.workshopId,
       request.params.sessionId,
       request.body.mediaId,
+      { id: request.user!.id, roles: request.user!.roles },
+      { sectionId: request.body.sectionId ?? null },
     );
   }
 
@@ -207,6 +217,24 @@ export function createWorkshopsController({
     return reply.status(201).send(result);
   }
 
+  async function importRegistrants(
+    request: FastifyRequest<
+      WorkshopParams & { Body: ImportWorkshopRegistrantsRequest }
+    >,
+  ) {
+    return await service.importRegistrants(
+      request.params.workshopId,
+      request.body,
+      request.user!.id,
+    );
+  }
+
+  async function listCourseSections(request: FastifyRequest<WorkshopParams>) {
+    return {
+      items: await service.listCourseSections(request.params.workshopId),
+    };
+  }
+
   async function removeRegistrant(
     request: FastifyRequest<{ Params: { workshopId: string; userId: string } }>,
   ) {
@@ -244,6 +272,8 @@ export function createWorkshopsController({
     registrantsCsv,
     addRegistrant,
     removeRegistrant,
+    importRegistrants,
+    listCourseSections,
     myNextWorkshop,
   };
 }

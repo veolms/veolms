@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
+  ImportWorkshopRegistrantsRequest,
+  ImportWorkshopRegistrantsResponse,
   WorkshopRegistrantsResponse,
   CancelWorkshopRequest,
   CreateWorkshopRequest,
@@ -48,8 +50,13 @@ export function useUpdateWorkshop() {
 
 export function usePublishWorkshop() {
   const refresh = useRefreshWorkshops();
-  return useMutation<WorkshopAdmin, ApiError, string>({
-    mutationFn: (workshopId) => workshopsService.publish(workshopId),
+  return useMutation<
+    WorkshopAdmin,
+    ApiError,
+    { workshopId: string; announce?: boolean }
+  >({
+    mutationFn: ({ workshopId, announce }) =>
+      workshopsService.publish(workshopId, announce),
     onSuccess: (workshop) => refresh(workshop),
   });
 }
@@ -136,10 +143,18 @@ export function useSetWorkshopRecording() {
   return useMutation<
     WorkshopAdmin,
     ApiError,
-    { workshopId: string; sessionId: string; mediaId: string | null }
+    {
+      workshopId: string;
+      sessionId: string;
+      mediaId: string | null;
+      sectionId?: string | null;
+    }
   >({
-    mutationFn: ({ workshopId, sessionId, mediaId }) =>
-      workshopsService.setRecording(workshopId, sessionId, { mediaId }),
+    mutationFn: ({ workshopId, sessionId, mediaId, sectionId }) =>
+      workshopsService.setRecording(workshopId, sessionId, {
+        mediaId,
+        ...(sectionId !== undefined ? { sectionId } : {}),
+      }),
     onSuccess: (workshop) => refresh(workshop),
   });
 }
@@ -181,5 +196,29 @@ export function useRemoveWorkshopRegistrant() {
       workshopsService.removeRegistrant(workshopId, userId),
     onSuccess: (registrants, { workshopId }) =>
       refresh(workshopId, registrants),
+  });
+}
+
+/** Register a whole list from a CSV file; returns what was added and skipped. */
+export function useImportWorkshopRegistrants() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    ImportWorkshopRegistrantsResponse,
+    ApiError,
+    { workshopId: string } & ImportWorkshopRegistrantsRequest
+  >({
+    mutationFn: ({ workshopId, ...payload }) =>
+      workshopsService.importRegistrants(workshopId, payload),
+    onSuccess: (result, { workshopId }) => {
+      queryClient.setQueryData(workshopKeys.registrants(workshopId), {
+        items: result.items,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: workshopKeys.adminDetail(workshopId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: workshopKeys.adminLists(),
+      });
+    },
   });
 }

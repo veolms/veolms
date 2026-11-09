@@ -12,6 +12,7 @@ import {
   useWorkshopRegistrants,
 } from "../services/workshops";
 import { WorkshopHostAvatar } from "./WorkshopHostAvatar";
+import { WorkshopCsvImport } from "./WorkshopCsvImport";
 import {
   browserTimeZone,
   fieldClass,
@@ -23,6 +24,7 @@ const SOURCE_LABEL: Record<WorkshopRegistrant["source"], string> = {
   free: "Free",
   order: "Paid",
   admin: "Added by staff",
+  course: "Course learner",
 };
 
 /**
@@ -83,6 +85,17 @@ export function WorkshopRegistrantsSection({
           </a>
         ) : null}
       </div>
+
+      {workshop.courseId ? (
+        <p className="rounded-xl bg-(--accent)/8 px-3.5 py-2.5 text-[13px] leading-5 text-(--text)">
+          Learners of {workshop.courseTitle ?? "the course"} are included
+          without registering. They appear here once they join a session.
+        </p>
+      ) : null}
+
+      {canManage && workshop.status !== "cancelled" ? (
+        <WorkshopCsvImport workshopId={workshop.id} />
+      ) : null}
 
       {canManage && workshop.status !== "cancelled" ? (
         <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-start">

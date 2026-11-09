@@ -538,6 +538,24 @@ export function renderNotificationTemplate(
       };
       break;
     }
+    case "workshop.announced": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const when = workshopWhenLabel(data);
+      const viaCourse = optionalString(data, "audience") === "course";
+      const courseTitle = optionalString(data, "courseTitle");
+      inApp = {
+        title: "New workshop",
+        body: [
+          when ? `${workshopTitle} · ${when}.` : `${workshopTitle}.`,
+          viaCourse
+            ? `It is included with ${courseTitle || "your course"}: no need to register, the Join button appears on its page.`
+            : optionalString(data, "free") === "yes"
+              ? "Free: register on its page to get the reminders."
+              : "Register on its page to save a seat.",
+        ].join(" "),
+      };
+      break;
+    }
     case "workshop.updated": {
       const workshopTitle = stringValue(data, "workshopTitle");
       const change = optionalString(data, "change");

@@ -1,3 +1,4 @@
+import { lessonPathOf } from "./workshop-links.ts";
 import {
   workshopSessionState,
   type WorkshopAdmin,
@@ -37,6 +38,7 @@ export function presentSession(
   row: WorkshopSessionRow,
   joinUrl: string | null,
   now: Date,
+  courseSlug: string | null = null,
 ): WorkshopSessionAdmin {
   return {
     id: row.id,
@@ -49,6 +51,8 @@ export function presentSession(
     passcode: row.passcode,
     recordingMediaId: row.recording_media_id,
     recordingReadyAt: isoOrNull(row.recording_ready_at),
+    recordingLessonId: row.recording_lesson_id ?? null,
+    recordingLessonPath: lessonPathOf(courseSlug, row.recording_lesson_id),
     state: workshopSessionState(row.starts_at, row.ends_at, now),
   };
 }
@@ -139,7 +143,7 @@ export function presentWorkshopPublicListItem(
     seatsLeft:
       row.capacity === null
         ? null
-        : Math.max(0, row.capacity - registrationCount),
+        : Math.max(0, row.capacity - Number(row.seats_taken)),
     registrationCount,
     sessionCount: Number(row.session_count),
     nextSessionAt: isoOrNull(row.next_session_at ?? row.first_session_at),
@@ -151,6 +155,7 @@ export function presentWorkshopPublicListItem(
 export function presentSessionPublic(
   row: WorkshopSessionRow,
   now: Date,
+  courseSlug: string | null = null,
 ): WorkshopSessionPublic {
   return {
     id: row.id,
@@ -161,6 +166,7 @@ export function presentSessionPublic(
     timeZone: row.time_zone,
     state: workshopSessionState(row.starts_at, row.ends_at, now),
     hasRecording: row.recording_ready_at !== null,
+    recordingLessonPath: lessonPathOf(courseSlug, row.recording_lesson_id),
   };
 }
 
@@ -173,7 +179,9 @@ export function presentWorkshopPublic(
     ...presentWorkshopPublicListItem(row, now),
     description: row.description,
     resources: row.resources ?? [],
-    sessions: sessions.map((session) => presentSessionPublic(session, now)),
+    sessions: sessions.map((session) =>
+      presentSessionPublic(session, now, row.course_slug),
+    ),
     status: row.status === "cancelled" ? "cancelled" : "published",
     cancelReason: row.cancel_reason,
   };

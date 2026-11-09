@@ -1,5 +1,9 @@
 import {
   addWorkshopRegistrantRequestSchema,
+  workshopCourseSectionsResponseSchema,
+  importWorkshopRegistrantsRequestSchema,
+  importWorkshopRegistrantsResponseSchema,
+  publishWorkshopRequestSchema,
   cancelWorkshopRequestSchema,
   createWorkshopRequestSchema,
   heroVideoPlaybackSchema,
@@ -32,8 +36,11 @@ import {
   createPermissionPreHandlers,
 } from "../authorization/index.ts";
 import { createMediaService } from "../media/media.service.ts";
+import { createAuthContext } from "../auth/shared/auth.context.ts";
+import { createStudentCreationService } from "../students/student-creation.service.ts";
 import { createWorkshopsController } from "./workshops.controller.ts";
 import { createWorkshopsService } from "./workshops.service.ts";
+import { createWorkshopCourseLessons } from "./workshop-course-lessons.ts";
 
 /**
  * Workshops: the admin side (/workshops/admin) and the learner side (list,
@@ -44,6 +51,16 @@ import { createWorkshopsService } from "./workshops.service.ts";
  */
 const workshopsRoutes: RoutePlugin = async (app, options) => {
   const { signedIn, requires } = createPermissionPreHandlers(options.database);
+  // The Students module's own account creation, with its welcome email
+  // left out: the workshop's confirmation already tells them where to go.
+  const auth = createAuthContext(options);
+  const studentCreation = createStudentCreationService({
+    auth: auth.authService,
+    grantCourse: async () => undefined,
+    listGrantableCourses: async () => [],
+    canGrantCourses: async () => false,
+    sendWelcome: async () => true,
+  });
   const service = createWorkshopsService({
     database: options.database,
     mediaService: createMediaService({
@@ -52,6 +69,23 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
     }),
     authorization: createAuthorizationService(options.database),
     paymentGateways: options.services.paymentGateways,
+    courseLessons: createWorkshopCourseLessons({
+      database: options.database,
+      services: options.services,
+      logger: app.log,
+    }),
+    createStudentAccount: async (input, actorUserId) => {
+      try {
+        const created = await studentCreation.createStudent(
+          { email: input.email, displayName: input.displayName },
+          { id: actorUserId },
+        );
+        return created.id;
+      } catch (error) {
+        if ((error as { code?: string }).code === "EMAIL_TAKEN") return null;
+        throw error;
+      }
+    },
   });
   const controller = createWorkshopsController({
     service,
@@ -182,6 +216,7 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
         tags,
         summary: "Publish a draft to learners",
         params: workshopIdParamsSchema,
+        body: publishWorkshopRequestSchema.optional(),
         response: {
           200: jsonResponse("The published workshop.", workshopAdminSchema),
           400: errorResponse("The draft is not ready (see publish-check)"),
@@ -285,6 +320,29 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
   );
 
   app.get(
+    "/workshops/admin/:workshopId/course-sections",
+    {
+      preHandler: reads,
+      schema: {
+        operationId: "listWorkshopCourseSections",
+        tags,
+        summary:
+          "The linked course's sections, where a recording lesson may go (empty for an open workshop)",
+        params: workshopIdParamsSchema,
+        response: {
+          200: jsonResponse(
+            "Sections in course order.",
+            workshopCourseSectionsResponseSchema,
+          ),
+          ...common,
+          404: errorResponse("Workshop not found"),
+        },
+      },
+    },
+    controller.listCourseSections,
+  );
+
+  app.get(
     "/workshops/admin/:workshopId/registrants",
     {
       preHandler: reads,
@@ -346,6 +404,32 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.addRegistrant,
+  );
+
+  app.post(
+    "/workshops/admin/:workshopId/registrants/import",
+    {
+      preHandler: manages,
+      schema: {
+        operationId: "importWorkshopRegistrants",
+        tags,
+        summary:
+          "Register many people from a spreadsheet; emails with no account get a student account",
+        params: workshopIdParamsSchema,
+        body: importWorkshopRegistrantsRequestSchema,
+        response: {
+          200: jsonResponse(
+            "What was added and what was skipped.",
+            importWorkshopRegistrantsResponseSchema,
+          ),
+          400: errorResponse("Invalid request"),
+          ...common,
+          404: errorResponse("Workshop not found"),
+          409: errorResponse("The workshop was cancelled"),
+        },
+      },
+    },
+    controller.importRegistrants,
   );
 
   app.delete(
