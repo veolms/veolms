@@ -394,6 +394,7 @@ export const HIDEABLE_PLAYER_CONTROLS = [
   "chapters",
   "volume",
   "lesson-navigation",
+  "minimize",
 ] as const;
 export type HideablePlayerControl = (typeof HIDEABLE_PLAYER_CONTROLS)[number];
 
