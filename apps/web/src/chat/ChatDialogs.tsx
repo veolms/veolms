@@ -64,6 +64,42 @@ const pill =
   "h-10 cursor-pointer rounded-full border border-solid border-(--chat-line-strong) bg-transparent px-5 text-[0.88rem] font-semibold text-(--accent-ink) hover:bg-(--chat-hover) disabled:opacity-50";
 const dangerPill = cn(pill, "border-red-500/50 text-red-500");
 
+/** WhatsApp's "Clear this chat?" / "Delete this chat?" */
+export function ClearChatDialog({
+  mode,
+  name,
+  onConfirm,
+  onClose,
+}: {
+  mode: "clear" | "delete";
+  name: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <ChatDialog
+      title={
+        mode === "delete" ? `Delete chat with ${name}?` : "Clear this chat?"
+      }
+      onClose={onClose}
+    >
+      <p className="m-0 text-[0.9rem] leading-relaxed text-(--text-secondary)">
+        {mode === "delete"
+          ? "It is removed from your chats, with its messages, on all your devices. They keep their copy. If either of you writes again, it comes back with the new messages only."
+          : "All messages are removed for you, on all your devices. Others in the chat keep theirs."}
+      </p>
+      <div className="mt-6 flex justify-end gap-2">
+        <button type="button" className={pill} onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className={dangerPill} onClick={onConfirm}>
+          {mode === "delete" ? "Delete chat" : "Clear chat"}
+        </button>
+      </div>
+    </ChatDialog>
+  );
+}
+
 export function DeleteMessageDialog({
   message,
   own,

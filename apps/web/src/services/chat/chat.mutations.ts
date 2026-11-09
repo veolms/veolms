@@ -210,6 +210,44 @@ export function useLeaveChat() {
   });
 }
 
+/**
+ * "Clear chat" empties your copy at once; "Delete chat" also takes it out
+ * of your list. The server is told in the background, then checked.
+ */
+export function useClearChat() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { roomId: string; deleteChat: boolean }) =>
+      chatService.clearChat(v.roomId, v.deleteChat),
+    onMutate: async ({ roomId, deleteChat }) => {
+      await client.cancelQueries({ queryKey: chatKeys.rooms() });
+      client.setQueryData<ChatRoomList>(chatKeys.rooms(), (old) =>
+        old
+          ? {
+              ...old,
+              rooms: deleteChat
+                ? old.rooms.filter((r) => r.id !== roomId)
+                : old.rooms.map((r) =>
+                    r.id === roomId
+                      ? { ...r, lastMessage: null, unreadCount: 0 }
+                      : r,
+                  ),
+            }
+          : old,
+      );
+      client.setQueryData<ChatThread>(chatKeys.messages(roomId), (old) =>
+        old
+          ? { ...old, messages: [], hasMoreBefore: false, oldestSeq: null }
+          : old,
+      );
+    },
+    onSettled: (_d, _e, { roomId }) => {
+      void client.invalidateQueries({ queryKey: chatKeys.rooms() });
+      void client.invalidateQueries({ queryKey: chatKeys.messages(roomId) });
+    },
+  });
+}
+
 export function useStartDirect() {
   const client = useQueryClient();
   return useMutation({

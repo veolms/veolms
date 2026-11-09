@@ -12,10 +12,12 @@ import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatRoomSummary } from "@veolms/contracts";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 
 import {
   DropdownMenu,
@@ -34,12 +36,15 @@ import {
   queueReceipt,
   useBlockUser,
   useChatCandidates,
+  useClearChat,
   useLeaveChat,
   useStarredMessages,
   useTypingNames,
   useUpdateMyChatState,
 } from "../services/chat";
+import { useChatDraft } from "../store/chatDrafts.store";
 import { ChatAvatar } from "./ChatAvatar";
+import { ClearChatDialog } from "./ChatDialogs";
 import { roomAvatarUrl } from "./chatIcon";
 import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
@@ -419,7 +424,16 @@ export function ChatList({
 
 /** The list shows text, not the *bold* / _italic_ / ~strike~ / `code` marks. */
 function plainPreview(text: string): string {
-  return text.replace(/([*_~`])(\S(?:[^]*?\S)?)\1/g, "$2");
+  return (
+    text
+      // A code block reads as its code, on one line (the server's preview
+      // is already one line: "```js const a = 1 ```").
+      .replace(
+        /```(?:(?:js|jsx|ts|tsx|javascript|typescript|py|python|java|c|cpp|cs|go|rust|rs|sql|html|css|json|bash|sh|shell|yaml|yml|php|rb|ruby|kotlin|swift|dart|md|txt)(?=\s))?\s*([^]*?)\s*(?:```|$)/gi,
+        "$1",
+      )
+      .replace(/([*_~`])(\S(?:[^]*?\S)?)\1/g, "$2")
+  );
 }
 
 function ChatRow({
@@ -440,7 +454,13 @@ function ChatRow({
   const myState = useUpdateMyChatState();
   const block = useBlockUser();
   const leave = useLeaveChat();
+  const clearChat = useClearChat();
+  const navigate = useNavigate();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const typing = useTypingNames(room.id);
+  // An unsent message shows instead of the last one (WhatsApp, Telegram).
+  const draft = useChatDraft(room.id);
+  const showDraft = Boolean(draft) && !selected;
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
   const last = room.lastMessage;
@@ -541,7 +561,7 @@ function ChatRow({
               </span>
             ) : (
               <>
-                {mine && last && !last.deleted ? (
+                {mine && last && !last.deleted && !showDraft ? (
                   <StatusTicks
                     seq={last.seq}
                     deliveredSeq={room.peerDeliveredSeq}
@@ -558,12 +578,23 @@ function ChatRow({
                     unread && !muted && "text-(--text-secondary)",
                   )}
                 >
-                  {isRequest ? (
-                    <span className="font-semibold text-(--accent-ink)">
-                      Message request ·{" "}
-                    </span>
-                  ) : null}
-                  {preview}
+                  {showDraft ? (
+                    <>
+                      <span className="font-semibold text-red-500">
+                        Draft:{" "}
+                      </span>
+                      {plainPreview(draft!)}
+                    </>
+                  ) : (
+                    <>
+                      {isRequest ? (
+                        <span className="font-semibold text-(--accent-ink)">
+                          Message request ·{" "}
+                        </span>
+                      ) : null}
+                      {preview}
+                    </>
+                  )}
                 </span>
               </>
             )}
@@ -666,6 +697,12 @@ function ChatRow({
                       ? "Unblock"
                       : "Block"}
                   </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-red-500"
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    <Trash size={17} aria-hidden="true" /> Delete chat
+                  </DropdownMenuItem>
                 </>
               ) : null}
               {room.kind === "team" ? (
@@ -683,6 +720,7 @@ function ChatRow({
           </DropdownMenu>
         ) : (
           // The menu mounts on first use, so a long chat list stays light.
+          // (Delete chat asks first, in a dialog of its own below.)
           <button
             type="button"
             aria-label={`Chat options for ${room.title}`}
@@ -697,6 +735,18 @@ function ChatRow({
           </button>
         )}
       </div>
+      {confirmDelete ? (
+        <ClearChatDialog
+          mode="delete"
+          name={room.title}
+          onClose={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setConfirmDelete(false);
+            clearChat.mutate({ roomId: room.id, deleteChat: true });
+            if (selected) void navigate("/chat");
+          }}
+        />
+      ) : null}
     </li>
   );
 }

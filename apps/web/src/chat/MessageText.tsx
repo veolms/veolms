@@ -1,13 +1,21 @@
-import type { ReactNode } from "react";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
+import { useState, type ReactNode } from "react";
 
 /**
  * Message text as WhatsApp shows it: links become links, @names are
- * highlighted, and *bold*, _italic_, ~strike~ and `code` are formatted.
+ * highlighted, and *bold*, _italic_, ~strike~ and `code` are formatted;
+ * a ```fenced block``` shows as code with a Copy button (for a class
+ * of programmers, the thing most often sent).
  * Plain text only: nothing is ever rendered as HTML.
  */
 
 const TOKEN =
   /(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])|(@[\p{L}\p{N}_.-]+(?:\s[\p{Lu}][\p{L}]+)?)|(`[^`\n]+`)|(\*[^*\n]+\*)|(_[^_\n]+_)|(~[^~\n]+~)/gu;
+
+// A language name only counts on the fence's own line ("```js" + newline);
+// "```const x = 1```" on one line is all code.
+const FENCE = /```(?:([\w+#.-]+)?[ \t]*\n)?([\s\S]*?)```/g;
 
 export function MessageText({
   text,
@@ -16,6 +24,66 @@ export function MessageText({
   text: string;
   mentionsMe?: boolean;
 }) {
+  const blocks: ReactNode[] = [];
+  let at = 0;
+  for (const match of text.matchAll(FENCE)) {
+    const index = match.index ?? 0;
+    // The line breaks around a block belong to the block, not the text.
+    const before = text.slice(at, index).replace(/\n$/, "");
+    if (before) blocks.push(<Inline key={`t${at}`} text={before} />);
+    blocks.push(
+      <CodeBlock
+        key={`c${index}`}
+        language={(match[1] ?? "").trim()}
+        code={(match[2] ?? "").replace(/\n$/, "")}
+      />,
+    );
+    at = index + match[0].length;
+    if (text[at] === "\n") at += 1;
+  }
+  if (at < text.length)
+    blocks.push(<Inline key={`t${at}`} text={text.slice(at)} />);
+  return (
+    <span
+      className={
+        mentionsMe
+          ? "rounded-sm bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
+          : undefined
+      }
+    >
+      {blocks}
+    </span>
+  );
+}
+
+function CodeBlock({ code, language }: { code: string; language: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <span className="my-1 block overflow-hidden rounded-lg bg-[#0d1117] text-left text-slate-100">
+      <span className="flex items-center justify-between px-3 py-1 text-[0.7rem] text-slate-400">
+        <span>{language || "code"}</span>
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard?.writeText(code).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            });
+          }}
+          className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[0.7rem] text-slate-300 hover:text-white"
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </span>
+      <code className="block overflow-x-auto px-3 pb-2.5 font-mono text-[0.82em] leading-relaxed whitespace-pre">
+        {code}
+      </code>
+    </span>
+  );
+}
+
+function Inline({ text }: { text: string }) {
   const parts: ReactNode[] = [];
   let last = 0;
   let key = 0;
@@ -62,15 +130,5 @@ export function MessageText({
     last = index + whole.length;
   }
   if (last < text.length) parts.push(text.slice(last));
-  return (
-    <span
-      className={
-        mentionsMe
-          ? "rounded-sm bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
-          : undefined
-      }
-    >
-      {parts}
-    </span>
-  );
+  return <>{parts}</>;
 }

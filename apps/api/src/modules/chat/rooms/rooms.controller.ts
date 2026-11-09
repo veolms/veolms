@@ -97,6 +97,16 @@ export function createRoomsController({ service }: { service: RoomsService }) {
       );
     },
 
+    async clear(
+      request: FastifyRequest<RoomParams & { Body: { deleteChat?: boolean } }>,
+    ) {
+      return service.clear(
+        request.user!.id,
+        request.params.roomId,
+        request.body ?? {},
+      );
+    },
+
     async leave(request: FastifyRequest<RoomParams>) {
       return service.leave(request.user!.id, request.params.roomId);
     },

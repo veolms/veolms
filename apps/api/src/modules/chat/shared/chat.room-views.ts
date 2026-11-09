@@ -273,7 +273,8 @@ export function createRoomViews(runtime: ChatRuntime) {
         lastSeq,
         lastEventSeq: Number(row.last_event_seq),
         lastMessage:
-          row.lm_seq === null
+          row.lm_seq === null ||
+          Number(row.lm_seq) <= Number(row.cleared_seq ?? 0)
             ? null
             : {
                 seq: Number(row.lm_seq),
