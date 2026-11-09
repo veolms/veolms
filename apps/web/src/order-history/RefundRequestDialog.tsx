@@ -1,4 +1,6 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { XIcon as X } from "@phosphor-icons/react/X";
@@ -28,15 +30,58 @@ export function RefundRequestDialog({
 }: RefundRequestDialogProps) {
   const titleId = useId();
   const reasonId = useId();
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const [reason, setReason] = useState("");
   const open = order !== null;
   useBackDismiss({ open, onDismiss: onCancel });
 
+  // While open, the page behind is inert: not focusable, clickable or read
+  // out. The dialog is rendered beside the page (a portal to the body), so
+  // everything else in the body is what goes inert, and comes back as it was.
+  useEffect(() => {
+    if (!open) return undefined;
+    const overlay = overlayRef.current;
+    const others = [...document.body.children].filter(
+      (element): element is HTMLElement =>
+        element instanceof HTMLElement && element !== overlay && !element.inert,
+    );
+    for (const element of others) element.inert = true;
+    return () => {
+      for (const element of others) element.inert = false;
+    };
+  }, [open]);
+
   if (!order) return null;
   const manualTransfer = order.refund?.manualTransfer ?? false;
 
-  return (
+  /** Escape cancels; Tab and Shift+Tab stay among the dialog's controls. */
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLFormElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onCancel();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [
+      ...event.currentTarget.querySelectorAll<HTMLElement>(
+        "button:not(:disabled), textarea:not(:disabled), input:not(:disabled)",
+      ),
+    ];
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  return createPortal(
     <div
+      ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"
@@ -45,6 +90,7 @@ export function RefundRequestDialog({
       <form
         className="w-full max-w-md rounded-[20px] border border-(--border) bg-(--card-surface) p-6 shadow-2xl animate-in zoom-in-95 duration-150"
         style={{ boxShadow: "var(--card-floating-shadow,var(--card-shadow))" }}
+        onKeyDown={onKeyDown}
         onSubmit={(event) => {
           event.preventDefault();
           if (!submitting) onConfirm(reason.trim());
@@ -83,9 +129,11 @@ export function RefundRequestDialog({
           </span>
         </p>
         <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
+          This refunds the whole order: everything bought in it, not only the
+          course shown.{" "}
           {manualTransfer
-            ? `We'll send ${order.formattedAmount} back by bank transfer and let you know when it's done. Your access to this course ends when the refund is made.`
-            : `${order.formattedAmount} goes back to your original payment method, usually within 5 to 10 business days. You'll lose access to this course straight away.`}
+            ? `We'll send ${order.formattedAmount} back by bank transfer and let you know when it's done. Your access to every course in the order ends when the refund is made.`
+            : `${order.formattedAmount} goes back to your original payment method, usually within 5 to 10 business days. You'll lose access to every course in the order straight away.`}
         </p>
 
         <label
@@ -134,6 +182,7 @@ export function RefundRequestDialog({
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }

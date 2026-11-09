@@ -113,7 +113,10 @@ export function createRefundEligibilityService({
         orderId: order.id,
         eligibility: evaluateRefundEligibility({
           paidAt: transferSentAt.get(order.id) ?? order.paid_at!,
-          now: at,
+          // A request made in time, whose refund the gateway then failed,
+          // is judged as of when it was made: the gateway's failure must
+          // not run it out of the 30 days.
+          now: refundFailed ? new Date(request.created_at) : at,
           watchedSeconds: totals?.watchedSeconds ?? 0,
           courseSeconds: totals?.courseSeconds ?? 0,
           creditedToUpgrade: credited.has(order.id),

@@ -175,11 +175,13 @@ export function listOrdersForRefund(
 export function listRefundRequestStatuses(
   database: Executor,
   orderIds: readonly string[],
-): Promise<{ id: string; order_id: string; status: string }[]> {
+): Promise<
+  { id: string; order_id: string; status: string; created_at: Date }[]
+> {
   if (orderIds.length === 0) return Promise.resolve([]);
   return database
     .selectFrom("refund_requests")
-    .select(["id", "order_id", "status"])
+    .select(["id", "order_id", "status", "created_at"])
     .where("order_id", "in", [...orderIds])
     .execute();
 }
@@ -202,6 +204,20 @@ export async function listOrdersWithLiveRefund(
     .where("status", "in", ["pending", "processed"])
     .execute();
   return new Set(rows.map((row) => row.order_id));
+}
+
+/** Whether a refund of the order is still waiting on the gateway. */
+export async function hasPendingRefund(
+  database: Executor,
+  orderId: string,
+): Promise<boolean> {
+  const row = await database
+    .selectFrom("refunds")
+    .select("id")
+    .where("order_id", "=", orderId)
+    .where("status", "=", "pending")
+    .executeTakeFirst();
+  return Boolean(row);
 }
 
 /** How many refunds of the order failed: each retry is a new attempt. */
@@ -242,10 +258,16 @@ export async function listTransferSentAt(
 
 /**
  * Of these orders, the ones that bought part of a course (an unlisted
- * course opening some of another's sections) which the buyer then upgraded:
- * a later order of theirs, still paid, for the course the part opens. What
- * the part cost came off that course's price (pricing's upgrade credit), the
- * same pairing `completes_part` names on the order list.
+ * course opening some of another's sections) whose price was then credited
+ * toward the whole course: a later order of the buyer's for the course the
+ * part opens, where the credit was taken. The credit is recorded only as
+ * that item's `discount_amount` (pricing's upgrade credit: no coupon is
+ * taken on an upgrade), so an upgrade with none (parts paid in another
+ * currency, say) credited nothing and leaves the part refundable.
+ *
+ * An upgrade still being paid counts: its price was fixed, credit taken,
+ * at checkout. A part refunded first brings no credit to a later checkout
+ * (upgrade-credit.ts counts paid parts only).
  */
 export async function listOrdersCreditedToUpgrade(
   database: Executor,
@@ -264,8 +286,10 @@ export async function listOrdersCreditedToUpgrade(
     where part_o.id = any(${[...orderIds]}::uuid[])
       and up_o.user_id = part_o.user_id
       and up_o.id <> part_o.id
-      and up_o.status in ('paid', 'partially_refunded')
+      and up_o.status in
+        ('pending', 'payment_processing', 'paid', 'partially_refunded')
       and up_o.created_at > part_o.paid_at
+      and up_i.discount_amount > 0
   `.execute(database);
   return new Set(result.rows.map((row) => row.order_id));
 }

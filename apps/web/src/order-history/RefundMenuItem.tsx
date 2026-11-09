@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import type { LearnerOrderRefund } from "@veolms/contracts";
@@ -66,6 +66,10 @@ export function RefundMenuItem({
   const state = refundMenuState(refund);
   const reasonsId = useId();
   const [showReasons, setShowReasons] = useState(false);
+  // A tap focuses the item and then clicks it. Opened on that focus, the
+  // reasons were closed again by the click: a pointer's press is left to
+  // the click, and only keyboard focus opens them by itself.
+  const pressed = useRef(false);
 
   if (state.enabled) {
     return (
@@ -93,13 +97,22 @@ export function RefundMenuItem({
         aria-disabled="true"
         aria-describedby={reasonsId}
         className="flex min-h-10 w-full cursor-not-allowed items-center gap-2.5 rounded-lg px-3 text-left text-[0.78rem] text-(--muted) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+        onPointerDown={() => {
+          pressed.current = true;
+        }}
         onClick={(event) => {
           // Not chosen: the menu stays open, and a tap shows or hides why.
           event.stopPropagation();
+          pressed.current = false;
           setShowReasons((shown) => !shown);
         }}
-        onFocus={() => setShowReasons(true)}
-        onBlur={() => setShowReasons(false)}
+        onFocus={() => {
+          if (!pressed.current) setShowReasons(true);
+        }}
+        onBlur={() => {
+          pressed.current = false;
+          setShowReasons(false);
+        }}
       >
         <ArrowCounterClockwise
           size={17}

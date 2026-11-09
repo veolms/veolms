@@ -99,6 +99,15 @@ await test("a course with no video is judged on the 30 days alone", () => {
     }).eligible,
     true,
   );
+  assert.deepEqual(
+    evaluateRefundEligibility({
+      paidAt,
+      now: daysLater(31),
+      watchedSeconds: 0,
+      courseSeconds: 0,
+    }),
+    { eligible: false, reasons: ["window_passed"] },
+  );
 });
 
 await test("part of a course credited toward its upgrade is not refunded on its own", () => {

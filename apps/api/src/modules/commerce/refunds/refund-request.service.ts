@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Database } from "@veolms/database";
+import type { Database, DatabaseExecutor as Executor } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type {
   LearnerRefundRequest,
@@ -26,6 +26,7 @@ import {
   type RefundEligibilityService,
 } from "./refund-eligibility.service.ts";
 import * as eligibilityRepo from "./refund-eligibility.repository.ts";
+import { REFUND_REASON_MESSAGES } from "./refund-eligibility.ts";
 
 export interface RefundRequestService {
   submitStudentRefundRequest(
@@ -160,10 +161,38 @@ export function createRefundRequestService({
     }
 
     const reason = request.reason?.trim() || "Requested from Purchase History";
+    const retryRequestId = assessment.retryRequestId;
     // One request per order, even for two taps at once: the order row is
     // locked while the request is looked for and written.
-    const row = await database.transaction().execute(async (trx) => {
-      await orderRepo.findOrderByIdForUpdate(trx, orderId);
+    const { row, otherRefundPending } = await database
+      .transaction()
+      .execute(async (trx) => {
+        await orderRepo.findOrderByIdForUpdate(trx, orderId);
+        // Asked again on current state, under the lock: an upgrade checked
+        // out since the assessment above has credited this part already.
+        if (
+          (
+            await eligibilityRepo.listOrdersCreditedToUpgrade(trx, [orderId])
+          ).has(orderId)
+        ) {
+          throw new AppError(
+            400,
+            "REFUND_NOT_ELIGIBLE",
+            REFUND_REASON_MESSAGES.credited_to_upgrade,
+          );
+        }
+        return {
+          row: await writeRequest(trx),
+          // Another refund of the order still waiting on the gateway: what
+          // is left to refund is not known yet, so staff decide this one.
+          otherRefundPending: await eligibilityRepo.hasPendingRefund(
+            trx,
+            orderId,
+          ),
+        };
+      });
+
+    async function writeRequest(trx: Executor) {
       const existing = await refundRequestRepo.findRefundRequestByOrderId(
         trx,
         orderId,
@@ -173,7 +202,7 @@ export function createRefundRequestService({
         // gateway. Looked at again under the lock, and asked again on the
         // same request.
         const stillFailed =
-          existing.id === assessment.retryRequestId &&
+          existing.id === retryRequestId &&
           existing.status === "approved" &&
           !(await eligibilityRepo.listOrdersWithLiveRefund(trx, [orderId])).has(
             orderId,
@@ -200,9 +229,11 @@ export function createRefundRequestService({
         created_at: now,
         updated_at: now,
       });
-    });
+    }
 
-    if (assessment.manualTransfer) return toLearnerRefundRequest(row);
+    if (assessment.manualTransfer || otherRefundPending) {
+      return toLearnerRefundRequest(row);
+    }
 
     let refund: Refund;
     try {

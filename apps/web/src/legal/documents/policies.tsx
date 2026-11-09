@@ -35,8 +35,10 @@ export const policiesDocument: LegalDocument = {
         <p>
           You can get a refund yourself from <strong>Purchase History</strong>:
           open the menu next to the course and choose{" "}
-          <strong>Request refund</strong>. Refunds are processed automatically,
-          with no need to contact us.
+          <strong>Request refund</strong>. An eligible refund is processed
+          automatically, with no need to contact us. A purchase paid by bank or
+          UPI transfer, and a refund our payment provider cannot complete, stay
+          as a pending request for our team to process.
         </p>
         <p>
           A purchase is eligible when both of these are true: it was made within

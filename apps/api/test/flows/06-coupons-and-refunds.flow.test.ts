@@ -22,6 +22,25 @@ import {
 } from "./setup/flow-courses.ts";
 import type { FlowCourse } from "./setup/flow-courses.ts";
 import { FLOW_ADMIN } from "./setup/flow-fixtures.ts";
+import { fakePaymentGateways } from "./setup/fake-payment-gateway.ts";
+import { createRefundReconciliationWorker } from "../../src/modules/commerce/fulfillment/refund-reconciliation.worker.ts";
+
+/** The reconciliation worker's log, kept quiet. */
+const silentLogger = {
+  level: "silent",
+  fatal() {},
+  error() {},
+  warn() {},
+  info() {},
+  debug() {},
+  trace() {},
+  silent() {},
+  child() {
+    return silentLogger;
+  },
+} as unknown as Parameters<
+  typeof createRefundReconciliationWorker
+>[0]["logger"];
 
 const flow = await startFlowApp();
 const admin = await signedInAdmin(flow);
@@ -765,7 +784,7 @@ await test("a refund whose answer the gateway lost is resumed by staff, not made
   assert.equal(await orderStatus(bought.orderId), "refunded");
 });
 
-await test("a refund the gateway fails later can be asked for again", async () => {
+await test("a refund the gateway fails later can be asked for again, even past the 30 days", async () => {
   const course = await createCourse(flow, { price: 1_299 });
   const { client } = await signedUpLearner(flow);
   const bought = await buy(client, course);
@@ -778,13 +797,29 @@ await test("a refund the gateway fails later can be asked for again", async () =
     "approved",
   );
 
-  // The gateway reports it failed, as its webhook would.
+  // The gateway fails it, and the reconciliation worker records that, as it
+  // does for a refund left pending.
   const [first] = flow.gateway.refundsOf(bought.gatewayPaymentId);
   flow.gateway.failRefund(first!.gatewayRefundId);
-  await flow.database
-    .updateTable("refunds")
-    .set({ status: "failed" })
+  await createRefundReconciliationWorker({
+    database: flow.database,
+    paymentGateways: fakePaymentGateways(flow.gateway),
+    logger: silentLogger,
+    staleAfterMinutes: 0,
+  }).reconcileStaleRefunds();
+  const recorded = await flow.database
+    .selectFrom("refunds")
+    .select("status")
     .where("order_id", "=", bought.orderId)
+    .executeTakeFirstOrThrow();
+  assert.equal(recorded.status, "failed");
+
+  // Asked for on day 20, now day 40: judged as of the request.
+  await paidDaysAgo(bought.orderId, 40);
+  await flow.database
+    .updateTable("refund_requests")
+    .set({ created_at: new Date(Date.now() - 20 * DAY) })
+    .where("id", "=", asked.body.data!.id)
     .execute();
 
   assert.deepEqual(await refundOption(client, bought.orderId), {
@@ -934,7 +969,11 @@ async function quizPassCourse(quizCount: number, price = 199) {
 }
 
 /** The learner starting an attempt on one of the course's quizzes. */
-async function attemptQuiz(userId: string, assignmentId: string) {
+async function attemptQuiz(
+  userId: string,
+  assignmentId: string,
+  status: "submitted" | "in_progress" = "submitted",
+) {
   const assignment = await flow.database
     .selectFrom("quiz_assignments")
     .select("quiz_version_id")
@@ -948,9 +987,9 @@ async function attemptQuiz(userId: string, assignmentId: string) {
       quiz_version_id: assignment.quiz_version_id,
       user_id: userId,
       attempt_number: 1,
-      status: "submitted",
+      status,
       expires_at: null,
-      submitted_at: new Date(),
+      submitted_at: status === "submitted" ? new Date() : null,
       score_obtained: null,
       max_score: null,
       score_percentage: null,
@@ -997,6 +1036,60 @@ await test("a quiz pass is refunded with no more than 10% of its quizzes attempt
     "You've attempted more than 10% of the quizzes.",
     "Refunds are only available within 30 days of purchase.",
   ]);
+});
+
+/** Buys the course's quiz pass, as a member of the course; returns the order. */
+async function buyQuizPass(
+  client: FlowClient,
+  course: FlowCourse,
+  pricingId: string,
+) {
+  await enrollForFree(client, course);
+  const started = await client.post<CheckoutOrder>("/v1/checkout/orders", {
+    items: [{ itemType: "quiz", quizPricingId: pricingId }],
+  });
+  assert.equal(started.status, 200, JSON.stringify(started.body));
+  const gateway = started.body.data!.gateway!;
+  const paid = flow.gateway.pay(gateway.gatewayOrderId);
+  await client.post("/v1/payments/verify", {
+    orderId: started.body.data!.order.id,
+    gatewayOrderId: gateway.gatewayOrderId,
+    ...paid,
+  });
+  return { orderId: started.body.data!.order.id, ...paid };
+}
+
+await test("quizzes started but not handed in count as attempted", async () => {
+  const { course, pricingId, assignmentIds } = await quizPassCourse(10);
+  const { client, userId } = await signedUpLearner(flow);
+  const bought = await buyQuizPass(client, course, pricingId);
+  await attemptQuiz(userId, assignmentIds[0]!, "in_progress");
+  await attemptQuiz(userId, assignmentIds[1]!, "in_progress");
+
+  const asked = await requestRefund(client, bought.orderId);
+
+  assert.equal(asked.status, 400);
+  assert.equal(asked.body.error?.code, "REFUND_NOT_ELIGIBLE");
+  assert.deepEqual(flow.gateway.refundsOf(bought.gatewayPaymentId), []);
+});
+
+await test("a request made while another refund of the order is pending waits for staff", async () => {
+  const course = await createCourse(flow, { price: 1_299 });
+  const { client } = await signedUpLearner(flow);
+  const bought = await buy(client, course);
+  // Staff refund part of it; the gateway has not settled that yet.
+  flow.gateway.nextRefund("pending");
+  const part = await admin.post("/v1/refunds", {
+    orderId: bought.orderId,
+    amount: 50_000,
+  });
+  assert.equal(part.status, 200, JSON.stringify(part.body));
+
+  const asked = await requestRefund(client, bought.orderId);
+
+  assert.equal(asked.status, 201, JSON.stringify(asked.body));
+  assert.equal(asked.body.data?.status, "pending");
+  assert.equal(flow.gateway.refundsOf(bought.gatewayPaymentId).length, 1);
 });
 
 await test("a quiz pass barely used is refunded", async () => {

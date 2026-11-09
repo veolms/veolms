@@ -182,6 +182,19 @@ export function createRefundService({
                   existing.order_item_id,
                 )) ?? null)
               : null;
+            // The resuming caller's access choice (staff approving a
+            // learner's lost refund may keep their access). The webhook and
+            // the reconciliation worker that may finish the refund later
+            // read it from the row, so it is written there, not only used
+            // below.
+            await trx
+              .updateTable("refunds")
+              .set({
+                preserve_access: request.preserveAccess ?? false,
+                updated_at: new Date(),
+              })
+              .where("id", "=", existing.id)
+              .execute();
             return {
               kind: "dispatch" as const,
               refundId: existing.id,

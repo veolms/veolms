@@ -7,8 +7,8 @@ import type {
   ReviewRefundRequest,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
-import { courseKeys } from "../courses/courses.keys";
-import { enrollmentKeys } from "../enrollments/enrollments.keys";
+import { courseKeys } from "../courses";
+import { enrollmentKeys } from "../enrollments";
 import { studentKeys } from "../students/students.keys";
 import { orderKeys } from "./orders.keys";
 import { ordersService } from "./orders.service";
@@ -39,7 +39,9 @@ export function useRefundOrder() {
 /**
  * A learner asks for their purchase back from Purchase History. An eligible
  * purchase is refunded at once and its course taken away, so the orders,
- * the learner's courses and their enrollments are read again.
+ * the learner's courses and their enrollments are read again, and so is
+ * each course overview's access answer, which picks its buttons (buy or
+ * continue learning).
  */
 export function useRequestRefund() {
   const queryClient = useQueryClient();
@@ -54,6 +56,7 @@ export function useRequestRefund() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: orderKeys.all });
       void queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
+      void queryClient.invalidateQueries({ queryKey: courseKeys.overviews() });
       void queryClient.invalidateQueries({ queryKey: enrollmentKeys.all });
     },
   });
