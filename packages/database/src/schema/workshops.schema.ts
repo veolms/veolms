@@ -68,6 +68,8 @@ export interface WorkshopRegistrationTable {
   order_id: string | null;
   registered_at: Generated<Date>;
   cancelled_at: Date | null;
+  /** Said "I'm not going": no more reminders or notices. */
+  declined_at: Generated<Date | null>;
   /** The sessions this learner clicked Join on. */
   joined_session_ids: Generated<string[]>;
 }

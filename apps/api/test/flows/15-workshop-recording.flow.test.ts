@@ -79,10 +79,12 @@ async function imageAsset(): Promise<string> {
 async function publishedWorkshop(
   client: FlowClient,
   title: string,
+  extra: Record<string, unknown> = {},
 ): Promise<WorkshopAdmin> {
   const start = new Date(Date.now() + 2 * HOUR);
   const created = await client.post<WorkshopAdmin>("/v1/workshops/admin", {
     title,
+    ...extra,
     summary: "A live session.",
     sessions: [
       {
@@ -102,13 +104,20 @@ async function publishedWorkshop(
   return published.body.data!;
 }
 
-const workshop = await publishedWorkshop(admin, "Recorded workshop");
+// A paid workshop: an open one is for every learner, so this one shows
+// who is kept away from a recording. The registrant's seat is added by staff.
+const workshop = await publishedWorkshop(admin, "Recorded workshop", {
+  priceMinor: 9_900,
+});
 const session = workshop.sessions[0]!;
 const registrant = await signedUpLearner(flow, "wsrec");
 const outsider = await signedUpLearner(flow, "wsrecout");
 assert.equal(
-  (await registrant.client.post(`/v1/workshops/${workshop.id}/register`))
-    .status,
+  (
+    await admin.post(`/v1/workshops/admin/${workshop.id}/registrants`, {
+      email: registrant.learner.email,
+    })
+  ).status,
   201,
 );
 

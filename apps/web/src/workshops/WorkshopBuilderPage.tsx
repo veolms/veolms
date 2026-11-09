@@ -47,7 +47,7 @@ import { WorkshopRecordingField } from "./WorkshopRecordingField";
 import { WorkshopRegistrantsSection } from "./WorkshopRegistrantsSection";
 import { WorkshopStatusPanel } from "./WorkshopStatusPanel";
 import { WorkshopsAccessDenied } from "./WorkshopsAccessDenied";
-import { WORKSHOPS_ADMIN_PATH } from "./WorkshopsAdminPage";
+import { WORKSHOPS_ADMIN_PATH, workshopEditPath } from "./WorkshopsAdminPage";
 import {
   browserTimeZone,
   fieldClass,
@@ -86,6 +86,58 @@ function FieldLabel({
         {required ? <RequiredMark /> : null}
       </label>
       {hint ? <span className="text-[12px] text-(--muted)">{hint}</span> : null}
+    </div>
+  );
+}
+
+type EditorTab =
+  "details" | "sessions" | "audience" | "recordings" | "attendance";
+
+const EDITOR_TABS: readonly (readonly [EditorTab, string])[] = [
+  ["details", "Details"],
+  ["sessions", "Sessions"],
+  ["audience", "Audience and price"],
+  ["recordings", "Recordings"],
+  ["attendance", "Attendance"],
+];
+
+/**
+ * The editor in tabs: one concern on screen at a time, and the recordings
+ * and attendance only load when opened. Those two need a saved workshop.
+ */
+function EditorTabs({
+  value,
+  onChange,
+  saved,
+}: {
+  value: EditorTab;
+  onChange: (tab: EditorTab) => void;
+  saved: boolean;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Workshop editor"
+      className="-mx-1 flex gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-1 pb-3"
+    >
+      {EDITOR_TABS.filter(
+        ([tab]) => saved || (tab !== "recordings" && tab !== "attendance"),
+      ).map(([tab, label]) => (
+        <button
+          key={tab}
+          type="button"
+          role="tab"
+          aria-selected={value === tab}
+          onClick={() => onChange(tab)}
+          className={`shrink-0 cursor-pointer rounded-lg px-3 py-1.5 text-[13px] font-semibold ${
+            value === tab
+              ? "bg-(--surface-strong) text-(--text)"
+              : "text-(--muted) hover:text-(--text)"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -245,6 +297,7 @@ export function WorkshopBuilderPage({
   const publishMutation = usePublishWorkshop();
   const unpublishMutation = useUnpublishWorkshop();
   const cancelMutation = useCancelWorkshop();
+  const [editorTab, setEditorTab] = useState<EditorTab>("details");
   const deleteMutation = useDeleteWorkshop();
 
   const defaultZone = useMemo(
@@ -339,7 +392,8 @@ export function WorkshopBuilderPage({
       priceMinor = Math.round(rupees * 100);
     }
     let capacity: number | null = null;
-    if (form.hasCapacity) {
+    // Seats are only sold; free and course workshops are open to their audience.
+    if (form.hasCapacity && form.isPaid && form.access !== "course") {
       const seats = Number(form.capacity);
       if (!Number.isInteger(seats) || seats <= 0) {
         return "Enter how many seats there are, or remove the limit.";
@@ -398,7 +452,7 @@ export function WorkshopBuilderPage({
       }
       const created = await createMutation.mutateAsync(payload);
       setNotice?.("Draft saved. Publish it when the sessions are set.");
-      onNavigatePage?.(`${WORKSHOPS_ADMIN_PATH}/${created.id}`);
+      onNavigatePage?.(workshopEditPath(created.id));
       return created;
     } catch (caught) {
       setErrorMessage(getApiError(caught).message);
@@ -497,216 +551,190 @@ export function WorkshopBuilderPage({
           }}
           className={`${surfaceClass} flex min-w-0 flex-col gap-8 p-5 sm:p-6`}
         >
-          <Section
-            title="Basics"
-            description="The title and summary are what learners see first."
-          >
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <EditorTabs
+            value={editorTab}
+            onChange={setEditorTab}
+            saved={Boolean(workshop)}
+          />
+          {editorTab === "details" ? (
+            <Section
+              title="Basics"
+              description="The title and summary are what learners see first."
+            >
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="min-w-0">
+                  <FieldLabel htmlFor="workshop-title" required>
+                    Title
+                  </FieldLabel>
+                  <input
+                    id="workshop-title"
+                    type="text"
+                    value={form.title}
+                    onChange={(event) => handleTitleChange(event.target.value)}
+                    placeholder="React performance day"
+                    maxLength={160}
+                    required
+                    disabled={readOnly}
+                    className={`${fieldClass} w-full`}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <FieldLabel
+                    htmlFor="workshop-slug"
+                    hint={
+                      slugLocked
+                        ? "Fixed once published"
+                        : "Auto from the title"
+                    }
+                  >
+                    Address
+                  </FieldLabel>
+                  <div
+                    className={`${fieldClass} flex w-full items-center gap-1 text-sm`}
+                  >
+                    <span className="shrink-0 text-(--muted)">/workshops/</span>
+                    <input
+                      id="workshop-slug"
+                      type="text"
+                      value={form.slug}
+                      onChange={(event) =>
+                        patch({
+                          slug: event.target.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9-]/g, ""),
+                          slugTouched: true,
+                        })
+                      }
+                      placeholder="react-performance-day"
+                      maxLength={80}
+                      disabled={readOnly || slugLocked}
+                      className="w-full min-w-0 border-0 bg-transparent outline-none disabled:opacity-60"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="min-w-0">
-                <FieldLabel htmlFor="workshop-title" required>
-                  Title
+                <FieldLabel
+                  htmlFor="workshop-summary"
+                  required
+                  hint={`${form.summary.length}/300`}
+                >
+                  Summary
                 </FieldLabel>
                 <input
-                  id="workshop-title"
+                  id="workshop-summary"
                   type="text"
-                  value={form.title}
-                  onChange={(event) => handleTitleChange(event.target.value)}
-                  placeholder="React performance day"
-                  maxLength={160}
-                  required
+                  value={form.summary}
+                  onChange={(event) =>
+                    patch({ summary: event.target.value.slice(0, 300) })
+                  }
+                  placeholder="One afternoon on rendering, memoisation and profiling, with a live code review."
+                  maxLength={300}
                   disabled={readOnly}
                   className={`${fieldClass} w-full`}
                 />
               </div>
+
               <div className="min-w-0">
-                <FieldLabel
-                  htmlFor="workshop-slug"
-                  hint={
-                    slugLocked ? "Fixed once published" : "Auto from the title"
-                  }
-                >
-                  Address
+                <FieldLabel htmlFor="workshop-description">
+                  Description
                 </FieldLabel>
-                <div
-                  className={`${fieldClass} flex w-full items-center gap-1 text-sm`}
-                >
-                  <span className="shrink-0 text-(--muted)">/workshops/</span>
-                  <input
-                    id="workshop-slug"
-                    type="text"
-                    value={form.slug}
-                    onChange={(event) =>
-                      patch({
-                        slug: event.target.value
-                          .toLowerCase()
-                          .replace(/[^a-z0-9-]/g, ""),
-                        slugTouched: true,
-                      })
-                    }
-                    placeholder="react-performance-day"
-                    maxLength={80}
-                    disabled={readOnly || slugLocked}
-                    className="w-full min-w-0 border-0 bg-transparent outline-none disabled:opacity-60"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              <FieldLabel
-                htmlFor="workshop-summary"
-                required
-                hint={`${form.summary.length}/300`}
-              >
-                Summary
-              </FieldLabel>
-              <input
-                id="workshop-summary"
-                type="text"
-                value={form.summary}
-                onChange={(event) =>
-                  patch({ summary: event.target.value.slice(0, 300) })
-                }
-                placeholder="One afternoon on rendering, memoisation and profiling, with a live code review."
-                maxLength={300}
-                disabled={readOnly}
-                className={`${fieldClass} w-full`}
-              />
-            </div>
-
-            <div className="min-w-0">
-              <FieldLabel htmlFor="workshop-description">
-                Description
-              </FieldLabel>
-              <QuizRichTextField
-                label="Workshop description"
-                value={form.description}
-                onChange={(value) =>
-                  patch({ description: value.slice(0, 10_000) })
-                }
-                documentId={`workshop-${workshopId ?? "new"}-description`}
-                placeholder="What you will cover, who it is for, what to prepare."
-                minHeight="min-h-32"
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="min-w-0">
-                <FieldLabel>Cover image</FieldLabel>
-                <WorkshopCoverUpload
-                  value={form.cover}
-                  onChange={(cover) => patch({ cover })}
-                  disabled={readOnly}
+                <QuizRichTextField
+                  label="Workshop description"
+                  value={form.description}
+                  onChange={(value) =>
+                    patch({ description: value.slice(0, 10_000) })
+                  }
+                  documentId={`workshop-${workshopId ?? "new"}-description`}
+                  placeholder="What you will cover, who it is for, what to prepare."
+                  minHeight="min-h-32"
                 />
               </div>
-              <div className="grid content-start gap-4">
+
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                 <div className="min-w-0">
-                  <FieldLabel htmlFor="workshop-host">Host</FieldLabel>
-                  <div className={`${fieldClass} flex w-full items-center`}>
-                    <ThemedSelect
-                      id="workshop-host"
-                      value={form.hostUserId || user?.id || ""}
-                      onValueChange={(value) => patch({ hostUserId: value })}
-                      options={hosts}
-                      searchable={hosts.length > 8}
-                      searchPlaceholder="Search the team"
-                      disabled={readOnly}
-                      ariaLabel="Host"
-                      triggerClassName={selectTriggerClass}
-                    />
-                  </div>
+                  <FieldLabel>Cover image</FieldLabel>
+                  <WorkshopCoverUpload
+                    value={form.cover}
+                    onChange={(cover) => patch({ cover })}
+                    disabled={readOnly}
+                  />
                 </div>
-                <div className="min-w-0">
-                  <FieldLabel htmlFor="workshop-access">
-                    Who can register
-                  </FieldLabel>
-                  <div className={`${fieldClass} flex w-full items-center`}>
-                    <ThemedSelect
-                      id="workshop-access"
-                      value={form.access}
-                      onValueChange={(value) =>
-                        patch({ access: value as FormState["access"] })
-                      }
-                      options={[
-                        ["everyone", "Everyone"],
-                        ["course", "Learners of one course"],
-                      ]}
-                      disabled={readOnly}
-                      ariaLabel="Who can register"
-                      triggerClassName={selectTriggerClass}
-                    />
-                  </div>
-                  {form.access === "course" ? (
-                    <div
-                      className={`${fieldClass} mt-2 flex w-full items-center`}
-                    >
+                <div className="grid content-start gap-4">
+                  <div className="min-w-0">
+                    <FieldLabel htmlFor="workshop-host">Host</FieldLabel>
+                    <div className={`${fieldClass} flex w-full items-center`}>
                       <ThemedSelect
-                        id="workshop-course"
-                        value={form.courseId}
-                        onValueChange={(value) => patch({ courseId: value })}
-                        options={courses}
-                        searchable
-                        searchPlaceholder="Search courses"
-                        defaultLimit={6}
-                        disabled={readOnly || courses.length === 0}
-                        ariaLabel="Course"
+                        id="workshop-host"
+                        value={form.hostUserId || user?.id || ""}
+                        onValueChange={(value) => patch({ hostUserId: value })}
+                        options={hosts}
+                        searchable={hosts.length > 8}
+                        searchPlaceholder="Search the team"
+                        disabled={readOnly}
+                        ariaLabel="Host"
                         triggerClassName={selectTriggerClass}
                       />
                     </div>
-                  ) : null}
+                  </div>
                 </div>
               </div>
-            </div>
-          </Section>
+            </Section>
+          ) : null}
 
-          <Section
-            title="Sessions"
-            description="Each session has its own time and meeting link. Times are saved in the session's time zone and shown to every learner in theirs."
-          >
-            <WorkshopSessionsField
-              sessions={form.sessions}
-              onChange={(sessions) => patch({ sessions })}
-              disabled={readOnly}
-              defaultTimeZone={defaultZone}
-            />
-          </Section>
-
-          <Section
-            title="Recordings"
-            description="Upload each session's recording or import it from YouTube, usually after it ends. It goes through the same video processing as lessons; registrants are told once it is ready."
-          >
-            {workshop && workshop.sessions.length > 0 ? (
-              <div className="grid gap-3">
-                {workshop.sessions.map((session, index) => (
-                  <WorkshopRecordingField
-                    key={session.id}
-                    workshopId={workshop.id}
-                    course={
-                      workshop.courseId
-                        ? {
-                            id: workshop.courseId,
-                            title: workshop.courseTitle ?? "the course",
-                          }
-                        : null
-                    }
-                    session={session}
-                    index={index}
-                    disabled={!canManage}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-(--muted)">
-                Save the workshop with its sessions first; each session then
-                gets its own recording slot here.
-              </p>
-            )}
-          </Section>
-
-          {workshop ? (
+          {editorTab === "sessions" ? (
             <Section
-              title="Registrants"
-              description="Who has a seat, how they got it, and whether they joined. Download the list or add someone by the email of their account."
+              title="Sessions"
+              description="Each session has its own time and meeting link. Times are saved in the session's time zone and shown to every learner in theirs."
+            >
+              <WorkshopSessionsField
+                sessions={form.sessions}
+                onChange={(sessions) => patch({ sessions })}
+                disabled={readOnly}
+                defaultTimeZone={defaultZone}
+              />
+            </Section>
+          ) : null}
+
+          {editorTab === "recordings" ? (
+            <Section
+              title="Recordings"
+              description="Upload each session's recording or import it from YouTube, usually after it ends. It goes through the same video processing as lessons; registrants are told once it is ready."
+            >
+              {workshop && workshop.sessions.length > 0 ? (
+                <div className="grid gap-3">
+                  {workshop.sessions.map((session, index) => (
+                    <WorkshopRecordingField
+                      key={session.id}
+                      workshopId={workshop.id}
+                      course={
+                        workshop.courseId
+                          ? {
+                              id: workshop.courseId,
+                              title: workshop.courseTitle ?? "the course",
+                            }
+                          : null
+                      }
+                      session={session}
+                      index={index}
+                      disabled={!canManage}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-(--muted)">
+                  Save the workshop with its sessions first; each session then
+                  gets its own recording slot here.
+                </p>
+              )}
+            </Section>
+          ) : null}
+
+          {editorTab === "attendance" && workshop ? (
+            <Section
+              title="Attendance"
+              description="Who joined, who is not going, and who you added. Download the list or import a spreadsheet."
             >
               <WorkshopRegistrantsSection
                 workshop={workshop}
@@ -715,99 +743,149 @@ export function WorkshopBuilderPage({
             </Section>
           ) : null}
 
-          <Section title="Seats and price">
-            <div className="grid gap-4 sm:grid-cols-2">
-              {form.access === "course" ? (
-                <p className="rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5 text-[13px] leading-5 text-(--muted)">
-                  Free for the course&apos;s learners: they are in without
-                  registering and are told when you publish.
-                </p>
-              ) : (
-                <div className="grid gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-(--text)">
-                      Paid workshop
-                    </span>
-                    <ToggleSwitch
-                      checked={form.isPaid}
-                      onChange={(isPaid) => patch({ isPaid })}
-                      label="Paid workshop"
-                      disabled={readOnly}
-                    />
+          {editorTab === "audience" ? (
+            <Section
+              title="Audience and price"
+              description="Everyone it is for gets the invitation in their calendar when you publish; nobody registers."
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <div className="min-w-0">
+                    <FieldLabel htmlFor="workshop-access">
+                      Who it&apos;s for
+                    </FieldLabel>
+                    <div className={`${fieldClass} flex w-full items-center`}>
+                      <ThemedSelect
+                        id="workshop-access"
+                        value={form.access}
+                        onValueChange={(value) =>
+                          patch({ access: value as FormState["access"] })
+                        }
+                        options={[
+                          ["everyone", "Every learner"],
+                          ["course", "Learners of one course"],
+                        ]}
+                        disabled={readOnly}
+                        ariaLabel="Who it's for"
+                        triggerClassName={selectTriggerClass}
+                      />
+                    </div>
+                    {form.access === "course" ? (
+                      <div
+                        className={`${fieldClass} mt-2 flex w-full items-center`}
+                      >
+                        <ThemedSelect
+                          id="workshop-course"
+                          value={form.courseId}
+                          onValueChange={(value) => patch({ courseId: value })}
+                          options={courses}
+                          searchable
+                          searchPlaceholder="Search courses"
+                          defaultLimit={6}
+                          disabled={readOnly || courses.length === 0}
+                          ariaLabel="Course"
+                          triggerClassName={selectTriggerClass}
+                        />
+                      </div>
+                    ) : null}
                   </div>
-                  {form.isPaid ? (
-                    <div
-                      className={`${fieldClass} flex w-full items-center gap-2`}
-                    >
-                      <span className="text-sm font-semibold text-(--muted)">
-                        ₹
+                </div>
+                {form.access === "course" ? (
+                  <p className="rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5 text-[13px] leading-5 text-(--muted)">
+                    Free for the course&apos;s learners: they are in without
+                    registering and are told when you publish.
+                  </p>
+                ) : (
+                  <div className="grid gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-(--text)">
+                        Paid workshop
                       </span>
+                      <ToggleSwitch
+                        checked={form.isPaid}
+                        onChange={(isPaid) => patch({ isPaid })}
+                        label="Paid workshop"
+                        disabled={readOnly}
+                      />
+                    </div>
+                    {form.isPaid ? (
+                      <div
+                        className={`${fieldClass} flex w-full items-center gap-2`}
+                      >
+                        <span className="text-sm font-semibold text-(--muted)">
+                          ₹
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          step="1"
+                          value={form.priceRupees}
+                          onChange={(event) =>
+                            patch({ priceRupees: event.target.value })
+                          }
+                          placeholder="499"
+                          disabled={readOnly}
+                          aria-label="Price in rupees"
+                          className="w-full border-0 bg-transparent outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-[12px] text-(--muted)">
+                        Free: every learner is in and gets the invitation.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {form.isPaid && form.access !== "course" ? (
+                  <div className="grid gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-(--text)">
+                        Limit seats
+                      </span>
+                      <ToggleSwitch
+                        checked={form.hasCapacity}
+                        onChange={(hasCapacity) => patch({ hasCapacity })}
+                        label="Limit seats"
+                        disabled={readOnly}
+                      />
+                    </div>
+                    {form.hasCapacity ? (
                       <input
                         type="number"
                         min={1}
                         step="1"
-                        value={form.priceRupees}
+                        value={form.capacity}
                         onChange={(event) =>
-                          patch({ priceRupees: event.target.value })
+                          patch({ capacity: event.target.value })
                         }
-                        placeholder="499"
+                        placeholder="100"
                         disabled={readOnly}
-                        aria-label="Price in rupees"
-                        className="w-full border-0 bg-transparent outline-none"
+                        aria-label="Number of seats"
+                        className={`${fieldClass} w-full`}
                       />
-                    </div>
-                  ) : (
-                    <p className="text-[12px] text-(--muted)">
-                      Free: learners register with one click.
-                    </p>
-                  )}
-                </div>
-              )}
-              <div className="grid gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-(--text)">
-                    Limit seats
-                  </span>
-                  <ToggleSwitch
-                    checked={form.hasCapacity}
-                    onChange={(hasCapacity) => patch({ hasCapacity })}
-                    label="Limit seats"
-                    disabled={readOnly}
-                  />
-                </div>
-                {form.hasCapacity ? (
-                  <input
-                    type="number"
-                    min={1}
-                    step="1"
-                    value={form.capacity}
-                    onChange={(event) =>
-                      patch({ capacity: event.target.value })
-                    }
-                    placeholder="100"
-                    disabled={readOnly}
-                    aria-label="Number of seats"
-                    className={`${fieldClass} w-full`}
-                  />
-                ) : (
-                  <p className="text-[12px] text-(--muted)">
-                    Unlimited: anyone who may register can.
-                  </p>
-                )}
+                    ) : (
+                      <p className="text-[12px] text-(--muted)">
+                        Unlimited seats.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
               </div>
-            </div>
-          </Section>
+            </Section>
+          ) : null}
 
-          <Section
-            title="Resources"
-            description="Links learners see on the workshop page: slides, a repository, reading."
-          >
-            <WorkshopResourcesField
-              resources={form.resources}
-              onChange={(resources) => patch({ resources })}
-              disabled={readOnly}
-            />
-          </Section>
+          {editorTab === "details" ? (
+            <Section
+              title="Resources"
+              description="Links learners see on the workshop page: slides, a repository, reading."
+            >
+              <WorkshopResourcesField
+                resources={form.resources}
+                onChange={(resources) => patch({ resources })}
+                disabled={readOnly}
+              />
+            </Section>
+          ) : null}
 
           {canManage ? (
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-5">

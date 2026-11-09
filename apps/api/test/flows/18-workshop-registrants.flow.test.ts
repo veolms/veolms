@@ -115,7 +115,11 @@ await test("staff add someone by email, who is told like anyone; unknown emails 
       (event.payload as { workshopId: string; recipientUserId: string })
         .workshopId === workshop.id,
   );
-  assert.equal(theirs.length, 2, "both registrants got a confirmation");
+  assert.equal(
+    theirs.length,
+    1,
+    "the person staff added is told; everyone else was in already",
+  );
 
   const again = await admin.post<WorkshopRegistrantsResponse>(
     `/v1/workshops/admin/${workshop.id}/registrants`,
@@ -138,7 +142,7 @@ await test("staff add someone by email, who is told like anyone; unknown emails 
   assert.equal(learnerTry.status, 403);
 });
 
-await test("taking a seat back removes them from the list and lets them register again", async () => {
+await test("taking a seat back removes them from the list", async () => {
   const removed = await admin.delete<WorkshopRegistrantsResponse>(
     `/v1/workshops/admin/${workshop.id}/registrants/${otherAccount.userId}`,
   );
@@ -147,7 +151,8 @@ await test("taking a seat back removes them from the list and lets them register
   const me = await otherAccount.client.get<{ registered: boolean }>(
     `/v1/workshops/${workshop.slug}/me`,
   );
-  assert.equal(me.body.data?.registered, false);
+  // An open workshop is for every learner, so they are still in it.
+  assert.equal(me.body.data?.registered, true);
 });
 
 await test("the home card points at the next registered session, else the soonest open workshop", async () => {

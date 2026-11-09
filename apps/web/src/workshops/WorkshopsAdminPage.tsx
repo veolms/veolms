@@ -21,7 +21,12 @@ import {
 } from "./WorkshopsAdminTabs";
 import { surfaceClass } from "./workshopHelpers";
 
-export const WORKSHOPS_ADMIN_PATH = "/workshops-admin";
+export const WORKSHOPS_ADMIN_PATH = "/workshops";
+
+/** The editor of one workshop. */
+export function workshopEditPath(workshopId: string): string {
+  return `/workshops/${workshopId}/edit`;
+}
 
 export interface WorkshopsAdminPageProps {
   onNavigatePage?: NavigateTo;
@@ -47,9 +52,9 @@ export function WorkshopsAdminPage({
 
   usePageSearchShortcut(WORKSHOPS_SEARCH_INPUT_ID);
 
-  const openCreate = () => onNavigatePage?.(`${WORKSHOPS_ADMIN_PATH}/create`);
+  const openCreate = () => onNavigatePage?.("/workshops/new");
   const openWorkshop = (workshop: WorkshopAdminListItem) =>
-    onNavigatePage?.(`${WORKSHOPS_ADMIN_PATH}/${workshop.id}`);
+    onNavigatePage?.(workshopEditPath(workshop.id));
 
   if (!isAuthReady) {
     return (

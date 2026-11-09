@@ -553,6 +553,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         channels: commonChannels,
         mandatory: false,
         deepLink: `/workshops/${event.workshopSlug}`,
+        emailCalendar: { workshopId: event.workshopId, method: "REQUEST" },
       },
     ];
   },
@@ -575,7 +576,8 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         timeZone: event.timeZone,
         window: event.window,
       },
-      channels: commonChannels,
+      channels:
+        event.audience === "everyone" ? (["in_app"] as const) : commonChannels,
       mandatory: false,
       deepLink: `/workshops/${event.workshopSlug}`,
     }));
@@ -623,6 +625,10 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       channels: commonChannels,
       // A cancellation or a new time is about something they signed up for.
       mandatory: true,
+      emailCalendar: {
+        workshopId: event.workshopId,
+        method: event.change === "cancelled" ? "CANCEL" : "REQUEST",
+      } as const,
       deepLink: `/workshops/${event.workshopSlug}`,
     }));
   },
@@ -651,6 +657,14 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
       channels: commonChannels,
       mandatory: false,
+      ...(event.audience === "course" || !event.priceMinor
+        ? {
+            emailCalendar: {
+              workshopId: event.workshopId,
+              method: "REQUEST" as const,
+            },
+          }
+        : {}),
       deepLink: `/workshops/${event.workshopSlug}`,
     }));
   },

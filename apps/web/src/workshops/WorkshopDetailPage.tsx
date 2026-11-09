@@ -1,17 +1,16 @@
 import { useState } from "react";
-import {
-  googleCalendarUrl,
-  type WorkshopPublic,
-  type WorkshopViewer,
+import type {
+  WorkshopPublic,
+  WorkshopSessionPublic,
+  WorkshopViewer,
 } from "@veolms/contracts";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowSquareOutIcon as ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
-import { CalendarPlusIcon as CalendarPlus } from "@phosphor-icons/react/CalendarPlus";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
+import { CalendarCheckIcon as CalendarCheck } from "@phosphor-icons/react/CalendarCheck";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { LinkIcon as Link } from "@phosphor-icons/react/Link";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
-import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { VideoConferenceIcon as VideoConference } from "@phosphor-icons/react/VideoConference";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
@@ -20,6 +19,7 @@ import { getApiError } from "../lib/api-error";
 import { buildLoginPath } from "../routing/routeAccess";
 import type { NavigateTo } from "../routing/navigation";
 import { useCurrentUser } from "../services/auth";
+import { useCapabilities } from "../services/authorization";
 import {
   useRegisterForWorkshop,
   useUnregisterFromWorkshop,
@@ -32,20 +32,16 @@ import { WorkshopHostAvatar } from "./WorkshopHostAvatar";
 import { WorkshopJoinButton } from "./WorkshopJoinButton";
 import { WorkshopPayButton } from "./WorkshopPayButton";
 import { WorkshopRecordingPlayer } from "./WorkshopRecordingPlayer";
+import { workshopEditPath } from "./WorkshopsAdminPage";
 import { WORKSHOPS_PATH } from "./WorkshopsPage";
 import {
   browserTimeZone,
   formatSessionDay,
   formatSessionTime,
-  formatWorkshopPrice,
-  publicStateClass,
-  publicStateLabel,
-  seatsLeftLabel,
-  sessionStateLabel,
   surfaceClass,
   timeZoneShortName,
-  workshopCalendarUrl,
 } from "./workshopHelpers";
+import { formatCountdown, JOIN_OPENS_MS, useNow } from "./useNow";
 
 export interface WorkshopDetailPageProps {
   slug?: string | null;
@@ -53,310 +49,52 @@ export interface WorkshopDetailPageProps {
   setNotice?: (message: string) => void;
 }
 
-function RegisterPanel({
-  workshop,
-  viewer,
-  signedIn,
-  isBusy,
-  onRegister,
-  onUnregister,
-  onSignIn,
-  onPaid,
-  onNavigatePage,
-}: {
-  workshop: WorkshopPublic;
-  viewer: WorkshopViewer | undefined;
-  signedIn: boolean;
-  isBusy: boolean;
-  onRegister: () => void;
-  onUnregister: () => void;
-  onSignIn: () => void;
-  onPaid: () => void;
-  onNavigatePage?: NavigateTo;
-}) {
-  const [confirmLeave, setConfirmLeave] = useState(false);
-  const reason: WorkshopViewer["reason"] = signedIn
-    ? (viewer?.reason ?? "ok")
-    : workshop.status === "cancelled"
-      ? "cancelled"
-      : workshop.state === "ended"
-        ? "ended"
-        : "sign_in";
-  const seats = seatsLeftLabel(workshop.seatsLeft);
-  const nextSession =
-    workshop.sessions.find((session) => session.state !== "ended") ??
-    workshop.sessions[0];
-  const calendarLink = nextSession
-    ? googleCalendarUrl({
-        title: workshop.title,
-        startsAt: nextSession.startsAt,
-        endsAt: nextSession.endsAt,
-        details: workshop.summary ?? undefined,
-        location:
-          typeof window !== "undefined" ? window.location.href : undefined,
-      })
-    : null;
+const panelClass = `${surfaceClass} p-5 sm:p-6`;
+const rowBorder =
+  "border border-[color-mix(in_srgb,var(--text)_10%,transparent)]";
 
-  let body: React.ReactNode;
-  switch (reason) {
-    case "registered":
-      body = (
-        <div className="grid gap-3">
-          {viewer?.joinable?.length ? (
-            <div className="grid gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
-              <p className="flex items-center gap-2 text-sm font-semibold text-(--text)">
-                <span className="relative flex size-2.5">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
-                </span>
-                {workshop.state === "live"
-                  ? "The session is live"
-                  : "Starting soon — you can join now"}
-              </p>
-              {viewer.joinable.map((entry) => (
-                <WorkshopJoinButton
-                  key={entry.sessionId}
-                  workshopId={workshop.id}
-                  joinable={entry}
-                  label={
-                    workshop.sessions.length > 1
-                      ? `Join ${
-                          workshop.sessions.find(
-                            (session) => session.id === entry.sessionId,
-                          )?.title ??
-                          `session ${
-                            workshop.sessions.findIndex(
-                              (session) => session.id === entry.sessionId,
-                            ) + 1
-                          }`
-                        }`
-                      : "Join now"
-                  }
-                />
-              ))}
-            </div>
-          ) : null}
-          <p className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
-            <CheckCircle size={18} weight="fill" />
-            {viewer?.viaCourse
-              ? "Included with your course"
-              : "You're registered"}
-          </p>
-          <p className="text-[13px] leading-5 text-(--muted)">
-            We&apos;ll remind you a day before and an hour before. The Join
-            button appears here 15 minutes before each session starts, and this
-            page refreshes on its own.
-          </p>
-          <div className="grid gap-2">
-            {calendarLink ? (
-              <a
-                href={calendarLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-(--surface-strong) px-4 text-sm font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--text)"
-              >
-                <CalendarPlus size={16} />
-                Add to Google Calendar
-              </a>
-            ) : null}
-            <a
-              href={workshopCalendarUrl(workshop.id)}
-              download
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-(--surface-strong) px-4 text-sm font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--text)"
-            >
-              <DownloadSimple size={16} />
-              Download calendar file (.ics)
-            </a>
-          </div>
-          {viewer?.viaCourse ? null : confirmLeave ? (
-            <div className="grid gap-2 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
-              <p className="text-[13px] text-(--text)">
-                Cancel your registration? You can register again while seats are
-                left.
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="danger"
-                  disabled={isBusy}
-                  onClick={onUnregister}
-                >
-                  Cancel registration
-                </Button>
-                <Button
-                  variant="quiet"
-                  elevation="flat"
-                  disabled={isBusy}
-                  onClick={() => setConfirmLeave(false)}
-                >
-                  Keep it
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmLeave(true)}
-              disabled={isBusy}
-              className="text-[13px] font-medium text-(--muted) hover:text-rose-500 cursor-pointer disabled:opacity-50"
-            >
-              Can&apos;t make it? Cancel registration
-            </button>
-          )}
-        </div>
-      );
-      break;
-    case "sign_in":
-      body = (
-        <div className="grid gap-3">
-          <Button onClick={onSignIn} className="w-full">
-            Sign in to register
-          </Button>
-          <p className="text-[13px] leading-5 text-(--muted)">
-            {workshop.priceMinor
-              ? formatWorkshopPrice(workshop.priceMinor, workshop.currency) +
-                " per seat. You'll be back here after signing in."
-              : "Registration is free. You'll be back here after signing in."}
-          </p>
-        </div>
-      );
-      break;
-    case "course_required":
-      body = (
-        <div className="grid gap-3">
-          <p className="text-sm font-semibold text-(--text)">
-            For learners of {workshop.courseTitle ?? "the course"}
-          </p>
-          <p className="text-[13px] leading-5 text-(--muted)">
-            This workshop comes with the course. Enrol in the course and
-            registration opens here.
-          </p>
-          {workshop.courseSlug ? (
-            <Button
-              variant="quiet"
-              elevation="flat"
-              onClick={() =>
-                onNavigatePage?.(`/courses/${workshop.courseSlug}/overview`)
-              }
-            >
-              Open the course
-            </Button>
-          ) : null}
-        </div>
-      );
-      break;
-    case "full":
-      body = (
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold text-(--text)">No seats left</p>
-          <p className="text-[13px] leading-5 text-(--muted)">
-            Every seat is taken. If someone cancels, a seat opens here.
-          </p>
-        </div>
-      );
-      break;
-    case "payment_required":
-      body = <WorkshopPayButton workshop={workshop} onRegistered={onPaid} />;
-      break;
-    case "ended":
-      body = (
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold text-(--text)">
-            This workshop has ended
-          </p>
-          <p className="text-[13px] leading-5 text-(--muted)">
-            {workshop.sessions.some((session) => session.hasRecording)
-              ? "The recording is available below."
-              : "The recording appears here once the host adds it."}
-          </p>
-        </div>
-      );
-      break;
-    case "cancelled":
-      body = (
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold text-rose-500">Cancelled</p>
-          <p className="text-[13px] leading-5 text-(--muted)">
-            {workshop.cancelReason ?? "This workshop was cancelled."}
-          </p>
-        </div>
-      );
-      break;
-    default:
-      body = (
-        <div className="grid gap-3">
-          <Button onClick={onRegister} disabled={isBusy} className="w-full">
-            {isBusy ? "Registering…" : "Register"}
-          </Button>
-          <p className="text-[13px] leading-5 text-(--muted)">
-            Free. You&apos;ll get a confirmation, reminders before each session,
-            and the Join button here when it starts.
-          </p>
-        </div>
-      );
-  }
-
-  return (
-    <aside className={`${surfaceClass} grid gap-4 p-5 lg:sticky lg:top-4`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-2xl font-bold tracking-tight text-(--text)">
-            {formatWorkshopPrice(workshop.priceMinor, workshop.currency)}
-          </p>
-          {seats && workshop.state !== "ended" ? (
-            <p className="text-xs text-(--muted)">{seats}</p>
-          ) : null}
-        </div>
-        <span
-          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${publicStateClass(workshop.state)}`}
-        >
-          {publicStateLabel(workshop.state)}
-        </span>
-      </div>
-      {body}
-      <p className="flex items-center gap-1.5 text-xs text-(--muted)">
-        <Users size={14} />
-        {workshop.registrationCount === 0
-          ? "Be the first to register"
-          : workshop.registrationCount === 1
-            ? "1 learner registered"
-            : `${workshop.registrationCount} learners registered`}
-      </p>
-    </aside>
-  );
+function whenLabel(session: WorkshopSessionPublic, timeZone: string): string {
+  return `${formatSessionDay(session.startsAt, timeZone)} · ${formatSessionTime(
+    session.startsAt,
+    timeZone,
+  )} – ${formatSessionTime(session.endsAt, timeZone)} ${timeZoneShortName(
+    timeZone,
+    new Date(session.startsAt),
+  )}`;
 }
 
+/**
+ * One workshop. The panel beside the title always offers the single thing
+ * that makes sense now: when it starts, Join, the recording, or buying a
+ * seat. Nobody registers; whoever it is for is in and has it in their
+ * calendar from the invitation email.
+ */
 export function WorkshopDetailPage({
   slug,
   onNavigatePage,
   setNotice,
 }: WorkshopDetailPageProps) {
-  const { data: authUser, isFetched: authUserFetched } = useCurrentUser();
+  const { data: authUser, isFetched } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
-  const user = authUserFetched ? authUser : storeUser;
-  const signedIn = Boolean(user);
+  const user = isFetched ? authUser : storeUser;
+  const { can } = useCapabilities({ enabled: Boolean(user) });
   const workshopQuery = useWorkshopPublic(slug);
   const viewerQuery = useWorkshopViewer(slug, {
-    enabled: signedIn,
+    enabled: Boolean(user),
     refetchInterval: workshopRefetchInterval(
       workshopQuery.data?.sessions ?? [],
     ),
   });
-  const registerMutation = useRegisterForWorkshop();
-  const unregisterMutation = useUnregisterFromWorkshop();
-  const [error, setError] = useState<string | null>(null);
+  const now = useNow();
   const timeZone = browserTimeZone();
   const [recordingSessionId, setRecordingSessionId] = useState<string | null>(
     null,
   );
 
   const workshop = workshopQuery.data;
-  const recordingSession = recordingSessionId
-    ? workshop?.sessions.find((session) => session.id === recordingSessionId)
-    : undefined;
-
   if (workshopQuery.isLoading) {
     return (
-      <main className="mx-auto w-full max-w-[1320px]">
+      <main className="mx-auto w-full max-w-[1100px]">
         <CenteredLoadingSpinner
           label="Loading workshop"
           className="min-h-52 py-24"
@@ -366,10 +104,8 @@ export function WorkshopDetailPage({
   }
   if (!workshop) {
     return (
-      <main className="mx-auto grid w-full max-w-[1320px] gap-4">
-        <div
-          className={`${surfaceClass} grid place-items-center p-10 text-center`}
-        >
+      <main className="mx-auto grid w-full max-w-[1100px] gap-4">
+        <div className={`${panelClass} grid place-items-center text-center`}>
           <span className="flex size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
             <VideoConference size={24} weight="duotone" />
           </span>
@@ -387,302 +123,513 @@ export function WorkshopDetailPage({
     );
   }
 
-  const isBusy = registerMutation.isPending || unregisterMutation.isPending;
-  const act = async (action: () => Promise<unknown>, notice: string) => {
-    setError(null);
-    try {
-      await action();
-      setNotice?.(notice);
-    } catch (caught) {
-      setError(getApiError(caught).message);
+  const viewer = viewerQuery.data;
+  const upcoming = workshop.sessions.find(
+    (session) => new Date(session.endsAt).getTime() > now,
+  );
+  const recordingSession = recordingSessionId
+    ? workshop.sessions.find((session) => session.id === recordingSessionId)
+    : undefined;
+  const canWatch = Boolean(viewer?.canWatchRecordings);
+
+  const openRecording = (session: WorkshopSessionPublic) => {
+    if (session.recordingLessonPath) {
+      onNavigatePage?.(session.recordingLessonPath);
+      return;
     }
+    setRecordingSessionId(session.id);
   };
 
   return (
-    <main className="mx-auto grid w-full max-w-[1800px] gap-6">
-      <button
-        type="button"
-        onClick={() => onNavigatePage?.(WORKSHOPS_PATH)}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-(--muted) hover:text-(--text) cursor-pointer"
-      >
-        <ArrowLeft size={16} weight="bold" />
-        All workshops
-      </button>
-
-      <div className="grid w-full min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.38fr)]">
-        <div className="grid min-w-0 gap-5">
-          <section className={`${surfaceClass}`}>
-            <div className="relative aspect-video w-full overflow-hidden bg-(--accent)/10">
-              {workshop.coverUrl ? (
-                <img
-                  src={workshop.coverUrl}
-                  alt=""
-                  className="size-full object-cover"
-                />
-              ) : (
-                <div className="grid size-full place-items-center text-(--accent)">
-                  <VideoConference size={56} weight="duotone" />
-                </div>
-              )}
-            </div>
-            <div className="grid gap-4 p-5 sm:p-6">
-              <div>
-                <h1 className="text-[clamp(1.6rem,2.2vw,2rem)] font-bold leading-tight tracking-[-0.03em] text-(--text)">
-                  {workshop.title}
-                </h1>
-                {workshop.summary ? (
-                  <p className="mt-2 text-[15px] leading-6 text-(--muted)">
-                    {workshop.summary}
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-(--text-secondary,var(--muted))">
-                <span className="flex items-center gap-2">
-                  <WorkshopHostAvatar
-                    name={workshop.host.name}
-                    avatarUrl={workshop.host.avatarUrl}
-                    size={28}
-                  />
-                  <span>
-                    Hosted by{" "}
-                    <span className="font-medium text-(--text)">
-                      {workshop.host.name}
-                    </span>
-                  </span>
-                </span>
-                {workshop.courseTitle ? (
-                  <span className="rounded-full bg-(--accent)/10 px-2.5 py-1 text-xs font-medium text-(--accent)">
-                    For {workshop.courseTitle} learners
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          </section>
-
-          {error ? (
-            <div
-              role="alert"
-              className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-500"
-            >
-              {error}
-            </div>
-          ) : null}
-
-          <section
-            className={`${surfaceClass} p-5 sm:p-6`}
-            aria-labelledby="workshop-sessions"
+    <main className="mx-auto grid w-full max-w-[1100px] gap-5">
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => onNavigatePage?.(WORKSHOPS_PATH)}
+          className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-(--muted) hover:text-(--text)"
+        >
+          <ArrowLeft size={16} weight="bold" />
+          All workshops
+        </button>
+        {can("workshop.manage") ? (
+          <Button
+            variant="quiet"
+            elevation="flat"
+            onClick={() => onNavigatePage?.(workshopEditPath(workshop.id))}
           >
-            <h2
-              id="workshop-sessions"
-              className="text-base font-bold tracking-tight text-(--text)"
-            >
-              {workshop.sessions.length === 1
-                ? "Session"
-                : `${workshop.sessions.length} sessions`}
-            </h2>
-            <p className="mt-0.5 text-xs text-(--muted)">
-              Times are shown in your time zone ({timeZone.replace(/_/g, " ")}).
+            <PencilSimple size={15} />
+            Edit workshop
+          </Button>
+        ) : null}
+      </div>
+
+      <section
+        className={`${panelClass} grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start`}
+      >
+        <div className="flex min-w-0 gap-4">
+          {workshop.coverUrl ? (
+            <img
+              src={workshop.coverUrl}
+              alt=""
+              className="hidden aspect-video w-44 shrink-0 rounded-xl object-cover sm:block"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <p className="m-0 flex items-center gap-2 text-[12px] text-(--muted)">
+              <WorkshopHostAvatar
+                name={workshop.host.name}
+                avatarUrl={workshop.host.avatarUrl}
+                size={18}
+              />
+              {workshop.host.name}
+              {workshop.courseTitle ? ` · ${workshop.courseTitle}` : ""}
             </p>
-            {recordingSession ? (
-              <div className="mt-4">
-                <WorkshopRecordingPlayer
-                  workshopId={workshop.id}
-                  sessionId={recordingSession.id}
-                  title={
-                    recordingSession.title ??
-                    formatSessionDay(recordingSession.startsAt, timeZone)
-                  }
-                  onClose={() => setRecordingSessionId(null)}
-                />
-              </div>
+            <h1 className="m-0 mt-1 text-[clamp(1.5rem,2.2vw,1.9rem)] font-bold leading-tight tracking-[-0.03em] text-(--text)">
+              {workshop.title}
+            </h1>
+            {workshop.summary ? (
+              <p className="m-0 mt-1.5 text-[0.92rem] leading-6 text-(--muted)">
+                {workshop.summary}
+              </p>
             ) : null}
-            <ol className="mt-4 grid gap-3">
-              {workshop.sessions.map((session, index) => (
-                <li
-                  key={session.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-xs font-bold text-(--accent)">
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-(--text)">
-                        {session.title ??
-                          formatSessionDay(session.startsAt, timeZone)}
-                      </p>
-                      <p className="text-[13px] text-(--muted)">
-                        {session.title
-                          ? `${formatSessionDay(session.startsAt, timeZone)} · `
-                          : ""}
-                        {formatSessionTime(session.startsAt, timeZone)} –{" "}
-                        {formatSessionTime(session.endsAt, timeZone)}{" "}
-                        {timeZoneShortName(
-                          timeZone,
-                          new Date(session.startsAt),
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  {(() => {
-                    const joinable = (viewerQuery.data?.joinable ?? []).find(
-                      (entry) => entry.sessionId === session.id,
-                    );
-                    if (session.hasRecording) {
-                      if (
-                        session.recordingLessonPath &&
-                        viewerQuery.data?.canWatchRecordings
-                      ) {
-                        const lessonPath = session.recordingLessonPath;
-                        return (
-                          <a
-                            href={lessonPath}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              onNavigatePage?.(lessonPath);
-                            }}
-                            className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xl bg-(--accent) px-3.5 text-[13px] font-semibold text-(--on-accent) shadow-sm transition hover:opacity-90"
-                          >
-                            <PlayCircle size={16} weight="fill" />
-                            Watch in course
-                          </a>
-                        );
-                      }
-                      return viewerQuery.data?.canWatchRecordings ? (
-                        <button
-                          type="button"
-                          onClick={() => setRecordingSessionId(session.id)}
-                          className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xl bg-(--accent) px-3.5 text-[13px] font-semibold text-(--on-accent) shadow-sm transition hover:opacity-90"
-                        >
-                          <PlayCircle size={16} weight="fill" />
-                          Watch recording
-                        </button>
-                      ) : (
-                        <span className="rounded-full bg-(--canvas) px-2.5 py-1 text-[11px] font-semibold text-(--muted)">
-                          Recording for registrants
-                        </span>
-                      );
-                    }
-                    return joinable ? (
-                      <WorkshopJoinButton
-                        workshopId={workshop.id}
-                        joinable={joinable}
-                        size="sm"
-                        label={session.state === "live" ? "Join now" : "Join"}
-                      />
-                    ) : (
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                          session.state === "live"
-                            ? "bg-emerald-500 text-white"
-                            : "bg-(--canvas) text-(--muted)"
-                        }`}
-                      >
-                        {sessionStateLabel(session.state)}
-                      </span>
-                    );
-                  })()}
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          {workshop.description ? (
-            <section
-              className={`${surfaceClass} p-5 sm:p-6`}
-              aria-labelledby="workshop-about"
-            >
-              <h2
-                id="workshop-about"
-                className="text-base font-bold tracking-tight text-(--text)"
-              >
-                About this workshop
-              </h2>
-              <div className="mt-3 text-[15px] leading-7 text-(--text)">
-                <DiscussionMarkdown
-                  label="Workshop description"
-                  content={{
-                    format: "markdown",
-                    markdown: workshop.description,
-                    plainText: workshop.description,
-                  }}
-                />
-              </div>
-            </section>
-          ) : null}
-
-          {workshop.resources.length > 0 ? (
-            <section
-              className={`${surfaceClass} p-5 sm:p-6`}
-              aria-labelledby="workshop-resources"
-            >
-              <h2
-                id="workshop-resources"
-                className="text-base font-bold tracking-tight text-(--text)"
-              >
-                Resources
-              </h2>
-              <ul className="mt-3 grid gap-2">
-                {workshop.resources.map((resource) => (
-                  <li key={resource.url}>
-                    <a
-                      href={resource.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-between gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3.5 py-3 text-sm font-medium text-(--text) hover:border-(--accent) hover:bg-(--accent)/5"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <Link size={16} className="shrink-0 text-(--muted)" />
-                        <span className="truncate">{resource.title}</span>
-                      </span>
-                      <ArrowSquareOut
-                        size={16}
-                        className="shrink-0 text-(--muted)"
-                      />
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+            {upcoming ? (
+              <p className="m-0 mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-(--text)">
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock size={15} className="text-(--muted)" />
+                  {whenLabel(upcoming, timeZone)}
+                </span>
+                {viewer?.registered ? (
+                  <span className="inline-flex items-center gap-1.5 text-emerald-600">
+                    <CalendarCheck size={15} weight="bold" />
+                    You&apos;re in
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
+          </div>
         </div>
 
-        <RegisterPanel
+        <ActionPanel
           workshop={workshop}
-          viewer={viewerQuery.data}
-          signedIn={signedIn}
-          isBusy={isBusy}
-          onRegister={() =>
-            void act(
-              () =>
-                registerMutation.mutateAsync({
-                  workshopId: workshop.id,
-                  slug: workshop.slug,
-                }),
-              "You're registered. A confirmation is on its way.",
-            )
-          }
-          onUnregister={() =>
-            void act(
-              () =>
-                unregisterMutation.mutateAsync({
-                  workshopId: workshop.id,
-                  slug: workshop.slug,
-                }),
-              "Registration cancelled.",
-            )
-          }
-          onSignIn={() =>
+          viewer={viewer}
+          signedIn={Boolean(user)}
+          upcoming={upcoming}
+          now={now}
+          onNavigatePage={onNavigatePage}
+          setNotice={setNotice}
+          onWatch={() => {
+            const first = workshop.sessions.find(
+              (session) => session.hasRecording,
+            );
+            if (first) openRecording(first);
+          }}
+        />
+      </section>
+
+      {recordingSession ? (
+        <section className={panelClass}>
+          <WorkshopRecordingPlayer
+            workshopId={workshop.id}
+            sessionId={recordingSession.id}
+            title={
+              recordingSession.title ??
+              formatSessionDay(recordingSession.startsAt, timeZone)
+            }
+            onClose={() => setRecordingSessionId(null)}
+          />
+        </section>
+      ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <section className={panelClass} aria-labelledby="workshop-sessions">
+          <h2
+            id="workshop-sessions"
+            className="m-0 text-base font-bold tracking-tight text-(--text)"
+          >
+            {workshop.sessions.length === 1
+              ? "Session"
+              : `${workshop.sessions.length} sessions`}
+          </h2>
+          <ol className="m-0 mt-3 grid list-none gap-2 p-0">
+            {workshop.sessions.map((session, index) => (
+              <SessionRow
+                key={session.id}
+                workshopId={workshop.id}
+                session={session}
+                index={index}
+                viewer={viewer}
+                canWatch={canWatch}
+                now={now}
+                timeZone={timeZone}
+                onWatch={() => openRecording(session)}
+              />
+            ))}
+          </ol>
+        </section>
+
+        {workshop.resources.length > 0 ? (
+          <section className={panelClass} aria-labelledby="workshop-resources">
+            <h2
+              id="workshop-resources"
+              className="m-0 text-base font-bold tracking-tight text-(--text)"
+            >
+              Resources
+            </h2>
+            <ul className="m-0 mt-3 grid list-none gap-2 p-0">
+              {workshop.resources.map((resource) => (
+                <li key={resource.url}>
+                  <a
+                    href={resource.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-(--text) hover:border-(--accent) ${rowBorder}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Link size={15} className="shrink-0 text-(--muted)" />
+                      <span className="truncate">{resource.title}</span>
+                    </span>
+                    <ArrowSquareOut
+                      size={15}
+                      className="shrink-0 text-(--muted)"
+                    />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
+
+      {workshop.description ? (
+        <section className={panelClass} aria-labelledby="workshop-about">
+          <h2
+            id="workshop-about"
+            className="m-0 text-base font-bold tracking-tight text-(--text)"
+          >
+            About this workshop
+          </h2>
+          <div className="mt-3">
+            <DiscussionMarkdown
+              label="Workshop description"
+              content={{
+                format: "markdown",
+                markdown: workshop.description,
+                plainText: workshop.description,
+              }}
+            />
+          </div>
+        </section>
+      ) : null}
+    </main>
+  );
+}
+
+function SessionRow({
+  workshopId,
+  session,
+  index,
+  viewer,
+  canWatch,
+  now,
+  timeZone,
+  onWatch,
+}: {
+  workshopId: string;
+  session: WorkshopSessionPublic;
+  index: number;
+  viewer: WorkshopViewer | undefined;
+  canWatch: boolean;
+  now: number;
+  timeZone: string;
+  onWatch: () => void;
+}) {
+  const starts = new Date(session.startsAt).getTime();
+  const ends = new Date(session.endsAt).getTime();
+  const joinable = viewer?.joinable.find(
+    (entry) => entry.sessionId === session.id,
+  );
+  let right: React.ReactNode;
+  if (now >= ends) {
+    right =
+      session.hasRecording && canWatch ? (
+        <button
+          type="button"
+          onClick={onWatch}
+          className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-semibold text-(--accent) hover:underline"
+        >
+          <PlayCircle size={16} weight="fill" />
+          {session.recordingLessonPath ? "Watch in course" : "Watch recording"}
+        </button>
+      ) : (
+        <span className="text-[12px] text-(--muted)">
+          {session.hasRecording ? "Recording available" : "Ended"}
+        </span>
+      );
+  } else if (joinable) {
+    right = (
+      <WorkshopJoinButton
+        workshopId={workshopId}
+        joinable={joinable}
+        size="sm"
+        label={now >= starts ? "Join now" : "Join"}
+      />
+    );
+  } else {
+    right = (
+      <span className="text-[12px] text-(--muted)">
+        {now >= starts
+          ? "Live now"
+          : `Starts ${formatCountdown(session.startsAt, now)}`}
+      </span>
+    );
+  }
+  return (
+    <li
+      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl px-3.5 py-3 ${rowBorder}`}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-xs font-bold text-(--accent)">
+          {index + 1}
+        </span>
+        <div className="min-w-0">
+          <p className="m-0 truncate text-sm font-semibold text-(--text)">
+            {session.title ?? `Session ${index + 1}`}
+          </p>
+          <p className="m-0 text-[12px] text-(--muted)">
+            {whenLabel(session, timeZone)}
+          </p>
+        </div>
+      </div>
+      {right}
+    </li>
+  );
+}
+
+/** The one thing to do now, and the quiet "not going" switch. */
+function ActionPanel({
+  workshop,
+  viewer,
+  signedIn,
+  upcoming,
+  now,
+  onNavigatePage,
+  setNotice,
+  onWatch,
+}: {
+  workshop: WorkshopPublic;
+  viewer: WorkshopViewer | undefined;
+  signedIn: boolean;
+  upcoming: WorkshopSessionPublic | undefined;
+  now: number;
+  onNavigatePage?: NavigateTo;
+  setNotice?: (message: string) => void;
+  onWatch: () => void;
+}) {
+  const going = useRegisterForWorkshop();
+  const notGoing = useUnregisterFromWorkshop();
+  const [error, setError] = useState<string | null>(null);
+  const busy = going.isPending || notGoing.isPending;
+
+  const act = (run: () => Promise<unknown>, done: string) => {
+    setError(null);
+    void run()
+      .then(() => setNotice?.(done))
+      .catch((caught: unknown) =>
+        setError(
+          getApiError(caught)?.message ?? "That did not work. Try again.",
+        ),
+      );
+  };
+
+  const frame = (children: React.ReactNode) => (
+    <div className={`grid gap-2.5 rounded-xl bg-(--canvas) p-4 ${rowBorder}`}>
+      {children}
+      {error ? (
+        <p className="m-0 text-[13px] text-rose-500" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+
+  if (workshop.status === "cancelled") {
+    return frame(
+      <>
+        <p className="m-0 text-sm font-semibold text-rose-500">
+          This workshop was cancelled
+        </p>
+        {workshop.cancelReason ? (
+          <p className="m-0 text-[13px] text-(--muted)">
+            {workshop.cancelReason}
+          </p>
+        ) : null}
+      </>,
+    );
+  }
+
+  if (!upcoming) {
+    const hasRecording = workshop.sessions.some(
+      (session) => session.hasRecording,
+    );
+    return frame(
+      hasRecording && viewer?.canWatchRecordings ? (
+        <Button onClick={onWatch} className="w-full">
+          <PlayCircle size={17} weight="fill" />
+          Watch the recording
+        </Button>
+      ) : (
+        <>
+          <p className="m-0 text-sm font-semibold text-(--text)">
+            This workshop has ended
+          </p>
+          <p className="m-0 text-[13px] text-(--muted)">
+            {hasRecording
+              ? "The recording is for its attendees."
+              : "The recording appears here once the host adds it."}
+          </p>
+        </>
+      ),
+    );
+  }
+
+  if (!signedIn) {
+    return frame(
+      <>
+        <Button
+          className="w-full"
+          onClick={() =>
             onNavigatePage?.(
               buildLoginPath(`${WORKSHOPS_PATH}/${workshop.slug}`),
             )
           }
-          onPaid={() =>
-            setNotice?.("You're registered. A confirmation is on its way.")
+        >
+          Sign in to join
+        </Button>
+        <p className="m-0 text-[13px] text-(--muted)">
+          You&apos;ll come back here after signing in.
+        </p>
+      </>,
+    );
+  }
+
+  if (!viewer) {
+    return frame(
+      <CenteredLoadingSpinner label="Checking your seat" className="py-4" />,
+    );
+  }
+
+  if (viewer.reason === "full") {
+    return frame(
+      <p className="m-0 text-sm font-semibold text-(--text)">Sold out</p>,
+    );
+  }
+
+  if (viewer.reason === "payment_required") {
+    return frame(
+      <WorkshopPayButton
+        workshop={workshop}
+        onRegistered={() =>
+          setNotice?.("You're in. The invitation is on its way to your email.")
+        }
+      />,
+    );
+  }
+
+  if (viewer.reason === "course_required") {
+    return frame(
+      <>
+        <p className="m-0 text-sm font-semibold text-(--text)">
+          For learners of {workshop.courseTitle ?? "its course"}
+        </p>
+        {workshop.courseSlug ? (
+          <Button
+            variant="quiet"
+            elevation="flat"
+            className="w-full"
+            onClick={() => onNavigatePage?.(`/courses/${workshop.courseSlug}`)}
+          >
+            View the course
+          </Button>
+        ) : null}
+      </>,
+    );
+  }
+
+  if (viewer.declined) {
+    return frame(
+      <>
+        <p className="m-0 text-sm font-semibold text-(--text)">
+          You said you&apos;re not going
+        </p>
+        <p className="m-0 text-[13px] text-(--muted)">
+          You won&apos;t get reminders. You can still join if plans change.
+        </p>
+        <Button
+          variant="quiet"
+          elevation="flat"
+          className="w-full"
+          disabled={busy}
+          onClick={() =>
+            act(
+              () =>
+                going.mutateAsync({
+                  workshopId: workshop.id,
+                  slug: workshop.slug,
+                }),
+              "Good to have you back. Reminders are on again.",
+            )
           }
-          onNavigatePage={onNavigatePage}
+        >
+          I&apos;m going after all
+        </Button>
+      </>,
+    );
+  }
+
+  const joinable = viewer.joinable.find(
+    (entry) => entry.sessionId === upcoming.id,
+  );
+  const startsAt = new Date(upcoming.startsAt).getTime();
+  const opensIn = formatCountdown(
+    new Date(startsAt - JOIN_OPENS_MS).toISOString(),
+    now,
+  );
+  return frame(
+    <>
+      {joinable ? (
+        <WorkshopJoinButton
+          workshopId={workshop.id}
+          joinable={joinable}
+          label={now >= startsAt ? "Join now" : "Join"}
         />
-      </div>
-    </main>
+      ) : (
+        <div className="grid gap-0.5">
+          <p className="m-0 text-base font-bold text-(--text)">
+            Starts {formatCountdown(upcoming.startsAt, now)}
+          </p>
+          <p className="m-0 text-[13px] text-(--muted)">
+            Join opens here {opensIn === "now" ? "any moment" : opensIn}, 15
+            minutes before the start.
+          </p>
+        </div>
+      )}
+      <button
+        type="button"
+        className="cursor-pointer justify-self-start text-[13px] font-medium text-(--muted) hover:text-(--text) disabled:opacity-50"
+        disabled={busy}
+        onClick={() =>
+          act(
+            () =>
+              notGoing.mutateAsync({
+                workshopId: workshop.id,
+                slug: workshop.slug,
+              }),
+            "Noted. No more reminders for this workshop.",
+          )
+        }
+      >
+        Can&apos;t make it? I&apos;m not going
+      </button>
+    </>,
   );
 }

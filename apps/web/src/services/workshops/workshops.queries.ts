@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type {
+  WorkshopStandingsResponse,
   WorkshopCourseSectionsResponse,
   WorkshopRegistrantsResponse,
   WorkshopHomeCard,
@@ -111,11 +112,21 @@ export function useWorkshopViewer(
   });
 }
 
-export function useWorkshopRegistrants(workshopId: string | null | undefined) {
+export function useWorkshopRegistrants(
+  workshopId: string | null | undefined,
+  options: { page?: number; search?: string } = {},
+) {
+  const page = options.page ?? 1;
+  const search = options.search?.trim() || undefined;
   return useQuery<WorkshopRegistrantsResponse, ApiError>({
-    queryKey: workshopKeys.registrants(workshopId ?? ""),
-    queryFn: () => workshopsService.listRegistrants(workshopId!),
+    queryKey: [
+      ...workshopKeys.registrants(workshopId ?? ""),
+      { page, search: search ?? "" },
+    ],
+    queryFn: () =>
+      workshopsService.listRegistrants(workshopId!, { page, search }),
     enabled: Boolean(workshopId),
+    placeholderData: keepPreviousData,
     staleTime: 15 * 1000,
   });
 }
@@ -140,5 +151,15 @@ export function useWorkshopCourseSections(
     queryFn: () => workshopsService.courseSections(workshopId),
     enabled: options.enabled,
     staleTime: 60 * 1000,
+  });
+}
+
+/** Whether the signed-in learner is in each listed workshop. */
+export function useWorkshopStandings(options: { enabled: boolean }) {
+  return useQuery<WorkshopStandingsResponse, ApiError>({
+    queryKey: workshopPublicKeys.standings(),
+    queryFn: () => workshopsPublicService.standings(),
+    enabled: options.enabled,
+    staleTime: 30 * 1000,
   });
 }

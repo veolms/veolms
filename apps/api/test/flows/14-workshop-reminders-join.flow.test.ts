@@ -15,6 +15,7 @@ import {
   startFlowApp,
   type FlowClient,
 } from "./setup/flow-app.ts";
+import { createCourse, enrollForFree } from "./setup/flow-courses.ts";
 
 const flow = await startFlowApp();
 // Loaded after the flow environment is set, so config points at the test DB.
@@ -37,9 +38,11 @@ async function publishedWorkshop(
   client: FlowClient,
   title: string,
   sessions: { startsAt: Date; endsAt: Date; passcode?: string }[],
+  extra: Record<string, unknown> = {},
 ): Promise<WorkshopAdmin> {
   const created = await client.post<WorkshopAdmin>("/v1/workshops/admin", {
     title,
+    ...extra,
     summary: "A live session.",
     sessions: sessions.map((session) => ({
       startsAt: session.startsAt.toISOString(),
@@ -57,16 +60,28 @@ async function publishedWorkshop(
   return published.body.data!;
 }
 
+// A course workshop: its course's learners are in, others are not.
+const course = await createCourse(flow, {
+  title: "Join and remind course",
+  pricing: "free",
+});
+
 // Session 1 opens for joining now (starts in 10 minutes); session 2 is in
 // two days.
-const workshop = await publishedWorkshop(admin, "Join and remind", [
-  { startsAt: at(10 * MINUTE), endsAt: at(70 * MINUTE), passcode: "4242" },
-  { startsAt: at(2 * DAY), endsAt: at(2 * DAY + HOUR) },
-]);
+const workshop = await publishedWorkshop(
+  admin,
+  "Join and remind",
+  [
+    { startsAt: at(10 * MINUTE), endsAt: at(70 * MINUTE), passcode: "4242" },
+    { startsAt: at(2 * DAY), endsAt: at(2 * DAY + HOUR) },
+  ],
+  { courseId: course.id },
+);
 const [soon, later] = workshop.sessions;
 assert.ok(soon && later);
 
 const learner = await signedUpLearner(flow, "wsjoin");
+assert.equal((await enrollForFree(learner.client, course)).status, 200);
 const outsider = await signedUpLearner(flow, "wsoutsider");
 
 await test("a registrant sees which session is joinable, with its passcode, and nobody else does", async () => {
@@ -146,18 +161,10 @@ await test("Join is refused before the window opens, for non-registrants, and si
   assert.equal(unknown.status, 404);
 });
 
-await test("the poller queues each reminder once, for sessions with registrants only", async () => {
+await test("the poller queues each reminder once per session and window", async () => {
   const worker = new WorkshopReminderWorker({ database: flow.database });
   const laterStart = new Date(later.startsAt);
   const soonStart = new Date(soon.startsAt);
-
-  // Nobody is registered for this one, so it never gets a reminder.
-  const empty = await publishedWorkshop(admin, "No registrants", [
-    {
-      startsAt: new Date(laterStart),
-      endsAt: new Date(laterStart.getTime() + HOUR),
-    },
-  ]);
 
   // Other tests leave sessions around that may fall into the same windows,
   // so the counts only say "something" or "nothing new"; the dedupe keys
@@ -189,7 +196,7 @@ await test("the poller queues each reminder once, for sessions with registrants 
       .execute()
   ).filter((event) => {
     const { workshopId } = event.payload as { workshopId: string };
-    return workshopId === workshop.id || workshopId === empty.id;
+    return workshopId === workshop.id;
   });
   assert.deepEqual(
     queued.map((event) => event.dedupe_key),
@@ -210,13 +217,6 @@ await test("the poller queues each reminder once, for sessions with registrants 
   assert.equal(payload.workshopSlug, workshop.slug);
   assert.equal(payload.sessionId, later.id);
   assert.equal(payload.window, "day");
-  assert.equal(
-    queued.some(
-      (event) =>
-        (event.payload as { workshopId: string }).workshopId === empty.id,
-    ),
-    false,
-  );
 });
 
 await test("each window has its own wording", () => {

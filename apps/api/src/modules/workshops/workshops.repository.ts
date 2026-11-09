@@ -21,6 +21,9 @@ export interface WorkshopDetailRow extends WorkshopRow {
   course_title: string | null;
   course_slug: string | null;
   registration_count: number;
+  /** Registrants who pressed Join at least once. */
+  joined_count: number;
+  declined_count: number;
   /** Registrations that take a seat (free and paid). */
   seats_taken: number;
 }
@@ -29,6 +32,8 @@ export interface WorkshopDetailRow extends WorkshopRow {
 export interface WorkshopListRow extends WorkshopDetailRow {
   session_count: number;
   next_session_at: Date | null;
+  next_session_id?: string | null;
+  next_session_ends_at?: Date | null;
   first_session_at: Date | null;
   last_session_ends_at: Date | null;
 }
@@ -56,6 +61,16 @@ function withJoins(database: DatabaseExecutor) {
         where r.workshop_id = workshops.id and r.cancelled_at is null
           and r.source in ('free', 'order')
       )`.as("seats_taken"),
+      sql<number>`(
+        select count(*)::int from workshop_registrations r
+        where r.workshop_id = workshops.id and r.cancelled_at is null
+          and cardinality(r.joined_session_ids) > 0
+      )`.as("joined_count"),
+      sql<number>`(
+        select count(*)::int from workshop_registrations r
+        where r.workshop_id = workshops.id and r.cancelled_at is null
+          and r.declined_at is not null
+      )`.as("declined_count"),
     ])
     .where("workshops.deleted_at", "is", null);
 }
@@ -363,6 +378,16 @@ export async function countAdminTabs(
 // --- Step 2: learners ---
 
 const listAggregates = (now: Date) => [
+  sql<string | null>`(
+    select s.id from workshop_sessions s
+    where s.workshop_id = workshops.id and s.ends_at > ${now}
+    order by s.starts_at asc limit 1
+  )`.as("next_session_id"),
+  sql<Date | null>`(
+    select s.ends_at from workshop_sessions s
+    where s.workshop_id = workshops.id and s.ends_at > ${now}
+    order by s.starts_at asc limit 1
+  )`.as("next_session_ends_at"),
   sql<number>`(
     select count(*)::int from workshop_sessions s where s.workshop_id = workshops.id
   )`.as("session_count"),
@@ -705,6 +730,7 @@ export interface WorkshopRegistrantRow {
   order_id: string | null;
   registered_at: Date;
   joined_session_ids: string[];
+  declined_at?: Date | null;
 }
 
 /** Active registrants with who they are, newest first. */
@@ -855,4 +881,143 @@ export async function listAllLearnerUserIds(
       )
   `.execute(database);
   return rows.rows.map((row) => row.id);
+}
+
+// --- Audience and "I'm not going" ---
+
+export async function setDeclined(
+  database: DatabaseExecutor,
+  workshopId: string,
+  userId: string,
+  declinedAt: Date | null,
+): Promise<void> {
+  await database
+    .updateTable("workshop_registrations")
+    .set({ declined_at: declinedAt })
+    .where("workshop_id", "=", workshopId)
+    .where("user_id", "=", userId)
+    .execute();
+}
+
+export async function listDeclinedUserIds(
+  database: DatabaseExecutor,
+  workshopId: string,
+): Promise<string[]> {
+  const rows = await database
+    .selectFrom("workshop_registrations")
+    .select("user_id")
+    .where("workshop_id", "=", workshopId)
+    .where("declined_at", "is not", null)
+    .execute();
+  return rows.map((row) => row.user_id);
+}
+
+export async function findWorkshopAudienceInfo(
+  database: DatabaseExecutor,
+  workshopId: string,
+): Promise<
+  { course_id: string | null; price_minor: number | null } | undefined
+> {
+  return await database
+    .selectFrom("workshops")
+    .select(["course_id", "price_minor"])
+    .where("id", "=", workshopId)
+    .executeTakeFirst();
+}
+
+// --- Staff list counts ---
+
+export async function countAllLearners(
+  database: DatabaseExecutor,
+): Promise<number> {
+  const row = await sql<{ total: number }>`
+    select count(*)::int as total from users u
+    where u.is_deleted = false
+      and u.id in (
+        select ur.user_id from user_roles ur
+          join roles r on r.id = ur.role_id where r.name = 'student'
+        union
+        select ra.user_id from role_assignments ra
+          join roles r2 on r2.id = ra.role_id where r2.name = 'student'
+        union
+        select e.user_id from enrollments e
+      )
+  `.execute(database);
+  return Number(row.rows[0]?.total ?? 0);
+}
+
+/** Active learners of each course, in one query. */
+export async function countCourseLearners(
+  database: DatabaseExecutor,
+  courseIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (courseIds.length === 0) return new Map();
+  const rows = await database
+    .selectFrom("enrollments")
+    .select(["course_id", (eb) => eb.fn.countAll<number>().as("total")])
+    .where("course_id", "in", [...courseIds])
+    .where("status", "=", "active")
+    .where((eb) =>
+      eb.or([
+        eb("access_expires_at", "is", null),
+        eb("access_expires_at", ">", new Date()),
+      ]),
+    )
+    .groupBy("course_id")
+    .execute();
+  return new Map(rows.map((row) => [row.course_id, Number(row.total)]));
+}
+
+/** One page of the attendance list, with the total for the pager. */
+export async function listRegistrantsPage(
+  database: DatabaseExecutor,
+  workshopId: string,
+  options: { offset: number; limit: number; search?: string },
+): Promise<{ rows: WorkshopRegistrantRow[]; total: number }> {
+  let base = database
+    .selectFrom("workshop_registrations as r")
+    .innerJoin("users", "users.id", "r.user_id")
+    .where("r.workshop_id", "=", workshopId)
+    .where("r.cancelled_at", "is", null);
+  if (options.search) {
+    // %, _ and the escape character itself are matched literally.
+    const escape = String.fromCharCode(92);
+    const term = `%${[...options.search]
+      .map((char) => (("%_" + escape).includes(char) ? escape + char : char))
+      .join("")}%`;
+    base = base.where((eb) =>
+      eb.or([
+        eb("users.display_name", "ilike", term),
+        eb("users.email", "ilike", term),
+        eb("users.username", "ilike", term),
+      ]),
+    );
+  }
+  const [rows, total] = await Promise.all([
+    base
+      .select([
+        "r.id as registration_id",
+        "r.user_id",
+        "users.display_name",
+        "users.username",
+        "users.email",
+        "users.avatar_data_url",
+        "r.source",
+        "r.order_id",
+        "r.registered_at",
+        "r.joined_session_ids",
+        "r.declined_at",
+      ])
+      .orderBy("r.registered_at", "desc")
+      .offset(options.offset)
+      .limit(options.limit)
+      .execute(),
+    base
+      .select((eb) => eb.fn.countAll<number>().as("total"))
+      .executeTakeFirst(),
+  ]);
+  return {
+    rows: rows as WorkshopRegistrantRow[],
+    total: Number(total?.total ?? 0),
+  };
 }

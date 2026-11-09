@@ -19,8 +19,10 @@ import {
   workshopPublicListResponseSchema,
   workshopPublicSchema,
   workshopHomeCardSchema,
+  workshopStandingsResponseSchema,
   workshopRegistrantParamsSchema,
   workshopRegistrantsResponseSchema,
+  workshopRegistrantsQuerySchema,
   workshopRegistrationResponseSchema,
   workshopSessionParamsSchema,
   workshopSlugParamsSchema,
@@ -351,6 +353,7 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
         tags,
         summary: "Who is registered: name, email, when, how, sessions joined",
         params: workshopIdParamsSchema,
+        querystring: workshopRegistrantsQuerySchema,
         response: {
           200: jsonResponse("Newest first.", workshopRegistrantsResponseSchema),
           ...common,
@@ -455,6 +458,26 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
   );
 
   // --- Learners ---
+
+  app.get(
+    "/workshops/me/standings",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "getMyWorkshopStandings",
+        tags,
+        summary: "Whether the learner is in each listed workshop",
+        response: {
+          200: jsonResponse(
+            "One entry per listed workshop.",
+            workshopStandingsResponseSchema,
+          ),
+          401: errorResponse("Authentication required"),
+        },
+      },
+    },
+    controller.standings,
+  );
 
   app.get(
     "/workshops/me/next",

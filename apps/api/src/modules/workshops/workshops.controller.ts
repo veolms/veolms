@@ -1,5 +1,6 @@
 import type {
   AddWorkshopRegistrantRequest,
+  WorkshopRegistrantsQuery,
   ImportWorkshopRegistrantsRequest,
   PublishWorkshopRequest,
   CancelWorkshopRequest,
@@ -185,8 +186,15 @@ export function createWorkshopsController({
     );
   }
 
-  async function listRegistrants(request: FastifyRequest<WorkshopParams>) {
-    return await service.listRegistrants(request.params.workshopId);
+  async function listRegistrants(
+    request: FastifyRequest<
+      WorkshopParams & { Querystring: WorkshopRegistrantsQuery }
+    >,
+  ) {
+    return await service.listRegistrants(request.params.workshopId, {
+      page: request.query.page,
+      ...(request.query.search ? { search: request.query.search } : {}),
+    });
   }
 
   async function registrantsCsv(
@@ -244,6 +252,10 @@ export function createWorkshopsController({
     );
   }
 
+  async function standings(request: FastifyRequest) {
+    return await service.standings(request.user!.id);
+  }
+
   async function myNextWorkshop(request: FastifyRequest) {
     return await learnerHomeWorkshop(database, request.user!.id, new Date());
   }
@@ -275,6 +287,7 @@ export function createWorkshopsController({
     importRegistrants,
     listCourseSections,
     myNextWorkshop,
+    standings,
   };
 }
 

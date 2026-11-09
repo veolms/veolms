@@ -71,10 +71,9 @@ import {
   InvitePage,
   CouponBuilderPage,
   CouponsAccessDenied,
-  WorkshopsAdminPage,
   WorkshopBuilderPage,
   WorkshopsAccessDenied,
-  WorkshopsPage,
+  WorkshopsHome,
   WorkshopDetailPage,
 } from "../academyLazyPages";
 import {
@@ -694,27 +693,6 @@ export function useAcademyPageContent({
         </Suspense>
       );
     }
-    if (surfacePage === "workshop-detail") {
-      return (
-        <Suspense fallback={<AcademyPageFallback />}>
-          <WorkshopDetailPage
-            slug={workshopSlug}
-            onNavigatePage={onNavigatePage}
-            setNotice={setNotice}
-          />
-        </Suspense>
-      );
-    }
-    if (surfacePage === "workshops-browse" || isSectionPage("Workshops")) {
-      return (
-        <Suspense fallback={<AcademyPageFallback />}>
-          <WorkshopsPage
-            onNavigatePage={onNavigatePage}
-            setNotice={setNotice}
-          />
-        </Suspense>
-      );
-    }
     if (surfacePage === "workshop-builder") {
       if (!isAuthReady) return <AcademyPageFallback />;
       if (!activeUser || !isStaffRole(userRoles)) {
@@ -734,10 +712,21 @@ export function useAcademyPageContent({
         </Suspense>
       );
     }
-    if (surfacePage === "workshops" || isSectionPage("Manage workshops")) {
+    if (surfacePage === "workshop-detail") {
       return (
         <Suspense fallback={<AcademyPageFallback />}>
-          <WorkshopsAdminPage
+          <WorkshopDetailPage
+            slug={workshopSlug}
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        </Suspense>
+      );
+    }
+    if (surfacePage === "workshops-browse" || isSectionPage("Workshops")) {
+      return (
+        <Suspense fallback={<AcademyPageFallback />}>
+          <WorkshopsHome
             onNavigatePage={onNavigatePage}
             setNotice={setNotice}
           />

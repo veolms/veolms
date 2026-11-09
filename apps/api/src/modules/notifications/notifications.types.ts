@@ -65,6 +65,11 @@ export interface NotificationIntent {
   /** Files sent with the email, if it is sent. */
   emailAttachments?: readonly NotificationEmailAttachment[];
   /**
+   * A workshop calendar invitation sent as part of the email: built for the
+   * recipient when the email goes out.
+   */
+  emailCalendar?: { workshopId: string; method: "REQUEST" | "CANCEL" };
+  /**
    * False keeps it off phones even when the type is pushed (a course-wide
    * event with NOTIFICATION_COURSE_WIDE_PUSH off). Which types are pushed at
    * all is PUSH_ROUTES in the contracts, not the handlers.
@@ -76,6 +81,15 @@ export interface NotificationIntent {
  * Turns an attachment reference into the file to send. Throws when the file
  * cannot be had right now; the email is then tried again later.
  */
+/** Builds a workshop's calendar invitation for one recipient. */
+export interface NotificationCalendarInviteBuilder {
+  build(input: {
+    workshopId: string;
+    method: "REQUEST" | "CANCEL";
+    attendeeEmail: string;
+  }): Promise<{ method: "REQUEST" | "CANCEL"; content: string } | null>;
+}
+
 export interface NotificationAttachmentResolver {
   resolve(attachment: NotificationEmailAttachment): Promise<EmailAttachment>;
 }

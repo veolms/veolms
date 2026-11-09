@@ -329,11 +329,6 @@ export function seatsLeftLabel(seatsLeft: number | null): string | null {
   return seatsLeft === 1 ? "1 seat left" : `${seatsLeft} seats left`;
 }
 
-/** The signed-in learner's calendar file for a workshop they registered for. */
-export function workshopCalendarUrl(workshopId: string): string {
-  return getApiRequestUrl(`/workshops/${workshopId}/calendar.ics`);
-}
-
 /** The Join redirect, opened in a new tab; the API records the attendance. */
 export function workshopJoinUrl(workshopId: string, sessionId: string): string {
   return getApiRequestUrl(

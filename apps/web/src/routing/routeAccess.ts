@@ -47,7 +47,6 @@ const RESERVED_PROFILE_PATHS = new Set([
   "/support",
   "/support-inbox",
   "/coupons",
-  "/workshops-admin",
   "/workshops",
   "/home-page",
   "/platform",
@@ -99,8 +98,8 @@ export function isCourseAuthorPath(pathname: string): boolean {
     normalized.startsWith("/analytics/") ||
     normalized === "/coupons" ||
     normalized.startsWith("/coupons/") ||
-    normalized === "/workshops-admin" ||
-    normalized.startsWith("/workshops-admin/") ||
+    normalized === "/workshops/new" ||
+    /^\/workshops\/[0-9a-f-]{36}\/edit$/.test(normalized) ||
     normalized === "/support-inbox" ||
     normalized.startsWith("/support-inbox/") ||
     normalized === "/home-page" ||
@@ -154,7 +153,8 @@ export function isCoursesPublicPath(pathname: string): boolean {
 export function isWorkshopsPublicPath(pathname: string): boolean {
   const path = normalizeAppPath(pathname);
   return (
-    path === "/workshops" || /^\/workshops\/[a-z0-9][a-z0-9-]*$/.test(path)
+    path === "/workshops" ||
+    /^\/workshops\/(?!new$)[a-z0-9][a-z0-9-]*$/.test(path)
   );
 }
 

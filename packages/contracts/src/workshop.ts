@@ -192,6 +192,12 @@ export const workshopAdminListItemSchema = z.strictObject({
   nextSessionAt: z.iso.datetime().nullable(),
   lastSessionEndsAt: z.iso.datetime().nullable(),
   registrationCount: z.number().int().nonnegative(),
+  /** Who it is for. */
+  audience: z.enum(["everyone", "course", "paid"]),
+  /** People sent the invitation: its audience, less those not going. */
+  invitedCount: z.number().int().nonnegative(),
+  /** People who pressed Join at least once. */
+  joinedCount: z.number().int().nonnegative(),
   updatedAt: z.iso.datetime(),
 });
 export type WorkshopAdminListItem = z.infer<typeof workshopAdminListItemSchema>;
@@ -328,6 +334,9 @@ export const workshopPublicListItemSchema = z.strictObject({
   nextSessionAt: z.iso.datetime().nullable(),
   lastSessionEndsAt: z.iso.datetime().nullable(),
   state: workshopPublicStateSchema,
+  /** The next session not yet ended, for a direct Join. */
+  nextSessionId: z.uuid().nullable(),
+  nextSessionEndsAt: z.iso.datetime().nullable(),
 });
 export type WorkshopPublicListItem = z.infer<
   typeof workshopPublicListItemSchema
@@ -353,6 +362,7 @@ export type WorkshopPublic = z.infer<typeof workshopPublicSchema>;
 /** Why the Register button is, or is not, offered to this viewer. */
 export const workshopRegistrationReasons = [
   "ok",
+  "declined",
   "sign_in",
   "registered",
   "course_required",
@@ -382,6 +392,10 @@ export const workshopViewerSchema = z.strictObject({
   canWatchRecordings: z.boolean(),
   /** In through the workshop's course, not a registration of their own. */
   viaCourse: z.boolean(),
+  /** Who the workshop is for. */
+  audience: z.enum(["everyone", "course", "paid"]),
+  /** Said "I'm not going": no reminders; may still join. */
+  declined: z.boolean(),
 });
 export type WorkshopViewer = z.infer<typeof workshopViewerSchema>;
 
@@ -476,11 +490,15 @@ export const workshopRegistrantSchema = z.strictObject({
   registeredAt: z.iso.datetime(),
   /** Sessions they pressed Join on. */
   joinedSessionIds: z.array(z.uuid()),
+  /** When they said they are not going; null when they did not. */
+  declinedAt: z.iso.datetime().nullable(),
 });
 export type WorkshopRegistrant = z.infer<typeof workshopRegistrantSchema>;
 
 export const workshopRegistrantsResponseSchema = z.strictObject({
   items: z.array(workshopRegistrantSchema),
+  /** All matching rows, for the pager (equal to items.length when not paged). */
+  total: z.number().int().nonnegative(),
 });
 export type WorkshopRegistrantsResponse = z.infer<
   typeof workshopRegistrantsResponseSchema
@@ -580,4 +598,32 @@ export const workshopCourseSectionsResponseSchema = z.strictObject({
 });
 export type WorkshopCourseSectionsResponse = z.infer<
   typeof workshopCourseSectionsResponseSchema
+>;
+
+export const workshopRegistrantsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  search: z.string().trim().min(1).max(120).optional(),
+});
+export type WorkshopRegistrantsQuery = z.output<
+  typeof workshopRegistrantsQuerySchema
+>;
+
+/** Rows per page of the attendance list. */
+export const WORKSHOP_REGISTRANTS_PAGE_SIZE = 50;
+
+/** Where the signed-in learner stands with each listed workshop. */
+export const workshopStandingsResponseSchema = z.strictObject({
+  items: z.array(
+    z.strictObject({
+      workshopId: z.uuid(),
+      /** In its audience and not "not going". */
+      attending: z.boolean(),
+      declined: z.boolean(),
+      /** Bought, or in through a course, or open to everyone. */
+      via: z.enum(["everyone", "course", "paid", "added"]).nullable(),
+    }),
+  ),
+});
+export type WorkshopStandingsResponse = z.infer<
+  typeof workshopStandingsResponseSchema
 >;

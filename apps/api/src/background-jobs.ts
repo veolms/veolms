@@ -19,6 +19,7 @@ import { WorkshopReminderWorker } from "./modules/workshops/workshop-reminder.wo
 import { createWorkshopsService } from "./modules/workshops/workshops.service.ts";
 import { createMediaService } from "./modules/media/media.service.ts";
 import { createAuthorizationService } from "./modules/authorization/authorization.service.ts";
+import { createWorkshopInviteBuilder } from "./modules/workshops/workshop-invites.ts";
 import {
   listAllLearnerUserIds,
   listWorkshopAudienceUserIds,
@@ -543,6 +544,10 @@ function startInlineNotificationLoop(
     chat: createChatPushSource({
       database,
       groupMaxMembers: config.CHAT_PUSH_GROUP_MAX_MEMBERS,
+    }),
+    calendarInvites: createWorkshopInviteBuilder({
+      database,
+      from: config.EMAIL_FROM,
     }),
     attachments: createInvoiceAttachmentResolver(
       createInvoiceService({

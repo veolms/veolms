@@ -3,6 +3,7 @@ import { sql, type Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 
 import { createOutboxService } from "../../events/outbox.service.ts";
+import { audienceOf } from "./workshop-links.ts";
 import {
   WORKSHOP_REMINDER_WINDOWS,
   WORKSHOP_REMINDER_WINDOW_ORDER,
@@ -28,6 +29,8 @@ interface DueSessionRow {
   workshop_id: string;
   slug: string;
   title: string;
+  course_id: string | null;
+  price_minor: number | null;
 }
 
 /**
@@ -162,6 +165,8 @@ export class WorkshopReminderWorker {
         s.time_zone,
         w.id as workshop_id,
         w.slug,
+        w.course_id,
+        w.price_minor,
         w.title
       from workshop_sessions s
       join workshops w on w.id = s.workshop_id
@@ -169,13 +174,6 @@ export class WorkshopReminderWorker {
         and w.deleted_at is null
         and s.starts_at > ${lowest}
         and s.starts_at <= ${highest}
-        and (
-          w.course_id is not null
-          or exists (
-            select 1 from workshop_registrations r
-            where r.workshop_id = w.id and r.cancelled_at is null
-          )
-        )
         and not exists (
           select 1 from outbox_events o
           where o.dedupe_key = ${keyPrefix} || s.id || ${`:${window}`}
@@ -201,6 +199,7 @@ export class WorkshopReminderWorker {
             endsAt: new Date(row.ends_at).toISOString(),
             timeZone: row.time_zone,
             window,
+            audience: audienceOf(row),
           },
         });
       });

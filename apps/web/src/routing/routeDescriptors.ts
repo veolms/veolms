@@ -459,25 +459,18 @@ export const routeDescriptors = {
     title: "Edit Coupon",
     description: "Maintain coupon parameters, limits, and validity.",
   },
-  "workshops-admin": {
-    kind: "shell",
-    page: "workshops",
-    section: "Manage workshops",
-    title: "Workshops",
-    description:
-      "Live sessions on Zoom, Google Meet or YouTube Live: schedule, publish and run them.",
-  },
+
   "workshop-create": {
     kind: "shell",
     page: "workshop-builder",
-    section: "Manage workshops",
+    section: "Workshops",
     title: "Create workshop",
     description: "Schedule a new live workshop for your learners.",
   },
   "workshop-edit": {
     kind: "shell",
     page: "workshop-builder",
-    section: "Manage workshops",
+    section: "Workshops",
     title: "Edit workshop",
     description: "Change a workshop's sessions, links and details.",
   },
@@ -487,14 +480,14 @@ export const routeDescriptors = {
     section: "Workshops",
     title: "Workshops",
     description:
-      "Live sessions with the instructors: register, get reminders, join from here.",
+      "Live sessions with the instructors, in your calendar, joined from here.",
   },
   "workshop-detail": {
     kind: "shell",
     page: "workshop-detail",
     section: "Workshops",
     title: "Workshop",
-    description: "A live workshop: sessions, host, and registration.",
+    description: "A live workshop: sessions, host, and how to join.",
   },
   // Help and feedback: pages that render their own route inside the shell.
   support: {
@@ -556,9 +549,8 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   team: "/team",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
-  "workshops-admin": "/workshops-admin",
-  "workshop-create": "/workshops-admin/create",
-  "workshop-edit": "/workshops-admin/:workshopId",
+  "workshop-create": "/workshops/new",
+  "workshop-edit": "/workshops/:workshopId/edit",
   workshops: "/workshops",
   "workshop-detail": "/workshops/:workshopSlug",
   "create-course": "/courses/create",
@@ -623,9 +615,8 @@ const canonicalPathsByRouteId = {
   "platform-general": "/platform/general",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
-  "workshops-admin": "/workshops-admin",
-  "workshop-create": "/workshops-admin/create",
-  "workshop-edit": "/workshops-admin/:workshopId",
+  "workshop-create": "/workshops/new",
+  "workshop-edit": "/workshops/:workshopId/edit",
   workshops: "/workshops",
   "workshop-detail": "/workshops/:workshopSlug",
   "course-create": "/courses/create",
@@ -778,13 +769,13 @@ export const getEffectiveRouteId = (
   }
 
   if (routeId === "workshop-detail") {
-    return /^\/workshops\/[a-z0-9][a-z0-9-]*$/.test(normalizedPath)
+    return /^\/workshops\/(?!new$)[a-z0-9][a-z0-9-]*$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }
 
   if (routeId === "workshop-edit") {
-    return /^\/workshops-admin\/[0-9a-f-]{36}$/.test(normalizedPath)
+    return /^\/workshops\/[0-9a-f-]{36}\/edit$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

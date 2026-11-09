@@ -20,4 +20,5 @@ export const workshopPublicKeys = {
   viewer: (slug: string) =>
     [...workshopPublicKeys.all, "viewer", slug] as const,
   home: () => [...workshopPublicKeys.all, "home"] as const,
+  standings: () => [...workshopPublicKeys.all, "standings"] as const,
 };

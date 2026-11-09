@@ -18,6 +18,7 @@ import {
   type NotificationEmailAttachment,
   type NotificationHandlerDependencies,
   type NotificationRecipientDirectory,
+  type NotificationCalendarInviteBuilder,
 } from "./notifications.types.ts";
 import type { PushSender, PushSendResult } from "./push/push-sender.ts";
 import { createNotificationService } from "./notifications.service.ts";
@@ -30,6 +31,13 @@ const emailDeliveryPayloadSchema = z.strictObject({
     .array(
       z.strictObject({ kind: z.literal("order-invoice"), orderId: z.uuid() }),
     )
+    .optional(),
+  calendar: z
+    .strictObject({
+      kind: z.literal("workshop-invite"),
+      workshopId: z.uuid(),
+      method: z.enum(["REQUEST", "CANCEL"]),
+    })
     .optional(),
 });
 
@@ -69,9 +77,12 @@ export function createNotificationProcessor({
   handlers,
   recipients,
   attachments,
+  calendarInvites,
   push,
   chat,
 }: {
+  /** Builds workshop calendar invitations; without it they are left out. */
+  calendarInvites?: NotificationCalendarInviteBuilder;
   database: Kysely<Database>;
   email: EmailService;
   /**
@@ -274,8 +285,11 @@ export function createNotificationProcessor({
         if (!delivery.destination) {
           throw new Error("Email delivery has no destination.");
         }
-        const { attachments: wanted = [], ...content } =
-          emailDeliveryPayloadSchema.parse(delivery.payload);
+        const {
+          attachments: wanted = [],
+          calendar: wantedCalendar,
+          ...content
+        } = emailDeliveryPayloadSchema.parse(delivery.payload);
         const files = await resolveAttachments(
           wanted,
           delivery.id,
@@ -283,8 +297,17 @@ export function createNotificationProcessor({
           // rather than not at all.
           delivery.attempt_count >= config.NOTIFICATION_EMAIL_MAX_ATTEMPTS,
         );
+        const calendar =
+          wantedCalendar && calendarInvites
+            ? await calendarInvites.build({
+                workshopId: wantedCalendar.workshopId,
+                method: wantedCalendar.method,
+                attendeeEmail: delivery.destination,
+              })
+            : null;
         const sendResult = await email.send(delivery.destination, content, {
           attachments: files,
+          ...(calendar ? { calendar } : {}),
         });
         if (sendResult.status === "failed") throw sendResult.error;
 

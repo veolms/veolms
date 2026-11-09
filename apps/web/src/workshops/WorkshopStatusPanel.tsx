@@ -185,7 +185,12 @@ export function WorkshopStatusPanel({
                     Learners of {workshop.courseTitle ?? "its course"} are told
                     when you publish; they do not need to register.
                   </p>
-                ) : !workshop.publishedAt ? (
+                ) : !workshop.publishedAt && !workshop.priceMinor ? (
+                  <p className="text-[12px] leading-5 text-(--muted)">
+                    Every learner gets an email with the calendar invitation
+                    when you publish.
+                  </p>
+                ) : !workshop.publishedAt && workshop.priceMinor ? (
                   <label className="flex cursor-pointer items-start gap-2 text-[13px] text-(--text)">
                     <input
                       type="checkbox"
@@ -193,7 +198,7 @@ export function WorkshopStatusPanel({
                       onChange={(event) => setAnnounce(event.target.checked)}
                       className="mt-0.5 size-4 accent-(--accent)"
                     />
-                    <span>Announce to every learner by email</span>
+                    <span>Announce the seats to every learner by email</span>
                   </label>
                 ) : null}
                 <Button

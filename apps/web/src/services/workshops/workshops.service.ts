@@ -19,6 +19,7 @@ import type {
   WorkshopRegistrationResponse,
   WorkshopRegistrantsResponse,
   WorkshopHomeCard,
+  WorkshopStandingsResponse,
   WorkshopViewer,
 } from "@veolms/contracts";
 
@@ -88,10 +89,18 @@ export const workshopsService = {
       payload,
     ),
 
-  listRegistrants: (workshopId: string): Promise<WorkshopRegistrantsResponse> =>
-    api.get<WorkshopRegistrantsResponse>(
-      ADMIN_BASE + "/" + workshopId + "/registrants",
-    ),
+  listRegistrants: (
+    workshopId: string,
+    query: { page?: number; search?: string } = {},
+  ): Promise<WorkshopRegistrantsResponse> => {
+    const params = new URLSearchParams();
+    if (query.page && query.page > 1) params.set("page", String(query.page));
+    if (query.search) params.set("search", query.search);
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
+    return api.get<WorkshopRegistrantsResponse>(
+      `${ADMIN_BASE}/${workshopId}/registrants${suffix}`,
+    );
+  },
 
   addRegistrant: (
     workshopId: string,
@@ -122,6 +131,9 @@ export const workshopsPublicService = {
 
   viewer: (slug: string): Promise<WorkshopViewer> =>
     api.get<WorkshopViewer>(`/workshops/${encodeURIComponent(slug)}/me`),
+
+  standings: (): Promise<WorkshopStandingsResponse> =>
+    api.get<WorkshopStandingsResponse>("/workshops/me/standings"),
 
   homeCard: (): Promise<WorkshopHomeCard | null> =>
     api.get<WorkshopHomeCard | null>("/workshops/me/next"),

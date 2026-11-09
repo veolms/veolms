@@ -495,6 +495,15 @@ export function createNotificationService({
                   subject: rendered.email.subject,
                   text: rendered.email.text,
                   html: rendered.email.html,
+                  ...(intent.emailCalendar
+                    ? {
+                        calendar: {
+                          kind: "workshop-invite",
+                          workshopId: intent.emailCalendar.workshopId,
+                          method: intent.emailCalendar.method,
+                        },
+                      }
+                    : {}),
                   ...(intent.emailAttachments?.length
                     ? {
                         attachments: intent.emailAttachments.map(

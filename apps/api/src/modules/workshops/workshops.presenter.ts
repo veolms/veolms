@@ -1,4 +1,4 @@
-import { lessonPathOf } from "./workshop-links.ts";
+import { audienceOf, lessonPathOf } from "./workshop-links.ts";
 import {
   workshopSessionState,
   type WorkshopAdmin,
@@ -89,6 +89,7 @@ export function presentWorkshopAdmin(
 
 export function presentWorkshopListItem(
   row: WorkshopListRow,
+  invitedCount = 0,
 ): WorkshopAdminListItem {
   return {
     id: row.id,
@@ -105,6 +106,9 @@ export function presentWorkshopListItem(
     nextSessionAt: isoOrNull(row.next_session_at ?? row.first_session_at),
     lastSessionEndsAt: isoOrNull(row.last_session_ends_at),
     registrationCount: Number(row.registration_count),
+    audience: audienceOf(row),
+    invitedCount,
+    joinedCount: Number(row.joined_count),
     updatedAt: iso(row.updated_at),
   };
 }
@@ -149,6 +153,8 @@ export function presentWorkshopPublicListItem(
     nextSessionAt: isoOrNull(row.next_session_at ?? row.first_session_at),
     lastSessionEndsAt: isoOrNull(row.last_session_ends_at),
     state: publicState(row, now),
+    nextSessionId: row.next_session_id ?? null,
+    nextSessionEndsAt: isoOrNull(row.next_session_ends_at ?? null),
   };
 }
 

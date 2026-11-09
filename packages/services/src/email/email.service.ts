@@ -28,6 +28,8 @@ export interface EmailAttachment {
 
 export interface EmailSendOptions {
   attachments?: readonly EmailAttachment[];
+  /** A calendar invitation, sent as the email's text/calendar part. */
+  calendar?: { method: "REQUEST" | "CANCEL"; content: string };
 }
 
 export type EmailDeliveryResult =
@@ -96,6 +98,7 @@ export function createEmailService({
           subject: content.subject,
           body: content.text,
           attachments: attachments.map((file) => file.filename),
+          calendar: options.calendar?.method ?? null,
         },
         "Email not dispatched (console transport)",
       );
@@ -109,6 +112,14 @@ export function createEmailService({
         subject: content.subject,
         text: content.text,
         html: content.html,
+        ...(options.calendar
+          ? {
+              icalEvent: {
+                method: options.calendar.method,
+                content: options.calendar.content,
+              },
+            }
+          : {}),
         ...(attachments.length > 0
           ? {
               attachments: attachments.map((file) => ({

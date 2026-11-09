@@ -7,3 +7,13 @@ export function lessonPathOf(
     ? `/learn/${courseSlug}?lessonId=${lessonId}`
     : null;
 }
+
+/** Who a workshop is for: a course's learners, buyers, or every learner. */
+export function audienceOf(row: {
+  course_id: string | null;
+  price_minor: number | null;
+}): "everyone" | "course" | "paid" {
+  if (row.course_id) return "course";
+  if (row.price_minor !== null && row.price_minor > 0) return "paid";
+  return "everyone";
+}

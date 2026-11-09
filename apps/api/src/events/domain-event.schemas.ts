@@ -274,6 +274,8 @@ export const workshopReminderEventSchema = z.strictObject({
   timeZone: z.string().min(1),
   /** A day before, an hour before, or at the start. */
   window: z.enum(["day", "hour", "now"]),
+  /** Who the workshop is for; "everyone" is reminded in the app only. */
+  audience: z.enum(["everyone", "course", "paid"]).optional(),
 });
 
 export const workshopRecordingReadyEventSchema = z.strictObject({

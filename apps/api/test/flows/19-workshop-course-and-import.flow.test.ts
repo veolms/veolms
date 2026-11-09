@@ -241,12 +241,22 @@ await test("a course workshop's recording becomes a lesson of the course", async
   );
 });
 
-await test("an open workshop is announced to everyone only when asked", async () => {
-  const quiet = await draftWorkshop(admin, "Quiet open workshop", {});
+await test("a free open workshop is announced to everyone; a paid one only when asked", async () => {
+  const free = await draftWorkshop(admin, "Free open workshop", {});
+  await admin.post(`/v1/workshops/admin/${free.id}/publish`, {});
+  const freeSent = await announcements(free.id);
+  assert.equal(freeSent.length, 1);
+  assert.equal((freeSent[0]!.payload as { audience: string }).audience, "all");
+
+  const quiet = await draftWorkshop(admin, "Quiet paid workshop", {
+    priceMinor: 9_900,
+  });
   await admin.post(`/v1/workshops/admin/${quiet.id}/publish`, {});
   assert.equal((await announcements(quiet.id)).length, 0);
 
-  const loud = await draftWorkshop(admin, "Announced open workshop", {});
+  const loud = await draftWorkshop(admin, "Announced paid workshop", {
+    priceMinor: 9_900,
+  });
   await admin.post(`/v1/workshops/admin/${loud.id}/publish`, {
     announce: true,
   });

@@ -141,9 +141,11 @@ export function WorkshopsAdminList({
                 </div>
                 <p className="mt-0.5 truncate text-xs text-(--muted)">
                   {workshop.host.name}
-                  {workshop.courseTitle
-                    ? ` · ${workshop.courseTitle} learners`
-                    : " · Open to everyone"}
+                  {workshop.audience === "course"
+                    ? ` · ${workshop.courseTitle ?? "Course"} learners`
+                    : workshop.audience === "paid"
+                      ? " · Paid seats"
+                      : " · Every learner"}
                 </p>
                 <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--text-secondary,var(--muted))">
                   <span className="inline-flex items-center gap-1.5">
@@ -157,10 +159,13 @@ export function WorkshopsAdminList({
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <Users size={14} />
-                    {formatRegistrations(
-                      workshop.registrationCount,
-                      workshop.capacity,
-                    )}
+                    {workshop.audience === "paid"
+                      ? formatRegistrations(
+                          workshop.registrationCount,
+                          workshop.capacity,
+                        )
+                      : `${workshop.invitedCount.toLocaleString("en-IN")} invited`}
+                    {` · ${workshop.joinedCount.toLocaleString("en-IN")} joined`}
                   </span>
                 </p>
               </div>

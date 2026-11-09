@@ -12,6 +12,7 @@ import {
   useWorkshopRegistrants,
 } from "../services/workshops";
 import { WorkshopHostAvatar } from "./WorkshopHostAvatar";
+import { WORKSHOP_REGISTRANTS_PAGE_SIZE } from "@veolms/contracts";
 import { WorkshopCsvImport } from "./WorkshopCsvImport";
 import {
   browserTimeZone,
@@ -38,7 +39,17 @@ export function WorkshopRegistrantsSection({
   workshop: WorkshopAdmin;
   canManage: boolean;
 }) {
-  const registrants = useWorkshopRegistrants(workshop.id);
+  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState("");
+  const registrants = useWorkshopRegistrants(workshop.id, {
+    page,
+    search: query,
+  });
+  const total = registrants.data?.total ?? 0;
+  const pageCount = Math.max(
+    1,
+    Math.ceil(total / WORKSHOP_REGISTRANTS_PAGE_SIZE),
+  );
   const add = useAddWorkshopRegistrant();
   const remove = useRemoveWorkshopRegistrant();
   const [email, setEmail] = useState("");
@@ -70,9 +81,9 @@ export function WorkshopRegistrantsSection({
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-(--muted)">
-          {items.length === 0
-            ? "Nobody is registered yet."
-            : `${items.length} ${items.length === 1 ? "person" : "people"} registered.`}
+          {total === 0 && !query
+            ? "Nobody has joined or been added yet."
+            : `${total} ${total === 1 ? "person" : "people"}`}
         </p>
         {items.length > 0 ? (
           <a
@@ -137,6 +148,18 @@ export function WorkshopRegistrantsSection({
         </p>
       ) : null}
 
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setPage(1);
+        }}
+        placeholder="Search by name or email"
+        aria-label="Search attendance"
+        className={`${fieldClass} w-full sm:max-w-sm`}
+      />
+
       {registrants.isLoading ? (
         <CenteredLoadingSpinner label="Loading registrants" className="py-8" />
       ) : items.length > 0 ? (
@@ -192,6 +215,7 @@ export function WorkshopRegistrantsSection({
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="rounded-full bg-(--canvas) px-2.5 py-1 text-[11px] font-semibold text-(--muted)">
                       {SOURCE_LABEL[registrant.source]}
+                      {registrant.declinedAt ? " · not going" : ""}
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap tabular-nums text-(--muted)">
@@ -248,6 +272,34 @@ export function WorkshopRegistrantsSection({
               ))}
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {pageCount > 1 ? (
+        <div className="flex items-center justify-between gap-3 text-[13px] text-(--muted)">
+          <span>
+            Page {page} of {pageCount}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="quiet"
+              elevation="flat"
+              disabled={page <= 1 || registrants.isFetching}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="quiet"
+              elevation="flat"
+              disabled={page >= pageCount || registrants.isFetching}
+              onClick={() =>
+                setPage((current) => Math.min(pageCount, current + 1))
+              }
+            >
+              Next
+            </Button>
+          </div>
         </div>
       ) : null}
     </div>

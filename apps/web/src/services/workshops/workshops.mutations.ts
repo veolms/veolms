@@ -162,7 +162,10 @@ export function useSetWorkshopRecording() {
 function useRefreshRegistrants() {
   const queryClient = useQueryClient();
   return (workshopId: string, registrants: WorkshopRegistrantsResponse) => {
-    queryClient.setQueryData(workshopKeys.registrants(workshopId), registrants);
+    void registrants;
+    void queryClient.invalidateQueries({
+      queryKey: workshopKeys.registrants(workshopId),
+    });
     // The seat count on the workshop itself changed too.
     void queryClient.invalidateQueries({
       queryKey: workshopKeys.adminDetail(workshopId),
@@ -210,8 +213,9 @@ export function useImportWorkshopRegistrants() {
     mutationFn: ({ workshopId, ...payload }) =>
       workshopsService.importRegistrants(workshopId, payload),
     onSuccess: (result, { workshopId }) => {
-      queryClient.setQueryData(workshopKeys.registrants(workshopId), {
-        items: result.items,
+      void result;
+      void queryClient.invalidateQueries({
+        queryKey: workshopKeys.registrants(workshopId),
       });
       void queryClient.invalidateQueries({
         queryKey: workshopKeys.adminDetail(workshopId),

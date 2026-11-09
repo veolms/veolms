@@ -85,7 +85,7 @@ const creatorNavigation: readonly NavigationItem[] = [
     "creator-workshops",
     "Workshops",
     VideoConference,
-    "/workshops-admin",
+    "/workshops",
   ),
   createNavigationItem("creator-settings", "Settings", GearSix, "/settings"),
 ];
@@ -114,7 +114,7 @@ const adminNavigation: readonly NavigationItem[] = [
     "admin-workshops",
     "Workshops",
     VideoConference,
-    "/workshops-admin",
+    "/workshops",
   ),
   // Problems learners report and the feedback they send.
   createNavigationItem("admin-support", "Support", Lifebuoy, "/support-inbox"),
