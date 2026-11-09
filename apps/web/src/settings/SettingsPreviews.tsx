@@ -17,6 +17,10 @@ const sidebarIconPreviewClass = [
   "[background:color-mix(in_srgb,var(--canvas)_91%,var(--accent)_9%)]",
   "max-[1120px]:w-42.5 max-[1120px]:basis-42.5",
   "max-[900px]:w-34 max-[900px]:basis-34 max-[900px]:py-2.75",
+  // On a phone the card's name beside it ("Monochrome", one word that
+  // cannot wrap) ran past the card's edge, more so with larger text: the
+  // preview gives way instead.
+  "max-[640px]:max-w-[42%]",
 ].join(" ");
 const sidebarIconPreviewRowClass =
   "grid min-h-5.75 grid-cols-[22px_minmax(0,1fr)] items-center gap-2.25";

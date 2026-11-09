@@ -1165,16 +1165,21 @@ function getAdvancedSettings({
   hasChapters,
   hasLessonNavigation,
   hasLessons,
+  hasMinimize,
   icons,
   lessonsShortcut,
+  mobileInteraction,
   preferences,
   themed,
 }: {
   hasChapters: boolean;
   hasLessonNavigation: boolean;
   hasLessons: boolean;
+  hasMinimize: boolean;
   icons: ReturnType<typeof usePlayerTheme>["icons"];
   lessonsShortcut: string;
+  /** A touch screen minimizes with a swipe down, not the I key. */
+  mobileInteraction: boolean;
   preferences: PlayerLayoutPreferences;
   themed: boolean;
 }): SettingsMenuSection[] {
@@ -1203,6 +1208,7 @@ function getAdvancedSettings({
   const ChaptersIcon = icons.chapters;
   const VolumeIcon = icons.volumeHigh;
   const NextIcon = icons.next;
+  const MinimizeIcon = icons.minimize;
   const keys: SettingsMenuToggle[] = [
     ...(hasLessons
       ? [
@@ -1233,6 +1239,22 @@ function getAdvancedSettings({
             "Shift+P and Shift+N",
             <NextIcon size={17} />,
           ),
+        ]
+      : []),
+    ...(hasMinimize
+      ? [
+          {
+            ...keyToggle(
+              "minimize",
+              LEARNING_PLAYER_MINIMIZE_LABEL,
+              LEARNING_PLAYER_MINIMIZE_SHORTCUT,
+              <MinimizeIcon size={17} />,
+            ),
+            // The same line shown or hidden: how to minimize without it.
+            description: mobileInteraction
+              ? "Swipe down on the video to minimize"
+              : `Press ${LEARNING_PLAYER_MINIMIZE_SHORTCUT} to minimize or restore`,
+          },
         ]
       : []),
   ];
@@ -1356,6 +1378,7 @@ export function LessonPlayerControls({
     Boolean(onCourseLessonsToggle) && !hiddenControls.includes("lessons");
   const chaptersKeyShown = hasChapters && !hiddenControls.includes("chapters");
   const volumeKeyShown = !hiddenControls.includes("volume");
+  const minimizeKeyShown = !hiddenControls.includes("minimize");
   const shortcutPlatform = useShortcutPlatform();
 
   // Shift+C opens and closes the chapters, the way their key does (C alone
@@ -1814,7 +1837,9 @@ export function LessonPlayerControls({
           hasLessons: Boolean(onCourseLessonsToggle),
           hasChapters,
           hasLessonNavigation: lessonNavigationOffered,
+          hasMinimize: Boolean(onMinimize),
           icons: playerTheme.icons,
+          mobileInteraction,
         })}
         toggles={
           autoplayInSettings || showAmbientControl
@@ -2026,7 +2051,7 @@ export function LessonPlayerControls({
             timelineHost,
           )
         : null}
-      {onMinimize ? (
+      {onMinimize && minimizeKeyShown ? (
         <div
           className={cn(
             "pointer-events-none absolute inset-0 z-50 text-white transition-[opacity,visibility] duration-200 ease-in-out motion-reduce:transition-none",
