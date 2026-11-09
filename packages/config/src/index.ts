@@ -717,6 +717,19 @@ const serverConfigSchema = z.object({
    * region, e.g. "DASH_ADAPTIVE_LADDER".
    */
   MEDIACONVERT_JOB_TEMPLATE: z.string().optional(),
+  /** Optional comma-separated quality labels sent as template job metadata. */
+  MEDIACONVERT_VIDEO_QUALITIES: z
+    .string()
+    .regex(/^\s*(?:all|\d{3,4}p\s*(,\s*\d{3,4}p\s*)*)$/i)
+    .transform((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .join(","),
+    )
+    .optional(),
+  /** Optional storyboard preference sent as template job metadata. */
+  MEDIACONVERT_GENERATE_STORYBOARD: booleanEnvironmentValueSchema.optional(),
   /**
    * ClearKey DRM master key (hex). When set alongside DRM_MASTER_KEY_VERSION
    * the dispatcher injects drmKeySystem / drmMasterKeyVersion into the job's
