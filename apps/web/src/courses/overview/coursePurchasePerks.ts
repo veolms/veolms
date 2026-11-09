@@ -81,11 +81,47 @@ export function videoIncludeWords({
   };
 }
 
+/** How long a course stays with a learner, as its access rule says. */
+export interface CourseAccessValidity {
+  durationType: "lifetime" | "fixed_duration" | "custom_expiration";
+  durationDays?: number | null;
+}
+
+/** "2 years", "6 months", "3 weeks", "45 days": the largest whole unit. */
+function accessLength(days: number) {
+  if (days % 365 === 0) return plural(days / 365, "year");
+  if (days % 30 === 0) return plural(days / 30, "month");
+  if (days % 7 === 0) return plural(days / 7, "week");
+  return plural(days, "day");
+}
+
+/**
+ * The title of the line about access, from the course's access rule (the
+ * editor's Access rules step): "2 years of access", "Lifetime access". Null
+ * when the course has no rule yet; the line's stored words stand then.
+ */
+export function accessIncludeTitle(
+  validity: CourseAccessValidity | null | undefined,
+): string | null {
+  if (!validity) return null;
+  switch (validity.durationType) {
+    case "lifetime":
+      return "Lifetime access";
+    case "fixed_duration":
+      return validity.durationDays && validity.durationDays > 0
+        ? `${accessLength(validity.durationDays)} of access`
+        : null;
+    case "custom_expiration":
+      return "Limited-time access";
+  }
+}
+
 /**
  * What the price card says comes with a course, under the button: the
  * course's own "This course includes" lines, in its order, with their icons
  * and colours (the course editor's Extras tab). The line about the video is
- * written from the curriculum. A page built before lines were stored (no
+ * written from the curriculum, and the title of the line about access from
+ * the course's access rule. A page built before lines were stored (no
  * `courseIncludes`) gets the standard lines every course starts with.
  */
 export function getCoursePurchasePerks({
@@ -93,18 +129,26 @@ export function getCoursePurchasePerks({
   lessons,
   sections,
   courseIncludes,
+  accessValidity,
 }: {
   duration?: string;
   lessons: number;
   sections: number;
   courseIncludes?: readonly CourseIncludeLine[];
+  accessValidity?: CourseAccessValidity | null;
 }): CoursePurchasePerk[] {
   const lines = courseIncludes ?? DEFAULT_COURSE_INCLUDES;
   return lines.map((line) => {
     const words =
       line.kind === "video"
         ? videoIncludeWords({ duration, lessons, sections })
-        : { title: line.text, detail: line.detail ?? undefined };
+        : {
+            title:
+              (line.kind === "access"
+                ? accessIncludeTitle(accessValidity)
+                : null) ?? line.text,
+            detail: line.detail ?? undefined,
+          };
     return {
       title: words.title,
       detail: words.detail || undefined,

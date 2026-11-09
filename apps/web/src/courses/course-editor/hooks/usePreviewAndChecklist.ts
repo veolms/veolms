@@ -132,7 +132,7 @@ export interface UsePreviewAndChecklistArgs {
               detail?: string | null | undefined;
               icon?: string | null | undefined;
               color?: string | null | undefined;
-              kind?: "custom" | "video" | undefined;
+              kind?: "custom" | "video" | "access" | undefined;
             }[]
           | undefined;
       }
@@ -244,7 +244,7 @@ export interface UsePreviewAndChecklistArgs {
               detail?: string | null | undefined;
               icon?: string | null | undefined;
               color?: string | null | undefined;
-              kind?: "custom" | "video" | undefined;
+              kind?: "custom" | "video" | "access" | undefined;
             }[]
           | undefined;
       }
@@ -388,7 +388,7 @@ export interface UsePreviewAndChecklistResult {
               detail?: string | null | undefined;
               icon?: string | null | undefined;
               color?: string | null | undefined;
-              kind?: "custom" | "video" | undefined;
+              kind?: "custom" | "video" | "access" | undefined;
             }[]
           | undefined;
       }

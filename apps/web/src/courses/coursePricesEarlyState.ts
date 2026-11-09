@@ -3,7 +3,7 @@
  * cards word it, for each region, so the head script below needs no
  * formatting of its own.
  */
-export const COURSE_PRICE_LINES_STORAGE_KEY = "veolms-course-price-lines:v1";
+export const COURSE_PRICE_LINES_STORAGE_KEY = "veolms-course-price-lines:v2";
 
 /** Set on <html> by the head script when it drew kept prices. */
 const EARLY_ATTRIBUTE = "data-course-prices-early";
@@ -43,7 +43,23 @@ function applyEarlyCoursePrices(keys: EarlyPriceKeys) {
       const entry = lines[id];
       if (!entry || !entry.d || typeof entry.d.p !== "string") continue;
       // A course with no price for buyers outside India costs them rupees.
-      const byRegion: [string, { p: string; o: string; x: string }][] = [
+      const byRegion: [
+        string,
+        {
+          p: string;
+          o: string;
+          x: string;
+          b?: {
+            k: string;
+            t: string;
+            z: string;
+            m: string;
+            s: string;
+            l: string;
+            x: string;
+          };
+        },
+      ][] = [
         ["domestic", entry.d],
         ["international", entry.i || entry.d],
       ];
@@ -77,6 +93,62 @@ function applyEarlyCoursePrices(keys: EarlyPriceKeys) {
             ? scope +
               " [data-course-early-price-part=discount]{display:inline-flex!important}"
             : "");
+        // The course page's price box (`CoursePriceBoxEarly`): its words,
+        // and the parts its price has. Only the box of the kind the page
+        // drew (a paid course's receipt, a free course's line) gives up its
+        // shimmer.
+        const box = line.b;
+        if (
+          box &&
+          (box.k === "r" || box.k === "l") &&
+          typeof box.t === "string"
+        ) {
+          const size =
+            ["normal", "medium", "large", "xlarge"].indexOf(box.z) === -1
+              ? "normal"
+              : box.z;
+          rules +=
+            scope +
+            "{--course-early-box-total:" +
+            text(box.t) +
+            ";--course-early-box-marked:" +
+            text(box.m) +
+            ";--course-early-box-saving:" +
+            text(box.s) +
+            ";--course-early-box-sale:" +
+            text(box.l) +
+            ";--course-early-box-badge:" +
+            text(box.x) +
+            "}" +
+            scope +
+            " [data-course-early-box=pending-" +
+            box.k +
+            "]{display:none!important}" +
+            scope +
+            " [data-course-early-box=filled-" +
+            box.k +
+            "]{display:flex!important}" +
+            scope +
+            " [data-course-early-box=filled-" +
+            box.k +
+            "] [data-course-early-box-size=" +
+            size +
+            "]{display:inline!important}" +
+            (box.m
+              ? scope +
+                " [data-course-early-box=filled-" +
+                box.k +
+                "] [data-course-early-box-part=marked]{display:" +
+                (box.k === "r" ? "grid" : "inline") +
+                "!important}" +
+                scope +
+                " [data-course-early-box=filled-r] [data-course-early-box-part=total]{border-top-width:1px!important;padding-top:0.75rem!important}"
+              : "") +
+            (box.x
+              ? scope +
+                " [data-course-early-box=filled-l] [data-course-early-box-part=badge]{display:contents!important}"
+              : "");
+        }
       }
     }
     if (!rules) return;

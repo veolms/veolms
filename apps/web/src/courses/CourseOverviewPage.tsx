@@ -100,7 +100,6 @@ import { FreeWithCourseNote } from "./FreeWithCourseNote";
 import { CourseLearnerProgressBar } from "./overview/CourseLearnerProgressBar";
 import { CourseLearnerProgressBarEarly } from "./overview/CourseLearnerProgressBarEarly";
 import { CourseOverviewCurriculum } from "./overview/CourseOverviewCurriculum";
-import { courseValidityLabel } from "./overview/courseValidity";
 import {
   CourseOverviewHero,
   overviewColumnClasses,
@@ -110,6 +109,7 @@ import { CourseLoadError } from "./overview/CourseLoadError";
 import { CourseManagerBar } from "./overview/CourseManagerBar";
 import { CourseBandLoadError } from "./overview/CourseBandLoadError";
 import { CourseViewerBandPlaceholder } from "./overview/CourseViewerBandPlaceholder";
+import { CoursePriceBoxEarly } from "./overview/CoursePriceBoxEarly";
 import { PartialAccessNotice } from "./overview/PartialAccessNotice";
 import { usePartialAccessOffer } from "../services/courses";
 import {
@@ -147,6 +147,14 @@ import {
   type ContributionPresetId,
 } from "./overview/CourseSupportAmountPicker";
 import { formatPriceWithCurrency } from "./overview/coursePriceFormat";
+import {
+  coursePriceView,
+  getPriceSizeVariant,
+  isFreeCoursePricing,
+  priceTextClasses,
+  toOverviewPricingProps,
+  type CourseOverviewPricingProps,
+} from "./overview/coursePriceView";
 import { getCourseEditorPath } from "./courseEditorRouting";
 
 // Asked for only when an enrolment needs a verified number first, so its
@@ -159,49 +167,14 @@ export { CourseOverviewSkeleton };
 
 // ─── Helpers for Currency, Sale Window, Language, and Price Sizing ────────────
 
-export type PriceSizeVariant = "normal" | "medium" | "large" | "xlarge";
-
-export function getPriceSizeVariant(priceStr: string): PriceSizeVariant {
-  if (!priceStr || priceStr.toLowerCase() === "free") return "normal";
-  const digitsOnly = priceStr.replace(/\D/g, "");
-  const digitCount = digitsOnly.length;
-  if (digitCount >= 8) return "xlarge";
-  if (digitCount >= 6) return "large";
-  if (digitCount === 5) return "medium";
-  return "normal";
-}
-
-export const priceTextClasses: Record<PriceSizeVariant, string> = {
-  normal: "text-[2.15rem] max-[640px]:text-[1.95rem] tracking-[-0.03em]",
-  medium: "text-[1.95rem] max-[640px]:text-[1.75rem] tracking-[-0.025em]",
-  large: "text-[1.75rem] max-[640px]:text-[1.55rem] tracking-[-0.02em]",
-  xlarge: "text-[1.55rem] max-[640px]:text-[1.4rem] tracking-[-0.015em]",
-};
-
-export function isCourseSaleActive(
-  salePrice: number | null | undefined,
-  regularPrice: number,
-  saleStartsAt?: string | null,
-  saleEndsAt?: string | null,
-): boolean {
-  if (salePrice == null || salePrice <= 0 || salePrice >= regularPrice) {
-    return false;
-  }
-  const now = new Date().getTime();
-  if (saleStartsAt) {
-    const starts = new Date(saleStartsAt).getTime();
-    if (!isNaN(starts) && starts > now) {
-      return false;
-    }
-  }
-  if (saleEndsAt) {
-    const ends = new Date(saleEndsAt).getTime();
-    if (!isNaN(ends) && ends < now) {
-      return false;
-    }
-  }
-  return true;
-}
+export {
+  getPriceSizeVariant,
+  isCourseSaleActive,
+  isFreeCoursePricing,
+  priceTextClasses,
+  type CourseOverviewPricingProps,
+  type PriceSizeVariant,
+} from "./overview/coursePriceView";
 
 export function getLanguageLabel(code?: string | null): string | undefined {
   if (!code || !code.trim()) return undefined;
@@ -230,162 +203,6 @@ export function getLanguageLabel(code?: string | null): string | undefined {
 export interface CourseInclude {
   icon: typeof BookOpen;
   label: string;
-}
-
-export interface CourseOverviewPricingProps {
-  price?: string;
-  originalPrice?: string;
-  discount?: string;
-  /** Catalog charge in major currency units. */
-  amount?: number;
-  /** The marked price in major units, when `originalPrice` is shown. */
-  originalAmount?: number;
-  currency?: string;
-  /** What the price box calls the discount, when it is not a sale. */
-  discountName?: string;
-  /**
-   * The same at the course's price for buyers outside India, when it has
-   * one: its amounts are major units with cents (43.99). Which of the two
-   * a visitor sees is their region's (see `priceRegion.ts`).
-   */
-  international?: CourseOverviewPricingProps;
-}
-
-export function isFreeCoursePricing(
-  pricing?: CourseOverviewPricingProps | null,
-): boolean {
-  if (!pricing) return true;
-  if (typeof pricing.amount === "number") return pricing.amount <= 0;
-  if (!pricing.price) return true;
-  const p = pricing.price.trim().toLowerCase();
-  if (p === "free" || p === "0") return true;
-  return /^(?:[$₹€£]\s*0+(?:\.0+)?|0+(?:\.0+)?)$/.test(p);
-}
-
-function toOverviewPricingProps(
-  pr?: {
-    pricingType: "free" | "paid";
-    price: number;
-    currency?: string;
-    salePrice?: number | null;
-    international?: InternationalCoursePrice | null;
-  } | null,
-): CourseOverviewPricingProps {
-  const domestic = toDomesticOverviewPricingProps(pr);
-  const international =
-    pr?.pricingType === "paid" && pr.international
-      ? toInternationalOverviewPricingProps(pr.international)
-      : undefined;
-  return international ? { ...domestic, international } : domestic;
-}
-
-/** A course's price for buyers outside India, as the price box shows it. */
-function toInternationalOverviewPricingProps({
-  currency,
-  priceMinor,
-  salePriceMinor,
-}: InternationalCoursePrice): CourseOverviewPricingProps {
-  const amount = toMajorUnits(salePriceMinor, currency);
-  if (priceMinor <= salePriceMinor) {
-    return {
-      price: formatMoney(salePriceMinor, { currency }),
-      amount,
-      currency,
-    };
-  }
-  return {
-    price: formatMoney(salePriceMinor, { currency }),
-    originalPrice: formatMoney(priceMinor, { currency }),
-    discount: `${Math.round(((priceMinor - salePriceMinor) / priceMinor) * 100)}% OFF`,
-    amount,
-    originalAmount: toMajorUnits(priceMinor, currency),
-    currency,
-  };
-}
-
-function toDomesticOverviewPricingProps(
-  pr?: {
-    pricingType: "free" | "paid";
-    price: number;
-    currency?: string;
-    salePrice?: number | null;
-  } | null,
-): CourseOverviewPricingProps {
-  const currency = pr?.currency || "INR";
-  if (!pr || pr.pricingType === "free") {
-    // A free course that names what it would otherwise cost shows that
-    // price struck through beside a price of zero.
-    if (pr && pr.price > 0) {
-      return {
-        price: formatPriceWithCurrency(0, currency),
-        originalPrice: formatPriceWithCurrency(pr.price, currency),
-        discount: "Free",
-        amount: 0,
-        currency,
-      };
-    }
-    return { price: "Free", amount: 0, currency };
-  }
-
-  const activeSale = isCourseSaleActive(pr.salePrice, pr.price);
-  if (activeSale && pr.salePrice != null) {
-    const discountPct = Math.round(
-      ((pr.price - pr.salePrice) / pr.price) * 100,
-    );
-    return {
-      price: formatPriceWithCurrency(pr.salePrice, currency),
-      originalPrice: formatPriceWithCurrency(pr.price, currency),
-      discount: `${discountPct}% OFF`,
-      amount: pr.salePrice,
-      originalAmount: pr.price,
-      currency,
-    };
-  }
-
-  return {
-    price: formatPriceWithCurrency(pr.price, currency),
-    amount: pr.price,
-    currency,
-  };
-}
-
-/**
- * A paid course's own price as the price box shows it with no coupon and
- * no amount of the buyer's own: the line and the full breakdown. The same
- * figures the purchase section works out for that case.
- */
-function coursePriceView(
-  pricing: CourseOverviewPricingProps,
-): RegionalPriceView {
-  const label = pricing.price ?? "Free";
-  const currency = pricing.currency ?? "INR";
-  const amount = pricing.amount ?? 0;
-  const sizeClassName = priceTextClasses[getPriceSizeVariant(label)];
-  return {
-    price: {
-      label,
-      sizeClassName,
-      struckThrough: pricing.originalPrice,
-      badge: pricing.discount,
-    },
-    priceBreakdown: {
-      sale:
-        pricing.originalPrice && pricing.discount && pricing.originalAmount
-          ? {
-              marked: pricing.originalPrice,
-              discount: formatPriceWithCurrency(
-                pricing.originalAmount - amount,
-                currency,
-              ),
-              label: pricing.discount.replace(/\s*off$/i, "").trim() + " off",
-              name: pricing.discountName,
-            }
-          : undefined,
-      beforeCoupon: formatPriceWithCurrency(amount, currency),
-      total: label,
-      totalSizeClassName: sizeClassName,
-    },
-  };
 }
 
 function appliedCouponFromPreview(
@@ -457,6 +274,8 @@ interface CoursePurchaseSectionProps {
   includedWith?: CourseOverviewResponse["includedWith"];
   /** The overview's `includedCourses`: the courses that come free with it. */
   includedCourses?: CourseOverviewResponse["includedCourses"];
+  /** How long the course stays with a learner: the "… of access" line. */
+  accessValidity?: CourseOverviewResponse["accessValidity"];
   /**
    * Whether the page knows who is looking (see `courseViewerState`): a
    * purchase started before signing in waits for it.
@@ -469,6 +288,13 @@ interface CoursePurchaseSectionProps {
   purchaseCourseId?: string;
   /** What the payment window names, with `purchaseCourseId`. */
   purchaseTitle?: string;
+  /**
+   * The course's price is not known yet (a page is built with none): the
+   * box is drawn whole, with a shimmer where the price goes or, on a
+   * reload, the price this tab kept (`CoursePriceBoxEarly`), and nothing
+   * is bought until the price comes. `paid` says which kind of box.
+   */
+  pendingPrice?: { paid: boolean };
 }
 
 function CoursePurchaseSection({
@@ -481,10 +307,13 @@ function CoursePurchaseSection({
   canSelfEnroll,
   includedWith,
   includedCourses,
+  accessValidity,
   viewerKnown = true,
   purchaseCourseId,
   purchaseTitle,
+  pendingPrice,
 }: CoursePurchaseSectionProps) {
+  const pricePending = Boolean(pendingPrice);
   const user = useAuthStore((state) => state.user);
   // The prices this visitor is charged: the ones for buyers outside India
   // there. Until the region is known the price box shows a shimmer for a
@@ -517,6 +346,11 @@ function CoursePurchaseSection({
   const isEnrolled = Boolean(user && course.enrolled);
 
   const [isPaymentBusy, setIsPaymentBusy] = useState(false);
+  // "Pay Now" pressed by a signed-in buyer before the price is known (a
+  // built page draws the button at once): the press is kept and paid once
+  // the price is in, with the button busy meanwhile.
+  const heldPayRef = useRef<{ amount: number | undefined } | null>(null);
+  const [holdingPay, setHoldingPay] = useState(false);
   // A verified mobile number before the first enrolment, where the academy
   // asks for one (REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT) of a new account:
   // the server says so when the order is asked for (only new accounts are
@@ -550,7 +384,9 @@ function CoursePurchaseSection({
   const baseNumericPrice = pricing?.amount ?? 0;
   const isPreview = Boolean(isReadOnlyPreview);
   const isCreatorNormal = Boolean(isCreator && !isPreview);
-  const isFree = isFreeCoursePricing(pricing);
+  const isFree = pendingPrice
+    ? !pendingPrice.paid
+    : isFreeCoursePricing(pricing);
   // A restricted course with no price is entered by a grant from staff and
   // checkout refuses it, so the card offers no enrolment, amount or coupon
   // for it: one line says how the course is entered.
@@ -753,6 +589,7 @@ function CoursePurchaseSection({
     lessons: course.lectures,
     sections: course.sections,
     courseIncludes: inclusions,
+    accessValidity,
   });
   // The payment line and the money-back promise only where something is
   // paid for.
@@ -761,7 +598,8 @@ function CoursePurchaseSection({
 
   const applyCouponCode = async (rawCode: string) => {
     const code = rawCode.trim().toUpperCase();
-    if (!code) return;
+    // A coupon's total is worked out from the price.
+    if (!code || pricePending) return;
     setCouponBusy(true);
     setCouponError(null);
     // A code tried while another is applied (it was pasted on the page)
@@ -914,6 +752,13 @@ function CoursePurchaseSection({
     } = {},
   ) => {
     if (isReadOnlyPreview) return;
+    // An order is made at the price; a guest's press opens the login
+    // pop-up and carries on once both are known (`canResumePurchase`).
+    if (pricePending && user) {
+      heldPayRef.current = { amount: voluntaryContributionAmount };
+      setHoldingPay(true);
+      return;
+    }
     if (!phoneChecked && !resumed) {
       trackAnalyticsEvent("enroll_click", {
         courseId: course.id,
@@ -1120,6 +965,7 @@ function CoursePurchaseSection({
   const canResumePurchase =
     Boolean(user) &&
     viewerKnown &&
+    !pricePending &&
     !isReadOnlyPreview &&
     !isCreatorNormal &&
     !isEnrolled &&
@@ -1144,6 +990,16 @@ function CoursePurchaseSection({
   useEffect(() => {
     if (canResumePurchase) resumePendingPurchase();
   }, [canResumePurchase]);
+
+  const payHeldPress = useEffectEvent(() => {
+    const held = heldPayRef.current;
+    heldPayRef.current = null;
+    setHoldingPay(false);
+    if (held) void handlePayNow(held.amount);
+  });
+  useEffect(() => {
+    if (!pricePending) payHeldPress();
+  }, [pricePending]);
 
   // Closing the login pop-up without signing in drops the press: signing in
   // later, some other way, is not taken to mean paying. Signing in closes
@@ -1403,6 +1259,24 @@ function CoursePurchaseSection({
     }
   }
 
+  // With no price yet the paid course's amount reads 0, which would name
+  // the button "Enroll for Free".
+  if (holdingPay) {
+    ctaLabel = "Processing…";
+    ctaIcon = (
+      <CircleNotch
+        size="1.15em"
+        className="animate-spin shrink-0"
+        aria-hidden="true"
+      />
+    );
+    ctaDisabled = true;
+    ctaOnClick = undefined;
+  } else if (pricePending && !isFree && !isPreview && !isPaymentBusy) {
+    ctaLabel = "Pay Now";
+    ctaIcon = <PayCardIcon />;
+  }
+
   const includingCoursePath = includingCourse
     ? `/courses/${encodeURIComponent(includingCourse.slug)}/overview`
     : undefined;
@@ -1441,9 +1315,17 @@ function CoursePurchaseSection({
 
   return (
     <CoursePriceBar
-      regional={regionalPrices}
+      regional={pendingPrice ? undefined : regionalPrices}
+      pendingPrice={
+        pendingPrice
+          ? {
+              receipt: pendingPrice.paid,
+              node: <CoursePriceBoxEarly paid={pendingPrice.paid} />,
+            }
+          : undefined
+      }
       price={
-        isCreatorNormal
+        isCreatorNormal || pendingPrice
           ? undefined
           : includingCourse
             ? {
@@ -1473,7 +1355,7 @@ function CoursePurchaseSection({
               }
       }
       priceBreakdown={
-        priceBreakdown
+        priceBreakdown && !pendingPrice
           ? {
               ...priceBreakdown,
               totalSizeClassName: priceTextClasses[priceSizeVariant],
@@ -1536,7 +1418,8 @@ function CoursePurchaseSection({
         ) : undefined
       }
       checkoutNote={
-        !isPaidPurchase ? undefined : pricingForAllRegions?.international ? (
+        !isPaidPurchase ? undefined : pricingForAllRegions?.international ||
+          pendingPrice ? (
           // How a buyer can pay depends on where they are: rupees by UPI,
           // cards and net banking in India, dollars by card elsewhere.
           <CoursePriceSwitch
@@ -2018,6 +1901,13 @@ export function adaptPreviewDataToOverview(
     pricing: pricingProps,
     instructorName: resolvedInstructorName,
     trailerMediaId: c.trailerMediaId ?? null,
+    // The "… of access" line follows the access rule in the preview too.
+    accessValidity: previewData.accessRules
+      ? {
+          durationType: previewData.accessRules.durationType,
+          durationDays: previewData.accessRules.durationDays ?? null,
+        }
+      : null,
   };
 }
 
@@ -2051,6 +1941,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     error: overviewError,
     refetch: refetchOverview,
     access,
+    accessAnswered,
     accessPending,
     accessFailed,
     priceStatus,
@@ -2222,6 +2113,7 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         priceStatus={pricedByPage ? priceStatus : "known"}
         accessFailed={pricedByPage && accessFailed}
         onRetryAccess={refetchOverview}
+        enrolmentPending={Boolean(access?.enrolled) && !accessAnswered}
         enrolmentAccess={
           access?.enrolled
             ? {
@@ -2267,6 +2159,12 @@ type CourseOverviewContentProps = CourseOverviewPageProps & {
     enrollment?: CourseAccessEnrollment | null;
   } | null;
   /**
+   * The learner holds the course, but the band is drawn from their list of
+   * courses until the course's own answer comes: where they are and "Your
+   * enrollment" hold their places meanwhile.
+   */
+  enrolmentPending?: boolean;
+  /**
    * Whether the course's price in force is known (see `useCoursePageData`).
    * Until it is, the band shows a placeholder where the price and the
    * button go; if it failed to load, it says so.
@@ -2306,6 +2204,7 @@ function CourseOverviewContent({
   onRequestAllSections,
   resume,
   enrolmentAccess,
+  enrolmentPending = false,
   partialOffer = null,
   priceStatus = "known",
   accessFailed = false,
@@ -2771,6 +2670,7 @@ function CourseOverviewContent({
                 totalLessons={course.lectures}
                 resume={resume}
                 enrolment={enrolmentAccess}
+                enrolmentPending={enrolmentPending}
                 onNavigatePage={onNavigatePage}
                 openIntent={learnerPlays ? learnerIntent : undefined}
               />
@@ -2786,8 +2686,11 @@ function CourseOverviewContent({
               // Whether the course is theirs, or what it costs, could not be
               // loaded: a price would be wrong for a learner who holds it.
               <CourseBandLoadError onRetry={onRetryAccess} />
-            ) : !offer && priceStatus === "pending" ? (
-              // A page is built with no price; it comes from the API.
+            ) : !offer &&
+              priceStatus === "pending" &&
+              propIsPaidCourse === undefined ? (
+              // A page is built with no price; it comes from the API. Not
+              // even whether the course is paid is known here.
               <CourseViewerBandPlaceholder />
             ) : (
               <CoursePurchaseSection
@@ -2803,9 +2706,19 @@ function CourseOverviewContent({
                 canSelfEnroll={offer ? true : adaptedFromPreview?.canSelfEnroll}
                 includedWith={adaptedFromPreview?.includedWith}
                 includedCourses={adaptedFromPreview?.includedCourses}
+                accessValidity={adaptedFromPreview?.accessValidity}
                 viewerKnown={viewer === "known"}
                 purchaseCourseId={offer?.courseId}
                 purchaseTitle={offer?.title}
+                // A page is built with no price, and one opened from another
+                // page waits for its access answer: the whole box is drawn
+                // meanwhile, the price with a shimmer or the one this tab
+                // kept, so the box is the size it will be.
+                pendingPrice={
+                  !offer && priceStatus === "pending"
+                    ? { paid: isPaidCourse }
+                    : undefined
+                }
               />
             )}
           </div>
@@ -2833,10 +2746,6 @@ function CourseOverviewContent({
           lessonIntentFor={lessonIntentFor}
           isReadOnlyPreview={isReadOnlyPreview}
           isPaidCourse={isPaidCourse}
-          validityLabel={courseValidityLabel(
-            adaptedFromPreview?.accessValidity,
-            enrolmentAccess,
-          )}
           totalSections={totalSections}
           sectionsComplete={sectionsComplete}
           onRequestAllSections={onRequestAllSections}
