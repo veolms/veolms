@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import * as quizPricingRepo from "../../quizzes/shared/quiz-pricing.repository.ts";
+import * as workshopOrders from "../../workshops/workshop-orders.ts";
 import type { AccessService } from "../../access/access.service.ts";
 import { createAccessService } from "../../access/access.service.ts";
 import { syncLinkedCourseAccess } from "../../access/linked-course-access.ts";
@@ -23,10 +24,11 @@ export interface OrderItemRefLike {
    * courses that were noted for it when the order was fulfilled.
    */
   id?: string;
-  item_type: "course" | "bundle" | "quiz";
+  item_type: "course" | "bundle" | "quiz" | "workshop";
   course_id: string | null;
   bundle_id: string | null;
   quiz_pricing_id?: string | null;
+  workshop_id?: string | null;
 }
 
 /** An order item being fulfilled: the row itself, so what it grants can be noted against it. */
@@ -282,6 +284,14 @@ export function createCourseAccessService({
           // Deliberately not added to enrolledCourseIds: a quiz purchase is
           // not a course enrollment.
         }
+      } else if (item.item_type === "workshop" && item.workshop_id) {
+        // A paid registration; the workshop tells the buyer itself.
+        await workshopOrders.registerFromOrder(database, {
+          workshopId: item.workshop_id,
+          userId: order.user_id,
+          orderId: order.id,
+          now,
+        });
       }
     }
 
@@ -314,6 +324,12 @@ export function createCourseAccessService({
     await accessService.revokeAccessForOrder(database, order.id);
     await enrollmentRepo.revokeEnrollmentsByOrderId(database, order.id);
     await quizPricingRepo.revokeGrantsByOrderId(database, order.id);
+    await workshopOrders.cancelRegistrationsByOrder(
+      database,
+      order.id,
+      null,
+      new Date(),
+    );
     await syncLinkedCourseAccess(database, [order.user_id]);
   }
 
@@ -351,6 +367,13 @@ export function createCourseAccessService({
           courseId: offering.course_id,
         });
       }
+    } else if (item.item_type === "workshop" && item.workshop_id) {
+      await workshopOrders.cancelRegistrationsByOrder(
+        database,
+        order.id,
+        item.workshop_id,
+        new Date(),
+      );
     }
     await syncLinkedCourseAccess(database, [order.user_id]);
   }

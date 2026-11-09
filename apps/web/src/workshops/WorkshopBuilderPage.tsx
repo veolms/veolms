@@ -835,14 +835,19 @@ export function WorkshopBuilderPage({
               await unpublishMutation.mutateAsync(workshop.id);
             }, "Workshop unpublished. It is a draft again.")
           }
-          onCancel={(reason) =>
-            void run(async () => {
-              if (!workshop) return;
-              await cancelMutation.mutateAsync({
-                workshopId: workshop.id,
-                payload: { reason },
-              });
-            }, "Workshop cancelled.")
+          onCancel={(reason, refundPaid) =>
+            void run(
+              async () => {
+                if (!workshop) return;
+                await cancelMutation.mutateAsync({
+                  workshopId: workshop.id,
+                  payload: { reason, refundPaid },
+                });
+              },
+              refundPaid
+                ? "Workshop cancelled. Refunds are on their way."
+                : "Workshop cancelled.",
+            )
           }
           onDelete={() =>
             void run(async () => {

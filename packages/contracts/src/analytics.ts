@@ -118,7 +118,12 @@ export type AnalyticsOverviewResponse = z.infer<
 // Revenue
 // ---------------------------------------------------------------------------
 
-export const revenueProductTypeSchema = z.enum(["course", "bundle", "quiz"]);
+export const revenueProductTypeSchema = z.enum([
+  "course",
+  "bundle",
+  "quiz",
+  "workshop",
+]);
 
 export const revenueByProductRowSchema = z.strictObject({
   id: z.string(),

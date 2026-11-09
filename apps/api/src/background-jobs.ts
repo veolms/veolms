@@ -107,6 +107,7 @@ export function registerBackgroundJobs(
     database,
     mediaService: createMediaService({ database, services }),
     authorization: createAuthorizationService(database),
+    paymentGateways: services.paymentGateways,
   });
   const workshopReminderWorker = new WorkshopReminderWorker({
     database,

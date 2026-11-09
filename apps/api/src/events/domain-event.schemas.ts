@@ -284,3 +284,18 @@ export const workshopRecordingReadyEventSchema = z.strictObject({
   sessionTitle: z.string().nullable(),
   mediaId: z.uuid(),
 });
+
+/** A change registrants must hear about: the workshop was cancelled or moved. */
+export const workshopUpdatedEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  change: z.enum(["cancelled", "rescheduled"]),
+  reason: z.string().nullable(),
+  /** Paid registrations are being refunded (cancellations only). */
+  refunding: z.boolean(),
+  /** The next session after the change, if any. */
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
+  timeZone: z.string().nullable(),
+});

@@ -25,7 +25,10 @@ import { config } from "../../config.ts";
 import { createOutboxService } from "../../events/outbox.service.ts";
 import { AppError } from "../../lib/errors.ts";
 import { createAccessService } from "../access/index.ts";
+import * as orderRepo from "../commerce/orders/order.repository.ts";
+import { createRefundService } from "../commerce/refunds/refund.service.ts";
 import type { AuthorizationService } from "../authorization/authorization.service.ts";
+import type { PaymentGateways } from "@veolms/contracts";
 import type {
   MediaService,
   VideoAssetForPlayback,
@@ -47,6 +50,7 @@ import {
   presentWorkshopPublicListItem,
 } from "./workshops.presenter.ts";
 import * as repository from "./workshops.repository.ts";
+import { createRegistration } from "./workshop-orders.ts";
 
 export interface WorkshopsServiceDependencies {
   database: Kysely<Database>;
@@ -58,6 +62,8 @@ export interface WorkshopsServiceDependencies {
     | "getVideoAssetPlaybackToken"
   >;
   authorization: Pick<AuthorizationService, "check">;
+  /** For refunding paid registrations when a workshop is cancelled. */
+  paymentGateways: PaymentGateways;
 }
 
 export interface WorkshopsService {
@@ -74,7 +80,11 @@ export interface WorkshopsService {
   publishCheck(workshopId: string): Promise<WorkshopPublishCheck>;
   publish(workshopId: string): Promise<WorkshopAdmin>;
   unpublish(workshopId: string): Promise<WorkshopAdmin>;
-  cancel(workshopId: string, reason: string): Promise<WorkshopAdmin>;
+  cancel(
+    workshopId: string,
+    reason: string,
+    options?: { refundPaid?: boolean; actorUserId?: string },
+  ): Promise<WorkshopAdmin>;
   remove(workshopId: string): Promise<void>;
   listPublic(): Promise<WorkshopPublicListResponse>;
   getPublic(slug: string): Promise<WorkshopPublic>;
@@ -110,6 +120,22 @@ export interface WorkshopsService {
   ): Promise<VideoPlaybackToken>;
 }
 
+/** Did a session that registrants already knew change its time? */
+function sessionsMoved(
+  before: readonly repository.WorkshopSessionRow[],
+  after: readonly repository.SessionWrite[],
+): boolean {
+  const previous = new Map(before.map((session) => [session.id, session]));
+  return after.some((write) => {
+    const old = previous.get(write.id);
+    return (
+      old !== undefined &&
+      (old.starts_at.getTime() !== write.starts_at.getTime() ||
+        old.ends_at.getTime() !== write.ends_at.getTime())
+    );
+  });
+}
+
 function notFound(): AppError {
   return new AppError(404, "WORKSHOP_NOT_FOUND", "Workshop not found.");
 }
@@ -118,9 +144,11 @@ export function createWorkshopsService({
   database,
   mediaService,
   authorization,
+  paymentGateways,
 }: WorkshopsServiceDependencies): WorkshopsService {
   const access = createAccessService();
   const outbox = createOutboxService();
+  const refunds = createRefundService({ database, paymentGateways });
 
   async function load(workshopId: string) {
     const row = await repository.findWorkshopById(database, workshopId);
@@ -316,13 +344,34 @@ export function createWorkshopsService({
         await repository.updateWorkshop(trx, workshopId, patch, now);
       }
       if (input.sessions) {
-        const known = await repository.listSessionIds(trx, workshopId);
-        await repository.replaceSessions(
-          trx,
-          workshopId,
-          toSessionWrites(input.sessions, known),
-          now,
-        );
+        const before = await repository.listSessions(trx, workshopId);
+        const known = new Set(before.map((session) => session.id));
+        const writes = toSessionWrites(input.sessions, known);
+        await repository.replaceSessions(trx, workshopId, writes, now);
+        // Registrants planned around the old times: a published
+        // workshop whose sessions moved tells them once per save.
+        if (existing.status === "published" && sessionsMoved(before, writes)) {
+          const next =
+            writes.find((write) => write.ends_at.getTime() > now.getTime()) ??
+            writes[0];
+          await outbox.publish(trx, {
+            type: "workshop.updated",
+            version: 1,
+            dedupeKey: `workshop.updated:${workshopId}:rescheduled:${now.getTime()}`,
+            occurredAt: now,
+            payload: {
+              workshopId,
+              workshopSlug: existing.slug,
+              workshopTitle: patch.title ?? existing.title,
+              change: "rescheduled",
+              reason: null,
+              refunding: false,
+              startsAt: next ? next.starts_at.toISOString() : null,
+              endsAt: next ? next.ends_at.toISOString() : null,
+              timeZone: next?.time_zone ?? null,
+            },
+          });
+        }
       }
     });
     return await getAdmin(workshopId);
@@ -391,20 +440,46 @@ export function createWorkshopsService({
   async function cancel(
     workshopId: string,
     reason: string,
+    options: { refundPaid?: boolean; actorUserId?: string } = {},
   ): Promise<WorkshopAdmin> {
     const row = await load(workshopId);
     if (row.status !== "cancelled") {
       const now = new Date();
-      await repository.updateWorkshop(
-        database,
-        workshopId,
-        {
-          status: "cancelled",
-          cancelled_at: now,
-          cancel_reason: reason.trim(),
-        },
-        now,
-      );
+      const wasPublished = row.status === "published";
+      await database.transaction().execute(async (trx) => {
+        await repository.updateWorkshop(
+          trx,
+          workshopId,
+          {
+            status: "cancelled",
+            cancelled_at: now,
+            cancel_reason: reason.trim(),
+          },
+          now,
+        );
+        // A draft has no registrants to tell.
+        if (!wasPublished) return;
+        await outbox.publish(trx, {
+          type: "workshop.updated",
+          version: 1,
+          dedupeKey: `workshop.updated:${workshopId}:cancelled:${now.getTime()}`,
+          occurredAt: now,
+          payload: {
+            workshopId,
+            workshopSlug: row.slug,
+            workshopTitle: row.title,
+            change: "cancelled",
+            reason: reason.trim(),
+            refunding: Boolean(options.refundPaid),
+            startsAt: null,
+            endsAt: null,
+            timeZone: null,
+          },
+        });
+      });
+      if (options.refundPaid && options.actorUserId) {
+        await refundPaidRegistrations(workshopId, options.actorUserId);
+      }
     }
     return await getAdmin(workshopId);
   }
@@ -587,35 +662,14 @@ export function createWorkshopsService({
         );
         if (taken >= row.capacity) throw reasonError("full");
       }
-      const registration = await repository.upsertRegistration(trx, {
-        id: existing?.id ?? crypto.randomUUID(),
-        workshopId,
+      return await createRegistration(trx, {
+        workshop: row,
         userId,
         source: "free",
         orderId: null,
+        ...(existing ? { existingId: existing.id } : {}),
         now,
       });
-      const sessions = await repository.listSessions(trx, workshopId);
-      const next =
-        sessions.find((session) => session.ends_at.getTime() > now.getTime()) ??
-        sessions[0];
-      await outbox.publish(trx, {
-        type: "workshop.registered",
-        version: 1,
-        dedupeKey: `workshop.registered:${workshopId}:${userId}:${now.getTime()}`,
-        occurredAt: now,
-        payload: {
-          workshopId,
-          workshopSlug: row.slug,
-          workshopTitle: row.title,
-          recipientUserId: userId,
-          startsAt: next ? next.starts_at.toISOString() : null,
-          endsAt: next ? next.ends_at.toISOString() : null,
-          timeZone: next?.time_zone ?? null,
-          sessionCount: sessions.length,
-        },
-      });
-      return registration;
     });
     return { registrationId: saved.id };
   }
@@ -725,6 +779,45 @@ export function createWorkshopsService({
     }
     await repository.recordJoin(database, workshopId, userId, sessionId);
     return url;
+  }
+
+  /**
+   * Cancelling a paid workshop: every registration bought through checkout
+   * is refunded through the normal refund flow, one order at a time, and
+   * the refund itself cancels the registration. An order the gateway
+   * cannot refund (a manual transfer, a gateway no longer set up) is left
+   * for staff to settle by hand from the orders page.
+   */
+  async function refundPaidRegistrations(
+    workshopId: string,
+    actorUserId: string,
+  ): Promise<void> {
+    const paid = await repository.listPaidRegistrations(database, workshopId);
+    for (const registration of paid) {
+      const items = await orderRepo.listOrderItems(
+        database,
+        registration.order_id,
+      );
+      const line = items.find(
+        (item) =>
+          item.item_type === "workshop" && item.workshop_id === workshopId,
+      );
+      try {
+        await refunds.processRefund(
+          actorUserId,
+          {
+            orderId: registration.order_id,
+            ...(line ? { orderItemId: line.id } : {}),
+            reason: "Workshop cancelled",
+            preserveAccess: false,
+            idempotencyKey: `workshop-cancel:${workshopId}:${registration.order_id}`,
+          },
+          { initiatedBy: "staff" },
+        );
+      } catch {
+        // Left for staff; the registration still shows as paid.
+      }
+    }
   }
 
   // --- Recordings ---

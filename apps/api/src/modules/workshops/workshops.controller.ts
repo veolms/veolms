@@ -55,7 +55,14 @@ export function createWorkshopsController({
   async function cancel(
     request: FastifyRequest<WorkshopParams & { Body: CancelWorkshopRequest }>,
   ) {
-    return await service.cancel(request.params.workshopId, request.body.reason);
+    return await service.cancel(
+      request.params.workshopId,
+      request.body.reason,
+      {
+        refundPaid: request.body.refundPaid,
+        actorUserId: request.user!.id,
+      },
+    );
   }
 
   async function remove(request: FastifyRequest<WorkshopParams>) {

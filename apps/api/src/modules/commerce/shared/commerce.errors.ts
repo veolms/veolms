@@ -119,6 +119,32 @@ export const CommerceErrors = {
       "QUIZ_ALREADY_OWNED",
       `You already have active access to "${title}".`,
     ),
+  WORKSHOP_NOT_FOUND: (id: string) =>
+    new AppError(404, "WORKSHOP_NOT_FOUND", `Workshop "${id}" was not found.`),
+  WORKSHOP_NOT_PURCHASABLE: (title: string) =>
+    new AppError(
+      400,
+      "WORKSHOP_NOT_PURCHASABLE",
+      `"${title}" is free: register from its page instead.`,
+    ),
+  WORKSHOP_ENDED: (title: string) =>
+    new AppError(409, "WORKSHOP_ENDED", `"${title}" has already ended.`),
+  WORKSHOP_CANCELLED: (title: string) =>
+    new AppError(409, "WORKSHOP_CANCELLED", `"${title}" was cancelled.`),
+  WORKSHOP_FULL: (title: string) =>
+    new AppError(409, "WORKSHOP_FULL", `"${title}" has no seats left.`),
+  WORKSHOP_COURSE_REQUIRED: (title: string) =>
+    new AppError(
+      403,
+      "WORKSHOP_COURSE_REQUIRED",
+      `"${title}" is for learners of its course.`,
+    ),
+  WORKSHOP_ALREADY_REGISTERED: (title: string) =>
+    new AppError(
+      409,
+      "WORKSHOP_ALREADY_REGISTERED",
+      `You are already registered for "${title}".`,
+    ),
   EMPTY_CHECKOUT_ITEMS: () =>
     new AppError(
       400,

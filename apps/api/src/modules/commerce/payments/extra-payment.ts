@@ -168,6 +168,7 @@ export interface SoldItem {
   course_id: string | null;
   bundle_id: string | null;
   quiz_pricing_id?: string | null;
+  workshop_id?: string | null;
   title_snapshot: string;
 }
 
@@ -183,6 +184,7 @@ export function heldItemTitles(
     ownedCourseIds: ReadonlySet<string>;
     bundleCourses: ReadonlyArray<{ bundle_id: string; course_id: string }>;
     heldQuizPricingIds: ReadonlySet<string>;
+    heldWorkshopIds?: ReadonlySet<string>;
   },
 ): string[] {
   const held: string[] = [];
@@ -200,6 +202,10 @@ export function heldItemTitles(
       if (ownsOne) held.push(item.title_snapshot);
     } else if (item.item_type === "quiz" && item.quiz_pricing_id) {
       if (holdings.heldQuizPricingIds.has(item.quiz_pricing_id)) {
+        held.push(item.title_snapshot);
+      }
+    } else if (item.item_type === "workshop" && item.workshop_id) {
+      if (holdings.heldWorkshopIds?.has(item.workshop_id)) {
         held.push(item.title_snapshot);
       }
     }

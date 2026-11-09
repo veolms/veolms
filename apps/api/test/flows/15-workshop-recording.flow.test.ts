@@ -29,6 +29,7 @@ const { createMediaService } =
   await import("../../src/modules/media/media.service.ts");
 const { createAuthorizationService } =
   await import("../../src/modules/authorization/authorization.service.ts");
+const { fakePaymentGateways } = await import("./setup/fake-payment-gateway.ts");
 const { createServices } = await import("@veolms/services");
 const { config } = await import("../../src/config.ts");
 
@@ -193,6 +194,7 @@ await test("a recording still processing is attached but not shown, and becomes 
       }),
     }),
     authorization: createAuthorizationService(flow.database),
+    paymentGateways: fakePaymentGateways(flow.gateway),
   });
   assert.equal(await service.markReadyRecordings(new Date()), 1);
   assert.equal(await service.markReadyRecordings(new Date()), 0, "once");

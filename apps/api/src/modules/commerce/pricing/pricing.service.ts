@@ -12,7 +12,11 @@ import {
 } from "../shared/currency.ts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
-import { isRestrictedFreeCourse } from "../../access/index.ts";
+import {
+  createAccessService,
+  isRestrictedFreeCourse,
+} from "../../access/index.ts";
+import * as workshopOrders from "../../workshops/workshop-orders.ts";
 import * as quizRepo from "../../quizzes/shared/quiz.repository.ts";
 import * as quizPricingRepo from "../../quizzes/shared/quiz-pricing.repository.ts";
 import * as courseRepo from "../../courses/course/course.repository.ts";
@@ -168,7 +172,7 @@ export function createPricingService({
     const seenItems = new Set<string>();
     for (const it of items) {
       if (it.itemType === "quiz") continue;
-      const key = `${it.itemType}:${it.courseId ?? it.bundleId ?? ""}`;
+      const key = `${it.itemType}:${it.courseId ?? it.bundleId ?? it.workshopId ?? ""}`;
       if (seenItems.has(key)) {
         throw CommerceErrors.PRICE_CALCULATION_FAILED(
           "The same item appears more than once in this request.",
@@ -191,7 +195,7 @@ export function createPricingService({
     let upgradeCredit: { amount: number; from: string[] } | undefined;
 
     const calculatedItems: Array<{
-      itemType: "course" | "bundle" | "quiz";
+      itemType: "course" | "bundle" | "quiz" | "workshop";
       itemId: string;
       title: string;
       unitPrice: number;
@@ -244,6 +248,13 @@ export function createPricingService({
         quizPricingIds.push(it.quizPricingId);
       }
     }
+    const workshopIds = [
+      ...new Set(
+        items
+          .filter((it) => it.itemType === "workshop" && it.workshopId)
+          .map((it) => it.workshopId!),
+      ),
+    ];
 
     const [
       courseRows,
@@ -252,6 +263,7 @@ export function createPricingService({
       bundleRows,
       bundleCourseRows,
       quizRows,
+      workshopRows,
     ] = await Promise.all([
       courseRepo.findCoursesByIds(database, courseIds),
       courseConfigRepo.findPricingByCourseIds(database, courseIds),
@@ -259,6 +271,7 @@ export function createPricingService({
       bundleRepo.findBundlesByIds(database, bundleIds),
       bundleRepo.listBundleCoursesForBundleIds(database, bundleIds),
       quizPricingRepo.listOfferingsByPricingIds(database, quizPricingIds),
+      workshopOrders.listWorkshopsForCheckout(database, workshopIds, now),
     ]);
 
     const coursesById = new Map(courseRows.map((c) => [c.id, c]));
@@ -274,6 +287,7 @@ export function createPricingService({
       bundleCoursesByBundleId.set(bc.bundle_id, list);
     }
     const quizzesByPricingId = new Map(quizRows.map((q) => [q.pricing_id, q]));
+    const workshopsById = new Map(workshopRows.map((w) => [w.id, w]));
 
     // One currency for the whole order. Outside India it is the price for
     // buyers there when every paid item has one; an order with anything
@@ -557,6 +571,70 @@ export function createPricingService({
         });
         subtotalAmount += charge.effectivePrice;
         itemCourseMap.set(quizPricingId, [offering.course_id]);
+      } else if (item.itemType === "workshop") {
+        const workshopId = item.workshopId!;
+        const workshop = workshopsById.get(workshopId);
+        // A draft answers like a missing workshop, as a draft course does.
+        if (!workshop || workshop.status !== "published") {
+          throw CommerceErrors.WORKSHOP_NOT_FOUND(workshopId);
+        }
+        const workshopTitle = `Workshop: ${workshop.title}`;
+        const refusal = workshopOrders.workshopPurchaseRefusal(workshop, now);
+        if (refusal === "ended") {
+          throw CommerceErrors.WORKSHOP_ENDED(workshop.title);
+        }
+        if (refusal === "free") {
+          throw CommerceErrors.WORKSHOP_NOT_PURCHASABLE(workshop.title);
+        }
+        if (userId) {
+          if (
+            await workshopOrders.findActiveRegistration(
+              database,
+              workshopId,
+              userId,
+            )
+          ) {
+            throw CommerceErrors.WORKSHOP_ALREADY_REGISTERED(workshop.title);
+          }
+          if (
+            workshop.course_id &&
+            !(await createAccessService().hasActiveAccess(
+              database,
+              userId,
+              workshop.course_id,
+            ))
+          ) {
+            throw CommerceErrors.WORKSHOP_COURSE_REQUIRED(workshop.title);
+          }
+        }
+        if (refusal === "full") {
+          throw CommerceErrors.WORKSHOP_FULL(workshop.title);
+        }
+
+        // Workshop prices are stored in paise; pricing works in rupees.
+        const workshopPrice = Math.round((workshop.price_minor ?? 0) / 100);
+        const itemCurrency = workshop.currency || "INR";
+        if (!currencyInitialized) {
+          detectedCurrency = itemCurrency;
+          currencyInitialized = true;
+        } else if (itemCurrency !== detectedCurrency) {
+          throw CommerceErrors.PRICE_CALCULATION_FAILED(
+            `Cart contains items with mixed currencies (${detectedCurrency} and ${itemCurrency}).`,
+          );
+        }
+
+        calculatedItems.push({
+          itemType: "workshop",
+          itemId: workshopId,
+          title: workshopTitle,
+          unitPrice: workshopPrice,
+          couponBase: 0, // workshops are charged at their set price
+          domesticCouponBase: 0,
+          discountAmount: 0,
+          taxAmount: 0,
+          finalAmount: workshopPrice,
+        });
+        subtotalAmount += workshopPrice;
       }
     }
 
@@ -648,7 +726,7 @@ export function createPricingService({
 
       for (const item of calculatedItems) {
         // Quizzes are always charged at their configured price; coupons skip them.
-        if (item.itemType === "quiz") continue;
+        if (item.itemType === "quiz" || item.itemType === "workshop") continue;
         let isEligible = true;
         if (item.itemType === "course") {
           const p = pricingByCourseId.get(item.itemId);

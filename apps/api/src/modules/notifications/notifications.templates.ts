@@ -538,6 +538,34 @@ export function renderNotificationTemplate(
       };
       break;
     }
+    case "workshop.updated": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const change = optionalString(data, "change");
+      if (change === "cancelled") {
+        const reason = optionalString(data, "reason");
+        const refunding = optionalString(data, "refunding") === "yes";
+        inApp = {
+          title: "Workshop cancelled",
+          body: [
+            reason
+              ? `${workshopTitle} was cancelled: ${reason}`
+              : `${workshopTitle} was cancelled.`,
+            refunding ? "Your payment is being refunded." : null,
+          ]
+            .filter(Boolean)
+            .join(" "),
+        };
+      } else {
+        const when = workshopWhenLabel(data);
+        inApp = {
+          title: "Workshop time changed",
+          body: when
+            ? `${workshopTitle} now starts ${when}. Your calendar entry may need updating.`
+            : `${workshopTitle} has a new schedule. See the workshop page.`,
+        };
+      }
+      break;
+    }
     case "learning.reminder": {
       const streakDays = numberValue(data, "streakDays");
       inApp =

@@ -459,7 +459,7 @@ export default function RevenueTab({
       <div className="grid grid-cols-1 gap-3.5 sm:gap-6 lg:grid-cols-2">
         <ChartSection
           title="Revenue by Product"
-          description="Net revenue of each course, bundle or quiz sold"
+          description="Net revenue of each course, bundle, quiz or workshop sold"
         >
           <BarList
             rows={revenue.byProduct.map((row) => ({

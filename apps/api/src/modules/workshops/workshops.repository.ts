@@ -626,3 +626,52 @@ export async function markRecordingReady(
     .executeTakeFirst();
   return Number(result.numUpdatedRows) > 0;
 }
+
+// --- Step 5: paid registration ---
+
+/** Published or cancelled workshops by id, with the list aggregates. */
+export async function listPublicByIds(
+  database: DatabaseExecutor,
+  workshopIds: readonly string[],
+  now: Date,
+): Promise<WorkshopListRow[]> {
+  if (workshopIds.length === 0) return [];
+  return (await withJoins(database)
+    .select(listAggregates(now))
+    .where("workshops.id", "in", [...workshopIds])
+    .where("workshops.status", "in", ["published", "cancelled"])
+    .execute()) as WorkshopListRow[];
+}
+
+export async function cancelRegistrationsByOrder(
+  database: DatabaseExecutor,
+  orderId: string,
+  workshopId: string | null,
+  now: Date,
+): Promise<void> {
+  let query = database
+    .updateTable("workshop_registrations")
+    .set({ cancelled_at: now })
+    .where("order_id", "=", orderId)
+    .where("cancelled_at", "is", null);
+  if (workshopId) query = query.where("workshop_id", "=", workshopId);
+  await query.execute();
+}
+
+/** Registrations that came from a paid order and still stand. */
+export async function listPaidRegistrations(
+  database: DatabaseExecutor,
+  workshopId: string,
+): Promise<{ user_id: string; order_id: string }[]> {
+  const rows = await database
+    .selectFrom("workshop_registrations")
+    .select(["user_id", "order_id"])
+    .where("workshop_id", "=", workshopId)
+    .where("source", "=", "order")
+    .where("order_id", "is not", null)
+    .where("cancelled_at", "is", null)
+    .execute();
+  return rows.filter((row): row is { user_id: string; order_id: string } =>
+    Boolean(row.order_id),
+  );
+}

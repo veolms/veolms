@@ -1,4 +1,5 @@
 import * as quizPricingRepo from "../../quizzes/shared/quiz-pricing.repository.ts";
+import * as workshopOrders from "../../workshops/workshop-orders.ts";
 import * as bundleRepo from "../bundles/bundle.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
@@ -35,6 +36,19 @@ export async function listHeldItemTitles(
       ? []
       : await bundleRepo.listBundleCoursesForBundleIds(executor, bundleIds);
 
+  const heldWorkshopIds = new Set<string>();
+  for (const item of items) {
+    if (item.item_type !== "workshop" || !item.workshop_id) continue;
+    if (
+      await workshopOrders.findActiveRegistration(
+        executor,
+        item.workshop_id,
+        order.user_id,
+      )
+    ) {
+      heldWorkshopIds.add(item.workshop_id);
+    }
+  }
   const heldQuizPricingIds = new Set<string>();
   for (const item of items) {
     if (item.item_type !== "quiz" || !item.quiz_pricing_id) continue;
@@ -58,5 +72,6 @@ export async function listHeldItemTitles(
     ownedCourseIds: owned,
     bundleCourses,
     heldQuizPricingIds,
+    heldWorkshopIds,
   });
 }

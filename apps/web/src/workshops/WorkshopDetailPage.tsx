@@ -30,6 +30,7 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { WorkshopHostAvatar } from "./WorkshopHostAvatar";
 import { WorkshopJoinButton } from "./WorkshopJoinButton";
+import { WorkshopPayButton } from "./WorkshopPayButton";
 import { WorkshopRecordingPlayer } from "./WorkshopRecordingPlayer";
 import { WORKSHOPS_PATH } from "./WorkshopsPage";
 import {
@@ -60,6 +61,7 @@ function RegisterPanel({
   onRegister,
   onUnregister,
   onSignIn,
+  onPaid,
   onNavigatePage,
 }: {
   workshop: WorkshopPublic;
@@ -69,6 +71,7 @@ function RegisterPanel({
   onRegister: () => void;
   onUnregister: () => void;
   onSignIn: () => void;
+  onPaid: () => void;
   onNavigatePage?: NavigateTo;
 }) {
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -207,7 +210,10 @@ function RegisterPanel({
             Sign in to register
           </Button>
           <p className="text-[13px] leading-5 text-(--muted)">
-            Registration is free. You&apos;ll be back here after signing in.
+            {workshop.priceMinor
+              ? formatWorkshopPrice(workshop.priceMinor, workshop.currency) +
+                " per seat. You'll be back here after signing in."
+              : "Registration is free. You'll be back here after signing in."}
           </p>
         </div>
       );
@@ -247,16 +253,7 @@ function RegisterPanel({
       );
       break;
     case "payment_required":
-      body = (
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold text-(--text)">
-            {formatWorkshopPrice(workshop.priceMinor, workshop.currency)}
-          </p>
-          <p className="text-[13px] leading-5 text-(--muted)">
-            Paid registration opens soon. Check back shortly.
-          </p>
-        </div>
-      );
+      body = <WorkshopPayButton workshop={workshop} onRegistered={onPaid} />;
       break;
     case "ended":
       body = (
@@ -658,6 +655,9 @@ export function WorkshopDetailPage({
             onNavigatePage?.(
               buildLoginPath(`${WORKSHOPS_PATH}/${workshop.slug}`),
             )
+          }
+          onPaid={() =>
+            setNotice?.("You're registered. A confirmation is on its way.")
           }
           onNavigatePage={onNavigatePage}
         />

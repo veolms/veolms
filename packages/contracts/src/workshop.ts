@@ -257,6 +257,8 @@ export type UpdateWorkshopRequest = z.infer<typeof updateWorkshopRequestSchema>;
 export const cancelWorkshopRequestSchema = z.strictObject({
   /** Told to every registrant. */
   reason: z.string().trim().min(3).max(500),
+  /** Refund every paid registration through the normal refund flow. */
+  refundPaid: z.boolean().optional(),
 });
 export type CancelWorkshopRequest = z.infer<typeof cancelWorkshopRequestSchema>;
 

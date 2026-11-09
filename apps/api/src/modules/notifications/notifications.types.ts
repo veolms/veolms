@@ -34,7 +34,8 @@ export type NotificationTemplateKey =
   | "learning.reminder"
   | "workshop.registered"
   | "workshop.reminder"
-  | "workshop.recording_ready";
+  | "workshop.recording_ready"
+  | "workshop.updated";
 
 export type NotificationTemplateData = Record<
   string,

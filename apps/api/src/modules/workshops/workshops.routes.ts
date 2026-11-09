@@ -47,6 +47,7 @@ const workshopsRoutes: RoutePlugin = async (app, options) => {
       services: options.services,
     }),
     authorization: createAuthorizationService(options.database),
+    paymentGateways: options.services.paymentGateways,
   });
   const controller = createWorkshopsController({ service });
   const tags = ["Workshops"];

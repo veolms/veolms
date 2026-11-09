@@ -37,7 +37,7 @@ export interface WorkshopStatusPanelProps {
   onSave: () => void;
   onPublish: () => void;
   onUnpublish: () => void;
-  onCancel: (reason: string) => void;
+  onCancel: (reason: string, refundPaid: boolean) => void;
   onDelete: () => void;
 }
 
@@ -94,6 +94,8 @@ export function WorkshopStatusPanel({
 }: WorkshopStatusPanelProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [refundPaid, setRefundPaid] = useState(true);
+  const isPaid = (workshop?.priceMinor ?? 0) > 0;
   const [deleteOpen, setDeleteOpen] = useState(false);
   const status = displayStatus(workshop);
   const isDraft = !workshop || workshop.status === "draft";
@@ -214,12 +216,28 @@ export function WorkshopStatusPanel({
                     placeholder="The host is unwell; we will announce a new date."
                     className={`${fieldClass} h-auto w-full py-2`}
                   />
+                  {isPaid ? (
+                    <label className="flex cursor-pointer items-start gap-2 text-[13px] text-(--text)">
+                      <input
+                        type="checkbox"
+                        checked={refundPaid}
+                        onChange={(event) =>
+                          setRefundPaid(event.target.checked)
+                        }
+                        className="mt-0.5 size-4 accent-(--accent)"
+                      />
+                      <span>
+                        Refund every paid registration now (the usual refund
+                        flow, one order at a time).
+                      </span>
+                    </label>
+                  ) : null}
                   <div className="flex gap-2">
                     <Button
                       variant="danger"
                       disabled={isBusy || cancelReason.trim().length < 3}
                       onClick={() => {
-                        onCancel(cancelReason.trim());
+                        onCancel(cancelReason.trim(), isPaid && refundPaid);
                         setCancelOpen(false);
                       }}
                     >

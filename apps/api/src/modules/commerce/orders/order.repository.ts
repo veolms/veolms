@@ -937,6 +937,8 @@ export async function insertOrderItems(
     item_type: OrderItemType;
     course_id?: string | null;
     bundle_id?: string | null;
+    quiz_pricing_id?: string | null;
+    workshop_id?: string | null;
     title_snapshot: string;
     unit_price: number;
     discount_amount?: number;
