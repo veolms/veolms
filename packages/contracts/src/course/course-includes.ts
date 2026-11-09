@@ -55,8 +55,12 @@ export const courseIncludeColorSchema = z
  * - `video`: how much video the course has, written from its curriculum
  *   (length, sections, lessons) so it is always right; its icon and colour
  *   are the editor's.
+ * - `access`: how long the course stays with a learner, its title written
+ *   from the course's access rule ("2 years of access", "Lifetime access")
+ *   so it never disagrees with it; the line under it, the icon and the
+ *   colour are the editor's.
  */
-export const courseIncludeKindSchema = z.enum(["custom", "video"]);
+export const courseIncludeKindSchema = z.enum(["custom", "video", "access"]);
 export type CourseIncludeKind = z.infer<typeof courseIncludeKindSchema>;
 
 /**
@@ -89,8 +93,8 @@ export interface CourseIncludePreset {
 /** The lines every course starts with (the user's list, 2026-10-16). */
 export const DEFAULT_COURSE_INCLUDES: readonly CourseIncludePreset[] = [
   {
-    kind: "custom",
-    text: "3 years of access",
+    kind: "access",
+    text: "Access",
     detail: "Watch every lesson as often as you like",
     icon: "calendar-check",
     color: "#5da9ff",

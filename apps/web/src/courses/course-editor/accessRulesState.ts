@@ -75,3 +75,32 @@ export const isAccessRulesEqual = (
 ): boolean => {
   return isAccessRuleConfigEqual(a, b) && isAccessSettingsEqual(a, b);
 };
+
+const DAYS_PER_UNIT: Record<DurationUnit, number> = {
+  Days: 1,
+  Weeks: 7,
+  Months: 30,
+  Years: 365,
+};
+
+/**
+ * How long the course stays with a learner, as the form now says it, in the
+ * shape the course page reads (`accessIncludeTitle`); null while no
+ * duration is chosen. The same days the Access rules step saves.
+ */
+export const accessRulesValidity = (
+  state: AccessRulesFormState,
+): {
+  durationType: "lifetime" | "fixed_duration";
+  durationDays: number | null;
+} | null =>
+  state.durationMode === "lifetime"
+    ? { durationType: "lifetime", durationDays: null }
+    : state.durationMode === "fixed"
+      ? {
+          durationType: "fixed_duration",
+          durationDays:
+            Math.max(1, state.fixedDurationValue || 1) *
+            DAYS_PER_UNIT[state.fixedDurationUnit],
+        }
+      : null;

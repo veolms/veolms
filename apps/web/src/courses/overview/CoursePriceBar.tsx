@@ -62,6 +62,13 @@ export interface CoursePriceBarProps {
     domestic: RegionalPriceView;
     international: RegionalPriceView;
   };
+  /**
+   * In place of the price while the page does not know it (see
+   * `CoursePriceBoxEarly`), laid out as a paid course's receipt or as a
+   * free course's price line. `price`, `priceBreakdown` and `regional`
+   * are left out meanwhile.
+   */
+  pendingPrice?: { receipt: boolean; node: ReactNode };
   /** Left out when no coupon can be used on this course. */
   coupon?: CourseCouponControlProps;
   /** A coupon problem to show under the bar. */
@@ -106,7 +113,7 @@ export interface RegionalPriceView {
 }
 
 /** A saving beside the price: the sale's, and a coupon's after it. */
-const savingBadgeClasses =
+export const savingBadgeClasses =
   "inline-flex items-baseline rounded-lg bg-[color-mix(in_srgb,var(--success)_14%,transparent)] px-2.5 py-1.5 text-[0.8rem] leading-none font-bold whitespace-nowrap text-[color-mix(in_srgb,var(--success)_72%,var(--text))]";
 
 /** The bar is a box on the page; it measures itself for its own layout. */
@@ -350,6 +357,7 @@ export function CoursePriceBar({
   price,
   priceBreakdown,
   regional,
+  pendingPrice,
   coupon,
   couponError,
   action,
@@ -363,7 +371,9 @@ export function CoursePriceBar({
   guarantee,
   children,
 }: CoursePriceBarProps) {
-  const receipt = Boolean(price && priceBreakdown);
+  const receipt = pendingPrice
+    ? pendingPrice.receipt
+    : Boolean(price && priceBreakdown);
   const couponFieldOpen = Boolean(
     coupon && coupon.isOpen && !coupon.applied && !closedMessage,
   );
@@ -384,7 +394,9 @@ export function CoursePriceBar({
               : "flex flex-col gap-x-6 gap-y-3.5 @2xl/price:flex-row @2xl/price:flex-wrap @2xl/price:items-center @2xl/price:justify-between"
           }
         >
-          {regional ? (
+          {pendingPrice ? (
+            pendingPrice.node
+          ) : regional ? (
             <>
               {/* The rupee price laid out unseen under the shimmer, so the
                   box is the height it will be. */}
@@ -469,7 +481,7 @@ export function CoursePriceBar({
                       ? receiptButtonClasses
                       : coupon
                         ? buttonBesideCouponClasses
-                        : price
+                        : price || pendingPrice
                           ? buttonAloneClasses
                           : ""
                   }`}

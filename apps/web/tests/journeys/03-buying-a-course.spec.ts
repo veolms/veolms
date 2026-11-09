@@ -23,6 +23,21 @@ function pricing(page: Page) {
   return page.getByRole("region", { name: "Course pricing and enrollment" });
 }
 
+function progress(page: Page) {
+  return page.getByRole("region", { name: "Your progress in this course" });
+}
+
+/** "Your enrollment", under the learner's progress on the course's page. */
+async function expectEnrolment(page: Page) {
+  await expect(progress(page)).toContainText("Your enrollment");
+  await expect(progress(page)).toContainText("Enrolled on");
+  await expect(progress(page)).toContainText("Order #");
+  await expect(
+    progress(page).getByRole("link", { name: "Invoice" }),
+  ).toBeVisible();
+  await expect(progress(page)).toContainText("Your pace");
+}
+
 function paymentWindow(page: Page) {
   return page.getByRole("dialog", { name: "Payment window" });
 }
@@ -31,7 +46,9 @@ function paymentWindow(page: Page) {
 async function expectWholeCourseOpen(page: Page, course: TestCourse) {
   await expect(page).toHaveURL(new RegExp(`/learn/${course.slug}/`, "u"));
   for (const lessonNumber of [1, 2, 3]) {
-    await expect(lessonInList(page, lessonNumber)).not.toContainText("locked");
+    await expect(lessonInList(page, lessonNumber)).not.toHaveAccessibleName(
+      /\blocked\b/u,
+    );
   }
 }
 
@@ -73,11 +90,11 @@ test("after buying, the course is in the learner's courses and purchases, and is
   await paymentWindow(page).getByRole("button", { name: "Pay" }).click();
   await expectWholeCourseOpen(page, course);
 
-  // The course's page now shows their progress, not a price.
+  // The course's page now shows their progress and their purchase, not a
+  // price.
   await openCoursePage(page, course);
-  await expect(
-    page.getByRole("region", { name: "Your progress in this course" }),
-  ).toBeVisible();
+  await expect(progress(page)).toBeVisible();
+  await expectEnrolment(page);
   await expect(pricing(page)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Pay Now" })).toHaveCount(0);
 
@@ -94,6 +111,36 @@ test("after buying, the course is in the learner's courses and purchases, and is
   await expect(purchases).toContainText("₹799");
   await expect(purchases).toContainText("Completed");
   await expect(purchases).toContainText("Invoice");
+});
+
+test("a learner who opens a bought course from their courses sees their progress and their purchase on its page", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    title: "Kubernetes Basics",
+    price: 1499,
+  });
+  await academy.signedInLearner("returning");
+  await openCoursePage(page, course);
+  await pricing(page).getByRole("button", { name: "Pay Now" }).click();
+  await paymentWindow(page).getByRole("button", { name: "Pay" }).click();
+  await expectWholeCourseOpen(page, course);
+
+  // Opened from inside the app (no reload): the page has only what the app
+  // already knows, and the rest comes after.
+  await page.goto("/courses/enrolled");
+  // From the keyboard: the card's progress and button lie over the middle of
+  // this link, which is where a click would land.
+  await page
+    .getByRole("link", { name: "View course overview for Kubernetes Basics" })
+    .press("Enter");
+  await expect(page).toHaveURL(
+    new RegExp(`/courses/${course.slug}/overview`, "u"),
+  );
+  await expect(progress(page)).toBeVisible();
+  await expectEnrolment(page);
+  await expect(page.getByRole("button", { name: "Pay Now" })).toHaveCount(0);
 });
 
 test("closing the payment window charges nothing: the course stays locked, and the learner can still buy it", async ({

@@ -1,4 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { accessIncludeTitle } from "./overview/coursePurchasePerks";
+import { accessRulesValidity } from "./course-editor/accessRulesState";
 import "../styles/features/course-wizard.css";
 import { createPortal } from "react-dom";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
@@ -1720,6 +1722,9 @@ export function CourseCreatePage({
                   totalSections={totalSections}
                   totalLessons={totalLessons}
                   computedDuration={computedDuration}
+                  accessTitle={accessIncludeTitle(
+                    accessRulesValidity(accessRules),
+                  )}
                   isReorderingIncludes={isReorderingIncludes}
                   reorderIncludesMutation={reorderIncludesMutation}
                   extrasControlStatus={extrasControlStatus}
