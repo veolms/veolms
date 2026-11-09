@@ -51,6 +51,8 @@ import { useVoiceRecorder } from "./useVoiceRecorder";
 export interface ComposerHandle {
   addFiles: (files: File[]) => void;
   focus: () => void;
+  /** Adds "@name " where the caret is (Mention, on a person's card). */
+  mention: (person: { id: string; name: string }) => void;
 }
 
 const DOCUMENT_ACCEPT = (CHAT_UPLOAD_MIME_TYPES.file as readonly string[]).join(
@@ -204,6 +206,18 @@ export const Composer = forwardRef<
   useImperativeHandle(ref, () => ({
     addFiles: (picked) => void addFiles(picked),
     focus: () => textareaRef.current?.focus({ preventScroll: true }),
+    mention: (person) => {
+      const area = textareaRef.current;
+      const caret = area?.selectionStart ?? text.length;
+      const lead = text.slice(0, caret);
+      const before = `${lead}${lead && !/\s$/.test(lead) ? " " : ""}@${person.name} `;
+      setMentions((current) => new Map(current).set(person.id, person.name));
+      updateText(before + text.slice(caret));
+      requestAnimationFrame(() => {
+        area?.focus({ preventScroll: true });
+        area?.setSelectionRange(before.length, before.length);
+      });
+    },
   }));
 
   function updateText(value: string) {

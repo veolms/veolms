@@ -50,6 +50,7 @@ import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
 import { listTime, messageTime, ROLE_LABEL } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
+import { NotificationsPrompt } from "./NotificationsPrompt";
 import { ProfilePhotoPreview } from "./ProfilePhotoPreview";
 
 type Filter = "all" | "unread" | "courses" | "direct" | "requests";
@@ -135,6 +136,7 @@ export function ChatList({
   onStartDirect,
   onJumpToMessage,
   onShowShortcuts,
+  onToast,
 }: {
   rooms: ChatRoomSummary[] | undefined;
   loading: boolean;
@@ -149,6 +151,7 @@ export function ChatList({
   onStartDirect: (userId: string) => void;
   onJumpToMessage: (roomId: string, seq: number) => void;
   onShowShortcuts: () => void;
+  onToast: (message: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -276,6 +279,7 @@ export function ChatList({
         onEnter={() => visible[0] && onSelect(visible[0].id)}
       />
 
+      {!archivedView ? <NotificationsPrompt onToast={onToast} /> : null}
       {!archivedView ? (
         <div
           className="flex shrink-0 gap-2 overflow-x-auto px-3 pt-0.5 pb-2.5 [scrollbar-width:none]"

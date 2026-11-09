@@ -8,6 +8,7 @@ import type { ChatMessage } from "@veolms/contracts";
 import { useRef, useState, type ReactNode } from "react";
 
 import { cn } from "../lib/utils";
+import { ChatAvatar } from "./ChatAvatar";
 import { StatusTicks } from "./ChatTicks";
 import { messageTime, nameTone, ROLE_LABEL } from "./chatFormat";
 import { MessageAttachments, type ViewableMedia } from "./MessageAttachments";
@@ -26,6 +27,16 @@ export interface BubbleContext {
   isHelper: boolean;
   starred: ReadonlySet<string>;
   myReactions: ReadonlyMap<string, string>;
+  /** A name, picture or @mention was clicked: show that person's card. */
+  onOpenPerson?: (
+    person: { id: string; name: string; avatarUrl: string | null },
+    anchor: HTMLElement,
+  ) => void;
+  /** Who an @name in a message is (from the people the chat knows). */
+  resolveMention?: (
+    name: string,
+    mentionIds: readonly string[],
+  ) => { id: string; name: string; avatarUrl: string | null } | null;
 }
 
 const SWIPE_TO_REPLY_PX = 56;
@@ -40,7 +51,6 @@ export function MessageBubble({
   message,
   ctx,
   firstOfRun,
-  highlighted,
   onAction,
   onOpenMedia,
   onJumpTo,
@@ -48,10 +58,9 @@ export function MessageBubble({
   message: ChatMessage;
   ctx: BubbleContext;
   firstOfRun: boolean;
-  highlighted: boolean;
   onAction: (action: MessageAction, message: ChatMessage) => void;
   onOpenMedia: (items: ViewableMedia[], index: number) => void;
-  onJumpTo: (seq: number) => void;
+  onJumpTo: (seq: number, from?: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
@@ -123,7 +132,6 @@ export function MessageBubble({
         outgoing ? "justify-end" : "justify-start",
         firstOfRun ? "mt-2" : "mt-0.5",
         reactions.length > 0 && "pb-3.5",
-        highlighted && "bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]",
       )}
       onContextMenu={(event) => {
         if (window.getSelection()?.toString()) return;
@@ -183,6 +191,28 @@ export function MessageBubble({
           <ArrowBendUpLeft size={16} />
         </span>
       ) : null}
+      {ctx.isGroup && !outgoing ? (
+        // Groups: the sender's picture beside the first of their run
+        // (WhatsApp, Telegram); tapping it shows their card.
+        <span className="mr-1.5 w-8 shrink-0">
+          {firstOfRun && message.sender ? (
+            <button
+              type="button"
+              aria-label={`${message.sender.name}’s profile`}
+              onClick={(event) =>
+                ctx.onOpenPerson?.(message.sender!, event.currentTarget)
+              }
+              className="cursor-pointer rounded-full border-0 bg-transparent p-0"
+            >
+              <ChatAvatar
+                name={message.sender.name}
+                url={message.sender.avatarUrl}
+                size="sm"
+              />
+            </button>
+          ) : null}
+        </span>
+      ) : null}
       <div
         className={cn(
           "relative max-w-[min(65%,560px)] min-w-24 rounded-lg px-2 pt-1.5 pb-1 text-(length:--chat-text,0.92rem) leading-[1.38] text-(--text) shadow-[0_1px_0.5px_rgb(0_0_0/0.13)] max-[640px]:max-w-[85%]",
@@ -191,15 +221,31 @@ export function MessageBubble({
           onlyMedia && "p-1",
           reactions.length > 0 && "pb-3.5",
         )}
+        data-bubble
         style={dragX ? { transform: `translateX(${dragX}px)` } : undefined}
       >
         {firstOfRun ? <Tail outgoing={outgoing} /> : null}
 
         {firstOfRun && ctx.isGroup && !outgoing && message.sender ? (
           <div className="mb-0.5 flex items-baseline gap-1.5 px-0.5 text-[0.8rem] font-semibold">
-            <span className={nameTone(message.sender.id)}>
-              {message.sender.name}
-            </span>
+            {ctx.onOpenPerson ? (
+              <button
+                type="button"
+                onClick={(event) =>
+                  ctx.onOpenPerson!(message.sender!, event.currentTarget)
+                }
+                className={cn(
+                  "cursor-pointer border-0 bg-transparent p-0 text-left font-semibold hover:underline",
+                  nameTone(message.sender.id),
+                )}
+              >
+                {message.sender.name}
+              </button>
+            ) : (
+              <span className={nameTone(message.sender.id)}>
+                {message.sender.name}
+              </span>
+            )}
             {roleLabel ? (
               <span className="text-[0.7rem] font-medium text-(--muted)">
                 {roleLabel}
@@ -211,7 +257,7 @@ export function MessageBubble({
         {message.replyTo && !deleted ? (
           <button
             type="button"
-            onClick={() => onJumpTo(message.replyTo!.seq)}
+            onClick={() => onJumpTo(message.replyTo!.seq, message.seq)}
             className="mb-1 block w-full cursor-pointer rounded-md border-0 border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2 py-1 text-left"
           >
             <span className="block text-[0.76rem] font-semibold text-(--accent-ink)">
@@ -245,7 +291,21 @@ export function MessageBubble({
             ) : null}
             {message.body ? (
               <div className="px-0.5 whitespace-pre-wrap break-words">
-                <MessageText text={message.body} mentionsMe={mentionsMe} />
+                <MessageText
+                  text={message.body}
+                  mentionsMe={mentionsMe}
+                  onMention={
+                    ctx.onOpenPerson && ctx.resolveMention
+                      ? (name, anchor) => {
+                          const person = ctx.resolveMention!(
+                            name,
+                            message.mentions,
+                          );
+                          if (person) ctx.onOpenPerson!(person, anchor);
+                        }
+                      : undefined
+                  }
+                />
                 {/* Room for the time so the last line does not run under it. */}
                 <span
                   aria-hidden="true"

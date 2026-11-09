@@ -1,6 +1,9 @@
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { useState } from "react";
 
+import type { AvatarImageVariant } from "@veolms/contracts";
+
+import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import { cn } from "../lib/utils";
 import { initials } from "./chatFormat";
 
@@ -10,6 +13,8 @@ const SIZES = {
   lg: "size-12 text-[0.95rem]",
   xl: "size-24 text-[1.9rem]",
 } as const;
+/** The pixel size of each, so the smallest fitting copy is fetched. */
+const PIXELS = { sm: 32, md: 40, lg: 48, xl: 96 } as const;
 
 /** Soft colours for initials, picked from the name so each person keeps one. */
 const TONES = [
@@ -41,12 +46,15 @@ function toneFor(name: string): string {
 export function ChatAvatar({
   name,
   url,
+  srcSet,
   group = false,
   size = "lg",
   className,
 }: {
   name: string;
   url?: string | null;
+  /** The account's own sizes (Settings), when known. */
+  srcSet?: readonly AvatarImageVariant[] | null;
   group?: boolean;
   size?: keyof typeof SIZES;
   className?: string;
@@ -60,11 +68,15 @@ export function ChatAvatar({
   if (url && failed !== url) {
     return (
       <span className={cn(base, "bg-(--chat-input)")}>
-        <img
+        {/* The site's avatar loader: small CDN copies first, and the
+            original files when a copy is missing (Google photos). */}
+        <ResponsiveAvatar
           src={url}
+          srcSet={srcSet ?? null}
+          sizes={`${PIXELS[size]}px`}
+          width={PIXELS[size]}
+          height={PIXELS[size]}
           alt=""
-          loading="lazy"
-          decoding="async"
           onError={() => setFailed(url)}
           className="size-full object-cover"
         />

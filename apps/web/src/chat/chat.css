@@ -119,3 +119,38 @@
     padding: 0;
   }
 }
+
+/*
+ * A message opened from a notification, a reply quote, search, a pin or a
+ * link blinks twice, as in WhatsApp (MessageList.flash).
+ */
+@keyframes chat-flash {
+  0%,
+  100% {
+    box-shadow: 0 1px 0.5px rgb(0 0 0 / 0.13);
+    filter: none;
+  }
+  15%,
+  55% {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent),
+      0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
+    filter: brightness(1.18);
+  }
+  35%,
+  75% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+    filter: brightness(1.04);
+  }
+}
+
+.chat-flash {
+  animation: chat-flash 2.6s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-flash {
+    animation-duration: 0.01s;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+}

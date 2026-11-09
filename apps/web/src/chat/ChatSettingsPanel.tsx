@@ -378,7 +378,9 @@ export function ChatSettingsPanel({
           <div className="mb-2 flex items-center gap-4 rounded-xl px-4 py-4">
             <ChatAvatar
               name={user.displayName}
-              url={user.avatarSrcSet.at(-1)?.url ?? null}
+              url={user.avatarDataUrl ?? user.avatarSrcSet.at(-1)?.url ?? null}
+              srcSet={user.avatarSrcSet}
+              size="xl"
               className="size-16 text-[1.2rem]"
             />
             <span className="min-w-0">
