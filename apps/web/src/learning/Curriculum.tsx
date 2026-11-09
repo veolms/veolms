@@ -183,6 +183,27 @@ const OPEN_HEADING_FRAME_CLASS =
 const LESSONS_FRAME_CLASS =
   "rounded-b-2xl border border-t-0 [clip-path:inset(var(--frame-clip-top,0px)_0_0_0)]";
 
+/*
+ * A narrow panel (the lesson list is the container, `@container/lessons`):
+ * under 330px of list, about a 360px panel, the sections and lesson cards
+ * (CurriculumLessonCard) set smaller type in less room, so a title keeps more
+ * of its words on fewer lines; under 230px, about a 260px panel (a phone's
+ * Lessons panel beside a full-screen video, dragged small), a section's line
+ * of facts under its title goes too, and its count (the bar under the
+ * heading still shows how far it has come), leaving the title the room, and
+ * a word too long for a line breaks rather than being cut off. The resizing
+ * itself is unchanged.
+ */
+const SECTION_TOGGLE_NARROW_CLASS =
+  "@max-[330px]/lessons:gap-2 @max-[330px]/lessons:px-3 @max-[330px]/lessons:py-2.5";
+const SECTION_TITLE_NARROW_CLASS =
+  "@max-[330px]/lessons:text-sm/5 @max-[230px]/lessons:wrap-break-word";
+const SECTION_FACTS_NARROW_CLASS =
+  "@max-[330px]/lessons:text-xs/4 @max-[230px]/lessons:hidden";
+const SECTION_COUNT_NARROW_CLASS =
+  "@max-[330px]/lessons:text-xs/4 @max-[230px]/lessons:hidden";
+const SECTION_CARET_NARROW_CLASS = "@max-[330px]/lessons:size-6";
+
 /** A small drawn dot between the facts of a line. */
 function Dot() {
   return (
@@ -1363,7 +1384,10 @@ export const Curriculum = memo(function Curriculum({
           </div>
         ) : null}
 
-        <div ref={lessonListRef} className="learning-curriculum__lesson-list">
+        <div
+          ref={lessonListRef}
+          className="learning-curriculum__lesson-list @container/lessons"
+        >
           {unavailable ? (
             <div className="grid min-h-60 place-items-center px-6 py-10 text-center">
               <div className="space-y-2">
@@ -1495,7 +1519,7 @@ export const Curriculum = memo(function Curriculum({
                     className={
                       hideHero
                         ? "learning-curriculum__section-toggle"
-                        : `learning-curriculum__section-toggle group/section relative flex w-full cursor-pointer items-center gap-3 border px-4 py-3.5 text-left text-(--text) transition-[background-color,border-color] duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent) ${
+                        : `learning-curriculum__section-toggle group/section relative flex w-full cursor-pointer items-center gap-3 border px-4 py-3.5 ${SECTION_TOGGLE_NARROW_CLASS} text-left text-(--text) transition-[background-color,border-color] duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent) ${
                             isOpen
                               ? `${OPEN_HEADING_FRAME_CLASS} bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_13%,var(--surface))] ${stickHeadings ? `sticky ${STUCK_HEADING_TOP_CLASS} z-2 ${STICK_SETTING_OFF_CLASS}` : ""}`
                               : "overflow-hidden rounded-2xl border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--text)_4.5%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
@@ -1534,13 +1558,17 @@ export const Curriculum = memo(function Curriculum({
                               bold, a size above a lesson's title (16px over
                               14px, the user's call; they were all but the
                               same), in the case it was written in. */}
-                          <span className="line-clamp-2 text-base/6 font-bold tracking-[-0.01em]">
+                          <span
+                            className={`line-clamp-2 text-base/6 font-bold tracking-[-0.01em] ${SECTION_TITLE_NARROW_CLASS}`}
+                          >
                             <span className="sr-only">
                               Section {section.id}:{" "}
                             </span>
                             {section.title}
                           </span>
-                          <span className="inline-flex flex-wrap items-center gap-x-1.5 text-[0.78rem]/5 font-medium text-(--muted) tabular-nums">
+                          <span
+                            className={`inline-flex flex-wrap items-center gap-x-1.5 text-[0.78rem]/5 font-medium text-(--muted) tabular-nums ${SECTION_FACTS_NARROW_CLASS}`}
+                          >
                             <span aria-hidden="true">Section {section.id}</span>
                             <Dot />
                             <span>
@@ -1575,14 +1603,14 @@ export const Curriculum = memo(function Curriculum({
                             aria-hidden="true"
                           />
                           <span
-                            className="text-[0.8rem]/5 font-semibold text-(--text-secondary,var(--muted)) tabular-nums [[data-section-complete]_&]:hidden"
+                            className={`text-[0.8rem]/5 font-semibold text-(--text-secondary,var(--muted)) tabular-nums [[data-section-complete]_&]:hidden ${SECTION_COUNT_NARROW_CLASS}`}
                             aria-hidden="true"
                             data-curriculum-section-count=""
                           >
                             {sectionProgress}
                           </span>
                           <span
-                            className={`learning-curriculum__section-arrow size-7 rounded-full bg-[color-mix(in_srgb,var(--text)_6%,transparent)] transition-[transform,background-color,color] group-hover/section:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] group-hover/section:text-(--text) ${
+                            className={`learning-curriculum__section-arrow size-7 ${SECTION_CARET_NARROW_CLASS} rounded-full bg-[color-mix(in_srgb,var(--text)_6%,transparent)] transition-[transform,background-color,color] group-hover/section:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] group-hover/section:text-(--text) ${
                               isOpen
                                 ? "is-open text-(--text)"
                                 : "text-(--muted)"
