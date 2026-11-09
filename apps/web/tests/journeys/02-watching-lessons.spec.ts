@@ -29,9 +29,9 @@ test("a visitor watches the free preview lesson, and the other lessons show as l
   await openLesson(page, course, 1);
   await expectVideoToPlay(page);
 
-  await expect(lessonInList(page, 1)).not.toContainText("locked");
-  await expect(lessonInList(page, 2)).toContainText("locked");
-  await expect(lessonInList(page, 3)).toContainText("locked");
+  await expect(lessonInList(page, 1)).not.toHaveAccessibleName(/\blocked\b/u);
+  await expect(lessonInList(page, 2)).toHaveAccessibleName(/\blocked\b/u);
+  await expect(lessonInList(page, 3)).toHaveAccessibleName(/\blocked\b/u);
 
   // The CDN refuses a segment without the playback token (403), so
   // segments it served prove the player sent the token.
@@ -114,7 +114,9 @@ test("a learner who has the course watches its locked lessons, and nothing shows
   await openLesson(page, course, 2);
   await expectVideoToPlay(page);
   for (const lessonNumber of [1, 2, 3]) {
-    await expect(lessonInList(page, lessonNumber)).not.toContainText("locked");
+    await expect(lessonInList(page, lessonNumber)).not.toHaveAccessibleName(
+      /\blocked\b/u,
+    );
   }
 
   await openLesson(page, course, 3);
