@@ -2,6 +2,16 @@
    live with their route or component owner and are loaded when that feature
    is rendered. */
 @import "tailwindcss" source("./");
+/* The lesson list as a phone's pull-up sheet: narrower than 820px, but not
+   in the Lessons panel beside a full-screen video, which keeps the wide
+   panel's look on every phone (no grab-handle notch, rounded corners). */
+@custom-variant phone-sheet {
+  @media (width < 820px) {
+    &:not([data-learning-fullscreen-course-panel] *) {
+      @slot;
+    }
+  }
+}
 /* The video player package's utilities are generated here, in the one
    utilities build, so base and responsive variants keep Tailwind's order. */
 @source "../../../packages/video-player/src";

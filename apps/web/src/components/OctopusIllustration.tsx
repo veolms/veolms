@@ -113,13 +113,15 @@ function usePickedPicture(kind: OctopusKind): PictureName {
  * Where a drawing's lead leaves the top of its picture, as shares of the
  * picture's width: the middle of the lead and how thick it is. The lead goes
  * straight up there, so it can be carried on above the picture as a plain
- * line (see `wireToTop`). Measured on the file: 8.5 of 379 pixels wide,
- * centred on pixel 318.
+ * line (see `wireToTop`). Measured on the files (all three sizes, by the
+ * coverage of each pixel row): 1.97% of the width, centred at 84.08%, over
+ * the rows just under its rounded tip. The line must be exactly that: a
+ * hair wider or off to one side and it shows a step where the two meet.
  */
 const leadFromAbove: Partial<
   Record<PictureName, { at: number; thick: number }>
 > = {
-  "went-wrong-frayed": { at: 83.9, thick: 2.25 },
+  "went-wrong-frayed": { at: 84.08, thick: 1.97 },
 };
 
 /** Whether a drawing is in the page at all, by the page's theme. */
@@ -182,12 +184,16 @@ function OctopusImage({
   // lead comes in from outside. The box takes the size and the adjustments
   // the drawing would have had, and the line is sized in shares of the box,
   // so it is scaled and moved with the drawing.
+  //
+  // The line runs 4px on down over the drawn lead, past its rounded tip, and
+  // fades out as it goes: ended square at the tip, the two met in a visible
+  // kink at the size the player shows them, however exactly they lined up.
   return (
     <span className={`relative w-fit! ${placing}`}>
       {image}
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute bottom-[calc(100%-2px)] h-[100vh] -translate-x-1/2 ${
+        className={`pointer-events-none absolute bottom-[calc(100%-4px)] h-[100vh] -translate-x-1/2 [mask-image:linear-gradient(to_top,transparent,black_4px)] ${
           tone === "on-dark" ? "bg-white" : "bg-black"
         }`}
         style={{ left: `${lead.at}%`, width: `${lead.thick}%` }}
