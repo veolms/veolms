@@ -75,6 +75,11 @@ interface ThreadSurfaceProps {
   editingEntryId: string | number | null;
   notice: string;
   entryFilter: DiscussionEntryFilter;
+  /**
+   * The filter the learner last chose, shown on the buttons at once;
+   * `entryFilter` (what the list shows) catches up with it a moment later.
+   */
+  selectedEntryFilter?: DiscussionEntryFilter;
   feedView: DiscussionFeedView;
   /** The learner is signed in, so the feed can be narrowed to their own. */
   canFilterMine: boolean;
@@ -153,6 +158,8 @@ interface ThreadSurfaceProps {
   onSubmit: (onLocallyAccepted?: () => void) => Promise<boolean> | void;
   onCancelEdit: () => void;
   onEntryFilterChange: (filter: DiscussionEntryFilter) => void;
+  /** The pointer rests on a filter button, or it has focus: load ahead. */
+  onEntryFilterIntent?: (filter: DiscussionEntryFilter) => void;
   onFeedViewChange: (view: DiscussionFeedView) => void;
   onLike: (id: string | number, liked: boolean) => void;
   onEdit: (comment: Comment) => void;
@@ -281,6 +288,7 @@ export function ThreadSurface({
   editingEntryId,
   notice,
   entryFilter,
+  selectedEntryFilter = entryFilter,
   feedView,
   canFilterMine,
   search,
@@ -338,6 +346,7 @@ export function ThreadSurface({
   onSubmit,
   onCancelEdit,
   onEntryFilterChange,
+  onEntryFilterIntent,
   onFeedViewChange,
   onLike,
   onEdit,
@@ -954,9 +963,11 @@ export function ThreadSurface({
               <button
                 key={value}
                 type="button"
-                aria-pressed={entryFilter === value}
+                aria-pressed={selectedEntryFilter === value}
                 onClick={() => onEntryFilterChange(value)}
-                className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${entryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
+                onPointerEnter={() => onEntryFilterIntent?.(value)}
+                onFocus={() => onEntryFilterIntent?.(value)}
+                className={`learning-discussion__filter-button h-8 shrink-0 rounded-lg px-2.5 font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:px-3 ${selectedEntryFilter === value ? "bg-(--text) text-(--canvas) shadow-[0_6px_18px_color-mix(in_srgb,var(--canvas)_28%,transparent)]" : "bg-[color-mix(in_srgb,var(--surface)_54%,transparent)] text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover) hover:text-(--text)"}`}
               >
                 {label}
               </button>

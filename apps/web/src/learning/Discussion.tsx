@@ -2,6 +2,7 @@ import React, {
   lazy,
   Suspense,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -142,6 +143,7 @@ import {
   learningInteractionKeys,
   mergeNotesWithCreationRecords,
   mergeThreadsWithCreationRecords,
+  prefetchLessonDiscussions,
   useLessonDiscussions,
 } from "../services/learning-interactions";
 import { optimisticEditCoordinator } from "../services/learning-interactions/optimistic-edit-coordinator";
@@ -288,9 +290,17 @@ function DiscussionInner({
   const [entryKind, setEntryKind] =
     useState<DiscussionEntryKind>(firstAvailableKind);
   const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
-  const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>(
+  const [selectedEntryFilter, setEntryFilter] = useState<DiscussionEntryFilter>(
     enabledKinds.length === 1 ? enabledKinds[0]! : "all",
   );
+  // The filter buttons show the choice at once; everything the choice
+  // changes (the queries, the counts, the list) follows it as a deferred
+  // update React can interrupt. A switch rebuilt the whole visible list in
+  // one task, 126 to 237 ms on procodrr.com and up to 475 ms in a
+  // development build, with no frame drawn meanwhile: the lesson video
+  // stood still and the pressed button lagged (Chrome without a graphics
+  // card, 2026-11-11).
+  const entryFilter = useDeferredValue(selectedEntryFilter);
   const [chosenFeedView, setFeedView] = useState<DiscussionFeedView>("top");
   // "Mine" is only there for a learner who is signed in; one who signs out
   // while it is chosen is back on the top ones.
@@ -459,6 +469,41 @@ function DiscussionInner({
       updatedAt: copy.savedAt,
     });
   }, [courseId, isOpeningQuery, lessonId, openingKind, queryClient]);
+  // A filter's first page is asked for as soon as the pointer rests on its
+  // button (or the button takes focus), so that by the click it is loaded:
+  // the list is then built as part of the deferred update (see
+  // `selectedEntryFilter`), which React can interrupt. Arriving after the
+  // click, the answer is applied as an ordinary update, and the whole list
+  // was built in one task: a 600 ms freeze on a tab's first use without a
+  // graphics card (development build, 2026-11-11).
+  const prefetchEntryFilter = useCallback(
+    (filter: DiscussionEntryFilter) => {
+      if (
+        !queryClient ||
+        !courseId ||
+        !lessonId ||
+        lessonContentAccess !== "granted" ||
+        filter === entryFilter
+      ) {
+        return;
+      }
+      void prefetchLessonDiscussions(queryClient, courseId, lessonId, {
+        ...unifiedDiscussionQuery,
+        kind:
+          filter === "comment" || filter === "question" || filter === "note"
+            ? filter
+            : "all",
+      });
+    },
+    [
+      courseId,
+      entryFilter,
+      lessonContentAccess,
+      lessonId,
+      queryClient,
+      unifiedDiscussionQuery,
+    ],
+  );
   const unifiedDiscussionItems = useMemo<LessonDiscussionItem[]>(
     () => unifiedDiscussions.data?.pages.flatMap((page) => page.items) ?? [],
     [unifiedDiscussions.data],
@@ -2566,6 +2611,8 @@ function DiscussionInner({
             editingEntryId={editingEntry?.id ?? null}
             notice={notice}
             entryFilter={entryFilter}
+            selectedEntryFilter={selectedEntryFilter}
+            onEntryFilterIntent={prefetchEntryFilter}
             feedView={feedView}
             canFilterMine={Boolean(currentUser)}
             search={discussionSearch}

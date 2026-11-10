@@ -231,6 +231,48 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   width: var(--learning-fullscreen-video-width, 98%);
 }
 
+/* The shell glow, once it is drawn already blurred (LessonAmbientProjection),
+   is laid out at the size it is seen at instead of being scaled up to it:
+   around the video in pixels, written on the element by placeShellGlow
+   (not with anchor() here), and in full screen by the rule below. It is a
+   painted element, part of the page's own layer; a transform, or a box
+   given by anchor(), made the browser draw it apart again, and without a
+   graphics card that cost half the frames of the video above it (27 to 36
+   page frames a second either way, 58 to 60 laid out in pixels, headless
+   Chrome with the GPU off, 2026-11-10). The 1.5 is the transparent margin
+   the blur spreads into (SPREAD in the component). */
+.ambient-canvas--shell.ambient-canvas--learning-shell[data-ambient-prefiltered] {
+  --ambient-spread: calc(var(--ambient-scale) * 1.5);
+  transform: none;
+}
+
+/* Where the page is drawn without a graphics card
+   (lib/software-rendering.ts) the glow stays around the video only. The
+   part spread under the sidebar and the lesson list moves with the video,
+   so it was repainted at about 1900 x 1000 pixels on every frame the page
+   scrolled: 67 to 74 frames a second with it, 78 to 92 without (Chrome
+   157, GPU off, 2026-11-11). In full screen nothing scrolls, and it stays. */
+:root[data-rendering="software"]
+  .ambient-canvas--shell[data-ambient-projection-scope="app"] {
+  display: none;
+}
+
+[data-video-player-shell-overlay-host]
+  > .ambient-canvas--fullscreen-shell[data-ambient-prefiltered] {
+  top: calc(1% - 98% * (var(--ambient-spread) - 1) / 2);
+  right: auto;
+  bottom: auto;
+  left: calc(
+    var(--learning-fullscreen-video-offset-x, 1%) -
+      var(--learning-fullscreen-video-width, 98%) *
+      (var(--ambient-spread) - 1) / 2
+  );
+  width: calc(
+    var(--learning-fullscreen-video-width, 98%) * var(--ambient-spread)
+  );
+  height: calc(98% * var(--ambient-spread));
+}
+
 @media (max-width: 640px) {
   /* Prevent video overlays (such as scaled/blurred ambient projections) from
      bleeding past mobile viewport boundaries, which causes horizontal
