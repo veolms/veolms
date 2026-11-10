@@ -282,6 +282,9 @@ importers:
       '@veolms/web-core':
         specifier: workspace:*
         version: link:../../packages/web-core
+      '@veolms/webview-bridge':
+        specifier: workspace:*
+        version: link:../../packages/webview-bridge
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -633,6 +636,8 @@ importers:
       '@types/react':
         specifier: 19.2.18
         version: 19.2.18
+
+  packages/webview-bridge: {}
 
 packages:
 
