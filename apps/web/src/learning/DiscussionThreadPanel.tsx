@@ -1734,14 +1734,9 @@ function ThreadReplyEntry({
                     setEditing(true);
                   }}
                   onShare={() =>
-                    void shareDiscussionEntry(
-                      reply.id,
-                      reply.name,
-                      reply.text,
-                      {
-                        parentThreadId: parentId,
-                      },
-                    )
+                    shareDiscussionEntry(reply.id, reply.name, reply.text, {
+                      parentThreadId: parentId,
+                    })
                   }
                   onDelete={() => {
                     void onDelete(reply.id);

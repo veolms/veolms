@@ -52,7 +52,7 @@ const dayElevation = [
   "[:root[data-theme=light]:not([data-elevated-surfaces=false])_&]:[--card-hover-shadow:inset_0_1px_0_rgb(255_255_255/100%),0_4px_9px_rgb(25_32_45/14%),0_18px_36px_rgb(25_32_45/20%),0_5px_15px_color-mix(in_srgb,var(--accent-shadow)_24%,transparent)]",
   "[:root[data-theme=light]:not([data-elevated-surfaces=false])_&]:[--card-compact-shadow:var(--sidebar-menu-active-shadow)]",
   "[:root[data-theme=light]:not([data-elevated-surfaces=false])_&]:[--raised-surface-shadow:var(--sidebar-menu-active-shadow)]",
-  "[:root[data-theme=light]:not([data-elevated-surfaces=false])_&]:[--raised-surface-image:linear-gradient(108deg,oklch(from_var(--accent)_calc(0.99_-_c_*_0.35)_calc(c_*_0.11)_h)_0%,oklch(from_var(--accent)_calc(0.995_-_c_*_0.3)_calc(c_*_0.09)_h)_100%)]",
+  "[:root[data-theme=light]:not([data-elevated-surfaces=false])_&]:[--raised-surface-image:linear-gradient(108deg,oklab(from_var(--accent)_calc(0.99_-_sqrt(a_*_a_+_b_*_b)_*_0.35)_calc(a_*_0.11)_calc(b_*_0.11))_0%,oklab(from_var(--accent)_calc(0.995_-_sqrt(a_*_a_+_b_*_b)_*_0.3)_calc(a_*_0.09)_calc(b_*_0.09))_100%)]",
   "[:root[data-theme=light]:not([data-elevated-surfaces=false])_&]:[--card-border:transparent]",
 ].join(" ");
 

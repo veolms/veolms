@@ -38,6 +38,7 @@ import {
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { DiscussionEditor } from "./discussion-editor/DiscussionEditor";
 import { copyTextToClipboard } from "../lib/clipboard";
+import { canOpenShareSheet } from "../lib/share";
 import { HighlightedText, useSearchHighlight } from "../lib/searchHighlight";
 import { UndoDeleteButton } from "./useUndoableDeletion";
 import { QueryClientContext } from "@tanstack/react-query";
@@ -2013,10 +2014,11 @@ export async function shareDiscussionEntry(
 
   // A comment or a question is shared as a link straight to it, through the
   // device's own share sheet. Where there is none, or it will not open (an
-  // embedded browser, most desktop Firefox), the link is copied instead.
+  // embedded browser, most desktop Firefox) or hangs (Windows), the link is
+  // copied instead.
   if (!options?.isNote && !options?.parentThreadId) {
     const link = getHighlightedCommentUrl(entryId);
-    if (typeof navigator.share === "function") {
+    if (canOpenShareSheet()) {
       try {
         await navigator.share({
           title: `${name}'s discussion entry`,
@@ -2044,7 +2046,7 @@ export async function shareDiscussionEntry(
   const shareText = text.trim();
 
   try {
-    if (navigator.share) {
+    if (canOpenShareSheet()) {
       await navigator.share({
         title: `${name}'s discussion entry`,
         text: shareText || undefined,
