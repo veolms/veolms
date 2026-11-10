@@ -42,6 +42,8 @@ import { SidebarTooltipSurface } from "./shell/SidebarTooltipSurface";
 import { SidebarResizeHandle } from "./shell/SidebarResizeHandle";
 import { SidebarBrand } from "./shell/SidebarBrand";
 import { SidebarNavigation } from "./shell/SidebarNavigation";
+import { DiwaliMenuOffer } from "./festive/DiwaliMenuOffer";
+import { DiwaliSidebarOffer } from "./festive/DiwaliSidebarOffer";
 import { SidebarProfileMenuLayer } from "./shell/SidebarProfileMenuLayer";
 import { SidebarProfileButton } from "./shell/SidebarProfileButton";
 import { SidebarAppearanceDock } from "./shell/SidebarAppearanceDock";
@@ -337,6 +339,7 @@ export function CoursesPage({
     publishedCourses,
     enrolledCoursesData,
     learnerStateKnown,
+    learnerStateFailed,
     myCoursesQuery,
     myCoursesData,
     deletedCoursesQuery,
@@ -665,6 +668,8 @@ export function CoursesPage({
     publishedCourses,
     enrolledCoursesData,
     learnerStateKnown,
+    learnerStateFailed,
+    signedIn: isAuthenticated,
     myCoursesData,
     deletedCoursesData,
     deleteCourseMutation,
@@ -1211,7 +1216,11 @@ export function CoursesPage({
               sidebarResizing={sidebarResizing}
               sidebarResizePreviewWidth={sidebarResizePreviewWidth}
               renderedSidebarWidth={renderedSidebarWidth}
+              sharesRoomBelow
             />
+            {/* The festive offer, when an admin has it on; otherwise only
+                the room under the menu. */}
+            <DiwaliSidebarOffer />
 
             <div className="courses-profile" ref={profileRef}>
               <SidebarProfileMenuLayer
@@ -1538,6 +1547,11 @@ export function CoursesPage({
                   onNavigatePage={onNavigatePage}
                   setLogoutConfirmOpen={setLogoutConfirmOpen}
                 />
+                {/* Measured with the rest by useMobileProfileDrawerSize, so
+                    the drawer opens tall enough for it and the dock. */}
+                <div className="mobile-menu-sheet__extra">
+                  <DiwaliMenuOffer />
+                </div>
                 <MobileSheetAppearance
                   mobilePaletteMenu={mobilePaletteMenu}
                   sidebarDockItems={sidebarDockItems}

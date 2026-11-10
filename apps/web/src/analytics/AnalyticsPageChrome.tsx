@@ -5,7 +5,10 @@ import {
   AnalyticsTabPlaceholder,
   LoadingTab,
 } from "@veolms/analytics-ui/skeletons";
-import type { AnalyticsTabContribution } from "@veolms/web-core";
+import type {
+  AnalyticsSelectProps,
+  AnalyticsTabContribution,
+} from "@veolms/web-core";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { elevatedCardTokenScopeClasses } from "../components/ElevatedCard";
 import { PageHeading } from "../components/PageHeading";
@@ -17,6 +20,38 @@ import { useCapabilities } from "../services/authorization";
 import { SettingsTabBar } from "../settings/SettingsTabBar";
 import type { PageTabDefinition } from "../settings/settingsTabs";
 import { CORE_ANALYTICS_TABS } from "./analyticsTabs";
+
+/** The analytics filter look: the course picker and every tab's filters. */
+const ANALYTICS_SELECT_TRIGGER_CLASS =
+  "!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)";
+
+/**
+ * The select analytics tabs are handed (`AnalyticsTabProps.Select`): the
+ * app's ThemedSelect with the course picker's trigger, so a plugin tab's
+ * filters match the page.
+ */
+export function AnalyticsSelect({
+  value,
+  onValueChange,
+  options,
+  ariaLabel,
+  searchable,
+  searchPlaceholder,
+  disabled,
+}: AnalyticsSelectProps) {
+  return (
+    <ThemedSelect
+      value={value}
+      onValueChange={onValueChange}
+      options={options}
+      ariaLabel={ariaLabel}
+      searchable={searchable}
+      searchPlaceholder={searchPlaceholder}
+      disabled={disabled}
+      triggerClassName={ANALYTICS_SELECT_TRIGGER_CLASS}
+    />
+  );
+}
 
 /**
  * The analytics page's frame: heading, Export button, the pinned section
@@ -362,7 +397,7 @@ export function AnalyticsPageChrome({
             ariaLabel="Course"
             searchable
             disabled={!onCourseChange}
-            triggerClassName="!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
+            triggerClassName={ANALYTICS_SELECT_TRIGGER_CLASS}
           />
         </div>
         <p className="hidden md:block text-xs text-(--muted)">

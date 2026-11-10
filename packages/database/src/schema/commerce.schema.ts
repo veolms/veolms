@@ -85,6 +85,21 @@ export interface CouponTable {
   updated_at: Generated<Date>;
 }
 
+export type CouponDiscountRuleTarget = "course" | "bundle";
+
+/** A course's or bundle's own discount under a coupon. */
+export interface CouponDiscountRuleTable {
+  id: string;
+  coupon_id: string;
+  target_type: CouponDiscountRuleTarget;
+  target_id: string;
+  discount_type: CouponDiscountType;
+  discount_value: number;
+  max_discount_amount: number | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface CouponRedemptionTable {
   id: string;
   coupon_id: string;
@@ -106,6 +121,13 @@ export interface OrderTable {
   total_amount: number;
   /** Creator earnings after commission, in smallest currency units (paise). */
   after_commission_amount: number | null;
+  /**
+   * For an order paid in another currency: what the gateway settles it for
+   * in `settlement_currency` (Razorpay: INR), in minor units. Null for an
+   * order paid in the settlement currency itself.
+   */
+  settlement_amount: number | null;
+  settlement_currency: string | null;
   coupon_id: string | null;
   idempotency_key: string | null;
   expires_at: Date;

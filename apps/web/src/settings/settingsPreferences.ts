@@ -1,7 +1,4 @@
-import {
-  isBuiltInPlayerThemeId,
-  type BuiltInPlayerThemeId,
-} from "@veolms/video-player/theme-ids";
+import { isPlayerThemeId } from "@veolms/video-player/theme-ids";
 
 export const SIDEBAR_MAX_WIDTH_MIN = 200;
 export const SIDEBAR_MAX_WIDTH_DEFAULT = 300;
@@ -334,7 +331,17 @@ export interface SidebarPreferences {
 
 export interface LearningPreferences {
   videoQuality: string;
-  videoPlayerTheme: BuiltInPlayerThemeId;
+  /**
+   * A built-in theme id or one a plugin registers; an id nobody provides
+   * plays in the default theme (see `resolvePlayerTheme`).
+   */
+  /**
+   * The player theme this browser picked; empty while it follows the
+   * academy's default (Platform > Appearance). Kept under a new name: the
+   * old `videoPlayerTheme` was written as "youtube" for everyone, picked or
+   * not, so it cannot tell the two apart.
+   */
+  playerThemeChoice: string;
   playbackSpeed: string;
   seekIntervalSeconds: number;
   resumeFromLastPosition: boolean;
@@ -359,7 +366,44 @@ export interface LearningPreferences {
    * while its lessons scroll under it.
    */
   stickOpenSection: boolean;
+  /**
+   * Keys taken off the player (settings > Advanced) to keep it clean; each
+   * still works from its keyboard shortcut.
+   */
+  hiddenPlayerControls: HideablePlayerControl[];
+  /**
+   * Where the lessons list and the chapters take the player theme's look
+   * (settings > Advanced); everywhere else they keep the app's own.
+   */
+  lessonListThemeInPage: boolean;
+  lessonListThemeInFullscreen: boolean;
+  lessonListThemeInDrawer: boolean;
+  chaptersThemeInFullscreen: boolean;
+  chaptersThemeInSheet: boolean;
+  /**
+   * On a lesson with a video, 1-9 and 0 jump the video to that tenth and
+   * Alt with them opens the sidebar's pages; off, the other way round
+   * (settings > Advanced).
+   */
+  numberKeysSeekVideo: boolean;
 }
+
+/** The player's keys a learner can hide. */
+export const HIDEABLE_PLAYER_CONTROLS = [
+  "lessons",
+  "chapters",
+  "volume",
+  "lesson-navigation",
+  "minimize",
+] as const;
+export type HideablePlayerControl = (typeof HIDEABLE_PLAYER_CONTROLS)[number];
+
+const normalizeHiddenPlayerControls = (
+  value: unknown,
+): HideablePlayerControl[] =>
+  Array.isArray(value)
+    ? HIDEABLE_PLAYER_CONTROLS.filter((control) => value.includes(control))
+    : [];
 
 export const LEARNING_PREFERENCES_KEY = "veolms-learning-preferences";
 export const LEARNING_PREFERENCES_EVENT = "veolms:learning-preferences";
@@ -391,13 +435,22 @@ export const normalizeLearningSeekInterval = (value: unknown): number => {
   );
 };
 
-export const normalizeVideoPlayerTheme = (
-  value: unknown,
-): BuiltInPlayerThemeId => (isBuiltInPlayerThemeId(value) ? value : "youtube");
+/** Themes that were taken out; a stored choice of one goes back to the default. */
+const RETIRED_PLAYER_THEME_IDS = new Set(["aurora", "minimal"]);
+
+export const normalizePlayerThemeChoice = (value: unknown): string =>
+  isPlayerThemeId(value) && !RETIRED_PLAYER_THEME_IDS.has(value) ? value : "";
 
 export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   videoQuality: "auto",
-  videoPlayerTheme: "youtube",
+  playerThemeChoice: "",
+  hiddenPlayerControls: [],
+  lessonListThemeInPage: false,
+  lessonListThemeInFullscreen: true,
+  lessonListThemeInDrawer: true,
+  chaptersThemeInFullscreen: true,
+  chaptersThemeInSheet: true,
+  numberKeysSeekVideo: true,
   playbackSpeed: "1",
   seekIntervalSeconds: LEARNING_SEEK_INTERVAL_DEFAULT,
   resumeFromLastPosition: true,
@@ -775,14 +828,31 @@ export const readLearningPreferences = (): LearningPreferences => {
           : LEARNING_PREFERENCE_DEFAULTS.resumeFromLastPosition,
       continuousLessonNumbering:
         storedPreferences.continuousLessonNumbering === true,
-      videoPlayerTheme: normalizeVideoPlayerTheme(
-        storedPreferences.videoPlayerTheme,
+      playerThemeChoice: normalizePlayerThemeChoice(
+        storedPreferences.playerThemeChoice,
+      ),
+      hiddenPlayerControls: normalizeHiddenPlayerControls(
+        storedPreferences.hiddenPlayerControls,
       ),
     };
+    for (const key of [
+      "lessonListThemeInPage",
+      "lessonListThemeInFullscreen",
+      "lessonListThemeInDrawer",
+      "chaptersThemeInFullscreen",
+      "chaptersThemeInSheet",
+      "numberKeysSeekVideo",
+    ] as const) {
+      if (typeof preferences[key] !== "boolean") {
+        preferences[key] = LEARNING_PREFERENCE_DEFAULTS[key];
+      }
+    }
     delete (preferences as Record<string, unknown>).autoplayNextLecture;
     // Goal/reminder fields moved to the server (learning goal settings
     // API); stale copies in old localStorage payloads are dropped.
     for (const staleKey of [
+      // Replaced by `playerThemeChoice` (see there).
+      "videoPlayerTheme",
       "weeklyGoal",
       "learningReminders",
       "reminderDays",

@@ -53,6 +53,29 @@ const refusedBootstraps = new Map<string, RefusedBootstrap>();
 
 const currentViewerId = () => authStore.getState().user?.id ?? null;
 
+/**
+ * Moves on each time this page's playback answers are dropped, so an answer
+ * asked for before then is not kept after it.
+ */
+let playbackAnswersGeneration = 0;
+
+/**
+ * A lesson's answer carries the token its segments are fetched with, so it
+ * is the signed-in account's and goes with its session. The lesson page used
+ * to find it still kept after a sign-out: the video it was playing played
+ * on, and coming back to the lesson loaded it again with a token the server
+ * would no longer renew, instead of asking and being told to log in. A
+ * visitor signing in keeps theirs: what a visitor may watch, an account may.
+ */
+let signedInViewerId = currentViewerId();
+authStore.subscribe(() => {
+  const viewerId = currentViewerId();
+  if (viewerId === signedInViewerId) return;
+  const previous = signedInViewerId;
+  signedInViewerId = viewerId;
+  if (previous !== null) clearVideoPlaybackBootstrapCache();
+});
+
 function refusalStillStands(refused: RefusedBootstrap): boolean {
   if (Date.now() >= refused.expiresAt) return false;
   const viewerId = currentViewerId();
@@ -241,13 +264,14 @@ async function takeEarlyAnswer(
     lessonNumber: options.lessonNumber,
     learnerView: isLearnerView(),
   };
+  const askedBy = keptViewer();
   const headStarted = takeHeadStartedPlaybackBootstrap(request);
   const answer = headStarted ? await headStarted.catch(() => null) : null;
   if (answer) {
     const data = unwrapResponseData(answer.payload);
     if (answer.status >= 200 && answer.status < 300) {
       const bootstrap = await parseBootstrap(data);
-      if (!answer.kept) keepAnswer(options, data);
+      if (!answer.kept) keepAnswer(options, data, askedBy);
       return bootstrap;
     }
     // A refusal is the server's answer as it would be to the page.
@@ -266,9 +290,16 @@ async function takeEarlyAnswer(
   return kept ? await parseBootstrap(kept).catch(() => null) : null;
 }
 
-function keepAnswer(options: VideoPlaybackBootstrapRequest, data: unknown) {
+function keepAnswer(
+  options: VideoPlaybackBootstrapRequest,
+  data: unknown,
+  askedBy: string | null,
+) {
   const viewer = keptViewer();
   if (!viewer || options.mediaId) return;
+  // Signed out (or into another account) while it was on its way: the
+  // answer was the old account's, and is not kept as the new viewer's.
+  if (viewer !== askedBy) return;
   keepPlaybackBootstrap(
     viewer,
     {
@@ -308,6 +339,7 @@ async function answerBootstrap(
   // for the seek-preview storyboard when the video has one, for where the
   // learner left the lesson, and for the video's subtitle tracks.
   const path = `${playbackPath(options, "playback-bootstrap")}?inlineManifest=1&storyboard=1&resume=1&subtitles=1`;
+  const askedBy = keptViewer();
   let response: Response;
   try {
     response = await fetch(resolveVideoPlaybackApiUrl(path), {
@@ -338,7 +370,7 @@ async function answerBootstrap(
   }
 
   const bootstrap = await parseBootstrap(data);
-  keepAnswer(options, data);
+  keepAnswer(options, data, askedBy);
   return bootstrap;
 }
 
@@ -359,6 +391,26 @@ async function parseBootstrap(data: unknown): Promise<VideoPlaybackBootstrap> {
   };
 }
 
+/**
+ * How long a token request may take. The requests are shared by key
+ * (`playbackTokenRequests`) until they settle, so one that never settled
+ * (a connection gone quiet) was handed back to every renewal after it, and
+ * the lesson's segments waited on it for good. Given up at this point, the
+ * next renewal starts afresh.
+ */
+const PLAYBACK_TOKEN_REQUEST_LIMIT_MS = 12_000;
+
+/** `signal`, or one that aborts after the limit when none is given. */
+function playbackTokenSignal(signal: AbortSignal | undefined): AbortSignal {
+  if (signal) return signal;
+  if (typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(PLAYBACK_TOKEN_REQUEST_LIMIT_MS);
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), PLAYBACK_TOKEN_REQUEST_LIMIT_MS);
+  return controller.signal;
+}
+
 async function requestPlaybackToken(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackToken> {
@@ -369,7 +421,7 @@ async function requestPlaybackToken(
       credentials: "include",
       cache: "no-store",
       headers: playbackRequestHeaders(),
-      signal: options.signal,
+      signal: playbackTokenSignal(options.signal),
     },
   );
   const payload = await readResponsePayload(response);
@@ -476,11 +528,15 @@ export function getVideoPlaybackBootstrap(
     refusedBootstraps.delete(key);
   }
 
+  const generation = playbackAnswersGeneration;
   const promise = withinPlaybackBootstrapLimit(requestBootstrap(options));
   bootstrapRequests.set(key, promise);
   void promise
     .then((bootstrap) => {
-      bootstrapCache.set(key, bootstrap);
+      // Asked for by a session that has since ended: not kept.
+      if (generation === playbackAnswersGeneration) {
+        bootstrapCache.set(key, bootstrap);
+      }
     })
     .catch((error: unknown) => {
       if (bootstrapRequests.get(key) === promise) {
@@ -519,6 +575,7 @@ export function getRefusedVideoPlaybackBootstrap(
 }
 
 export function clearVideoPlaybackBootstrapCache(): void {
+  playbackAnswersGeneration += 1;
   bootstrapRequests.clear();
   refusedBootstraps.clear();
   playbackTokenRequests.clear();

@@ -19,6 +19,8 @@ import type {
   CoursePurchasePerk,
 } from "./coursePurchasePerks";
 import { overviewCardClasses } from "./overviewStyles";
+import { courseCardShimmerClass } from "../courseCardShimmer";
+import { priceRegionClass } from "../CoursePriceSwitch";
 
 export interface CoursePriceBarProps {
   /** Left out for someone who manages the course: they have nothing to buy. */
@@ -50,6 +52,23 @@ export interface CoursePriceBarProps {
    * with `price` on a phone, and with a coupon in use beside the button.
    */
   priceBreakdown?: CoursePriceBreakdownData;
+  /**
+   * For a course that also has a price for buyers outside India, while the
+   * box shows the course's own price: both prices, of which the visitor's
+   * region shows one, and a shimmer of their size until it is known (see
+   * `priceRegion.ts`). `price` and `priceBreakdown` are then the rupee ones.
+   */
+  regional?: {
+    domestic: RegionalPriceView;
+    international: RegionalPriceView;
+  };
+  /**
+   * In place of the price while the page does not know it (see
+   * `CoursePriceBoxEarly`), laid out as a paid course's receipt or as a
+   * free course's price line. `price`, `priceBreakdown` and `regional`
+   * are left out meanwhile.
+   */
+  pendingPrice?: { receipt: boolean; node: ReactNode };
   /** Left out when no coupon can be used on this course. */
   coupon?: CourseCouponControlProps;
   /** A coupon problem to show under the bar. */
@@ -80,15 +99,21 @@ export interface CoursePriceBarProps {
    */
   includedCourses?: ReactNode;
   /** A small line right under the button: how the payment is made. */
-  checkoutNote?: string;
+  checkoutNote?: ReactNode;
   /** The green box at the foot of the card, for a course that is paid for. */
   guarantee?: CoursePurchaseGuarantee;
   /** A further row under the price, above the perks. */
   children?: ReactNode;
 }
 
+/** The price part of the bar for one region (see `CoursePriceBarProps.regional`). */
+export interface RegionalPriceView {
+  price: NonNullable<CoursePriceBarProps["price"]>;
+  priceBreakdown?: CoursePriceBreakdownData;
+}
+
 /** A saving beside the price: the sale's, and a coupon's after it. */
-const savingBadgeClasses =
+export const savingBadgeClasses =
   "inline-flex items-baseline rounded-lg bg-[color-mix(in_srgb,var(--success)_14%,transparent)] px-2.5 py-1.5 text-[0.8rem] leading-none font-bold whitespace-nowrap text-[color-mix(in_srgb,var(--success)_72%,var(--text))]";
 
 /** The bar is a box on the page; it measures itself for its own layout. */
@@ -331,6 +356,8 @@ export function CoursePriceDisplay({
 export function CoursePriceBar({
   price,
   priceBreakdown,
+  regional,
+  pendingPrice,
   coupon,
   couponError,
   action,
@@ -344,7 +371,9 @@ export function CoursePriceBar({
   guarantee,
   children,
 }: CoursePriceBarProps) {
-  const receipt = Boolean(price && priceBreakdown);
+  const receipt = pendingPrice
+    ? pendingPrice.receipt
+    : Boolean(price && priceBreakdown);
   const couponFieldOpen = Boolean(
     coupon && coupon.isOpen && !coupon.applied && !closedMessage,
   );
@@ -365,7 +394,38 @@ export function CoursePriceBar({
               : "flex flex-col gap-x-6 gap-y-3.5 @2xl/price:flex-row @2xl/price:flex-wrap @2xl/price:items-center @2xl/price:justify-between"
           }
         >
-          {receipt && priceBreakdown ? (
+          {pendingPrice ? (
+            pendingPrice.node
+          ) : regional ? (
+            <>
+              {/* The rupee price laid out unseen under the shimmer, so the
+                  box is the height it will be. */}
+              <div
+                aria-hidden="true"
+                className={`${priceRegionClass("pending", "block")} relative min-w-0`}
+              >
+                <div className="invisible">
+                  <RegionalPrice view={regional.domestic} receipt={receipt} />
+                </div>
+                <div
+                  className={`absolute inset-0 rounded-lg ${courseCardShimmerClass}`}
+                />
+              </div>
+              <div
+                className={`${priceRegionClass("domestic", "block")} min-w-0`}
+              >
+                <RegionalPrice view={regional.domestic} receipt={receipt} />
+              </div>
+              <div
+                className={`${priceRegionClass("international", "block")} min-w-0`}
+              >
+                <RegionalPrice
+                  view={regional.international}
+                  receipt={receipt}
+                />
+              </div>
+            </>
+          ) : receipt && priceBreakdown ? (
             <CoursePriceBreakdown breakdown={priceBreakdown} />
           ) : price ? (
             <CoursePriceDisplay price={price} />
@@ -421,7 +481,7 @@ export function CoursePriceBar({
                       ? receiptButtonClasses
                       : coupon
                         ? buttonBesideCouponClasses
-                        : price
+                        : price || pendingPrice
                           ? buttonAloneClasses
                           : ""
                   }`}
@@ -612,5 +672,20 @@ function PriceBarLinkAction({
         <ArrowRight size={17} weight="bold" aria-hidden="true" />
       </span>
     </a>
+  );
+}
+
+/** One region's price, drawn as the bar draws its only one. */
+function RegionalPrice({
+  view,
+  receipt,
+}: {
+  view: RegionalPriceView;
+  receipt: boolean;
+}) {
+  return receipt && view.priceBreakdown ? (
+    <CoursePriceBreakdown breakdown={view.priceBreakdown} />
+  ) : (
+    <CoursePriceDisplay price={view.price} />
   );
 }

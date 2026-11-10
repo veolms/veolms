@@ -1,5 +1,5 @@
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
-import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
+import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
@@ -135,6 +135,18 @@ const WHEN_IN_PROGRESS = "hidden [[data-in-progress]_&]:block";
 const WHEN_LOCKED = "hidden [[data-locked]_&]:block";
 const UNLESS_LOCKED = "[[data-locked]_&]:hidden [[data-unavailable]_&]:hidden";
 
+/*
+ * In a narrow panel (under 330px of the lesson list, `@container/lessons` in
+ * Curriculum.tsx) a card sets its title a size smaller in less padding, and
+ * its buttons come down with its foot. Out of that list nothing changes.
+ */
+const CARD_PADDING_NARROW_CLASS =
+  "@max-[330px]/lessons:px-2.5 @max-[330px]/lessons:pt-2 @max-[330px]/lessons:pb-1.5";
+const CARD_TITLE_NARROW_CLASS = "@max-[330px]/lessons:text-[0.8125rem]/5";
+const CARD_FACTS_NARROW_CLASS =
+  "@max-[330px]/lessons:mt-1 @max-[330px]/lessons:text-xs/4";
+const CARD_ACTIONS_NARROW_CLASS = "@max-[330px]/lessons:bottom-1.5";
+
 /**
  * One lesson in the course content list. Watch progress is the percentage
  * beside the duration; a finished lesson shows a green check instead. The open lesson has an accent wash
@@ -225,7 +237,9 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
             // sidebar shadow token spreads too far for cards stacked in a
             // list, so only its widest layers are reined in here.
             "bg-(image:--sidebar-menu-active-background) shadow-[inset_0_1px_0_rgb(255_255_255/15%),inset_1px_0_0_rgb(255_255_255/7%),inset_0_-1px_0_rgb(0_0_0/28%),0_2px_5px_rgb(0_0_0/45%),0_7px_14px_rgb(0_0_0/36%)] [[data-theme=light]_&]:shadow-[inset_0_1px_0_rgb(255_255_255/96%),0_2px_5px_rgb(25_32_45/10%),0_7px_16px_rgb(25_32_45/14%)]"
-          : "bg-[color-mix(in_srgb,var(--text)_4%,transparent)] [&:not([data-unavailable])]:hover:bg-[color-mix(in_srgb,var(--text)_7.5%,transparent)]"
+          : // Fainter than a section's card, so the sections stand out
+            // as the headings and the lessons as the rows under them.
+            "bg-[color-mix(in_srgb,var(--text)_2.5%,transparent)] [&:not([data-unavailable])]:hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
       }`}
     >
       <button
@@ -257,20 +271,22 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
         {/* The card's padding is on this, not on the button, so that a drag
             begun anywhere on the card starts in its text and selects it
             (one begun on the button's own box would not). */}
-        <span className="block px-3 pt-3 pb-2.5">
+        <span className={`block px-3 pt-3 pb-2.5 ${CARD_PADDING_NARROW_CLASS}`}>
           {/* Whole-pixel line heights here and in the meta line below: the
             cards stack, so a line box a fraction of a pixel tall would put
             every card after it on a fractional position, where a later
             paint (hydration's) snaps the text a pixel away from where the
             first paint had it. */}
           <span
-            className="line-clamp-2 text-[0.875rem]/5 font-semibold text-(--text) [[data-completed]:not([data-active])_&]:text-[color-mix(in_srgb,var(--text)_72%,transparent)]"
+            className={`line-clamp-2 text-[0.875rem]/5 font-medium text-(--text) ${CARD_TITLE_NARROW_CLASS} [[data-active]_&]:font-semibold [[data-completed]:not([data-active])_&]:text-[color-mix(in_srgb,var(--text)_72%,transparent)]`}
             // A title longer than two lines is cut off; hovering shows all of it.
             title={isAvailable ? title : undefined}
           >
             {displayNumber}. {title}
           </span>
-          <span className="mt-1.5 flex min-h-8 items-center gap-1.5 text-[0.8125rem]/5 font-medium tabular-nums text-(--muted)">
+          <span
+            className={`mt-1.5 flex min-h-8 items-center gap-1.5 text-[0.8125rem]/5 font-medium tabular-nums text-(--muted) ${CARD_FACTS_NARROW_CLASS}`}
+          >
             <LockSimple
               size={13}
               weight="fill"
@@ -327,7 +343,10 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
         </span>
       </button>
       {hasActions ? (
-        <div className="absolute right-2 bottom-2.5 flex items-center gap-1.5 [[data-unavailable]_&]:hidden">
+        <div
+          data-lesson-card-actions=""
+          className={`absolute right-2 bottom-2.5 flex items-center gap-1.5 [[data-unavailable]_&]:hidden ${CARD_ACTIONS_NARROW_CLASS}`}
+        >
           {/* Not a button: the card itself opens the lesson. It lets a
               click through to the card underneath. */}
           <span
@@ -350,7 +369,7 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
                 title={quizActive ? "Quiz is open" : "Open quiz"}
                 onClick={() => onOpenQuiz?.(number)}
               >
-                <Brain size={18} weight="fill" aria-hidden="true" />
+                <ListChecks size={18} weight="bold" aria-hidden="true" />
               </button>
             </span>
           ) : null}

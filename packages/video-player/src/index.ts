@@ -24,7 +24,12 @@ export type {
   VideoStreamingConfiguration,
   VideoTextTrack,
 } from "./core/types";
-export { VideoEngineError, normalizeUnknownError } from "./core/errors";
+export {
+  VideoEngineError,
+  networkFailureHttpStatus,
+  networkFailureKind,
+  normalizeUnknownError,
+} from "./core/errors";
 export type {
   VideoEngineEvent,
   VideoEngineEventMap,
@@ -104,6 +109,11 @@ export { MuteButton } from "./controls/MuteButton";
 export { VolumeControl } from "./controls/VolumeControl";
 export { TimeDisplay } from "./controls/TimeDisplay";
 export { SettingsMenu } from "./controls/SettingsMenu";
+export {
+  ChapterCountBadge,
+  ChapterNowLabel,
+  useChapterPosition,
+} from "./controls/ChapterNow";
 export { FullscreenButton } from "./controls/FullscreenButton";
 export { PictureInPictureButton } from "./controls/PictureInPictureButton";
 export { TheaterButton } from "./controls/TheaterButton";
@@ -211,11 +221,18 @@ export { formatMediaTime } from "./accessibility/formatMediaTime";
 export {
   BUILT_IN_PLAYER_THEMES,
   BUILT_IN_PLAYER_THEME_IDS,
+  DEFAULT_PLAYER_THEME_ID,
   PLAYER_THEME_OPTIONS,
   createPlayerTheme,
+  createThemedIcon,
+  findPlayerTheme,
   getPlayerThemeStyle,
+  getPlayerThemes,
   isBuiltInPlayerThemeId,
+  isPlayerThemeId,
+  registerPlayerTheme,
   resolvePlayerTheme,
+  subscribePlayerThemes,
 } from "./themes/playerThemes";
 export type {
   BuiltInPlayerThemeId,
@@ -225,12 +242,24 @@ export type {
   PlayerThemeIcon,
   PlayerThemeIconProps,
   PlayerThemeIcons,
+  PlayerThemeAutoplay,
+  PlayerThemeChrome,
   PlayerThemeMotion,
+  PlayerThemeSettingsMenu,
   PlayerThemeStyle,
   PlayerThemeTokens,
 } from "./themes/playerThemes";
 export {
   PlayerThemeProvider,
   usePlayerTheme,
+  usePlayerThemes,
 } from "./themes/PlayerThemeContext";
 export type { PlayerThemeProviderProps } from "./themes/PlayerThemeContext";
+export type {
+  SettingsMenuSection,
+  SettingsMenuToggle,
+} from "./controls/SettingsMenuLayouts";
+export {
+  PlayerThemeSwatch,
+  type PlayerThemeSwatchProps,
+} from "./themes/PlayerThemeSwatch";

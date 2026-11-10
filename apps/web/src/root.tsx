@@ -19,6 +19,7 @@ import { appBaseStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
+import { getPlayerThemeBootstrapScript } from "./learning/player/playerThemeEarlyState";
 import {
   applyLearningShellToDocument,
   getInitialLearningShellState,
@@ -38,13 +39,18 @@ import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getSessionPresenceBootstrapScript } from "./store/sessionPresence";
 import { getProfileHintBootstrapScript } from "./shell/profileHintEarlyState";
+import { getOutdatedBrowserScript } from "./shell/outdatedBrowser";
+import { getTrailingDotHostRedirectScript } from "./shell/trailingDotHost";
+import { getLegacyBrowserSupportScript } from "./shell/legacyBrowserSupport";
 import { getNavigationOriginBootstrapScript } from "./routing/navigationOriginEarlyState";
 import { getLessonMenuSectionBootstrapScript } from "./shell/lessonMenuEarlyState";
 import { getCourseCardsEarlyStateBootstrapScript } from "./courses/courseCardEarlyState";
+import { getCoursePricesEarlyBootstrapScript } from "./courses/coursePricesEarlyState";
 import { getLearnerStartedBootstrapScript } from "./home/learner/learnerCoursesSubtitle";
 import { getHomeHintBootstrapScript } from "./store/homeHint";
 import { getLearnerHomeSnapshotBootstrapScript } from "./home/learner/learnerHomeSnapshot";
 import { getPlaybackBootstrapHeadStartScript } from "./learning/playbackBootstrapHeadStart";
+import { getPriceRegionBootstrapScript } from "./courses/priceRegion";
 import { getCurriculumEarlyScrollScript } from "./learning/curriculumEarlyScroll";
 import { getLessonPageEarlyStateScript } from "./learning/lessonPageEarlyState";
 import { getApiBaseUrl } from "./lib/api-client";
@@ -68,7 +74,6 @@ import {
 } from "./shell/academyPaletteStyles";
 import { AuthPageFrame } from "./auth/AuthPageFrame";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
-import { DeviceLimitHost } from "./auth/DeviceLimitHost";
 import { AnalyticsPageViews } from "./lib/AnalyticsPageViews";
 import { AnalyticsIdentity } from "./lib/AnalyticsIdentity";
 import {
@@ -84,6 +89,7 @@ import {
   DEFAULT_ACADEMY_THEME,
   academyThemes,
 } from "./themes";
+import { useRememberAppPage } from "./legal/legalReturn";
 
 interface LayoutProps {
   children: ReactNode;
@@ -197,7 +203,9 @@ const getInitialLayoutDomState = (): InitialLayoutDomState => {
 };
 // Shared HTML shell wrapping both the academy and authentication routes.
 export function Layout({ children }: LayoutProps) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  // The legal pages' Back button returns to the last app page.
+  useRememberAppPage(pathname, search);
   const isPublicRoute =
     pathname === "/login" ||
     pathname === "/mfa-setup" ||
@@ -253,6 +261,20 @@ export function Layout({ children }: LayoutProps) {
           name="viewport"
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
+        {/* First, before any stylesheet or script: a browser the app cannot
+            run in is shown an update page instead (outdatedBrowser.ts), and
+            older browsers get their fallbacks (legacyBrowserSupport.ts). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: getTrailingDotHostRedirectScript(),
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{ __html: getOutdatedBrowserScript() }}
+        />
+        <script
+          dangerouslySetInnerHTML={{ __html: getLegacyBrowserSupportScript() }}
+        />
         <meta name="theme-color" content="#151718" />
         {/* Lets the app be installed and opened with no browser bars, with
             the status bar kept and the back button left to navigate. */}
@@ -278,13 +300,13 @@ export function Layout({ children }: LayoutProps) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getLessonMenuSectionBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}${getLessonPageEarlyStateScript()}${getCurriculumEarlyScrollScript()}`,
+            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getLessonMenuSectionBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getCoursePricesEarlyBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}${getPlayerThemeBootstrapScript()}${getLessonPageEarlyStateScript()}${getCurriculumEarlyScrollScript()}`,
           }}
         />
         <Meta />
         <script
           dangerouslySetInnerHTML={{
-            __html: getPlaybackBootstrapHeadStartScript(getApiBaseUrl()),
+            __html: `${getPlaybackBootstrapHeadStartScript(getApiBaseUrl())}${getPriceRegionBootstrapScript(getApiBaseUrl())}`,
           }}
         />
         <script
@@ -491,7 +513,6 @@ export default function Root() {
       <HydrationMarker />
       <SessionInitializer>
         <GlobalGoogleOneTap />
-        <DeviceLimitHost />
         <AnalyticsPageViews />
         <AnalyticsIdentity />
         <Outlet />

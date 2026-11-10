@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { courseThumbnailVariantSchema } from "../course/course.ts";
-import { outsideRefundSchema, refundSchema } from "./refund.ts";
+import {
+  learnerOrderRefundSchema,
+  outsideRefundSchema,
+  refundSchema,
+} from "./refund.ts";
 
 export const bundleStatusSchema = z.enum(["draft", "published", "archived"]);
 export type BundleStatus = z.infer<typeof bundleStatusSchema>;
@@ -141,6 +145,39 @@ export type CartResponse = z.infer<typeof cartResponseSchema>;
 export const couponDiscountTypeSchema = z.enum(["percentage", "fixed"]);
 export type CouponDiscountType = z.infer<typeof couponDiscountTypeSchema>;
 
+/**
+ * A course's or bundle's own discount under a coupon. The coupon's own
+ * discount is the default for every other item it applies to; a rule's
+ * target must be one the coupon applies to.
+ */
+export const couponDiscountRuleSchema = z
+  .strictObject({
+    targetType: z.enum(["course", "bundle"]),
+    targetId: z.uuid(),
+    discountType: couponDiscountTypeSchema,
+    discountValue: z.number().int().positive(),
+    maxDiscountAmount: z.number().int().positive().nullable().default(null),
+  })
+  .refine(
+    (rule) => rule.discountType !== "percentage" || rule.discountValue <= 100,
+    {
+      message: "Percentage discount cannot exceed 100%.",
+      path: ["discountValue"],
+    },
+  );
+export type CouponDiscountRule = z.infer<typeof couponDiscountRuleSchema>;
+
+/** At most one rule per course or bundle; 200 is far above any real coupon. */
+export const couponDiscountRulesSchema = z
+  .array(couponDiscountRuleSchema)
+  .max(200)
+  .refine(
+    (rules) =>
+      new Set(rules.map((r) => `${r.targetType}:${r.targetId}`)).size ===
+      rules.length,
+    { message: "A course or bundle can have only one discount per coupon." },
+  );
+
 export const couponSchema = z.strictObject({
   id: z.uuid(),
   code: z.string().min(1).max(50).toUpperCase(),
@@ -155,6 +192,9 @@ export const couponSchema = z.strictObject({
   perUserLimit: z.number().int().positive().default(1),
   isActive: z.boolean().default(true),
   restrictedCourseIds: z.array(z.uuid()).nullable().optional(),
+  restrictedBundleIds: z.array(z.uuid()).nullable().optional(),
+  /** Own discounts for some courses or bundles; empty when there are none. */
+  discountRules: z.array(couponDiscountRuleSchema).default([]),
 });
 export type Coupon = z.infer<typeof couponSchema>;
 
@@ -219,6 +259,7 @@ export const createCouponRequestSchema = z.strictObject({
   isActive: z.boolean().default(true),
   restrictedCourseIds: z.array(z.uuid()).optional(),
   restrictedBundleIds: z.array(z.uuid()).optional(),
+  discountRules: couponDiscountRulesSchema.optional(),
 });
 export type CreateCouponRequest = z.infer<typeof createCouponRequestSchema>;
 
@@ -235,6 +276,8 @@ export const updateCouponRequestSchema = z.strictObject({
   isActive: z.boolean().optional(),
   restrictedCourseIds: z.array(z.uuid()).nullable().optional(),
   restrictedBundleIds: z.array(z.uuid()).nullable().optional(),
+  /** Replaces the whole set; left out, the rules stay as they are. */
+  discountRules: couponDiscountRulesSchema.optional(),
 });
 export type UpdateCouponRequest = z.infer<typeof updateCouponRequestSchema>;
 
@@ -302,11 +345,27 @@ export const upgradeCreditSchema = z.strictObject({
 });
 export type UpgradeCredit = z.infer<typeof upgradeCreditSchema>;
 
+/**
+ * The unit of a price calculation's amounts. List prices are whole rupees,
+ * so a calculation is in major units, except one for a course bought at its
+ * price for buyers outside India, which is kept in cents (minor units) as
+ * that price is (see `internationalCoursePriceSchema`).
+ */
+export const pricingAmountUnitSchema = z.enum(["major", "minor"]);
+export type PricingAmountUnit = z.infer<typeof pricingAmountUnitSchema>;
+
 export const pricingCalculationSchema = z.strictObject({
+  /** The unit of every amount below. */
+  amountUnit: pricingAmountUnitSchema.default("major"),
   subtotalAmount: z.number().int().nonnegative(),
   discountAmount: z.number().int().nonnegative().default(0),
   taxAmount: z.number().int().nonnegative().default(0),
   totalAmount: z.number().int().nonnegative(),
+  /**
+   * Set when the discounts would have left less than the smallest card
+   * payment: `totalAmount` was raised to this amount (`minimumCardPayment`).
+   */
+  minimumCharge: z.number().int().positive().optional(),
   currency: z.string().length(3).default("INR"),
   couponCode: z.string().optional(),
   couponId: z.uuid().optional(),
@@ -593,6 +652,8 @@ export const learnerOrderSchema = z.strictObject({
   paymentSummary: orderPaymentSummarySchema.nullable(),
   items: z.array(orderItemSummarySchema),
   createdAt: z.string().or(z.date()),
+  /** The refund option, on a paid purchase with something to return. */
+  refund: learnerOrderRefundSchema.optional(),
 });
 export type LearnerOrder = z.infer<typeof learnerOrderSchema>;
 
@@ -657,15 +718,21 @@ export type CheckoutPreviewRequest = z.infer<
 >;
 
 /**
- * What the checkout UI needs from a preview, in major units. The full
- * `PricingCalculation` (per-item breakdown, coupon id) stays server-side.
+ * What the checkout UI needs from a preview, in major units unless
+ * `amountUnit` says minor (a course at its price for buyers outside India).
+ * The full `PricingCalculation` (per-item breakdown, coupon id) stays
+ * server-side.
  */
 export const checkoutPreviewResponseSchema = z.strictObject({
   pricing: z.strictObject({
+    /** The unit of the amounts here. Absent from older servers: major. */
+    amountUnit: pricingAmountUnitSchema.optional(),
     /** The items' prices before anything comes off. */
     subtotalAmount: z.number().int().nonnegative().optional(),
     discountAmount: z.number().int().nonnegative(),
     totalAmount: z.number().int().nonnegative(),
+    /** Set when `totalAmount` was raised to the smallest card payment. */
+    minimumCharge: z.number().int().positive().optional(),
     currency: z.string().length(3),
     /**
      * What already paid parts of a course take off its price (included in

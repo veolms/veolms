@@ -21,6 +21,7 @@ export const VIDEO_JOB_STATUSES = [
   "queued",
   "provisioning",
   "processing",
+  "ready",
   "completed",
   "failed",
   "cancelled",
@@ -279,6 +280,8 @@ export const mediaImageVariantManifestSchema = z.object({
 export const videoJobProgressResponseSchema = z.object({
   status: videoJobStatusSchema,
   progressPercent: z.number().int().min(0).max(100),
+  /** The published video can be played even while more qualities are processing. */
+  playbackReady: z.boolean().optional(),
   error: z.string().nullable().optional(),
   /** What is happening now, in words (YouTube imports report their stage). */
   stage: z.string().nullable().optional(),

@@ -1,4 +1,9 @@
-import { VideoEngineError, normalizeUnknownError } from "../../core/errors";
+import {
+  VideoEngineError,
+  networkFailureHttpStatus,
+  networkFailureKind,
+  normalizeUnknownError,
+} from "../../core/errors";
 import type {
   VideoAudioTrack,
   VideoEngineCapabilities,
@@ -114,16 +119,70 @@ const HAVE_CURRENT_DATA = 2;
  * quality, but only with automatic quality on and another stream to switch
  * to. A chosen quality, and the one audio stream of a DASH lesson, have
  * none, so the error was final: "Something went wrong" on HLS lessons, and
- * on DASH lessons a picture that froze once what was buffered ran out. It
- * showed at the very end because that is where the last segments are
- * fetched on a slow link, beside the next lesson preloading. The stream is
- * now asked for again, this many times in a row before the error stands...
+ * on DASH lessons a picture that froze once what was buffered ran out.
+ *
+ * The stream is asked for again instead, for as long as it takes while the
+ * failure is one that passes (see `networkFailureKind`): the connection
+ * dropping or the server failing for a minute, a token the CDN refused that
+ * the request hook renews on the next try. Eight tries in a row used to be
+ * the limit, under a minute of waiting in all: a laptop that lost its WiFi
+ * for two minutes, or a phone in a lift, then showed "Something went wrong"
+ * for a video that would have played on, and a reload was the only way
+ * back. Now it waits as YouTube does: the loader turns, and the video goes
+ * on where it was once segments arrive again. Only a file the server says
+ * is not there (a 404) is given up, after a few tries: that video is broken
+ * and no retry mends it. The first retry comes this long after the
+ * failure, twice as long after each next one...
  */
-const STREAMING_RETRY_LIMIT = 8;
-/** ...this long after the first failure, twice as long after each next one... */
 const STREAMING_RETRY_FIRST_DELAY_SECONDS = 1;
 /** ...and never longer than this. */
 const STREAMING_RETRY_MAX_DELAY_SECONDS = 8;
+/** Tries for a segment the server says does not exist (see above). */
+const STREAMING_MISSING_RETRY_LIMIT = 6;
+/**
+ * A load that failed on the network (the manifest, the first segments or
+ * the licence not arriving) is tried again this many times before the
+ * failure is shown, waiting 1s, 2s and 4s. A lesson opened on a flaky link,
+ * or just as the connection comes back, then starts instead of failing.
+ */
+const LOAD_RETRY_LIMIT = 3;
+const LOAD_RETRY_FIRST_DELAY_MS = 1_000;
+/** With the browser offline, a load retry waits for `online` up to this long. */
+const LOAD_RETRY_OFFLINE_WAIT_MS = 20_000;
+/**
+ * A decoder that fails mid-lesson (the browser's MEDIA_ERR_DECODE, Shaka's
+ * VIDEO_ERROR or a media source that threw) is the second most common error
+ * students met after a video had started, often half an hour in, and the
+ * only way on was the Try again button, which loads the video again where
+ * it was. That reload is now made for them: the video is loaded again at
+ * its position and played on, with the loader up for the moment it takes
+ * (its segments are on the device, see segmentCache.ts). This many times
+ * within the window; a video that keeps failing then shows its error.
+ */
+const MEDIA_RECOVERY_LIMIT = 3;
+const MEDIA_RECOVERY_WINDOW_MS = 10 * 60_000;
+/**
+ * A decoder that failed twice in the window is probably struggling with
+ * the picture itself (1080p is High profile level 4.2; the renditions below
+ * are lighter): automatic quality stays at or under this height for the
+ * rest of the video. A quality the viewer picks still applies.
+ */
+const MEDIA_RECOVERY_MAX_HEIGHT = 720;
+/** A load that times out (see LOAD_TIMEOUT_MS) is started over this many times. */
+const TIMED_OUT_LOAD_RETRY_LIMIT = 1;
+/**
+ * The watchdog looks at a playing video this often for the freezes the
+ * browser reports no error for (see `watchPlayback`): the playhead not
+ * moving although this much is buffered in front of it, a key the browser
+ * is waiting for, or video frames no longer being drawn while the sound
+ * goes on (a black picture). Each counts as a media failure after it has
+ * lasted this long, and is mended the way a decoder failure is.
+ */
+const WATCHDOG_INTERVAL_MS = 1_000;
+const WATCHDOG_BUFFERED_AHEAD_SECONDS = 2;
+const WATCHDOG_FROZEN_PLAYHEAD_MS = 8_000;
+const WATCHDOG_WAITING_FOR_KEY_MS = 8_000;
+const WATCHDOG_NO_FRAMES_MS = 6_000;
 
 /** Resolves true once `media` has a decoded frame to show, false on timeout. */
 function waitForFirstFrame(
@@ -174,6 +233,57 @@ function markPlayback(name: string, detail?: Record<string, unknown>): void {
     performance.mark(`veo:${name}`, detail ? { detail } : undefined);
   } catch {
     // Marks are diagnostics.
+  }
+}
+
+/** Thrown inside `loadOnce` for a failure that `load` is to try again. */
+class LoadRetry extends Error {
+  readonly failure: VideoEngineError;
+  constructor(failure: VideoEngineError) {
+    super(failure.message);
+    this.name = "LoadRetry";
+    this.failure = failure;
+  }
+}
+
+/** Whether the browser says it has no network. */
+function browserOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+/** Resolves on the browser's `online` event, or after `maxMs`. */
+function waitForOnline(maxMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = (): void => {
+      window.clearTimeout(timer);
+      window.removeEventListener("online", done);
+      resolve();
+    };
+    const timer = window.setTimeout(done, maxMs);
+    window.addEventListener("online", done);
+  });
+}
+
+let resourceTimingsKept = false;
+
+/**
+ * The browser keeps 250 resource timings and then records no more. A
+ * lesson passes that in minutes (a segment every few seconds), and the
+ * download speed read from them (`measuredSegmentBandwidth`) was then
+ * frozen at what the first minutes showed, so every quality switch later
+ * in a long lesson was timed on stale figures. The buffer is widened and
+ * emptied when it fills, so the latest downloads are always there.
+ */
+function keepResourceTimings(): void {
+  if (resourceTimingsKept || typeof performance === "undefined") return;
+  resourceTimingsKept = true;
+  try {
+    performance.setResourceTimingBufferSize(2000);
+    performance.addEventListener("resourcetimingbufferfull", () => {
+      performance.clearResourceTimings();
+    });
+  } catch {
+    // Older browsers: measurements then stop with the buffer, as before.
   }
 }
 
@@ -411,8 +521,28 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #standbyMedia: HTMLMediaElement | null = null;
   /** Settles once the player last playing in the standby element is gone. */
   #standbyReleased: Promise<void> = Promise.resolve();
-  /** Streaming failures retried in a row (see `STREAMING_RETRY_LIMIT`). */
+  /** Streaming failures retried in a row (see `retryFailedStreaming`). */
   #streamingRetries = 0;
+  /** The generation of the load most recently started (see `load`). */
+  #loadGeneration = 0;
+  /** Set while the browser is offline and a stream waits for `online`. */
+  #retryOnOnline = false;
+  /** When each self-recovery from a media failure began (see above). */
+  #mediaRecoveries: number[] = [];
+  #mediaRecoveryInFlight = false;
+  /** Set once the decoder has failed twice on this source (see above). */
+  #mediaRecoveryMaxHeight: number | null = null;
+  /** The source and options of the load most recently asked for. */
+  #lastLoad: { src: string; options: VideoLoadOptions } | null = null;
+  #timedOutLoadRetries = 0;
+  /** The watchdog's timer and what it last saw (see `watchPlayback`). */
+  #watchdog: number | null = null;
+  #watchdogMedia: HTMLMediaElement | null = null;
+  #lastPlayheadTime = -1;
+  #playheadStillSince = 0;
+  #lastFrameCount = -1;
+  #framesStillSince = 0;
+  #waitingForKeySince = 0;
   #stopWatchingSpeculativePreloads: (() => void) | null = null;
   /** Drops a source's streaming settings still waiting for its first frame. */
   #cancelDeferredStreaming: (() => void) | null = null;
@@ -434,7 +564,26 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   constructor(options: ShakaVideoEngineOptions = {}) {
     super();
     this.#runtimeLoader = options.runtimeLoader ?? defaultShakaRuntimeLoader;
+    keepResourceTimings();
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.handleOnline);
+    }
   }
+
+  /**
+   * The network is back: a stream waiting out a failure is asked for at
+   * once rather than at the end of its backoff.
+   */
+  private readonly handleOnline = (): void => {
+    if (!this.#retryOnOnline) return;
+    this.#retryOnOnline = false;
+    const player = this.#player;
+    if (!player?.retryStreaming || this.getSnapshot().lifecycle !== "ready") {
+      return;
+    }
+    markPlayback("streaming-retry-online");
+    player.retryStreaming(0.1);
+  };
 
   setStandbyMedia(media: HTMLMediaElement | null): void {
     if (this.#standbyMedia === media) return;
@@ -467,11 +616,164 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     source: VideoSource,
     options: VideoLoadOptions = {},
   ): Promise<void> {
+    if (this.#lastLoad?.src !== source.src) {
+      // Another video: what the last one's decoder could not take says
+      // nothing about this one.
+      this.#mediaRecoveries = [];
+      this.#mediaRecoveryMaxHeight = null;
+      this.#timedOutLoadRetries = 0;
+    }
+    this.#lastLoad = { src: source.src, options };
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await this.loadOnce(source, options, attempt);
+        return;
+      } catch (error) {
+        if (!(error instanceof LoadRetry)) throw error;
+        const generation = this.#loadGeneration;
+        const offline = browserOffline();
+        const delayMs = offline
+          ? LOAD_RETRY_OFFLINE_WAIT_MS
+          : LOAD_RETRY_FIRST_DELAY_MS * 2 ** attempt;
+        const httpStatus = networkFailureHttpStatus(error.failure);
+        markPlayback("load-retry", {
+          attempt: attempt + 1,
+          delayMs,
+          code: error.failure.code,
+          status: httpStatus,
+          offline,
+        });
+        this.emit("streamingretry", {
+          attempt: attempt + 1,
+          delaySeconds: delayMs / 1000,
+          code: error.failure.code,
+          httpStatus,
+          offline,
+        });
+        if (offline) await waitForOnline(delayMs);
+        else await delay(delayMs);
+        // Another load, a stop or the teardown came meanwhile: that one
+        // has the player now.
+        if (!this.isCurrentOperation(generation)) return;
+      }
+    }
+  }
+
+  /**
+   * See `MediaElementEngineBase.recoverFromMediaFailure` and
+   * `MEDIA_RECOVERY_LIMIT`. The same failure reaches here twice (from the
+   * media element and from Shaka): the second finds the recovery under way.
+   */
+  protected override recoverFromMediaFailure(error: VideoEngineError): boolean {
+    const media = this.mediaElement;
+    const source = this.getSnapshot().source;
+    if (
+      !media ||
+      !source ||
+      this.getSnapshot().lifecycle !== "ready" ||
+      error.category === "UNSUPPORTED"
+    ) {
+      return false;
+    }
+    if (this.#mediaRecoveryInFlight) return true;
+    const now = Date.now();
+    this.#mediaRecoveries = this.#mediaRecoveries.filter(
+      (at) => now - at < MEDIA_RECOVERY_WINDOW_MS,
+    );
+    if (this.#mediaRecoveries.length >= MEDIA_RECOVERY_LIMIT) return false;
+    this.#mediaRecoveries.push(now);
+    this.#mediaRecoveryInFlight = true;
+    if (this.#mediaRecoveries.length >= 2) {
+      this.#mediaRecoveryMaxHeight = MEDIA_RECOVERY_MAX_HEIGHT;
+    }
+    const startTime = media.currentTime;
+    const wasPlaying = !media.paused && !media.ended;
+    markPlayback("media-recovery", {
+      attempt: this.#mediaRecoveries.length,
+      code: error.code,
+      startTime,
+      maxHeight: this.#mediaRecoveryMaxHeight,
+    });
+    // Told to whoever listens, as a failure the player got over.
+    this.emit("error", {
+      error: new VideoEngineError({
+        category: error.category,
+        code: error.code,
+        message: error.message,
+        fatal: false,
+        recoverable: true,
+        cause: error.cause,
+        details: error.details,
+      }),
+    });
+    void (async () => {
+      // Let Shaka finish dispatching the failure first.
+      await Promise.resolve();
+      try {
+        await this.load(source, { startTime });
+        if (
+          this.#mediaRecoveryMaxHeight !== null &&
+          this.#qualityChoice !== "manual"
+        ) {
+          const runtime = this.#runtime;
+          const player = this.#player;
+          if (runtime && player) {
+            player.configure({ abr: this.abrConfiguration(source, runtime) });
+          }
+        }
+        if (wasPlaying) await this.play();
+      } catch {
+        // The load showed its own failure.
+      } finally {
+        this.#mediaRecoveryInFlight = false;
+      }
+    })();
+    return true;
+  }
+
+  /** See `MediaElementEngineBase.retryTimedOutLoad`. */
+  protected override retryTimedOutLoad(): boolean {
+    const last = this.#lastLoad;
+    if (!last || this.#timedOutLoadRetries >= TIMED_OUT_LOAD_RETRY_LIMIT) {
+      return false;
+    }
+    const source = this.getSnapshot().source;
+    if (!source || source.src !== last.src) return false;
+    this.#timedOutLoadRetries += 1;
+    markPlayback("load-timeout-retry", { attempt: this.#timedOutLoadRetries });
+    this.emit("streamingretry", {
+      attempt: this.#timedOutLoadRetries,
+      delaySeconds: 0,
+      code: "LOAD_TIMEOUT",
+      httpStatus: null,
+      offline: browserOffline(),
+    });
+    void this.load(source, last.options).catch(() => undefined);
+    return true;
+  }
+
+  /**
+   * Whether a load that failed with `error` is tried again (see
+   * `LOAD_RETRY_LIMIT`): a network failure that passes, within the limit.
+   */
+  private shouldRetryLoad(error: VideoEngineError, attempt: number): boolean {
+    if (attempt >= LOAD_RETRY_LIMIT) return false;
+    if (error.code === "LOAD_TIMEOUT") return false;
+    return networkFailureKind(error) === "transient";
+  }
+
+  private async loadOnce(
+    source: VideoSource,
+    options: VideoLoadOptions,
+    attempt: number,
+  ): Promise<void> {
     const media = this.requireMedia();
     let player = this.requirePlayer();
     const runtime = this.requireRuntime();
     const generation = this.beginOperation();
+    this.#loadGeneration = generation;
     this.#streamingRetries = 0;
+    this.#retryOnOnline = false;
     this.hideOutgoingVideo(media);
     this.startLoading(source);
     this.#selectedTextTrackId = null;
@@ -612,6 +914,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       const normalized =
         existing ??
         this.normalizeShakaError(error, "SHAKA_LOAD_FAILED", "SOURCE");
+      // A failure on the network is not shown yet: `load` tries again
+      // (the error event during a load leaves such failures to this path,
+      // see bindShakaEvents).
+      if (!existing && this.shouldRetryLoad(normalized, attempt)) {
+        throw new LoadRetry(normalized);
+      }
       if (!existing) {
         this.emitError(normalized, normalized.fatal);
       }
@@ -705,6 +1013,23 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         code: "QUALITY_NOT_FOUND",
         message: `Quality '${id}' is not available.`,
       });
+    }
+
+    try {
+      const manifestVariant = player
+        .getManifest?.()
+        ?.variants.find(
+          (candidate) => String(candidate.id) === String(track.id),
+        );
+      if (
+        manifestVariant &&
+        typeof manifestVariant.disabledUntilTime === "number" &&
+        manifestVariant.disabledUntilTime > 0
+      ) {
+        manifestVariant.disabledUntilTime = 0;
+      }
+    } catch {
+      // Manifest inspection is best-effort.
     }
 
     player.configure({ abr: { enabled: false } });
@@ -859,6 +1184,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   protected override async onDetaching(
     _media: HTMLMediaElement,
   ): Promise<void> {
+    this.stopWatchdog();
     this.#selectedTextTrackId = null;
     this.#cancelDeferredStreaming?.();
     this.revealVideo();
@@ -871,6 +1197,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   protected override async onDestroying(
     _media: HTMLMediaElement | null,
   ): Promise<void> {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.handleOnline);
+    }
+    this.stopWatchdog();
+    this.#retryOnOnline = false;
     this.#cancelDeferredStreaming?.();
     rememberShakaBandwidthEstimate(this.#player);
     this.clearNetworkingFilters();
@@ -1012,14 +1343,32 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       ),
       runtime,
     ).abr as Record<string, unknown>;
-    return { ...abr, enabled: auto };
+    return { ...abr, ...this.mediaRecoveryRestrictions(abr), enabled: auto };
+  }
+
+  /**
+   * ABR restrictions after a decoder failed twice (see
+   * `MEDIA_RECOVERY_MAX_HEIGHT`), on top of the source's own.
+   */
+  private mediaRecoveryRestrictions(abr: Record<string, unknown>): {
+    restrictions?: Record<string, unknown>;
+  } {
+    const cap = this.#mediaRecoveryMaxHeight;
+    if (cap === null) return {};
+    const restrictions = (abr.restrictions ?? {}) as Record<string, unknown>;
+    const maxHeight =
+      typeof restrictions.maxHeight === "number"
+        ? Math.min(restrictions.maxHeight, cap)
+        : cap;
+    return { restrictions: { ...restrictions, maxHeight } };
   }
 
   /** The height the source is to play at: chosen, or held while on auto. */
   private targetVideoHeight(source: VideoSource): number | null {
     const chosen = shakaPreferredVideoHeight(source);
     if (chosen !== null) return chosen;
-    return this.#qualityChoice === null ? this.#heldHeight : null;
+    if (this.#qualityChoice !== null) return null;
+    return this.#heldHeight ?? shakaStartVideoHeight(source);
   }
 
   /**
@@ -1295,7 +1644,147 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   ): Promise<void> {
     this.refreshTracks(true);
     this.finishLoading(source);
+    this.startWatchdog();
     void this.addSourceTextTracks(player, source, generation);
+  }
+
+  /** Watches the loaded video for silent freezes (see WATCHDOG_INTERVAL_MS). */
+  private startWatchdog(): void {
+    this.stopWatchdog();
+    const media = this.mediaElement;
+    if (!media || typeof window === "undefined") return;
+    this.#watchdogMedia = media;
+    this.#lastPlayheadTime = -1;
+    this.#lastFrameCount = -1;
+    this.#waitingForKeySince = 0;
+    media.addEventListener("waitingforkey", this.handleWaitingForKey);
+    this.#watchdog = window.setInterval(
+      () => this.watchPlayback(),
+      WATCHDOG_INTERVAL_MS,
+    );
+  }
+
+  private stopWatchdog(): void {
+    if (this.#watchdog !== null) {
+      window.clearInterval(this.#watchdog);
+      this.#watchdog = null;
+    }
+    this.#watchdogMedia?.removeEventListener(
+      "waitingforkey",
+      this.handleWaitingForKey,
+    );
+    this.#watchdogMedia = null;
+  }
+
+  private readonly handleWaitingForKey = (): void => {
+    if (this.#waitingForKeySince === 0) {
+      this.#waitingForKeySince = Date.now();
+      markPlayback("waiting-for-key");
+    }
+  };
+
+  /**
+   * One look at the playing video. Nothing here runs while it is paused,
+   * ended, hidden with the page, or waiting on the network (nothing
+   * buffered ahead), so a slow connection is never taken for a freeze.
+   */
+  private watchPlayback(): void {
+    const media = this.mediaElement;
+    if (
+      !media ||
+      media !== this.#watchdogMedia ||
+      this.#mediaRecoveryInFlight ||
+      this.getSnapshot().lifecycle !== "ready"
+    ) {
+      return;
+    }
+    const now = Date.now();
+    const wantsToPlay = !media.paused && !media.ended && media.playbackRate > 0;
+    if (!wantsToPlay) {
+      this.#playheadStillSince = 0;
+      this.#framesStillSince = 0;
+      this.#waitingForKeySince = 0;
+      this.#lastPlayheadTime = media.currentTime;
+      return;
+    }
+    const ahead = bufferedAheadSeconds(media);
+    const time = media.currentTime;
+    const moved = time !== this.#lastPlayheadTime;
+    this.#lastPlayheadTime = time;
+
+    // A key the browser is still waiting for: the licence never came for
+    // this part of the video, or the key is not the one it holds.
+    if (this.#waitingForKeySince !== 0) {
+      if (moved) {
+        this.#waitingForKeySince = 0;
+      } else if (
+        now - this.#waitingForKeySince >=
+        WATCHDOG_WAITING_FOR_KEY_MS
+      ) {
+        this.#waitingForKeySince = 0;
+        this.recoverFromFreeze("WAITING_FOR_KEY", { ahead });
+        return;
+      }
+    }
+
+    // Data in front of the playhead, play asked for, and no movement.
+    if (moved || ahead < WATCHDOG_BUFFERED_AHEAD_SECONDS) {
+      this.#playheadStillSince = 0;
+    } else if (this.#playheadStillSince === 0) {
+      this.#playheadStillSince = now;
+    } else if (now - this.#playheadStillSince >= WATCHDOG_FROZEN_PLAYHEAD_MS) {
+      this.#playheadStillSince = 0;
+      this.recoverFromFreeze("PLAYHEAD_FROZEN", {
+        ahead,
+        readyState: media.readyState,
+      });
+      return;
+    }
+
+    // The sound goes on but no frame has been drawn for a while: a black
+    // picture. Only while the page is shown; a hidden tab draws nothing.
+    const quality =
+      typeof document !== "undefined" &&
+      document.visibilityState === "visible" &&
+      media instanceof HTMLVideoElement &&
+      media.videoWidth > 0 &&
+      typeof media.getVideoPlaybackQuality === "function"
+        ? media.getVideoPlaybackQuality()
+        : null;
+    if (!quality || !moved) {
+      this.#framesStillSince = 0;
+      if (quality) this.#lastFrameCount = quality.totalVideoFrames;
+      return;
+    }
+    const frames = quality.totalVideoFrames;
+    if (this.#lastFrameCount === -1 || frames !== this.#lastFrameCount) {
+      this.#lastFrameCount = frames;
+      this.#framesStillSince = 0;
+      return;
+    }
+    if (this.#framesStillSince === 0) {
+      this.#framesStillSince = now;
+    } else if (now - this.#framesStillSince >= WATCHDOG_NO_FRAMES_MS) {
+      this.#framesStillSince = 0;
+      this.recoverFromFreeze("NO_VIDEO_FRAMES", { frames });
+    }
+  }
+
+  /** A freeze the watchdog found, mended as a decoder failure is. */
+  private recoverFromFreeze(
+    code: string,
+    detail: Record<string, unknown>,
+  ): void {
+    markPlayback("watchdog", { code, ...detail });
+    const error = new VideoEngineError({
+      category: "MEDIA",
+      code,
+      message: `Playback stopped silently (${code}).`,
+    });
+    if (!this.recoverFromMediaFailure(error)) {
+      // Mended as often as allowed already: the failure is the player's.
+      this.emitError(error);
+    }
   }
 
   /**
@@ -1668,6 +2157,26 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         "UNKNOWN",
       );
       if (this.retryFailedStreaming(player, error)) return;
+      if (
+        error.fatal &&
+        error.category === "MEDIA" &&
+        this.recoverFromMediaFailure(error)
+      ) {
+        return;
+      }
+      // While a video loads, a network failure is the load's to handle:
+      // `load` tries again before showing anything (the same error also
+      // rejects Shaka's load promise). Shown here first, the retry found
+      // the error already on the player and gave up.
+      if (
+        this.#player === player &&
+        this.getSnapshot().lifecycle === "loading" &&
+        error.fatal &&
+        networkFailureKind(error) === "transient"
+      ) {
+        this.emit("error", { error });
+        return;
+      }
       // One Shaka got over by itself (another quality took over) is told to
       // whoever listens, but is not the player's error: shown as one, the
       // video played on under "Something went wrong" until it was paused.
@@ -1679,7 +2188,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     });
     // A segment in again: the streams are healthy.
     listen("segmentappended", () => {
+      const attempts = this.#streamingRetries;
       this.#streamingRetries = 0;
+      this.#retryOnOnline = false;
+      if (attempts > 0) {
+        markPlayback("streaming-recovered", { attempts });
+        this.emit("streamingrecovered", { attempts });
+      }
     });
     listen("buffering", (event) => {
       this.setBuffering(Boolean(event.buffering));
@@ -1716,9 +2231,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
 
   /**
    * Asks Shaka to stream again after a segment could not be downloaded
-   * (see `STREAMING_RETRY_LIMIT`), waiting longer each time. True when it
-   * will: the error is then not the player's, and the loader shows while
-   * playback waits for the segment.
+   * (see `STREAMING_RETRY_FIRST_DELAY_SECONDS`), waiting longer each time,
+   * for as long as the failure is one that passes. True when it will: the
+   * error is then not the player's, and the loader shows while playback
+   * waits for the segment. Offline, the wait is the longest one, and the
+   * browser's `online` event cuts it short (`handleOnline`).
    */
   private retryFailedStreaming(
     player: ShakaPlayerLike,
@@ -1726,24 +2243,44 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   ): boolean {
     if (
       !error.fatal ||
-      error.category !== "NETWORK" ||
       this.#player !== player ||
       this.getSnapshot().lifecycle !== "ready" ||
-      this.#streamingRetries >= STREAMING_RETRY_LIMIT ||
       !player.retryStreaming
     ) {
       return false;
     }
-    const delay = Math.min(
-      STREAMING_RETRY_MAX_DELAY_SECONDS,
-      STREAMING_RETRY_FIRST_DELAY_SECONDS * 2 ** this.#streamingRetries,
-    );
+    const kind = networkFailureKind(error);
+    if (kind === null || error.category === "DRM") return false;
+    if (
+      kind === "missing" &&
+      this.#streamingRetries >= STREAMING_MISSING_RETRY_LIMIT
+    ) {
+      return false;
+    }
+    const offline = browserOffline();
+    const delay = offline
+      ? STREAMING_RETRY_MAX_DELAY_SECONDS
+      : Math.min(
+          STREAMING_RETRY_MAX_DELAY_SECONDS,
+          STREAMING_RETRY_FIRST_DELAY_SECONDS * 2 ** this.#streamingRetries,
+        );
     if (!player.retryStreaming(delay)) return false;
     this.#streamingRetries += 1;
+    this.#retryOnOnline = offline;
+    const httpStatus = networkFailureHttpStatus(error);
     markPlayback("streaming-retry", {
       attempt: this.#streamingRetries,
       delay,
       code: error.code,
+      status: httpStatus,
+      offline,
+    });
+    this.emit("streamingretry", {
+      attempt: this.#streamingRetries,
+      delaySeconds: delay,
+      code: error.code,
+      httpStatus,
+      offline,
     });
     return true;
   }
@@ -1759,6 +2296,22 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const player = this.#player;
     if (!player) {
       return;
+    }
+
+    try {
+      const manifestVariants = player.getManifest?.()?.variants;
+      if (manifestVariants) {
+        for (const variant of manifestVariants) {
+          if (
+            typeof variant.disabledUntilTime === "number" &&
+            variant.disabledUntilTime > 0
+          ) {
+            variant.disabledUntilTime = 0;
+          }
+        }
+      }
+    } catch {
+      // Manifest inspection is best-effort.
     }
 
     this.clearTrackMaps();

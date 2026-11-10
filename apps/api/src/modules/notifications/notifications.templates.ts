@@ -1,5 +1,10 @@
 import { formatMoney } from "@veolms/contracts";
-import { escapeHtml, type EmailContent } from "@veolms/services/email";
+import {
+  discussionMentionEmail,
+  discussionReplyEmail,
+  escapeHtml,
+  type EmailContent,
+} from "@veolms/services/email";
 
 import { config } from "../../config.ts";
 import { clampText } from "../../lib/text.ts";
@@ -11,6 +16,12 @@ import type {
   NotificationTemplateData,
   NotificationTemplateKey,
 } from "./notifications.types.ts";
+
+/** The academy as its emails show it: its name, and its logo when set. */
+export interface NotificationEmailBrand {
+  name: string;
+  logoUrl: string | null;
+}
 
 export interface RenderedNotificationTemplate {
   inApp: { title: string; body: string };
@@ -46,24 +57,66 @@ function stringListValue(
   return value;
 }
 
+function optionalString(
+  data: NotificationTemplateData,
+  key: string,
+): string | null {
+  const value = data[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function absoluteUrl(path: string | null): string | null {
+  return path ? new URL(path, config.WEB_URL).toString() : null;
+}
+
+// Every email says where its notifications are controlled; none did, so
+// the only way to stop them was to find the settings page unprompted.
+function settingsPageUrl(): string {
+  return new URL("/settings/notifications", config.WEB_URL).toString();
+}
+
+/**
+ * The lecture link of a discussion email, marked as opened from an email:
+ * the page then says so above the highlighted comment, with a way to clear
+ * the highlight.
+ */
+function discussionEmailUrl(deepLink: string | null): string | null {
+  const url = absoluteUrl(deepLink);
+  if (!url) return null;
+  const parsed = new URL(url);
+  if (parsed.searchParams.get("focus") === "comment") {
+    parsed.searchParams.set("via", "email");
+  }
+  return parsed.toString();
+}
+
+/** "Nov 2, 2026", for when a comment was posted, or null when unknown. */
+function postedDateLabel(data: NotificationTemplateData): string | null {
+  const value = optionalString(data, "occurredAt");
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 function emailContent(
   subject: string,
   body: string,
   deepLink: string | null,
+  brand: NotificationEmailBrand,
 ): EmailContent {
-  const actionUrl = deepLink
-    ? new URL(deepLink, config.WEB_URL).toString()
-    : null;
-  const action = actionUrl ? `\n\nOpen VeoLMS: ${actionUrl}` : "";
+  const actionUrl = absoluteUrl(deepLink);
+  const actionLabel = `Open ${brand.name}`;
+  const action = actionUrl ? `\n\n${actionLabel}: ${actionUrl}` : "";
   const actionHtml = actionUrl
-    ? `<p style="margin-top: 20px;"><a href="${escapeHtml(actionUrl)}">Open VeoLMS</a></p>`
+    ? `<p style="margin-top: 20px;"><a href="${escapeHtml(actionUrl)}">${escapeHtml(actionLabel)}</a></p>`
     : "";
-  // Every email says where its notifications are controlled; none did, so
-  // the only way to stop them was to find the settings page unprompted.
-  const settingsUrl = new URL(
-    "/settings/notifications",
-    config.WEB_URL,
-  ).toString();
+  const settingsUrl = settingsPageUrl();
   const footer = `\n\nManage which emails you receive: ${settingsUrl}`;
   const footerHtml = `<p style="margin-top: 28px; font-size: 12px; color: #777;">You can choose which emails you receive in your <a href="${escapeHtml(settingsUrl)}" style="color: #777;">notification settings</a>.</p>`;
   return {
@@ -84,10 +137,51 @@ function moderationActionPhrase(action: string): string {
   return phrases[action] ?? action;
 }
 
+/**
+ * The mention and reply emails show the comment itself, where it is, and a
+ * button that opens the lecture with it highlighted.
+ */
+function discussionEmail(
+  templateKey: "user.mentioned" | "discussion.reply_created",
+  data: NotificationTemplateData,
+  deepLink: string | null,
+  brand: NotificationEmailBrand,
+): EmailContent {
+  const common = {
+    academyName: brand.name,
+    logoUrl: brand.logoUrl,
+    actorName: stringValue(data, "actorName"),
+    lessonTitle: optionalString(data, "lessonTitle"),
+    courseTitle: optionalString(data, "courseTitle"),
+    timeLabel: postedDateLabel(data),
+    actionUrl: discussionEmailUrl(deepLink),
+    settingsUrl: settingsPageUrl(),
+  };
+  if (templateKey === "user.mentioned") {
+    return discussionMentionEmail({
+      ...common,
+      commentText: stringValue(data, "context"),
+    });
+  }
+  return discussionReplyEmail({
+    ...common,
+    replyText: stringValue(data, "replySnippet"),
+    originalText: optionalString(data, "originalSnippet"),
+    recipientRole:
+      optionalString(data, "recipientRole") === "follower"
+        ? "follower"
+        : "author",
+  });
+}
+
 export function renderNotificationTemplate(
   templateKey: NotificationTemplateKey,
   data: NotificationTemplateData,
   deepLink: string | null,
+  brand: NotificationEmailBrand = {
+    name: config.ACADEMY_NAME,
+    logoUrl: null,
+  },
 ): RenderedNotificationTemplate {
   let inApp: RenderedNotificationTemplate["inApp"];
 
@@ -147,7 +241,7 @@ export function renderNotificationTemplate(
     case "auth.passkey_added":
       inApp = {
         title: "Passkey added",
-        body: "A new passkey was added to your VeoLMS account.",
+        body: `A new passkey was added to your ${config.ACADEMY_NAME} account.`,
       };
       break;
     case "auth.session_revoked":
@@ -174,12 +268,22 @@ export function renderNotificationTemplate(
         body: `Your certificate for ${stringValue(data, "courseTitle")} is ready.`,
       };
       break;
-    case "discussion.reply_created":
+    case "discussion.reply_created": {
+      // Says who replied. Older events (without `recipientRole`) keep their
+      // title, which named the discussion.
+      const role = optionalString(data, "recipientRole");
+      const actorName = stringValue(data, "actorName");
       inApp = {
-        title: `New reply on ${stringValue(data, "threadTitle")}`,
-        body: `${stringValue(data, "actorName")}: ${stringValue(data, "replySnippet")}`,
+        title:
+          role === "author"
+            ? `${actorName} replied to your comment`
+            : role === "follower"
+              ? `${actorName} replied in a discussion you follow`
+              : `New reply on ${stringValue(data, "threadTitle")}`,
+        body: `${actorName}: ${stringValue(data, "replySnippet")}`,
       };
       break;
+    }
     case "discussion.answer_accepted":
       inApp = {
         title: "Your answer was accepted!",
@@ -208,6 +312,32 @@ export function renderNotificationTemplate(
       inApp = {
         title: "Update on your report",
         body: `Your report regarding a ${stringValue(data, "targetType")} has been ${stringValue(data, "status")}${data.actionTaken ? ` (action: ${stringValue(data, "actionTaken")})` : "."}`,
+      };
+      break;
+    case "chat.mentioned":
+      inApp = {
+        title: `${stringValue(data, "actorName")} mentioned you in ${stringValue(data, "roomTitle")}`,
+        body: stringValue(data, "snippet"),
+      };
+      break;
+    case "chat.platform_restriction": {
+      const restriction = stringValue(data, "restriction");
+      const action =
+        restriction === "ban"
+          ? "removed"
+          : restriction === "no_direct"
+            ? "turned off private chats for"
+            : "muted";
+      inApp = {
+        title: `${stringValue(data, "actorName")} ${action} ${stringValue(data, "targetName")} in all chats`,
+        body: `Reason: ${stringValue(data, "reason")}. Review or lift it in chat restrictions.`,
+      };
+      break;
+    }
+    case "support.reply_posted":
+      inApp = {
+        title: `Reply to your ${stringValue(data, "ticketKind") === "feedback" ? "feedback" : "report"} #${stringValue(data, "ticketNumber")}`,
+        body: stringValue(data, "replySnippet"),
       };
       break;
     case "quiz.attempt_passed":
@@ -269,6 +399,10 @@ export function renderNotificationTemplate(
 
   return {
     inApp,
-    email: emailContent(inApp.title, inApp.body, deepLink),
+    email:
+      templateKey === "user.mentioned" ||
+      templateKey === "discussion.reply_created"
+        ? discussionEmail(templateKey, data, deepLink, brand)
+        : emailContent(inApp.title, inApp.body, deepLink, brand),
   };
 }

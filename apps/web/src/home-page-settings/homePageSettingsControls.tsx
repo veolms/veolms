@@ -162,3 +162,58 @@ export function TextField({
     </div>
   );
 }
+
+/**
+ * A choice between a few options, each a card with a short explanation,
+ * the chosen one outlined in the accent colour.
+ */
+export function ChoiceCards<Value extends string>({
+  name,
+  legend,
+  options,
+  value,
+  onChange,
+}: {
+  name: string;
+  legend: string;
+  options: readonly (readonly [value: Value, label: string, help: string])[];
+  value: Value;
+  onChange: (value: Value) => void;
+}) {
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-1.5 text-[13px] font-medium text-(--text)">
+        {legend}
+      </legend>
+      <div className="grid gap-2.5 sm:grid-cols-2">
+        {options.map(([optionValue, label, help]) => (
+          <label
+            key={optionValue}
+            className={`flex cursor-pointer items-start gap-3 p-3.5 ${insetRowClass} ${
+              value === optionValue
+                ? "border-(--accent)! ring-2 ring-(--accent)/20"
+                : ""
+            }`}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={optionValue}
+              checked={value === optionValue}
+              onChange={() => onChange(optionValue)}
+              className="mt-0.5 size-4 accent-(--accent)"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-(--text)">
+                {label}
+              </span>
+              <span className="mt-0.5 block text-xs leading-relaxed text-(--muted)">
+                {help}
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}

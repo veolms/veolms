@@ -44,6 +44,8 @@ export function UnenrollCourseModal({
       onConfirm={confirm}
       icon={SignOut}
       iconWeight="regular"
+      // The sign-out question's look, so the two read alike.
+      appearance="loginCard"
       tone="danger"
       title={
         resetsProgress
@@ -55,8 +57,8 @@ export function UnenrollCourseModal({
           ? `You will be unenrolled from “${course.title}”. This will reset all your progress in this course.`
           : `You will lose access to “${course.title}”. Your progress is kept, and you can enroll again for free at any time.`
       }
-      // Staying is the safe choice, so it is the highlighted button and
-      // comes last; "Unenroll" is the quiet one before it.
+      // Staying is the safe choice, so it is the highlighted button, on
+      // top; "Unenroll" is the quiet one under it.
       emphasis="cancel"
       cancelLabel="Stay enrolled"
       confirmLabel="Unenroll"

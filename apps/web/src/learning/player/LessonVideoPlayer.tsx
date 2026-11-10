@@ -83,7 +83,12 @@ import {
   writeVolumePreference,
 } from "./lessonPlayerPersistence";
 import { createLearningLessonVideoSource } from "./lessonVideoSource";
-import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
+import { claimNumberKeysForVideo } from "../../keyboardShortcuts";
+import {
+  MINI_PLAYER_THEME,
+  useLearningPlayerTheme,
+  usePlayerLayoutPreferences,
+} from "./useLearningPlayerTheme";
 import { useLearningSeekInterval } from "./useLearningSeekInterval";
 import { MiniPlayerControls } from "./MiniPlayerControls";
 import {
@@ -103,6 +108,22 @@ import {
 } from "../learningWatchTime";
 import { createPlaybackTelemetry } from "./playbackTelemetry";
 import { trackAnalyticsEvent } from "../../lib/analytics-track";
+import {
+  markPlaying,
+  markNotPlaying,
+  subscribeToPlaybackConflict,
+  type PlaybackDeniedPlayingOn,
+} from "../playbackClaim";
+import { formatSessionDevice } from "../../settings/sessionDisplay";
+import { isLowMemoryDevice } from "./deviceTier";
+
+/**
+ * The stream has been waiting out failures for this many retries in a row
+ * (about 7 s with the engine's 1s, 2s, 4s waits) before the player says so
+ * over the loader: a single missed segment passes unremarked, as on any
+ * streaming site.
+ */
+const RECONNECTING_NOTICE_AFTER_RETRIES = 3;
 
 // Where the learner is, kept this often while the video plays: a reload
 // then starts within half a second of where it was (it is also kept the
@@ -147,6 +168,22 @@ const LESSON_PLAYER_SHORTCUTS = {
   toggleTheaterMode: false,
   togglePictureInPicture: false,
 } as const;
+/** 1-9 and 0 jump to that tenth without Alt (settings > Advanced). */
+const LESSON_PLAYER_SHORTCUTS_WITH_NUMBER_KEYS = {
+  ...LESSON_PLAYER_SHORTCUTS,
+  seekToPercentage: [
+    "Digit0",
+    "Digit1",
+    "Digit2",
+    "Digit3",
+    "Digit4",
+    "Digit5",
+    "Digit6",
+    "Digit7",
+    "Digit8",
+    "Digit9",
+  ],
+} as const;
 
 type FullscreenCoursePanelStyle = CSSProperties & {
   "--learning-fullscreen-panel-offset-x": string;
@@ -159,6 +196,7 @@ export interface LessonVideoPlayerProps {
   media: CourseVideo;
   description?: string | null;
   lessonTitle: string;
+  lessonId?: string | number;
   courseTitle?: string;
   lessonIndex?: number;
   totalLessons?: number;
@@ -448,6 +486,7 @@ export function LessonVideoPlayer({
   description,
   lessonIndex,
   lessonTitle,
+  lessonId,
   media,
   totalLessons,
   onProgressChange,
@@ -541,7 +580,22 @@ export function LessonVideoPlayer({
     }
     goToNextLesson();
   }, [goToNextLesson, lessonQuizOffered, showEndScreen]);
-  const playerTheme = useLearningPlayerTheme();
+  const lessonPlayerTheme = useLearningPlayerTheme();
+  // The mini window wears no theme (see MINI_PLAYER_THEME).
+  const playerTheme =
+    presentation === "mini" ? MINI_PLAYER_THEME : lessonPlayerTheme;
+  // The mini window, over other pages, leaves their number keys alone.
+  const layoutPreferences = usePlayerLayoutPreferences();
+  const numberKeysSeekVideo =
+    layoutPreferences.numberKeysSeekVideo && presentation === "full";
+  // Settings > Advanced can take the minimize key off the player; I and the
+  // swipe down still minimize.
+  const minimizeKeyShown =
+    !layoutPreferences.hiddenPlayerControls.includes("minimize");
+  useEffect(
+    () => (numberKeysSeekVideo ? claimNumberKeysForVideo() : undefined),
+    [numberKeysSeekVideo],
+  );
   const mediaKey = resumePersistenceKey ?? media.fileName;
   const activeMediaKeyRef = useRef(mediaKey);
   const requestedMediaKeyRef = useRef(mediaKey);
@@ -852,6 +906,39 @@ export function LessonVideoPlayer({
   useEffect(() => {
     watchTimeCourseKeyRef.current = watchTimeCourseKey;
   }, [watchTimeCourseKey]);
+
+  const [streamConflict, setStreamConflict] =
+    useState<PlaybackDeniedPlayingOn | null>(null);
+  // Retries in a row the engine has made for a segment that would not
+  // come (see `streamingretry`); 0 once one does, or a video is loaded.
+  const [streamingRetries, setStreamingRetries] = useState(0);
+  const reconnecting = streamingRetries >= RECONNECTING_NOTICE_AFTER_RETRIES;
+  // A small device prepares no second video out of sight: the standby is
+  // a whole second media pipeline (see deviceTier.ts).
+  const [withStandby] = useState(() => !isLowMemoryDevice());
+  const effectiveLessonId = lessonId ?? playbackBootstrap?.lessonId ?? null;
+  const effectiveLessonIdRef = useRef(effectiveLessonId);
+  useEffect(() => {
+    effectiveLessonIdRef.current = effectiveLessonId;
+  }, [effectiveLessonId]);
+
+  useEffect(() => {
+    const courseKey = watchTimeCourseKey;
+    if (!courseKey) return undefined;
+    return subscribeToPlaybackConflict(courseKey, (conflict) => {
+      playerRef.current?.pause();
+      setStreamConflict(conflict);
+    });
+  }, [watchTimeCourseKey]);
+
+  useEffect(() => {
+    return () => {
+      const courseKey = watchTimeCourseKeyRef.current;
+      if (courseKey) {
+        markNotPlaying(courseKey);
+      }
+    };
+  }, []);
   const [trackWatchTime] = useState(() =>
     createWatchTimeTracker((seconds) => {
       const courseKey = watchTimeCourseKeyRef.current;
@@ -885,6 +972,39 @@ export function LessonVideoPlayer({
       playbackTelemetry.handle(event);
       if (event.type === "fullscreenchange") {
         setPlayerFullscreen(event.detail.active);
+      }
+      if (event.type === "streamingretry") {
+        setStreamingRetries(event.detail.attempt);
+      } else if (
+        event.type === "streamingrecovered" ||
+        event.type === "loaded" ||
+        // A failure the player got over by itself (Shaka moving to
+        // another quality while one is refused) is reported too, and is
+        // not the end of the wait.
+        (event.type === "error" && event.detail.error.fatal)
+      ) {
+        setStreamingRetries(0);
+      }
+      if (event.type === "play" || event.type === "playing") {
+        setStreamConflict(null);
+        const courseKey = watchTimeCourseKeyRef.current;
+        const currentLessonId = effectiveLessonIdRef.current;
+        if (
+          courseKey &&
+          currentLessonId !== null &&
+          currentLessonId !== undefined
+        ) {
+          markPlaying(courseKey, String(currentLessonId));
+        }
+      } else if (
+        event.type === "pause" ||
+        event.type === "ended" ||
+        event.type === "unloaded"
+      ) {
+        const courseKey = watchTimeCourseKeyRef.current;
+        if (courseKey) {
+          markNotPlaying(courseKey);
+        }
       }
       if (playbackSuspended || holdingPlaybackRef.current) {
         if (
@@ -1634,17 +1754,25 @@ export function LessonVideoPlayer({
             article={reading}
             minimizeControl={
               onMinimize ? (
-                <LessonPlayerMinimizeControl
-                  icon={<MinimizeIcon size={22} />}
-                  onMinimize={minimizeReadingFromControl}
-                />
+                // In the theme's shape, as over a video (see the controls
+                // row's `data-player-theme`).
+                <div
+                  className="contents"
+                  data-player-theme={playerTheme.id}
+                  style={getPlayerThemeStyle(playerTheme)}
+                >
+                  <LessonPlayerMinimizeControl
+                    icon={<MinimizeIcon size={22} />}
+                    onMinimize={minimizeReadingFromControl}
+                  />
+                </div>
               ) : undefined
             }
             clearBottom
             controlsHidden={readingControlsHidden}
             onTap={toggleReadingControls}
           />
-        ) : presentation === "full" && onMinimize ? (
+        ) : presentation === "full" && onMinimize && minimizeKeyShown ? (
           <LessonPlayerMinimizeControl
             icon={<MinimizeIcon size={22} />}
             onMinimize={minimizePlayerFromControl}
@@ -1919,7 +2047,11 @@ export function LessonVideoPlayer({
       ariaLabel={`Lesson video player for ${lessonTitle}`}
       theaterMode={theaterMode}
       onTheaterModeChange={handleTheaterModeChange}
-      shortcuts={LESSON_PLAYER_SHORTCUTS}
+      shortcuts={
+        numberKeysSeekVideo
+          ? LESSON_PLAYER_SHORTCUTS_WITH_NUMBER_KEYS
+          : LESSON_PLAYER_SHORTCUTS
+      }
       seekIntervalSeconds={seekIntervalSeconds}
       emptyTapBehavior="responsive"
       controlsIdleDelay={LESSON_PLAYER_CONTROLS_IDLE_DELAY_MS}
@@ -1981,7 +2113,7 @@ export function LessonVideoPlayer({
         muted: restoreAutoplayRef.current !== null ? true : muted,
         // A hovered or next lesson is prepared in a hidden second element
         // and switched to at once when opened.
-        withStandby: true,
+        withStandby,
       }}
       className={cn(
         // A failure's message is drawn on the video, and the window is
@@ -2043,6 +2175,7 @@ export function LessonVideoPlayer({
             canGoNext={canGoNext}
             canGoPrevious={canGoPrevious}
             controlsSuppressed={chromeSuppressed}
+            endScreenOpen={endScreenVisible}
             onGoNext={onGoNext}
             onGoPrevious={onGoPrevious}
           />
@@ -2086,6 +2219,8 @@ export function LessonVideoPlayer({
             courseLessonsSidePanel={courseLessonsSidePanel}
             courseLessonsBottomSheet={courseLessonsBottomSheet}
             lessonTitle={lessonTitle}
+            lessonIndex={lessonIndex}
+            totalLessons={totalLessons}
             chaptersPanelHost={chaptersPanelHost}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}
@@ -2101,6 +2236,44 @@ export function LessonVideoPlayer({
       }
       overlays={
         <>
+          {reconnecting && !streamConflict && presentation === "full" ? (
+            // The engine is asking for segments that would not come (the
+            // connection is down, or the CDN refused them); the loader is
+            // up where the buffer ran out. Said in a word under the top
+            // row, as a status, never as a failure: the video goes on by
+            // itself once they arrive.
+            <div
+              className="pointer-events-none absolute inset-x-0 top-14 z-30 flex justify-center"
+              role="status"
+              aria-live="polite"
+              data-learning-player-reconnecting=""
+            >
+              <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-sm">
+                Reconnecting…
+              </span>
+            </div>
+          ) : null}
+          {streamConflict ? (
+            <VideoPlayerNotice
+              className="z-35"
+              title={
+                presentation === "mini"
+                  ? `Playing on ${formatSessionDevice(streamConflict.userAgent)}`
+                  : `You started playing on ${formatSessionDevice(streamConflict.userAgent)}${streamConflict.location ? ` in ${streamConflict.location}` : ""}. Play here instead?`
+              }
+              background={
+                <div className="size-full bg-black/85 backdrop-blur-xs" />
+              }
+              action={{
+                label: "Play here instead",
+                prominent: true,
+                onSelect: () => {
+                  setStreamConflict(null);
+                  void playerRef.current?.play();
+                },
+              }}
+            />
+          ) : null}
           {holdingPreviousLesson ? (
             // The same waiting surface the player used to be replaced with:
             // black over the held lesson, with the loader, above the controls.

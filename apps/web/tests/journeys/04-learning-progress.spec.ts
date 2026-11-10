@@ -6,8 +6,9 @@
  * 12 seconds of real playback, the way a learner finishes a lesson.
  *
  * The lesson page keeps progress in the browser first and sends it to the
- * API every 15 seconds, when a lesson ends, and when the learner moves on
- * in the app. The tests wait for that save (`waitForProgressSave`) before
+ * API once a minute while a video plays (the interval the API names), a
+ * few seconds after the video pauses or a lesson ends, and when the learner
+ * moves on in the app. The tests wait for that save (`waitForProgressSave`) before
  * checking anything another page or device reads from the API.
  */
 import type { Page } from "@playwright/test";
@@ -50,9 +51,12 @@ async function watchToTheEnd(
         lesson.lessonId === lessonId && lesson.progressPercent === 100,
     ),
   );
-  await expect(lessonInList(page, lessonNumber)).toContainText("completed", {
-    timeout: 30_000,
-  });
+  await expect(lessonInList(page, lessonNumber)).toHaveAccessibleName(
+    /\bcompleted\b/u,
+    {
+      timeout: 30_000,
+    },
+  );
   await saved;
 }
 
@@ -115,8 +119,8 @@ test("a lesson watched halfway is saved as started, not as complete", async ({
 
   await page.reload();
   const row = lessonInList(page, 1);
-  await expect(row).toContainText(/\d+% complete/u);
-  await expect(row).not.toContainText("completed");
+  await expect(row).toHaveAccessibleName(/\d+% complete\b/u);
+  await expect(row).not.toHaveAccessibleName(/\bcompleted\b/u);
 
   await openCoursePage(page, course);
   await expect(progressBox(page)).toContainText("0 of 3 lessons");
@@ -230,7 +234,7 @@ test("progress never goes backwards: replaying the start of a finished lesson ke
   await replaySaved;
 
   await page.reload();
-  await expect(lessonInList(page, 1)).toContainText("completed");
+  await expect(lessonInList(page, 1)).toHaveAccessibleName(/\bcompleted\b/u);
   await openCoursePage(page, course);
   await expect(progressBox(page)).toContainText("1 of 3 lessons");
 });

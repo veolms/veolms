@@ -146,6 +146,26 @@ export interface AnalyticsTabProps {
    * tables once they are loaded, and with `null` while they are not.
    */
   onExportChange: (sections: AnalyticsExportSection[] | null) => void;
+  /**
+   * The page's own select (the one its course filter uses), so a tab's
+   * filters look and behave like the rest of the app: same trigger, menu,
+   * keyboard handling and optional search.
+   */
+  Select: ComponentType<AnalyticsSelectProps>;
+}
+
+/** What a tab passes the page's `Select`. */
+export interface AnalyticsSelectProps {
+  value: string;
+  onValueChange: (value: string) => void;
+  /** [value, label] pairs, in order. */
+  options: readonly (readonly [value: string, label: string])[];
+  /** Names the control for screen readers ("Lesson"). */
+  ariaLabel: string;
+  /** A search box at the top of the menu, for long lists. */
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -303,6 +323,30 @@ export interface PlaybackSummary {
   watchedSeconds: number;
   /** Seconds played at each rendition height. */
   qualities: Array<{ height: number; seconds: number }>;
+  /**
+   * The HTTP status behind a network error, when the error carried one
+   * (a 403 from the CDN, a 503 from the licence server).
+   */
+  errorHttpStatus?: number;
+  /**
+   * How often the engine asked for a stream again after a segment failed
+   * (see `streamingretry`), and how many of those waits passed 10 s. Both
+   * are 0 for a playback that never stumbled.
+   */
+  streamingRetries?: number;
+  /** Playback token renewals that failed or timed out during this playback. */
+  tokenRefreshFailures?: number;
+  /**
+   * Errors the player got over by itself (Shaka moving to another quality
+   * when one was refused, a media pipeline it reset): the learner saw at
+   * most a moment's loading. A fatal error ends the summary instead
+   * (`errorCode`).
+   */
+  recoveredErrors?: number;
+  /** Gigabytes of memory the browser reports (Chromium), if it does. */
+  deviceMemoryGb?: number;
+  /** Logical processor cores the browser reports, if it does. */
+  cpuCores?: number;
   /**
    * What the on-device segment cache did during this playback (absent where
    * the browser keeps none).

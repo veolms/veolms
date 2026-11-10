@@ -2,10 +2,8 @@ import {
   activeSessionsVerificationRequestSchema,
   activeSessionsVerificationResponseSchema,
   authMessageResponseSchema,
-  deviceLimitResponseSchema,
-  loginResponseSchema,
-  otpSendResponseSchema,
-  resolveDeviceLimitRequestSchema,
+  sendActiveSessionsVerificationRequestSchema,
+  sendActiveSessionsVerificationResponseSchema,
   sessionParamsSchema,
   sessionResponseSchema,
 } from "@veolms/contracts";
@@ -35,14 +33,17 @@ const sessionRoutes: RoutePlugin = async (app, options) => {
         tags: ["Auth"],
         summary: "Send active-sessions verification code",
         description:
-          "Sends an email OTP to the authenticated user's verified email address.",
+          "Sends an OTP to the authenticated user's verified email address or phone number.",
+        body: sendActiveSessionsVerificationRequestSchema,
         response: {
           200: jsonResponse(
             "Active-sessions verification code sent.",
-            otpSendResponseSchema,
+            sendActiveSessionsVerificationResponseSchema,
           ),
           401: errorResponse("Unauthorized."),
-          409: errorResponse("A verified email address is required."),
+          409: errorResponse(
+            "A verified email address or phone number is required.",
+          ),
           429: errorResponse("Rate limit exceeded."),
           503: errorResponse("Verification code could not be delivered."),
         },
@@ -66,7 +67,7 @@ const sessionRoutes: RoutePlugin = async (app, options) => {
         tags: ["Auth"],
         summary: "Verify identity for active sessions",
         description:
-          "Consumes an email OTP valid for session management for up to 24 hours.",
+          "Consumes an email or phone OTP valid for session management for up to 24 hours.",
         body: activeSessionsVerificationRequestSchema,
         response: {
           200: jsonResponse(
@@ -75,7 +76,9 @@ const sessionRoutes: RoutePlugin = async (app, options) => {
           ),
           400: errorResponse("Verification code is invalid or expired."),
           401: errorResponse("Unauthorized or authenticated session expired."),
-          409: errorResponse("A verified email address is required."),
+          409: errorResponse(
+            "A verified email address or phone number is required.",
+          ),
           429: errorResponse("Rate limit exceeded."),
         },
       },
@@ -153,49 +156,6 @@ const sessionRoutes: RoutePlugin = async (app, options) => {
       preHandler: mfaVerified,
     },
     controller.revokeAll,
-  );
-
-  // Signed out (the sign-in is waiting): the device-limit cookie, not a
-  // session, says whose devices these are.
-  app.get(
-    "/auth/device-limit",
-    {
-      schema: {
-        operationId: "getDeviceLimit",
-        tags: ["Auth"],
-        summary: "Devices to choose from at the device limit",
-        description:
-          "For a sign-in held back by the academy's device limit: the devices the student is signed in on.",
-        response: {
-          200: jsonResponse(
-            "The devices and the limit.",
-            deviceLimitResponseSchema,
-          ),
-          401: errorResponse("No sign-in is waiting, or it has expired."),
-        },
-      },
-    },
-    controller.deviceLimit,
-  );
-
-  app.post(
-    "/auth/device-limit/resolve",
-    {
-      schema: {
-        operationId: "resolveDeviceLimit",
-        tags: ["Auth"],
-        summary: "Sign a device out and sign in here",
-        description:
-          "Signs the chosen device out and completes the sign-in held back by the device limit.",
-        body: resolveDeviceLimitRequestSchema,
-        response: {
-          200: jsonResponse("Signed in.", loginResponseSchema),
-          401: errorResponse("No sign-in is waiting, or it has expired."),
-          404: errorResponse("That device is no longer signed in."),
-        },
-      },
-    },
-    controller.resolveDeviceLimit,
   );
 };
 

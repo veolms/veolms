@@ -4,7 +4,6 @@ export const LEARNING_PROGRESS_STORAGE_VERSION = 1;
 /** Before `:<user id>:<course key>` (both URI-encoded); the head reads it too. */
 export const LEARNING_PROGRESS_STORAGE_PREFIX = "veolms-learning-progress-v1";
 const STORAGE_PREFIX = LEARNING_PROGRESS_STORAGE_PREFIX;
-const MAX_STORED_PROGRESS_ITEMS = 500;
 
 export interface LocalLearningProgressItem {
   lessonId?: string;
@@ -97,7 +96,7 @@ function normalizeState(value: unknown): LocalLearningProgressState {
 
   return {
     version: LEARNING_PROGRESS_STORAGE_VERSION,
-    items: [...itemsByKey.values()].slice(-MAX_STORED_PROGRESS_ITEMS),
+    items: [...itemsByKey.values()],
   };
 }
 
@@ -219,7 +218,7 @@ export function recordLearningProgress(
 
   return {
     version: LEARNING_PROGRESS_STORAGE_VERSION,
-    items: nextItems.slice(-MAX_STORED_PROGRESS_ITEMS),
+    items: nextItems,
   };
 }
 
@@ -267,7 +266,7 @@ export function mergeServerLearningProgress(
   return changed
     ? {
         version: LEARNING_PROGRESS_STORAGE_VERSION,
-        items: nextItems.slice(-MAX_STORED_PROGRESS_ITEMS),
+        items: nextItems,
       }
     : state;
 }
@@ -324,7 +323,7 @@ export function mergeLocalLearningProgress(
   return changed
     ? {
         version: LEARNING_PROGRESS_STORAGE_VERSION,
-        items: nextItems.slice(-MAX_STORED_PROGRESS_ITEMS),
+        items: nextItems,
       }
     : current;
 }

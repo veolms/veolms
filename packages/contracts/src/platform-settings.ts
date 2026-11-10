@@ -1,8 +1,13 @@
 import { z } from "zod";
+
+/** The form of a player theme id (see `@veolms/video-player`). */
+const PLAYER_THEME_ID_PATTERN = /^[a-z][a-z0-9-]{0,39}$/;
 import {
   DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
   MAX_MAX_DEVICES_PER_STUDENT,
+  MAX_MAX_SIMULTANEOUS_STREAMS,
   MIN_MAX_DEVICES_PER_STUDENT,
+  MIN_MAX_SIMULTANEOUS_STREAMS,
   PLATFORM_DISPLAY_MODES,
   type PlatformAppearanceSettings,
   type PlatformInvoiceSettings,
@@ -23,6 +28,13 @@ export const platformAppearanceSettingsSchema = z.strictObject({
     .regex(/^[a-z][a-z0-9-]{0,39}$/, "Choose one of the colour themes")
     .default(DEFAULT_PLATFORM_APPEARANCE_SETTINGS.defaultColorTheme)
     .meta({ example: "ocean" }),
+  // Player themes come from the web app and its plugins; the API only
+  // checks the id's form.
+  defaultVideoPlayerTheme: z
+    .string()
+    .regex(PLAYER_THEME_ID_PATTERN, "Choose one of the player themes")
+    .default(DEFAULT_PLATFORM_APPEARANCE_SETTINGS.defaultVideoPlayerTheme)
+    .meta({ example: "youtube" }),
 }) satisfies z.ZodType<PlatformAppearanceSettings>;
 
 export const platformSecuritySettingsSchema = z.strictObject({
@@ -32,6 +44,12 @@ export const platformSecuritySettingsSchema = z.strictObject({
     .int()
     .min(MIN_MAX_DEVICES_PER_STUDENT)
     .max(MAX_MAX_DEVICES_PER_STUDENT)
+    .nullable(),
+  maxSimultaneousStreams: z
+    .number()
+    .int()
+    .min(MIN_MAX_SIMULTANEOUS_STREAMS)
+    .max(MAX_MAX_SIMULTANEOUS_STREAMS)
     .nullable(),
 }) satisfies z.ZodType<PlatformSecuritySettings>;
 
@@ -67,6 +85,7 @@ export const platformInvoiceSettingsSchema = z.strictObject({
   signatoryLabel: z.string().trim().max(60),
   footerNote: z.string().trim().max(200),
   showLogo: z.boolean(),
+  logoUrl: z.url().nullable(),
 }) satisfies z.ZodType<PlatformInvoiceSettings>;
 
 export const platformSettingsSchema = z.strictObject({
@@ -96,11 +115,19 @@ export const updatePlatformSettingsRequestSchema = z
         defaultColorTheme: z
           .string()
           .regex(/^[a-z][a-z0-9-]{0,39}$/, "Choose one of the colour themes"),
+        defaultVideoPlayerTheme: z
+          .string()
+          .regex(PLAYER_THEME_ID_PATTERN, "Choose one of the player themes"),
       })
       .partial()
       .optional(),
     security: platformSecuritySettingsSchema.partial().optional(),
-    invoice: platformInvoiceSettingsSchema.partial().optional(),
+    // The invoice logo is set by its own upload (an address the server
+    // checked), never sent with the other details.
+    invoice: platformInvoiceSettingsSchema
+      .omit({ logoUrl: true })
+      .partial()
+      .optional(),
   })
   .refine(
     (value) =>

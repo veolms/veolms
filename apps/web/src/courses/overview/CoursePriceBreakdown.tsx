@@ -11,11 +11,13 @@ export interface CoursePriceBreakdownData {
   /** The coupon in use: its code and its amount off ("₹500"). */
   coupon?: { code: string; discount: string };
   total: string;
+  /** A line under the total: why it is more than the coupon leaves. */
+  note?: string;
   /** Text size for the total; long amounts take a smaller one. */
   totalSizeClassName: string;
 }
 
-const discountClasses =
+export const discountClasses =
   "m-0 text-right font-semibold whitespace-nowrap text-[color-mix(in_srgb,var(--success)_72%,var(--text))]";
 
 /**
@@ -33,7 +35,8 @@ export function CoursePriceBreakdown({
 }: {
   breakdown: CoursePriceBreakdownData;
 }) {
-  const { sale, beforeCoupon, coupon, total, totalSizeClassName } = breakdown;
+  const { sale, beforeCoupon, coupon, total, note, totalSizeClassName } =
+    breakdown;
   const hasLines = Boolean(sale || coupon);
 
   return (
@@ -78,6 +81,11 @@ export function CoursePriceBreakdown({
           {total}
         </span>
       </div>
+      {note ? (
+        <p className="m-0 -mt-1 text-[0.8rem] leading-snug text-(--muted)">
+          {note}
+        </p>
+      ) : null}
     </div>
   );
 }

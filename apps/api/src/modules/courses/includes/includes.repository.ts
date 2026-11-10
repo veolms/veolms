@@ -31,7 +31,7 @@ export async function insertInclude(
     detail?: string | null;
     icon?: string | null;
     color?: string | null;
-    kind?: "custom" | "video";
+    kind?: "custom" | "video" | "access";
     position: number;
     created_at: Date;
     updated_at: Date;
@@ -50,7 +50,7 @@ export async function insertIncludes(
     detail: string | null;
     icon: string;
     color: string;
-    kind: "custom" | "video";
+    kind: "custom" | "video" | "access";
     position: number;
     created_at: Date;
     updated_at: Date;

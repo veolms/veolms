@@ -1677,8 +1677,16 @@
     z-index: 81;
   }
 
+  /* The page always sits in the frame (`.courses-main-frame > .courses-main`).
+     The frame is a box of its own only in the framed layout with a mouse;
+     elsewhere (edge-to-edge, touch) it is `display: contents`, its z-index
+     does nothing, and the page's sticky bars (the Discussions tabs, z-index
+     26) were stacked with the sidebar itself, covering the top of the
+     floating sidebar once it was hidden. The page is held at this level
+     either way. */
   .courses-app > .courses-main-frame,
-  .courses-app > .courses-main {
+  .courses-app > .courses-main,
+  .courses-app > .courses-main-frame > .courses-main {
     z-index: 1;
   }
 }

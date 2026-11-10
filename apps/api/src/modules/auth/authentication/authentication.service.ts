@@ -31,6 +31,7 @@ import type { OtpService } from "../otp/otp.service.ts";
 import type { SessionService } from "../session/session.service.ts";
 import {
   normalizePhoneIdentifier,
+  phoneNotRegistered,
   refusesUnconfirmedPhoneSignIn,
 } from "../shared/auth.utils.ts";
 import { evictCachedUserSessions } from "../shared/session-auth-cache.ts";
@@ -88,6 +89,17 @@ const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
   "mfa-setup",
   "auth",
   "explore-courses",
+  // Legal and Help and feedback pages.
+  "terms",
+  "privacy",
+  "policies",
+  "contact",
+  "about",
+  "community-guidelines",
+  "delete-account",
+  "refund-policy",
+  "support",
+  "support-inbox",
   "learn",
   "cdn",
   "v1",
@@ -570,6 +582,29 @@ export function createAuthService({
     });
   }
 
+  /**
+   * These routes add a number, or confirm the one on the account. Replacing
+   * a confirmed number takes proof of it first (contact-change): otherwise
+   * anyone holding a session could move the account to their own number,
+   * and sign in with it.
+   */
+  function assertNotReplacingConfirmedPhone(
+    account: { phone_no: string | null; phone_verified_at: Date | null },
+    phoneNo: string,
+  ): void {
+    if (
+      account.phone_verified_at &&
+      account.phone_no &&
+      account.phone_no !== phoneNo
+    ) {
+      throw new AppError(
+        409,
+        "PHONE_CHANGE_NEEDS_PROOF",
+        "To replace your confirmed number, use Change number: it asks for a code sent to your current number first.",
+      );
+    }
+  }
+
   async function sendPhoneVerificationOtp(
     userId: string,
     phoneNo: string,
@@ -593,6 +628,7 @@ export function createAuthService({
     if (!currentUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
+    assertNotReplacingConfirmedPhone(currentUser, normalizedPhoneNo);
 
     if (!otpService) {
       throw new AppError(
@@ -728,6 +764,7 @@ export function createAuthService({
     if (!currentUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
+    assertNotReplacingConfirmedPhone(currentUser, normalizedPhoneNo);
 
     if (!otpService) {
       throw new AppError(
@@ -775,6 +812,17 @@ export function createAuthService({
       new Date(),
     );
     if (!updatedUser) {
+      // Nothing written: the account is gone, or a different number was
+      // confirmed on it since the check above.
+      const now = await userRepository.findUserContactById(database, userId);
+      if (!now) {
+        throw new AppError(
+          404,
+          "USER_NOT_FOUND",
+          "User account was not found.",
+        );
+      }
+      assertNotReplacingConfirmedPhone(now, normalizedPhoneNo);
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
     forgetCachedAccount(userId);
@@ -875,45 +923,6 @@ export function createAuthService({
     return { email: updated.email ?? email, phoneNo: updated.phone_no };
   }
 
-  async function deactivateAccount(userId: string): Promise<void> {
-    if (!sessionService) {
-      throw new AppError(
-        500,
-        "CONFIG_ERROR",
-        "AuthService requires sessionService for account deactivation.",
-      );
-    }
-
-    await database.transaction().execute(async (transaction) => {
-      const user = await userRepository.deactivateUser(transaction, userId);
-      if (!user) {
-        throw new AppError(
-          404,
-          "USER_NOT_FOUND",
-          "User account was not found or is already deactivated.",
-        );
-      }
-
-      await sessionService.revokeAllSessions(userId, transaction);
-
-      // Keyed on this deactivation, not on the account. Keyed on the
-      // account alone, the notice went out the first time only: an account
-      // that had been deactivated and brought back was deactivated again
-      // with no email, because the event counted as already sent.
-      await outbox.publish(transaction, {
-        type: "auth.account_deactivated",
-        version: 1,
-        dedupeKey: `auth.account_deactivated:${userId}:${user.updated_at.toISOString()}`,
-        occurredAt: new Date(),
-        payload: { recipientUserId: userId },
-      });
-    });
-    // The sessions were dropped from the cache inside the transaction. A
-    // request arriving before the commit can have cached one again, so they
-    // are dropped once more now that the deactivation is saved.
-    forgetCachedAccount(userId);
-  }
-
   async function getUserRoles(userId: string): Promise<string[]> {
     return userRepository.listUserRoleNames(database, userId);
   }
@@ -978,23 +987,13 @@ export function createAuthService({
       );
     }
 
-    // A number nobody confirmed (the one typed during platform setup, or by
-    // staff adding a student) cannot sign in until the owner confirms it
-    // from their profile. That holds whether or not the email is confirmed
-    // yet: a student added by staff has neither, and a mistyped number would
-    // otherwise open their account to its holder.
+    // A number nobody confirmed (the one typed during platform setup, by
+    // staff adding a student, or by an import) cannot sign in until the
+    // owner confirms it from their profile: a mistyped number would
+    // otherwise open the account to its holder. No code is sent to such a
+    // number, so this only answers a caller who skipped that step.
     if (refusesUnconfirmedPhoneSignIn(input.identifierType, user)) {
-      await otpService.assertOtpMatches(
-        input.identifier,
-        input.identifierType,
-        "login",
-        input.code,
-      );
-      throw new AppError(
-        403,
-        "PHONE_NOT_VERIFIED",
-        "This mobile number has not been confirmed yet. Sign in with your email, then confirm the number in Settings.",
-      );
+      throw phoneNotRegistered();
     }
 
     // The read-only prerequisites of the session do not depend on the OTP,
@@ -1793,7 +1792,6 @@ export function createAuthService({
     createUser,
     requireUser,
     updateContactAsAdmin,
-    deactivateAccount,
   };
 }
 

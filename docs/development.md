@@ -1,60 +1,88 @@
-# Development
+# Development setup
 
-## Install dependencies
+This guide sets up a local development copy. Run commands from the repository root unless stated otherwise.
+
+## Prerequisites
+
+- Git
+- Node.js 24 and pnpm 11.18.0 (the version in `package.json`)
+- Docker Engine or Docker Desktop with Compose, running locally; or PostgreSQL 18 installed locally
+- Google Chrome for browser tests
+
+Check `git --version`, `node --version`, `pnpm --version`, and `docker compose version`. Install missing tools using their official instructions. If pnpm is unavailable, install the version above using the [pnpm installation guide](https://pnpm.io/installation).
+
+## Clone and configure
 
 ```bash
-pnpm install
+git clone --branch dev https://github.com/veolms/veolms.git
+cd veolms
+cp .env.example .env
+pnpm install --frozen-lockfile
 ```
 
-## Database options
+In PowerShell, use `Copy-Item .env.example .env` instead of `cp`. If you already have a checkout or `.env`, use it instead of cloning again or overwriting your configuration. The example credentials and secrets are for local development only. Never commit `.env`, and use unique secrets for any deployed environment. Optional integrations such as OAuth, object storage, and payment providers require their own credentials; consult the comments in `.env.example` when working on them.
 
-VeoLMS requires PostgreSQL 18. Choose either Docker or a native PostgreSQL installation. The application, migrations, seed command, and resulting schema work identically in both cases; only `DATABASE_URL` and how PostgreSQL is started differ.
+## Start PostgreSQL
 
-### Option A: Docker Compose (recommended)
-
-Docker provides a reproducible, isolated PostgreSQL 18 environment and requires no host-level database configuration.
+With Docker running:
 
 ```bash
-pnpm compose:up
+docker compose up -d --wait postgres
+```
+
+The default local database is `veolms` on port `5433`, matching `.env.example`. Compose stores data in a persistent named volume. If port 5433 is occupied, change both `POSTGRES_PORT` and the port in `DATABASE_URL` in `.env` before starting Compose.
+
+Alternatively, use [native PostgreSQL 18](#native-postgresql-18). Do not start the Compose database for this option.
+
+## Initialize and run
+
+```bash
 pnpm db:migrate
 pnpm db:seed
 pnpm dev
 ```
 
-Compose runs `postgres:18-alpine`, publishes PostgreSQL on host port `5433`, and stores its data in the persistent `veolms-postgres-18-data` named volume. The default validated connection URL is:
+Open <http://localhost:3000>; the API is at <http://localhost:4000> and its documentation is at <http://localhost:4000/docs>. The local seed creates a demo academy and the administrator `admin@veolms.org`. Sign in with the email code shown in the API console. See the [seed guide](seed.md) for the sample data, options, and media configuration.
 
-```text
-postgresql://veolms:veolms@localhost:5433/veolms
+Stop the app with Ctrl+C. To stop the Docker database while preserving its data:
+
+```bash
+docker compose down
 ```
 
-Run `pnpm compose:down` to stop PostgreSQL. The named volume preserves local data.
+Avoid `docker compose down -v` and `pnpm db:reset` unless you intend to remove local data. If startup fails, check that Docker is running, the database is healthy (`docker compose ps`), the configured port is free, and `.env` matches your database. See the platform and application notes below for more details.
 
-### Option B: Native PostgreSQL 18
+## Useful commands
 
-Use a native installation when Docker Desktop consumes too much memory or when PostgreSQL 18 is already installed. Install PostgreSQL 18 from the [official PostgreSQL downloads](https://www.postgresql.org/download/) and ensure its service is running.
+```bash
+pnpm dev:web       # Start the frontend
+pnpm dev:api       # Start the API
+pnpm lint          # Check code quality
+pnpm typecheck     # Check TypeScript types
+pnpm test:all      # Run API, flow, and browser tests
+```
 
-Create the local role and database through `psql`, pgAdmin, or an equivalent administration tool. With `psql`:
+## Checks
+
+```bash
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test:api
+```
+
+Before pushing to `dev`, run `pnpm test:all`. Flow tests require Docker PostgreSQL; browser tests also require Google Chrome. They rebuild separate test databases. See the [flow tests](../apps/api/test/flows/README.md) and [browser tests](../apps/web/tests/journeys/README.md) for details. See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution and test rules.
+
+### Native PostgreSQL 18
+
+Install and start [PostgreSQL 18](https://www.postgresql.org/download/). Create a local role and database with `psql` or an equivalent tool:
 
 ```sql
 CREATE ROLE veolms WITH LOGIN PASSWORD 'veolms';
 CREATE DATABASE veolms OWNER veolms;
 ```
 
-Copy `.env.example` to `.env` and point `DATABASE_URL` at the native server. Native installations commonly use port `5432`:
-
-```env
-DATABASE_URL=postgresql://veolms:veolms@localhost:5432/veolms
-```
-
-Do not run `pnpm compose:up` for this option. Once the native server and database are ready, use the same application commands:
-
-```bash
-pnpm db:migrate
-pnpm db:seed
-pnpm dev
-```
-
-The migration creates the schema and the idempotent seed inserts the three initial published courses. `pnpm db:reset` rolls migrations back and reapplies them, removing existing course data; run `pnpm db:seed` afterward.
+Copy `.env.example` to `.env` if needed and set `DATABASE_URL=postgresql://veolms:veolms@localhost:5432/veolms` to match your server. Then install dependencies and run `pnpm db:migrate`, `pnpm db:seed`, and `pnpm dev` as described above.
 
 ## Platform resource notes
 
@@ -65,7 +93,7 @@ The migration creates the schema and the idempotent seed inserts the three initi
 To fully release Docker and WSL memory on Windows after stopping the Compose services:
 
 ```powershell
-pnpm compose:down
+docker compose down
 docker desktop stop
 wsl --shutdown
 ```
@@ -74,7 +102,7 @@ wsl --shutdown
 
 ## Run the applications
 
-The Web application currently runs independently of the API and database. Start only the frontend with:
+To start only the frontend, run:
 
 ```bash
 pnpm dev:web
@@ -141,7 +169,10 @@ domain. `.m3u8` files are public, while non-manifest objects in
 `CDN_PUBLIC_FOLDERS` are served without a token and
 `CDN_PRIVATE_FOLDERS` require the short-lived `veo_token` issued by the API.
 `CDN_TOKEN_TTL_SECONDS` controls normal protected-media URLs and
-`CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs.
+`CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs (default 300).
+A segment token cannot be revoked, so keep it short: it is how long the rest
+of a paid video can still load after a sign-out. The player renews it while
+it plays.
 New direct uploads use `public/...` or `protected/...` keys. Course thumbnail
 assets use a flat per-asset layout:
 
@@ -179,7 +210,7 @@ site on the previous version.
 
 ## Development API deployment
 
-Every push to `development` also runs `.github/workflows/deploy-development-api.yml`. It validates the API and database migrations, connects to the existing Linux server over SSH, updates the server checkout to the exact Git commit that triggered the workflow, installs the frozen lockfile, applies pending migrations, type-checks the API, restarts the systemd service, and checks the API liveness endpoint.
+`.github/workflows/deploy-development-api.yml` runs only when started by hand (Actions → Deploy development API → Run workflow). Since 2026-10-31 dev.veolms.org runs the cloud app, which the cloud repository deploys; this workflow deploys the old core API, which is stopped and kept as a rollback target. It validates the API and database migrations, connects to the existing Linux server over SSH, updates the server checkout to the exact Git commit the run was started on, installs the frozen lockfile, applies pending migrations, builds the API, starts the new build on a free port on 127.0.0.1 to check that it becomes ready, reloads the pm2 service (or restarts the systemd one), and checks `/v1/ready` on the API's own port. To roll dev.veolms.org back to it, run the workflow, then point the nginx map in `/etc/nginx/conf.d/veolms-dev-backend.conf` at `127.0.0.1:4000` and reload nginx.
 
 The server must have Node.js 24, pnpm 11, Git, PostgreSQL access, `curl`, and a systemd unit for the API. Keep the production `.env` on the server in the repository's expected location; the workflow never transfers or replaces it. The deploy user needs read/write access to the application directory and passwordless permission to restart only the API service, for example:
 
@@ -189,7 +220,7 @@ veolms-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart veolms-api.service
 
 Configure these values on the GitHub `development` environment:
 
-- Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (optional; defaults to `22`), `DEPLOY_APP_DIR`, `DEPLOY_SERVICE_NAME`, and `API_HEALTHCHECK_URL` (for example, `http://127.0.0.1:4000/v1/health`).
+- Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (optional; defaults to `22`), `DEPLOY_APP_DIR`, `DEPLOY_SERVICE_NAME`, and `API_HEALTHCHECK_URL` (only the link shown on the deployment; the health check calls the API on 127.0.0.1).
 - Secrets: `DEPLOY_SSH_PRIVATE_KEY` and `DEPLOY_KNOWN_HOSTS`.
 
 The server checkout's `origin` must point to the repository and the deploy key must be able to fetch the `development` branch. `DEPLOY_KNOWN_HOSTS` should contain the server's verified `known_hosts` entry; do not use `ssh-keyscan` inside the workflow or disable host-key checking.

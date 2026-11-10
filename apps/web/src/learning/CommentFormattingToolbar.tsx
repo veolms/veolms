@@ -19,6 +19,7 @@ import {
 import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
 import { DISCUSSION_ATTACHMENTS_ENABLED } from "./discussion-editor/image-storage";
+import { CommentEmojiPicker } from "./CommentEmojiPicker";
 
 interface CommentFormattingToolbarProps {
   /**
@@ -30,6 +31,12 @@ interface CommentFormattingToolbarProps {
   formattingState: DiscussionFormattingState;
   attachmentsEnabled?: boolean;
   onEditorNeeded?: () => void;
+  /** The line between the profile picture before the toolbar and its
+   * first button; off where no picture comes first. */
+  leadingDivider?: boolean;
+  /** The tools always shown, with no arrow to fold them away (a form
+   * with room for them, such as Help and feedback). */
+  toolsAlwaysOpen?: boolean;
 }
 
 export function hasCommentToolbarOverflow(
@@ -44,6 +51,8 @@ export function CommentFormattingToolbar({
   formattingState,
   attachmentsEnabled = true,
   onEditorNeeded,
+  leadingDivider = true,
+  toolsAlwaysOpen = false,
 }: CommentFormattingToolbarProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const scrollportRef = useRef<HTMLDivElement>(null);
@@ -110,7 +119,8 @@ export function CommentFormattingToolbar({
     };
   }, []);
 
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsOpenByUser, setToolsOpen] = useState(false);
+  const toolsOpen = toolsAlwaysOpen || toolsOpenByUser;
   const toolsSwipeRef = useRef<{
     pointerId: number;
     x: number;
@@ -157,6 +167,9 @@ export function CommentFormattingToolbar({
           className="absolute bottom-[calc(100%+0.75rem)] left-0 z-30 flex w-[min(22rem,calc(100vw-2rem))] items-center gap-1.5 rounded-xl bg-(--surface-elevated,var(--surface)) p-2 shadow-[0_16px_44px_rgba(0,0,0,0.34),0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]"
           onSubmit={(event) => {
             event.preventDefault();
+            // Inside a form of its own (Help and feedback), the submit
+            // would otherwise send that form too.
+            event.stopPropagation();
             applyLink();
           }}
           onKeyDown={(event) => {
@@ -195,29 +208,33 @@ export function CommentFormattingToolbar({
         </form>
       )}
 
-      <span
-        data-comment-toolbar-separator="leading"
-        aria-hidden="true"
-        className="h-6 w-px shrink-0 bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-      />
+      {leadingDivider ? (
+        <span
+          data-comment-toolbar-separator="leading"
+          aria-hidden="true"
+          className="h-6 w-px shrink-0 bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+        />
+      ) : null}
 
       {/* The tools wait behind this arrow: it, or a sideways swipe on the
           toolbar, opens and closes them. */}
-      <button
-        type="button"
-        aria-label={toolsOpen ? "Hide formatting" : "Show formatting"}
-        title={toolsOpen ? "Hide formatting" : "Show formatting"}
-        aria-expanded={toolsOpen}
-        onClick={() => setToolsOpen((open) => !open)}
-        className="ml-0.5 grid size-8 shrink-0 place-items-center rounded-md text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
-      >
-        <CaretRight
-          size={15}
-          weight="bold"
-          aria-hidden="true"
-          className={`transition-transform duration-200 ${toolsOpen ? "rotate-180" : ""}`}
-        />
-      </button>
+      {toolsAlwaysOpen ? null : (
+        <button
+          type="button"
+          aria-label={toolsOpen ? "Hide formatting" : "Show formatting"}
+          title={toolsOpen ? "Hide formatting" : "Show formatting"}
+          aria-expanded={toolsOpen}
+          onClick={() => setToolsOpen((open) => !open)}
+          className="ml-0.5 grid size-8 shrink-0 place-items-center rounded-md text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent)"
+        >
+          <CaretRight
+            size={15}
+            weight="bold"
+            aria-hidden="true"
+            className={`transition-transform duration-200 ${toolsOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+      )}
 
       <div
         data-comment-toolbar-tools
@@ -291,6 +308,10 @@ export function CommentFormattingToolbar({
             >
               <TextItalic size={17} />
             </ToolbarButton>
+            <CommentEmojiPicker
+              editor={editor}
+              onEditorNeeded={onEditorNeeded}
+            />
             <ToolbarButton
               label="Inline code"
               active={formattingState.code}

@@ -84,3 +84,19 @@ await test("the code-exchange path's address comes out lower-cased (mock code, n
   });
   assert.equal(result.email, "ada@example.com");
 });
+
+await test("a Google ID token's nonce claim is carried through to the profile", () => {
+  const result = googleIdTokenToProfile(
+    {
+      iss: "https://accounts.google.com",
+      aud: "client-id",
+      sub: "1234567890",
+      email: "Ada.Lovelace@Example.com",
+      email_verified: true,
+      name: "Ada Lovelace",
+      nonce: "cryptographic_random_nonce_123",
+    },
+    "client-id",
+  );
+  assert.equal(result.nonce, "cryptographic_random_nonce_123");
+});

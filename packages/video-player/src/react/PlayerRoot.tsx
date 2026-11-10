@@ -113,6 +113,11 @@ function assignRef<Value>(
 
 const TOUCH_SCREEN_QUERY = "(any-pointer: coarse)";
 
+// A player empty this long while it has a source is loaded again (see the
+// effect that does it), at most this many times for one source.
+const EMPTY_PLAYER_RELOAD_MS = 4000;
+const EMPTY_PLAYER_RELOADS = 2;
+
 function readTouchScreen(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -320,6 +325,50 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
           autoPlay: autoPlayRef.current,
         })
         .catch(() => undefined);
+    }, [controller, stableLoadOptions, stableSource]);
+
+    // The source above is loaded only when it changes. A player left with
+    // no video in it while it still has one to show (stopped, its load
+    // dropped along the way) sat on its spinner for good, until the page
+    // was reloaded. Empty for a few seconds, it is loaded again.
+    useEffect(() => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let reloads = 0;
+      const sitsEmpty = () => {
+        const { media } = controller.getSnapshot();
+        return (
+          !controller.destroyed &&
+          media.lifecycle === "attached" &&
+          media.source === null &&
+          media.error === null
+        );
+      };
+      const check = () => {
+        if (!sitsEmpty()) {
+          clearTimeout(timer);
+          timer = undefined;
+          return;
+        }
+        if (timer !== undefined || reloads >= EMPTY_PLAYER_RELOADS) return;
+        timer = setTimeout(() => {
+          timer = undefined;
+          if (!sitsEmpty()) return;
+          reloads += 1;
+          void controller
+            .load({
+              source: stableSource,
+              options: stableLoadOptions,
+              autoPlay: autoPlayRef.current,
+            })
+            .catch(() => undefined);
+        }, EMPTY_PLAYER_RELOAD_MS);
+      };
+      const unsubscribe = controller.subscribe(check);
+      check();
+      return () => {
+        unsubscribe();
+        clearTimeout(timer);
+      };
     }, [controller, stableLoadOptions, stableSource]);
 
     const resolvedTheme = resolvePlayerTheme(theme);

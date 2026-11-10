@@ -14,6 +14,8 @@ import type {
   NeedsRefundListResponse,
   RefundRequest,
   ReviewRefundRequest,
+  CreateStudentRefundRequest,
+  LearnerRefundRequest,
 } from "@veolms/contracts";
 
 /** `view` decides the response shape, so each list function fixes its own. */
@@ -71,6 +73,22 @@ export const ordersService = {
     const base = getApiBaseUrl();
     const queryString = view ? `?view=${encodeURIComponent(view)}` : "";
     return `${base}/orders/${orderId}/invoice/download${queryString}`;
+  },
+
+  /**
+   * A learner asks for their purchase back (Purchase History). An eligible
+   * purchase is refunded at once (`status: "approved"`); one paid by bank
+   * transfer, or one the gateway did not refund, waits for staff
+   * (`"pending"`).
+   */
+  requestRefund: (
+    orderId: string,
+    payload: CreateStudentRefundRequest,
+  ): Promise<LearnerRefundRequest> => {
+    return api.post<LearnerRefundRequest>(
+      `/orders/${encodeURIComponent(orderId)}/refund-requests`,
+      payload,
+    );
   },
 
   refundOrder: (

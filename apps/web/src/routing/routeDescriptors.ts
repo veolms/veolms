@@ -112,11 +112,14 @@ const notFoundRouteDescriptor = {
 export const notFoundDocumentTitle = `${notFoundRouteDescriptor.title} · ${productName}`;
 
 export const routeDescriptors = {
+  // The home page at "/" is what web filters and search engines read to
+  // decide what the site is, so its title and description name it plainly.
   "root-courses": {
     kind: "shell",
     page: "home",
-    title: "Home",
-    description: "Your ProCodrr home screen.",
+    title: "Online Programming Courses",
+    description:
+      "Learn programming online with video courses in JavaScript, TypeScript, Node.js, Next.js and more. Practical lessons, projects and progress tracking on ProCodrr.",
   },
   home: {
     kind: "shell",
@@ -452,6 +455,39 @@ export const routeDescriptors = {
     title: "Edit Coupon",
     description: "Maintain coupon parameters, limits, and validity.",
   },
+  // Help and feedback: pages that render their own route inside the shell.
+  support: {
+    kind: "shell",
+    page: "extension",
+    title: "Help and feedback",
+    description:
+      "Report a problem or send feedback, and read the team's replies.",
+  },
+  "support-new": {
+    kind: "shell",
+    page: "extension",
+    title: "Report a problem or send feedback",
+    description: "Tell the ProCodrr team what went wrong, or what you think.",
+  },
+  "support-ticket": {
+    kind: "shell",
+    page: "extension",
+    title: "Help and feedback",
+    description: "A report or feedback and its conversation with the team.",
+  },
+  chat: {
+    kind: "shell",
+    page: "extension",
+    title: "Chats",
+    description: "Course groups, team groups and private chats.",
+  },
+  "support-inbox": {
+    kind: "shell",
+    page: "extension",
+    section: "Support",
+    title: "Support",
+    description: "Problems reported by learners, and their feedback.",
+  },
   // An address no page answers to. It used to render Home under the wrong
   // address; it now says the page was not found.
   "home-fallback": notFoundRouteDescriptor,
@@ -485,6 +521,9 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "student-details": "/students/:username",
   progress: "/progress",
   "progress-learner": "/progress/:username",
+  support: "/support",
+  "support-inbox": "/support-inbox",
+  chat: "/chat",
   "public-profile": "/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
@@ -510,6 +549,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "/my-learning": "/courses",
   Students: "/students",
   Progress: "/progress",
+  Support: "/support-inbox",
   Reviews: "/reviews",
   Discussions: "/discussions",
   Analytics: "/analytics",
@@ -549,6 +589,9 @@ const canonicalPathsByRouteId = {
   "student-details": "/students/:username",
   progress: "/progress",
   "progress-learner": "/progress/:username",
+  support: "/support",
+  "support-new": "/support/new",
+  chat: "/chat",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -703,6 +746,24 @@ export const getEffectiveRouteId = (
 
   if (routeId === "progress-learner") {
     return /^\/progress\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "support-ticket") {
+    return /^\/support\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "chat") {
+    return /^\/chat(?:\/[0-9a-f-]{36})?$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "support-inbox") {
+    return /^\/support-inbox(?:\/feedback)?$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

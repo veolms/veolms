@@ -1,3 +1,4 @@
+import { ArrowsDownUpIcon as ArrowsDownUp } from "@phosphor-icons/react/ArrowsDownUp";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
@@ -43,6 +44,9 @@ import { hasAdminRole } from "../shell/workspaceRole";
 import { courseMatchesWishlist, getCourseRouteKey } from "./catalogue";
 import { useCatalogSearchTracking } from "./useCatalogSearchTracking";
 import { ShownCourseThumbnailsScript } from "./CourseCardThumbnail";
+import { CourseReorderPanel } from "./reorder/CourseReorderPanel";
+import { useCourseDragOrder } from "./reorder/useCourseDragOrder";
+import { useCourseReorder } from "./reorder/useCourseReorder";
 
 // Only a learner leaving a free course needs this, so it stays out of the
 // catalogue's own code.
@@ -147,6 +151,34 @@ export function CourseCatalogue({
   // The bin lists every deleted course, so it takes the academy-wide key.
   const canOpenBin =
     isAdmin || capabilities.canOnCourse("course.restore", null);
+  // The order spans every course, so it takes the academy-wide key.
+  const canReorder =
+    role === "creator" &&
+    activeSection === "Courses" &&
+    (isAdmin || capabilities.canOnCourse("course.details.update", null));
+  const reorder = useCourseReorder({ enabled: canReorder, setNotice });
+  // Cards are dragged in any view but the Bin, with a mouse or, after a
+  // press and hold, a finger. In a filtered view (only Published, a search)
+  // a card takes the place of the one it is dropped on in the full order.
+  const visibleIds = visibleCourses.map((course) => course.id);
+  const savedIds = reorder.courses.map((course) => course.id);
+  const gridReorderable =
+    canReorder && enrollmentFilter !== "bin" && savedIds.length > 0;
+  const fullOrder = [
+    ...savedIds,
+    ...visibleIds.filter((id) => !savedIds.includes(id)),
+  ];
+  const gridDrag = useCourseDragOrder(
+    fullOrder,
+    (ids) => void reorder.save(ids.filter((id) => savedIds.includes(id))),
+  );
+  const coursesById = new Map(
+    visibleCourses.map((course) => [course.id, course]),
+  );
+  const shownCourses =
+    gridReorderable && gridDrag.draggedId
+      ? gridDrag.order.flatMap((id) => coursesById.get(id) ?? [])
+      : visibleCourses;
   useCatalogSearchTracking(
     search,
     isLoading,
@@ -154,11 +186,13 @@ export function CourseCatalogue({
   );
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
   const [pendingUnenroll, setPendingUnenroll] = useState<Course | null>(null);
-  // An admin in Student view, or a shared test account, can leave any
-  // course they enrolled in, and doing so clears their progress in it.
+  // An admin in Student view, a shared test account, or anyone on a local
+  // server with LOCAL_ANY_COURSE_UNENROLL, can leave any course they
+  // enrolled in, and doing so clears their progress in it.
   const currentUser = useCurrentUser().data;
   const leavesAnyCourse =
-    hasAdminRole(currentUser?.roles) || Boolean(currentUser?.isTestAccount);
+    hasAdminRole(currentUser?.roles) ||
+    Boolean(currentUser?.isTestAccount || currentUser?.localAnyCourseUnenroll);
   const quickFilterTabsRef = useRef<HTMLDivElement>(null);
   const [hasQuickFilterOverflow, setHasQuickFilterOverflow] = useState(false);
   const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(
@@ -382,18 +416,34 @@ export function CourseCatalogue({
 
           {role === "creator" &&
             activeSection === "Courses" &&
-            canCreateCourse && (
+            (canCreateCourse || canReorder) && (
               <div className="order-3 flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="Create"
-                  className="flex h-11 shrink-0 items-center gap-2 rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-4 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-                  data-control-radius-action
-                  onClick={() => onNavigatePage("Create Course")}
-                >
-                  <Plus size={18} weight="bold" />
-                  <span>Create</span>
-                </button>
+                {canReorder ? (
+                  <button
+                    type="button"
+                    className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-(--control-radius-action) border border-(--border-strong) bg-(--card-surface) px-4 text-[14px]! font-[650]! text-(--text) transition-colors hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) max-[640px]:w-11 max-[640px]:px-0"
+                    data-control-radius-action
+                    aria-haspopup="dialog"
+                    aria-label="Reorder courses"
+                    title="Reorder courses"
+                    onClick={() => reorder.setPanelOpen(true)}
+                  >
+                    <ArrowsDownUp size={18} weight="bold" />
+                    <span className="max-[640px]:sr-only">Reorder</span>
+                  </button>
+                ) : null}
+                {canCreateCourse ? (
+                  <button
+                    type="button"
+                    aria-label="Create"
+                    className="flex h-11 shrink-0 items-center gap-2 rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-4 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                    data-control-radius-action
+                    onClick={() => onNavigatePage("Create Course")}
+                  >
+                    <Plus size={18} weight="bold" />
+                    <span>Create</span>
+                  </button>
+                ) : null}
               </div>
             )}
         </ExpandableSearch>
@@ -511,8 +561,26 @@ export function CourseCatalogue({
           suppressHydrationWarning
         >
           <div className={gridClasses}>
-            {visibleCourses.map((course, index) =>
-              renderCard(course, priorityImageIndexes.has(index)),
+            {shownCourses.map((course, index) =>
+              gridReorderable ? (
+                <div
+                  key={course.id}
+                  draggable={!reorder.saving}
+                  {...gridDrag.handlersFor(course.id, course.title)}
+                  {...gridDrag.holdHandlersFor(course.id)}
+                  data-course-reorder-card={course.id}
+                  data-course-drop-id={course.id}
+                  className={`min-w-0 cursor-grab rounded-2xl transition-[opacity,scale,box-shadow] duration-150 select-none [-webkit-touch-callout:none] active:cursor-grabbing ${
+                    gridDrag.draggedId === course.id
+                      ? "scale-[0.97] opacity-60 shadow-[0_0_0_2px_var(--accent)]"
+                      : ""
+                  }`}
+                >
+                  {renderCard(course, priorityImageIndexes.has(index))}
+                </div>
+              ) : (
+                renderCard(course, priorityImageIndexes.has(index))
+              ),
             )}
           </div>
           <ShownCourseThumbnailsScript />
@@ -552,6 +620,17 @@ export function CourseCatalogue({
         </div>
       ) : null}
 
+      {canReorder ? (
+        <CourseReorderPanel
+          open={reorder.panelOpen}
+          onOpenChange={reorder.setPanelOpen}
+          courses={reorder.courses}
+          saving={reorder.saving}
+          onSave={async (ids) => {
+            if (await reorder.save(ids)) reorder.setPanelOpen(false);
+          }}
+        />
+      ) : null}
       <ConfirmDeleteModal
         isOpen={pendingDelete !== null}
         title="Move course to Bin?"

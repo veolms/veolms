@@ -190,3 +190,58 @@ export function CourseEnrolmentDetails({
     </div>
   );
 }
+
+const placeholderBlock =
+  "rounded-md bg-[color-mix(in_srgb,var(--text)_10%,transparent)]";
+
+/** A row of the panel while its words are on their way: tile and lines. */
+function PlaceholderRow({ noteLines }: { noteLines: 0 | 1 | 2 }) {
+  return (
+    <li className="flex min-w-0 gap-3">
+      <span className={`${enrolmentTileClasses} ${placeholderBlock}`} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className={`${enrolmentLabelClasses} flex h-[1lh] items-center`}>
+          <span className={`${placeholderBlock} h-[0.7em] w-16`} />
+        </span>
+        <span className={`${enrolmentValueClasses} flex h-[1lh] items-center`}>
+          <span className={`${placeholderBlock} h-[0.8em] w-32`} />
+        </span>
+        {Array.from({ length: noteLines }, (_, line) => (
+          <span
+            key={line}
+            // One note of two lines: the top margin once.
+            className={`${line === 0 ? enrolmentNoteClasses : "text-[0.78rem]"} flex h-[1lh] items-center`}
+          >
+            <span
+              className={`${placeholderBlock} h-[0.7em] ${line === 0 ? "w-40" : "w-24"}`}
+            />
+          </span>
+        ))}
+      </div>
+    </li>
+  );
+}
+
+/**
+ * "Your enrollment" before the access answer has come with its words (a
+ * course page opened from another page, whose band is drawn from the
+ * learner's list of courses until then): the panel at its usual size, its
+ * heading in place and its rows pulsing, so the band does not grow when
+ * they arrive. Each line keeps the height of the text it stands for.
+ */
+export function CourseEnrolmentDetailsPlaceholder() {
+  return (
+    <div className={enrolmentPanelClasses} aria-hidden="true">
+      <h3 className="font-bold text-(--text)">Your enrollment</h3>
+      <ul
+        className={`${enrolmentListClasses} animate-pulse motion-reduce:animate-none`}
+      >
+        {/* The order under the date; the pace's note, which runs to two
+            lines in the column beside the curriculum. */}
+        <PlaceholderRow noteLines={1} />
+        <PlaceholderRow noteLines={0} />
+        <PlaceholderRow noteLines={2} />
+      </ul>
+    </div>
+  );
+}

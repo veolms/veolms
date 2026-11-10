@@ -2,10 +2,12 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { HouseIcon as House } from "@phosphor-icons/react/House";
+import { LifebuoyIcon as Lifebuoy } from "@phosphor-icons/react/Lifebuoy";
 import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircle";
 import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
@@ -50,6 +52,7 @@ const studentNavigation: readonly NavigationItem[] = [
     ChatCircleDots,
     "/discussions",
   ),
+  createNavigationItem("student-chat", "Chats", ChatsCircle, "/chat"),
   createNavigationItem("student-settings", "Settings", GearSix, "/settings"),
 ];
 
@@ -61,6 +64,7 @@ const creatorNavigation: readonly NavigationItem[] = [
     ChatCircleDots,
     "/discussions",
   ),
+  createNavigationItem("creator-chat", "Chats", ChatsCircle, "/chat"),
   createNavigationItem("creator-dashboard", "Dashboard", SquaresFour, "/"),
   createNavigationItem("creator-students", "Students", Users, "/students"),
   createNavigationItem(
@@ -82,6 +86,7 @@ const adminNavigation: readonly NavigationItem[] = [
     ChatCircleDots,
     "/discussions",
   ),
+  createNavigationItem("creator-chat", "Chats", ChatsCircle, "/chat"),
   createNavigationItem("creator-orders", "Orders", Tote, "/orders"),
   createNavigationItem("creator-students", "Students", Users, "/students"),
   createNavigationItem(
@@ -91,6 +96,8 @@ const adminNavigation: readonly NavigationItem[] = [
     "/analytics",
   ),
   createNavigationItem("admin-coupons", "Coupons", Tag, "/coupons"),
+  // Problems learners report and the feedback they send.
+  createNavigationItem("admin-support", "Support", Lifebuoy, "/support-inbox"),
   // Academy-wide settings, the home page among them.
   createNavigationItem(
     "admin-platform",
@@ -155,6 +162,7 @@ const navigationTones: Record<string, string> = {
   Coupons: "#fbbf24",
   Platform: "#38bdf8",
   Team: "#818cf8",
+  Support: "#fb7185",
   Students: "#2dd4bf",
   Reviews: "#f1be4b",
   "My Quiz": "#f87171",
@@ -164,6 +172,7 @@ const navigationTones: Record<string, string> = {
   Orders: "#d68eea",
   "Purchase History": "#d68eea",
   Messages: "#63c8d5",
+  Chats: "#25d0a8",
   Notifications: "#f1be4b",
   Settings: "#a16cff",
   // Dock controls that are not pages.
@@ -286,7 +295,9 @@ export function getMobilePrimaryNavigation(
   role: string,
   navigation: readonly NavigationItemWithMetadata[],
 ): NavigationItemWithMetadata[] {
-  const capacity = role === "student" ? 3 : 4;
+  // Learners: Home, Courses, Discussions and Chats, then "You" (Chats would
+  // otherwise only be reachable from the side menu on a phone).
+  const capacity = 4;
   return navigation.slice(0, capacity);
 }
 

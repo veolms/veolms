@@ -13,6 +13,29 @@ export const learningProgressItemSchema = z.strictObject({
    * keeps), and saving it marks the lesson as the course's last played.
    */
   positionSeconds: z.number().int().min(0).max(86_400).optional(),
+  /**
+   * How many seconds ago, by this device's clock, the learner was at
+   * `positionSeconds`. A duration rather than a time, so a device whose
+   * clock is wrong still orders correctly against the learner's other
+   * devices: a position held back (offline, a failed request) and sent
+   * later does not replace one saved since from another device. Absent
+   * from an older page, which means "now".
+   */
+  positionAgeSeconds: z.number().int().min(0).max(604_800).optional(),
+});
+
+/**
+ * What the learner is playing when the batch is sent. Absent when nothing
+ * is playing on this device, which releases this device's playback claim.
+ */
+export const learningProgressPlayingSchema = z.strictObject({
+  lessonId: z.uuid(),
+  /**
+   * "play": the viewer just pressed play on this device (a new claim,
+   *   always wins against an existing heartbeat on another device).
+   * "heartbeat": still playing since the last report.
+   */
+  event: z.enum(["play", "heartbeat"]),
 });
 
 export const learningProgressBatchRequestSchema = z.strictObject({
@@ -33,6 +56,9 @@ export const learningProgressBatchRequestSchema = z.strictObject({
    * calendar instead of UTC. Ignored once a zone is saved, or if unknown.
    */
   timeZone: z.string().min(1).max(64).optional(),
+  /** The lesson playing on this device when the report was sent. Absent when
+   *  nothing is playing here, which releases this device's claim. */
+  playing: learningProgressPlayingSchema.optional(),
 });
 
 export const learningProgressLessonSchema = z.strictObject({
@@ -82,8 +108,34 @@ export const learningProgressResumeContextResponseSchema = z.strictObject({
   upcomingLessons: z.array(learningProgressResumeLessonSchema).max(3),
 });
 
+/**
+ * The server's answer about whether this device may play. Absent when the
+ * stream limit is off, the user is staff, or the client did not send
+ * `playing` (older client). Absent always means "allowed".
+ */
+export const learningProgressPlaybackSchema = z.discriminatedUnion("allowed", [
+  z.strictObject({ allowed: z.literal(true) }),
+  z.strictObject({
+    allowed: z.literal(false),
+    /** The device whose play is newer than this one's. */
+    playingOn: z.strictObject({
+      userAgent: z.string().nullable(),
+      location: z.string().nullable(),
+      lessonTitle: z.string().nullable(),
+      since: z.iso.datetime(),
+    }),
+  }),
+]);
+
 export const learningProgressSyncResponseSchema = z.strictObject({
   synced: z.literal(true),
+  playback: learningProgressPlaybackSchema.optional(),
+  /**
+   * How long the page should wait, while a video plays, before it sends the
+   * next batch. Pauses, the end of a lesson and leaving the page still send
+   * at once. The server raises it to shed load; absent from an older API.
+   */
+  nextSyncSeconds: z.number().int().min(15).max(600).optional(),
 });
 
 export type LearningProgressCourseParams = z.infer<
@@ -111,9 +163,21 @@ export type LearningProgressResumeContextResponse = z.infer<
 export type LearningProgressSyncResponse = z.infer<
   typeof learningProgressSyncResponseSchema
 >;
+export type LearningProgressPlaying = z.infer<
+  typeof learningProgressPlayingSchema
+>;
+export type LearningProgressPlayback = z.infer<
+  typeof learningProgressPlaybackSchema
+>;
 
 z.globalRegistry.add(learningProgressBatchRequestSchema, {
   id: "LearningProgressBatchRequest",
+});
+z.globalRegistry.add(learningProgressPlayingSchema, {
+  id: "LearningProgressPlaying",
+});
+z.globalRegistry.add(learningProgressPlaybackSchema, {
+  id: "LearningProgressPlayback",
 });
 z.globalRegistry.add(learningProgressResponseSchema, {
   id: "LearningProgressResponse",

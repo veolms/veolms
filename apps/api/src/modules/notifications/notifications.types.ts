@@ -23,6 +23,9 @@ export type NotificationTemplateKey =
   | "moderation.user_suspended"
   | "moderation.user_unsuspended"
   | "moderation.report_resolved"
+  | "support.reply_posted"
+  | "chat.mentioned"
+  | "chat.platform_restriction"
   | "quiz.attempt_passed"
   | "quiz.attempt_failed_final"
   | "quiz.assigned"
@@ -56,6 +59,12 @@ export interface NotificationIntent {
   deepLink: string | null;
   /** Files sent with the email, if it is sent. */
   emailAttachments?: readonly NotificationEmailAttachment[];
+  /**
+   * False keeps it off phones even when the type is pushed (a course-wide
+   * event with NOTIFICATION_COURSE_WIDE_PUSH off). Which types are pushed at
+   * all is PUSH_ROUTES in the contracts, not the handlers.
+   */
+  push?: boolean;
 }
 
 /**
@@ -70,7 +79,43 @@ export interface NotificationHandlerDependencies {
   listActiveCourseRecipientUserIds(courseId: string): Promise<string[]>;
   /** False keeps course-wide notifications in-app only (no email). */
   courseWideEmail?: boolean;
+  /** False keeps course-wide notifications off phones. */
+  courseWidePush?: boolean;
 }
+
+/** A chat message to push, with who should get it (from the chat module). */
+export interface ChatMessagePush {
+  roomId: string;
+  roomKind: "course" | "team" | "direct";
+  /** The group's name; for a private chat, the sender's name. */
+  roomTitle: string;
+  messageId: string;
+  seq: number;
+  senderId: string;
+  senderName: string;
+  /** One line: the text, or what was attached ("Photo", "Voice message"). */
+  text: string;
+  sentAt: Date;
+  /** A first message from someone not yet accepted. */
+  isRequest: boolean;
+  recipients: readonly {
+    userId: string;
+    isMention: boolean;
+    /** Unread messages in this chat for them, capped at 99. */
+    unreadCount: number;
+  }[];
+}
+
+/**
+ * Turns a `chat.message_sent` event into the message and its recipients,
+ * applying the chat's own rules (muted chats, already read, blocks, large
+ * groups). Null: nothing to push (deleted, system message, nobody left).
+ */
+export interface ChatPushSource {
+  resolveMessagePush(payload: unknown): Promise<ChatMessagePush | null>;
+}
+
+export const CHAT_MESSAGE_SENT_EVENT = "chat.message_sent";
 
 export interface NotificationRecipient {
   id: string;

@@ -146,6 +146,7 @@ export function createViewerAccessService({
       pricing: {
         ...course.pricing,
         showDiscountBadge: course.pricing.showDiscountBadge === true,
+        international: course.pricing.international ?? null,
       },
       progress: progress ?? null,
     };

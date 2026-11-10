@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import type {
+  CouponDiscountRule,
   CreateCouponRequest,
   UpdateCouponRequest,
 } from "@veolms/contracts";
@@ -23,6 +24,10 @@ import { getApiError } from "../lib/api-error";
 import type { NavigateTo } from "../routing/navigation";
 import { QuizRichTextField } from "../quizzes/QuizRichTextField";
 import { CouponTicketPreview } from "./CouponTicketPreview";
+import {
+  CouponCourseRatesField,
+  type CourseRateDraft,
+} from "./CouponCourseRatesField";
 import {
   couponMoneyToForm,
   inputClass,
@@ -182,6 +187,9 @@ export function CouponBuilderPage({
   // The switch that used to sit here saved a limit of 1 when turned off.
   const [perUserLimit, setPerUserLimit] = useState<number | "">(1);
   const [restrictedCourseIds, setRestrictedCourseIds] = useState<string[]>([]);
+  const [courseRates, setCourseRates] = useState<CourseRateDraft[]>([]);
+  // Bundle rules have no editor here; they are kept as they are on save.
+  const [otherRules, setOtherRules] = useState<CouponDiscountRule[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleDiscountTypeChange = (value: string) => {
@@ -242,6 +250,17 @@ export function CouponBuilderPage({
       setUsageLimit(existingCoupon.globalUsageLimit ?? 2000);
       setPerUserLimit(existingCoupon.perUserLimit ?? 1);
       setRestrictedCourseIds(existingCoupon.restrictedCourseIds ?? []);
+      const rules = existingCoupon.discountRules ?? [];
+      setCourseRates(
+        rules
+          .filter((rule) => rule.targetType === "course")
+          .map((rule) => ({
+            courseId: rule.targetId,
+            discountType: rule.discountType,
+            discountValue: rule.discountValue,
+          })),
+      );
+      setOtherRules(rules.filter((rule) => rule.targetType !== "course"));
       setErrorMessage(null);
       return;
     }
@@ -258,6 +277,8 @@ export function CouponBuilderPage({
       setUsageLimit(2000);
       setPerUserLimit(1);
       setRestrictedCourseIds(presetCourseId ? [presetCourseId] : []);
+      setCourseRates([]);
+      setOtherRules([]);
       setErrorMessage(null);
     }
   }, [defaultEnd, defaultStart, existingCoupon, isEditMode, presetCourseId]);
@@ -290,7 +311,20 @@ export function CouponBuilderPage({
     setRestrictedCourseIds((current) =>
       current.filter((id) => id !== courseId),
     );
+    // A course the coupon no longer applies to cannot keep its own rate.
+    setCourseRates((current) =>
+      current.filter((rate) => rate.courseId !== courseId),
+    );
   };
+
+  // Only courses the coupon applies to can have their own rate.
+  const rateCourses = useMemo(
+    () =>
+      restrictedCourseIds.length > 0
+        ? courses.filter((course) => restrictedCourseIds.includes(course.id))
+        : courses,
+    [courses, restrictedCourseIds],
+  );
 
   const handleSubmit = async (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -328,6 +362,28 @@ export function CouponBuilderPage({
       return;
     }
 
+    for (const rate of courseRates) {
+      const value = Number(rate.discountValue) || 0;
+      if (value <= 0) {
+        setErrorMessage("Each course with its own discount needs a value.");
+        return;
+      }
+      if (rate.discountType === "percentage" && value > 100) {
+        setErrorMessage("Percentage discount cannot exceed 100%.");
+        return;
+      }
+    }
+    const discountRules: CouponDiscountRule[] = [
+      ...courseRates.map((rate) => ({
+        targetType: "course" as const,
+        targetId: rate.courseId,
+        discountType: rate.discountType,
+        discountValue: Math.round(Number(rate.discountValue)),
+        maxDiscountAmount: null,
+      })),
+      ...otherRules,
+    ];
+
     const money = toCouponMoneyPayload({
       discountType,
       discountValue: numericDiscountValue,
@@ -354,6 +410,7 @@ export function CouponBuilderPage({
           isActive: existingCoupon.isActive,
           restrictedCourseIds:
             restrictedCourseIds.length > 0 ? restrictedCourseIds : null,
+          discountRules,
         };
         await updateMutation.mutateAsync({ id: existingCoupon.id, payload });
         setNotice?.(`${existingCoupon.code} updated.`);
@@ -372,6 +429,7 @@ export function CouponBuilderPage({
           isActive: true,
           restrictedCourseIds:
             restrictedCourseIds.length > 0 ? restrictedCourseIds : undefined,
+          discountRules,
         };
         await createMutation.mutateAsync(payload);
         setNotice?.(`${cleanCode} created.`);
@@ -532,6 +590,12 @@ export function CouponBuilderPage({
                   {discountType === "percentage" ? "%" : "₹"}
                 </span>
               </div>
+              {discountType === "fixed" ? (
+                <p className="m-0 mt-1.5 text-xs text-(--muted)">
+                  On a course sold in dollars outside India, it takes off the
+                  same share of the price.
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -661,6 +725,19 @@ export function CouponBuilderPage({
                 </p>
               )}
             </div>
+          ) : null}
+
+          {rateCourses.length > 0 || courseRates.length > 0 ? (
+            <CouponCourseRatesField
+              courses={rateCourses}
+              rates={courseRates}
+              onChange={setCourseRates}
+              defaultLabel={
+                discountType === "percentage"
+                  ? `${Number(discountValue) || 0}%`
+                  : `₹${Number(discountValue) || 0} off`
+              }
+            />
           ) : null}
 
           <div className="mt-1 flex items-center justify-end gap-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-4">

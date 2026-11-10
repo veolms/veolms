@@ -4,6 +4,8 @@ import {
   authPasskeyAddedEventSchema,
   authSessionRevokedEventSchema,
   certificateGeneratedEventSchema,
+  chatMentionedEventSchema,
+  chatPlatformRestrictionEventSchema,
   coursePublishedEventSchema,
   discussionAnswerAcceptedEventSchema,
   discussionReplyCreatedEventSchema,
@@ -12,6 +14,7 @@ import {
   learningStreakMilestoneEventSchema,
   moderationContentModeratedEventSchema,
   moderationReportResolvedEventSchema,
+  supportReplyPostedEventSchema,
   moderationUserSuspendedEventSchema,
   moderationUserUnsuspendedEventSchema,
   paymentCompletedEventSchema,
@@ -52,6 +55,22 @@ function courseWideChannels(dependencies: NotificationHandlerDependencies) {
     : commonChannels;
 }
 
+/**
+ * The lecture, course and time a discussion email shows, where the event
+ * has them (events from before they were added do not).
+ */
+function discussionEmailData(event: {
+  lessonTitle?: string | undefined;
+  courseTitle?: string | undefined;
+  occurredAt?: string | undefined;
+}): Record<string, string> {
+  const data: Record<string, string> = {};
+  if (event.lessonTitle) data.lessonTitle = event.lessonTitle;
+  if (event.courseTitle) data.courseTitle = event.courseTitle;
+  if (event.occurredAt) data.occurredAt = event.occurredAt;
+  return data;
+}
+
 const notificationHandlers: Record<string, NotificationHandler> = {
   "course.published": async (payload, dependencies) => {
     const event = coursePublishedEventSchema.parse(payload);
@@ -64,6 +83,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       templateKey: "course.published",
       templateData: { courseTitle: event.courseTitle },
       channels: courseWideChannels(dependencies),
+      push: dependencies.courseWidePush !== false,
       mandatory: false,
       deepLink: `/courses/${event.courseSlug}`,
     }));
@@ -228,7 +248,12 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         type: "user.mentioned",
         category: "social",
         templateKey: "user.mentioned",
-        templateData: { actorName: event.actorName, context: event.context },
+        templateData: {
+          actorName: event.actorName,
+          context: event.context,
+          ...discussionEmailData(event),
+          ...(event.inReply ? { inReply: "true" } : {}),
+        },
         channels: commonChannels,
         mandatory: false,
         deepLink: event.deepLink,
@@ -262,6 +287,13 @@ const notificationHandlers: Record<string, NotificationHandler> = {
           actorName: event.actorName,
           threadTitle: event.threadTitle,
           replySnippet: event.replySnippet,
+          ...discussionEmailData(event),
+          ...(event.recipientRole
+            ? { recipientRole: event.recipientRole }
+            : {}),
+          ...(event.originalSnippet
+            ? { originalSnippet: event.originalSnippet }
+            : {}),
         },
         channels: commonChannels,
         mandatory: false,
@@ -361,6 +393,68 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
     ];
   },
+  "chat.mentioned": async (payload) => {
+    const event = chatMentionedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "chat.mentioned",
+        category: "social",
+        templateKey: "chat.mentioned",
+        templateData: {
+          actorName: event.actorName,
+          roomTitle: event.roomTitle,
+          snippet: event.snippet,
+        },
+        // Chat is live already; email for every mention would be noise.
+        channels: ["in_app"] as const,
+        mandatory: false,
+        deepLink: event.deepLink,
+      },
+    ];
+  },
+  "chat.platform_restriction": async (payload) => {
+    const event = chatPlatformRestrictionEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "chat.platform_restriction",
+        category: "transactional",
+        templateKey: "chat.platform_restriction",
+        templateData: {
+          actorName: event.actorName,
+          targetName: event.targetName,
+          restriction: event.restriction,
+          reason: event.reason,
+        },
+        channels: ["in_app"] as const,
+        // A staff alert (decision 5), not a preference.
+        mandatory: true,
+        deepLink: event.deepLink,
+      },
+    ];
+  },
+  "support.reply_posted": async (payload) => {
+    const event = supportReplyPostedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "support.reply_posted",
+        category: "transactional",
+        templateKey: "support.reply_posted",
+        templateData: {
+          ticketNumber: String(event.ticketNumber),
+          ticketKind: event.ticketKind,
+          replySnippet: event.replySnippet,
+        },
+        channels:
+          event.emailAllowed === false ? (["in_app"] as const) : commonChannels,
+        // An answer to something the learner asked us; not a preference.
+        mandatory: true,
+        deepLink: `/support/${event.ticketId}`,
+      },
+    ];
+  },
   "quiz.attempt.passed": async (payload) => {
     const event = quizAttemptPassedEventSchema.parse(payload);
     return [
@@ -415,6 +509,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         lessonTitle: event.lessonTitle,
       },
       channels: courseWideChannels(dependencies),
+      push: dependencies.courseWidePush !== false,
       mandatory: false,
       deepLink: event.deepLink,
     }));

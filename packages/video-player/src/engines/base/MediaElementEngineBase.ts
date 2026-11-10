@@ -117,6 +117,16 @@ function mediaErrorToVideoEngineError(
   });
 }
 
+/**
+ * How long a load may go on before it is reported as failed. A load that
+ * never finished (a request that hung, a step that never came back) left
+ * the player on its spinner for good, with no error and nothing to retry:
+ * only a reload of the page got it going. It fails instead, and the error
+ * screen offers to try again. A load that does finish after this still
+ * plays (`finishLoading` clears the error).
+ */
+const LOAD_TIMEOUT_MS = 45_000;
+
 export abstract class MediaElementEngineBase implements VideoEngine {
   abstract readonly name: VideoEngineName;
 
@@ -125,6 +135,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
   #media: HTMLMediaElement | null = null;
   #snapshot = createInitialVideoEngineSnapshot();
   #operationGeneration = 0;
+  #loadTimeout: ReturnType<typeof setTimeout> | null = null;
 
   async attach(media: HTMLMediaElement): Promise<void> {
     this.assertNotDestroyed();
@@ -497,6 +508,9 @@ export abstract class MediaElementEngineBase implements VideoEngine {
   }
 
   protected startLoading(source: VideoSource): void {
+    // A new load gets the whole time again.
+    if (this.#loadTimeout !== null) clearTimeout(this.#loadTimeout);
+    this.#loadTimeout = null;
     this.updateSnapshot({
       lifecycle: "loading",
       source,
@@ -597,6 +611,25 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     });
   }
 
+  /**
+   * Given a fatal media failure (the element could not decode what it was
+   * handed, the media source broke) before it is shown. True when the
+   * engine is putting it right itself, so the failure is not reported as
+   * the player's error; false to show it. The base engine shows every one.
+   */
+  protected recoverFromMediaFailure(_error: VideoEngineError): boolean {
+    return false;
+  }
+
+  /**
+   * A load has run for LOAD_TIMEOUT_MS without finishing. True when the
+   * engine starts it over instead of failing it (a request that hung is
+   * dropped with it); false to report the failure. The base engine reports.
+   */
+  protected retryTimedOutLoad(): boolean {
+    return false;
+  }
+
   protected async onAttached(_media: HTMLMediaElement): Promise<void> {}
 
   protected async onDetaching(_media: HTMLMediaElement): Promise<void> {}
@@ -606,7 +639,32 @@ export abstract class MediaElementEngineBase implements VideoEngine {
   ): Promise<void> {}
 
   private emitSnapshot(): void {
+    this.watchLoadTime();
     this.#events.emit("snapshotchange", this.getSnapshot());
+  }
+
+  /** Times a load from its start (see LOAD_TIMEOUT_MS). */
+  private watchLoadTime(): void {
+    if (this.#snapshot.lifecycle !== "loading") {
+      if (this.#loadTimeout !== null) clearTimeout(this.#loadTimeout);
+      this.#loadTimeout = null;
+      return;
+    }
+    if (this.#loadTimeout !== null) return;
+    this.#loadTimeout = setTimeout(() => {
+      this.#loadTimeout = null;
+      if (this.#snapshot.lifecycle !== "loading") return;
+      if (this.retryTimedOutLoad()) return;
+      this.emitError(
+        new VideoEngineError({
+          category: "NETWORK",
+          code: "LOAD_TIMEOUT",
+          message: "The video took too long to load.",
+          fatal: true,
+          recoverable: true,
+        }),
+      );
+    }, LOAD_TIMEOUT_MS);
   }
 
   private normalizeNativeTextTrack(
@@ -703,9 +761,15 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       this.recoverFromMediaError();
       this.refreshNativeTextTracks();
     });
-    listen("error", () =>
-      this.emitError(mediaErrorToVideoEngineError(media.error)),
-    );
+    listen("error", () => {
+      const error = mediaErrorToVideoEngineError(media.error);
+      if (error.fatal && this.recoverFromMediaFailure(error)) return;
+      // A fetch the element gave up on (MEDIA_ERR_ABORTED, MEDIA_ERR_NETWORK)
+      // is not the end of the video: the streaming engine fetches the
+      // segments itself and carries on. Shown as the player's error, it put
+      // "Something went wrong" over a video that played on.
+      this.emitError(error, error.fatal);
+    });
   }
 
   private unbindMediaEvents(media: HTMLMediaElement): void {

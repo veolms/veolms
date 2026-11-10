@@ -16,6 +16,8 @@ import {
   saveActiveSessionsVerification,
 } from "../auth/activeSessionsVerification";
 import type { ActiveSessionsVerificationState } from "../auth/activeSessionsVerification";
+import { maskIdentifier } from "../auth/authFlow";
+import { loginQuietLinkClasses } from "../auth/LoginCardParts";
 import type { AuthIdentifier } from "../auth/authFlow";
 import { OtpForm } from "../auth/OtpForm";
 import {
@@ -36,14 +38,26 @@ import { SettingsModalOverlay } from "./SettingsModalOverlay";
 function ActiveSessionsVerificationDialog({
   userId,
   email,
+  phoneNo,
+  hasUsableEmail,
+  hasUsablePhone,
   onClose,
   onVerified,
 }: {
   userId: string;
-  email: string;
+  email?: string | null;
+  phoneNo?: string | null;
+  hasUsableEmail: boolean;
+  hasUsablePhone: boolean;
   onClose: () => void;
   onVerified: (state: ActiveSessionsVerificationState) => void;
 }) {
+  const [channel, setChannel] = useState<"email" | "phone">(() =>
+    hasUsableEmail ? "email" : "phone",
+  );
+  const [maskedDestination, setMaskedDestination] = useState<string | null>(
+    null,
+  );
   const sendCode = useSendActiveSessionsVerificationCode();
   const verifyCode = useVerifyActiveSessionsCode();
   const { mutate: sendCodeMutation, reset: resetSendCode } = sendCode;
@@ -53,15 +67,36 @@ function ActiveSessionsVerificationDialog({
   const [sentAt, setSentAt] = useState<number | null>(null);
   const initialSendStarted = useRef(false);
 
-  const send = useCallback(() => {
-    resetSendCode();
-    sendCodeMutation(undefined, {
-      onSuccess: () => {
-        setSendCount((count) => count + 1);
-        setSentAt(Date.now());
-      },
-    });
-  }, [resetSendCode, sendCodeMutation]);
+  const send = useCallback(
+    (targetChannel = channel) => {
+      resetSendCode();
+      sendCodeMutation(
+        { channel: targetChannel },
+        {
+          onSuccess: (data) => {
+            setMaskedDestination(data.maskedDestination);
+            setSendCount((count) => count + 1);
+            setSentAt(Date.now());
+          },
+        },
+      );
+    },
+    [channel, resetSendCode, sendCodeMutation],
+  );
+
+  const switchChannel = useCallback(
+    (nextChannel: "email" | "phone") => {
+      setChannel(nextChannel);
+      setCode("");
+      setSendCount(0);
+      setSentAt(null);
+      setMaskedDestination(null);
+      resetSendCode();
+      resetVerifyCode();
+      send(nextChannel);
+    },
+    [resetSendCode, resetVerifyCode, send],
+  );
 
   useEffect(() => {
     if (initialSendStarted.current) return;
@@ -70,12 +105,43 @@ function ActiveSessionsVerificationDialog({
     setCode("");
     setSendCount(0);
     setSentAt(null);
+    setMaskedDestination(null);
     resetSendCode();
     resetVerifyCode();
     send();
   }, [resetSendCode, resetVerifyCode, send]);
 
-  const identifier: AuthIdentifier = { method: "email", email };
+  const identifier: AuthIdentifier =
+    channel === "email"
+      ? { method: "email", email: email ?? "" }
+      : { method: "mobile", phoneNo: phoneNo ?? "" };
+
+  const switchAction =
+    channel === "email" && hasUsablePhone ? (
+      <span className="text-xs text-(--muted)">
+        Can&rsquo;t use your email?{" "}
+        <button
+          className={loginQuietLinkClasses}
+          disabled={verifyCode.isPending || sendCode.isPending}
+          onClick={() => switchChannel("phone")}
+          type="button"
+        >
+          Send a code to your phone instead
+        </button>
+      </span>
+    ) : channel === "phone" && hasUsableEmail ? (
+      <span className="text-xs text-(--muted)">
+        Can&rsquo;t use your phone?{" "}
+        <button
+          className={loginQuietLinkClasses}
+          disabled={verifyCode.isPending || sendCode.isPending}
+          onClick={() => switchChannel("email")}
+          type="button"
+        >
+          Send a code to your email instead
+        </button>
+      </span>
+    ) : null;
 
   return (
     <>
@@ -96,17 +162,19 @@ function ActiveSessionsVerificationDialog({
         code={code}
         errorMessage={sendCode.error?.message ?? verifyCode.error?.message}
         failure={null}
+        footnote={switchAction}
+        hideChangeIdentifier={true}
         identifier={identifier}
         onCodeChange={(nextCode) => {
           setCode(nextCode);
           if (verifyCode.isError) verifyCode.reset();
         }}
         onIdentifierChange={onClose}
-        onResend={send}
+        onResend={() => send(channel)}
         onSubmit={(submittedCode) => {
           resetVerifyCode();
           verifyCodeMutation(
-            { code: submittedCode },
+            { channel, code: submittedCode },
             {
               onSuccess: (result) => {
                 onVerified({ userId, verifiedUntil: result.verifiedUntil });
@@ -120,11 +188,20 @@ function ActiveSessionsVerificationDialog({
         sentAt={sentAt}
         status={verifyCode.isPending ? "verifying" : "idle"}
         subtitle={
-          sendCode.isPending
-            ? "Sending a verification code to your email address."
-            : sendCode.isError
-              ? "We couldn't send a code. Please try again."
-              : undefined
+          sendCode.isPending ? (
+            `Sending a verification code to your ${
+              channel === "email" ? "email address" : "phone number"
+            }.`
+          ) : sendCode.isError ? (
+            "We couldn't send a code. Please try again."
+          ) : (
+            <>
+              We sent a 6-digit code to{" "}
+              <span className="font-semibold text-(--text)">
+                {maskedDestination ?? maskIdentifier(identifier)}
+              </span>
+            </>
+          )
         }
       />
     </>
@@ -148,6 +225,13 @@ export function ActiveSessionsSection({
     useState<ActiveSessionsVerificationState | null>(null);
   const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
   const currentUserId = currentUser?.id;
+  const hasUsableEmail = Boolean(
+    currentUser?.email && currentUser.emailVerified,
+  );
+  const hasUsablePhone = Boolean(
+    currentUser?.phoneNo && currentUser.mobileVerified,
+  );
+  const canVerify = hasUsableEmail || hasUsablePhone;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -297,7 +381,7 @@ export function ActiveSessionsSection({
                 active sessions.
               </p>
             </div>
-            {currentUser?.email && currentUser.emailVerified ? (
+            {canVerify ? (
               <button
                 className="settings-action"
                 onClick={() => setVerificationDialogOpen(true)}
@@ -308,7 +392,8 @@ export function ActiveSessionsSection({
               </button>
             ) : (
               <p className="m-0 max-w-md text-sm text-(--muted)" role="status">
-                A verified email address is required to confirm your identity.
+                A verified email address or phone number is required to confirm
+                your identity.
               </p>
             )}
           </div>
@@ -444,14 +529,16 @@ export function ActiveSessionsSection({
       {isAuthenticated &&
         currentUser &&
         verificationDialogOpen &&
-        currentUser.email &&
-        currentUser.emailVerified && (
+        canVerify && (
           <SettingsModalOverlay labelledBy="active-sessions-otp-title">
             <div className="auth-mfa-setup__modal">
               <ActiveSessionsVerificationDialog
                 email={currentUser.email}
+                hasUsableEmail={hasUsableEmail}
+                hasUsablePhone={hasUsablePhone}
                 onClose={() => setVerificationDialogOpen(false)}
                 onVerified={handleVerified}
+                phoneNo={currentUser.phoneNo}
                 userId={currentUser.id}
               />
             </div>

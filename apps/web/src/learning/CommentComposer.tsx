@@ -261,12 +261,16 @@ export function CommentComposer({
       ) : (
         <div
           key="publish"
-          className={`flex min-h-0 flex-col motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-250 ${presentation === "drawer" ? "flex-1 overflow-y-auto overscroll-contain" : ""}`}
+          className={`flex min-h-0 flex-col motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-250 ${presentation === "drawer" ? "flex-1" : ""}`}
         >
+          {/* In the drawer the options scroll and Back and Post stay below
+              them. Shrunk without scrolling, the options spilled under the
+              buttons in a short phone drawer. Elsewhere nothing scrolls
+              here, so the visibility tooltips are not clipped. */}
           <div
             ref={reviewHeadingRef}
             tabIndex={-1}
-            className="flex min-h-0 flex-1 outline-none"
+            className={`flex min-h-0 flex-1 outline-none ${presentation === "drawer" ? "overflow-y-auto overscroll-contain" : ""}`}
           >
             <CommentPublishingOptions
               entryKind={entryKind}

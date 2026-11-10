@@ -14,6 +14,10 @@ export function createHomePageController({
     return await service.getGuestPage();
   }
 
+  async function getFestive() {
+    return await service.getFestive();
+  }
+
   async function getSettings() {
     return await service.getSettings();
   }
@@ -61,6 +65,7 @@ export function createHomePageController({
 
   return {
     getGuestPage,
+    getFestive,
     getSettings,
     getOptions,
     updateSettings,

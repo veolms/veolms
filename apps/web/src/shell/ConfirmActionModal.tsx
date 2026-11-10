@@ -40,9 +40,10 @@ export interface ConfirmActionModalProps {
   pendingLabel: string;
   tone?: "accent" | "danger";
   /**
-   * Which button is the highlighted one, shown last. Defaults to the
-   * confirming button; "cancel" highlights the safe choice instead and puts
-   * the confirming button first, unhighlighted.
+   * Which button is the highlighted one: last in the default look, first
+   * (on top) in the login card's. Defaults to the confirming button;
+   * "cancel" highlights the safe choice instead and leaves the confirming
+   * button unhighlighted.
    */
   emphasis?: "confirm" | "cancel";
   /**
@@ -200,6 +201,51 @@ export function ConfirmActionModal({
   );
 
   if (appearance === "loginCard") {
+    const loginConfirmButton = (
+      <button
+        key="confirm"
+        ref={confirmBtnRef}
+        type="button"
+        className={cn(
+          loginButtonClasses.base,
+          cancelEmphasized
+            ? loginButtonClasses.secondary
+            : isDanger
+              ? "border-0 bg-(--danger) text-white hover:bg-[color-mix(in_srgb,var(--danger)_88%,black)] disabled:opacity-70"
+              : loginButtonClasses.primary,
+        )}
+        onClick={closeOnConfirm ? () => dismissThen(onConfirm) : onConfirm}
+        disabled={isPending || confirmDisabled}
+        aria-busy={isPending}
+      >
+        {isPending ? (
+          <CircleNotch
+            size={16}
+            weight="bold"
+            className="animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+        ) : null}
+        {isPending ? pendingLabel : confirmLabel}
+      </button>
+    );
+    const loginCancelButton = (
+      <button
+        key="cancel"
+        ref={cancelBtnRef}
+        type="button"
+        className={cn(
+          loginButtonClasses.base,
+          cancelEmphasized
+            ? loginButtonClasses.primary
+            : loginButtonClasses.secondary,
+        )}
+        onClick={dismissModal}
+        disabled={isPending}
+      >
+        {cancelLabel}
+      </button>
+    );
     return createPortal(
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-xs animate-in fade-in duration-150"
@@ -249,43 +295,9 @@ export function ConfirmActionModal({
             {description}
           </p>
           <div className="mt-7 flex flex-col gap-2.5">
-            <button
-              ref={confirmBtnRef}
-              type="button"
-              className={cn(
-                loginButtonClasses.base,
-                isDanger
-                  ? "border-0 bg-(--danger) text-white hover:bg-[color-mix(in_srgb,var(--danger)_88%,black)] disabled:opacity-70"
-                  : loginButtonClasses.primary,
-              )}
-              onClick={
-                closeOnConfirm ? () => dismissThen(onConfirm) : onConfirm
-              }
-              disabled={isPending || confirmDisabled}
-              aria-busy={isPending}
-            >
-              {isPending ? (
-                <CircleNotch
-                  size={16}
-                  weight="bold"
-                  className="animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-              ) : null}
-              {isPending ? pendingLabel : confirmLabel}
-            </button>
-            <button
-              ref={cancelBtnRef}
-              type="button"
-              className={cn(
-                loginButtonClasses.base,
-                loginButtonClasses.secondary,
-              )}
-              onClick={dismissModal}
-              disabled={isPending}
-            >
-              {cancelLabel}
-            </button>
+            {cancelEmphasized
+              ? [loginCancelButton, loginConfirmButton]
+              : [loginConfirmButton, loginCancelButton]}
           </div>
         </div>
       </div>,

@@ -263,7 +263,15 @@
   padding: 6px 14px;
 }
 
+/* The settings dialogs open outside the sign-in layout, which defines these
+   sizes. auth.css also styles `.auth-otp` with them, and when it loads after
+   this file (the sign-in dialog brings it in) its rules win: undefined, the
+   code boxes lost their width, height and border and stacked in a column. */
 .auth-mfa-setup__overlay {
+  --auth-h-field: 44px;
+  --auth-radius: 9px;
+  --auth-line: color-mix(in srgb, var(--text) 13%, transparent);
+
   position: fixed;
   inset: 0;
   z-index: 1100;

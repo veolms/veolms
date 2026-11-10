@@ -29,7 +29,10 @@ const learningProgressRoutes: RoutePlugin = async (app, options) => {
     database: options.database,
     services: options.services,
   });
-  const controller = createLearningProgressController({ service });
+  const controller = createLearningProgressController({
+    service,
+    sessionService,
+  });
 
   app.get(
     "/learning-progress/:courseKey",
@@ -81,6 +84,8 @@ const learningProgressRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/learning-progress/:courseKey/batch",
     {
+      // The page keeps the progress and sends it again (load-shedding.ts).
+      config: { shedUnderLoad: true },
       preHandler: requireAuthenticated,
       schema: {
         operationId: "syncLearningProgress",

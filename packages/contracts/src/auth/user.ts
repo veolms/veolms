@@ -16,6 +16,10 @@ export const otpSendRequestSchema = z
       .min(8, "Phone number is too short")
       .meta({ example: "+15551234567" })
       .optional(),
+    // "sign_in": the code is only for getting into an existing account, so
+    // a number that is not an account's confirmed number is refused instead
+    // of being sent a sign-up code.
+    intent: z.enum(["sign_in"]).optional(),
   })
   .refine((data) => data.email || data.phoneNo, {
     message: "Either email or phone number must be provided",
@@ -181,6 +185,11 @@ export const authUserSchema = z.object({
    * is enrolled in, as an admin may.
    */
   isTestAccount: z.boolean().optional(),
+  /**
+   * A developer's machine with LOCAL_ANY_COURSE_UNENROLL: every account may
+   * leave any course it is enrolled in, as an admin may.
+   */
+  localAnyCourseUnenroll: z.boolean().optional(),
   ...avatarResponseFields,
   ...profileFieldSchemas,
 });
@@ -195,6 +204,7 @@ export const userProfileResponseSchema = z.object({
   mobileVerified: z.boolean(),
   roles: z.array(z.string().max(50)),
   isTestAccount: z.boolean().optional(),
+  localAnyCourseUnenroll: z.boolean().optional(),
   ...avatarResponseFields,
   ...profileFieldSchemas,
   mfaVerified: z.boolean(),

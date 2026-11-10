@@ -309,6 +309,18 @@ export const workspaceDiscussionItemSchema = z.object({
   updatedAt: z.string(),
   // Present for bookmark workspace items; omitted by existing tabs.
   bookmarkedAt: z.string().optional(),
+  /**
+   * With a search, on a thread it found by a reply: the first such reply,
+   * shown on the row so the match is visible without opening the thread.
+   */
+  searchMatchedReply: z
+    .object({
+      id: z.uuid(),
+      authorName: z.string(),
+      authorUsername: z.string().nullable(),
+      plainText: z.string(),
+    })
+    .optional(),
 });
 export type WorkspaceDiscussionItem = z.infer<
   typeof workspaceDiscussionItemSchema

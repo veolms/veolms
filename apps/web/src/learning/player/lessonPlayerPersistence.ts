@@ -2,6 +2,7 @@ import {
   noteLessonPosition,
   parseLessonMediaKey,
 } from "../lessonPositionOutbox";
+import { isLowMemoryDevice } from "./deviceTier";
 
 const PLAYER_MUTED_STORAGE_KEY = "veolms-player-muted";
 const PLAYER_AMBIENT_STORAGE_KEY = "veolms-player-ambient";
@@ -169,10 +170,13 @@ export function readVolumePreference(
 export function readAmbientPreference(
   storage: StorageReader | null = getBrowserStorage(),
   constrainedDevice = typeof window !== "undefined" &&
-    Boolean(
+    (Boolean(
       window.matchMedia?.("(prefers-reduced-motion: reduce), (pointer: coarse)")
         .matches,
-    ),
+    ) ||
+      // Painting the picture onto two canvases twice a second is work a
+      // laptop with little memory feels (see deviceTier.ts).
+      isLowMemoryDevice()),
 ): boolean {
   try {
     const value = storage?.getItem(PLAYER_AMBIENT_STORAGE_KEY);

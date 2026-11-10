@@ -3,12 +3,19 @@ description: "Suggest an idea, enhancement, or new feature for VeoLMS."
 title: "[Feature]: "
 labels: ["enhancement", "feature request", "needs-triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not report security vulnerabilities in public issues.** Please read the [security policy](https://github.com/veolms/veolms/blob/dev/SECURITY.md) and report suspected vulnerabilities privately as described there.
+
   - type: checkboxes
     id: duplicate-check
     attributes:
       label: Before submitting
       options:
         - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: This issue does not disclose a security vulnerability or sensitive security details.
           required: true
 
   - type: dropdown

@@ -1,4 +1,9 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useSyncExternalStore } from "react";
 
 import type { ApiError } from "../../lib/api-error";
 import {
@@ -6,6 +11,11 @@ import {
   type NotificationListFilters,
 } from "./notifications.keys";
 import { notificationsService } from "./notifications.service";
+import {
+  isNotificationStreamLive,
+  startNotificationStream,
+  subscribeNotificationStreamLive,
+} from "./notifications.stream";
 
 export function useNotifications(filters: NotificationListFilters) {
   return useInfiniteQuery({
@@ -23,14 +33,37 @@ export function useNotifications(filters: NotificationListFilters) {
 }
 
 export function useNotificationSummary(options?: { enabled?: boolean }) {
+  // While the live stream (notifications.stream.ts) is connected it says
+  // when to refetch, and the poll is only a safety net.
+  const streamLive = useSyncExternalStore(
+    subscribeNotificationStreamLive,
+    isNotificationStreamLive,
+    () => false,
+  );
   return useQuery({
     queryKey: notificationKeys.summary(),
     queryFn: notificationsService.summary,
     enabled: options?.enabled ?? true,
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    // Every open tab of every signed-in learner asks, so the interval is
+    // most of this route's load (8% of all API requests at 30 s). A tab
+    // in the background does not poll at all, and coming back to one asks
+    // at once (focus), so a new badge still shows when it is looked at.
+    staleTime: 60_000,
+    refetchInterval: streamLive ? 10 * 60_000 : 120_000,
     refetchOnWindowFocus: true,
   });
+}
+
+/**
+ * Keeps this tab's notifications live (Server-Sent Events) while `enabled`,
+ * i.e. while someone is signed in. Mounted once, in the app shell.
+ */
+export function useNotificationStream(enabled: boolean) {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!enabled) return;
+    return startNotificationStream(queryClient);
+  }, [enabled, queryClient]);
 }
 
 export function useNotificationPreferences(options?: { enabled?: boolean }) {

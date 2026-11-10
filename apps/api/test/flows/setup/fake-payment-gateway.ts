@@ -11,6 +11,9 @@ import type {
   PaymentGateways,
 } from "@veolms/contracts";
 
+/** The rate the fake gateway settles a payment in another currency at. */
+export const FAKE_RUPEES_PER_UNIT = 88;
+
 interface FakeOrder {
   gatewayOrderId: string;
   amount: number;
@@ -58,9 +61,17 @@ export class FakePaymentGateway implements PaymentGateway {
       gatewayOrderId,
       amount: order.amount,
       currency: order.currency,
+      // Razorpay settles in rupees and says for how much on a payment in
+      // another currency; here at ₹88 to the dollar.
+      ...(order.currency === "INR"
+        ? {}
+        : {
+            settlementAmount: order.amount * FAKE_RUPEES_PER_UNIT,
+            settlementCurrency: "INR",
+          }),
       status: "captured",
       captured: true,
-      method: "upi",
+      method: order.currency === "INR" ? "upi" : "card",
     };
     order.payments.push(payment);
     this.#payments.set(payment.gatewayPaymentId, payment);
@@ -154,40 +165,71 @@ export class FakePaymentGateway implements PaymentGateway {
     return { ...payment };
   }
 
+  readonly #refundOutcomes: ("lost" | "pending")[] = [];
+  readonly #refundIdsByKey = new Map<string, string>();
+
+  /**
+   * How the next refund goes, instead of settling at once: "lost", made
+   * but its answer never arrives (a timeout); "pending", settled later.
+   */
+  nextRefund(outcome: "lost" | "pending"): void {
+    this.#refundOutcomes.push(outcome);
+  }
+
+  /** A refund the gateway later reports as failed: its money stays paid. */
+  failRefund(gatewayRefundId: string): void {
+    const refund = this.#refunds.get(gatewayRefundId);
+    if (refund)
+      this.#refunds.set(gatewayRefundId, { ...refund, status: "failed" });
+  }
+
   /**
    * Refunds settle at once, as Razorpay's usually do. The gateway refuses
-   * more than is left of the payment, as Razorpay's does.
+   * more than is left of the payment, as Razorpay's does, and hands back
+   * the same refund for a key it has seen.
    */
   async refundPayment(
     input: CreateGatewayRefundInput,
   ): Promise<GatewayRefundOutput> {
+    const output = (refund: GatewayRefundDetails): GatewayRefundOutput => ({
+      gatewayRefundId: refund.gatewayRefundId,
+      amount: refund.amount,
+      currency: refund.currency,
+      status: refund.status,
+    });
+    const seen = input.idempotencyKey
+      ? this.#refundIdsByKey.get(input.idempotencyKey)
+      : undefined;
+    if (seen) return output(this.#refunds.get(seen)!);
+
     const payment = this.#payments.get(input.gatewayPaymentId);
     if (!payment || !payment.captured) {
       throw new Error(`No captured payment ${input.gatewayPaymentId}`);
     }
-    const refunded = this.refundsOf(input.gatewayPaymentId).reduce(
-      (sum, refund) => sum + refund.amount,
-      0,
-    );
+    const refunded = this.refundsOf(input.gatewayPaymentId)
+      .filter((refund) => refund.status !== "failed")
+      .reduce((sum, refund) => sum + refund.amount, 0);
     if (input.amount > payment.amount - refunded) {
       throw new Error(
         `Refund of ${input.amount} exceeds what is left of ${input.gatewayPaymentId}`,
       );
     }
+    const outcome = this.#refundOutcomes.shift();
     const refund: GatewayRefundDetails = {
       gatewayRefundId: `rfnd_flow_${this.#run}_${++this.#next}`,
       gatewayPaymentId: input.gatewayPaymentId,
       amount: input.amount,
       currency: input.currency,
-      status: "processed",
+      status: outcome === "pending" ? "pending" : "processed",
     };
     this.#refunds.set(refund.gatewayRefundId, refund);
-    return {
-      gatewayRefundId: refund.gatewayRefundId,
-      amount: refund.amount,
-      currency: refund.currency,
-      status: refund.status,
-    };
+    if (input.idempotencyKey) {
+      this.#refundIdsByKey.set(input.idempotencyKey, refund.gatewayRefundId);
+    }
+    if (outcome === "lost") {
+      throw new Error("Gateway timed out (the refund was made)");
+    }
+    return output(refund);
   }
 
   async fetchRefund(gatewayRefundId: string): Promise<GatewayRefundDetails> {
@@ -245,6 +287,14 @@ export class FakePaymentGateway implements PaymentGateway {
       gatewayPaymentId: payload.gatewayPaymentId,
       amount: payment?.amount,
       currency: payment?.currency,
+      // As Razorpay's webhook names what a payment in another currency
+      // settles for.
+      ...(payment?.settlementAmount != null && payment.settlementCurrency
+        ? {
+            settlementAmount: payment.settlementAmount,
+            settlementCurrency: payment.settlementCurrency,
+          }
+        : {}),
       rawPayload,
       occurredAt: new Date().toISOString(),
     };

@@ -26,7 +26,11 @@ import type { IdentifierType, OtpPurpose } from "../shared/auth.types.ts";
 import type { Executor } from "../shared/repository.types.ts";
 import * as otpRepository from "./otp.repository.ts";
 import * as userRepository from "../authentication/authentication.repository.ts";
-import { hashToken } from "../shared/auth.utils.ts";
+import {
+  hashToken,
+  phoneNotRegistered,
+  refusesPhoneSignInCode,
+} from "../shared/auth.utils.ts";
 
 export interface OtpServiceOptions {
   database: Kysely<Database>;
@@ -237,7 +241,22 @@ export function createOtpService({
     identifier: string,
     identifierType: IdentifierType,
     requester: OtpRequester = {},
+    options: { signInOnly?: boolean } = {},
   ): Promise<void> {
+    // A number is answered before anything is sent: no code goes to a
+    // number its account never confirmed, and phone sign-in sends nothing
+    // to a number without an account. Both get the same answer.
+    if (identifierType === "phone") {
+      const account = await userRepository.findUserStatusByIdentifier(
+        database,
+        identifier,
+        identifierType,
+      );
+      if (refusesPhoneSignInCode(account, options.signInOnly === true)) {
+        throw phoneNotRegistered();
+      }
+    }
+
     const purpose = await resolveOtpPurpose(identifier, identifierType);
     if (purpose === null) {
       await sendDeactivatedAccountNotice(identifier, identifierType, requester);
@@ -494,6 +513,24 @@ export function createOtpService({
     await sendOtpWithPurpose(phoneNo, "phone", "phone_verification", requester);
   }
 
+  /**
+   * A code to the email address or number on the account now, proving it
+   * before it is changed (contact-change). Its own purpose, so it can
+   * neither sign anyone in nor confirm a new address.
+   */
+  async function sendContactChangeOtp(
+    identifier: string,
+    identifierType: IdentifierType,
+    requester: OtpRequester = {},
+  ): Promise<void> {
+    await sendOtpWithPurpose(
+      identifier,
+      identifierType,
+      "contact_change",
+      requester,
+    );
+  }
+
   async function sendEmailVerificationOtp(
     email: string,
     requester: OtpRequester = {},
@@ -502,12 +539,13 @@ export function createOtpService({
   }
 
   async function sendActiveSessionsVerificationOtp(
-    email: string,
+    identifier: string,
+    identifierType: IdentifierType,
     requester: OtpRequester = {},
   ): Promise<void> {
     await sendOtpWithPurpose(
-      email,
-      "email",
+      identifier,
+      identifierType,
       "active_sessions_verification",
       requester,
     );
@@ -564,7 +602,8 @@ export function createOtpService({
   function failureStatusFor(purpose: OtpPurpose): number {
     return purpose === "phone_verification" ||
       purpose === "email_verification" ||
-      purpose === "active_sessions_verification"
+      purpose === "active_sessions_verification" ||
+      purpose === "contact_change"
       ? 400
       : 401;
   }
@@ -716,12 +755,13 @@ export function createOtpService({
   }
 
   async function verifyActiveSessionsVerificationOtp(
-    email: string,
+    identifier: string,
+    identifierType: IdentifierType,
     code: string,
   ): Promise<void> {
     await verifyAndConsumeOtp(
-      email,
-      "email",
+      identifier,
+      identifierType,
       "active_sessions_verification",
       code,
     );
@@ -733,6 +773,7 @@ export function createOtpService({
     sendPhoneVerificationOtp,
     sendEmailVerificationOtp,
     sendActiveSessionsVerificationOtp,
+    sendContactChangeOtp,
     recordRefusedSend,
     assertOtpMatches,
     verifyAndConsumeOtp,

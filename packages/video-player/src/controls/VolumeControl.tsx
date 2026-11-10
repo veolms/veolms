@@ -6,6 +6,7 @@ import {
 } from "react";
 import { usePlayerController } from "../react/context";
 import { useVolume } from "../react/usePlayerState";
+import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import { classNames } from "../utils/classNames";
 import { MuteButton } from "./MuteButton";
 
@@ -24,11 +25,19 @@ export function VolumeControl({
 }: VolumeControlProps = {}) {
   const controller = usePlayerController();
   const { muted, volume } = useVolume();
+  // Some themes write the level beside the slider (Cone).
+  const showPercent = Boolean(usePlayerTheme().chrome?.volumePercent);
   const groupRef = useRef<HTMLDivElement>(null);
+  // Whatever changes the volume here, the player says it at the top
+  // (controller.showVolume), as it does for the Up and Down keys.
+  const changeVolume = (next: number) => {
+    controller.setVolume(next);
+    controller.showVolume(next);
+  };
   const setVolumeFromPointer = (event: PointerEvent<HTMLInputElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     if (bounds.width <= 0) return;
-    controller.setVolume(
+    changeVolume(
       Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
     );
   };
@@ -51,7 +60,9 @@ export function VolumeControl({
             Math.min(1, displayedVolume + direction * VOLUME_WHEEL_STEP),
           ) * 100,
         ) / 100;
-      if (nextVolume !== displayedVolume) controller.setVolume(nextVolume);
+      if (nextVolume === displayedVolume) return;
+      controller.setVolume(nextVolume);
+      controller.showVolume(nextVolume, direction);
     };
 
     group.addEventListener("wheel", changeVolumeFromWheel, { passive: false });
@@ -89,11 +100,22 @@ export function VolumeControl({
             "--video-player-volume": `${(muted ? 0 : volume) * 100}%`,
           } as CSSProperties
         }
-        onChange={(event) =>
-          controller.setVolume(event.currentTarget.valueAsNumber)
-        }
+        onChange={(event) => changeVolume(event.currentTarget.valueAsNumber)}
         onPointerDown={setVolumeFromPointer}
       />
+      {showPercent ? (
+        <span
+          aria-hidden="true"
+          data-volume-percent=""
+          className={classNames(
+            "shrink-0 text-xs font-bold text-(--video-player-control-text-muted) tabular-nums",
+            collapsible &&
+              "w-0 overflow-hidden opacity-0 transition-[width,opacity] duration-200 ease-out group-focus-within/volume:w-9 group-focus-within/volume:opacity-100 group-hover/volume:w-9 group-hover/volume:opacity-100",
+          )}
+        >
+          {Math.round((muted ? 0 : volume) * 100)}%
+        </span>
+      ) : null}
     </div>
   );
 }

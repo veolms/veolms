@@ -36,6 +36,8 @@ import {
   formatOrderDate,
   getCourseBrandBadge,
   getOrderStatusStyle,
+  hasOrderInvoice,
+  isOrderRefundable,
   orderItemLabel,
 } from "./orderHelpers";
 import { StudentAvatar } from "./StudentAvatar";
@@ -203,6 +205,9 @@ const OrderRow = memo(function OrderRow({
     void navigator.clipboard.writeText(text);
     setNotice?.(`Copied ${label} to clipboard.`);
   };
+
+  const showsInvoice = hasOrderInvoice(order);
+  const showsRefund = Boolean(onRequestRefund) && isOrderRefundable(order);
 
   const handleDownloadInvoice = () => {
     setNotice?.(`Downloading invoice for order ${order.orderNumber}...`);
@@ -408,17 +413,21 @@ const OrderRow = memo(function OrderRow({
             }}
           />
 
-          <MenuDivider />
+          {/* 4–5. Only for a payment that went through: a failed or
+              processing order has no invoice and nothing to refund. */}
+          {(showsInvoice || showsRefund) && <MenuDivider />}
 
           {/* 4. Download invoice */}
-          <MenuAction
-            Icon={DownloadSimple}
-            label="Download invoice"
-            onClick={handleDownloadInvoice}
-          />
+          {showsInvoice && (
+            <MenuAction
+              Icon={DownloadSimple}
+              label="Download invoice"
+              onClick={handleDownloadInvoice}
+            />
+          )}
 
           {/* 5. Issue refund */}
-          {onRequestRefund && (
+          {showsRefund && onRequestRefund && (
             <MenuAction
               Icon={ArrowCounterClockwise}
               label="Issue refund"

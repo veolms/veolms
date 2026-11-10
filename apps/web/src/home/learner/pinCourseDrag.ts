@@ -6,6 +6,11 @@ import {
   type PointerEvent,
 } from "react";
 import { suspendDragForAltTextSelect } from "../../courses/altDragTextSelect";
+import {
+  type AutoScroller,
+  scrollParentOf,
+  startAutoScroll as startEdgeAutoScroll,
+} from "../../courses/reorder/dragAutoScroll";
 
 /** Marks a drag as a course on its way to being pinned to the home. */
 const PIN_COURSE_DRAG_TYPE = "application/x-veolms-pin-course";
@@ -31,65 +36,19 @@ const PIN_TOUCH_SLOP_PX = 8;
 
 /**
  * Near the top or bottom edge of the screen, a carried card scrolls the page
- * under it, faster the closer it gets, so the hero can be reached from a
- * card far down the page without letting go first.
+ * under it, so the hero can be reached from a card far down the page without
+ * letting go first. The speeds are the course reorder's (dragAutoScroll.ts):
+ * they scale with the screen's height and speed up while the card stays at
+ * the edge, and each step is instant. Setting `scrollTop` instead started an
+ * eased scroll on every frame (the page scrolls smoothly, foundation.css),
+ * which barely moved the page on phones and tablets.
  */
-const AUTO_SCROLL_EDGE_PX = 80;
-/** The most it scrolls in one frame, right at the edge. */
-const AUTO_SCROLL_MAX_STEP_PX = 18;
-
 interface AutoScroll {
-  scroller: HTMLElement;
-  y: number;
-  frame: number;
-  /** After each step that moved the page (a touch drag re-aims its card). */
-  onScroll?: () => void;
+  scroller: AutoScroller;
   stop: () => void;
 }
 
 let autoScroll: AutoScroll | null = null;
-
-/** What the page scrolls in around `element`: a scrolling box, or the page. */
-function scrollerOf(element: Element): HTMLElement {
-  for (let node = element.parentElement; node; node = node.parentElement) {
-    const { overflowY } = getComputedStyle(node);
-    if (
-      /(auto|scroll)/.test(overflowY) &&
-      node.scrollHeight > node.clientHeight
-    ) {
-      return node;
-    }
-  }
-  return (document.scrollingElement as HTMLElement | null) ?? document.body;
-}
-
-function stepAutoScroll() {
-  const scroll = autoScroll;
-  if (!scroll) return;
-  const { scroller, y } = scroll;
-  const page = scroller === document.scrollingElement;
-  const box = scroller.getBoundingClientRect();
-  const top = page ? 0 : Math.max(0, box.top);
-  const bottom = page
-    ? window.innerHeight
-    : Math.min(window.innerHeight, box.bottom);
-  let step = 0;
-  if (y < top + AUTO_SCROLL_EDGE_PX) {
-    step =
-      -AUTO_SCROLL_MAX_STEP_PX *
-      (1 - Math.max(0, y - top) / AUTO_SCROLL_EDGE_PX);
-  } else if (y > bottom - AUTO_SCROLL_EDGE_PX) {
-    step =
-      AUTO_SCROLL_MAX_STEP_PX *
-      (1 - Math.max(0, bottom - y) / AUTO_SCROLL_EDGE_PX);
-  }
-  if (step !== 0) {
-    const before = scroller.scrollTop;
-    scroller.scrollTop = before + step;
-    if (scroller.scrollTop !== before) scroll.onScroll?.();
-  }
-  scroll.frame = window.requestAnimationFrame(stepAutoScroll);
-}
 
 function startAutoScroll(
   from: Element,
@@ -97,6 +56,8 @@ function startAutoScroll(
   options: { mouse?: boolean; onScroll?: () => void } = {},
 ) {
   stopAutoScroll();
+  const scroller = startEdgeAutoScroll(scrollParentOf(from), options.onScroll);
+  scroller.update(y);
   // A mouse drag tells where it is only through drag events, which keep
   // coming while it is held still.
   const follow = (event: globalThis.DragEvent) =>
@@ -107,10 +68,7 @@ function startAutoScroll(
     document.addEventListener("drop", stopAutoScroll);
   }
   autoScroll = {
-    scroller: scrollerOf(from),
-    y,
-    frame: window.requestAnimationFrame(stepAutoScroll),
-    onScroll: options.onScroll,
+    scroller,
     stop: () => {
       document.removeEventListener("dragover", follow);
       document.removeEventListener("dragend", stopAutoScroll);
@@ -120,14 +78,14 @@ function startAutoScroll(
 }
 
 function updateAutoScroll(y: number) {
-  if (autoScroll) autoScroll.y = y;
+  autoScroll?.scroller.update(y);
 }
 
 function stopAutoScroll() {
   const scroll = autoScroll;
   if (!scroll) return;
   autoScroll = null;
-  window.cancelAnimationFrame(scroll.frame);
+  scroll.scroller.stop();
   scroll.stop();
 }
 

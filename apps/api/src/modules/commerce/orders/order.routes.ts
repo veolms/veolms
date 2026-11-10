@@ -35,6 +35,7 @@ const orderRoutes: RoutePlugin = async (app, options) => {
   const service = createOrderService({
     database: options.database,
     courseCards: (courseIds) => courseService.listCourseCardsByIds(courseIds),
+    log: app.log,
   });
   const invoiceService = createInvoiceService({
     database: options.database,

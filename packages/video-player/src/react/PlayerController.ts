@@ -1,6 +1,6 @@
 import { getActiveChapter } from "../chapters/getChapterAtTime";
 import type { Chapter } from "../chapters/chapterTypes";
-import { VideoEngineError } from "../core/errors";
+import { VideoEngineError, networkFailureKind } from "../core/errors";
 import type { VideoEngineEvent, VideoEngineEventMap } from "../core/events";
 import type { VideoEngineSnapshot } from "../core/snapshot";
 import type { VideoEngine } from "../core/VideoEngine";
@@ -182,6 +182,8 @@ export class PlayerController {
   #pendingMediaProperties: PendingMediaProperties = {};
   #activated = false;
   #destroyed = false;
+  /** A reload of a failed video under way (see `retryPassingFailure`). */
+  #passingFailureRetry: Promise<void> | null = null;
   #loadGeneration = 0;
   #playRequestGeneration = 0;
   /** Settles once the last `stop` is done; a load waits for it. */
@@ -213,6 +215,7 @@ export class PlayerController {
   // last finished seek landed.
   #scrubLessonTime: number | null = null;
   readonly #activeMediaListeners = new Set<ActiveMediaListener>();
+  readonly #controlsRevealListeners = new Set<() => void>();
 
   constructor(engine: VideoEngine) {
     this.engine = engine;
@@ -285,6 +288,13 @@ export class PlayerController {
         PAGE_FULLSCREEN_CHANGE_EVENT,
         this.handleFullscreenChange,
       );
+      document.addEventListener(
+        "visibilitychange",
+        this.handleVisibilityChange,
+      );
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.handleOnline);
     }
 
     const media = this.engine.getSnapshot();
@@ -320,7 +330,42 @@ export class PlayerController {
         PAGE_FULLSCREEN_CHANGE_EVENT,
         this.handleFullscreenChange,
       );
+      document.removeEventListener(
+        "visibilitychange",
+        this.handleVisibilityChange,
+      );
     }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.handleOnline);
+    }
+  }
+
+  /**
+   * A video that failed on the network (the connection gone, a server
+   * down) is loaded again where it was the moment the network is back, or
+   * the page is looked at again: the viewer should never have to find the
+   * Try again button for a failure that has passed. A failure that will not
+   * pass (a broken file, no access) stays, with its message.
+   */
+  private readonly handleOnline = (): void => {
+    this.retryPassingFailure();
+  };
+
+  private readonly handleVisibilityChange = (): void => {
+    if (document.visibilityState !== "visible") return;
+    this.retryPassingFailure();
+  };
+
+  private retryPassingFailure(): void {
+    if (this.#destroyed || this.#passingFailureRetry) return;
+    const { error, source } = this.#snapshot.media;
+    if (!error || !source || networkFailureKind(error) !== "transient") return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    this.#passingFailureRetry = this.reload()
+      .catch(() => undefined)
+      .finally(() => {
+        this.#passingFailureRetry = null;
+      });
   }
 
   readonly subscribe = (listener: SnapshotListener): (() => void) => {
@@ -918,6 +963,21 @@ export class PlayerController {
     });
   }
 
+  /**
+   * Shows the controls, and the pointer with them, as a mouse moving over
+   * the player does, to hide again after the same idle delay: a keyboard
+   * shortcut (a seek, the volume) acted on the player.
+   * `useControlsVisibility` does the showing and the timing.
+   */
+  revealControls(): void {
+    for (const listener of this.#controlsRevealListeners) listener();
+  }
+
+  onControlsReveal(listener: () => void): () => void {
+    this.#controlsRevealListeners.add(listener);
+    return () => this.#controlsRevealListeners.delete(listener);
+  }
+
   setControlsLocked(controlsLocked: boolean): void {
     this.updateUi({ controlsLocked });
   }
@@ -1009,6 +1069,19 @@ export class PlayerController {
   showHud(text: string, options: PlayerHudOptions = {}): void {
     this.#hudId += 1;
     this.updateUi({ hud: { ...options, id: this.#hudId, text } });
+  }
+
+  /**
+   * Says the volume at the top of the player, with the speaker: a slider,
+   * the wheel over it or the Up and Down keys changed it.
+   */
+  showVolume(volume: number, direction?: -1 | 1): void {
+    const level = Math.min(1, Math.max(0, volume));
+    this.showHud(`${Math.round(level * 100)}%`, {
+      direction,
+      level,
+      variant: "volume",
+    });
   }
 
   clearHud(id?: number): void {
@@ -1214,6 +1287,7 @@ export class PlayerController {
     this.deactivate();
     this.#listeners.clear();
     this.#eventListeners.clear();
+    this.#controlsRevealListeners.clear();
     await this.#mediaTransition;
     this.unlistenMedia(this.#media);
     this.#media = null;

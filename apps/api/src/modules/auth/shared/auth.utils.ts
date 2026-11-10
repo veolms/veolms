@@ -23,6 +23,15 @@ export function isTestLoginAccount(email: string | null | undefined): boolean {
   return Boolean(email && config.TEST_LOGIN_ACCOUNTS.has(email.toLowerCase()));
 }
 
+/**
+ * Whether every account may leave any course it is enrolled in, as an admin
+ * or a test account may: on a developer's machine with
+ * LOCAL_ANY_COURSE_UNENROLL, never anywhere else.
+ */
+export function isLocalAnyCourseUnenroll(): boolean {
+  return config.NODE_ENV === "development" && config.LOCAL_ANY_COURSE_UNENROLL;
+}
+
 export function generateRandomToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
@@ -238,18 +247,40 @@ export function verifyTotp(
   return null;
 }
 
+export const PHONE_NOT_REGISTERED_MESSAGE =
+  "This phone number is not associated with any account.";
+
+export function phoneNotRegistered(): AppError {
+  return new AppError(
+    404,
+    "PHONE_NOT_REGISTERED",
+    PHONE_NOT_REGISTERED_MESSAGE,
+  );
+}
+
 /**
  * Whether a sign-in by phone must be refused because the number was never
- * confirmed. Whoever holds an unconfirmed number receives its codes, so it
- * proves nothing while the account has an email to sign in with instead,
- * confirmed or not (a student added by staff has neither confirmed yet). An
- * account with no email keeps its number: it was opened with it.
+ * confirmed. Numbers typed by staff, at setup or by an import are never
+ * confirmed by their owner and can be mistyped or reassigned, so whoever
+ * holds one would receive its codes. Accounts are opened with an email, so
+ * the owner always has that way in to confirm the number from Settings.
  */
 export function refusesUnconfirmedPhoneSignIn(
   identifierType: "email" | "phone",
-  user: { email: string | null; phone_verified_at: Date | null },
+  user: { phone_verified_at: Date | null },
 ): boolean {
-  return (
-    identifierType === "phone" && !user.phone_verified_at && Boolean(user.email)
-  );
+  return identifierType === "phone" && !user.phone_verified_at;
+}
+
+/**
+ * Whether no code may be sent to a number. An account's unconfirmed number
+ * never gets one. Phone sign-in (`signInOnly`) never creates an account, so
+ * it also sends nothing to a number with no active account behind it.
+ */
+export function refusesPhoneSignInCode(
+  account: { is_deleted: boolean; phone_verified_at: Date | null } | undefined,
+  signInOnly: boolean,
+): boolean {
+  if (account && !account.phone_verified_at) return true;
+  return signInOnly && (!account || account.is_deleted);
 }

@@ -154,7 +154,13 @@ export function findUserByIdIncludingDeleted(
 export function findUserContactById(database: Executor, userId: string) {
   return database
     .selectFrom("users")
-    .select(["id", "email", "email_verified_at"])
+    .select([
+      "id",
+      "email",
+      "email_verified_at",
+      "phone_no",
+      "phone_verified_at",
+    ])
     .where("id", "=", userId)
     .where("is_deleted", "=", false)
     .executeTakeFirst();
@@ -194,7 +200,7 @@ export function findUserStatusByIdentifier(
 ) {
   return database
     .selectFrom("users")
-    .select(["id", "is_deleted"])
+    .select(["id", "is_deleted", "phone_verified_at"])
     .where(identifierType === "email" ? "email" : "phone_no", "=", identifier)
     .executeTakeFirst();
 }
@@ -301,17 +307,6 @@ export async function insertUser(
       avatar_data_url: input.avatarDataUrl ?? null,
     })
     .execute();
-}
-
-/** Atomically changes an active account into a deactivated account. */
-export async function deactivateUser(database: Executor, userId: string) {
-  return database
-    .updateTable("users")
-    .set({ is_deleted: true, updated_at: new Date() })
-    .where("id", "=", userId)
-    .where("is_deleted", "=", false)
-    .returningAll()
-    .executeTakeFirst();
 }
 
 export interface UpdateUserProfileInput {
@@ -499,19 +494,31 @@ export async function updateUserPhoneNumber(
   phoneNo: string,
   verifiedAt: Date,
 ) {
-  return database
-    .updateTable("users")
-    .set({
-      phone_no: phoneNo,
-      phone_verified_at: verifiedAt,
-      // A newly verified number must be explicitly published again.
-      mobile_public: false,
-      updated_at: new Date(),
-    })
-    .where("id", "=", userId)
-    .where("is_deleted", "=", false)
-    .returning("id")
-    .executeTakeFirst();
+  return (
+    database
+      .updateTable("users")
+      .set({
+        phone_no: phoneNo,
+        phone_verified_at: verifiedAt,
+        // A newly verified number must be explicitly published again.
+        mobile_public: false,
+        updated_at: new Date(),
+      })
+      .where("id", "=", userId)
+      .where("is_deleted", "=", false)
+      // Only adds a number, or confirms the one already there: a confirmed
+      // number is replaced through a contact change, which proves it first.
+      // Checked in the write itself, so a number confirmed since the caller
+      // looked is not overwritten.
+      .where((eb) =>
+        eb.or([
+          eb("phone_verified_at", "is", null),
+          eb("phone_no", "=", phoneNo),
+        ]),
+      )
+      .returning("id")
+      .executeTakeFirst()
+  );
 }
 
 export async function markUserEmailVerified(

@@ -37,6 +37,11 @@ export interface CourseTable {
    * courses (or the parts of courses) it links. See "Partial access".
    */
   unlisted: Generated<boolean>;
+  /**
+   * The course's place in the order an admin set (0 first). Null: not
+   * placed, listed after the placed courses in each list's own order.
+   */
+  sort_position: number | null;
 }
 
 export interface CategoryTable {
@@ -110,6 +115,19 @@ export interface CoursePricingTable {
    * of the catalogue (see 20261029120000).
    */
   linked_only: Generated<boolean>;
+  /**
+   * The price for buyers outside India, in this currency's minor units
+   * (cents): set together or not at all (see 20261101120000). A course
+   * without it is sold in rupees everywhere.
+   */
+  international_currency: string | null;
+  international_price_minor: number | null;
+  international_sale_price_minor: number | null;
+  /**
+   * The international price is the automatic one (the rupee prices at the
+   * day's rate, rounded up to .99), worked out again when they change.
+   */
+  international_price_auto: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -139,7 +157,7 @@ export interface CourseIncludeTable {
   /** The icon's colour, `#rrggbb`; its square is a tint of the same. */
   color: string | null;
   /** 'video': the words are written from the curriculum when shown. */
-  kind: Generated<"custom" | "video">;
+  kind: Generated<"custom" | "video" | "access">;
   position: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;

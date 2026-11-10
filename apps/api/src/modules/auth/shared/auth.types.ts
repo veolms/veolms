@@ -4,7 +4,9 @@ export type OtpPurpose =
   | "login"
   | "email_verification"
   | "phone_verification"
-  | "active_sessions_verification";
+  | "active_sessions_verification"
+  /** Proving the account's current email or number, to change it. */
+  | "contact_change";
 
 export interface SessionUser {
   id: string;

@@ -23,7 +23,7 @@ import {
 } from "./home/guest/guestHomeSpacing";
 import { courseSurfaceElevation } from "./components/cardElevation";
 import type { NavigateTo } from "./routing/navigation";
-import { useGuestHomePage } from "./services/home";
+import { useGuestHomePage, useHomeFestive } from "./services/home";
 import { useViewerCourseState } from "./courses/viewerCourseState";
 import "./home/guest/guest-home-shell.css";
 
@@ -92,6 +92,11 @@ export function GuestHome({
     enabled: !initialPage || idle,
   });
   const page = pageQuery.data;
+  // The festive greeting is asked for on every visit (the tab keeps its copy
+  // of the page for up to half an hour), so switching it on or off in Home
+  // Page settings shows on the next load; until it answers, the page's own
+  // copy (the one built ahead of time included) decides.
+  const festiveQuery = useHomeFestive();
   const copy = page ?? initialCopy;
   const isLoading = !page && pageQuery.isLoading;
   const isError = !page && pageQuery.isError;
@@ -144,6 +149,7 @@ export function GuestHome({
     >
       <GuestHomeHero
         hero={hero}
+        festive={festiveQuery.data ?? copy?.festive}
         greeting={isNewLearner ? getNewLearnerGreeting(learnerName) : undefined}
         returningLearnerHero={
           configuredHero && !isNewLearner

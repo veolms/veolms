@@ -190,6 +190,8 @@ export async function listEnrolledCoursesForUser(
     .where("c.status", "in", ["published", "archived"])
     .where("c.unlisted", "=", false)
     .where("c.deleted_at", "is", null)
+    // The admin's course order first, then the newest enrollment.
+    .orderBy("c.sort_position", (order) => order.asc().nullsLast())
     .orderBy("e.created_at", "desc")
     .execute();
 }

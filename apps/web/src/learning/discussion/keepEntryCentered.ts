@@ -7,10 +7,14 @@ import { getApplicationScrollElement } from "../../shell/applicationScroll";
  * it is still loading, so the first jump lands on a layout that then grows.
  * It runs for `checks` looks at the page (150ms apart) and gives up as soon
  * as the visitor scrolls, taps or types.
+ *
+ * `preferredId` is held instead once it is on the page: a reply the link
+ * points at, which arrives after the comment around it.
  */
 export function keepEntryCentered(
   elementId: string,
   checks: number,
+  preferredId?: string | null,
 ): { stop: () => void; isRunning: () => boolean } {
   const interactions = [
     "wheel",
@@ -29,7 +33,9 @@ export function keepEntryCentered(
     }
   };
   const check = () => {
-    const target = document.getElementById(elementId);
+    const target =
+      (preferredId ? document.getElementById(preferredId) : null) ??
+      document.getElementById(elementId);
     if (target) {
       const rect = target.getBoundingClientRect();
       // Where the video stays at the top of the page, the middle of the

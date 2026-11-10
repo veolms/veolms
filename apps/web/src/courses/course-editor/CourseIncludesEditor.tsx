@@ -36,6 +36,11 @@ export interface CourseIncludesEditorProps {
   items: IncludeDraftItem[];
   /** The words of the video line, as learners will see them. */
   videoWords: { title: string; detail: string };
+  /**
+   * The access line's title, from the course's access rule ("2 years of
+   * access"); null while the course has none, when its stored words stand.
+   */
+  accessTitle: string | null;
   /** Reordering, saving or deleting: the list is held still meanwhile. */
   busy: boolean;
   isSaving: (id: string) => boolean;
@@ -97,6 +102,7 @@ function IncludeIconTile({
 export function CourseIncludesEditor({
   items,
   videoWords,
+  accessTitle,
   busy,
   isSaving,
   isDeleting,
@@ -122,16 +128,21 @@ export function CourseIncludesEditor({
   // the extras.
   const titles = new Set(items.map((item) => item.text.trim().toLowerCase()));
   const hasVideo = items.some((item) => item.kind === "video");
+  const hasAccess = items.some((item) => item.kind === "access");
   const suggestions = [...DEFAULT_COURSE_INCLUDES, ...SUGGESTED_COURSE_INCLUDES]
     .filter((preset) =>
       preset.kind === "video"
         ? !hasVideo
-        : !titles.has(preset.text.toLowerCase()),
+        : preset.kind === "access"
+          ? !hasAccess
+          : !titles.has(preset.text.toLowerCase()),
     )
     .map((preset) =>
       preset.kind === "video"
         ? { ...preset, text: "On-demand video (from your curriculum)" }
-        : preset,
+        : preset.kind === "access"
+          ? { ...preset, text: "Access (from your access rules)" }
+          : preset,
     );
 
   return (
@@ -148,7 +159,12 @@ export function CourseIncludesEditor({
           const pending =
             item.isPendingCreation || isSaving(item.id) || isDeleting(item.id);
           const isVideo = item.kind === "video";
-          const title = isVideo ? videoWords.title : item.text;
+          const isAccess = item.kind === "access";
+          const title = isVideo
+            ? videoWords.title
+            : isAccess
+              ? (accessTitle ?? item.text)
+              : item.text;
           const detail = isVideo ? videoWords.detail : item.detail;
           const status = statusOf(item.id);
           return (
@@ -242,6 +258,7 @@ export function CourseIncludesEditor({
                 <IncludeLineEditor
                   item={item}
                   isVideo={isVideo}
+                  accessTitle={isAccess ? (accessTitle ?? item.text) : null}
                   disabled={busy || Boolean(item.isPendingCreation)}
                   onTextChange={(text) => onTextChange(item.id, text)}
                   onDetailChange={(text) => onDetailChange(item.id, text)}
@@ -306,6 +323,7 @@ export function CourseIncludesEditor({
 function IncludeLineEditor({
   item,
   isVideo,
+  accessTitle,
   disabled,
   onTextChange,
   onDetailChange,
@@ -315,6 +333,8 @@ function IncludeLineEditor({
 }: {
   item: IncludeDraftItem;
   isVideo: boolean;
+  /** For the access line: its title, which the access rule writes. */
+  accessTitle: string | null;
   disabled: boolean;
   onTextChange: (text: string) => void;
   onDetailChange: (text: string) => void;
@@ -350,19 +370,32 @@ function IncludeLineEditor({
         </p>
       ) : (
         <div className="grid gap-3 min-[900px]:grid-cols-2">
-          <label className="flex flex-col gap-1.5">
-            <span className={labelClasses}>Title</span>
-            <input
-              type="text"
-              value={item.text}
-              disabled={disabled}
-              maxLength={COURSE_INCLUDE_TEXT_MAX}
-              onChange={(event) => onTextChange(event.target.value)}
-              onBlur={onCommit}
-              placeholder="e.g. Source code"
-              className={fieldClasses}
-            />
-          </label>
+          {accessTitle !== null ? (
+            <div className="flex flex-col gap-1.5">
+              <span className={labelClasses}>Title</span>
+              <p className="m-0 rounded-[10px] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] px-3 py-2 text-[0.84rem] text-(--muted)">
+                <span className="font-semibold text-(--text)">
+                  {accessTitle}
+                </span>
+                {" · "}from the access duration in Access rules, so it always
+                matches it.
+              </p>
+            </div>
+          ) : (
+            <label className="flex flex-col gap-1.5">
+              <span className={labelClasses}>Title</span>
+              <input
+                type="text"
+                value={item.text}
+                disabled={disabled}
+                maxLength={COURSE_INCLUDE_TEXT_MAX}
+                onChange={(event) => onTextChange(event.target.value)}
+                onBlur={onCommit}
+                placeholder="e.g. Source code"
+                className={fieldClasses}
+              />
+            </label>
+          )}
           <label className="flex flex-col gap-1.5">
             <span className={labelClasses}>Line under it</span>
             <input

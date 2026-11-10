@@ -33,6 +33,7 @@ export const NAVIGATION_PERMISSIONS: Readonly<
     "platform.homepage.update",
   ],
   "/team": ["team.read", "role.read"],
+  "/support-inbox": ["support.read", "support.manage"],
 };
 
 /**

@@ -15,6 +15,8 @@ import { jsonResponse } from "../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
 import { createAuthMiddleware } from "../../../middlewares/auth.middleware.ts";
 import { createSessionService } from "../../auth/index.ts";
+import { config } from "../../../config.ts";
+import { createNotificationStreamHub } from "../notification-stream.ts";
 import { createNotificationController } from "../notifications.controller.ts";
 import { createNotificationService } from "../notifications.service.ts";
 
@@ -27,7 +29,48 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
     middleware.requireMfaVerified,
   ];
   const service = createNotificationService({ database: options.database });
-  const controller = createNotificationController({ service });
+  // One LISTEN connection for this process's open streams, opened when the
+  // first stream is (an app built for tests opens none). DATABASE_URL is
+  // the writer on every server: LISTEN does not work on a replica.
+  const hub = createNotificationStreamHub({
+    connectionString: config.DATABASE_URL,
+    logger: app.log,
+  });
+  app.addHook("onClose", async () => {
+    await hub.stop();
+  });
+  const controller = createNotificationController({
+    service,
+    stream: {
+      hub,
+      enabled: config.NOTIFICATION_STREAM_ENABLED,
+      maxStreamsPerUser: config.NOTIFICATION_STREAM_MAX_PER_USER,
+    },
+  });
+
+  app.get(
+    "/notifications/stream",
+    {
+      preHandler: requireAuthenticated,
+      schema: {
+        operationId: "streamMyNotificationChanges",
+        tags: ["Notifications"],
+        summary: "Server-Sent Events: told when your notifications change",
+        description:
+          "A text/event-stream that never carries notifications, only " +
+          "`event: ready` once open and `event: changed` when the signed-in " +
+          "user's notifications change (refetch the summary and list), with " +
+          "a `: ping` comment every 25 seconds. Ends after about 15 minutes; " +
+          "EventSource reconnects by itself.",
+        response: {
+          401: errorResponse("Authentication required"),
+          429: errorResponse("Too many open notification streams"),
+          503: errorResponse("Live notification updates are turned off"),
+        },
+      },
+    },
+    controller.streamChanges,
+  );
 
   app.get(
     "/notifications",
@@ -53,6 +96,8 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/notifications/summary",
     {
+      // A poll: the badge asks again in a minute (load-shedding.ts).
+      config: { shedUnderLoad: true },
       preHandler: requireAuthenticated,
       schema: {
         operationId: "getMyNotificationSummary",

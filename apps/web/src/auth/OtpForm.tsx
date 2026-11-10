@@ -50,6 +50,10 @@ export interface OtpFormProps {
   backLabel?: string;
   /** The button's words, when not "Verify". */
   submitLabel?: string;
+  /** Custom footnote or switch link underneath. */
+  footnote?: ReactNode;
+  /** Whether to hide the default "Use a different email/number" link. */
+  hideChangeIdentifier?: boolean;
 }
 
 const CODE_LABEL = "Verification code";
@@ -109,6 +113,8 @@ export function OtpForm({
   resendAvailable = false,
   backLabel,
   submitLabel = "Verify",
+  footnote,
+  hideChangeIdentifier = false,
   sendCount,
   sentAt,
   status,
@@ -266,14 +272,17 @@ export function OtpForm({
             </button>
           )}
         </p>
-        <button
-          className={loginLinkClasses}
-          disabled={resending || verifying}
-          onClick={onIdentifierChange}
-          type="button"
-        >
-          {byEmail ? "Use a different email" : "Use a different number"}
-        </button>
+        {!hideChangeIdentifier && (
+          <button
+            className={loginLinkClasses}
+            disabled={resending || verifying}
+            onClick={onIdentifierChange}
+            type="button"
+          >
+            {byEmail ? "Use a different email" : "Use a different number"}
+          </button>
+        )}
+        {footnote}
       </div>
     </div>
   );

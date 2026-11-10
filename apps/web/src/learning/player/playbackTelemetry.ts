@@ -1,6 +1,14 @@
-import type { VideoPlayerEvent } from "@veolms/video-player";
+import {
+  networkFailureHttpStatus,
+  type VideoPlayerEvent,
+} from "@veolms/video-player";
 import type { PlaybackSummary } from "@veolms/web-core";
 import { trackPlayback } from "../../lib/analytics-track";
+import { readDeviceTier } from "./deviceTier";
+import {
+  getTokenRefreshStats,
+  type TokenRefreshStats,
+} from "./learningHlsConstants";
 import { getSegmentCacheStats, type SegmentCacheStats } from "./segmentCache";
 
 export interface PlaybackTelemetryContext {
@@ -21,6 +29,13 @@ interface OpenPlayback {
   playRequestedAt: number | null;
   firstFrameAt: number | null;
   errorCode: string | undefined;
+  errorHttpStatus: number | undefined;
+  /** Errors the player got over by itself (see `recoveredErrors`). */
+  recoveredErrors: number;
+  /** Streaming retries the engine reported (see `streamingretry`). */
+  streamingRetries: number;
+  /** The token renewal counts when the load started. */
+  tokenRefreshAtStart: TokenRefreshStats;
   bufferingSince: number | null;
   bufferingCount: number;
   bufferingMs: number;
@@ -53,6 +68,11 @@ function segmentCacheSince(
 
 /** A gap between two time updates larger than this is a seek, not play. */
 const MAX_TIMEUPDATE_STEP_SECONDS = 2;
+/**
+ * Play asked for this long ago with no frame shown yet, when the playback
+ * is given up on: reported as a failed start (`STUCK_START`).
+ */
+const STUCK_START_MS = 8_000;
 
 /**
  * Turns the player's events into one {@link PlaybackSummary} per video
@@ -82,6 +102,12 @@ export function createPlaybackTelemetry(
     const courseKey = playback.courseKey ?? context.courseKey;
     if (!courseKey) return;
     const now = Date.now();
+    const device = readDeviceTier();
+    const stuckStart =
+      reason !== "error" &&
+      playback.firstFrameAt === null &&
+      playback.playRequestedAt !== null &&
+      performance.now() - playback.playRequestedAt >= STUCK_START_MS;
     const summary: PlaybackSummary = {
       playbackId: playback.playbackId,
       courseKey,
@@ -102,8 +128,27 @@ export function createPlaybackTelemetry(
                   ),
               ),
             ),
-      startFailed: playback.firstFrameAt === null && reason === "error",
-      ...(playback.errorCode ? { errorCode: playback.errorCode } : {}),
+      // A video whose first frame never came, given up on (the page
+      // left, another lesson opened) after waiting this long, failed to
+      // start as surely as one that errored; it used to go unreported.
+      startFailed:
+        playback.firstFrameAt === null && (reason === "error" || stuckStart),
+      ...(playback.errorCode
+        ? { errorCode: playback.errorCode }
+        : stuckStart
+          ? { errorCode: "STUCK_START" }
+          : {}),
+      ...(playback.errorHttpStatus !== undefined
+        ? { errorHttpStatus: playback.errorHttpStatus }
+        : {}),
+      streamingRetries: playback.streamingRetries,
+      recoveredErrors: playback.recoveredErrors,
+      tokenRefreshFailures:
+        getTokenRefreshStats().failures - playback.tokenRefreshAtStart.failures,
+      ...(device.deviceMemoryGb !== null
+        ? { deviceMemoryGb: device.deviceMemoryGb }
+        : {}),
+      ...(device.cpuCores !== null ? { cpuCores: device.cpuCores } : {}),
       bufferingCount: playback.bufferingCount,
       bufferingMs: Math.round(playback.bufferingMs),
       watchedSeconds: Math.round(playback.watchedSeconds),
@@ -139,6 +184,10 @@ export function createPlaybackTelemetry(
           playRequestedAt: null,
           firstFrameAt: null,
           errorCode: undefined,
+          errorHttpStatus: undefined,
+          recoveredErrors: 0,
+          streamingRetries: 0,
+          tokenRefreshAtStart: getTokenRefreshStats(),
           bufferingSince: null,
           bufferingCount: 0,
           bufferingMs: 0,
@@ -217,11 +266,26 @@ export function createPlaybackTelemetry(
         open.currentHeight = event.detail.quality?.height ?? null;
         return;
       }
+      case "streamingretry": {
+        if (open) open.streamingRetries += 1;
+        return;
+      }
       case "error": {
         if (!open) return;
-        const error = event.detail.error as { code?: unknown };
+        const error = event.detail.error;
+        // An error the player got over by itself (Shaka switching away
+        // from a quality the CDN refused, a decode hiccup it reset) used to
+        // close the summary as a failure, so the rest of the lesson went
+        // unrecorded and the Viewing tab counted an error no learner saw.
+        // It is counted and the playback goes on.
+        if (!error.fatal) {
+          open.recoveredErrors += 1;
+          return;
+        }
         open.errorCode =
-          error && error.code !== undefined ? String(error.code) : "unknown";
+          error.code !== undefined ? String(error.code) : "unknown";
+        const status = networkFailureHttpStatus(error);
+        open.errorHttpStatus = status === null ? undefined : status;
         finish("error");
         return;
       }

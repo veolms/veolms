@@ -91,8 +91,28 @@ export const learnerRefundRequestSchema = z.strictObject({
 });
 export type LearnerRefundRequest = z.infer<typeof learnerRefundRequestSchema>;
 
+/**
+ * A purchase's refund option, as its buyer's Purchase History shows it. Only
+ * on a paid purchase with something to return; absent on any other order.
+ */
+export const learnerOrderRefundSchema = z.strictObject({
+  /** Within 30 days, and no more watched than 10% or 10 hours. */
+  eligible: z.boolean(),
+  /** Why it is not eligible, in words for the learner; empty when it is. */
+  reasons: z.array(z.string()),
+  /** The refund already asked for, if one was. */
+  requestStatus: refundRequestStatusSchema.nullable(),
+  /**
+   * Paid by bank or UPI transfer: a request goes to staff, who send the
+   * money back by hand, instead of being refunded at once.
+   */
+  manualTransfer: z.boolean(),
+});
+export type LearnerOrderRefund = z.infer<typeof learnerOrderRefundSchema>;
+
 export const createStudentRefundRequestSchema = z.strictObject({
-  reason: z.string().min(5).max(1000),
+  /** Why, in the learner's words. Optional: an eligible purchase is refunded either way. */
+  reason: z.string().trim().max(1000).optional(),
 });
 export type CreateStudentRefundRequest = z.infer<
   typeof createStudentRefundRequestSchema

@@ -1,16 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { ArchiveIcon as Archive } from "@phosphor-icons/react/Archive";
 import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/CreditCard";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import {
-  useCurrentUser,
-  useDeactivateAccount,
-  useSignOut,
-} from "../services/auth";
+import { useSignOut } from "../services/auth";
 import "../styles/features/workspace.css";
-import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import { LogoutConfirmModal } from "../shell/LogoutConfirmModal";
 import { AutosyncSyncError, autosyncManager } from "../lib/autosync";
 import type { ProfileRole } from "./profileTypes";
@@ -24,7 +20,7 @@ export interface AccountSettingsProps {
   onNavigatePage?: (page: string) => void;
 }
 
-// Signing out and deactivating from this tab wait for unsaved changes to reach
+// Signing out from this tab waits for unsaved changes to reach
 // the server. When they could not, the dialog stayed open with no word on why.
 const getUnsyncedChangesMessage = (error: unknown) => {
   if (error instanceof AutosyncSyncError) {
@@ -38,9 +34,6 @@ const getUnsyncedChangesMessage = (error: unknown) => {
   return "Some of your changes haven't been saved yet. Go back and finish saving them, then try again.";
 };
 
-/** Typed to confirm a deactivation, which cannot be undone from the app. */
-const DEACTIVATE_PHRASE = "DEACTIVATE";
-
 export function AccountSettings({
   role,
   isAuthenticated,
@@ -48,46 +41,18 @@ export function AccountSettings({
   onNavigatePage,
 }: AccountSettingsProps) {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
   const [unsyncedChangesMessage, setUnsyncedChangesMessage] = useState<
     string | null
   >(null);
   const { isPending: isSigningOut, signOut } = useSignOut();
-  const deactivateMutation = useDeactivateAccount();
-  const { data: currentUser } = useCurrentUser();
   // Data export is not built yet: its section, a disabled button, is shown
   // to admins alone (see `useAdminOnlySettings`).
   const showAdminSettings = useAdminOnlySettings();
-  const [deactivatePhrase, setDeactivatePhrase] = useState("");
-  const deactivatePhraseMatches =
-    deactivatePhrase.trim().toUpperCase() === DEACTIVATE_PHRASE;
-  // The notice goes by email, so it is only promised to an account that
-  // has an address to send it to.
-  const hasEmail = Boolean(currentUser?.email);
 
   useEffect(() => {
     if (isAuthenticated) return;
     setLogoutConfirmOpen(false);
-    setDeactivateConfirmOpen(false);
   }, [isAuthenticated]);
-
-  const deactivateAccount = async () => {
-    if (!deactivatePhraseMatches) return;
-    setUnsyncedChangesMessage(null);
-    try {
-      await autosyncManager.requireSynced();
-    } catch (error) {
-      setUnsyncedChangesMessage(getUnsyncedChangesMessage(error));
-      return;
-    }
-    try {
-      await deactivateMutation.mutateAsync();
-      setDeactivateConfirmOpen(false);
-      window.location.href = "/";
-    } catch {
-      // The dialog remains open and exposes the API error so the user can retry.
-    }
-  };
 
   const signOutAfterSync = async () => {
     setUnsyncedChangesMessage(null);
@@ -191,44 +156,6 @@ export function AccountSettings({
       ) : null}
 
       {isAuthenticated && (
-        <section
-          className="settings-section settings-section--danger"
-          aria-labelledby="deactivate-heading"
-        >
-          <header className="settings-section__heading">
-            <Trash size={20} weight="duotone" />
-            <div>
-              <h3 id="deactivate-heading">Deactivate account</h3>
-              <p>Remove access to this account and sign out everywhere.</p>
-            </div>
-          </header>
-          <div className="settings-account-plan">
-            <div>
-              <strong>Deactivate your account</strong>
-              <small>
-                This takes effect straight away: you are signed out of every
-                device and cannot sign in again.
-                {hasEmail ? " We email you a notice once it is done." : ""}
-              </small>
-            </div>
-            <button
-              type="button"
-              className="settings-action settings-action--danger"
-              onClick={() => {
-                deactivateMutation.reset();
-                setUnsyncedChangesMessage(null);
-                setDeactivatePhrase("");
-                setDeactivateConfirmOpen(true);
-              }}
-              disabled={deactivateMutation.isPending}
-            >
-              <Trash size={16} /> Deactivate account
-            </button>
-          </div>
-        </section>
-      )}
-
-      {isAuthenticated && (
         <section className="settings-section" aria-labelledby="signout-heading">
           <header className="settings-section__heading">
             <SignOut size={20} weight="duotone" />
@@ -258,68 +185,40 @@ export function AccountSettings({
         </section>
       )}
 
+      {isAuthenticated && (
+        <section
+          className="settings-section settings-section--danger"
+          aria-labelledby="delete-heading"
+        >
+          <header className="settings-section__heading">
+            <Trash size={20} weight="duotone" />
+            <div>
+              <h3 id="delete-heading">Delete account</h3>
+              <p>Remove this account and the data linked to it.</p>
+            </div>
+          </header>
+          {/* Deletion is requested by email; the page explains how. */}
+          <div className="settings-account-plan">
+            <div>
+              <strong>Delete your account</strong>
+              <small>Permanently delete your account and data.</small>
+            </div>
+            <Link
+              to="/delete-account"
+              className="settings-action settings-action--delete"
+            >
+              <Trash size={16} /> Delete account
+            </Link>
+          </div>
+        </section>
+      )}
+
       <LogoutConfirmModal
         isOpen={isAuthenticated && logoutConfirmOpen}
         isPending={isSigningOut}
         onClose={() => setLogoutConfirmOpen(false)}
         onConfirm={() => void signOutAfterSync()}
         notice={unsyncedChangesAlert}
-      />
-
-      <ConfirmActionModal
-        id="deactivate-account-modal"
-        isOpen={isAuthenticated && deactivateConfirmOpen}
-        isPending={deactivateMutation.isPending}
-        confirmDisabled={!deactivatePhraseMatches}
-        onClose={() => setDeactivateConfirmOpen(false)}
-        onConfirm={() => void deactivateAccount()}
-        icon={Trash}
-        title="Deactivate account?"
-        description={
-          <>
-            <span>
-              This signs you out everywhere and permanently disables access to
-              this account. It happens as soon as you confirm, and you cannot
-              undo it yourself. Your stored account record will be retained as
-              required for platform records.
-            </span>
-            {/* A permanent action used to take one click on a button. The
-                word has to be typed, so it cannot be confirmed by a stray
-                click or a held Enter. */}
-            <label className="mt-4 block text-xs font-semibold text-(--text)">
-              Type {DEACTIVATE_PHRASE} to confirm
-              <input
-                type="text"
-                value={deactivatePhrase}
-                onChange={(event) => setDeactivatePhrase(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && deactivatePhraseMatches) {
-                    void deactivateAccount();
-                  }
-                }}
-                disabled={deactivateMutation.isPending}
-                autoComplete="off"
-                autoCapitalize="characters"
-                spellCheck={false}
-                placeholder={DEACTIVATE_PHRASE}
-                className="mt-1.5 block h-10 w-full rounded-lg bg-(--surface-strong) px-3 text-sm! font-semibold! tracking-wide text-(--text) ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] outline-none ring-inset placeholder:font-normal placeholder:text-(--muted) focus:ring-2 focus:ring-(--danger)"
-              />
-            </label>
-            {unsyncedChangesAlert}
-            {deactivateMutation.error && (
-              <span
-                className="mt-3 block rounded-lg bg-[color-mix(in_srgb,var(--danger)_8%,var(--surface-strong))] px-3 py-2 text-xs font-semibold text-(--danger)"
-                role="alert"
-              >
-                {deactivateMutation.error.message}
-              </span>
-            )}
-          </>
-        }
-        cancelLabel="Keep my account"
-        confirmLabel="Deactivate account"
-        pendingLabel="Deactivating…"
-        tone="danger"
       />
     </div>
   );

@@ -123,6 +123,7 @@ export interface ShakaPreloadManagerLike {
 export interface ShakaManifestLike {
   variants: ReadonlyArray<{
     id: number | string;
+    disabledUntilTime?: number;
     video?: {
       segmentIndex?: {
         find(time: number): number | null;
@@ -252,21 +253,41 @@ export const SHAKA_STREAMING_DEFAULTS = {
 } as const;
 
 /**
- * Retries tuned for flaky mobile links: four tries, ~0.4s/0.6s/0.9s apart.
- * No limit on a request's total time: on 3G (~50KB/s) a 1080p segment
- * (~1.6MB) needs over 30s, and a retry starts again from its first byte, so
- * a total limit made it fail forever. A request is given up only when no
- * byte has arrived for 20s, which also leaves room for an extension that
- * hands the page the body only once it is complete.
+ * Retries tuned for flaky mobile links: five tries, ~0.4s/0.6s/0.9s/1.4s
+ * apart. No limit on a request's total time: on 3G (~50KB/s) a 1080p
+ * segment (~1.6MB) needs over 30s, and a retry starts again from its first
+ * byte, so a total limit made it fail forever. A request is given up when
+ * no byte has arrived for 8s (connecting, or mid-body): a connection that
+ * quiet is dead, and the 20s given before, four times over, was a minute
+ * and a half of loader for one dead connection. Production's playback log
+ * showed buffering stretches averaging 100s on lessons whose segments
+ * come from the CDN cache in under a second. (An extension that hands the
+ * page a body only once complete answers from the device, not over the
+ * network, so these limits never apply to it.)
  */
 export const SHAKA_SEGMENT_RETRY_DEFAULTS = {
-  maxAttempts: 4,
+  maxAttempts: 5,
   baseDelay: 400,
   backoffFactor: 1.5,
   fuzzFactor: 0.3,
   timeout: 0,
-  connectionTimeout: 20_000,
-  stallTimeout: 20_000,
+  connectionTimeout: 8_000,
+  stallTimeout: 8_000,
+} as const;
+
+/**
+ * A licence is a few hundred bytes from the API: one that has not answered
+ * in 8s is not coming, and a video cannot start without it. Three tries,
+ * then the error (a licence refused outright, 401/403, is never retried).
+ */
+export const SHAKA_LICENSE_RETRY_DEFAULTS = {
+  maxAttempts: 3,
+  baseDelay: 500,
+  backoffFactor: 1.5,
+  fuzzFactor: 0.3,
+  timeout: 0,
+  connectionTimeout: 8_000,
+  stallTimeout: 8_000,
 } as const;
 
 /**
@@ -287,6 +308,13 @@ export const SHAKA_ABR_DEFAULTS = {
   switchInterval: 4,
   bandwidthUpgradeTarget: 0.85,
   bandwidthDowngradeTarget: 0.95,
+  /**
+   * Keep dropped frames from disabling video streams in Shaka. On emulators,
+   * mobile devices with background load or brief stalls, frame drop counters
+   * exceed 15% and cause Shaka to ban streams for 30s, removing them from
+   * the visible qualities list (veolms#334).
+   */
+  droppedFrames: false,
 } as const;
 
 const MIN_REMEMBERED_BANDWIDTH = 300_000;
@@ -721,17 +749,12 @@ export function createShakaConfiguration(
   const heldHeight = shakaHeldVideoHeight(source);
   const capHeight =
     preferredHeight ?? heldHeight ?? shakaStartVideoHeight(source);
-  // A chosen quality: the first variant is the highest not above it (every
-  // variant looks affordable at this estimate, so ABR takes the top one the
-  // restriction leaves), and ABR stays off so playback stays there. The
-  // height limit is always given, so going back to auto (a `configure`,
-  // which merges) lifts the one a chosen quality set.
+  // Explicit caller restrictions (if any); preferred/start height guides
+  // initial track selection via targetVideoHeight/startAtPreferredQuality and
+  // must not hard-restrict manifest variants from being discovered in the UI.
   const restrictions = {
     ...streaming?.abrRestrictions,
-    maxHeight: Math.min(
-      streaming?.abrRestrictions?.maxHeight ?? Infinity,
-      capHeight ?? Infinity,
-    ),
+    maxHeight: streaming?.abrRestrictions?.maxHeight ?? Infinity,
   };
   result.abr = {
     enabled: isShakaAutoQuality(source) && heldHeight === null,
@@ -750,6 +773,8 @@ export function createShakaConfiguration(
       streaming?.abrBandwidthDowngradeTarget ??
       SHAKA_ABR_DEFAULTS.bandwidthDowngradeTarget,
     restrictions,
+    droppedFrames:
+      streaming?.abrDroppedFrames ?? SHAKA_ABR_DEFAULTS.droppedFrames,
   };
 
   if (networking?.manifestRetry) {
@@ -849,7 +874,7 @@ export function createShakaConfiguration(
     ...(result.drm as Record<string, unknown> | undefined),
     retryParameters: networking?.licenseRetry
       ? retryConfiguration(networking.licenseRetry)
-      : { ...SHAKA_SEGMENT_RETRY_DEFAULTS },
+      : { ...SHAKA_LICENSE_RETRY_DEFAULTS },
   };
 
   return result;

@@ -29,9 +29,9 @@ test("a visitor watches the free preview lesson, and the other lessons show as l
   await openLesson(page, course, 1);
   await expectVideoToPlay(page);
 
-  await expect(lessonInList(page, 1)).not.toContainText("locked");
-  await expect(lessonInList(page, 2)).toContainText("locked");
-  await expect(lessonInList(page, 3)).toContainText("locked");
+  await expect(lessonInList(page, 1)).not.toHaveAccessibleName(/\blocked\b/u);
+  await expect(lessonInList(page, 2)).toHaveAccessibleName(/\blocked\b/u);
+  await expect(lessonInList(page, 3)).toHaveAccessibleName(/\blocked\b/u);
 
   // The CDN refuses a segment without the playback token (403), so
   // segments it served prove the player sent the token.
@@ -114,11 +114,49 @@ test("a learner who has the course watches its locked lessons, and nothing shows
   await openLesson(page, course, 2);
   await expectVideoToPlay(page);
   for (const lessonNumber of [1, 2, 3]) {
-    await expect(lessonInList(page, lessonNumber)).not.toContainText("locked");
+    await expect(lessonInList(page, lessonNumber)).not.toHaveAccessibleName(
+      /\blocked\b/u,
+    );
   }
 
   await openLesson(page, course, 3);
   await expectVideoToPlay(page);
+});
+
+test("signing out while a locked lesson plays stops it and locks it, also after coming back to it", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse();
+  const learner = await academy.signedInLearner("signing_out_mid_lesson");
+  await academy.giveCourse(learner, course);
+  await openLesson(page, course, 2);
+  await expectVideoToPlay(page);
+
+  await page
+    .getByRole("button", {
+      name: new RegExp(`^${learner.displayName}, .*Open profile menu$`, "u"),
+    })
+    .click();
+  await page.getByRole("menuitem", { name: "Logout" }).click();
+  await page
+    .getByRole("dialog", { name: "Sign out?" })
+    .getByRole("button", { name: "Sign out" })
+    .click();
+
+  const loginLock = page
+    .getByRole("alert")
+    .getByRole("heading", { name: "Log in to dive in" });
+  await expect(loginLock).toBeVisible();
+  await expectNoVideo(page);
+
+  // Another lesson, then back to the one that was playing: still the lock,
+  // not the loader or "Something went wrong".
+  await lessonInList(page, 3).click();
+  await expect(loginLock).toBeVisible();
+  await lessonInList(page, 2).click();
+  await expect(loginLock).toBeVisible();
+  await expectNoVideo(page);
 });
 
 test("when staff take the course away, its lessons lock again for that learner", async ({

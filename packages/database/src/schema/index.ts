@@ -18,6 +18,8 @@ export * from "./home-page.schema.ts";
 export * from "./quotes.schema.ts";
 export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
+export * from "./support.schema.ts";
+export * from "./chat.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
@@ -35,6 +37,8 @@ import type {
   MfaBackupCodeTable,
   WebauthnChallengeTable,
   UserAvatarTable,
+  OauthNonceTable,
+  ContactChangeTable,
 } from "./auth.schema.ts";
 
 import type {
@@ -78,6 +82,7 @@ import type {
   CartTable,
   CartItemTable,
   CouponTable,
+  CouponDiscountRuleTable,
   CouponRedemptionTable,
   OrderTable,
   InvoiceNumberCounterTable,
@@ -117,6 +122,8 @@ import type {
   NotificationTable,
   NotificationDeliveryTable,
   NotificationPreferenceTable,
+  PushDeviceTable,
+  PushDeliveryTable,
 } from "./notifications.schema.ts";
 
 import type {
@@ -140,6 +147,27 @@ import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
+import type {
+  SupportAttachmentTable,
+  SupportMessageTable,
+  SupportTicketTable,
+} from "./support.schema.ts";
+import type {
+  ChatHiddenMessageTable,
+  ChatMemberTable,
+  ChatMessageTable,
+  ChatModerationLogTable,
+  ChatProfileTable,
+  ChatReceiptMarkTable,
+  ChatReactionTable,
+  ChatReportTable,
+  ChatRestrictionTable,
+  ChatRoomTable,
+  ChatSettingsTable,
+  ChatStarTable,
+  ChatUploadTable,
+  ChatUserBlockTable,
+} from "./chat.schema.ts";
 
 export interface Database {
   // Auth & Roles
@@ -159,11 +187,13 @@ export interface Database {
   pending_device_sign_ins: PendingDeviceSignInTable;
   oauth_accounts: OauthAccountTable;
   otp_codes: OtpCodeTable;
+  contact_changes: ContactChangeTable;
   passkeys: PasskeyTable;
   user_totp_credentials: UserTotpCredentialTable;
   mfa_backup_codes: MfaBackupCodeTable;
   webauthn_challenges: WebauthnChallengeTable;
   user_avatars: UserAvatarTable;
+  oauth_nonces: OauthNonceTable;
 
   // Courses & Curriculum
   courses: CourseTable;
@@ -193,6 +223,7 @@ export interface Database {
   carts: CartTable;
   cart_items: CartItemTable;
   coupons: CouponTable;
+  coupon_discount_rules: CouponDiscountRuleTable;
   coupon_redemptions: CouponRedemptionTable;
   orders: OrderTable;
   invoice_number_counters: InvoiceNumberCounterTable;
@@ -230,6 +261,8 @@ export interface Database {
   notifications: NotificationTable;
   notification_deliveries: NotificationDeliveryTable;
   notification_preferences: NotificationPreferenceTable;
+  push_devices: PushDeviceTable;
+  push_deliveries: PushDeliveryTable;
 
   // Learner state
   quizzes: QuizTable;
@@ -249,6 +282,27 @@ export interface Database {
   platform_settings: PlatformSettingsTable;
   quotes: QuoteTable;
   wishlist_items: WishlistItemTable;
+
+  // Support
+  support_tickets: SupportTicketTable;
+  support_messages: SupportMessageTable;
+  support_attachments: SupportAttachmentTable;
+
+  // Chat
+  chat_settings: ChatSettingsTable;
+  chat_rooms: ChatRoomTable;
+  chat_members: ChatMemberTable;
+  chat_messages: ChatMessageTable;
+  chat_uploads: ChatUploadTable;
+  chat_profiles: ChatProfileTable;
+  chat_receipt_marks: ChatReceiptMarkTable;
+  chat_reactions: ChatReactionTable;
+  chat_stars: ChatStarTable;
+  chat_hidden_messages: ChatHiddenMessageTable;
+  chat_restrictions: ChatRestrictionTable;
+  chat_user_blocks: ChatUserBlockTable;
+  chat_reports: ChatReportTable;
+  chat_moderation_log: ChatModerationLogTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;

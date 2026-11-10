@@ -19,6 +19,7 @@ import {
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+import { acceptTextJsonBody } from "../../../lib/text-json-body.ts";
 import { createAuthContext } from "../shared/auth.context.ts";
 import { createAuthController } from "./authentication.controller.ts";
 
@@ -30,6 +31,8 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/login",
     {
+      // Sign-in requests may arrive as text/plain (no CORS preflight).
+      preValidation: acceptTextJsonBody,
       // Unauthenticated OTP-credential verification: cap per-IP attempts so
       // a single client cannot brute-force codes or hammer the identifier
       // lookups (DB-side OTP attempt caps remain the hard stop).
@@ -58,6 +61,8 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/register",
     {
+      // Sign-in requests may arrive as text/plain (no CORS preflight).
+      preValidation: acceptTextJsonBody,
       // Unauthenticated and write-heavy (user row + session + advisory
       // lock): cap per-IP so registration cannot be used as a cheap
       // write-amplification or enumeration vector.
@@ -305,27 +310,6 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
       preHandler: context.mfaVerified,
     },
     controller.deleteUploadedAvatars,
-  );
-
-  app.delete(
-    "/auth/me",
-    {
-      schema: {
-        operationId: "deactivateCurrentUserAccount",
-        tags: ["Auth"],
-        summary: "Deactivate the current user account",
-        description:
-          "Deactivates the authenticated account, invalidates every active session, and queues a confirmation email.",
-        response: {
-          200: jsonResponse("Account deactivated.", authMessageResponseSchema),
-          401: errorResponse("Authentication required."),
-          403: errorResponse("MFA step-up required."),
-          404: errorResponse("User account was not found."),
-        },
-      },
-      preHandler: context.mfaVerified,
-    },
-    controller.deactivateAccount,
   );
 };
 

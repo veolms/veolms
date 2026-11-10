@@ -1,3 +1,5 @@
+import { forgetChatCache } from "../lib/chatCacheDb";
+import { forgetChatDrafts } from "./chatDrafts.store";
 import { forgetSessionTabs } from "../routing/tabSessionState";
 
 /**
@@ -187,6 +189,9 @@ export function claimLastOpenedLessons(
 export function forgetAccountBrowserState(): void {
   if (typeof window === "undefined") return;
   forgetSessionTabs();
+  // The chats kept for instant opening (lib/chatCacheDb.ts).
+  forgetChatCache();
+  forgetChatDrafts();
   try {
     removeMatchingKeys(window.sessionStorage, isAccountSessionStorageKey);
   } catch {

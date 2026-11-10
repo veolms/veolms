@@ -132,6 +132,7 @@ async function loadDefaultGuestHomePage(): Promise<GuestHomePageResponse> {
   ]);
   const {
     hero,
+    festive,
     highlights,
     popularCourses,
     freeCourses,
@@ -140,6 +141,7 @@ async function loadDefaultGuestHomePage(): Promise<GuestHomePageResponse> {
   return {
     version: "build-default",
     hero,
+    festive,
     highlights,
     popularCourses: {
       visible: popularCourses.visible,
@@ -389,7 +391,8 @@ async function loadLessonPageSeed(
 /**
  * A course page's course: its public curriculum, the same for everyone,
  * and the price a visitor is offered (asked without a session, so it is
- * the price, not anyone's access).
+ * the price, not anyone's access). The page is not drawn with that price:
+ * see `CourseCurriculumPreview.pricing`.
  */
 async function loadCourseCurriculumPreview(
   courseSlug: string,

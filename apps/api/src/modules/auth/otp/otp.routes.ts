@@ -11,6 +11,7 @@ import {
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+import { acceptTextJsonBody } from "../../../lib/text-json-body.ts";
 import { createAuthContext } from "../shared/auth.context.ts";
 import { createOtpController } from "./otp.controller.ts";
 
@@ -21,6 +22,8 @@ const otpRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/otp/send",
     {
+      // Sign-in requests may arrive as text/plain (no CORS preflight).
+      preValidation: acceptTextJsonBody,
       // Unauthenticated, so the per-identifier checks in otp.service.ts are
       // not enough on their own — an attacker can rotate identifiers from a
       // single IP to bypass them. This caps sends per IP regardless of which
@@ -44,6 +47,9 @@ const otpRoutes: RoutePlugin = async (app, options) => {
             otpSendResponseSchema,
           ),
           400: errorResponse("Validation error or missing parameters."),
+          404: errorResponse(
+            "The phone number is not an account's confirmed number (PHONE_NOT_REGISTERED).",
+          ),
           429: errorResponse("Rate limit exceeded."),
           503: errorResponse("Verification code could not be delivered."),
         },

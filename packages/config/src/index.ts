@@ -207,6 +207,58 @@ const serverConfigSchema = z.object({
     .max(60_000)
     .default(30_000),
   /**
+   * Seconds a page waits, while a video plays, between two lesson progress
+   * batches (pauses, a lesson's end and leaving the page send at once). The
+   * batches are the API's most frequent write; raising this during a load
+   * spike slows every open page down within one interval, with a reload
+   * of the API and no deploy.
+   */
+  LEARNING_PROGRESS_SYNC_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(15)
+    .max(600)
+    .default(60),
+  /**
+   * When this server says it is full on GET /v1/ready/capacity, so the
+   * proxy in front of it sends new requests to another server: the whole
+   * machine's CPU in use (Postgres included, over 5 s), in percent. It says
+   * it has room again only below CAPACITY_CPU_ROOM_PERCENT, so it does not
+   * flip on and off. Lower both on the database's boss, whose CPU is also
+   * the database's.
+   */
+  CAPACITY_CPU_FULL_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(100)
+    .default(80),
+  CAPACITY_CPU_ROOM_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(100)
+    .default(65),
+  /** The same for the machine's memory in use (not counting reclaimable cache). */
+  CAPACITY_MEMORY_FULL_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(100)
+    .default(85),
+  CAPACITY_MEMORY_ROOM_PERCENT: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(100)
+    .default(75),
+  /**
+   * While this file exists the server says it is full, so traffic moves
+   * away before a deploy or maintenance restarts it (create it, wait a few
+   * seconds, restart, remove it). Unset: no drain file.
+   */
+  CAPACITY_DRAIN_FILE: z.string().min(1).optional(),
+  /**
    * TTL for the process-local cache of a course as every visitor sees it
    * (the signed-out overview, the public curriculum and its version), in
    * ms. A change made through the API clears that course at once in the
@@ -371,6 +423,16 @@ const serverConfigSchema = z.object({
     .optional(),
 
   /**
+   * Local development only: every account may leave any course it is
+   * enrolled in, bought ones included, as an admin or a shared test account
+   * may (no money is returned, the order is left as it is, and the course's
+   * progress is cleared), so a purchase can be tried again. Honoured only
+   * when `NODE_ENV` is `development`, and the API refuses to start in
+   * production with it set.
+   */
+  LOCAL_ANY_COURSE_UNENROLL: booleanEnvironmentValueSchema.default(false),
+
+  /**
    * Enables the `mock_<email>` OAuth short-circuit, which skips both the
    * provider round-trip and the state/CSRF check. Requires `NODE_ENV` to be
    * `development` as well, so it can never be switched on in a deployed
@@ -424,6 +486,92 @@ const serverConfigSchema = z.object({
    * the sending domain rate-limited by Gmail, delaying sign-in codes too.
    */
   NOTIFICATION_COURSE_WIDE_EMAIL: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Serves GET /notifications/stream, a Server-Sent Events stream that tells
+   * a signed-in browser the moment its notifications change, so the badge
+   * and list refresh without waiting for the next poll. Off, the endpoint
+   * answers 503 and the web app falls back to polling every 2 minutes.
+   */
+  NOTIFICATION_STREAM_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Open notification streams one user may hold on one API process (one
+   * per browser tab). Beyond it the stream is refused and that tab polls.
+   */
+  NOTIFICATION_STREAM_MAX_PER_USER: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .default(8),
+
+  // Mobile push (Firebase Cloud Messaging)
+  /**
+   * Sends phone pushes for notifications and chat messages. Off, nothing is
+   * queued or sent; phones keep registering, so turning it on later works.
+   */
+  PUSH_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * The apps that may receive pushes and the Firebase key each is sent
+   * with, as JSON: `[{"applicationId":"com.procodrr.app",
+   * "serviceAccountPath":"/etc/veolms-api/fcm-procodrr.json"}]`. Instead of
+   * a path, `"serviceAccountBase64"` holds the key file itself. A phone
+   * whose app is not listed cannot register. Unset: push is off.
+   */
+  PUSH_APPS: z.string().trim().optional(),
+  /**
+   * The HTTP v1 message field the install is named in. Firebase now uses
+   * `fid`; `token` (deprecated) also accepts a Firebase Installation ID
+   * during the transition, so it is the fallback if `fid` is refused.
+   */
+  PUSH_TARGET_FIELD: z.enum(["fid", "token"]).default("fid"),
+  /** Firebase's address; changed only to test against a local stand-in. */
+  PUSH_FCM_ENDPOINT: z.url().default("https://fcm.googleapis.com"),
+  /** Sends per push before it is marked failed. */
+  PUSH_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+  /** Pushes sent at the same time by one worker. */
+  PUSH_SEND_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(16),
+  /** Phones one account may register; the least recently seen goes first. */
+  PUSH_MAX_DEVICES_PER_USER: z.coerce.number().int().min(1).max(50).default(10),
+  /**
+   * Pushes notifications that go to everyone in a course (a course
+   * published, a quiz assigned). Off, they still appear in-app.
+   */
+  NOTIFICATION_COURSE_WIDE_PUSH: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Groups with more members than this push only mentions (and @everyone),
+   * not every message: one message would otherwise wake thousands of
+   * phones. Private chats always push.
+   */
+  CHAT_PUSH_GROUP_MAX_MEMBERS: z.coerce.number().int().min(2).default(256),
+
+  // Chat (course groups, team groups, private chats)
+  /**
+   * Kill switch for chat. Off, every /chat route answers 404 and the live
+   * stream sends no chat events; nothing is deleted.
+   */
+  CHAT_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /** Open chat streams one user may hold on one API process (one per tab). */
+  CHAT_STREAM_MAX_PER_USER: z.coerce.number().int().min(1).max(50).default(8),
+  /**
+   * Open chat streams one API process holds. Beyond it new streams get 503
+   * with Retry-After, and the browser reconnects later (maybe elsewhere).
+   */
+  CHAT_STREAM_MAX_PER_PROCESS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(100_000)
+    .default(4_000),
+  /**
+   * How often the chat retention job runs (course-group messages older than
+   * the platform's retention, bodies of messages deleted over 7 days ago).
+   * 0 turns it off.
+   */
+  CHAT_RETENTION_INTERVAL_HOURS: z.coerce
+    .number()
+    .min(0)
+    .max(24 * 7)
+    .default(6),
 
   // SMS Delivery
   /**
@@ -479,12 +627,16 @@ const serverConfigSchema = z.object({
     .min(60)
     .max(86_400)
     .default(900),
+  // A segment token cannot be revoked (it is an expiry signed with the
+  // folder), so it is kept short: after a sign-out, or losing the course,
+  // the rest of a paid video stops loading within this. The player renews
+  // it while it plays, which needs a session that may still watch.
   CDN_HLS_TOKEN_TTL_SECONDS: z.coerce
     .number()
     .int()
     .min(60)
     .max(86_400)
-    .default(900),
+    .default(300),
   CDN_PUBLIC_FOLDERS: folderListSchema(
     "public,thumbnails,course-hls,course-videos",
   ),
@@ -558,6 +710,39 @@ const serverConfigSchema = z.object({
   MEDIACONVERT_WEBHOOK_URL: z.string().url().optional(),
   MEDIACONVERT_WEBHOOK_SECRET: z.string().optional(),
 
+  /**
+   * AWS MediaConvert job template name.
+   * When set, the dispatcher uses this pre-created template instead of building
+   * inline output settings. The template must exist in the same AWS account and
+   * region, e.g. "DASH_ADAPTIVE_LADDER".
+   */
+  MEDIACONVERT_JOB_TEMPLATE: z.string().optional(),
+  /** Optional comma-separated quality labels sent as template job metadata. */
+  MEDIACONVERT_VIDEO_QUALITIES: z
+    .string()
+    .regex(/^\s*(?:all|\d{3,4}p\s*(,\s*\d{3,4}p\s*)*)$/i)
+    .transform((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .join(","),
+    )
+    .optional(),
+  /** Optional storyboard preference sent as template job metadata. */
+  MEDIACONVERT_GENERATE_STORYBOARD: booleanEnvironmentValueSchema.optional(),
+  /**
+   * ClearKey DRM master key (hex). When set alongside DRM_MASTER_KEY_VERSION
+   * the dispatcher injects drmKeySystem / drmMasterKeyVersion into the job's
+   * UserMetadata so the webhook handler and license server can resolve the key.
+   * The raw key is kept server-side only; it is never sent to AWS.
+   */
+  DRM_MASTER_KEY: z.string().optional(),
+  /**
+   * Monotonic version tag for DRM_MASTER_KEY. Embedded in UserMetadata so the
+   * ClearKey license driver can look up the correct key version.
+   */
+  DRM_MASTER_KEY_VERSION: z.string().optional(),
+
   FLEET_MANAGER_TRIGGER_URL: z.string().url().optional(),
   FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
   PROBE_LAMBDA_NAME: z.string().optional(),
@@ -618,6 +803,25 @@ const serverConfigSchema = z.object({
     .regex(/^[A-Za-z]{2}$/u, "Expected a two-letter country code, such as US.")
     .transform((value) => value.toUpperCase())
     .optional(),
+  // Automatic prices for buyers outside India use the day's USD/INR rate,
+  // fetched from public sources (European Central Bank via Frankfurter, then
+  // open.er-api.com). Set this to use a fixed rate instead: rupees per
+  // dollar, such as 95.
+  INTERNATIONAL_PRICE_INR_PER_USD: z.coerce.number().positive().optional(),
+  // Countries whose buyers see and pay a course's rupee price, comma
+  // separated ISO codes. Everywhere else, a course that has a price for
+  // buyers outside India is shown and sold at that price. A buyer whose
+  // country is not known gets the rupee price.
+  DOMESTIC_PRICING_COUNTRIES: z
+    .string()
+    .trim()
+    .default("IN")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((code) => code.trim().toUpperCase())
+        .filter((code) => /^[A-Z]{2}$/u.test(code)),
+    ),
 
   // An extra payment taken by the gateway (a second payment for a paid
   // order, or a late payment for something the buyer already has) is sent
@@ -694,6 +898,40 @@ function resolveEmailTransport(parsed: ParsedServerConfig): "smtp" | "console" {
     : "smtp";
 }
 
+// Android apps sign passkeys with an origin of the form
+// `android:apk-key-hash:<base64url SHA-256 of the signing cert>`. That is not
+// a web URL: `new URL()` accepts it but reports its origin as the string
+// "null", which would both lose the entry and allow opaque (sandboxed) pages.
+const ANDROID_ORIGIN_PREFIX = "android:apk-key-hash:";
+
+function isAndroidOrigin(origin: string): boolean {
+  return origin.startsWith(ANDROID_ORIGIN_PREFIX);
+}
+
+// One comma-separated origins entry, normalised: http(s) URLs become their
+// origin, Android key-hash origins are kept exactly as written (only when
+// allowed), anything unparseable is kept as written, and "null" never passes.
+function normalizeOriginEntry(
+  entry: string,
+  options: { allowAndroid: boolean },
+): string | undefined {
+  const trimmed = entry.trim();
+  if (!trimmed) return undefined;
+  if (isAndroidOrigin(trimmed)) {
+    return options.allowAndroid ? trimmed : undefined;
+  }
+  let normalized = trimmed;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      normalized = url.origin;
+    }
+  } catch {
+    // Not a URL: keep as written.
+  }
+  return normalized === "null" ? undefined : normalized;
+}
+
 function resolveWebAuthnOrigins(parsed: ParsedServerConfig): string[] {
   const origins = new Set<string>();
 
@@ -705,14 +943,8 @@ function resolveWebAuthnOrigins(parsed: ParsedServerConfig): string[] {
 
   if (parsed.WEBAUTHN_ORIGINS) {
     for (const origin of parsed.WEBAUTHN_ORIGINS.split(",")) {
-      const trimmed = origin.trim();
-      if (trimmed) {
-        try {
-          origins.add(new URL(trimmed).origin);
-        } catch {
-          origins.add(trimmed);
-        }
-      }
+      const normalized = normalizeOriginEntry(origin, { allowAndroid: true });
+      if (normalized) origins.add(normalized);
     }
   }
 
@@ -748,6 +980,8 @@ function resolveWebAuthnRpIds(
     rpIds.add(resolvedRpId);
   }
   for (const origin of origins) {
+    // Android key-hash origins carry no host; the app's RP ID is the website's.
+    if (isAndroidOrigin(origin)) continue;
     try {
       const hostname = new URL(origin).hostname;
       if (hostname) {
@@ -761,18 +995,16 @@ function resolveWebAuthnRpIds(
 }
 
 function resolveCorsOrigins(parsed: ParsedServerConfig): string[] {
-  const origins = new Set(resolveWebAuthnOrigins(parsed));
+  // Browsers never send an Android key-hash origin, so CORS takes only the
+  // web origins of the WebAuthn list.
+  const origins = new Set(
+    resolveWebAuthnOrigins(parsed).filter((origin) => !isAndroidOrigin(origin)),
+  );
 
   if (parsed.CORS_ORIGINS) {
     for (const origin of parsed.CORS_ORIGINS.split(",")) {
-      const trimmed = origin.trim();
-      if (trimmed) {
-        try {
-          origins.add(new URL(trimmed).origin);
-        } catch {
-          origins.add(trimmed);
-        }
-      }
+      const normalized = normalizeOriginEntry(origin, { allowAndroid: false });
+      if (normalized) origins.add(normalized);
     }
   }
 
@@ -795,6 +1027,19 @@ export function loadServerConfig(
   environment: Record<string, string | undefined>,
 ): ServerConfig {
   const parsed = serverConfigSchema.parse(environment);
+  // The development-only switches are honoured when NODE_ENV is
+  // `development`, which is also the schema's default: a deployment that
+  // forgot NODE_ENV would have them on. So they need it named outright.
+  const developmentOnly = [
+    parsed.LOCAL_FIXED_OTP ? "LOCAL_FIXED_OTP" : null,
+    parsed.LOCAL_ANY_COURSE_UNENROLL ? "LOCAL_ANY_COURSE_UNENROLL" : null,
+  ].filter((name): name is string => name !== null);
+  if (developmentOnly.length > 0 && !environment.NODE_ENV?.trim()) {
+    throw new Error(
+      `Refusing to start with ${developmentOnly.join(", ")} set and no NODE_ENV: ` +
+        "set NODE_ENV=development explicitly for these development-only switches.",
+    );
+  }
   const offenders = findInsecureDefaults(parsed);
   const missingRequired = findMissingRequiredInProduction(parsed);
 
@@ -802,6 +1047,12 @@ export function loadServerConfig(
     if (parsed.LOCAL_FIXED_OTP) {
       throw new Error(
         "Refusing to start in production with LOCAL_FIXED_OTP set: it lets anyone sign in to any account. " +
+          "Remove it from the environment.",
+      );
+    }
+    if (parsed.LOCAL_ANY_COURSE_UNENROLL) {
+      throw new Error(
+        "Refusing to start in production with LOCAL_ANY_COURSE_UNENROLL set: it lets any student give up a paid course. " +
           "Remove it from the environment.",
       );
     }

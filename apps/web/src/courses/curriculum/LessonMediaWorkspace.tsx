@@ -204,9 +204,17 @@ export function LessonMediaWorkspace({
 
   // Attached lessons play from their playback bootstrap manifest. Until it
   // loads, the player shows the lesson thumbnail rather than any other video.
+  // The player takes `fileName` as the video's identity: a new one is another
+  // video, loaded from the start. So it names the media and never the lesson
+  // title, a draft that changes with every key pressed.
   const videoMedia = useMemo<CourseVideo>(
     () => ({
-      fileName: previewFile?.name || mediaInfo?.name || lessonTitle,
+      fileName:
+        previewFile?.name ||
+        mediaInfo?.name ||
+        mediaInfo?.id ||
+        mediaInfo?.url ||
+        "",
       duration: mediaInfo?.durationSeconds || 0,
       src: previewUrl || mediaInfo?.url || "",
       thumbnailSrc: previewUrl
@@ -214,8 +222,8 @@ export function LessonMediaWorkspace({
         : mediaInfo?.thumbnailUrl || undefined,
     }),
     [
-      lessonTitle,
       mediaInfo?.durationSeconds,
+      mediaInfo?.id,
       mediaInfo?.name,
       mediaInfo?.thumbnailUrl,
       mediaInfo?.url,

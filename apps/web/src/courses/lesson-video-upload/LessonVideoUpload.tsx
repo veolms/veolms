@@ -206,6 +206,8 @@ export const LessonVideoUpload = forwardRef<
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadLoadedBytes, setUploadLoadedBytes] = useState(0);
   const [transcodeProgress, setTranscodeProgress] = useState(0);
+  const [playbackReady, setPlaybackReady] = useState(false);
+  const readinessNotifiedMediaIdRef = useRef<string | null>(null);
   const [transcodeStatus, setTranscodeStatus] = useState<
     VideoJobStatus | undefined
   >();
@@ -283,7 +285,6 @@ export const LessonVideoUpload = forwardRef<
       setSelectedFile(null);
       uploadedThisSessionRef.current = false;
       setPhase("ready");
-      setTrackProgress(false);
     } catch (error: unknown) {
       if (!mountedRef.current) return;
       committedMediaIdRef.current = null;
@@ -380,6 +381,10 @@ export const LessonVideoUpload = forwardRef<
       setStreamConnectionState("connected");
       setStreamErrorCount(0);
       setTranscodeStatus(next.status);
+      setPlaybackReady(
+        next.playbackReady ??
+          (next.status === "ready" || next.status === "completed"),
+      );
       highestTranscodeProgressRef.current = Math.max(
         highestTranscodeProgressRef.current,
         next.progressPercent,
@@ -396,7 +401,21 @@ export const LessonVideoUpload = forwardRef<
         onThumbnailAvailableRef.current?.(activeMediaId);
       }
 
-      if (next.status === "completed") {
+      if (next.status === "ready") {
+        setUploadProgress(100);
+        setErrorMessage(null);
+        setPhase("ready");
+        if (readinessNotifiedMediaIdRef.current !== activeMediaId) {
+          readinessNotifiedMediaIdRef.current = activeMediaId;
+          if (candidateMediaId === activeMediaId) {
+            void commitCandidate(activeMediaId).then(() =>
+              notifyProcessingComplete(activeMediaId),
+            );
+          } else {
+            notifyProcessingComplete(activeMediaId);
+          }
+        }
+      } else if (next.status === "completed") {
         receivedTerminalEvent = true;
         setStreamConnectionState("terminal");
         setUploadProgress(100);
@@ -422,13 +441,15 @@ export const LessonVideoUpload = forwardRef<
       } else if (next.status === "failed" || next.status === "cancelled") {
         receivedTerminalEvent = true;
         setStreamConnectionState("terminal");
-        setPhase("failed");
+        setPhase(next.playbackReady ? "ready" : "failed");
         setTrackProgress(false);
         setErrorMessage(
-          next.error ||
-            (next.status === "cancelled"
-              ? "Video processing was cancelled."
-              : "The video could not be transcoded."),
+          next.playbackReady
+            ? "Video is playable, but processing additional qualities failed."
+            : next.error ||
+                (next.status === "cancelled"
+                  ? "Video processing was cancelled."
+                  : "The video could not be transcoded."),
         );
       } else {
         setErrorMessage(null);
@@ -576,6 +597,7 @@ export const LessonVideoUpload = forwardRef<
       setActiveMediaId(mediaAssetId ?? null);
       setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
       setTranscodeProgress(0);
+      setPlaybackReady(false);
       setTranscodeStatus(undefined);
       setProgressStreamError(null);
       setStreamConnectionState("idle");
@@ -598,7 +620,6 @@ export const LessonVideoUpload = forwardRef<
       setSelectedFile(null);
       uploadedThisSessionRef.current = false;
       setPhase("ready");
-      setTrackProgress(false);
       setProgressStreamError(null);
       setAttachmentError(null);
       setErrorMessage(null);
@@ -610,6 +631,7 @@ export const LessonVideoUpload = forwardRef<
     setActiveMediaId(mediaAssetId ?? null);
     setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
     setTranscodeProgress(0);
+    setPlaybackReady(false);
     setTranscodeStatus(undefined);
     setProgressStreamError(null);
     setStreamConnectionState("idle");
@@ -807,6 +829,10 @@ export const LessonVideoUpload = forwardRef<
   const checkedAttachedMediaIdRef = useRef<string | null>(null);
   const adoptAttachedVideoStatus = useCallback(
     (mediaId: string, status: VideoJobProgressResponse) => {
+      setPlaybackReady(
+        status.playbackReady ??
+          (status.status === "ready" || status.status === "completed"),
+      );
       if (status.source === "youtube") {
         setYoutubeImportMediaId(mediaId);
         // It is the lesson's video already: nothing is left to attach here.
@@ -815,22 +841,25 @@ export const LessonVideoUpload = forwardRef<
       if (
         status.status === "queued" ||
         status.status === "provisioning" ||
-        status.status === "processing"
+        status.status === "processing" ||
+        status.status === "ready"
       ) {
         highestTranscodeProgressRef.current = status.progressPercent;
         setTranscodeProgress(status.progressPercent);
         setTranscodeStatus(status.status);
         setHasReceivedProgress(true);
-        setPhase("transcoding");
+        setPhase(status.status === "ready" ? "ready" : "transcoding");
         setTrackProgress(true);
       } else if (status.status === "failed" || status.status === "cancelled") {
         setTranscodeStatus(status.status);
-        setPhase("failed");
+        setPhase(status.playbackReady ? "ready" : "failed");
         setErrorMessage(
-          status.error ||
-            (status.status === "cancelled"
-              ? "Video processing was cancelled."
-              : "The video could not be processed."),
+          status.playbackReady
+            ? "Video is playable, but processing additional qualities failed."
+            : status.error ||
+                (status.status === "cancelled"
+                  ? "Video processing was cancelled."
+                  : "The video could not be processed."),
         );
       }
     },
@@ -1290,6 +1319,7 @@ export const LessonVideoUpload = forwardRef<
       videoNoun={videoNoun}
       progress={hasReceivedProgress ? transcodeProgress : null}
       status={transcodeStatus}
+      playbackReady={playbackReady}
       errorMessage={isStreamError ? null : errorMessage}
       isReplacement={isPendingReplacement}
       embedded={inline}
@@ -1400,6 +1430,8 @@ export const LessonVideoUpload = forwardRef<
         Boolean(selectedFile) ||
         isBusy(phase) ||
         phase === "failed" ||
+        transcodeStatus === "ready" ||
+        Boolean(playbackReady && errorMessage) ||
         Boolean(candidateMediaId)) ? (
         <div
           className="min-w-0 space-y-3.5 sm:space-y-4"
@@ -1863,6 +1895,7 @@ interface TranscodingProgressStageProps {
   videoNoun: string;
   progress?: number | null;
   status?: string;
+  playbackReady?: boolean;
   errorMessage?: string | null;
   isReplacement: boolean;
   embedded?: boolean;
@@ -1880,6 +1913,7 @@ function TranscodingProgressStage({
   videoNoun,
   progress = null,
   status,
+  playbackReady = false,
   errorMessage,
   isReplacement,
   embedded = false,
@@ -1888,10 +1922,7 @@ function TranscodingProgressStage({
   onReplace,
   onReplaceFromYoutube,
 }: TranscodingProgressStageProps) {
-  // A worker can report 100% FFmpeg progress while the job is still doing
-  // final output/attachment work. Only the durable completed status means the
-  // playback files are verified and safe to show as Ready.
-  const isReady = status === "completed";
+  const isReady = playbackReady || status === "ready" || status === "completed";
   const isFailed =
     status === "failed" || status === "cancelled" || Boolean(errorMessage);
   const badge = isReady ? "Ready" : isFailed ? "Failed" : "Processing";
@@ -1920,6 +1951,12 @@ function TranscodingProgressStage({
             : null
         }
       />
+      {status === "ready" ? (
+        <p role="status" className="text-sm text-(--muted)">
+          Video ready to play and save. Other qualities are still processing
+          {progress === null ? "." : ` (${progress}%).`}
+        </p>
+      ) : null}
       {onReplaceFromYoutube ? (
         <button
           type="button"
@@ -2201,7 +2238,12 @@ function getStatusLabel(
   jobStatus?: string,
   streamConnectionState?: StreamConnectionState,
 ): string {
-  if (phase === "ready") return "Video ready";
+  if (phase === "ready")
+    return jobStatus === "failed" || jobStatus === "cancelled"
+      ? "Playable; additional qualities could not be processed"
+      : jobStatus === "ready"
+        ? "Ready to play; more qualities processing"
+        : "Video ready";
   if (phase === "failed") return "Video processing failed";
   if (phase === "uploading") return "Uploading…";
   if (phase === "confirming") return "Confirming upload…";
@@ -2220,6 +2262,8 @@ function getJobLabel(status?: string): string {
       return "Preparing transcoder";
     case "processing":
       return "Transcoding video";
+    case "ready":
+      return "Playable; more qualities processing";
     case "completed":
       return "Video ready";
     case "failed":

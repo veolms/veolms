@@ -7,6 +7,7 @@ import type {
   TransitionEvent as ReactTransitionEvent,
 } from "react";
 import { claimPointerGesture } from "../gestures/pointerGestureOwnership";
+import { useLessonListTheme } from "./player/useLearningPlayerTheme";
 
 export const FULLSCREEN_VIDEO_WIDTH_MIN_PERCENT = 50;
 export const FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT = 60;
@@ -94,6 +95,7 @@ export function FullscreenLandscapeCurriculumPanel({
   onVideoWidthPreviewChange,
   videoWidthPercent,
 }: FullscreenLandscapeCurriculumPanelProps) {
+  const lessonTheme = useLessonListTheme("fullscreen");
   const [motionMode, setMotionMode] = useState<PanelMotionMode>("idle");
   const dismissPendingRef = useRef(false);
   const motionTimerRef = useRef<number | null>(null);
@@ -389,7 +391,8 @@ export function FullscreenLandscapeCurriculumPanel({
 
   return (
     <div
-      className={`relative z-20 h-full min-w-0 flex-1 touch-pan-y overflow-hidden border-l border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] text-(--text) shadow-[-18px_0_40px_rgba(0,0,0,0.2)] will-change-transform [&_.learning-curriculum]:h-full [&_.learning-curriculum]:rounded-none [&_.learning-curriculum]:bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] [&_.learning-curriculum]:shadow-none ${motionMode === "settling" || motionMode === "dismissing" ? "transition-transform duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none" : "transition-none"}`}
+      data-lesson-theme={lessonTheme}
+      className={`relative z-20 h-full min-w-0 flex-1 touch-pan-y overflow-hidden rounded-(--control-radius-learning-panel,8px) bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] text-(--text) shadow-[-18px_0_40px_rgba(0,0,0,0.2)] will-change-transform [&_.learning-curriculum]:h-full [&_.learning-curriculum]:rounded-none [&_.learning-curriculum]:bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] [&_.learning-curriculum]:shadow-none ${motionMode === "settling" || motionMode === "dismissing" ? "transition-transform duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none" : "transition-none"}`}
       style={{
         transform:
           "translate3d(var(--learning-fullscreen-panel-offset-x, 0px), 0, 0)",
@@ -452,6 +455,16 @@ export function FullscreenLandscapeCurriculumPanel({
         />
       </div>
       <div className="h-full min-h-0 overflow-hidden">{children}</div>
+      {/* An open section reaches to 1px from the panel's edges, so its left
+          side runs down the resize line. The 3px strip under the line fades
+          into the panel at the bottom with it (the same 14px and 16% as the
+          line's own fade), painted over the list rather than masking it: a
+          mask would make the list a layer of its own, and keep the elastic
+          scroller, raised while it is held, under the resize handle. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 z-40 h-[calc(14px_+_16%)] w-[3px] bg-[linear-gradient(to_top,color-mix(in_srgb,var(--surface)_91%,var(--canvas))_14px,transparent)]"
+      />
     </div>
   );
 }

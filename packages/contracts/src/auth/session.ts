@@ -59,6 +59,15 @@ export const googleOneTapLoginRequestSchema = z.object({
   }),
 });
 
+export const googleOneTapNonceResponseSchema = z.object({
+  nonce: z.string().min(16).meta({
+    description:
+      "Single-use cryptographic nonce to embed in google.accounts.id.initialize().",
+  }),
+  expiresAt: z.string().datetime().meta({
+    description: "ISO-8601 UTC timestamp after which the nonce is invalid.",
+  }),
+});
 export const oauthRegisterRequestSchema = oauthCallbackRequestSchema.extend({
   username: z
     .string()
@@ -128,24 +137,23 @@ export const sessionResponseSchema = z.object({
   lastUsedAt: z.string().max(40),
 });
 
-/**
- * A student at the academy's device limit, signing in on one more: the
- * devices they are signed in on, one of which they sign out to continue.
- */
-export const deviceLimitResponseSchema = z.object({
-  limit: z.number().int().positive().nullable(),
-  sessions: sessionResponseSchema.array(),
-});
-
-export const resolveDeviceLimitRequestSchema = z.object({
-  sessionId: z.uuid().describe("The session to sign out to make room."),
-});
-
 export const sessionParamsSchema = z.object({
   id: z.uuid().describe("The UUID of the session to revoke."),
 });
 
+export const sendActiveSessionsVerificationRequestSchema = z.object({
+  channel: z.enum(["email", "phone"]).optional(),
+});
+
+export const sendActiveSessionsVerificationResponseSchema = z.object({
+  message: z.string().max(255),
+  codeExpiresInSeconds: z.number().int().positive(),
+  channel: z.enum(["email", "phone"]),
+  maskedDestination: z.string().max(255),
+});
+
 export const activeSessionsVerificationRequestSchema = z.object({
+  channel: z.enum(["email", "phone"]).optional(),
   code: z
     .string()
     .length(6, "Code must be exactly 6 digits")
@@ -357,15 +365,17 @@ export type AuthMessageResponse = z.output<typeof authMessageResponseSchema>;
 export type OtpSendResponse = z.output<typeof otpSendResponseSchema>;
 export type SessionParams = z.input<typeof sessionParamsSchema>;
 export type SessionResponse = z.output<typeof sessionResponseSchema>;
+export type SendActiveSessionsVerificationRequest = z.input<
+  typeof sendActiveSessionsVerificationRequestSchema
+>;
+export type SendActiveSessionsVerificationResponse = z.output<
+  typeof sendActiveSessionsVerificationResponseSchema
+>;
 export type ActiveSessionsVerificationRequest = z.input<
   typeof activeSessionsVerificationRequestSchema
 >;
 export type ActiveSessionsVerificationResponse = z.output<
   typeof activeSessionsVerificationResponseSchema
->;
-export type DeviceLimitResponse = z.output<typeof deviceLimitResponseSchema>;
-export type ResolveDeviceLimitRequest = z.input<
-  typeof resolveDeviceLimitRequestSchema
 >;
 export type PasskeyRegisterVerifyRequest = z.input<
   typeof passkeyRegisterVerifyRequestSchema
@@ -379,3 +389,6 @@ export type PasskeyRegisterVerifyResponse = z.output<
 export type BackupCodesResponse = z.output<typeof backupCodesResponseSchema>;
 export type TotpVerifyRequest = z.input<typeof totpVerifyRequestSchema>;
 export type TotpEnableRequest = z.input<typeof totpEnableRequestSchema>;
+export type GoogleOneTapNonceResponse = z.output<
+  typeof googleOneTapNonceResponseSchema
+>;

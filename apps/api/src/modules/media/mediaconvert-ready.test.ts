@@ -1,0 +1,196 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
+import { createMediaService } from "./media.service.ts";
+
+void test("READY publishes output without completion and later events preserve it", async () => {
+  const job = {
+    id: "550e8400-e29b-41d4-a716-446655440000",
+    video_id: "550e8400-e29b-41d4-a716-446655440001",
+    status: "processing",
+    output_prefix: "protected/test",
+    progress_percent: 0,
+  };
+  const asset: Record<string, unknown> = { status: "processing" };
+  const outputs: Array<Record<string, unknown>> = [];
+  const db = {
+    selectFrom(table: string) {
+      const query = {
+        select: () => query,
+        leftJoin: () => query,
+        where: () => query,
+        orderBy: () => query,
+        limit: () => query,
+        forUpdate: () => query,
+        async executeTakeFirst() {
+          if (table === "video_jobs") return { ...job };
+          if (table === "media_assets")
+            return {
+              media_status: asset.status,
+              job_id: job.id,
+              job_status: job.status,
+              progress_percent: job.progress_percent,
+            };
+          if (table === "video_outputs") return outputs.at(-1);
+          return undefined;
+        },
+      };
+      return query;
+    },
+    updateTable(table: string) {
+      let values: Record<string, unknown> = {};
+      const query = {
+        set(value: Record<string, unknown>) {
+          values = value;
+          return query;
+        },
+        where: () => query,
+        async execute() {
+          if (table === "video_jobs") {
+            if (typeof values.status === "string") job.status = values.status;
+            if (typeof values.progress_percent === "number")
+              job.progress_percent = values.progress_percent;
+          } else if (table === "media_assets") Object.assign(asset, values);
+          else if (table === "video_outputs")
+            Object.assign(outputs.at(-1)!, values);
+        },
+      };
+      return query;
+    },
+    insertInto(table: string) {
+      let value: Record<string, unknown>;
+      const query = {
+        values(v: Record<string, unknown>) {
+          value = v;
+          return query;
+        },
+        async execute() {
+          if (table === "video_outputs") outputs.push(value);
+        },
+      };
+      return query;
+    },
+  };
+  Object.assign(db, {
+    transaction: () => ({
+      execute: async (fn: (trx: typeof db) => Promise<unknown>) => fn(db),
+    }),
+  });
+  let manifestExists = false;
+  const checkedKeys: string[] = [];
+  const services = {
+    config: { MEDIACONVERT_WEBHOOK_SECRET: "secret" },
+    storage: {
+      headObject: async (key: string) => {
+        checkedKeys.push(key);
+        return manifestExists ? {} : null;
+      },
+      getCdnObjectUrl: (key: string) => `https://cdn.test/${key}`,
+      isCdnPublicKey: () => true,
+    },
+  };
+  const service = createMediaService({
+    database: db as never,
+    services: services as never,
+  });
+  async function deliver(status: string) {
+    const body = {
+      detail: {
+        status,
+        jobId: job.id,
+        videoId: job.video_id,
+        masterPlaylistPath: "s3://bucket/protected/test/video.mpd",
+        jobPercentComplete: 40,
+        progressPercent: status === "READY" ? 100 : 40,
+        overallProgressPercent: 40,
+      },
+    };
+    const rawBody = JSON.stringify(body);
+    const signature = `sha256=${createHmac("sha256", "secret").update(rawBody).digest("hex")}`;
+    return service.handleMediaConvertWebhook({
+      headers: { "x-fleet-signature": signature },
+      rawBody,
+      body,
+    });
+  }
+  await assert.rejects(deliver("READY"), /manifest is not available/i);
+  assert.equal(job.status, "processing");
+  assert.equal(outputs.length, 0);
+  assert.deepEqual(checkedKeys, ["protected/test/video.mpd"]);
+  manifestExists = true;
+  assert.equal((await deliver("READY")).status, "ready");
+  assert.equal(job.status, "ready");
+  assert.equal(job.progress_percent, 40);
+  assert.equal(asset.status, "ready");
+  assert.deepEqual(await service.getVideoJobProgress(job.video_id), {
+    status: "ready",
+    playbackReady: true,
+    progressPercent: 40,
+    error: null,
+  });
+  assert.equal(outputs.length, 1);
+  assert.equal(
+    outputs[0]?.master_playlist_path,
+    `protected/test/video.mpd?v=${job.id}-1`,
+  );
+  assert.equal((await deliver("READY")).status, "ready");
+  assert.equal(outputs.length, 1);
+  assert.equal(
+    outputs[0]?.master_playlist_path,
+    `protected/test/video.mpd?v=${job.id}-2`,
+  );
+  const playback = await service.getVideoAssetPlayback(
+    {
+      id: job.video_id,
+      type: "video",
+      status: "ready",
+      storageKey: "protected/test",
+      durationSeconds: null,
+    },
+    { mediaKey: "test" },
+  );
+  assert.equal(
+    playback.manifestUrl,
+    `https://cdn.test/protected/test/video.mpd?v=${job.id}-2`,
+  );
+  await deliver("PROGRESSING");
+  assert.equal(job.status, "ready");
+  assert.equal((await deliver("COMPLETE")).status, "completed");
+  assert.equal(job.status, "completed");
+  assert.equal(job.progress_percent, 100);
+  assert.deepEqual(await service.getVideoJobProgress(job.video_id), {
+    status: "completed",
+    playbackReady: true,
+    progressPercent: 100,
+    error: null,
+  });
+  assert.equal(outputs.length, 1);
+  assert.equal(
+    outputs[0]?.master_playlist_path,
+    `protected/test/video.mpd?v=${job.id}-3`,
+  );
+  const completedPlayback = await service.getVideoAssetPlayback(
+    {
+      id: job.video_id,
+      type: "video",
+      status: "ready",
+      storageKey: "protected/test",
+      durationSeconds: null,
+    },
+    { mediaKey: "test" },
+  );
+  assert.equal(
+    completedPlayback.manifestUrl,
+    `https://cdn.test/protected/test/video.mpd?v=${job.id}-3`,
+  );
+  await deliver("READY");
+  assert.equal(job.status, "completed");
+  job.status = "processing";
+  job.id = "550e8400-e29b-41d4-a716-446655440002";
+  await deliver("READY");
+  assert.equal(outputs.length, 2);
+  assert.equal(
+    outputs.at(-1)?.master_playlist_path,
+    `protected/test/video.mpd?v=${job.id}-1`,
+  );
+});

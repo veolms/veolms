@@ -8,6 +8,7 @@ export {
   type EmailTransportConfig,
 } from "./email.service.ts";
 export {
+  contactChangedEmail,
   deactivatedAccountSignInEmail,
   escapeHtml,
   otpVerificationEmail,
@@ -22,3 +23,9 @@ export {
   type TeamMemberAddedInput,
   type TeamPreapprovedInput,
 } from "./email.templates.ts";
+export {
+  discussionMentionEmail,
+  discussionReplyEmail,
+  type DiscussionMentionEmailInput,
+  type DiscussionReplyEmailInput,
+} from "./discussion-email.templates.ts";

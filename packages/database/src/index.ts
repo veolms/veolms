@@ -7,3 +7,12 @@ export { listPendingMigrations } from "./migrator.ts";
 export * from "./schema/index.ts";
 export * from "./image-jobs.ts";
 export * from "./role-grants.ts";
+export { withLocalCommit } from "./local-commit.ts";
+export {
+  isConnectFailure,
+  isDatabaseBossUnreachable,
+  isPlainRead,
+  isReadCopyPreferred,
+  preferReadCopy,
+  withReadCopy,
+} from "./routing.ts";
