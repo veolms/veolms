@@ -22,8 +22,10 @@ import {
 import {
   useStaffSupportStats,
   useStaffSupportTickets,
+  useSupportTeam,
   type SupportAdminFilters,
 } from "../../services/support";
+import { useAuthStore } from "../../store/auth.store";
 import { SearchField } from "../../team/TeamBits";
 import {
   CategoryBadge,
@@ -41,8 +43,18 @@ import { supportInboxPageClasses } from "../supportLayout";
 import { SupportSelect } from "../SupportSelect";
 import { FeedbackSummary } from "./FeedbackSummary";
 import { StaffTicketPanel } from "./StaffTicketPanel";
+import {
+  AssigneeAvatar,
+  PriorityIcon,
+  QUEUE_PRIORITIES,
+  StatusIcon,
+} from "./supportQueueCatalog";
 
 const ALL = "all";
+/** Reports not resolved yet. */
+const ACTIVE = "active";
+const ANYONE = "anyone";
+type StatusFilter = SupportTicketStatus | typeof ALL | typeof ACTIVE;
 
 /** /support-inbox(/feedback): what learners reported and the feedback they sent. */
 export function SupportInboxPage() {
@@ -61,6 +73,7 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("ticket");
   const stats = useStaffSupportStats();
+  const viewerId = useAuthStore((state) => state.user?.id);
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -69,29 +82,39 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
-  const [status, setStatus] = useState<SupportTicketStatus | typeof ALL>(ALL);
+  // Reports open on what is still to do; feedback on all of it.
+  const defaultStatus = kind === "problem" ? ACTIVE : ALL;
+  const [status, setStatus] = useState<StatusFilter>(defaultStatus);
   const [category, setCategory] = useState<SupportTicketCategory | typeof ALL>(
     ALL,
   );
   const [rating, setRating] = useState<string>(ALL);
+  const [assignee, setAssignee] = useState<string>(ANYONE);
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const team = useSupportTeam(canManage);
   // Filters belong to one tab.
   useEffect(() => {
-    setStatus(ALL);
+    setStatus(kind === "problem" ? ACTIVE : ALL);
     setCategory(ALL);
     setRating(ALL);
+    setAssignee(ANYONE);
   }, [kind]);
 
   const filters = useMemo<SupportAdminFilters>(
     () => ({
       kind,
       sort,
-      ...(status !== ALL ? { status } : {}),
+      ...(status === ACTIVE
+        ? { active: true }
+        : status !== ALL
+          ? { status }
+          : {}),
       ...(category !== ALL ? { category } : {}),
       ...(rating !== ALL ? { rating: Number(rating) } : {}),
+      ...(assignee !== ANYONE ? { assignee } : {}),
       ...(search ? { search } : {}),
     }),
-    [kind, sort, status, category, rating, search],
+    [kind, sort, status, category, rating, assignee, search],
   );
   // What is open and listed now, for a page that finishes loading later.
   const latestView = useRef({ selectedId, filters });
@@ -165,23 +188,79 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
         </InboxTab>
       </nav>
 
-      {kind === "problem" ? (
-        <div className="@container/support-stats">
-          <div className="grid grid-cols-2 gap-3 @2xl/support-stats:grid-cols-4">
+      {kind === "feedback" ? <FeedbackSummary stats={feedback} /> : null}
+
+      {/* Status chips with their counts, and the viewer's own work. */}
+      <div
+        className="flex flex-wrap items-center gap-1.5"
+        role="toolbar"
+        aria-label="Filter by status"
+      >
+        {kind === "problem" ? (
+          <>
+            <FilterChip
+              selected={status === ACTIVE}
+              onClick={() => setStatus(ACTIVE)}
+              label="All active"
+              count={
+                problems
+                  ? problems.open + problems.in_progress + problems.waiting
+                  : undefined
+              }
+            />
             {PROBLEM_STATUS_ORDER.map((value) => (
-              <StatusCard
+              <FilterChip
                 key={value}
-                status={value}
-                count={problems?.[value]}
                 selected={status === value}
-                onToggle={() => setStatus(status === value ? ALL : value)}
+                onClick={() => setStatus(status === value ? ACTIVE : value)}
+                icon={<StatusIcon status={value} size={14} />}
+                label={SUPPORT_STATUSES[value].staffLabel}
+                count={problems?.[value]}
               />
             ))}
-          </div>
-        </div>
-      ) : (
-        <FeedbackSummary stats={feedback} />
-      )}
+          </>
+        ) : (
+          <>
+            <FilterChip
+              selected={status === ALL}
+              onClick={() => setStatus(ALL)}
+              label="Any triage"
+              count={feedback?.total}
+            />
+            {FEEDBACK_STATUS_ORDER.map((value) => (
+              <FilterChip
+                key={value}
+                selected={status === value}
+                onClick={() => setStatus(status === value ? ALL : value)}
+                icon={<StatusIcon status={value} size={14} />}
+                label={SUPPORT_STATUSES[value].staffLabel}
+                count={feedback?.[value]}
+              />
+            ))}
+          </>
+        )}
+        <span
+          className="mx-1 h-5 w-px bg-[color-mix(in_srgb,var(--text)_12%,transparent)]"
+          aria-hidden="true"
+        />
+        <FilterChip
+          selected={assignee === "me"}
+          onClick={() => setAssignee(assignee === "me" ? ANYONE : "me")}
+          icon={
+            <AssigneeAvatar
+              person={
+                team.data?.members.find((member) => member.id === viewerId) ??
+                null
+              }
+              size={16}
+            />
+          }
+          label="Assigned to me"
+          count={
+            kind === "problem" ? problems?.assignedToMe : feedback?.assignedToMe
+          }
+        />
+      </div>
 
       <div className="flex flex-wrap items-center gap-2.5">
         {kind === "feedback" ? (
@@ -213,16 +292,24 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
           </div>
         ) : (
           <p className="m-0 mr-auto text-sm text-(--muted)">
-            Showing{" "}
-            <span className="font-semibold text-(--text-secondary)">
-              {status === ALL
-                ? "all reports"
-                : SUPPORT_STATUSES[status].staffLabel.toLowerCase()}
-            </span>{" "}
-            · {total} {total === 1 ? "report" : "reports"}
+            {total} {total === 1 ? "report" : "reports"}
           </p>
         )}
         <div className="ml-auto flex flex-wrap gap-2">
+          <SupportSelect
+            value={assignee}
+            onValueChange={setAssignee}
+            ariaLabel="Assignee"
+            className="w-48"
+            options={[
+              [ANYONE, "Assignee: Anyone"],
+              ["none", "Unassigned"],
+              ["me", "Assigned to me"],
+              ...(team.data?.members ?? [])
+                .filter((member) => member.id !== viewerId)
+                .map((member) => [member.id, member.name] as const),
+            ]}
+          />
           {kind === "problem" ? (
             <SupportSelect
               value={category}
@@ -248,19 +335,6 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
                   ...[...SUPPORT_RATINGS]
                     .reverse()
                     .map((item) => [String(item.value), item.label] as const),
-                ]}
-              />
-              <SupportSelect
-                value={status}
-                onValueChange={setStatus}
-                ariaLabel="Status"
-                className="w-40"
-                options={[
-                  [ALL, "Any status"],
-                  ...FEEDBACK_STATUS_ORDER.map(
-                    (value) =>
-                      [value, SUPPORT_STATUSES[value].staffLabel] as const,
-                  ),
                 ]}
               />
             </>
@@ -307,7 +381,11 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
               {kind === "problem" ? "No reports here" : "No feedback here"}
             </p>
             <p className="m-0 text-sm text-(--muted)">
-              {search || status !== ALL || category !== ALL || rating !== ALL
+              {search ||
+              status !== defaultStatus ||
+              category !== ALL ||
+              rating !== ALL ||
+              assignee !== ANYONE
                 ? "Nothing matches these filters."
                 : kind === "problem"
                   ? "Nice work: nothing is waiting."
@@ -409,37 +487,35 @@ function InboxTab({
   );
 }
 
-function StatusCard({
-  status,
-  count,
+/** A filter that is on or off, with how many it would show. */
+function FilterChip({
   selected,
-  onToggle,
+  onClick,
+  icon,
+  label,
+  count,
 }: {
-  status: SupportTicketStatus;
-  count: number | undefined;
   selected: boolean;
-  onToggle: () => void;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  label: string;
+  count: number | undefined;
 }) {
-  const info = SUPPORT_STATUSES[status];
   return (
-    <ElevatedCard
-      as="button"
+    <button
       type="button"
       aria-pressed={selected}
-      onClick={onToggle}
-      className="flex flex-col items-start gap-1.5 px-4 py-3.5 text-left ring-(--accent) transition-[background-color,box-shadow] ring-inset hover:bg-(--card-surface-hover) aria-pressed:ring-2"
+      onClick={onClick}
+      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-(--surface-strong) px-2.5 text-[0.8rem] font-semibold text-(--text-secondary) ring-1 ring-transparent transition-colors ring-inset hover:text-(--text) aria-pressed:bg-(--accent)/12 aria-pressed:text-(--text) aria-pressed:ring-(--accent)/60"
     >
-      <span className="flex items-center gap-2 text-[0.8rem] font-semibold text-(--text-secondary)">
-        <span
-          className={`size-2 rounded-full ${info.dot}`}
-          aria-hidden="true"
-        />
-        {info.staffLabel}
-      </span>
-      <span className="text-2xl font-bold tracking-[-0.02em] text-(--text) tabular-nums">
-        {count ?? "–"}
-      </span>
-    </ElevatedCard>
+      {icon}
+      {label}
+      {count !== undefined ? (
+        <span className="rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-1.5 text-[0.7rem] text-(--muted) tabular-nums">
+          {count}
+        </span>
+      ) : null}
+    </button>
   );
 }
 
@@ -517,7 +593,18 @@ function TicketCard({
               <TimeAgo value={ticket.createdAt} />
             </span>
           </span>
-          <StatusChip status={ticket.status} staff />
+          <span className="flex shrink-0 flex-col items-end gap-1.5">
+            <StatusChip status={ticket.status} staff />
+            {ticket.priority ? (
+              <span
+                className="inline-flex items-center gap-1 text-[0.7rem] font-semibold text-(--muted)"
+                title={`Priority: ${QUEUE_PRIORITIES[ticket.priority].label}`}
+              >
+                <PriorityIcon priority={ticket.priority} size={13} />
+                {QUEUE_PRIORITIES[ticket.priority].label}
+              </span>
+            ) : null}
+          </span>
         </span>
         {isFeedback ? null : (
           <span className="line-clamp-2 text-[0.82rem] leading-5 text-(--text-secondary)">
@@ -553,6 +640,22 @@ function TicketCard({
               {ticket.replyCount === 1 ? "reply" : "replies"}
             </span>
           ) : null}
+          {/* Who works on it, at the card's bottom-right. */}
+          <span
+            className={`shrink-0 ${ticket.replyCount > 0 || (isFeedback && ticket.contactAllowed) ? "" : "ml-auto"}`}
+            title={
+              ticket.assignee
+                ? `Assigned to ${ticket.assignee.name}`
+                : "Unassigned"
+            }
+          >
+            <AssigneeAvatar person={ticket.assignee} size={22} />
+            <span className="sr-only">
+              {ticket.assignee
+                ? `Assigned to ${ticket.assignee.name}`
+                : "Unassigned"}
+            </span>
+          </span>
         </span>
       </ElevatedCard>
     </li>
