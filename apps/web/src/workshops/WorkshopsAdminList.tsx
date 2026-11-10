@@ -145,7 +145,7 @@ export function WorkshopsAdminList({
                     ? ` · ${workshop.courseTitle ?? "Course"} learners`
                     : workshop.audience === "paid"
                       ? " · Paid seats"
-                      : " · Every learner"}
+                      : " · Everyone signed up"}
                 </p>
                 <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--text-secondary,var(--muted))">
                   <span className="inline-flex items-center gap-1.5">

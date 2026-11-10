@@ -869,16 +869,7 @@ export async function listAllLearnerUserIds(
 ): Promise<string[]> {
   const rows = await sql<{ id: string }>`
     select u.id from users u
-    where u.is_deleted = false
-      and u.id in (
-        select ur.user_id from user_roles ur
-          join roles r on r.id = ur.role_id where r.name = 'student'
-        union
-        select ra.user_id from role_assignments ra
-          join roles r2 on r2.id = ra.role_id where r2.name = 'student'
-        union
-        select e.user_id from enrollments e
-      )
+    where u.is_deleted = false and u.email is not null
   `.execute(database);
   return rows.rows.map((row) => row.id);
 }
@@ -932,16 +923,7 @@ export async function countAllLearners(
 ): Promise<number> {
   const row = await sql<{ total: number }>`
     select count(*)::int as total from users u
-    where u.is_deleted = false
-      and u.id in (
-        select ur.user_id from user_roles ur
-          join roles r on r.id = ur.role_id where r.name = 'student'
-        union
-        select ra.user_id from role_assignments ra
-          join roles r2 on r2.id = ra.role_id where r2.name = 'student'
-        union
-        select e.user_id from enrollments e
-      )
+    where u.is_deleted = false and u.email is not null
   `.execute(database);
   return Number(row.rows[0]?.total ?? 0);
 }

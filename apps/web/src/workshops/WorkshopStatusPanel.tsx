@@ -187,8 +187,8 @@ export function WorkshopStatusPanel({
                   </p>
                 ) : !workshop.publishedAt && !workshop.priceMinor ? (
                   <p className="text-[12px] leading-5 text-(--muted)">
-                    Every learner gets an email with the calendar invitation
-                    when you publish.
+                    Everyone who has signed up gets an email with the calendar
+                    invitation when you publish.
                   </p>
                 ) : !workshop.publishedAt && workshop.priceMinor ? (
                   <label className="flex cursor-pointer items-start gap-2 text-[13px] text-(--text)">
@@ -198,7 +198,9 @@ export function WorkshopStatusPanel({
                       onChange={(event) => setAnnounce(event.target.checked)}
                       className="mt-0.5 size-4 accent-(--accent)"
                     />
-                    <span>Announce the seats to every learner by email</span>
+                    <span>
+                      Announce the seats to everyone who has signed up
+                    </span>
                   </label>
                 ) : null}
                 <Button
@@ -341,8 +343,8 @@ export function WorkshopStatusPanel({
                 <span className="text-sm font-semibold text-(--text)">
                   {formatWorkshopPrice(preview.priceMinor, preview.currency)}
                 </span>
-                <span className="rounded-lg bg-(--accent) px-3 py-1.5 text-xs font-semibold text-(--on-accent)">
-                  Register
+                <span className="rounded-full bg-emerald-500/12 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
+                  You&apos;re in
                 </span>
               </div>
             </div>

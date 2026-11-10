@@ -120,9 +120,7 @@ function EditorTabs({
       aria-label="Workshop editor"
       className="-mx-1 flex gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-1 pb-3"
     >
-      {EDITOR_TABS.filter(
-        ([tab]) => saved || (tab !== "recordings" && tab !== "attendance"),
-      ).map(([tab, label]) => (
+      {EDITOR_TABS.filter(() => true).map(([tab, label]) => (
         <button
           key={tab}
           type="button"
@@ -204,7 +202,8 @@ function emptyForm(timeZone: string): FormState {
     description: "",
     cover: { coverMediaId: null, coverUrl: null },
     hostUserId: "",
-    access: "everyone",
+    // Most workshops are for a course's learners; every learner is a choice.
+    access: "course",
     courseId: "",
     isPaid: false,
     priceRupees: "",
@@ -383,6 +382,9 @@ export function WorkshopBuilderPage({
     }
     const sessions = sessionsPayload(form.sessions);
     if (typeof sessions === "string") return sessions;
+    if (form.access === "course" && !form.courseId) {
+      return "Choose the course this workshop is for, or make it for everyone who has signed up.";
+    }
     let priceMinor: number | null = null;
     if (form.isPaid && form.access !== "course") {
       const rupees = Number(form.priceRupees);
@@ -700,7 +702,7 @@ export function WorkshopBuilderPage({
           {editorTab === "recordings" ? (
             <Section
               title="Recordings"
-              description="Upload each session's recording or import it from YouTube, usually after it ends. It goes through the same video processing as lessons; registrants are told once it is ready."
+              description="Upload each session's recording or import it from YouTube, usually after it ends. It goes through the same video processing as lessons; learners are told once it is ready."
             >
               {workshop && workshop.sessions.length > 0 ? (
                 <div className="grid gap-3">
@@ -731,6 +733,17 @@ export function WorkshopBuilderPage({
             </Section>
           ) : null}
 
+          {editorTab === "attendance" && !workshop ? (
+            <Section
+              title="Attendance"
+              description="Who joined, who is not going, and who you added."
+            >
+              <p className="text-sm text-(--muted)">
+                Save the draft first; then you can import a spreadsheet or add
+                people by email here.
+              </p>
+            </Section>
+          ) : null}
           {editorTab === "attendance" && workshop ? (
             <Section
               title="Attendance"
@@ -762,8 +775,8 @@ export function WorkshopBuilderPage({
                           patch({ access: value as FormState["access"] })
                         }
                         options={[
-                          ["everyone", "Every learner"],
                           ["course", "Learners of one course"],
+                          ["everyone", "Everyone who has signed up"],
                         ]}
                         disabled={readOnly}
                         ariaLabel="Who it's for"
@@ -831,7 +844,8 @@ export function WorkshopBuilderPage({
                       </div>
                     ) : (
                       <p className="text-[12px] text-(--muted)">
-                        Free: every learner is in and gets the invitation.
+                        Free: everyone who has signed up is in and gets the
+                        invitation.
                       </p>
                     )}
                   </div>
@@ -937,7 +951,7 @@ export function WorkshopBuilderPage({
               workshop?.courseId
                 ? "Workshop published. The course's learners are being told."
                 : announce
-                  ? "Workshop published. Every learner is being told."
+                  ? "Workshop published. Everyone who has signed up is being told."
                   : "Workshop published. Learners can register now.",
             )
           }
