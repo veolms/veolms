@@ -16,7 +16,8 @@ export interface NativeTransportOptions {
    * Default timeout in milliseconds for pending requests.
    * Defaults to 30000 ms so a request that native never answers cannot hang forever.
    * Set to 0 to disable timeouts (e.g. for long-running native operations such as downloads),
-   * or pass a per-call `timeoutMs`. The init handshake uses this value when set, else 10000 ms.
+   * or pass a per-call `timeoutMs`. The init handshake uses this value when it is greater than 0,
+   * else 10000 ms (the handshake is never unbounded).
    */
   defaultTimeoutMs?: number;
 }

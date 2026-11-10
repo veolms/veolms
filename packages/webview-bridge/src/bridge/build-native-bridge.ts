@@ -14,7 +14,8 @@ export interface BuildBridgeOptions {
   debug?: boolean;
   /**
    * Default timeout in milliseconds for native requests. Defaults to 30000 ms; 0 disables timeouts
-   * (e.g. for long-running native operations). The init handshake uses this value, or 10000 ms.
+   * (e.g. for long-running native operations). The init handshake uses this value when it is
+   * greater than 0, else 10000 ms (the handshake is never unbounded).
    */
   timeoutMs?: number;
   /**
