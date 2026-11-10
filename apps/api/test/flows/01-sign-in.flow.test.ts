@@ -15,6 +15,8 @@ import {
 const flow = await startFlowApp();
 // Loaded after the flow app set up the test environment.
 const { config } = await import("../../src/config.ts");
+const { evictCachedUserSessions } =
+  await import("../../src/modules/auth/shared/session-auth-cache.ts");
 
 await test("a new learner signs up with the code emailed to them and is signed in as a student", async () => {
   const learner = newLearner();
@@ -238,11 +240,176 @@ await test("signing out of every other device keeps this one and ends the rest",
   const laptop = flow.visitor();
   assert.equal((await laptop.signIn(learner.email)).status, 200);
 
+  const sent = await phone.post("/v1/auth/sessions/verification/send");
+  assert.equal(sent.status, 200);
+  const verificationCode = flow.email.lastCodeFor(learner.email);
+  const verified = await phone.post("/v1/auth/sessions/verification/verify", {
+    code: verificationCode,
+  });
+  assert.equal(verified.status, 200);
+
   const revoke = await phone.post("/v1/auth/sessions/revoke-all");
   assert.equal(revoke.status, 200);
 
   assert.notEqual(await phone.whoAmI(), null);
   assert.equal(await laptop.whoAmI(), null);
+});
+
+await test("active sessions require their own verified email code", async () => {
+  const { client, learner } = await signedUpLearner(flow);
+
+  const locked = await client.get("/v1/auth/sessions");
+  assert.equal(locked.status, 403);
+  assert.equal(
+    locked.body.error?.code,
+    "ACTIVE_SESSIONS_VERIFICATION_REQUIRED",
+  );
+
+  const loginCode = await client.requestCode(learner.email);
+  const sent = await client.post<{
+    channel: string;
+    maskedDestination: string;
+  }>("/v1/auth/sessions/verification/send");
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.data?.channel, "email");
+  assert.ok(sent.body.data?.maskedDestination);
+  const verificationCode = flow.email.lastCodeFor(learner.email);
+
+  const loginCodeRejected = await client.post(
+    "/v1/auth/sessions/verification/verify",
+    { code: loginCode },
+  );
+  assert.equal(loginCodeRejected.status, 400);
+  assert.equal(loginCodeRejected.body.error?.code, "INVALID_CODE");
+
+  const verified = await client.post("/v1/auth/sessions/verification/verify", {
+    code: verificationCode,
+  });
+  assert.equal(verified.status, 200);
+  const sessions = await client.get<{ id: string }[]>("/v1/auth/sessions");
+  assert.equal(sessions.status, 200);
+  const revoked = await client.post("/v1/auth/sessions/revoke-all");
+  assert.equal(revoked.status, 200);
+});
+
+await test("a phone-only account successfully verifies active sessions using a phone code", async () => {
+  const { client, userId } = await signedUpLearner(flow);
+  const phoneNo = newIndianNumber();
+
+  await flow.database
+    .updateTable("users")
+    .set({
+      email: null,
+      email_verified_at: null,
+      phone_no: phoneNo,
+      phone_verified_at: new Date(),
+    })
+    .where("id", "=", userId)
+    .execute();
+  evictCachedUserSessions(userId);
+
+  const locked = await client.get("/v1/auth/sessions");
+  assert.equal(locked.status, 403);
+  assert.equal(
+    locked.body.error?.code,
+    "ACTIVE_SESSIONS_VERIFICATION_REQUIRED",
+  );
+
+  const sent = await client.post<{
+    channel: string;
+    maskedDestination: string;
+  }>("/v1/auth/sessions/verification/send", { channel: "phone" });
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.data?.channel, "phone");
+  assert.equal(sent.body.data?.maskedDestination, `••••${phoneNo.slice(-4)}`);
+
+  const phoneCode = flow.sms.lastCodeFor(phoneNo);
+  const verified = await client.post("/v1/auth/sessions/verification/verify", {
+    channel: "phone",
+    code: phoneCode,
+  });
+  assert.equal(verified.status, 200);
+
+  const sessions = await client.get("/v1/auth/sessions");
+  assert.equal(sessions.status, 200);
+});
+
+await test("the send request rejects or ignores any client-supplied destination", async () => {
+  const { client, learner } = await signedUpLearner(flow);
+  const attackerEmail = "attacker@example.com";
+
+  const sent = await client.post<{
+    channel: string;
+    maskedDestination: string;
+  }>("/v1/auth/sessions/verification/send", {
+    channel: "email",
+    email: attackerEmail,
+    destination: attackerEmail,
+  });
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.data?.channel, "email");
+
+  const verificationCode = flow.email.lastCodeFor(learner.email);
+  assert.ok(verificationCode);
+  assert.throws(() => flow.email.lastCodeFor(attackerEmail));
+
+  const verified = await client.post("/v1/auth/sessions/verification/verify", {
+    channel: "email",
+    code: verificationCode,
+  });
+  assert.equal(verified.status, 200);
+});
+
+await test("an email code cannot be used to verify the phone channel", async () => {
+  const { client, learner, userId } = await signedUpLearner(flow);
+  const phoneNo = newIndianNumber();
+
+  await flow.database
+    .updateTable("users")
+    .set({ phone_no: phoneNo, phone_verified_at: new Date() })
+    .where("id", "=", userId)
+    .execute();
+  evictCachedUserSessions(userId);
+
+  const sentEmail = await client.post("/v1/auth/sessions/verification/send", {
+    channel: "email",
+  });
+  assert.equal(sentEmail.status, 200);
+  const emailCode = flow.email.lastCodeFor(learner.email);
+
+  const verifyPhoneWithEmailCode = await client.post(
+    "/v1/auth/sessions/verification/verify",
+    {
+      channel: "phone",
+      code: emailCode,
+    },
+  );
+  assert.equal(verifyPhoneWithEmailCode.status, 400);
+  assert.equal(verifyPhoneWithEmailCode.body.error?.code, "INVALID_CODE");
+});
+
+await test("an account with neither email nor phone receives a 409 response", async () => {
+  const { client, userId } = await signedUpLearner(flow);
+
+  await flow.database
+    .updateTable("users")
+    .set({
+      email: null,
+      email_verified_at: null,
+      phone_no: null,
+      phone_verified_at: null,
+    })
+    .where("id", "=", userId)
+    .execute();
+  evictCachedUserSessions(userId);
+
+  const sent = await client.post("/v1/auth/sessions/verification/send");
+  assert.equal(sent.status, 409);
+
+  const verify = await client.post("/v1/auth/sessions/verification/verify", {
+    code: "123456",
+  });
+  assert.equal(verify.status, 409);
 });
 
 await test("at the device limit, a new device signs in and the one used longest ago is signed out", async () => {

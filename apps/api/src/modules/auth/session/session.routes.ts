@@ -1,5 +1,9 @@
 import {
+  activeSessionsVerificationRequestSchema,
+  activeSessionsVerificationResponseSchema,
   authMessageResponseSchema,
+  sendActiveSessionsVerificationRequestSchema,
+  sendActiveSessionsVerificationResponseSchema,
   sessionParamsSchema,
   sessionResponseSchema,
 } from "@veolms/contracts";
@@ -12,8 +16,76 @@ import { createSessionController } from "./session.controller.ts";
 
 const sessionRoutes: RoutePlugin = async (app, options) => {
   const context = createAuthContext(options);
-  const { mfaVerified } = context;
+  const { authenticated, mfaVerified } = context;
   const controller = createSessionController(context);
+
+  app.post(
+    "/auth/sessions/verification/send",
+    {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+        },
+      },
+      schema: {
+        operationId: "sendActiveSessionsVerificationCode",
+        tags: ["Auth"],
+        summary: "Send active-sessions verification code",
+        description:
+          "Sends an OTP to the authenticated user's verified email address or phone number.",
+        body: sendActiveSessionsVerificationRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Active-sessions verification code sent.",
+            sendActiveSessionsVerificationResponseSchema,
+          ),
+          401: errorResponse("Unauthorized."),
+          409: errorResponse(
+            "A verified email address or phone number is required.",
+          ),
+          429: errorResponse("Rate limit exceeded."),
+          503: errorResponse("Verification code could not be delivered."),
+        },
+      },
+      preHandler: authenticated,
+    },
+    controller.sendActiveSessionsVerificationCode,
+  );
+
+  app.post(
+    "/auth/sessions/verification/verify",
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
+      schema: {
+        operationId: "verifyActiveSessionsCode",
+        tags: ["Auth"],
+        summary: "Verify identity for active sessions",
+        description:
+          "Consumes an email or phone OTP valid for session management for up to 24 hours.",
+        body: activeSessionsVerificationRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Identity verified for active sessions.",
+            activeSessionsVerificationResponseSchema,
+          ),
+          400: errorResponse("Verification code is invalid or expired."),
+          401: errorResponse("Unauthorized or authenticated session expired."),
+          409: errorResponse(
+            "A verified email address or phone number is required.",
+          ),
+          429: errorResponse("Rate limit exceeded."),
+        },
+      },
+      preHandler: authenticated,
+    },
+    controller.verifyActiveSessionsCode,
+  );
 
   app.get(
     "/auth/sessions",
@@ -29,7 +101,9 @@ const sessionRoutes: RoutePlugin = async (app, options) => {
             sessionResponseSchema.array(),
           ),
           401: errorResponse("Unauthorized."),
-          403: errorResponse("MFA step-up required."),
+          403: errorResponse(
+            "Active-session email verification or sign-in MFA is required.",
+          ),
         },
       },
       preHandler: mfaVerified,
@@ -49,7 +123,9 @@ const sessionRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse("Session revoked.", authMessageResponseSchema),
           401: errorResponse("Unauthorized."),
-          403: errorResponse("MFA step-up required."),
+          403: errorResponse(
+            "Active-session email verification or sign-in MFA is required.",
+          ),
         },
       },
       preHandler: mfaVerified,
@@ -72,7 +148,9 @@ const sessionRoutes: RoutePlugin = async (app, options) => {
             authMessageResponseSchema,
           ),
           401: errorResponse("Unauthorized."),
-          403: errorResponse("MFA step-up required."),
+          403: errorResponse(
+            "Active-session email verification or sign-in MFA is required.",
+          ),
         },
       },
       preHandler: mfaVerified,
