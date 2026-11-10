@@ -2,16 +2,10 @@ import { useState } from "react";
 import type { WorkshopAdmin, WorkshopPublishCheck } from "@veolms/contracts";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import { CalendarBlankIcon as CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
-import { VideoConferenceIcon as VideoConference } from "@phosphor-icons/react/VideoConference";
 import { Button } from "../components/Button";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import {
-  browserTimeZone,
   fieldClass,
-  formatSessionDay,
-  formatSessionTime,
-  formatWorkshopPrice,
   surfaceClass,
   workshopStatusClass,
   workshopStatusLabel,
@@ -22,15 +16,6 @@ export interface WorkshopStatusPanelProps {
   /** Null while creating: nothing exists yet to publish or cancel. */
   workshop: WorkshopAdmin | null;
   publishCheck: WorkshopPublishCheck | undefined;
-  preview: {
-    title: string;
-    summary: string;
-    coverUrl: string | null;
-    firstSessionAt: string | null;
-    firstSessionZone: string;
-    priceMinor: number | null;
-    currency: string;
-  };
   isBusy: boolean;
   canManage: boolean;
   /** `announce`: tell every learner (open workshops only). */
@@ -81,7 +66,6 @@ function statusCopy(
 export function WorkshopStatusPanel({
   workshop,
   publishCheck,
-  preview,
   isBusy,
   canManage,
   onPublish,
@@ -99,7 +83,6 @@ export function WorkshopStatusPanel({
   const isDraft = !workshop || workshop.status === "draft";
   const issues = publishCheck?.issues ?? [];
   const ready = Boolean(workshop) && isDraft && issues.length === 0;
-  const zone = preview.firstSessionZone || browserTimeZone();
 
   return (
     <aside className="grid gap-4 lg:sticky lg:top-4">
@@ -284,54 +267,6 @@ export function WorkshopStatusPanel({
             ) : null}
           </div>
         ) : null}
-      </section>
-
-      <section className={`${surfaceClass}`} aria-label="How learners see it">
-        <div className="border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-5 py-3">
-          <h2 className="text-sm font-bold text-(--text)">Card preview</h2>
-          <p className="mt-0.5 text-xs text-(--muted)">
-            What learners see on the Workshops page.
-          </p>
-        </div>
-        <div className="p-4">
-          <div className="overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface)">
-            {preview.coverUrl ? (
-              <img
-                src={preview.coverUrl}
-                alt=""
-                className="aspect-video w-full object-cover"
-              />
-            ) : (
-              <div className="grid aspect-video w-full place-items-center bg-(--accent)/10 text-(--accent)">
-                <VideoConference size={32} weight="duotone" />
-              </div>
-            )}
-            <div className="grid gap-1.5 p-4">
-              <h3 className="text-[15px] font-semibold leading-snug text-(--text)">
-                {preview.title.trim() || "Workshop title"}
-              </h3>
-              <p className="line-clamp-2 text-[13px] leading-5 text-(--muted)">
-                {preview.summary.trim() || "A one-line summary appears here."}
-              </p>
-              <p className="mt-1 flex items-center gap-1.5 text-xs text-(--text-secondary,var(--muted))">
-                <CalendarBlank size={14} />
-                {preview.firstSessionAt
-                  ? `${formatSessionDay(preview.firstSessionAt, zone)} · ${formatSessionTime(preview.firstSessionAt, zone)}`
-                  : "Date to be set"}
-              </p>
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-sm font-semibold text-(--text)">
-                  {preview.priceMinor
-                    ? formatWorkshopPrice(preview.priceMinor, preview.currency)
-                    : null}
-                </span>
-                <span className="rounded-full bg-emerald-500/12 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
-                  You&apos;re in
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
       </section>
 
       <ConfirmDeleteModal

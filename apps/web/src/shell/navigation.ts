@@ -48,12 +48,6 @@ const studentNavigation: readonly NavigationItem[] = [
   createNavigationItem("student-home", "Home", House, "/"),
   createNavigationItem("student-courses", "Courses", BookOpen, "/courses"),
   createNavigationItem(
-    "student-workshops",
-    "Workshops",
-    VideoConference,
-    "/workshops",
-  ),
-  createNavigationItem(
     "student-discussions",
     "Discussions",
     ChatCircleDots,

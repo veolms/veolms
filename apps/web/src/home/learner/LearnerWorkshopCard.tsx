@@ -1,6 +1,8 @@
+import { useState } from "react";
 import type { WorkshopHomeCard } from "@veolms/contracts";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { VideoConferenceIcon as VideoConference } from "@phosphor-icons/react/VideoConference";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import type { NavigateTo } from "../../routing/navigation";
 import { useWorkshopHomeCard } from "../../services/workshops";
 import {
@@ -8,7 +10,6 @@ import {
   formatSessionDay,
   formatSessionTime,
   formatWorkshopPrice,
-  surfaceClass,
   timeZoneShortName,
 } from "../../workshops/workshopHelpers";
 
@@ -19,10 +20,26 @@ function headline(card: WorkshopHomeCard): string {
 }
 
 /**
- * One line on the learner's home for the workshop that matters most: the
- * next session they are registered for (with Join when it is open), or
- * the soonest workshop they could still register for. Nothing when there
- * is nothing upcoming.
+ * A closed banner stays closed for that session until it can be joined:
+ * then it comes back once with Join now, the one moment it must not miss.
+ */
+function dismissKey(card: WorkshopHomeCard, joinable: boolean): string {
+  return `veolms:workshop-banner:${card.slug}:${card.startsAt}:${joinable ? "join" : "soon"}`;
+}
+
+function readDismissed(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The learner's next workshop as a small banner at the top of their home,
+ * in the look of the app's notices, with a close button. Learners have no
+ * Workshops menu: this banner, the invitation email and the calendar entry
+ * are how they find a workshop. Nothing when there is nothing upcoming.
  */
 export function LearnerWorkshopCard({
   enabled,
@@ -33,43 +50,65 @@ export function LearnerWorkshopCard({
 }) {
   const query = useWorkshopHomeCard({ enabled });
   const card = query.data;
-  if (!card) return null;
+  const joinable = Boolean(
+    card?.registered && card.state !== "upcoming" && card.state !== "ended",
+  );
+  const key = card ? dismissKey(card, joinable) : "";
+  const [closedKey, setClosedKey] = useState<string | null>(null);
+  if (!card || closedKey === key || readDismissed(key)) return null;
+
   const timeZone = browserTimeZone();
-  const joinable =
-    card.registered && card.state !== "upcoming" && card.state !== "ended";
   const href = `/workshops/${card.slug}`;
+  const close = () => {
+    setClosedKey(key);
+    try {
+      window.localStorage.setItem(key, "1");
+    } catch {
+      // Closed for this visit only.
+    }
+  };
+
   return (
-    <section aria-labelledby="learner-home-workshop" className="min-w-0">
-      <a
-        href={href}
-        onClick={(event) => {
-          event.preventDefault();
-          onNavigatePage(href);
-        }}
-        className={`${surfaceClass} group flex flex-wrap items-center gap-4 p-4 transition hover:bg-(--hover) sm:p-5`}
-      >
+    <section
+      aria-labelledby="learner-home-workshop"
+      className="mx-auto w-full max-w-2xl min-w-0"
+    >
+      <div className="relative flex items-center gap-3 overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] py-2.5 pr-2 pl-3 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.35)] backdrop-blur-md">
         <span
-          className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${
+          aria-hidden="true"
+          className={`absolute inset-y-0 left-0 w-1 ${
+            joinable ? "bg-emerald-500" : "bg-(--accent)"
+          }`}
+        />
+        <span
+          className={`ml-1 flex size-9 shrink-0 items-center justify-center rounded-lg ${
             joinable
               ? "bg-emerald-500/15 text-emerald-600"
-              : "bg-(--accent)/10 text-(--accent)"
+              : "bg-(--accent)/12 text-(--accent)"
           }`}
         >
-          <VideoConference size={22} weight="duotone" />
+          <VideoConference size={19} weight="duotone" />
         </span>
-        <div className="min-w-0 flex-1">
+        <a
+          href={href}
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigatePage(href);
+          }}
+          className="min-w-0 flex-1"
+        >
           <p
             id="learner-home-workshop"
-            className={`text-[11px] font-bold uppercase tracking-wider ${
+            className={`text-[10.5px] font-bold uppercase tracking-wider ${
               joinable ? "text-emerald-600" : "text-(--muted)"
             }`}
           >
             {headline(card)}
           </p>
-          <p className="truncate text-base font-bold tracking-tight text-(--text)">
+          <p className="truncate text-sm font-semibold text-(--text)">
             {card.title}
           </p>
-          <p className="text-[13px] text-(--muted)">
+          <p className="truncate text-xs text-(--muted)">
             {formatSessionDay(card.startsAt, timeZone)} ·{" "}
             {formatSessionTime(card.startsAt, timeZone)} –{" "}
             {formatSessionTime(card.endsAt, timeZone)}{" "}
@@ -78,18 +117,31 @@ export function LearnerWorkshopCard({
               ? ` · ${formatWorkshopPrice(card.priceMinor, card.currency)}`
               : ""}
           </p>
-        </div>
-        <span
-          className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold ${
+        </a>
+        <a
+          href={href}
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigatePage(href);
+          }}
+          className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold ${
             joinable
               ? "bg-emerald-600 text-white"
               : "bg-(--accent) text-(--on-accent)"
           }`}
         >
-          {joinable ? "Join now" : card.registered ? "Open" : "See details"}
-          <ArrowRight size={16} weight="bold" />
-        </span>
-      </a>
+          {joinable ? "Join now" : "Details"}
+          <ArrowRight size={14} weight="bold" />
+        </a>
+        <button
+          type="button"
+          onClick={close}
+          aria-label="Close"
+          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-(--muted) hover:bg-(--hover) hover:text-(--text)"
+        >
+          <X size={14} weight="bold" />
+        </button>
+      </div>
     </section>
   );
 }

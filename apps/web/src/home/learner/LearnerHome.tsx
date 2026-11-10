@@ -286,6 +286,12 @@ export function LearnerHome({
       <PrefetchPageLinks
         page={heroLessonPath ?? getCoursePlayerHref(heroCourse)}
       />
+      <div className="px-4 pt-3 empty:hidden sm:px-6">
+        <LearnerWorkshopCard
+          enabled={Boolean(currentUser)}
+          onNavigatePage={onNavigatePage}
+        />
+      </div>
       <LearnerHomeHero
         timeGreeting={timeGreeting}
         firstName={firstName}
@@ -345,11 +351,6 @@ export function LearnerHome({
       />
 
       <div className={learnerHomeBodyClasses}>
-        <LearnerWorkshopCard
-          enabled={Boolean(currentUser)}
-          onNavigatePage={onNavigatePage}
-        />
-
         {listedCourses.length > 0 ? (
           <LearnerCoursesSection
             courses={listedCourses}

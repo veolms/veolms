@@ -1046,7 +1046,7 @@ export function createWorkshopsService({
     workshopId: string,
     query: { page?: number; search?: string } = {},
   ): Promise<WorkshopRegistrantsResponse> {
-    const workshop = await load(workshopId);
+    await load(workshopId);
     const page = Math.max(1, query.page ?? 1);
     const { rows, total } = await repository.listRegistrantsPage(
       database,
@@ -1054,7 +1054,6 @@ export function createWorkshopsService({
       {
         offset: (page - 1) * WORKSHOP_REGISTRANTS_PAGE_SIZE,
         limit: WORKSHOP_REGISTRANTS_PAGE_SIZE,
-        courseId: workshop.course_id,
         ...(query.search ? { search: query.search } : {}),
       },
     );

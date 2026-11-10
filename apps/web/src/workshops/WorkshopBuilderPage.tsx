@@ -16,7 +16,6 @@ import { ThemedSelect } from "../ThemedSelect";
 import { QuizRichTextField } from "../quizzes/QuizRichTextField";
 import { getApiError } from "../lib/api-error";
 import {
-  AutosaveStatus,
   removeAutosyncDraft,
   useAutosync,
   type AutosyncKey,
@@ -51,6 +50,7 @@ import {
 } from "./WorkshopSessionsField";
 import { WorkshopRecordingField } from "./WorkshopRecordingField";
 import { WorkshopRegistrantsSection } from "./WorkshopRegistrantsSection";
+import { WorkshopSaveStatus } from "./WorkshopSaveStatus";
 import { WorkshopStatusPanel } from "./WorkshopStatusPanel";
 import { WorkshopsAccessDenied } from "./WorkshopsAccessDenied";
 import { WORKSHOPS_ADMIN_PATH, workshopEditPath } from "./WorkshopsAdminPage";
@@ -114,13 +114,10 @@ const EDITOR_TABS: readonly (readonly [EditorTab, string])[] = [
 function EditorTabs({
   value,
   onChange,
-  trailing,
 }: {
   value: EditorTab;
   onChange: (tab: EditorTab) => void;
   saved: boolean;
-  /** Shown at the end of the row: the autosave state. */
-  trailing?: React.ReactNode;
 }) {
   return (
     <div
@@ -144,11 +141,6 @@ function EditorTabs({
           {label}
         </button>
       ))}
-      {trailing ? (
-        <div className="ml-auto flex shrink-0 items-center pl-3">
-          {trailing}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -574,16 +566,6 @@ export function WorkshopBuilderPage({
             value={editorTab}
             onChange={setEditorTab}
             saved={Boolean(workshop)}
-            trailing={
-              canManage && (workshop || autosync.status !== "idle") ? (
-                <span className="text-[12px] text-(--muted) [&_p]:m-0 [&_p[data-autosave-state=error]]:text-rose-500 [&_p[data-autosave-state=waiting]]:text-amber-600">
-                  <AutosaveStatus
-                    status={autosync.status}
-                    error={autosync.error}
-                  />
-                </span>
-              ) : null
-            }
           />
           {editorTab === "details" ? (
             <Section
@@ -891,21 +873,30 @@ export function WorkshopBuilderPage({
               />
             </Section>
           ) : null}
+
+          {canManage ? (
+            <div className="relative flex min-h-10 items-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-4">
+              <Button
+                type="button"
+                variant="quiet"
+                elevation="flat"
+                onClick={() => onNavigatePage?.(WORKSHOPS_ADMIN_PATH)}
+              >
+                Back
+              </Button>
+              <div className="pointer-events-none absolute inset-x-24 top-4 flex justify-center">
+                <WorkshopSaveStatus
+                  status={autosync.status}
+                  error={autosync.error}
+                />
+              </div>
+            </div>
+          ) : null}
         </form>
 
         <WorkshopStatusPanel
           workshop={workshop ?? null}
           publishCheck={publishCheck.data}
-          preview={{
-            title: form.title,
-            summary: form.summary,
-            coverUrl: form.cover.coverUrl,
-            firstSessionAt:
-              firstSession?.instants?.startsAt.toISOString() ?? null,
-            firstSessionZone: firstSession?.session.timeZone ?? defaultZone,
-            priceMinor: previewPriceMinor,
-            currency: WORKSHOP_DEFAULT_CURRENCY,
-          }}
           isBusy={isBusy}
           canManage={canManage}
           onPublish={(announce) =>

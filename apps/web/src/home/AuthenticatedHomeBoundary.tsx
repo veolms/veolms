@@ -140,7 +140,7 @@ export function AuthenticatedHomeBoundary({
   if (enrollmentData?.courses.length === 0) {
     return (
       <>
-        <div className={`${guestHomeGutter} pt-4`}>
+        <div className={`${guestHomeGutter} pt-4 empty:hidden`}>
           <LearnerWorkshopCard
             enabled={!sessionPending}
             onNavigatePage={onNavigatePage}
@@ -157,7 +157,7 @@ export function AuthenticatedHomeBoundary({
   if (enrollmentData === undefined && wasNotEnrolled) {
     return (
       <>
-        <div className={`${guestHomeGutter} pt-4`}>
+        <div className={`${guestHomeGutter} pt-4 empty:hidden`}>
           <LearnerWorkshopCard
             enabled={!sessionPending}
             onNavigatePage={onNavigatePage}

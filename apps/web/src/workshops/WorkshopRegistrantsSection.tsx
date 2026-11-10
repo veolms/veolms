@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import type { WorkshopAdmin, WorkshopRegistrant } from "@veolms/contracts";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { UserPlusIcon as UserPlus } from "@phosphor-icons/react/UserPlus";
 import { XIcon as X } from "@phosphor-icons/react/X";
@@ -82,6 +83,16 @@ export function WorkshopRegistrantsSection({
 
   return (
     <div className="grid gap-4">
+      {workshop.courseId ? (
+        <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-(--surface-strong) px-3.5 py-2.5 text-sm">
+          <BookOpen size={16} className="shrink-0 text-(--accent)" />
+          <span className="shrink-0 text-(--muted)">Course</span>
+          <span className="truncate font-medium text-(--text)">
+            {workshop.courseTitle ?? "Linked course"}
+          </span>
+        </div>
+      ) : null}
+
       {editable ? (
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -117,13 +128,7 @@ export function WorkshopRegistrantsSection({
         </div>
       ) : null}
 
-      {empty ? (
-        <p className="text-sm text-(--muted)">
-          {workshop.courseId
-            ? `${workshop.courseTitle ?? "The course"} has no active learners yet. Add people by email or import a spreadsheet.`
-            : "Nobody has joined or been added yet."}
-        </p>
-      ) : (
+      {empty ? null : (
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="search"
@@ -180,7 +185,7 @@ export function WorkshopRegistrantsSection({
             </thead>
             <tbody className="divide-y divide-[color-mix(in_srgb,var(--text)_6%,transparent)] text-sm text-(--text)">
               {items.map((registrant) => (
-                <tr key={registrant.userId}>
+                <tr key={registrant.registrationId}>
                   <td className="px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <WorkshopHostAvatar
@@ -202,9 +207,7 @@ export function WorkshopRegistrantsSection({
                     </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-(--muted)">
-                    {registrant.registrationId
-                      ? formatSessionDay(registrant.registeredAt, timeZone)
-                      : "—"}
+                    {formatSessionDay(registrant.registeredAt, timeZone)}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="rounded-full bg-(--canvas) px-2.5 py-1 text-[11px] font-semibold text-(--muted)">
@@ -219,8 +222,7 @@ export function WorkshopRegistrantsSection({
                   </td>
                   {canManage ? (
                     <td className="px-4 py-3 text-right">
-                      {!registrant.registrationId ? null : confirmRemove ===
-                        registrant.userId ? (
+                      {confirmRemove === registrant.userId ? (
                         <span className="inline-flex items-center gap-2 whitespace-nowrap">
                           <button
                             type="button"
