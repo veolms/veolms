@@ -31,10 +31,8 @@ export interface WorkshopStatusPanelProps {
     priceMinor: number | null;
     currency: string;
   };
-  isDirty: boolean;
   isBusy: boolean;
   canManage: boolean;
-  onSave: () => void;
   /** `announce`: tell every learner (open workshops only). */
   onPublish: (announce: boolean) => void;
   onUnpublish: () => void;
@@ -66,13 +64,13 @@ function statusCopy(
     case "draft":
       return workshop
         ? "Only the team can see this draft. Publish it when the sessions and meeting links are set."
-        : "Save the draft first. You can publish once the sessions and meeting links are set.";
+        : "It saves on its own once it has a title, its course and a session time. Then you can publish it.";
     case "upcoming":
-      return "Learners can see this workshop and register.";
+      return "Published. It is in its learners' workshops and calendars.";
     case "live":
-      return "A session is live right now. Registrants can join from the workshop page.";
+      return "A session is live right now. Learners can join from the workshop page.";
     case "past":
-      return "Every session has ended. Attach the recording so registrants can watch it.";
+      return "Every session has ended. Attach the recording so learners can watch it.";
     case "cancelled":
       return workshop?.cancelReason
         ? `Cancelled: ${workshop.cancelReason}`
@@ -84,10 +82,8 @@ export function WorkshopStatusPanel({
   workshop,
   publishCheck,
   preview,
-  isDirty,
   isBusy,
   canManage,
-  onSave,
   onPublish,
   onUnpublish,
   onCancel,
@@ -102,7 +98,7 @@ export function WorkshopStatusPanel({
   const status = displayStatus(workshop);
   const isDraft = !workshop || workshop.status === "draft";
   const issues = publishCheck?.issues ?? [];
-  const ready = Boolean(workshop) && isDraft && !isDirty && issues.length === 0;
+  const ready = Boolean(workshop) && isDraft && issues.length === 0;
   const zone = preview.firstSessionZone || browserTimeZone();
 
   return (
@@ -137,15 +133,6 @@ export function WorkshopStatusPanel({
 
         {workshop && isDraft ? (
           <ul className="mt-4 grid gap-2" aria-label="Ready to publish?">
-            {isDirty ? (
-              <li className="flex items-start gap-2 text-[13px] text-(--muted)">
-                <WarningCircle
-                  size={16}
-                  className="mt-0.5 shrink-0 text-amber-500"
-                />
-                Save your changes before publishing.
-              </li>
-            ) : null}
             {issues.map((issue) => (
               <li
                 key={`${issue.field}-${issue.message}`}
@@ -158,7 +145,7 @@ export function WorkshopStatusPanel({
                 {issue.message}
               </li>
             ))}
-            {!isDirty && publishCheck && issues.length === 0 ? (
+            {publishCheck && issues.length === 0 ? (
               <li className="flex items-start gap-2 text-[13px] text-emerald-600">
                 <CheckCircle
                   size={16}
@@ -173,11 +160,6 @@ export function WorkshopStatusPanel({
 
         {canManage ? (
           <div className="mt-4 grid gap-2">
-            {isDirty || !workshop ? (
-              <Button onClick={onSave} disabled={isBusy} className="w-full">
-                {workshop ? "Save changes" : "Save draft"}
-              </Button>
-            ) : null}
             {workshop && isDraft ? (
               <>
                 {workshop.courseId ? (
@@ -206,8 +188,6 @@ export function WorkshopStatusPanel({
                 <Button
                   onClick={() => onPublish(announce)}
                   disabled={isBusy || !ready}
-                  variant={isDirty ? "quiet" : "primary"}
-                  elevation={isDirty ? "flat" : "raised"}
                   className="w-full"
                 >
                   Publish

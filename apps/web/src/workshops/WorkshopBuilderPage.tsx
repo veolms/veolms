@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   WORKSHOP_DEFAULT_CURRENCY,
   WORKSHOP_DEFAULT_TIME_ZONE,
@@ -15,6 +15,12 @@ import { ToggleSwitch } from "../components/ToggleSwitch";
 import { ThemedSelect } from "../ThemedSelect";
 import { QuizRichTextField } from "../quizzes/QuizRichTextField";
 import { getApiError } from "../lib/api-error";
+import {
+  AutosaveStatus,
+  removeAutosyncDraft,
+  useAutosync,
+  type AutosyncKey,
+} from "../lib/autosync";
 import type { NavigateTo } from "../routing/navigation";
 import { useCurrentUser } from "../services/auth";
 import { useCapabilities } from "../services/authorization";
@@ -108,11 +114,13 @@ const EDITOR_TABS: readonly (readonly [EditorTab, string])[] = [
 function EditorTabs({
   value,
   onChange,
-  saved,
+  trailing,
 }: {
   value: EditorTab;
   onChange: (tab: EditorTab) => void;
   saved: boolean;
+  /** Shown at the end of the row: the autosave state. */
+  trailing?: React.ReactNode;
 }) {
   return (
     <div
@@ -120,7 +128,7 @@ function EditorTabs({
       aria-label="Workshop editor"
       className="-mx-1 flex gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-1 pb-3"
     >
-      {EDITOR_TABS.filter(() => true).map(([tab, label]) => (
+      {EDITOR_TABS.map(([tab, label]) => (
         <button
           key={tab}
           type="button"
@@ -136,6 +144,11 @@ function EditorTabs({
           {label}
         </button>
       ))}
+      {trailing ? (
+        <div className="ml-auto flex shrink-0 items-center pl-3">
+          {trailing}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -232,8 +245,10 @@ function formFromWorkshop(workshop: WorkshopAdmin): FormState {
         : "",
     hasCapacity: workshop.capacity !== null,
     capacity: workshop.capacity !== null ? String(workshop.capacity) : "",
-    resources: workshop.resources.map((resource) => ({
-      key: crypto.randomUUID(),
+    // Keys that do not change between loads, so a refetch after an autosave
+    // is not mistaken for an edit.
+    resources: workshop.resources.map((resource, index) => ({
+      key: `saved-${index}`,
       ...resource,
     })),
     sessions: workshop.sessions.map(sessionDraftFromAdmin),
@@ -263,6 +278,72 @@ function sessionsPayload(
   }
   return payload;
 }
+
+/** The request for a form, or what is missing before it can be saved. */
+function buildPayload(form: FormState): CreateWorkshopRequest | string {
+  const title = form.title.trim();
+  if (title.length < 3)
+    return "Give the workshop a title of at least 3 characters.";
+  const slug = form.slug.trim();
+  if (slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    return "The address may only use lowercase letters, numbers and hyphens.";
+  }
+  const sessions = sessionsPayload(form.sessions);
+  if (typeof sessions === "string") return sessions;
+  if (form.access === "course" && !form.courseId) {
+    return "Choose the course this workshop is for, or make it for everyone who has signed up.";
+  }
+  let priceMinor: number | null = null;
+  if (form.isPaid && form.access !== "course") {
+    const rupees = Number(form.priceRupees);
+    if (!Number.isFinite(rupees) || rupees <= 0) {
+      return "Enter the price, or switch the workshop back to free.";
+    }
+    priceMinor = Math.round(rupees * 100);
+  }
+  let capacity: number | null = null;
+  // Seats are only sold; free and course workshops are open to their audience.
+  if (form.hasCapacity && form.isPaid && form.access !== "course") {
+    const seats = Number(form.capacity);
+    if (!Number.isInteger(seats) || seats <= 0) {
+      return "Enter how many seats there are, or remove the limit.";
+    }
+    capacity = seats;
+  }
+  const resources = form.resources
+    .map((resource) => ({
+      title: resource.title.trim(),
+      url: resource.url.trim(),
+    }))
+    .filter((resource) => resource.title || resource.url);
+  for (const resource of resources) {
+    if (!resource.title || !/^https?:\/\//i.test(resource.url)) {
+      return "Every link needs a title and an address starting with https://";
+    }
+  }
+  return {
+    title,
+    ...(slug ? { slug } : {}),
+    summary: form.summary.trim() || null,
+    description: form.description.trim() || null,
+    coverMediaId: form.cover.coverMediaId,
+    coverUrl: form.cover.coverUrl,
+    ...(form.hostUserId ? { hostUserId: form.hostUserId } : {}),
+    courseId: form.access === "course" && form.courseId ? form.courseId : null,
+    priceMinor,
+    currency: WORKSHOP_DEFAULT_CURRENCY,
+    capacity,
+    resources,
+    sessions,
+  };
+}
+
+/** Where an unsaved new workshop waits in this browser. */
+const NEW_WORKSHOP_DRAFT: AutosyncKey = {
+  entity: "workshop",
+  entityId: "new",
+  scope: "editor",
+};
 
 export function WorkshopBuilderPage({
   workshopId,
@@ -306,26 +387,55 @@ export function WorkshopBuilderPage({
         : browserTimeZone(),
     [],
   );
-  const [form, setForm] = useState<FormState>(() => emptyForm(defaultZone));
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const initialForm = useMemo(
+    () => (workshop ? formFromWorkshop(workshop) : emptyForm(defaultZone)),
+    [workshop, defaultZone],
+  );
+  // A new workshop is created by its first save; later saves update it.
+  const createdIdRef = useRef<string | null>(null);
+  const slugLocked = Boolean(workshop && workshop.status !== "draft");
 
-  useEffect(() => {
-    if (
-      isEditMode &&
-      workshop &&
-      loadedFor !== `${workshop.id}:${workshop.updatedAt}`
-    ) {
-      setForm(formFromWorkshop(workshop));
-      setLoadedFor(`${workshop.id}:${workshop.updatedAt}`);
-      setIsDirty(false);
-    }
-  }, [isEditMode, loadedFor, workshop]);
+  // Every change is kept in this browser at once and sent to the server
+  // after a short pause (at the latest within a minute of typing), like
+  // the other editors. Nothing to press.
+  const autosync = useAutosync<FormState, WorkshopAdmin>({
+    key:
+      isEditMode && workshopId
+        ? { entity: "workshop", entityId: workshopId, scope: "editor" }
+        : NEW_WORKSHOP_DRAFT,
+    initialValue: initialForm,
+    enabled: canManage && (!isEditMode || Boolean(workshop)),
+    debounceMs: 1_500,
+    maxWaitMs: 60_000,
+    validate: (draft) => {
+      const payload = buildPayload(draft);
+      return typeof payload === "string"
+        ? { valid: false, message: payload }
+        : true;
+    },
+    sync: async (draft) => {
+      const payload = buildPayload(draft) as CreateWorkshopRequest;
+      const id = workshop?.id ?? createdIdRef.current;
+      if (id) {
+        const update: UpdateWorkshopRequest = {
+          ...payload,
+          ...(slugLocked ? { slug: undefined } : {}),
+        };
+        return updateMutation.mutateAsync({ workshopId: id, payload: update });
+      }
+      const created = await createMutation.mutateAsync(payload);
+      createdIdRef.current = created.id;
+      removeAutosyncDraft(NEW_WORKSHOP_DRAFT);
+      onNavigatePage?.(workshopEditPath(created.id));
+      return created;
+    },
+    onSynced: (saved) => formFromWorkshop(saved),
+  });
+  const form = autosync.value;
 
   const patch = (changes: Partial<FormState>) => {
-    setForm((current) => ({ ...current, ...changes }));
-    setIsDirty(true);
+    autosync.update((current) => ({ ...current, ...changes }));
   };
 
   const courses = useMemo(
@@ -355,111 +465,18 @@ export function WorkshopBuilderPage({
     return options;
   }, [team.data?.pages, user, workshop]);
 
+  // Autosaves are not "busy": the fields stay editable while one is sent.
   const isBusy =
-    createMutation.isPending ||
-    updateMutation.isPending ||
     publishMutation.isPending ||
     unpublishMutation.isPending ||
     cancelMutation.isPending ||
     deleteMutation.isPending;
-
-  const slugLocked = Boolean(workshop && workshop.status !== "draft");
 
   const handleTitleChange = (title: string) => {
     patch({
       title,
       ...(form.slugTouched || slugLocked ? {} : { slug: slugFromTitle(title) }),
     });
-  };
-
-  const buildPayload = (): CreateWorkshopRequest | string => {
-    const title = form.title.trim();
-    if (title.length < 3)
-      return "Give the workshop a title of at least 3 characters.";
-    const slug = form.slug.trim();
-    if (slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-      return "The address may only use lowercase letters, numbers and hyphens.";
-    }
-    const sessions = sessionsPayload(form.sessions);
-    if (typeof sessions === "string") return sessions;
-    if (form.access === "course" && !form.courseId) {
-      return "Choose the course this workshop is for, or make it for everyone who has signed up.";
-    }
-    let priceMinor: number | null = null;
-    if (form.isPaid && form.access !== "course") {
-      const rupees = Number(form.priceRupees);
-      if (!Number.isFinite(rupees) || rupees <= 0) {
-        return "Enter the price, or switch the workshop back to free.";
-      }
-      priceMinor = Math.round(rupees * 100);
-    }
-    let capacity: number | null = null;
-    // Seats are only sold; free and course workshops are open to their audience.
-    if (form.hasCapacity && form.isPaid && form.access !== "course") {
-      const seats = Number(form.capacity);
-      if (!Number.isInteger(seats) || seats <= 0) {
-        return "Enter how many seats there are, or remove the limit.";
-      }
-      capacity = seats;
-    }
-    const resources = form.resources
-      .map((resource) => ({
-        title: resource.title.trim(),
-        url: resource.url.trim(),
-      }))
-      .filter((resource) => resource.title || resource.url);
-    for (const resource of resources) {
-      if (!resource.title || !/^https?:\/\//i.test(resource.url)) {
-        return "Every link needs a title and an address starting with https://";
-      }
-    }
-    return {
-      title,
-      ...(slug ? { slug } : {}),
-      summary: form.summary.trim() || null,
-      description: form.description.trim() || null,
-      coverMediaId: form.cover.coverMediaId,
-      coverUrl: form.cover.coverUrl,
-      ...(form.hostUserId ? { hostUserId: form.hostUserId } : {}),
-      courseId:
-        form.access === "course" && form.courseId ? form.courseId : null,
-      priceMinor,
-      currency: WORKSHOP_DEFAULT_CURRENCY,
-      capacity,
-      resources,
-      sessions,
-    };
-  };
-
-  const save = async (): Promise<WorkshopAdmin | null> => {
-    setErrorMessage(null);
-    const payload = buildPayload();
-    if (typeof payload === "string") {
-      setErrorMessage(payload);
-      return null;
-    }
-    try {
-      if (isEditMode && workshop) {
-        const update: UpdateWorkshopRequest = {
-          ...payload,
-          ...(slugLocked ? { slug: undefined } : {}),
-        };
-        const saved = await updateMutation.mutateAsync({
-          workshopId: workshop.id,
-          payload: update,
-        });
-        setIsDirty(false);
-        setNotice?.("Workshop saved.");
-        return saved;
-      }
-      const created = await createMutation.mutateAsync(payload);
-      setNotice?.("Draft saved. Publish it when the sessions are set.");
-      onNavigatePage?.(workshopEditPath(created.id));
-      return created;
-    } catch (caught) {
-      setErrorMessage(getApiError(caught).message);
-      return null;
-    }
   };
 
   const run = async (action: () => Promise<unknown>, notice: string) => {
@@ -549,7 +566,7 @@ export function WorkshopBuilderPage({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            void save();
+            void autosync.flush().catch(() => undefined);
           }}
           className={`${surfaceClass} flex min-w-0 flex-col gap-8 p-5 sm:p-6`}
         >
@@ -557,6 +574,16 @@ export function WorkshopBuilderPage({
             value={editorTab}
             onChange={setEditorTab}
             saved={Boolean(workshop)}
+            trailing={
+              canManage && (workshop || autosync.status !== "idle") ? (
+                <span className="text-[12px] text-(--muted) [&_p]:m-0 [&_p[data-autosave-state=error]]:text-rose-500 [&_p[data-autosave-state=waiting]]:text-amber-600">
+                  <AutosaveStatus
+                    status={autosync.status}
+                    error={autosync.error}
+                  />
+                </span>
+              ) : null
+            }
           />
           {editorTab === "details" ? (
             <Section
@@ -690,8 +717,8 @@ export function WorkshopBuilderPage({
                 </div>
               ) : (
                 <p className="text-sm text-(--muted)">
-                  Save the workshop with its sessions first; each session then
-                  gets its own recording slot here.
+                  Each session gets its own recording slot here once the
+                  workshop has saved (a title, its course and a session time).
                 </p>
               )}
             </Section>
@@ -703,8 +730,8 @@ export function WorkshopBuilderPage({
               description="Who joined and who you added."
             >
               <p className="text-sm text-(--muted)">
-                Save the draft first; then you can import a spreadsheet or add
-                people by email here.
+                Once the workshop has saved (a title, its course and a session
+                time), its learners are listed here and you can add more.
               </p>
             </Section>
           ) : null}
@@ -864,26 +891,6 @@ export function WorkshopBuilderPage({
               />
             </Section>
           ) : null}
-
-          {canManage ? (
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-5">
-              <Button
-                type="button"
-                variant="quiet"
-                elevation="flat"
-                disabled={isBusy}
-                onClick={() => onNavigatePage?.(WORKSHOPS_ADMIN_PATH)}
-              >
-                {isDirty ? "Discard" : "Back"}
-              </Button>
-              <Button
-                type="submit"
-                disabled={isBusy || (isEditMode && !isDirty)}
-              >
-                {isEditMode ? "Save changes" : "Save draft"}
-              </Button>
-            </div>
-          ) : null}
         </form>
 
         <WorkshopStatusPanel
@@ -899,14 +906,13 @@ export function WorkshopBuilderPage({
             priceMinor: previewPriceMinor,
             currency: WORKSHOP_DEFAULT_CURRENCY,
           }}
-          isDirty={isDirty}
           isBusy={isBusy}
           canManage={canManage}
-          onSave={() => void save()}
           onPublish={(announce) =>
             void run(
               async () => {
                 if (!workshop) return;
+                await autosync.flush();
                 await publishMutation.mutateAsync({
                   workshopId: workshop.id,
                   announce,
@@ -916,7 +922,7 @@ export function WorkshopBuilderPage({
                 ? "Workshop published. The course's learners are being told."
                 : announce
                   ? "Workshop published. Everyone who has signed up is being told."
-                  : "Workshop published. Learners can register now.",
+                  : "Workshop published. Learners can see it now.",
             )
           }
           onUnpublish={() =>

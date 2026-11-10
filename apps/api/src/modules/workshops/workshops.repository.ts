@@ -720,13 +720,14 @@ export async function listPaidRegistrations(
 // --- Step 6: registrants and the home card ---
 
 export interface WorkshopRegistrantRow {
-  registration_id: string;
+  /** Null for a course learner who has no row yet (has not joined). */
+  registration_id: string | null;
   user_id: string;
   display_name: string;
   username: string | null;
   email: string | null;
   avatar_data_url: string | null;
-  source: "free" | "order" | "admin";
+  source: "free" | "order" | "admin" | "course";
   order_id: string | null;
   registered_at: Date;
   joined_session_ids: string[];
@@ -950,56 +951,77 @@ export async function countCourseLearners(
   return new Map(rows.map((row) => [row.course_id, Number(row.total)]));
 }
 
-/** One page of the attendance list, with the total for the pager. */
+/**
+ * One page of the attendance list, with the total for the pager. For a
+ * course workshop the course's active learners are listed too, before
+ * they join: they are in without a row of their own.
+ */
 export async function listRegistrantsPage(
   database: DatabaseExecutor,
   workshopId: string,
-  options: { offset: number; limit: number; search?: string },
+  options: {
+    offset: number;
+    limit: number;
+    search?: string;
+    courseId?: string | null;
+  },
 ): Promise<{ rows: WorkshopRegistrantRow[]; total: number }> {
-  let base = database
-    .selectFrom("workshop_registrations as r")
-    .innerJoin("users", "users.id", "r.user_id")
-    .where("r.workshop_id", "=", workshopId)
-    .where("r.cancelled_at", "is", null);
+  const courseLearners = options.courseId
+    ? sql`
+        union all
+        select distinct on (e.user_id)
+          null::uuid, e.user_id, 'course', null::uuid, e.created_at,
+          '{}'::uuid[], null::timestamptz
+        from enrollments e
+        where e.course_id = ${options.courseId}
+          and e.status = 'active'
+          and (e.access_expires_at is null or e.access_expires_at > now())
+          and not exists (
+            select 1 from workshop_registrations r2
+            where r2.workshop_id = ${workshopId}
+              and r2.user_id = e.user_id
+              and r2.cancelled_at is null
+          )`
+    : sql``;
+  let searchFilter = sql``;
   if (options.search) {
     // %, _ and the escape character itself are matched literally.
     const escape = String.fromCharCode(92);
     const term = `%${[...options.search]
       .map((char) => (("%_" + escape).includes(char) ? escape + char : char))
       .join("")}%`;
-    base = base.where((eb) =>
-      eb.or([
-        eb("users.display_name", "ilike", term),
-        eb("users.email", "ilike", term),
-        eb("users.username", "ilike", term),
-      ]),
-    );
+    searchFilter = sql`and (u.display_name ilike ${term}
+      or u.email ilike ${term} or u.username ilike ${term})`;
   }
+  const people = sql`
+    with people (registration_id, user_id, source, order_id, registered_at,
+                 joined_session_ids, declined_at) as (
+      select r.id, r.user_id, r.source::text, r.order_id, r.registered_at,
+             r.joined_session_ids, r.declined_at
+      from workshop_registrations r
+      where r.workshop_id = ${workshopId} and r.cancelled_at is null
+      ${courseLearners}
+    )`;
   const [rows, total] = await Promise.all([
-    base
-      .select([
-        "r.id as registration_id",
-        "r.user_id",
-        "users.display_name",
-        "users.username",
-        "users.email",
-        "users.avatar_data_url",
-        "r.source",
-        "r.order_id",
-        "r.registered_at",
-        "r.joined_session_ids",
-        "r.declined_at",
-      ])
-      .orderBy("r.registered_at", "desc")
-      .offset(options.offset)
-      .limit(options.limit)
-      .execute(),
-    base
-      .select((eb) => eb.fn.countAll<number>().as("total"))
-      .executeTakeFirst(),
+    sql<WorkshopRegistrantRow>`
+      ${people}
+      select p.*, u.display_name, u.username, u.email, u.avatar_data_url
+      from people p
+      join users u on u.id = p.user_id
+      where u.is_deleted = false ${searchFilter}
+      order by (p.registration_id is null), p.registered_at desc
+      offset ${options.offset} limit ${options.limit}
+    `.execute(database),
+    sql<{ total: number }>`
+      ${people}
+      select count(*)::int as total
+      from people p
+      join users u on u.id = p.user_id
+      where u.is_deleted = false ${searchFilter}
+    `.execute(database),
   ]);
   return {
-    rows: rows as WorkshopRegistrantRow[],
-    total: Number(total?.total ?? 0),
+    rows: rows.rows,
+    total: Number(total.rows[0]?.total ?? 0),
   };
 }

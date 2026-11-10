@@ -120,7 +120,7 @@ export function WorkshopRegistrantsSection({
       {empty ? (
         <p className="text-sm text-(--muted)">
           {workshop.courseId
-            ? `Nobody yet. Learners of ${workshop.courseTitle ?? "the course"} show up here once they join a session.`
+            ? `${workshop.courseTitle ?? "The course"} has no active learners yet. Add people by email or import a spreadsheet.`
             : "Nobody has joined or been added yet."}
         </p>
       ) : (
@@ -180,7 +180,7 @@ export function WorkshopRegistrantsSection({
             </thead>
             <tbody className="divide-y divide-[color-mix(in_srgb,var(--text)_6%,transparent)] text-sm text-(--text)">
               {items.map((registrant) => (
-                <tr key={registrant.registrationId}>
+                <tr key={registrant.userId}>
                   <td className="px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <WorkshopHostAvatar
@@ -202,7 +202,9 @@ export function WorkshopRegistrantsSection({
                     </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-(--muted)">
-                    {formatSessionDay(registrant.registeredAt, timeZone)}
+                    {registrant.registrationId
+                      ? formatSessionDay(registrant.registeredAt, timeZone)
+                      : "—"}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="rounded-full bg-(--canvas) px-2.5 py-1 text-[11px] font-semibold text-(--muted)">
@@ -217,7 +219,8 @@ export function WorkshopRegistrantsSection({
                   </td>
                   {canManage ? (
                     <td className="px-4 py-3 text-right">
-                      {confirmRemove === registrant.userId ? (
+                      {!registrant.registrationId ? null : confirmRemove ===
+                        registrant.userId ? (
                         <span className="inline-flex items-center gap-2 whitespace-nowrap">
                           <button
                             type="button"

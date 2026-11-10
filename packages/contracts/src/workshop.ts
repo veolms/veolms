@@ -478,7 +478,8 @@ export const workshopRegistrantSourceSchema = z.enum([
 ]);
 
 export const workshopRegistrantSchema = z.strictObject({
-  registrationId: z.uuid(),
+  /** Null for a course learner listed before they join (no row yet). */
+  registrationId: z.uuid().nullable(),
   userId: z.uuid(),
   name: z.string(),
   username: z.string().nullable(),
