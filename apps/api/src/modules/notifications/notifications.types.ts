@@ -25,6 +25,7 @@ export type NotificationTemplateKey =
   | "moderation.report_resolved"
   | "support.reply_posted"
   | "access.validity_extended"
+  | "support.assigned"
   | "chat.mentioned"
   | "chat.platform_restriction"
   | "quiz.attempt_passed"

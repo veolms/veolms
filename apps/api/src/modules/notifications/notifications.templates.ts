@@ -350,6 +350,12 @@ export function renderNotificationTemplate(
       };
       break;
     }
+    case "support.assigned":
+      inApp = {
+        title: `${stringValue(data, "assignedByName")} assigned ${stringValue(data, "ticketKind") === "feedback" ? "feedback" : "report"} #${stringValue(data, "ticketNumber")} to you`,
+        body: stringValue(data, "ticketTitle"),
+      };
+      break;
     case "quiz.attempt_passed":
       inApp = {
         title: "Quiz Passed! 🎉",

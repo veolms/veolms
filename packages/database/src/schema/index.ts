@@ -149,6 +149,7 @@ import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
   SupportAttachmentTable,
+  SupportEventTable,
   SupportMessageTable,
   SupportTicketTable,
 } from "./support.schema.ts";
@@ -287,6 +288,7 @@ export interface Database {
   support_tickets: SupportTicketTable;
   support_messages: SupportMessageTable;
   support_attachments: SupportAttachmentTable;
+  support_events: SupportEventTable;
 
   // Chat
   chat_settings: ChatSettingsTable;

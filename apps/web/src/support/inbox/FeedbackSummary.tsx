@@ -1,6 +1,7 @@
 import type { SupportAdminStatsResponse } from "@veolms/contracts/support";
 
 import { ElevatedCard } from "../../components/ElevatedCard";
+import { StatusIcon } from "./supportQueueCatalog";
 import {
   FEEDBACK_CATEGORY_ORDER,
   FEEDBACK_STATUS_ORDER,
@@ -112,10 +113,7 @@ export function FeedbackSummary({
         <h3 className={headingClasses}>Triage</h3>
         {FEEDBACK_STATUS_ORDER.map((value) => (
           <div key={value} className="flex items-center gap-2 text-sm">
-            <span
-              className={`size-2 rounded-full ${SUPPORT_STATUSES[value].dot}`}
-              aria-hidden="true"
-            />
+            <StatusIcon status={value} size={14} />
             <span className="flex-1 text-(--text-secondary)">
               {SUPPORT_STATUSES[value].staffLabel}
             </span>
