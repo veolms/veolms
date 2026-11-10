@@ -78,11 +78,30 @@ export class BridgeNativeError extends BridgeError {
 export class BridgeUnsupportedError extends BridgeError {
   public readonly path: string;
 
-  constructor(path: string) {
+  constructor(
+    path: string,
+    message?: string,
+    code: string = "UNSUPPORTED_ERROR",
+  ) {
     super(
-      `Native capability "${path}" is unsupported on the current platform`,
-      "UNSUPPORTED_ERROR",
+      message ??
+        `Native capability "${path}" is unsupported on the current platform`,
+      code,
     );
     this.path = path;
+  }
+}
+
+/**
+ * Error thrown when writing a property that native exposes as read-only.
+ * Extends `BridgeUnsupportedError` so existing `instanceof` checks keep working.
+ */
+export class BridgeReadOnlyError extends BridgeUnsupportedError {
+  constructor(path: string) {
+    super(
+      path,
+      `Property "${path}" is read-only on native.`,
+      "READ_ONLY_PROPERTY",
+    );
   }
 }

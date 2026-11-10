@@ -13,6 +13,7 @@ export {
   BridgeProtocolError,
   BridgeNativeError,
   BridgeUnsupportedError,
+  BridgeReadOnlyError,
 } from "./transport/errors.ts";
 
 // Protocol & Bridge Type Exports

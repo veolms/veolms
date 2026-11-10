@@ -11,6 +11,8 @@ export class MetadataRegistry {
   public readonly rawPayload: BridgeMetadataPayload;
   private readonly capabilitiesByPath = new Map<string, BridgeCapability>();
   private readonly knownNamespaces = new Set<string>();
+  /** Direct child member/namespace names per parent path ("" = root). */
+  private readonly childrenByPath = new Map<string, Set<string>>();
 
   constructor(payload: BridgeMetadataPayload) {
     this.rawPayload = payload;
@@ -33,7 +35,30 @@ export class MetadataRegistry {
         const nsPath = segments.slice(0, i).join(PATH_SEPARATOR);
         this.knownNamespaces.add(nsPath);
       }
+      if (capability.kind === "namespace") {
+        this.knownNamespaces.add(capPayload.path);
+      }
+
+      // Index every segment as a child of its parent path
+      let parent = "";
+      for (const segment of segments) {
+        let children = this.childrenByPath.get(parent);
+        if (!children) {
+          children = new Set<string>();
+          this.childrenByPath.set(parent, children);
+        }
+        children.add(segment);
+        parent =
+          parent === "" ? segment : `${parent}${PATH_SEPARATOR}${segment}`;
+      }
     }
+  }
+
+  /**
+   * Names of the direct children (members and namespaces) of `path` ("" for the root).
+   */
+  public childrenOf(path: string): string[] {
+    return Array.from(this.childrenByPath.get(path) ?? []);
   }
 
   public hasCapability(path: string): boolean {

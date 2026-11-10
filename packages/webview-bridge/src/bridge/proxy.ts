@@ -1,12 +1,152 @@
 import { PATH_SEPARATOR } from "../protocol/constants.ts";
 import type { BridgeValue } from "../protocol/types.d.ts";
-import { BridgeUnsupportedError } from "../transport/errors.ts";
+import { BridgeReadOnlyError } from "../transport/errors.ts";
 import type {
   BridgeEventHandler,
   NativeTransport,
 } from "../transport/types.d.ts";
 import type { MetadataRegistry } from "./metadata.ts";
 import type { NativeBridgeSession } from "./native-bridge.ts";
+
+/**
+ * Reports failures of fire-and-forget property assignments (`bridge.ns.prop = value`).
+ */
+type AssignmentErrorReporter = (error: unknown, path: string) => void;
+
+/**
+ * Explicit helpers available at every level of the bridge. `$` can never appear in a native
+ * member name (native identifiers are `[A-Za-z_][A-Za-z0-9_]*`), so these never shadow native members.
+ *
+ * - `$get(name)`: reads a property (resolves `null` when native does not expose a readable property).
+ * - `$set(name, value)`: writes a property and resolves once native acknowledged it; rejects with
+ *   native/transport errors or `BridgeReadOnlyError` (unlike the fire-and-forget assignment).
+ * - `$has(name?)`: whether native exposes `name` (or this namespace) — explicit feature detection,
+ *   since unsupported functions resolve `null` (NOOP) instead of failing.
+ */
+const HELPER_NAMES = new Set(["$get", "$set", "$has"]);
+
+function joinPath(basePath: string, prop: string): string {
+  return basePath === "" ? prop : `${basePath}${PATH_SEPARATOR}${prop}`;
+}
+
+function toBridgeArgs(args: unknown[]): BridgeValue[] {
+  // `undefined` → `null` (JSON has no undefined); deeper validation happens in the transport.
+  return args.map((arg) => (arg === undefined ? null : (arg as BridgeValue)));
+}
+
+function defaultAssignmentErrorReporter(error: unknown, path: string): void {
+  if (typeof console !== "undefined" && typeof console.warn === "function") {
+    console.warn(`[NativeBridge] Writing property "${path}" failed:`, error);
+  }
+}
+
+/**
+ * Shared, path-independent behaviour of root and nested proxies.
+ */
+function createPathOperations(
+  transport: NativeTransport,
+  metadata: MetadataRegistry,
+  reportAssignmentError: AssignmentErrorReporter,
+) {
+  const invoke = (
+    path: string,
+    args: unknown[],
+  ): Promise<BridgeValue | null> => {
+    if (metadata.hasCapability(path) && metadata.isFunction(path)) {
+      return transport.invoke(path, toBridgeArgs(args));
+    }
+    // NOOP Semantics: If member is in frontend contract but unsupported in native metadata,
+    // resolve cleanly according to contract Promise return shape.
+    return Promise.resolve(null);
+  };
+
+  const write = (path: string, value: unknown): Promise<void> => {
+    if (!metadata.hasCapability(path)) {
+      // NOOP for unsupported property setters
+      return Promise.resolve();
+    }
+    if (!metadata.isWritable(path)) {
+      return Promise.reject(new BridgeReadOnlyError(path));
+    }
+    const bridgeValue = value === undefined ? null : (value as BridgeValue);
+    return transport.set(path, bridgeValue);
+  };
+
+  /** Proxy `set` trap behaviour: synchronous read-only error, async errors reported (not swallowed). */
+  const assign = (path: string, value: unknown): boolean => {
+    if (metadata.hasCapability(path) && !metadata.isWritable(path)) {
+      throw new BridgeReadOnlyError(path);
+    }
+    // Avoid unhandledrejection events in the browser while still surfacing failures.
+    void write(path, value).catch((error: unknown) =>
+      reportAssignmentError(error, path),
+    );
+    return true;
+  };
+
+  const has = (path: string): boolean =>
+    metadata.hasCapability(path) || metadata.isNamespace(path);
+
+  const helper = (basePath: string, name: string): unknown => {
+    switch (name) {
+      case "$get":
+        return (member: string): Promise<BridgeValue | null> => {
+          const path = joinPath(basePath, String(member));
+          if (metadata.isProperty(path) && metadata.isReadable(path)) {
+            return transport.get(path);
+          }
+          return Promise.resolve(null);
+        };
+      case "$set":
+        return (member: string, value: unknown): Promise<void> =>
+          write(joinPath(basePath, String(member)), value);
+      case "$has":
+        return (member?: string): boolean =>
+          member === undefined
+            ? basePath === "" || has(basePath)
+            : has(joinPath(basePath, String(member)));
+      default:
+        return undefined;
+    }
+  };
+
+  /** Traps that make `in`, `Object.keys`, spread and devtools reflect native capabilities. */
+  const reflectionTraps = (basePath: string): ProxyHandler<object> => ({
+    has(target, prop) {
+      if (typeof prop === "symbol" || prop === "then") {
+        return Reflect.has(target, prop);
+      }
+      return (
+        HELPER_NAMES.has(prop) ||
+        has(joinPath(basePath, prop)) ||
+        Reflect.has(target, prop)
+      );
+    },
+    ownKeys() {
+      return metadata.childrenOf(basePath);
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      if (
+        typeof prop === "string" &&
+        prop !== "then" &&
+        has(joinPath(basePath, prop))
+      ) {
+        // Values are resolved lazily through the `get` trap (reading a property calls native).
+        return {
+          configurable: true,
+          enumerable: true,
+          writable: true,
+          value: undefined,
+        };
+      }
+      const own = Reflect.getOwnPropertyDescriptor(target, prop);
+      // Hide the dummy target's own `length`/`name` so they do not look like native members.
+      return own?.configurable ? undefined : own;
+    },
+  });
+
+  return { invoke, assign, helper, reflectionTraps };
+}
 
 /**
  * Creates a developer-facing Proxy object for NativeBridge.
@@ -21,10 +161,16 @@ export function createBridgeProxy<T extends object>(
   basePath: string = "",
   session?: NativeBridgeSession,
 ): T {
-  // Empty dummy target for Proxy wrapping
-  const NativeBridgeProxyTarget = function () {} as unknown as object;
+  const reportAssignmentError: AssignmentErrorReporter =
+    session?.onAssignmentError ?? defaultAssignmentErrorReporter;
+  const ops = createPathOperations(transport, metadata, reportAssignmentError);
+
+  // Empty callable dummy target for Proxy wrapping (arrow function: no non-configurable `prototype`).
+  const NativeBridgeProxyTarget = (() => undefined) as unknown as object;
 
   const proxy = new Proxy(NativeBridgeProxyTarget, {
+    ...ops.reflectionTraps(basePath),
+
     get(_target, prop) {
       // 1. Prevent Proxy from acting like a Promise when awaited
       if (prop === "then") {
@@ -60,31 +206,13 @@ export function createBridgeProxy<T extends object>(
         }
       }
 
+      // 4. Explicit helpers ($get / $set / $has)
+      if (HELPER_NAMES.has(prop)) {
+        return ops.helper(basePath, prop);
+      }
+
       // Build colon-separated protocol path
-      const currentPath =
-        basePath === ""
-          ? String(prop)
-          : `${basePath}${PATH_SEPARATOR}${String(prop)}`;
-
-      // 4. Return an invokable function handler for method calls
-      const functionHandler = (
-        ...args: unknown[]
-      ): Promise<BridgeValue | null> => {
-        // Sanitize arguments to JSON-safe BridgeValue array
-        const bridgeArgs: BridgeValue[] = args.map((arg) =>
-          arg === undefined ? null : (arg as BridgeValue),
-        );
-
-        if (metadata.hasCapability(currentPath)) {
-          if (metadata.isFunction(currentPath)) {
-            return transport.invoke(currentPath, bridgeArgs);
-          }
-        }
-
-        // NOOP Semantics: If member is in frontend contract but unsupported in native metadata,
-        // resolve cleanly according to contract Promise return shape.
-        return Promise.resolve(null);
-      };
+      const currentPath = joinPath(basePath, prop);
 
       // 5. If metadata explicitly marks this path as a Property, read property value
       if (metadata.isProperty(currentPath)) {
@@ -100,7 +228,8 @@ export function createBridgeProxy<T extends object>(
         transport,
         metadata,
         currentPath,
-        functionHandler,
+        ops,
+        (...args: unknown[]) => ops.invoke(currentPath, args),
       );
     },
 
@@ -108,26 +237,7 @@ export function createBridgeProxy<T extends object>(
       if (typeof prop === "symbol" || prop === "then") {
         return false;
       }
-
-      const currentPath =
-        basePath === ""
-          ? String(prop)
-          : `${basePath}${PATH_SEPARATOR}${String(prop)}`;
-
-      if (metadata.hasCapability(currentPath)) {
-        if (!metadata.isWritable(currentPath)) {
-          throw new BridgeUnsupportedError(
-            `Property "${currentPath}" is read-only on native.`,
-          );
-        }
-        const bridgeValue = value === undefined ? null : (value as BridgeValue);
-        // Execute set call asynchronously and swallow rejections to avoid unhandledrejection events in browser
-        void transport.set(currentPath, bridgeValue).catch(() => {});
-        return true;
-      }
-
-      // NOOP for unsupported property setters
-      return true;
+      return ops.assign(joinPath(basePath, prop), value);
     },
 
     apply(_target, _thisArg, argArray) {
@@ -135,17 +245,7 @@ export function createBridgeProxy<T extends object>(
       if (basePath === "") {
         return undefined;
       }
-      const bridgeArgs: BridgeValue[] = argArray.map((arg) =>
-        arg === undefined ? null : (arg as BridgeValue),
-      );
-
-      if (metadata.hasCapability(basePath)) {
-        if (metadata.isFunction(basePath)) {
-          return transport.invoke(basePath, bridgeArgs);
-        }
-      }
-      // NOOP
-      return Promise.resolve(null);
+      return ops.invoke(basePath, argArray);
     },
   });
 
@@ -159,9 +259,12 @@ function createBridgeProxyInternal<T extends object>(
   transport: NativeTransport,
   metadata: MetadataRegistry,
   currentPath: string,
+  ops: ReturnType<typeof createPathOperations>,
   functionHandler: (...args: unknown[]) => Promise<BridgeValue | null>,
 ): T {
   return new Proxy(functionHandler as unknown as object, {
+    ...ops.reflectionTraps(currentPath),
+
     get(_target, prop) {
       if (prop === "then") {
         return undefined;
@@ -169,8 +272,11 @@ function createBridgeProxyInternal<T extends object>(
       if (typeof prop === "symbol") {
         return undefined;
       }
+      if (HELPER_NAMES.has(prop)) {
+        return ops.helper(currentPath, prop);
+      }
 
-      const childPath = `${currentPath}${PATH_SEPARATOR}${String(prop)}`;
+      const childPath = joinPath(currentPath, prop);
 
       if (metadata.isProperty(childPath)) {
         if (metadata.isReadable(childPath)) {
@@ -179,26 +285,12 @@ function createBridgeProxyInternal<T extends object>(
         return undefined;
       }
 
-      const childFunctionHandler = (
-        ...args: unknown[]
-      ): Promise<BridgeValue | null> => {
-        const bridgeArgs: BridgeValue[] = args.map((arg) =>
-          arg === undefined ? null : (arg as BridgeValue),
-        );
-        if (
-          metadata.hasCapability(childPath) &&
-          metadata.isFunction(childPath)
-        ) {
-          return transport.invoke(childPath, bridgeArgs);
-        }
-        return Promise.resolve(null);
-      };
-
       return createBridgeProxyInternal(
         transport,
         metadata,
         childPath,
-        childFunctionHandler,
+        ops,
+        (...args: unknown[]) => ops.invoke(childPath, args),
       );
     },
 
@@ -206,18 +298,7 @@ function createBridgeProxyInternal<T extends object>(
       if (typeof prop === "symbol" || prop === "then") {
         return false;
       }
-      const childPath = `${currentPath}${PATH_SEPARATOR}${String(prop)}`;
-      if (metadata.hasCapability(childPath)) {
-        if (!metadata.isWritable(childPath)) {
-          throw new BridgeUnsupportedError(
-            `Property "${childPath}" is read-only on native.`,
-          );
-        }
-        const bridgeValue = value === undefined ? null : (value as BridgeValue);
-        void transport.set(childPath, bridgeValue).catch(() => {});
-        return true;
-      }
-      return true;
+      return ops.assign(joinPath(currentPath, prop), value);
     },
 
     apply(_target, _thisArg, argArray) {
