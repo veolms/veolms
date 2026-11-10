@@ -38,7 +38,7 @@ export function DiwaliDiyaRow() {
       <span className="relative h-10 w-9">
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -top-12 -left-8 size-25 animate-[diwali-glow_5.4s_ease-in-out_infinite] rounded-full bg-[radial-gradient(circle,rgb(255_200_110/0.5),rgb(255_150_50/0.12)_45%,transparent_70%)] motion-reduce:animate-none"
+          className="pointer-events-none absolute -top-12 -left-8 size-25 animate-[diwali-glow_5.4s_ease-in-out_infinite] rounded-full bg-[radial-gradient(circle,rgb(255_200_110/0.5),rgb(255_150_50/0.12)_45%,transparent_70%)] motion-reduce:animate-none [:root[data-rendering=software]_&]:animate-none"
         />
         <ShotsLayer shots={shots} onDone={removeShot} />
         <span
@@ -59,7 +59,7 @@ export function DiwaliDiyaRow() {
                     animationDelay: `${delay}s`,
                   } as CSSProperties
                 }
-                className="absolute -top-[1.5px] -left-[1.5px] size-[3px] animate-[diwali-spark_4s_cubic-bezier(.2,.75,.4,1)_infinite] rounded-full bg-[#FFE7A3] opacity-0 shadow-[0_0_6px_1px_rgb(255_186_90/0.95)] motion-reduce:hidden"
+                className="absolute -top-[1.5px] -left-[1.5px] size-[3px] animate-[diwali-spark_4s_cubic-bezier(.2,.75,.4,1)_infinite] rounded-full bg-[#FFE7A3] opacity-0 shadow-[0_0_6px_1px_rgb(255_186_90/0.95)] motion-reduce:hidden [:root[data-rendering=software]_&]:hidden"
               />
             </span>
           ))}

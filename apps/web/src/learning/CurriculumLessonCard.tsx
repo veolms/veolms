@@ -68,7 +68,7 @@ function NowPlayingGlyph({
       {NOW_PLAYING_BARS.map((bar) => (
         <span
           key={bar.delay}
-          className="w-[3px] origin-bottom rounded-full bg-current animate-[learning-lesson-now-playing_1.05s_ease-in-out_infinite] motion-reduce:animate-none"
+          className="w-[3px] origin-bottom rounded-full bg-current animate-[learning-lesson-now-playing_1.05s_ease-in-out_infinite] motion-reduce:animate-none [:root[data-rendering=software]_&]:animate-none"
           style={{ height: bar.height, animationDelay: bar.delay }}
         />
       ))}
