@@ -1530,6 +1530,18 @@
     }
   }
 
+  /* Left out where the page is drawn without a graphics card
+     (lib/software-rendering.ts). Fixed, it is a screen-sized layer that,
+     with the lesson video playing, the processor puts together again for
+     every frame; laid out as above it is repainted, blur and all, whenever
+     the page scrolls. A lesson's list scrolled at 70 to 76 frames a second
+     with it and 82 to 94 without, the page at 56 to 57 and 75 to 88 (Chrome
+     157, GPU off, 2026-11-11). At the default glow strength it tints the
+     shell by under 2 %. */
+  :root[data-rendering="software"] .courses-app::before {
+    display: none;
+  }
+
   .courses-sidebar {
     isolation: isolate;
   }
