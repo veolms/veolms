@@ -77,88 +77,80 @@ export function WorkshopRegistrantsSection({
     );
   };
 
+  const editable = canManage && workshop.status !== "cancelled";
+  const empty = total === 0 && !query;
+
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-(--muted)">
-          {total === 0 && !query
-            ? "Nobody has joined or been added yet."
-            : `${total} ${total === 1 ? "person" : "people"}`}
-        </p>
-        {items.length > 0 ? (
-          <a
-            href={workshopRegistrantsCsvUrl(workshop.id)}
-            download
-            className="inline-flex h-9 items-center gap-2 rounded-xl bg-(--surface-strong) px-3.5 text-[13px] font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--text)"
-          >
-            <DownloadSimple size={15} />
-            Download CSV
-          </a>
-        ) : null}
-      </div>
-
-      {workshop.courseId ? (
-        <p className="rounded-xl bg-(--accent)/8 px-3.5 py-2.5 text-[13px] leading-5 text-(--text)">
-          Learners of {workshop.courseTitle ?? "the course"} are included
-          without registering. They appear here once they join a session.
-        </p>
-      ) : null}
-
-      {canManage && workshop.status !== "cancelled" ? (
-        <WorkshopCsvImport workshopId={workshop.id} />
-      ) : null}
-
-      {canManage && workshop.status !== "cancelled" ? (
-        <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-start">
-          <div className="grid gap-1">
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="Add by email: learner@example.com"
-              aria-label="Email of the account to register"
-              className={`${fieldClass} w-full`}
-              disabled={add.isPending}
-              onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  submit();
-                }
-              }}
-            />
-            <p className="text-xs text-(--muted)">
-              They need an account here. Seats are not counted for people you
-              add, and they get the usual confirmation and reminders.
-            </p>
-          </div>
+      {editable ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="Add someone by email"
+            aria-label="Email of the account to add"
+            className={`${fieldClass} h-9 min-w-0 flex-1 basis-56 text-sm`}
+            disabled={add.isPending}
+            onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                submit();
+              }
+            }}
+          />
           <Button
             type="button"
             onClick={submit}
             disabled={add.isPending || email.trim().length === 0}
-            className="sm:h-11"
+            className="h-9"
           >
             <UserPlus size={16} weight="bold" />
             Add
           </Button>
+          <WorkshopCsvImport workshopId={workshop.id} />
+          {problem ? (
+            <p className="basis-full text-sm text-rose-500" role="alert">
+              {problem}
+            </p>
+          ) : null}
         </div>
       ) : null}
-      {problem ? (
-        <p className="text-sm text-rose-500" role="alert">
-          {problem}
-        </p>
-      ) : null}
 
-      <input
-        type="search"
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setPage(1);
-        }}
-        placeholder="Search by name or email"
-        aria-label="Search attendance"
-        className={`${fieldClass} w-full sm:max-w-sm`}
-      />
+      {empty ? (
+        <p className="text-sm text-(--muted)">
+          {workshop.courseId
+            ? `Nobody yet. Learners of ${workshop.courseTitle ?? "the course"} show up here once they join a session.`
+            : "Nobody has joined or been added yet."}
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Search by name or email"
+            aria-label="Search attendance"
+            className={`${fieldClass} h-9 min-w-0 flex-1 basis-56 text-sm sm:max-w-sm`}
+          />
+          <span className="text-[13px] text-(--muted) tabular-nums">
+            {total} {total === 1 ? "person" : "people"}
+          </span>
+          {items.length > 0 ? (
+            <a
+              href={workshopRegistrantsCsvUrl(workshop.id)}
+              download
+              className="ml-auto inline-flex h-9 items-center gap-2 rounded-xl px-3 text-[13px] font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--text)"
+            >
+              <DownloadSimple size={15} />
+              Download
+            </a>
+          ) : null}
+        </div>
+      )}
 
       {registrants.isLoading ? (
         <CenteredLoadingSpinner label="Loading registrants" className="py-8" />
@@ -171,7 +163,7 @@ export function WorkshopRegistrantsSection({
                   Learner
                 </th>
                 <th scope="col" className="px-4 py-3">
-                  Registered
+                  Added
                 </th>
                 <th scope="col" className="px-4 py-3">
                   How

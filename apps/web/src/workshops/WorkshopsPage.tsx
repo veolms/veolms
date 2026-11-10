@@ -133,11 +133,7 @@ function StandingBadge({
       </span>
     );
   }
-  return (
-    <span className="rounded-full bg-(--canvas) px-2.5 py-1 text-[11px] font-semibold text-(--muted)">
-      Free
-    </span>
-  );
+  return null;
 }
 
 /**

@@ -81,14 +81,13 @@ export function parseAttendeeCsv(
 }
 
 /**
- * Registers a whole list at once from a CSV file. People without an account
- * get a student account (they sign in with an emailed code) unless the box
- * is unticked; everyone added gets the usual confirmation and reminders.
+ * One "Import CSV" button. Emails without an account get a student account
+ * (they sign in with an emailed code). Meant for a wrapping flex row: the
+ * result line takes a row of its own under the buttons.
  */
 export function WorkshopCsvImport({ workshopId }: { workshopId: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const importRows = useImportWorkshopRegistrants();
-  const [createAccounts, setCreateAccounts] = useState(true);
   const [problem, setProblem] = useState<string | null>(null);
   const [result, setResult] =
     useState<ImportWorkshopRegistrantsResponse | null>(null);
@@ -111,7 +110,7 @@ export function WorkshopCsvImport({ workshopId }: { workshopId: string }) {
       return;
     }
     importRows.mutate(
-      { workshopId, rows, createAccounts },
+      { workshopId, rows, createAccounts: true },
       {
         onSuccess: (response) => setResult(response),
         onError: (error) =>
@@ -122,39 +121,20 @@ export function WorkshopCsvImport({ workshopId }: { workshopId: string }) {
     );
   };
 
+  const skipped = result?.skipped ?? [];
+
   return (
-    <div className="grid gap-2 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] p-3.5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-(--text)">
-            Import from a spreadsheet
-          </p>
-          <p className="text-xs text-(--muted)">
-            A CSV with an email column and, if you like, a name column.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={importRows.isPending}
-          className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-xl bg-(--surface-strong) px-3.5 text-[13px] font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--text) disabled:opacity-60"
-        >
-          <UploadSimple size={15} />
-          {importRows.isPending ? "Importing..." : "Import CSV"}
-        </button>
-      </div>
-      <label className="flex cursor-pointer items-start gap-2 text-[13px] text-(--text)">
-        <input
-          type="checkbox"
-          checked={createAccounts}
-          onChange={(event) => setCreateAccounts(event.target.checked)}
-          className="mt-0.5 size-4 accent-(--accent)"
-        />
-        <span>
-          Create an account for emails that have none (they sign in with an
-          emailed code)
-        </span>
-      </label>
+    <>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={importRows.isPending}
+        title="A CSV with an email column and, optionally, a name column"
+        className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-xl bg-(--surface-strong) px-3.5 text-[13px] font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--text) disabled:opacity-60"
+      >
+        <UploadSimple size={15} />
+        {importRows.isPending ? "Importing..." : "Import CSV"}
+      </button>
       <input
         ref={inputRef}
         type="file"
@@ -165,38 +145,29 @@ export function WorkshopCsvImport({ workshopId }: { workshopId: string }) {
         aria-hidden="true"
       />
       {problem ? (
-        <p className="text-sm text-rose-500" role="alert">
+        <p className="basis-full text-sm text-rose-500" role="alert">
           {problem}
         </p>
       ) : null}
       {result ? (
-        <div className="grid gap-1 text-[13px] text-(--text)" role="status">
-          <p>
-            {result.added} added
-            {result.accountsCreated > 0
-              ? ` (${result.accountsCreated} new accounts)`
-              : ""}
-            , {result.alreadyRegistered} already registered
-            {result.skipped.length > 0
-              ? `, ${result.skipped.length} skipped`
-              : ""}
-            .
-          </p>
-          {result.skipped.length > 0 ? (
-            <ul className="max-h-32 overflow-auto text-xs text-(--muted)">
-              {result.skipped.slice(0, 50).map((entry) => (
-                <li key={`${entry.row}-${entry.email}`}>
-                  Row {entry.row}: {entry.email || "(empty)"} —{" "}
-                  {REASON_LABEL[entry.reason]}
-                </li>
-              ))}
-              {result.skipped.length > 50 ? (
-                <li>…and {result.skipped.length - 50} more</li>
-              ) : null}
-            </ul>
-          ) : null}
-        </div>
+        <p className="basis-full text-[13px] text-(--muted)" role="status">
+          {result.added} added
+          {result.accountsCreated > 0
+            ? ` (${result.accountsCreated} new accounts)`
+            : ""}
+          , {result.alreadyRegistered} already in
+          {skipped.length > 0
+            ? `, ${skipped.length} skipped: ${skipped
+                .slice(0, 5)
+                .map(
+                  (entry) =>
+                    `${entry.email || `row ${entry.row}`} (${REASON_LABEL[entry.reason]})`,
+                )
+                .join(", ")}${skipped.length > 5 ? "…" : ""}`
+            : ""}
+          .
+        </p>
       ) : null}
-    </div>
+    </>
   );
 }

@@ -563,57 +563,21 @@ export function WorkshopBuilderPage({
               title="Basics"
               description="The title and summary are what learners see first."
             >
-              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="min-w-0">
-                  <FieldLabel htmlFor="workshop-title" required>
-                    Title
-                  </FieldLabel>
-                  <input
-                    id="workshop-title"
-                    type="text"
-                    value={form.title}
-                    onChange={(event) => handleTitleChange(event.target.value)}
-                    placeholder="React performance day"
-                    maxLength={160}
-                    required
-                    disabled={readOnly}
-                    className={`${fieldClass} w-full`}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <FieldLabel
-                    htmlFor="workshop-slug"
-                    hint={
-                      slugLocked
-                        ? "Fixed once published"
-                        : "Auto from the title"
-                    }
-                  >
-                    Address
-                  </FieldLabel>
-                  <div
-                    className={`${fieldClass} flex w-full items-center gap-1 text-sm`}
-                  >
-                    <span className="shrink-0 text-(--muted)">/workshops/</span>
-                    <input
-                      id="workshop-slug"
-                      type="text"
-                      value={form.slug}
-                      onChange={(event) =>
-                        patch({
-                          slug: event.target.value
-                            .toLowerCase()
-                            .replace(/[^a-z0-9-]/g, ""),
-                          slugTouched: true,
-                        })
-                      }
-                      placeholder="react-performance-day"
-                      maxLength={80}
-                      disabled={readOnly || slugLocked}
-                      className="w-full min-w-0 border-0 bg-transparent outline-none disabled:opacity-60"
-                    />
-                  </div>
-                </div>
+              <div className="min-w-0">
+                <FieldLabel htmlFor="workshop-title" required>
+                  Title
+                </FieldLabel>
+                <input
+                  id="workshop-title"
+                  type="text"
+                  value={form.title}
+                  onChange={(event) => handleTitleChange(event.target.value)}
+                  placeholder="React performance day"
+                  maxLength={160}
+                  required
+                  disabled={readOnly}
+                  className={`${fieldClass} w-full`}
+                />
               </div>
 
               <div className="min-w-0">
@@ -736,7 +700,7 @@ export function WorkshopBuilderPage({
           {editorTab === "attendance" && !workshop ? (
             <Section
               title="Attendance"
-              description="Who joined, who is not going, and who you added."
+              description="Who joined and who you added."
             >
               <p className="text-sm text-(--muted)">
                 Save the draft first; then you can import a spreadsheet or add
@@ -747,7 +711,7 @@ export function WorkshopBuilderPage({
           {editorTab === "attendance" && workshop ? (
             <Section
               title="Attendance"
-              description="Who joined, who is not going, and who you added. Download the list or import a spreadsheet."
+              description="Who joined and who you added."
             >
               <WorkshopRegistrantsSection
                 workshop={workshop}

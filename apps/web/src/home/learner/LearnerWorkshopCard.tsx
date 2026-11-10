@@ -74,7 +74,7 @@ export function LearnerWorkshopCard({
             {formatSessionTime(card.startsAt, timeZone)} –{" "}
             {formatSessionTime(card.endsAt, timeZone)}{" "}
             {timeZoneShortName(timeZone, new Date(card.startsAt))}
-            {!card.registered
+            {!card.registered && card.priceMinor
               ? ` · ${formatWorkshopPrice(card.priceMinor, card.currency)}`
               : ""}
           </p>

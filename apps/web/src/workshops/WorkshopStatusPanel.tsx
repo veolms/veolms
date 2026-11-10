@@ -341,7 +341,9 @@ export function WorkshopStatusPanel({
               </p>
               <div className="mt-2 flex items-center justify-between">
                 <span className="text-sm font-semibold text-(--text)">
-                  {formatWorkshopPrice(preview.priceMinor, preview.currency)}
+                  {preview.priceMinor
+                    ? formatWorkshopPrice(preview.priceMinor, preview.currency)
+                    : null}
                 </span>
                 <span className="rounded-full bg-emerald-500/12 px-2.5 py-1 text-[11px] font-semibold text-emerald-600">
                   You&apos;re in

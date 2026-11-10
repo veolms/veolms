@@ -171,9 +171,16 @@ export function WorkshopsAdminList({
               </div>
 
               <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:gap-1.5">
-                <span className="text-sm font-semibold text-(--text)">
-                  {formatWorkshopPrice(workshop.priceMinor, workshop.currency)}
-                </span>
+                {workshop.priceMinor ? (
+                  <span className="text-sm font-semibold text-(--text)">
+                    {formatWorkshopPrice(
+                      workshop.priceMinor,
+                      workshop.currency,
+                    )}
+                  </span>
+                ) : (
+                  <span />
+                )}
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-(--accent)">
                   {canManage ? "Edit" : "View"}
                   <ArrowRight size={14} weight="bold" />
