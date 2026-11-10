@@ -1244,3 +1244,16 @@ z.globalRegistry.add(courseValidationSectionsSchema, {
 z.globalRegistry.add(courseValidationResponseSchema, {
   id: "CourseValidationResponse",
 });
+
+/**
+ * Publishing a course tells its enrolled learners (notification and email)
+ * the first time only; `notifyLearners=true` asks for it again on a
+ * re-publish, `false` keeps even a first publish quiet.
+ */
+export const publishCourseQuerySchema = z.object({
+  notifyLearners: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+});
+export type PublishCourseQuery = z.output<typeof publishCourseQuerySchema>;

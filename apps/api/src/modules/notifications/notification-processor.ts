@@ -1,11 +1,13 @@
 import type { ServerConfig } from "@veolms/config";
-import type { Database } from "@veolms/database";
+import type { Database, NotificationDeliveryLane } from "@veolms/database";
 import type { FastifyBaseLogger } from "fastify";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import { z } from "zod";
 
 import * as outboxRepository from "../../events/outbox.repository.ts";
 import type { EmailAttachment, EmailService } from "@veolms/services/email";
+import { classifyEmailFailure } from "./email-failure.ts";
+import { addEmailSuppression } from "./email-suppressions.repository.ts";
 import {
   createNotificationIntents,
   UnknownNotificationEventError,
@@ -39,7 +41,18 @@ const emailDeliveryPayloadSchema = z.strictObject({
       method: z.enum(["REQUEST", "CANCEL"]),
     })
     .optional(),
+  /** List-Unsubscribe and friends, decided when the email was queued. */
+  headers: z.record(z.string(), z.string()).optional(),
 });
+
+/**
+ * Only one process sends queued email at a time. Every API process runs the
+ * inline worker, and six of them sending at once from one mailbox is what
+ * made providers throttle the domain; with the lock, the per-process send
+ * rate (EMAIL_RATE_PER_SECOND) is the account's rate. Outbox and push
+ * processing are not locked: they are safe in parallel.
+ */
+const EMAIL_SENDER_LOCK_KEY = 820_261_110;
 
 export interface NotificationProcessorResult {
   outbox: { processed: number; retried: number; failed: number };
@@ -94,10 +107,12 @@ export function createNotificationProcessor({
   config: Pick<
     ServerConfig,
     | "NOTIFICATION_BATCH_SIZE"
+    | "NOTIFICATION_BULK_PER_CYCLE"
     | "NOTIFICATION_LEASE_SECONDS"
     | "NOTIFICATION_OUTBOX_MAX_ATTEMPTS"
     | "NOTIFICATION_EMAIL_MAX_ATTEMPTS"
     | "NOTIFICATION_RETRY_SECONDS"
+    | "NOTIFICATION_THROTTLE_PAUSE_SECONDS"
     | "NOTIFICATION_OUTBOX_RETENTION_DAYS"
     | "NOTIFICATION_COURSE_WIDE_EMAIL"
     | "NOTIFICATION_COURSE_WIDE_PUSH"
@@ -114,6 +129,34 @@ export function createNotificationProcessor({
     pushEnabled: Boolean(push),
   });
   const log = logger.child({ job: "notification-worker" });
+
+  /**
+   * When each lane may send again. A lane rests after the provider
+   * throttles us or refuses a message for policy: sending more right then
+   * only burns quota and reputation. Kept in memory: the lock above means
+   * one process sends, and a restart simply tries again.
+   */
+  const lanePausedUntil = new Map<NotificationDeliveryLane, number>();
+
+  function lanePauseEnd(lane: NotificationDeliveryLane, nowMs: number) {
+    const until = lanePausedUntil.get(lane);
+    return until !== undefined && until > nowMs ? until : null;
+  }
+
+  function pauseLane(
+    lane: NotificationDeliveryLane,
+    nowMs: number,
+    reason: string,
+  ) {
+    const until = nowMs + config.NOTIFICATION_THROTTLE_PAUSE_SECONDS * 1000;
+    const current = lanePausedUntil.get(lane) ?? 0;
+    if (until <= current) return;
+    lanePausedUntil.set(lane, until);
+    log.warn(
+      { lane, pausedUntil: new Date(until).toISOString(), reason },
+      "Email lane paused",
+    );
+  }
 
   async function processOutbox() {
     const now = new Date();
@@ -264,23 +307,75 @@ export function createNotificationProcessor({
     return files;
   }
 
+  const noEmailWork = { sent: 0, retried: 0, failed: 0 };
+
   async function processEmail() {
+    // The lock lives for this transaction, which only holds the lock: the
+    // sends and their marks use the pool as before.
+    return await database.transaction().execute(async (lockHolder) => {
+      const lock = await sql<{ locked: boolean }>`
+        select pg_try_advisory_xact_lock(${sql.lit(EMAIL_SENDER_LOCK_KEY)}) as locked
+      `.execute(lockHolder);
+      if (!lock.rows[0]?.locked) {
+        log.debug("Another process is sending email; skipped this cycle");
+        return noEmailWork;
+      }
+      return await sendDueEmails();
+    });
+  }
+
+  async function sendDueEmails() {
     const now = new Date();
-    const leaseUntil = new Date(
-      now.getTime() + config.NOTIFICATION_LEASE_SECONDS * 1000,
-    );
+    const leaseMs = config.NOTIFICATION_LEASE_SECONDS * 1000;
+    let leaseUntil = new Date(now.getTime() + leaseMs);
+    let leaseStartedAt = now.getTime();
     const claimed = await notificationRepository.claimEmailDeliveries(
       database,
       {
         limit: config.NOTIFICATION_BATCH_SIZE,
+        bulkLimit:
+          lanePauseEnd("bulk", now.getTime()) === null
+            ? config.NOTIFICATION_BULK_PER_CYCLE
+            : 0,
+        transactionalPaused:
+          lanePauseEnd("transactional", now.getTime()) !== null,
         now,
         leaseUntil,
         maxAttempts: config.NOTIFICATION_EMAIL_MAX_ATTEMPTS,
       },
     );
-    const result = { sent: 0, retried: 0, failed: 0 };
+    const result = { ...noEmailWork };
 
-    for (const delivery of claimed) {
+    for (const [index, delivery] of claimed.entries()) {
+      // A slow provider must not make the batch outlive its lease: another
+      // worker would re-claim and re-send what is still in flight here.
+      if (Date.now() - leaseStartedAt > leaseMs / 2) {
+        const extended = new Date(Date.now() + leaseMs);
+        await notificationRepository.extendDeliveryLeases(database, {
+          deliveryIds: claimed.slice(index).map((row) => row.id),
+          from: leaseUntil,
+          to: extended,
+        });
+        leaseUntil = extended;
+        leaseStartedAt = Date.now();
+      }
+
+      // The lane rested after this batch was claimed (an earlier message in
+      // it was throttled): back to the queue, no attempt burned.
+      const pausedUntil = lanePauseEnd(delivery.lane, Date.now());
+      if (pausedUntil !== null) {
+        await notificationRepository.markDeliveryRetry(database, {
+          deliveryId: delivery.id,
+          nextAttemptAt: new Date(pausedUntil),
+          error: "Lane paused after a provider throttle",
+          now: new Date(),
+          lockedUntil: leaseUntil,
+          rewindAttempt: true,
+        });
+        result.retried += 1;
+        continue;
+      }
+
       try {
         if (!delivery.destination) {
           throw new Error("Email delivery has no destination.");
@@ -288,6 +383,7 @@ export function createNotificationProcessor({
         const {
           attachments: wanted = [],
           calendar: wantedCalendar,
+          headers = {},
           ...content
         } = emailDeliveryPayloadSchema.parse(delivery.payload);
         const files = await resolveAttachments(
@@ -308,6 +404,9 @@ export function createNotificationProcessor({
         const sendResult = await email.send(delivery.destination, content, {
           attachments: files,
           ...(calendar ? { calendar } : {}),
+          // One id per delivery: Gmail then shows each notice on its own
+          // instead of threading a learner's reminders into one.
+          headers: { ...headers, "X-Entity-Ref-ID": delivery.id },
         });
         if (sendResult.status === "failed") throw sendResult.error;
 
@@ -323,21 +422,56 @@ export function createNotificationProcessor({
         // attempt_count was already incremented at claim time.
         const attemptCount = delivery.attempt_count;
         const message = errorMessage(error);
-        const permanent = error instanceof z.ZodError;
+        const failure = classifyEmailFailure(error);
         const failureTime = new Date();
-        if (
-          permanent ||
+
+        if (failure.pauseLane) {
+          pauseLane(delivery.lane, failureTime.getTime(), failure.reason);
+        }
+        if (failure.suppress && delivery.destination) {
+          await addEmailSuppression(database, {
+            email: delivery.destination,
+            reason: "hard_bounce",
+            source: "smtp",
+            detail: message,
+          });
+        }
+
+        if (failure.kind === "throttled") {
+          await notificationRepository.markDeliveryRetry(database, {
+            deliveryId: delivery.id,
+            nextAttemptAt: new Date(
+              failureTime.getTime() +
+                config.NOTIFICATION_THROTTLE_PAUSE_SECONDS * 1000,
+            ),
+            error: `${failure.reason}: ${message}`,
+            now: failureTime,
+            lockedUntil: leaseUntil,
+            rewindAttempt: true,
+          });
+          result.retried += 1;
+          log.warn(
+            { err: error, deliveryId: delivery.id, lane: delivery.lane },
+            "Provider throttled email; lane paused",
+          );
+        } else if (
+          failure.kind === "permanent" ||
           attemptCount >= config.NOTIFICATION_EMAIL_MAX_ATTEMPTS
         ) {
           await notificationRepository.markDeliveryFailed(database, {
             deliveryId: delivery.id,
-            error: message,
+            error: `${failure.reason}: ${message}`,
             now: failureTime,
             lockedUntil: leaseUntil,
           });
           result.failed += 1;
           log.error(
-            { err: error, deliveryId: delivery.id },
+            {
+              err: error,
+              deliveryId: delivery.id,
+              lane: delivery.lane,
+              suppressed: failure.suppress,
+            },
             "Notification email failed permanently",
           );
         } else {
@@ -348,13 +482,13 @@ export function createNotificationProcessor({
               attemptCount,
               config.NOTIFICATION_RETRY_SECONDS,
             ),
-            error: message,
+            error: `${failure.reason}: ${message}`,
             now: failureTime,
             lockedUntil: leaseUntil,
           });
           result.retried += 1;
           log.warn(
-            { err: error, deliveryId: delivery.id },
+            { err: error, deliveryId: delivery.id, lane: delivery.lane },
             "Notification email scheduled for retry",
           );
         }

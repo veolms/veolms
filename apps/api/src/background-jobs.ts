@@ -24,6 +24,7 @@ import {
   listAllLearnerUserIds,
   listWorkshopAudienceUserIds,
 } from "./modules/workshops/workshop-audience.ts";
+import { listPlatformPermissionHolderIds } from "./modules/authorization/authorization.repository.ts";
 import { findIdsMentionedInCourseContent } from "./modules/courses/curriculum/course-content-reference.service.ts";
 import { createDiscussionUploadStore } from "./modules/discussion-uploads/index.ts";
 import { createAttachmentsRepository } from "./modules/learning/discussions/attachments/attachments.repository.ts";
@@ -563,6 +564,8 @@ function startInlineNotificationLoop(
           audience.listActiveUserIdsForCourse(courseId),
         ),
       listAllLearnerUserIds: () => listAllLearnerUserIds(database),
+      listPermissionHolderUserIds: (permissionKey) =>
+        listPlatformPermissionHolderIds(database, permissionKey),
     },
     recipients: {
       findRecipient: async (userId) => {

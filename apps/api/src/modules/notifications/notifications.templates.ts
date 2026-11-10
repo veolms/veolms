@@ -548,10 +548,10 @@ export function renderNotificationTemplate(
         body: [
           when ? `${workshopTitle} · ${when}.` : `${workshopTitle}.`,
           viaCourse
-            ? `It is included with ${courseTitle || "your course"}: no need to register, the Join button appears on its page.`
+            ? `It is included with ${courseTitle || "your course"}; the Join button appears on its page.`
             : optionalString(data, "free") === "yes"
-              ? "Free: register on its page to get the reminders."
-              : "Register on its page to save a seat.",
+              ? "Free for you; the Join button appears on its page."
+              : "Get a seat on its page.",
         ].join(" "),
       };
       break;
@@ -582,6 +582,15 @@ export function renderNotificationTemplate(
             : `${workshopTitle} has a new schedule. See the workshop page.`,
         };
       }
+      break;
+    }
+    case "email.unsubscribed": {
+      const name = stringValue(data, "name");
+      const email = optionalString(data, "email");
+      inApp = {
+        title: "A learner unsubscribed",
+        body: `${name}${email ? ` (${email})` : ""} unsubscribed from "${stringValue(data, "groupLabel")}" emails. They will not get these emails again; in-app notices continue.`,
+      };
       break;
     }
     case "learning.reminder": {

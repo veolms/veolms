@@ -2,6 +2,7 @@ import type {
   NotificationCategory,
   NotificationChannel,
 } from "@veolms/contracts";
+import type { NotificationDeliveryLane } from "@veolms/database";
 import type { EmailAttachment } from "@veolms/services/email";
 
 export type NotificationTemplateKey =
@@ -36,7 +37,8 @@ export type NotificationTemplateKey =
   | "workshop.reminder"
   | "workshop.recording_ready"
   | "workshop.updated"
-  | "workshop.announced";
+  | "workshop.announced"
+  | "email.unsubscribed";
 
 export type NotificationTemplateData = Record<
   string,
@@ -75,6 +77,12 @@ export interface NotificationIntent {
    * all is PUSH_ROUTES in the contracts, not the handlers.
    */
   push?: boolean;
+  /**
+   * Which email queue it waits in. `bulk` for notices sent to everyone in a
+   * course or to many people at once: they go out a few at a time behind
+   * `transactional` mail, which one person's own action caused.
+   */
+  lane?: NotificationDeliveryLane;
 }
 
 /**
@@ -104,6 +112,8 @@ export interface NotificationHandlerDependencies {
   listWorkshopRegistrantUserIds?(workshopId: string): Promise<string[]>;
   /** Every learner on the platform, for a workshop announced to everyone. */
   listAllLearnerUserIds?(): Promise<string[]>;
+  /** Team members whose roles grant this permission across the platform. */
+  listPermissionHolderUserIds?(permissionKey: string): Promise<string[]>;
 }
 
 /** A chat message to push, with who should get it (from the chat module). */

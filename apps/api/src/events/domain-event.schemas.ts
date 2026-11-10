@@ -304,6 +304,16 @@ export const workshopUpdatedEventSchema = z.strictObject({
   timeZone: z.string().nullable(),
 });
 
+/** Someone turned off a group of emails from an email's unsubscribe link. */
+export const emailUnsubscribedEventSchema = z.strictObject({
+  userId: z.uuid(),
+  username: z.string().nullable(),
+  name: z.string(),
+  email: z.string().nullable(),
+  group: z.string().min(1),
+  groupLabel: z.string().min(1),
+});
+
 /** A workshop was published: tell its course's learners, or everyone. */
 export const workshopAnnouncedEventSchema = z.strictObject({
   workshopId: z.uuid(),

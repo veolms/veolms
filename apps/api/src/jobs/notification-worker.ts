@@ -23,6 +23,7 @@ import {
   listAllLearnerUserIds,
   listWorkshopAudienceUserIds,
 } from "../modules/workshops/workshop-audience.ts";
+import { listPlatformPermissionHolderIds } from "../modules/authorization/authorization.repository.ts";
 import { createServices } from "../services/index.ts";
 import { createEmailService } from "@veolms/services/email";
 
@@ -39,6 +40,8 @@ const email = createEmailService({
     user: config.SMTP_USER,
     pass: config.SMTP_PASS,
     from: config.EMAIL_FROM,
+    replyTo: config.EMAIL_REPLY_TO,
+    ratePerSecond: config.EMAIL_RATE_PER_SECOND,
   },
 });
 
@@ -78,6 +81,8 @@ try {
           audience.listActiveUserIdsForCourse(courseId),
         ),
       listAllLearnerUserIds: () => listAllLearnerUserIds(database),
+      listPermissionHolderUserIds: (permissionKey) =>
+        listPlatformPermissionHolderIds(database, permissionKey),
     },
     recipients: {
       findRecipient: async (userId) => {

@@ -257,6 +257,7 @@ export function createLifecycleService({
     courseId: string,
     creatorId: string,
     userRoles?: readonly string[],
+    options: { notifyLearners?: boolean | undefined } = {},
   ) {
     const course = await getCourseAndVerifyOwner(
       courseId,
@@ -288,18 +289,25 @@ export function createLifecycleService({
         },
       );
       assertOptimisticUpdate(result);
-      await outbox.publish(trx, {
-        type: "course.published",
-        version: 1,
-        dedupeKey: `course.published:${course.id}:v${course.version + 1}`,
-        occurredAt: now,
-        payload: {
-          courseId: course.id,
-          courseSlug: course.slug,
-          courseTitle: course.title,
-          creatorUserId: course.creator_id,
-        },
-      });
+      // Learners hear about a course the first time it is published. A
+      // re-publish after edits used to mail every enrollee again; now it
+      // does so only when asked (notifyLearners).
+      const notifyLearners =
+        options.notifyLearners ?? course.published_at === null;
+      if (notifyLearners) {
+        await outbox.publish(trx, {
+          type: "course.published",
+          version: 1,
+          dedupeKey: `course.published:${course.id}:v${course.version + 1}`,
+          occurredAt: now,
+          payload: {
+            courseId: course.id,
+            courseSlug: course.slug,
+            courseTitle: course.title,
+            creatorUserId: course.creator_id,
+          },
+        });
+      }
       return result;
     });
 

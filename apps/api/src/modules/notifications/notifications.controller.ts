@@ -1,4 +1,5 @@
 import type {
+  EmailUnsubscribeParams,
   NotificationListQuery,
   UpdateNotificationPreferences,
 } from "@veolms/contracts";
@@ -8,6 +9,13 @@ import {
   createNotificationStreamHandler,
   type NotificationStreamHub,
 } from "./notification-stream.ts";
+import { config } from "../../config.ts";
+import { AppError } from "../../lib/errors.ts";
+import {
+  readUnsubscribeToken,
+  renderUnsubscribePage,
+  unsubscribeGroupLabel,
+} from "./email-unsubscribe.ts";
 import type { NotificationService } from "./notifications.service.ts";
 
 export function createNotificationController({
@@ -65,6 +73,51 @@ export function createNotificationController({
     return await service.updatePreferences(request.user!.id, request.body);
   }
 
+  function settingsUrl(): string {
+    return new URL("/settings/notifications", config.WEB_URL).toString();
+  }
+
+  async function showUnsubscribePage(
+    request: FastifyRequest<{
+      Params: EmailUnsubscribeParams;
+      Querystring: { done?: string | undefined };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const claims = readUnsubscribeToken(request.params.token);
+    void reply
+      .type("text/html; charset=utf-8")
+      .header("Cache-Control", "no-store")
+      .header("X-Robots-Tag", "noindex");
+    return renderUnsubscribePage({
+      academyName: config.ACADEMY_NAME,
+      state: claims ? (request.query.done === "1" ? "done" : "ask") : "invalid",
+      ...(claims ? { groupLabel: unsubscribeGroupLabel(claims.group) } : {}),
+      settingsUrl: settingsUrl(),
+    });
+  }
+
+  async function unsubscribe(
+    request: FastifyRequest<{ Params: EmailUnsubscribeParams }>,
+    reply: FastifyReply,
+  ) {
+    const result = await service.unsubscribeByToken(request.params.token);
+    if ((request.headers.accept ?? "").includes("text/html")) {
+      // The page's own button: back to the page, which now confirms (or,
+      // for a bad link, says so).
+      const path = request.url.split("?")[0] ?? request.url;
+      return reply.redirect(`${path}?done=1`, 303);
+    }
+    if (!result) {
+      throw new AppError(
+        404,
+        "UNSUBSCRIBE_LINK_INVALID",
+        "This unsubscribe link is invalid or has expired.",
+      );
+    }
+    return { unsubscribed: true as const, group: result.group };
+  }
+
   return {
     streamChanges,
     list,
@@ -75,6 +128,8 @@ export function createNotificationController({
     archive,
     getPreferences,
     updatePreferences,
+    showUnsubscribePage,
+    unsubscribe,
   };
 }
 

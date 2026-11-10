@@ -123,6 +123,7 @@ import type {
   NotificationTable,
   NotificationDeliveryTable,
   NotificationPreferenceTable,
+  EmailSuppressionTable,
   PushDeviceTable,
   PushDeliveryTable,
 } from "./notifications.schema.ts";
@@ -267,6 +268,7 @@ export interface Database {
   notifications: NotificationTable;
   notification_deliveries: NotificationDeliveryTable;
   notification_preferences: NotificationPreferenceTable;
+  email_suppressions: EmailSuppressionTable;
   push_devices: PushDeviceTable;
   push_deliveries: PushDeliveryTable;
 
