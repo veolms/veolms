@@ -2243,6 +2243,7 @@ export function CurriculumStepPanel({
                                                         {les.contentType ===
                                                         "video" ? (
                                                           <LessonVideoUpload
+                                                            attachWhileProcessing
                                                             mediaAssetId={
                                                               les.contentMediaId
                                                             }

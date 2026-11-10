@@ -61,6 +61,8 @@ export interface LessonVideoUploadProps {
     mediaAssetId: string,
   ) => void | boolean | Promise<void | boolean>;
   onProcessingComplete?: (mediaAssetId: string) => void | Promise<void>;
+  /** Persist a lesson's first uploaded video before transcoding completes. */
+  attachWhileProcessing?: boolean;
   /**
    * Called once per uploaded asset when its generated thumbnail can be shown.
    * The transcoder captures the thumbnail before encoding renditions, so it
@@ -141,6 +143,7 @@ export const LessonVideoUpload = forwardRef<
     stackStatusBelow = false,
     onPreviewFile,
     onMediaAttached,
+    attachWhileProcessing = false,
     onProcessingComplete,
     onThumbnailAvailable,
     youtubeImport = null,
@@ -272,9 +275,7 @@ export const LessonVideoUpload = forwardRef<
 
       if (result === false) {
         committedMediaIdRef.current = null;
-        setAttachmentError(
-          "The video is ready, but it could not be attached to this lesson.",
-        );
+        setAttachmentError("The video could not be attached to this lesson.");
         return;
       }
 
@@ -285,14 +286,13 @@ export const LessonVideoUpload = forwardRef<
       replacementForMediaIdRef.current = null;
       setSelectedFile(null);
       uploadedThisSessionRef.current = false;
-      setPhase("ready");
     } catch (error: unknown) {
       if (!mountedRef.current) return;
       committedMediaIdRef.current = null;
       setAttachmentError(
         error instanceof Error
           ? error.message
-          : "The video is ready, but it could not be attached to this lesson.",
+          : "The video could not be attached to this lesson.",
       );
     } finally {
       if (committingMediaIdRef.current === candidateId) {
@@ -621,7 +621,6 @@ export const LessonVideoUpload = forwardRef<
       replacementForMediaIdRef.current = null;
       setSelectedFile(null);
       uploadedThisSessionRef.current = false;
-      setPhase("ready");
       setProgressStreamError(null);
       setAttachmentError(null);
       setErrorMessage(null);
@@ -882,9 +881,9 @@ export const LessonVideoUpload = forwardRef<
   }, [adoptAttachedVideoStatus, attachedStatus, isAttachedOnly, mediaAssetId]);
 
   const retryAttachment = useCallback(async () => {
-    if (!candidateMediaId || phase !== "ready") return;
+    if (!candidateMediaId) return;
     await commitCandidate(candidateMediaId);
-  }, [candidateMediaId, commitCandidate, phase]);
+  }, [candidateMediaId, commitCandidate]);
 
   const validateFile = useCallback((file: File): string | null => {
     if (!file.type.toLowerCase().startsWith("video/")) {
@@ -1034,6 +1033,9 @@ export const LessonVideoUpload = forwardRef<
         setHasReceivedProgress(false);
         setAttachmentError(null);
         setTrackProgress(true);
+        if (attachWhileProcessing && !mediaAssetId) {
+          void commitCandidate(result.mediaAssetId);
+        }
       } catch (error: unknown) {
         if (
           !mountedRef.current ||
@@ -1057,6 +1059,8 @@ export const LessonVideoUpload = forwardRef<
     },
     [
       activeMediaId,
+      attachWhileProcessing,
+      commitCandidate,
       mediaAssetId,
       onPreviewFile,
       phase,
@@ -1125,7 +1129,9 @@ export const LessonVideoUpload = forwardRef<
       (phase === "failed" && !isStreamError)),
   );
   const canRetryAttachment = Boolean(
-    candidateMediaId && phase === "ready" && attachmentError,
+    candidateMediaId &&
+    attachmentError &&
+    (phase === "ready" || phase === "transcoding"),
   );
   const canRetry = Boolean(
     activeMediaId &&
@@ -1564,7 +1570,7 @@ export const LessonVideoUpload = forwardRef<
                           </p>
                           <p className="m-0 mt-0.5 text-[0.7rem] text-(--muted) sm:text-[0.72rem]">
                             {canRetryAttachment
-                              ? "The video is ready, but the lesson update did not save. Retry attaching it."
+                              ? "The lesson update did not save. Retry attaching the video."
                               : canRetryTranscoding
                                 ? isFollowingImport
                                   ? "You can restart the import; finished steps are kept."

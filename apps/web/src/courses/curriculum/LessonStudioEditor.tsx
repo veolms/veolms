@@ -570,6 +570,7 @@ export const LessonStudioEditor = forwardRef<
                   ref={videoUploadRef}
                   inline
                   hideTrigger
+                  attachWhileProcessing
                   mediaAssetId={mediaInfo?.id}
                   disabled={isSaving}
                   onPreviewFile={setPreviewFile}
