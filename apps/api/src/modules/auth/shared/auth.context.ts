@@ -61,7 +61,7 @@ export function createAuthContext({
     services,
     getAcademyBrand: academyBrandService.getBrand,
   });
-  const sessionService = createSessionService({ database });
+  const sessionService = createSessionService({ database, otpService });
   const middleware = createAuthMiddleware(sessionService);
   const authService = createAuthService({
     database,

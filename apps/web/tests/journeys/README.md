@@ -11,6 +11,7 @@ watching the video, paying, and checking what is saved.
 | `03-buying-a-course.spec.ts`   | Paying, cancelling the payment, free courses, invitation-only courses                                                     |
 | `04-learning-progress.spec.ts` | Completed lessons, course progress, resuming on another device                                                            |
 | `05-staff-area.spec.ts`        | The staff pages: closed to learners and visitors, open to the administrator                                               |
+| `06-active-sessions.spec.ts`   | Active sessions locked state and identity verification before viewing or revoking devices                                 |
 
 ## Running them
 
