@@ -23,6 +23,8 @@ import { StudentsTable } from "./StudentsTable";
 import { StudentFiltersBar } from "./StudentFiltersBar";
 import { StudentsTableSkeleton } from "./StudentsTableSkeleton";
 import { ElevatedCard } from "../components/ElevatedCard";
+import { withKeepScroll } from "../shell/applicationScroll";
+import { rememberStudentsListSearch } from "./studentsListPath";
 
 const AddStudentPanel = lazy(() =>
   import("./AddStudentPanel").then((module) => ({
@@ -36,7 +38,12 @@ export interface StudentsPageProps {
 }
 
 export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
-  const [searchQuery, setSearchQuery] = useState("");
+  // The search is kept in the address (`?q=`): Back from a student, a
+  // reload or a shared link brings the same results back.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(
+    () => searchParams.get("q") ?? "",
+  );
   const [debouncedSearch, searchControls] = useDebounceValue(
     searchQuery.trim(),
     DEFAULT_DEBOUNCE_DELAY_MS,
@@ -56,7 +63,6 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
   // A course card's "Manage Students" link opens this page with ?course=<id>,
   // which used to be ignored. It is read once and becomes the course filter
   // only if it is one of the filter's own options.
-  const [searchParams] = useSearchParams();
   const [requestedCourseId, setRequestedCourseId] = useState(
     () => searchParams.get("course") || null,
   );
@@ -83,6 +89,29 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
     if (!courseRecords) return [];
     return courseRecords.map(({ id, title }) => ({ id, title }));
   }, [courseRecords]);
+
+  // Written once typing settles, in place of the current entry: Back leaves
+  // the list rather than stepping through every letter typed.
+  const addressQuery = searchParams.get("q") ?? "";
+  useEffect(() => {
+    if (addressQuery === debouncedSearch) return;
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (debouncedSearch) next.set("q", debouncedSearch);
+        else next.delete("q");
+        return next;
+      },
+      { replace: true, state: withKeepScroll(null) },
+    );
+    // Follows the typed search only; the address is what it writes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+  useEffect(() => {
+    rememberStudentsListSearch(
+      addressQuery ? `?q=${encodeURIComponent(addressQuery)}` : "",
+    );
+  }, [addressQuery]);
 
   const cleanSearch = debouncedSearch.replace(/^@+/, "").trim();
 
