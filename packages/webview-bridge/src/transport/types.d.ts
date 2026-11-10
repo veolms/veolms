@@ -5,6 +5,10 @@ import type {
 
 /**
  * Event handler callback for native events.
+ *
+ * `T` is the payload type the caller expects; it is not checked at runtime. Native can deliver
+ * `null` (an explicit `"payload": null`, or an omitted `payload`, which is delivered as `null`),
+ * so include it in `T` (e.g. `onEvent<string | null>(...)`) when the event may carry no payload.
  */
 export type BridgeEventHandler<T = BridgeValue> = (payload: T) => void;
 
