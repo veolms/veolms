@@ -72,6 +72,8 @@ import {
 import { TimeAgo } from "../components/TimeAgo";
 import type { CreatorHeart } from "@veolms/contracts";
 import { CreatorHeartButton, PinnedLabel } from "./CreatorHeartButton";
+import { useCommentTapGestures } from "./useCommentTapGestures";
+import { useReplyHeartMutation } from "../services/learning-interactions/thread-marks";
 import { useThreadStaffActions } from "./useThreadStaffActions";
 import { cheerLike } from "../components/likeFeedback";
 
@@ -95,6 +97,8 @@ export interface CommentReply {
   isOwn?: boolean;
   isAccepted?: boolean;
   attachments?: DiscussionAttachmentItem[];
+  /** The creator's heart, as on a comment. */
+  creatorHeart?: CreatorHeart | null;
 }
 
 export interface Comment {
@@ -376,6 +380,11 @@ export const CommentCard = React.memo(function CommentCard({
     },
     canModerate,
     onNotice: onCopyTextNotice,
+  });
+  // Double tap likes, triple tap opens the thread.
+  const tapGestures = useCommentTapGestures({
+    onOpenThread:
+      onOpenThread && !isNote ? () => onOpenThread(comment.id) : undefined,
   });
 
   const {
@@ -666,11 +675,15 @@ export const CommentCard = React.memo(function CommentCard({
       aria-current={isDeepLinkTarget ? "location" : undefined}
       tabIndex={isDeepLinkTarget ? -1 : undefined}
       data-deletion-pending={deletion.hidden || undefined}
+      data-tap-gesture=""
+      style={tapGestures.style}
+      onMouseDown={tapGestures.onMouseDown}
       className={`relative ${constrainToContainer ? "-mx-(--learning-lesson-content-inset) px-(--learning-lesson-content-inset) py-3.5 sm:py-4" : "-mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4"} ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""} ${showHighlightedLabel ? `max-sm:mt-4 bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] shadow-[inset_3px_0_0_var(--accent)]` : ""}`}
       onPointerDown={(event) => {
         pressStartRef.current = { x: event.clientX, y: event.clientY };
       }}
       onClick={(event) => {
+        tapGestures.onClick(event);
         if (!hasReplies) return;
         const pressStart = pressStartRef.current;
         pressStartRef.current = null;
@@ -980,6 +993,7 @@ export const CommentCard = React.memo(function CommentCard({
                       }}
                       aria-pressed={isCommentLiked}
                       aria-label={isCommentLiked ? "Unlike" : "Like"}
+                      data-comment-like
                       className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isCommentLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
                     >
                       <span
@@ -1083,6 +1097,13 @@ export const CommentCard = React.memo(function CommentCard({
                           courseId={courseId}
                           mentionsEnabled={true}
                           onChange={setReplyDraft}
+                          // Enter posts (Shift+Enter for a new line), as in
+                          // the comment box.
+                          onSubmitShortcut={() => {
+                            if (hasDiscussionDraftContent(replyDraft)) {
+                              addReply();
+                            }
+                          }}
                         />
                       </span>
                     </label>
@@ -1154,6 +1175,11 @@ export const CommentCard = React.memo(function CommentCard({
                     onEdit={handleEditReply}
                     onDelete={handleDeleteReply}
                     onLike={handleLikeReply}
+                    canHeart={staff.canMark}
+                    threadServerId={getServerEntityId(comment)}
+                    onOpenThread={
+                      onOpenThread ? () => onOpenThread(comment.id) : undefined
+                    }
                     onReport={() =>
                       onReport?.({
                         targetType: "reply",
@@ -1258,6 +1284,12 @@ interface ReplyCardProps {
    * around it, which carries the link's own highlight.
    */
   isLinked?: boolean;
+  /** Course staff on a public post: may give the creator's heart. */
+  canHeart?: boolean;
+  /** The post's id on the server, where its replies are kept. */
+  threadServerId?: string;
+  /** Opens the thread the reply is in (a triple tap). */
+  onOpenThread?: () => void;
 }
 
 function ReplyCard({
@@ -1278,7 +1310,16 @@ function ReplyCard({
   onCopyTextNotice,
   courseId,
   isLinked = false,
+  canHeart = false,
+  threadServerId,
+  onOpenThread,
 }: ReplyCardProps) {
+  // Double tap likes the reply, triple tap opens its thread.
+  const tapGestures = useCommentTapGestures({ onOpenThread });
+  const heartMutation = useReplyHeartMutation({
+    onError: (error) =>
+      onCopyTextNotice?.(error.message || "That change could not be saved."),
+  });
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState<DiscussionDraft>(
     reply.content ?? createDiscussionDraft(reply.text),
@@ -1293,6 +1334,8 @@ function ReplyCard({
   const replyServerId = getServerEntityId(reply);
   const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
   const isEditing = optimisticEditCoordinator.isEditing("reply", replyClientId);
+  const canGiveHeart =
+    canHeart && Boolean(courseId && replyServerId && threadServerId);
 
   const saveEdit = async () => {
     if (!hasDiscussionDraftContent(editDraft)) return;
@@ -1313,6 +1356,10 @@ function ReplyCard({
     <article
       id={`discussion-entry-${reply.id}`}
       data-deletion-pending={deletion.hidden || undefined}
+      data-tap-gesture=""
+      style={tapGestures.style}
+      onMouseDown={tapGestures.onMouseDown}
+      onClick={tapGestures.onClick}
       data-linked-reply={isLinked || undefined}
       aria-current={isLinked ? "location" : undefined}
       className={`relative pl-8 sm:pl-14 ${deletion.hidden ? "min-h-10" : ""} ${isLinked ? "rounded-xl bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] py-2 pr-2 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--accent)_70%,transparent)]" : ""}`}
@@ -1474,6 +1521,7 @@ function ReplyCard({
                     }}
                     aria-pressed={isReplyLiked}
                     aria-label={isReplyLiked ? "Unlike reply" : "Like reply"}
+                    data-comment-like
                     className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isReplyLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
                   >
                     <span
@@ -1506,6 +1554,23 @@ function ReplyCard({
                     />
                   </button>
                 )}
+                <CreatorHeartButton
+                  heart={reply.creatorHeart}
+                  canGive={canGiveHeart}
+                  size="sm"
+                  onToggle={(give) => {
+                    if (!courseId || !replyServerId || !threadServerId) return;
+                    heartMutation.mutate({
+                      reply: {
+                        id: replyServerId,
+                        threadId: threadServerId,
+                        courseId,
+                        creatorHeart: reply.creatorHeart,
+                      },
+                      give,
+                    });
+                  }}
+                />
               </div>
             </div>
           </div>

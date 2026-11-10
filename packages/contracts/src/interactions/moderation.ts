@@ -122,7 +122,8 @@ export const moderateThreadRequestSchema = z.object({
 export type ModerateThreadRequest = z.infer<typeof moderateThreadRequestSchema>;
 
 export const moderateReplyRequestSchema = z.object({
-  action: z.enum(["hide", "unhide", "delete"]),
+  /** `heart` gives a reply the creator's heart, as on a comment. */
+  action: z.enum(["hide", "unhide", "delete", "heart", "unheart"]),
   reason: z.string().max(500).optional(),
 });
 export type ModerateReplyRequest = z.infer<typeof moderateReplyRequestSchema>;

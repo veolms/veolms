@@ -13,6 +13,7 @@ import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
 import { DiscussionAvatar } from "../learning/DiscussionAvatar";
 import type { NavigateTo } from "../routing/navigation";
 import { DiscussionLikeButton } from "./DiscussionLikeButton";
+import { useCommentTapGestures } from "../learning/useCommentTapGestures";
 import { DiscussionRowAction } from "./DiscussionRowAction";
 import { DiscussionStaffActions } from "./DiscussionStaffActions";
 import { DiscussionWorkspaceActionMenu } from "./DiscussionWorkspaceActionMenu";
@@ -195,6 +196,10 @@ export function DiscussionWorkspaceRow({
     if ((event.target as HTMLElement).closest("a,button,[role=menu]")) return;
     select();
   };
+  // Double tap likes the post, triple tap opens it.
+  const tapGestures = useCommentTapGestures({
+    onOpenThread: () => onOpen(card),
+  });
   const openFromKey = (event: KeyboardEvent<HTMLElement>) => {
     if (event.target !== event.currentTarget) return;
     if (event.key !== "Enter" && event.key !== " ") return;
@@ -216,7 +221,13 @@ export function DiscussionWorkspaceRow({
           ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] shadow-[inset_3px_0_0_var(--accent)]"
           : "hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]"
       }`}
-      onClick={open}
+      data-tap-gesture=""
+      style={tapGestures.style}
+      onMouseDown={tapGestures.onMouseDown}
+      onClick={(event) => {
+        tapGestures.onClick(event);
+        open(event);
+      }}
     >
       <DiscussionAvatar
         src={card.avatar || null}

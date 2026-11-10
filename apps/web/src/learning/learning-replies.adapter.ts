@@ -35,5 +35,6 @@ export function adaptLearningReplyToCommentReply(
     isOwn: Boolean(reply.isOwn),
     isAccepted: Boolean(reply.isAccepted),
     attachments: reply.attachments || [],
+    creatorHeart: reply.creatorHeart ?? null,
   };
 }
