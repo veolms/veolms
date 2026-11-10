@@ -148,3 +148,31 @@ test("an uploaded video stays with its lesson while transcoding is queued", asyn
     reopened.getByText("Video attached", { exact: true }).first(),
   ).toBeVisible();
 });
+
+test("adding a lesson updates the link to the new lesson", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    status: "draft",
+    lessons: [{ title: "Existing lesson", video: "none" }],
+  });
+  await academy.signInAsAdmin();
+  await page.goto(`/courses/${course.id}/edit/curriculum`);
+  const expandSection = page.getByRole("button", { name: "Expand section" });
+  if (await expandSection.count()) await expandSection.first().click();
+  await page
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  const previousUrl = page.url();
+  await page.getByRole("button", { name: "Add Lesson" }).first().click();
+  await expect.poll(() => page.url()).not.toBe(previousUrl);
+  const newLessonUrl = new URL(page.url());
+  expect(newLessonUrl.searchParams.get("lessonId")).toBeTruthy();
+  expect(newLessonUrl.searchParams.get("lessonId")).not.toBe(
+    new URL(previousUrl).searchParams.get("lessonId"),
+  );
+  await page.reload();
+  await expect(page.getByText("New Lesson 2").first()).toBeVisible();
+});

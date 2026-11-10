@@ -985,6 +985,8 @@ export function CourseCreatePage({
     saveAllDirtyLessons,
     handleToggleLessonExpand,
   } = useLessonHandlers({
+    onLessonCreated: (sectionId, lessonId) =>
+      navigateToCurriculumFocus(sectionId, lessonId),
     currentCourseId,
     currentCourseIdRef,
     refetchEditor,
