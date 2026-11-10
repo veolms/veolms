@@ -14,6 +14,7 @@ import {
   learningStreakMilestoneEventSchema,
   moderationContentModeratedEventSchema,
   moderationReportResolvedEventSchema,
+  supportAssignedEventSchema,
   supportReplyPostedEventSchema,
   moderationUserSuspendedEventSchema,
   moderationUserUnsuspendedEventSchema,
@@ -452,6 +453,30 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         // An answer to something the learner asked us; not a preference.
         mandatory: true,
         deepLink: `/support/${event.ticketId}`,
+      },
+    ];
+  },
+  "support.assigned": async (payload) => {
+    const event = supportAssignedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "support.assigned",
+        category: "transactional",
+        templateKey: "support.assigned",
+        templateData: {
+          ticketNumber: String(event.ticketNumber),
+          ticketKind: event.ticketKind,
+          ticketTitle: event.ticketTitle,
+          assignedByName: event.assignedByName,
+        },
+        channels: commonChannels,
+        // Work handed to a team member; not a preference.
+        mandatory: true,
+        deepLink:
+          event.ticketKind === "feedback"
+            ? `/support-inbox/feedback?ticket=${event.ticketId}`
+            : `/support-inbox?ticket=${event.ticketId}`,
       },
     ];
   },
