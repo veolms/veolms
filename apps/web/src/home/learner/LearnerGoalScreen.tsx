@@ -53,7 +53,7 @@ import {
 const screenClasses = [
   "relative size-full overflow-hidden bg-[#070b1c] text-(--goal-ink)",
   "[--goal-accent:color-mix(in_srgb,var(--accent)_60%,white)]",
-  "supports-[color:oklch(from_white_l_c_h)]:[--goal-accent:oklch(from_var(--accent)_max(l,0.76)_c_h)]",
+  "supports-[color:oklch(from_white_l_c_h)]:[--goal-accent:oklab(from_var(--accent)_max(l,0.76)_a_b)]",
   "[--goal-ink:color-mix(in_srgb,var(--goal-accent)_55%,white)]",
   "supports-[color:oklch(from_white_l_c_h)]:[--goal-ink:oklch(from_var(--goal-accent)_max(l,0.92)_min(c,0.11)_h)]",
 ].join(" ");

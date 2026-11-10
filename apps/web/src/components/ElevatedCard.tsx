@@ -24,6 +24,11 @@ import type { ComponentProps, ElementType } from "react";
  *   behind it.
  * - The shadow, in `elevatedCardShadowClasses`.
  *
+ * The lighter and darker steps are relative `oklab(from … a b)`, never
+ * `oklch(from … c h)`: Chrome 157 turns the hue of a converted, nearly
+ * grey colour into `none` (0°, red), which tinted every card red. Moving
+ * only `l` in oklab gives the same colour with no hue to lose.
+ *
  * Written out in full: Tailwind only generates classes it can read as
  * literals.
  */
@@ -42,10 +47,10 @@ import type { ComponentProps, ElementType } from "react";
 export const deepGroundClasses = [
   "in-data-[content-layout=framed]:bg-(--card-ground)!",
   "in-data-[content-layout=framed]:[--card-ground:color-mix(in_srgb,var(--main-surface)_42%,var(--canvas))]",
-  "[:root[data-theme=light]_&]:supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:[--card-ground:oklch(from_var(--main-surface)_calc(l_-_0.018)_c_h)]",
+  "[:root[data-theme=light]_&]:supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:[--card-ground:oklab(from_var(--main-surface)_calc(l_-_0.018)_a_b)]",
   "in-data-[content-layout=framed]:[--elevated-card:color-mix(in_srgb,var(--main-surface)_60%,var(--surface))]",
-  "supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:[--elevated-card:oklch(from_var(--card-ground)_calc(l_+_0.042)_c_h)]",
-  "[:root[data-theme=light]_&]:supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:[--elevated-card:oklch(from_var(--card-ground)_calc(l_+_0.03)_c_h)]",
+  "supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:[--elevated-card:oklab(from_var(--card-ground)_calc(l_+_0.042)_a_b)]",
+  "[:root[data-theme=light]_&]:supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:[--elevated-card:oklab(from_var(--card-ground)_calc(l_+_0.03)_a_b)]",
   "in-data-[content-layout=framed]:[--card-surface:var(--elevated-card)] in-data-[content-layout=framed]:[--card-surface-raised:var(--elevated-card)]",
   "in-data-[content-layout=framed]:[--card-surface-hover:color-mix(in_srgb,var(--text)_4%,var(--elevated-card))]",
   "[:root:not([data-elevated-surfaces=false])_&]:in-data-[content-layout=framed]:[--card-shadow:inset_0_1px_0_rgb(255_255_255/0.07),0_10px_22px_-12px_rgb(0_0_0/0.4),0_22px_44px_-24px_rgb(0_0_0/0.45)]",
@@ -57,8 +62,8 @@ export const deepGroundClasses = [
 const elevatedCardFillTokenClasses = [
   "[--elevated-card:var(--surface)]",
   "in-data-[content-layout=framed]:in-data-deep-ground:[--elevated-card:color-mix(in_srgb,var(--main-surface)_60%,var(--surface))]",
-  "supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:in-data-deep-ground:[--elevated-card:oklch(from_var(--card-ground)_calc(l_+_0.042)_c_h)]",
-  "[:root[data-theme=light]_&]:supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:in-data-deep-ground:[--elevated-card:oklch(from_var(--card-ground)_calc(l_+_0.03)_c_h)]",
+  "supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:in-data-deep-ground:[--elevated-card:oklab(from_var(--card-ground)_calc(l_+_0.042)_a_b)]",
+  "[:root[data-theme=light]_&]:supports-[color:oklch(from_white_l_c_h)]:in-data-[content-layout=framed]:in-data-deep-ground:[--elevated-card:oklab(from_var(--card-ground)_calc(l_+_0.03)_a_b)]",
 ].join(" ");
 
 const elevatedCardShadowClasses = [
