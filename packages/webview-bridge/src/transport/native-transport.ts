@@ -1,10 +1,10 @@
-import { MetadataRegistry } from "../bridge/metadata.ts";
 import type { NativeEndpoint } from "../endpoint/types.d.ts";
 import {
   decodeBridgeMessage,
   encodeBridgeMessage,
   isBridgeEvent,
   isBridgeReply,
+  normalizeBridgeValue,
 } from "../protocol/codec.ts";
 import {
   CLIENT_VERSION,
@@ -26,6 +26,7 @@ import {
   BridgeError,
   BridgeInitializationError,
   BridgeNativeError,
+  BridgeProtocolError,
   BridgeTimeoutError,
   BridgeTransportError,
 } from "./errors.ts";
@@ -34,6 +35,17 @@ import type {
   NativeTransport,
   NativeTransportOptions,
 } from "./types.d.ts";
+
+/**
+ * Default timeout for invoke/get/set requests when no `defaultTimeoutMs` is configured.
+ * Pass `defaultTimeoutMs: 0` to disable timeouts (e.g. for long-running native operations).
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+
+/**
+ * Timeout for the initialization handshake when no explicit `defaultTimeoutMs` is configured.
+ */
+const DEFAULT_INIT_TIMEOUT_MS = 10000;
 
 /**
  * Internal pending request tracker entry.
@@ -81,14 +93,16 @@ export class DefaultNativeTransport implements NativeTransport {
   >();
 
   private endpointUnsubscribe: (() => void) | null = null;
-  private metadataRegistry: MetadataRegistry | null = null;
+  private metadataPayload: BridgeMetadataPayload | null = null;
+  private readonly explicitTimeoutMs: number | undefined;
   private activeSessionId: string | null = null;
   private isDisposed = false;
 
   constructor(endpoint: NativeEndpoint, options?: NativeTransportOptions) {
     this.endpoint = endpoint;
+    this.explicitTimeoutMs = options?.defaultTimeoutMs;
     this.options = {
-      defaultTimeoutMs: options?.defaultTimeoutMs ?? 0,
+      defaultTimeoutMs: options?.defaultTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
     };
     this.attachEndpointListener();
   }
@@ -98,11 +112,11 @@ export class DefaultNativeTransport implements NativeTransport {
   }
 
   public get metadata(): BridgeMetadataPayload | null {
-    return this.metadataRegistry ? this.metadataRegistry.rawPayload : null;
+    return this.metadataPayload;
   }
 
   public get isInitialized(): boolean {
-    return this.metadataRegistry !== null;
+    return this.metadataPayload !== null;
   }
 
   public get sessionId(): string | null {
@@ -116,12 +130,14 @@ export class DefaultNativeTransport implements NativeTransport {
       );
     }
 
-    if (this.metadataRegistry) {
-      return this.metadataRegistry.rawPayload;
+    if (this.metadataPayload) {
+      return this.metadataPayload;
     }
 
     const initTimeout =
-      this.options.defaultTimeoutMs > 0 ? this.options.defaultTimeoutMs : 10000;
+      this.explicitTimeoutMs !== undefined && this.explicitTimeoutMs > 0
+        ? this.explicitTimeoutMs
+        : DEFAULT_INIT_TIMEOUT_MS;
     const jsSessionId = generateUUID();
 
     try {
@@ -164,7 +180,13 @@ export class DefaultNativeTransport implements NativeTransport {
         sessionId: finalSessionId,
       };
 
-      this.metadataRegistry = new MetadataRegistry(normalizedMetadata);
+      if (!Array.isArray(normalizedMetadata.capabilities)) {
+        throw new BridgeInitializationError(
+          `Initialization reply for endpoint "${this.endpoint.name}" has no capabilities array.`,
+        );
+      }
+
+      this.metadataPayload = normalizedMetadata;
       this.activeSessionId = finalSessionId;
       return normalizedMetadata;
     } catch (err) {
@@ -184,7 +206,14 @@ export class DefaultNativeTransport implements NativeTransport {
     args?: BridgeValue[],
     timeoutMs?: number,
   ): Promise<T> {
-    return this.sendRequest<T>(OPERATIONS.INVOKE, path, args ?? [], timeoutMs);
+    const wireArgs = this.normalizeOutbound(
+      () =>
+        (args ?? []).map((arg, i) =>
+          normalizeBridgeValue(arg, `argument ${i}`),
+        ),
+      path,
+    );
+    return this.sendRequest<T>(OPERATIONS.INVOKE, path, wireArgs, timeoutMs);
   }
 
   public async get<T extends BridgeValue = BridgeValue>(
@@ -199,7 +228,25 @@ export class DefaultNativeTransport implements NativeTransport {
     value: BridgeValue,
     timeoutMs?: number,
   ): Promise<void> {
-    await this.sendRequest<void>(OPERATIONS.SET, path, value, timeoutMs);
+    const wireValue = this.normalizeOutbound(
+      () => normalizeBridgeValue(value, "value"),
+      path,
+    );
+    await this.sendRequest<void>(OPERATIONS.SET, path, wireValue, timeoutMs);
+  }
+
+  /**
+   * Validates outbound values before they are serialized, turning lossy or unserializable values
+   * into a `BridgeProtocolError` instead of silent data loss or a raw `TypeError`.
+   */
+  private normalizeOutbound<V>(convert: () => V, path: string): V {
+    try {
+      return convert();
+    } catch (err) {
+      throw new BridgeProtocolError(
+        `Invalid outbound value for "${path}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   public onEvent<T = BridgeValue>(
@@ -417,8 +464,17 @@ export class DefaultNativeTransport implements NativeTransport {
     for (const handler of Array.from(subscribers)) {
       try {
         handler(event.payload);
-      } catch {
-        // Isolate subscriber execution errors
+      } catch (error) {
+        // Isolate subscriber errors from each other, but never hide them.
+        if (
+          typeof console !== "undefined" &&
+          typeof console.error === "function"
+        ) {
+          console.error(
+            `Unhandled exception in native event handler for "${event.name}":`,
+            error,
+          );
+        }
       }
     }
   }
@@ -445,7 +501,7 @@ export class DefaultNativeTransport implements NativeTransport {
 
     this.pendingRequests.clear();
     this.eventSubscribers.clear();
-    this.metadataRegistry = null;
+    this.metadataPayload = null;
 
     // Clean up underlying endpoint (removes window message listeners and callback properties)
     this.endpoint.dispose();
