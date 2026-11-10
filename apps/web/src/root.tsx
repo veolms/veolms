@@ -54,6 +54,7 @@ import { getPriceRegionBootstrapScript } from "./courses/priceRegion";
 import { getCurriculumEarlyScrollScript } from "./learning/curriculumEarlyScroll";
 import { getLessonPageEarlyStateScript } from "./learning/lessonPageEarlyState";
 import { getApiBaseUrl } from "./lib/api-client";
+import { markSoftwareRendering } from "./lib/software-rendering";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
   getControlRadiusBootstrapScript,
@@ -438,8 +439,10 @@ function HydrationMarker() {
     const removeTabFocusListeners = installTabFocusVisibility(root);
     const removeChunkReloadHandler = installChunkReloadHandler();
     registerSegmentCacheReclaimer();
+    const cancelRenderingCheck = markSoftwareRendering(root);
 
     return () => {
+      cancelRenderingCheck();
       removeChunkReloadHandler();
       removeTabFocusListeners();
       root.dataset.appHydrated = "false";

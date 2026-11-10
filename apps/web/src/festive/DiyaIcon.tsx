@@ -22,7 +22,7 @@ export function DiyaIcon({
       {glow ? (
         <span
           style={{ animationDelay: flameDelay }}
-          className="pointer-events-none absolute top-[-85%] left-[64%] aspect-square w-[150%] -translate-x-1/2 animate-[diwali-glow_5.4s_ease-in-out_infinite] rounded-full bg-[radial-gradient(circle,rgb(255_184_92/0.55),rgb(255_140_40/0.12)_45%,transparent_70%)] motion-reduce:animate-none"
+          className="pointer-events-none absolute top-[-85%] left-[64%] aspect-square w-[150%] -translate-x-1/2 animate-[diwali-glow_5.4s_ease-in-out_infinite] rounded-full bg-[radial-gradient(circle,rgb(255_184_92/0.55),rgb(255_140_40/0.12)_45%,transparent_70%)] motion-reduce:animate-none [:root[data-rendering=software]_&]:animate-none"
         />
       ) : null}
       <svg
@@ -42,7 +42,7 @@ export function DiyaIcon({
         </defs>
         <g
           style={{ animationDelay: flameDelay }}
-          className="origin-[50%_100%] animate-[diwali-flicker_3.6s_ease-in-out_infinite] [transform-box:fill-box] motion-reduce:animate-none"
+          className="origin-[50%_100%] animate-[diwali-flicker_3.6s_ease-in-out_infinite] [transform-box:fill-box] motion-reduce:animate-none [:root[data-rendering=software]_&]:animate-none"
         >
           <path
             d="M51 1 C55.5 8 57.5 13.5 51 19.5 C44.5 13.5 46.5 8 51 1Z"

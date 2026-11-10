@@ -1,5 +1,6 @@
 import {
   keepPreviousData,
+  type QueryClient,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -669,6 +670,37 @@ export function useLessonThreads(
         }
       : result.data,
   };
+}
+
+/**
+ * Asks for a lesson's first page of discussions ahead of time, as
+ * `useLessonDiscussions` would with the same query, so that switching the
+ * list to it later finds it loaded. Nothing is asked for when a fresh copy
+ * is already there.
+ */
+export function prefetchLessonDiscussions(
+  queryClient: QueryClient,
+  courseId: string,
+  lessonId: string,
+  query: LessonDiscussionsQuery,
+) {
+  if (!courseId || !lessonId) return Promise.resolve();
+  return queryClient.prefetchInfiniteQuery({
+    queryKey: learningInteractionKeys.lessonDiscussions(
+      courseId,
+      lessonId,
+      query,
+    ),
+    queryFn: ({ pageParam }) =>
+      learningInteractionsService.listLessonDiscussions(courseId, lessonId, {
+        ...query,
+        limit: 20,
+        ...(pageParam ? { cursor: pageParam } : {}),
+      } as ListLessonDiscussionsQuery),
+    initialPageParam: null as string | null,
+    staleTime: 30 * 1000,
+    retry: false,
+  });
 }
 
 export function useLessonDiscussions(
