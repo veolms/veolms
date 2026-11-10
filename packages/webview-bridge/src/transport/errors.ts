@@ -8,6 +8,8 @@ export abstract class BridgeError extends Error {
 
   constructor(message: string, code: string = "BRIDGE_ERROR") {
     super(message);
+    // Fallback for subclasses outside this library. Library classes set a literal `name` below,
+    // because `constructor.name` is mangled by minifiers (e.g. "he" instead of "BridgeTimeoutError").
     this.name = this.constructor.name;
     this.code = code;
     Object.setPrototypeOf(this, new.target.prototype);
@@ -18,6 +20,7 @@ export abstract class BridgeError extends Error {
  * Error thrown when bridge initialization fails or is rejected.
  */
 export class BridgeInitializationError extends BridgeError {
+  public override name = "BridgeInitializationError";
   constructor(message: string, code: string = "INIT_ERROR") {
     super(message, code);
   }
@@ -27,6 +30,7 @@ export class BridgeInitializationError extends BridgeError {
  * Error thrown when the underlying transport or native endpoint fails, disappears, or throws.
  */
 export class BridgeTransportError extends BridgeError {
+  public override name = "BridgeTransportError";
   constructor(message: string, code: string = "TRANSPORT_ERROR") {
     super(message, code);
   }
@@ -36,6 +40,7 @@ export class BridgeTransportError extends BridgeError {
  * Error thrown when a pending request exceeds its configured timeout duration.
  */
 export class BridgeTimeoutError extends BridgeError {
+  public override name = "BridgeTimeoutError";
   public readonly requestId: string;
 
   constructor(requestId: string, timeoutMs: number) {
@@ -51,6 +56,7 @@ export class BridgeTimeoutError extends BridgeError {
  * Error thrown when protocol validation or payload structure checks fail.
  */
 export class BridgeProtocolError extends BridgeError {
+  public override name = "BridgeProtocolError";
   constructor(message: string, code: string = "PROTOCOL_ERROR") {
     super(message, code);
   }
@@ -60,6 +66,7 @@ export class BridgeProtocolError extends BridgeError {
  * Error thrown when a native platform operation returns an error status or exception.
  */
 export class BridgeNativeError extends BridgeError {
+  public override name = "BridgeNativeError";
   public readonly details?: BridgeValue;
 
   constructor(
@@ -76,6 +83,7 @@ export class BridgeNativeError extends BridgeError {
  * Error thrown when a lower-level direct transport operation targets an unsupported path or member.
  */
 export class BridgeUnsupportedError extends BridgeError {
+  public override name = "BridgeUnsupportedError";
   public readonly path: string;
 
   constructor(
@@ -97,6 +105,7 @@ export class BridgeUnsupportedError extends BridgeError {
  * Extends `BridgeUnsupportedError` so existing `instanceof` checks keep working.
  */
 export class BridgeReadOnlyError extends BridgeUnsupportedError {
+  public override name = "BridgeReadOnlyError";
   constructor(path: string) {
     super(
       path,

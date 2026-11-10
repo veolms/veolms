@@ -146,7 +146,8 @@ export interface BridgeReply {
 export interface BridgeEvent {
   type: "event";
   name: string;
-  payload: BridgeValue;
+  /** Omitted payloads are delivered to event handlers as `null`. */
+  payload?: BridgeValue;
 }
 
 /**

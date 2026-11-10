@@ -41,6 +41,12 @@ export interface NativeTransport {
   readonly isInitialized: boolean;
 
   /**
+   * Whether `dispose()` was called. A disposed transport rejects every request and never
+   * becomes usable again; `sessionId` and `metadata` are `null` after disposal.
+   */
+  readonly isDisposed: boolean;
+
+  /**
    * Performs the initial protocol handshake to establish session and retrieve capability metadata.
    */
   initialize(): Promise<BridgeMetadataPayload>;

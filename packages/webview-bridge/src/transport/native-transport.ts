@@ -96,7 +96,7 @@ export class DefaultNativeTransport implements NativeTransport {
   private metadataPayload: BridgeMetadataPayload | null = null;
   private readonly explicitTimeoutMs: number | undefined;
   private activeSessionId: string | null = null;
-  private isDisposed = false;
+  private disposed = false;
 
   constructor(endpoint: NativeEndpoint, options?: NativeTransportOptions) {
     this.endpoint = endpoint;
@@ -123,8 +123,12 @@ export class DefaultNativeTransport implements NativeTransport {
     return this.activeSessionId;
   }
 
+  public get isDisposed(): boolean {
+    return this.disposed;
+  }
+
   public async initialize(): Promise<BridgeMetadataPayload> {
-    if (this.isDisposed) {
+    if (this.disposed) {
       throw new BridgeTransportError(
         `Transport for endpoint "${this.endpoint.name}" is disposed.`,
       );
@@ -253,7 +257,7 @@ export class DefaultNativeTransport implements NativeTransport {
     eventName: string,
     handler: BridgeEventHandler<T>,
   ): () => void {
-    if (this.isDisposed) {
+    if (this.disposed) {
       return () => {};
     }
 
@@ -283,7 +287,7 @@ export class DefaultNativeTransport implements NativeTransport {
     payloadOrValueOrArgs?: unknown,
     overrideTimeoutMs?: number,
   ): Promise<T> {
-    if (this.isDisposed) {
+    if (this.disposed) {
       throw new BridgeTransportError(
         `Transport for endpoint "${this.endpoint.name}" is disposed.`,
       );
@@ -405,7 +409,7 @@ export class DefaultNativeTransport implements NativeTransport {
   }
 
   private handleIncomingRawMessage(rawMessage: string): void {
-    if (this.isDisposed) {
+    if (this.disposed) {
       return;
     }
 
@@ -461,9 +465,10 @@ export class DefaultNativeTransport implements NativeTransport {
       return;
     }
 
+    const payload = event.payload === undefined ? null : event.payload;
     for (const handler of Array.from(subscribers)) {
       try {
-        handler(event.payload);
+        handler(payload);
       } catch (error) {
         // Isolate subscriber errors from each other, but never hide them.
         if (
@@ -480,10 +485,10 @@ export class DefaultNativeTransport implements NativeTransport {
   }
 
   public dispose(): void {
-    if (this.isDisposed) {
+    if (this.disposed) {
       return;
     }
-    this.isDisposed = true;
+    this.disposed = true;
 
     if (this.endpointUnsubscribe) {
       this.endpointUnsubscribe();
@@ -502,6 +507,7 @@ export class DefaultNativeTransport implements NativeTransport {
     this.pendingRequests.clear();
     this.eventSubscribers.clear();
     this.metadataPayload = null;
+    this.activeSessionId = null;
 
     // Clean up underlying endpoint (removes window message listeners and callback properties)
     this.endpoint.dispose();
