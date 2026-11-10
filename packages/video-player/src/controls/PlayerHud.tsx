@@ -4,6 +4,7 @@ import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import {
   MOBILE_SEEK_IDLE_DELAY_MS,
+  OUTSIDE_SPEED_NOTICE_DURATION_MS,
   PLAYER_FEEDBACK_DURATION_MS,
 } from "./feedbackTiming";
 import { VolumeLevelIcon, getVolumeLevel } from "./VolumeLevelIcon";
@@ -20,7 +21,9 @@ export function PlayerHud() {
     const durationMs =
       hud.variant === "mobile-seek"
         ? MOBILE_SEEK_IDLE_DELAY_MS
-        : PLAYER_FEEDBACK_DURATION_MS;
+        : hud.variant === "outside-speed"
+          ? OUTSIDE_SPEED_NOTICE_DURATION_MS
+          : PLAYER_FEEDBACK_DURATION_MS;
     const timer = setTimeout(() => controller.clearHud(hud.id), durationMs);
     return () => clearTimeout(timer);
   }, [controller, hud]);
@@ -165,6 +168,28 @@ export function PlayerHud() {
               size={20}
             />
             {hud.text}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  if (hud.variant === "outside-speed") {
+    return (
+      <div
+        key={hud.id}
+        aria-atomic="true"
+        aria-live="polite"
+        className="pointer-events-none absolute inset-0 z-30"
+        data-player-hud-variant="outside-speed"
+        role="status"
+      >
+        <div className="absolute top-[12%] left-1/2 flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-1 rounded-(--video-player-control-radius) border border-(--video-player-control-border) bg-(--video-player-control-surface) px-4 py-2.5 text-center text-(--video-player-control-text) shadow-(--video-player-control-shadow) backdrop-blur-sm">
+          <span className="text-sm font-semibold">
+            Speed changed to {hud.text} outside the player
+          </span>
+          <span className="text-xs opacity-80">
+            A browser extension may be controlling video speed. Turn it off for
+            this site to use the player&apos;s speed.
           </span>
         </div>
       </div>
