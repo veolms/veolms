@@ -24,7 +24,7 @@ import { useGoalEditor } from "./useGoalEditor";
  * are in the theme's accent, kept very soft, and fainter by day.
  */
 const cornerLightClasses = [
-  "[--glow:var(--accent)] supports-[color:oklch(from_white_l_c_h)]:[--glow:oklch(from_var(--accent)_max(l,0.7)_c_h)]",
+  "[--glow:var(--accent)] supports-[color:oklch(from_white_l_c_h)]:[--glow:oklab(from_var(--accent)_max(l,0.7)_a_b)]",
   "before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-[radial-gradient(70%_90%_at_100%_0%,color-mix(in_srgb,var(--glow)_8%,transparent),transparent_70%)]",
   "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:p-px after:bg-[radial-gradient(55%_75%_at_100%_0%,color-mix(in_srgb,var(--glow)_32%,transparent),color-mix(in_srgb,var(--glow)_10%,transparent)_45%,transparent_75%)] after:[mask:linear-gradient(#000_0_0)_content-box_exclude,linear-gradient(#000_0_0)]",
   // It follows the lamp, as the glow does (see `phoneBackdropClasses`).

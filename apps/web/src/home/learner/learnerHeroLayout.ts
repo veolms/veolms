@@ -221,7 +221,7 @@ export const resumeThumbnailClasses =
  */
 export const phoneBackdropClasses = [
   "pointer-events-none! absolute inset-0 -z-30 sm:hidden",
-  "[--glow:var(--accent)] supports-[color:oklch(from_white_l_c_h)]:[--glow:oklch(from_var(--accent)_max(l,0.62)_c_h)]",
+  "[--glow:var(--accent)] supports-[color:oklch(from_white_l_c_h)]:[--glow:oklab(from_var(--accent)_max(l,0.62)_a_b)]",
   "bg-[radial-gradient(110%_55%_at_100%_0%,color-mix(in_srgb,var(--glow)_30%,transparent),color-mix(in_srgb,var(--glow)_12%,transparent)_40%,transparent_75%)]",
   // The glow is the lamp's light: it follows the lamp as the picture does,
   // on by night and off by day until the switch says otherwise (the corner
