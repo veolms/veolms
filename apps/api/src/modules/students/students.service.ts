@@ -301,7 +301,7 @@ export function createStudentsService({
         email: user.email,
         phoneNo: searchPhone ? user.phone_no : null,
         avatarUrl,
-        joinedAt: new Date(user.joined_at).toISOString(),
+        joinedAt: user.created_at.toISOString(),
         enrolledCoursesCount,
         completedCoursesCount,
         averageProgressPercent,
@@ -315,7 +315,7 @@ export function createStudentsService({
           sortBy === "recent"
             ? {
                 sortBy,
-                createdAt: new Date(lastStudent.joined_at).toISOString(),
+                createdAt: lastStudent.created_at.toISOString(),
                 id: lastStudent.id,
               }
             : sortBy === "name"
@@ -586,8 +586,7 @@ export function createStudentsService({
         phoneNo: creatorId ? null : user.phone_no,
         avatarUrl: resolveStudentAvatar(user.avatar_data_url, userAvatars),
         bio: user.bio,
-        // On the old platform for a student brought over from it.
-        joinedAt: (user.joined_at ?? user.created_at).toISOString(),
+        joinedAt: user.created_at.toISOString(),
         socials: {
           githubUrl: visibleLink(user.github_url, user.github_public),
           linkedinUrl: visibleLink(user.linkedin_url, user.linkedin_public),
