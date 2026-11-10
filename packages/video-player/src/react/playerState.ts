@@ -22,6 +22,7 @@ export interface PlayerHudOptions {
     | "default"
     | "keyboard-seek"
     | "mobile-seek"
+    | "outside-speed"
     | "playback-rate"
     | "temporary-speed"
     | "volume";
