@@ -52,6 +52,7 @@ import {
 } from "./CourseCardActionParts";
 import { useRetryCourseCardState } from "./viewerCourseState";
 import { raisedCourseCardClasses } from "../components/cardElevation";
+import { canOpenShareSheet } from "../lib/share";
 import type { Permission } from "@veolms/contracts";
 import { useCapabilities } from "../services/authorization/authorization.queries";
 import { canOpenNavigationPath } from "../shell/navigationPermissions";
@@ -306,7 +307,7 @@ export function CourseCard({
   };
 
   const shareCourse = async () => {
-    if (typeof navigator.share !== "function") {
+    if (!canOpenShareSheet()) {
       await copyCourseLink();
       return;
     }
