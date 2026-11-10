@@ -747,6 +747,41 @@ export function createModerationService({
           );
         }
 
+        if (input.action === "heart" || input.action === "unheart") {
+          const giving = input.action === "heart";
+          // Shown to everyone, so given only to a reply anyone can see: a
+          // visible reply under a public post.
+          if (
+            giving &&
+            (reply.status !== "active" ||
+              thread?.status !== "active" ||
+              thread.visibility !== "public")
+          ) {
+            throw httpError(
+              409,
+              "REPLY_NOT_PUBLIC",
+              "Only a visible reply under a public post can be hearted.",
+            );
+          }
+          await repliesRepo.setHearted(
+            trx,
+            replyId,
+            giving ? actor.userId : null,
+          );
+          await moderationRepo.createAuditLog(trx, {
+            id: crypto.randomUUID(),
+            academyId: await resolveAcademyId(trx),
+            courseId: thread?.courseId ?? null,
+            actorUserId: actor.userId,
+            action: `${input.action}_reply`,
+            targetType: "reply",
+            targetId: replyId,
+            details: { reason: input.reason || null },
+            ipAddress,
+          });
+          return;
+        }
+
         if (input.action === "hide") {
           await repliesRepo.setStatus(trx, replyId, "hidden");
           // A hidden reply is no longer the accepted answer. Left accepted,

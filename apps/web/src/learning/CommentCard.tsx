@@ -72,6 +72,7 @@ import {
 import { TimeAgo } from "../components/TimeAgo";
 import type { CreatorHeart } from "@veolms/contracts";
 import { CreatorHeartButton, PinnedLabel } from "./CreatorHeartButton";
+import { useReplyHeartMutation } from "../services/learning-interactions/thread-marks";
 import { useThreadStaffActions } from "./useThreadStaffActions";
 import { cheerLike } from "../components/likeFeedback";
 
@@ -95,6 +96,8 @@ export interface CommentReply {
   isOwn?: boolean;
   isAccepted?: boolean;
   attachments?: DiscussionAttachmentItem[];
+  /** The creator's heart, as on a comment. */
+  creatorHeart?: CreatorHeart | null;
 }
 
 export interface Comment {
@@ -1083,6 +1086,13 @@ export const CommentCard = React.memo(function CommentCard({
                           courseId={courseId}
                           mentionsEnabled={true}
                           onChange={setReplyDraft}
+                          // Enter posts (Shift+Enter for a new line), as in
+                          // the comment box.
+                          onSubmitShortcut={() => {
+                            if (hasDiscussionDraftContent(replyDraft)) {
+                              addReply();
+                            }
+                          }}
                         />
                       </span>
                     </label>
@@ -1154,6 +1164,8 @@ export const CommentCard = React.memo(function CommentCard({
                     onEdit={handleEditReply}
                     onDelete={handleDeleteReply}
                     onLike={handleLikeReply}
+                    canHeart={staff.canMark}
+                    threadServerId={getServerEntityId(comment)}
                     onReport={() =>
                       onReport?.({
                         targetType: "reply",
@@ -1258,6 +1270,10 @@ interface ReplyCardProps {
    * around it, which carries the link's own highlight.
    */
   isLinked?: boolean;
+  /** Course staff on a public post: may give the creator's heart. */
+  canHeart?: boolean;
+  /** The post's id on the server, where its replies are kept. */
+  threadServerId?: string;
 }
 
 function ReplyCard({
@@ -1278,7 +1294,13 @@ function ReplyCard({
   onCopyTextNotice,
   courseId,
   isLinked = false,
+  canHeart = false,
+  threadServerId,
 }: ReplyCardProps) {
+  const heartMutation = useReplyHeartMutation({
+    onError: (error) =>
+      onCopyTextNotice?.(error.message || "That change could not be saved."),
+  });
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState<DiscussionDraft>(
     reply.content ?? createDiscussionDraft(reply.text),
@@ -1293,6 +1315,8 @@ function ReplyCard({
   const replyServerId = getServerEntityId(reply);
   const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
   const isEditing = optimisticEditCoordinator.isEditing("reply", replyClientId);
+  const canGiveHeart =
+    canHeart && Boolean(courseId && replyServerId && threadServerId);
 
   const saveEdit = async () => {
     if (!hasDiscussionDraftContent(editDraft)) return;
@@ -1506,6 +1530,23 @@ function ReplyCard({
                     />
                   </button>
                 )}
+                <CreatorHeartButton
+                  heart={reply.creatorHeart}
+                  canGive={canGiveHeart}
+                  size="sm"
+                  onToggle={(give) => {
+                    if (!courseId || !replyServerId || !threadServerId) return;
+                    heartMutation.mutate({
+                      reply: {
+                        id: replyServerId,
+                        threadId: threadServerId,
+                        courseId,
+                        creatorHeart: reply.creatorHeart,
+                      },
+                      give,
+                    });
+                  }}
+                />
               </div>
             </div>
           </div>

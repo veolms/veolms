@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  creatorHeartSchema,
   discussionAuthorSchema,
   learningThreadAttachmentSummarySchema,
 } from "./threads.ts";
@@ -15,6 +16,8 @@ export const learningReplySchema = z.object({
   attachments: z.array(learningThreadAttachmentSummarySchema).optional(),
   isLiked: z.boolean().optional(),
   isOwn: z.boolean().optional(),
+  /** The creator's heart, when staff gave one; as on a comment. */
+  creatorHeart: creatorHeartSchema.nullable().optional(),
   createdAt: z.string(),
 });
 export type LearningReply = z.infer<typeof learningReplySchema>;
