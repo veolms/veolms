@@ -121,7 +121,7 @@ export function SupportNoteCard({
     >
       <AssigneeAvatar person={note.author} size={28} />
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-28 text-xs max-sm:pr-0">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-28 text-xs max-sm:pr-8">
           <span className="text-sm font-semibold text-(--text)">
             {note.author.name}
           </span>
@@ -153,7 +153,8 @@ export function SupportNoteCard({
               className="w-full resize-y rounded-lg bg-(--surface) px-3 py-2 text-sm text-(--text) ring-1 ring-amber-400/40 outline-none ring-inset focus:ring-amber-400/80"
             />
             <div className="flex items-center justify-end gap-2">
-              <span className="mr-auto text-xs text-(--muted)">
+              {/* Keyboard hints, where there is a keyboard. */}
+              <span className="mr-auto text-xs text-(--muted) pointer-coarse:invisible">
                 Esc to cancel
               </span>
               <button
@@ -167,10 +168,10 @@ export function SupportNoteCard({
                 type="button"
                 onClick={save}
                 disabled={!draft.trim() || action.isPending}
-                className="h-8 rounded-lg bg-amber-400 px-3 text-[0.8rem] font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
+                className="h-8 rounded-lg bg-amber-400 px-3 text-[0.8rem] font-semibold whitespace-nowrap text-black hover:bg-amber-300 disabled:opacity-50"
               >
                 {action.isPending ? "Saving…" : "Save changes"}
-                <kbd className="ml-1.5 font-sans text-[0.68rem] opacity-70">
+                <kbd className="ml-1.5 font-sans text-[0.68rem] opacity-70 pointer-coarse:hidden">
                   ⌘↵
                 </kbd>
               </button>
@@ -225,14 +226,16 @@ export function SupportNoteCard({
       </div>
 
       {mode === "view" ? (
-        <div className="absolute top-2.5 right-2.5 flex items-center gap-0.5 rounded-lg bg-(--surface) p-0.5 opacity-0 shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 has-data-popup-open:opacity-100 max-sm:opacity-100">
+        // Shown on hover or focus; always on a touch screen, which has no
+        // hover. A phone has room only for the menu, which holds them all.
+        <div className="absolute top-2.5 right-2.5 flex items-center gap-0.5 rounded-lg bg-(--surface) p-0.5 opacity-0 shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 has-data-popup-open:opacity-100 pointer-coarse:opacity-100 max-sm:opacity-100">
           {canChange ? (
             <button
               type="button"
               onClick={startEdit}
               aria-label="Edit note"
               title="Edit (E)"
-              className={barButton}
+              className={`${barButton} max-sm:hidden`}
             >
               <PencilSimple size={15} aria-hidden="true" />
             </button>
@@ -245,7 +248,7 @@ export function SupportNoteCard({
               aria-label={note.pinned ? "Unpin note" : "Pin to top"}
               aria-pressed={note.pinned}
               title={note.pinned ? "Unpin (P)" : "Pin to top (P)"}
-              className={barButton}
+              className={`${barButton} max-sm:hidden`}
             >
               <PushPin
                 size={15}
@@ -259,7 +262,7 @@ export function SupportNoteCard({
             onClick={() => void copyLink()}
             aria-label="Copy link"
             title={copied ? "Link copied" : "Copy link"}
-            className={barButton}
+            className={`${barButton} max-sm:hidden`}
           >
             <LinkSimple size={15} aria-hidden="true" />
           </button>
@@ -272,7 +275,7 @@ export function SupportNoteCard({
                 <DropdownMenuItem onClick={startEdit}>
                   <PencilSimple size={15} aria-hidden="true" />
                   <span className="flex-1">Edit note</span>
-                  <kbd className="font-sans text-[0.68rem] text-(--muted)">
+                  <kbd className="font-sans text-[0.68rem] text-(--muted) pointer-coarse:hidden">
                     E
                   </kbd>
                 </DropdownMenuItem>
@@ -283,7 +286,7 @@ export function SupportNoteCard({
                   <span className="flex-1">
                     {note.pinned ? "Unpin" : "Pin to top"}
                   </span>
-                  <kbd className="font-sans text-[0.68rem] text-(--muted)">
+                  <kbd className="font-sans text-[0.68rem] text-(--muted) pointer-coarse:hidden">
                     P
                   </kbd>
                 </DropdownMenuItem>

@@ -177,7 +177,9 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
           active={kind === "problem"}
           label="Reports"
         >
-          {problems ? `${problems.open} open` : null}
+          {problems
+            ? `${problems.open + problems.in_progress + problems.waiting} active`
+            : null}
         </InboxTab>
         <InboxTab
           to="/support-inbox/feedback"
@@ -295,12 +297,12 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
             {total} {total === 1 ? "report" : "reports"}
           </p>
         )}
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="ml-auto flex flex-wrap gap-2 max-sm:grid max-sm:w-full max-sm:grid-cols-2">
           <SupportSelect
             value={assignee}
             onValueChange={setAssignee}
             ariaLabel="Assignee"
-            className="w-48"
+            className="w-48 max-sm:col-span-2 max-sm:w-full"
             options={[
               [ANYONE, "Assignee: Anyone"],
               ["none", "Unassigned"],
@@ -315,7 +317,7 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
               value={category}
               onValueChange={setCategory}
               ariaLabel="Category"
-              className="w-52"
+              className="w-52 max-sm:w-full"
               options={[
                 [ALL, "All categories"],
                 ...PROBLEM_CATEGORY_ORDER.map(
@@ -329,7 +331,7 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
                 value={rating}
                 onValueChange={setRating}
                 ariaLabel="Rating"
-                className="w-40"
+                className="w-40 max-sm:w-full"
                 options={[
                   [ALL, "All ratings"],
                   ...[...SUPPORT_RATINGS]
@@ -343,7 +345,7 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
             value={sort}
             onValueChange={setSort}
             ariaLabel="Sort"
-            className="w-40"
+            className="w-40 max-sm:w-full"
             options={[
               ["newest", "Newest first"],
               ["oldest", "Oldest first"],

@@ -162,7 +162,6 @@ export function createSupportStaffService({
           actorId: staffId,
           type,
           data,
-          at: now,
         });
       const statusChanged = body.status && body.status !== ticket.status;
       const categoryChanged =
@@ -306,7 +305,6 @@ export function createSupportStaffService({
         actorId: staffId,
         type: pinned ? "note_pinned" : "note_unpinned",
         data: { messageId },
-        at: now,
       });
     });
   }
@@ -327,7 +325,6 @@ export function createSupportStaffService({
         actorId: staffId,
         type: "note_deleted",
         data: { messageId },
-        at: now,
       });
     });
   }

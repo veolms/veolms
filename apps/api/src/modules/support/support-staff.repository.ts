@@ -64,6 +64,11 @@ export async function updateTicketFields(
     .execute();
 }
 
+/**
+ * Logs one event. Its time is the database's, like the messages it is
+ * listed among: the API's clock can differ from it, and mixing the two put
+ * events out of order beside notes and replies.
+ */
 export async function insertEvent(
   database: DatabaseExecutor,
   event: {
@@ -71,7 +76,6 @@ export async function insertEvent(
     actorId: string;
     type: SupportEventType;
     data: Record<string, unknown>;
-    at?: Date;
   },
 ) {
   await database
@@ -82,7 +86,6 @@ export async function insertEvent(
       actor_id: event.actorId,
       type: event.type,
       data: JSON.stringify(event.data),
-      ...(event.at ? { created_at: event.at } : {}),
     })
     .execute();
 }
