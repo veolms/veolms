@@ -176,3 +176,22 @@ test("adding a lesson updates the link to the new lesson", async ({
   await page.reload();
   await expect(page.getByText("New Lesson 2").first()).toBeVisible();
 });
+
+test("a new course keeps its draft when the curriculum is refreshed", async ({
+  page,
+  academy,
+}) => {
+  await academy.signInAsAdmin();
+  await page.goto("/courses/create/basics");
+  await page
+    .getByRole("textbox", { name: "Course Title" })
+    .fill("Refreshable draft course");
+  await page.getByRole("textbox", { name: "Course Title" }).blur();
+  await expect(
+    page.getByRole("tab", { name: "Curriculum", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("tab", { name: "Curriculum", exact: true }).click();
+  await expect(page.getByText("New Lesson 1").first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("New Lesson 1").first()).toBeVisible();
+});

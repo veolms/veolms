@@ -17,6 +17,7 @@ import type { BasicsFieldKey } from "../statusIndicators";
 import type { ApiError } from "../../../lib/api-error";
 
 export interface UseBasicsPersistenceArgs {
+  onCourseCreated: (courseId: string) => void;
   setServerBasics: Dispatch<SetStateAction<BasicsFormState>>;
   setBasicsDraft: Dispatch<SetStateAction<BasicsFormState>>;
   serverBasicsRef: RefObject<BasicsFormState>;
@@ -166,6 +167,7 @@ export interface UseBasicsPersistenceResult {
 }
 
 export function useBasicsPersistence({
+  onCourseCreated,
   setServerBasics,
   setBasicsDraft,
   serverBasicsRef,
@@ -399,18 +401,6 @@ export function useBasicsPersistence({
       // Write the confirmed ID to the ref immediately so all awaiting callers
       // can use it as soon as the shared promise resolves.
       currentCourseIdRef.current = created.id;
-      if (typeof window !== "undefined") {
-        const currentUrl = new URL(window.location.href);
-        if (currentUrl.searchParams.get("edit") !== created.id) {
-          currentUrl.searchParams.set("edit", created.id);
-          currentUrl.searchParams.delete("courseId");
-          window.history.replaceState(
-            window.history.state,
-            "",
-            currentUrl.toString(),
-          );
-        }
-      }
 
       // Prebuild initial section ("Introduction") and initial lesson ("New Lesson 1")
       try {
@@ -470,6 +460,7 @@ export function useBasicsPersistence({
         setToastMessage(errorMsg);
       }
 
+      onCourseCreated(created.id);
       return created;
     })();
 
