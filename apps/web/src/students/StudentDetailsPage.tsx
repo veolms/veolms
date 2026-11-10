@@ -52,6 +52,13 @@ const GrantCoursePanel = lazy(() =>
   })),
 );
 
+// Extending one course's access, from its menu.
+const ExtendValidityPanel = lazy(() =>
+  import("./ExtendValidityPanel").then((module) => ({
+    default: module.ExtendValidityPanel,
+  })),
+);
+
 // The Team page's add-member panel, opened with this student chosen.
 const AddMemberPanel = lazy(() =>
   import("../team/members/AddMemberPanel").then((module) => ({
@@ -84,6 +91,8 @@ export function StudentDetailsPage({
     useState<StudentCourseAccessChange | null>(null);
   const [editingContact, setEditingContact] = useState(false);
   const [grantingCourses, setGrantingCourses] = useState(false);
+  const [extendingCourse, setExtendingCourse] =
+    useState<StudentCourseDetail | null>(null);
 
   // The course's own page (its overview and curriculum). `/courses/<slug>`
   // alone is the old lesson address and opened the lesson player.
@@ -546,6 +555,7 @@ export function StudentDetailsPage({
                     onRestoreAccess={(target) =>
                       setAccessChange({ action: "restore", course: target })
                     }
+                    onExtendValidity={setExtendingCourse}
                     setNotice={setNotice}
                   />
                 ))}
@@ -612,6 +622,22 @@ export function StudentDetailsPage({
             phoneNo={student.phoneNo ?? null}
             onClose={() => setEditingContact(false)}
             setNotice={setNotice}
+          />
+        </Suspense>
+      ) : null}
+
+      {extendingCourse && student ? (
+        <Suspense fallback={null}>
+          <ExtendValidityPanel
+            userId={student.id}
+            studentName={student.displayName || `@${student.username}`}
+            studentEmail={student.email ?? null}
+            course={extendingCourse}
+            onClose={() => setExtendingCourse(null)}
+            onExtended={(message) => {
+              setExtendingCourse(null);
+              setNotice?.(message);
+            }}
           />
         </Suspense>
       ) : null}

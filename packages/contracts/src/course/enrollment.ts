@@ -75,6 +75,44 @@ export type CourseAccessChangeResponse = z.infer<
   typeof courseAccessChangeResponseSchema
 >;
 
+export const accessExtensionUnits = ["days", "months", "years"] as const;
+export type AccessExtensionUnit = (typeof accessExtensionUnits)[number];
+
+/**
+ * Staff extend one learner's access to one course: by an amount added to
+ * the current end date (from today when it has already passed), or to
+ * lifetime. The learner can be told by email.
+ */
+export const extendCourseAccessRequestSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("extend"),
+    amount: z.number().int().min(1).max(1000),
+    unit: z.enum(accessExtensionUnits),
+    notify: z.boolean().default(true),
+  }),
+  z.strictObject({
+    kind: z.literal("lifetime"),
+    notify: z.boolean().default(true),
+  }),
+]);
+export type ExtendCourseAccessRequest = z.input<
+  typeof extendCourseAccessRequestSchema
+>;
+
+/** A learner's access period for a course after staff extended it. */
+export const courseValidityResponseSchema = z.strictObject({
+  userId: z.uuid(),
+  courseId: z.uuid(),
+  status: accessGrantStatusSchema,
+  accessStartsAt: z.string(),
+  /** Null: lifetime. */
+  previousValidUntil: z.string().nullable(),
+  validUntil: z.string().nullable(),
+});
+export type CourseValidityResponse = z.infer<
+  typeof courseValidityResponseSchema
+>;
+
 export const enrollmentSchema = z.strictObject({
   id: z.uuid(),
   userId: z.uuid(),

@@ -15,6 +15,7 @@ import {
   moderationContentModeratedEventSchema,
   moderationReportResolvedEventSchema,
   supportReplyPostedEventSchema,
+  accessValidityExtendedEventSchema,
   moderationUserSuspendedEventSchema,
   moderationUserUnsuspendedEventSchema,
   paymentCompletedEventSchema,
@@ -452,6 +453,33 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         // An answer to something the learner asked us; not a preference.
         mandatory: true,
         deepLink: `/support/${event.ticketId}`,
+      },
+    ];
+  },
+  "access.validity_extended": async (payload) => {
+    const event = accessValidityExtendedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "access.validity_extended",
+        category: "transactional",
+        templateKey: "access.validity_extended",
+        templateData: {
+          courseTitle: event.courseTitle,
+          // Written out here: the email has no other way to show a date.
+          validUntil: event.validUntil
+            ? new Intl.DateTimeFormat("en-IN", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+                timeZone: "Asia/Kolkata",
+              }).format(new Date(event.validUntil))
+            : "",
+        },
+        channels: commonChannels,
+        // About the learner's own purchase; not a preference.
+        mandatory: true,
+        deepLink: `/courses/${event.courseSlug}/overview`,
       },
     ];
   },

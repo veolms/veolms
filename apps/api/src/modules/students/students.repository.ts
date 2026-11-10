@@ -689,6 +689,7 @@ export async function getStudentEnrolledCourses(
       "e.created_at as enrolled_at",
       "e.status as enrollment_status",
       "e.access_expires_at",
+      "e.access_starts_at",
       "e.order_id",
       "o.status as order_status",
       "o.total_amount as order_total_amount",
