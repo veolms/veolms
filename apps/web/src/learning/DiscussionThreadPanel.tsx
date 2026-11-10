@@ -89,6 +89,7 @@ import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
 import { ThreadReplyComposer } from "./ThreadReplyComposer";
 import { CreatorHeartButton } from "./CreatorHeartButton";
 import { useThreadStaffActions } from "./useThreadStaffActions";
+import { useCommentTapGestures } from "./useCommentTapGestures";
 import { useReplyHeartMutation } from "../services/learning-interactions/thread-marks";
 import type { LessonParticipationState } from "./Discussion";
 import { TimeAgo } from "../components/TimeAgo";
@@ -1367,13 +1368,21 @@ function ThreadRootEntry({
     canModerate,
     onNotice: onCopyTextNotice,
   });
+  // The thread is already open: a double tap likes, a triple tap does nothing more.
+  const tapGestures = useCommentTapGestures({});
   const clientId = getClientEntityId(entry);
   const isEditing = optimisticEditCoordinator.isEditing("thread", clientId);
 
   const replyCount = Math.max(entry.replies ?? 0, entry.thread?.length ?? 0);
 
   return (
-    <article className="mx-auto mb-1 max-w-4xl pt-3 pb-4">
+    <article
+      className="mx-auto mb-1 max-w-4xl pt-3 pb-4"
+      data-tap-gesture=""
+      style={tapGestures.style}
+      onMouseDown={tapGestures.onMouseDown}
+      onClick={tapGestures.onClick}
+    >
       <div className="flex gap-3 sm:gap-3.5">
         <ProfileLink username={entry.authorUsername} variant="picture">
           <DiscussionAvatar src={entry.avatar} className="size-10 sm:size-11" />
@@ -1509,6 +1518,7 @@ function ThreadRootEntry({
                 type="button"
                 aria-pressed={isEntryLiked}
                 aria-label={isEntryLiked ? "Unlike" : "Like"}
+                data-comment-like
                 onClick={(event) => {
                   if (!isEntryLiked) cheerLike(event.currentTarget);
                   onLike(entry.id, !isEntryLiked);
@@ -1632,6 +1642,7 @@ function ThreadReplyEntry({
   });
   const canGiveHeart =
     canHeart && Boolean(courseId && replyServerId && threadServerId);
+  const tapGestures = useCommentTapGestures({});
 
   const saveEdit = async () => {
     if (!hasDiscussionDraftContent(editDraft) || isUpdating) return;
@@ -1659,6 +1670,10 @@ function ThreadReplyEntry({
     <article
       data-thread-reply-entry
       data-deletion-pending={deletion.hidden || undefined}
+      data-tap-gesture=""
+      style={tapGestures.style}
+      onMouseDown={tapGestures.onMouseDown}
+      onClick={tapGestures.onClick}
       className={`relative px-3 py-2.5 sm:px-8 ${deletion.hidden ? "min-h-10" : ""}`}
     >
       <div
@@ -1786,6 +1801,7 @@ function ThreadReplyEntry({
                     type="button"
                     aria-pressed={Boolean(reply.liked)}
                     aria-label={reply.liked ? "Unlike reply" : "Like reply"}
+                    data-comment-like
                     onClick={(event) => {
                       if (!reply.liked) cheerLike(event.currentTarget);
                       onLikeReply(reply.id);

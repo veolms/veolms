@@ -46,6 +46,7 @@ import { DiscussionCourseThumbnail } from "./DiscussionCourseThumbnail";
 import { DiscussionAttachmentsList } from "../learning/discussion-attachments/DiscussionAttachmentsList";
 import { DiscussionStaffActions } from "./DiscussionStaffActions";
 import { CreatorHeartButton } from "../learning/CreatorHeartButton";
+import { useCommentTapGestures } from "../learning/useCommentTapGestures";
 import { useCapabilities } from "../services/authorization";
 import { useReplyHeartMutation } from "../services/learning-interactions/thread-marks";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
@@ -213,8 +214,13 @@ function PanelReply({
   /** Given, the reply's text is shown in the editor to change it. */
   edit?: PanelEditHandlers;
 }) {
+  const tapGestures = useCommentTapGestures({});
   return (
     <article
+      data-tap-gesture=""
+      style={tapGestures.style}
+      onMouseDown={tapGestures.onMouseDown}
+      onClick={tapGestures.onClick}
       className={`flex gap-3 rounded-xl ${
         highlighted
           ? "-mx-3 bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] px-3 py-3"
@@ -584,6 +590,8 @@ export function DiscussionPanelContent({
     moderatesDiscussions &&
     Boolean(card.courseId) &&
     thread.data?.visibility === "public";
+  // The discussion is open: a double tap likes, a triple tap does nothing more.
+  const postGestures = useCommentTapGestures({});
   const replyHeart = useReplyHeartMutation({
     onError: (error) =>
       setNotice?.(error.message || "That change could not be saved."),
@@ -829,7 +837,13 @@ export function DiscussionPanelContent({
         {!lessonInBar &&
           renderLessonLink(`border-b ${LINE} hover:bg-(--hover)`)}
 
-        <article className="px-5 pt-5 pb-4">
+        <article
+          className="px-5 pt-5 pb-4"
+          data-tap-gesture=""
+          style={postGestures.style}
+          onMouseDown={postGestures.onMouseDown}
+          onClick={postGestures.onClick}
+        >
           <div className="flex items-center gap-3">
             <DiscussionAvatar
               src={
