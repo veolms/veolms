@@ -30,6 +30,7 @@ import {
 import { StudentCourseCard } from "./StudentCourseCard";
 import { StudentDetailsSkeleton } from "./StudentDetailsSkeleton";
 import { ElevatedCard } from "../components/ElevatedCard";
+import { studentsListPath } from "./studentsListPath";
 
 export interface StudentDetailsPageProps {
   username?: string;
@@ -145,7 +146,7 @@ export function StudentDetailsPage({
       <nav className="mb-6 flex items-center gap-3">
         <button
           type="button"
-          onClick={() => onNavigatePage?.("/students")}
+          onClick={() => onNavigatePage?.(studentsListPath())}
           className="group inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface) px-3.5 py-2 text-xs md:text-sm font-semibold text-(--text-secondary) hover:border-(--border) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
           style={{ boxShadow: "var(--card-shadow)" }}
         >
@@ -184,7 +185,7 @@ export function StudentDetailsPage({
             </button>
             <button
               type="button"
-              onClick={() => onNavigatePage?.("/students")}
+              onClick={() => onNavigatePage?.(studentsListPath())}
               className="rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-md hover:opacity-90 cursor-pointer"
             >
               Back to Students List

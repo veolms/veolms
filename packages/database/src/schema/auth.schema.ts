@@ -64,6 +64,12 @@ export interface UserTable {
   website_public: Generated<boolean>;
   email_verified_at: Date | null;
   mfa_mandatory: Generated<boolean>;
+  /**
+   * When a student moved here from the old platform: when they joined
+   * there. Null for everyone who signed up here, whose joined date is
+   * `created_at`.
+   */
+  joined_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
