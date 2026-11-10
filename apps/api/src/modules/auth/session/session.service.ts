@@ -393,6 +393,53 @@ export function createSessionService({
     await sessionRepository.revokeSession(database, sessionId);
   }
 
+  function resolveVerificationChannel(
+    user: Pick<
+      AuthenticatedRequestContext["user"],
+      "id" | "email" | "emailVerified" | "phoneNo" | "mobileVerified"
+    >,
+    requestedChannel?: "email" | "phone",
+  ): { channel: "email" | "phone"; destination: string } {
+    const hasEmail = Boolean(user.email && user.emailVerified);
+    const hasPhone = Boolean(user.phoneNo && user.mobileVerified);
+
+    if (!hasEmail && !hasPhone) {
+      throw new AppError(
+        409,
+        "NO_VERIFICATION_CHANNEL",
+        "A verified email address or phone number is required to verify your active sessions.",
+      );
+    }
+
+    if (requestedChannel === "phone") {
+      if (!hasPhone) {
+        throw new AppError(
+          409,
+          "VERIFIED_PHONE_REQUIRED",
+          "A verified phone number is required.",
+        );
+      }
+      return { channel: "phone", destination: user.phoneNo! };
+    }
+
+    if (requestedChannel === "email") {
+      if (!hasEmail) {
+        throw new AppError(
+          409,
+          "VERIFIED_EMAIL_REQUIRED",
+          "A verified email address is required.",
+        );
+      }
+      return { channel: "email", destination: user.email! };
+    }
+
+    if (hasEmail) {
+      return { channel: "email", destination: user.email! };
+    }
+
+    return { channel: "phone", destination: user.phoneNo! };
+  }
+
   async function sendActiveSessionsVerificationCode(
     user: Pick<
       AuthenticatedRequestContext["user"],
@@ -412,49 +459,10 @@ export function createSessionService({
       );
     }
 
-    const hasEmail = Boolean(user.email && user.emailVerified);
-    const hasPhone = Boolean(user.phoneNo && user.mobileVerified);
-
-    if (!hasEmail && !hasPhone) {
-      throw new AppError(
-        409,
-        "NO_VERIFICATION_CHANNEL",
-        "A verified email address or phone number is required to verify your active sessions.",
-      );
-    }
-
-    let channel: "email" | "phone";
-    let destination: string;
-
-    if (requestedChannel === "phone") {
-      if (!hasPhone) {
-        throw new AppError(
-          409,
-          "VERIFIED_PHONE_REQUIRED",
-          "A verified phone number is required.",
-        );
-      }
-      channel = "phone";
-      destination = user.phoneNo!;
-    } else if (requestedChannel === "email") {
-      if (!hasEmail) {
-        throw new AppError(
-          409,
-          "VERIFIED_EMAIL_REQUIRED",
-          "A verified email address is required.",
-        );
-      }
-      channel = "email";
-      destination = user.email!;
-    } else {
-      if (hasEmail) {
-        channel = "email";
-        destination = user.email!;
-      } else {
-        channel = "phone";
-        destination = user.phoneNo!;
-      }
-    }
+    const { channel, destination } = resolveVerificationChannel(
+      user,
+      requestedChannel,
+    );
 
     await otpService.sendActiveSessionsVerificationOtp(destination, channel, {
       ip,
@@ -484,49 +492,10 @@ export function createSessionService({
       );
     }
 
-    const hasEmail = Boolean(user.email && user.emailVerified);
-    const hasPhone = Boolean(user.phoneNo && user.mobileVerified);
-
-    if (!hasEmail && !hasPhone) {
-      throw new AppError(
-        409,
-        "NO_VERIFICATION_CHANNEL",
-        "A verified email address or phone number is required to verify your active sessions.",
-      );
-    }
-
-    let channel: "email" | "phone";
-    let destination: string;
-
-    if (requestedChannel === "phone") {
-      if (!hasPhone) {
-        throw new AppError(
-          409,
-          "VERIFIED_PHONE_REQUIRED",
-          "A verified phone number is required.",
-        );
-      }
-      channel = "phone";
-      destination = user.phoneNo!;
-    } else if (requestedChannel === "email") {
-      if (!hasEmail) {
-        throw new AppError(
-          409,
-          "VERIFIED_EMAIL_REQUIRED",
-          "A verified email address is required.",
-        );
-      }
-      channel = "email";
-      destination = user.email!;
-    } else {
-      if (hasEmail) {
-        channel = "email";
-        destination = user.email!;
-      } else {
-        channel = "phone";
-        destination = user.phoneNo!;
-      }
-    }
+    const { channel, destination } = resolveVerificationChannel(
+      user,
+      requestedChannel,
+    );
 
     await otpService.verifyActiveSessionsVerificationOtp(
       destination,

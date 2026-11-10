@@ -351,7 +351,7 @@ await test("the send request rejects or ignores any client-supplied destination"
 
   const verificationCode = flow.email.lastCodeFor(learner.email);
   assert.ok(verificationCode);
-  assert.equal(flow.email.lastCodeFor(attackerEmail), undefined);
+  assert.throws(() => flow.email.lastCodeFor(attackerEmail));
 
   const verified = await client.post("/v1/auth/sessions/verification/verify", {
     channel: "email",

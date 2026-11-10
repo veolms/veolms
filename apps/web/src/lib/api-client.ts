@@ -211,17 +211,8 @@ function combineSignals(
   };
 }
 
-function isActiveSessionsManagementRequest(url: string): boolean {
-  const pathname = url.split("?")[0] ?? url;
-  const match = pathname.match(/(?:^|\/)auth\/sessions(?:\/([^/?]+))?$/u);
-  return Boolean(match && match[1] !== "verification");
-}
-
-function redirectToMfaSetup(apiError: ApiError, url: string): void {
+function redirectToMfaSetup(apiError: ApiError): void {
   if (typeof window === "undefined") {
-    return;
-  }
-  if (isActiveSessionsManagementRequest(url)) {
     return;
   }
 
@@ -431,7 +422,7 @@ async function request<T>(
         },
       }),
     );
-    redirectToMfaSetup(apiError, url);
+    redirectToMfaSetup(apiError);
     endSessionIfUnauthorized(url, apiError);
     throw apiError;
   }
