@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 import type { ExpressionBuilder } from "kysely";
 import type { Database, DatabaseExecutor } from "@veolms/database";
-import { isCursorUuid } from "../../lib/keyset.ts";
+import { exactCursorTimestamp, isCursorUuid } from "../../lib/keyset.ts";
 import { escapeLikePattern } from "../../lib/like-pattern.ts";
 import { fuzzyMatchesAny } from "../../lib/fuzzy-search.ts";
 
@@ -174,30 +174,6 @@ const studentListSorts: readonly StudentListSort[] = [
  * Cursors are opaque to clients but include the complete sort position so
  * every supported ordering can seek without skipping or duplicating rows.
  */
-/**
- * When a student joined: on the old platform for one brought over from it
- * (`joined_at`), else when they signed up here. "Recent" sorts by it.
- */
-const joinedAt = sql<Date>`coalesce(u.joined_at, u.created_at)`;
-
-/**
- * The page's last joined date at full precision. A cursor keeps it in
- * milliseconds and Postgres keeps microseconds; compared as sent, rows
- * within that millisecond were skipped or repeated. Read back from the row
- * when it still matches (as `exactCursorTimestamp` does for a column).
- */
-function exactJoinedAt(rowId: string, cursorValue: Date) {
-  return sql<Date>`coalesce((
-    select coalesce(cursor_row.joined_at, cursor_row.created_at)
-    from users as cursor_row
-    where cursor_row.id = ${rowId}::uuid
-      and coalesce(cursor_row.joined_at, cursor_row.created_at)
-        >= ${cursorValue}::timestamptz
-      and coalesce(cursor_row.joined_at, cursor_row.created_at)
-        < ${cursorValue}::timestamptz + interval '1 millisecond'
-  ), ${cursorValue}::timestamptz)`;
-}
-
 export function encodeStudentListCursor(cursor: StudentListCursor): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
 }
@@ -290,7 +266,6 @@ export async function listStudentsPaginated(
       "u.phone_no",
       "u.avatar_data_url",
       "u.created_at",
-      joinedAt.as("joined_at"),
     ])
     .where("u.is_deleted", "=", false)
     // Filter to users that are students (either have student role in
@@ -336,12 +311,20 @@ export async function listStudentsPaginated(
   const cursor = decodeStudentListCursor(options.cursor);
   if (cursor?.sortBy === sortBy) {
     if (cursor.sortBy === "recent") {
-      const joined = exactJoinedAt(cursor.id, new Date(cursor.createdAt));
-      query = query.where(
-        sql<boolean>`(
-          ${joinedAt} < ${joined}
-          or (${joinedAt} = ${joined} and u.id < ${cursor.id}::uuid)
-        )`,
+      const createdAt = exactCursorTimestamp(
+        ["users"],
+        "created_at",
+        cursor.id,
+        new Date(cursor.createdAt),
+      );
+      query = query.where((eb) =>
+        eb.or([
+          eb("u.created_at", "<", createdAt),
+          eb.and([
+            eb("u.created_at", "=", createdAt),
+            eb("u.id", "<", cursor.id),
+          ]),
+        ]),
       );
     } else if (cursor.sortBy === "name") {
       query = query.where((eb) =>
@@ -377,7 +360,7 @@ export async function listStudentsPaginated(
   } else if (sortBy === "progress") {
     query = query.orderBy(progressSort, "desc").orderBy("u.id", "desc");
   } else {
-    query = query.orderBy(joinedAt, "desc").orderBy("u.id", "desc");
+    query = query.orderBy("u.created_at", "desc").orderBy("u.id", "desc");
   }
 
   return await query.limit(options.limit + 1).execute();
@@ -665,7 +648,6 @@ export async function findStudentByUsername(
       "u.avatar_data_url",
       "u.bio",
       "u.created_at",
-      "u.joined_at",
       "u.github_url",
       "u.github_public",
       "u.linkedin_url",
