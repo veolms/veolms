@@ -107,7 +107,7 @@ export function WorkshopsAdminPage({
             <p className="mt-0.5 text-xs text-(--muted)">
               {canManage
                 ? "Open a workshop to edit its sessions, publish or cancel it."
-                : "Open a workshop to see its sessions and registrations."}
+                : "Open a workshop to see its sessions and attendance."}
             </p>
           </div>
         </div>

@@ -98,7 +98,7 @@ export function formatRegistrations(
   capacity: number | null,
 ): string {
   if (capacity === null) {
-    return count === 1 ? "1 registered" : `${count} registered`;
+    return count === 1 ? "1 joined or added" : `${count} joined or added`;
   }
   return `${count} / ${capacity} seats`;
 }

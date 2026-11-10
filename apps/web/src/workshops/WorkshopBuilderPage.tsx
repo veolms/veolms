@@ -732,7 +732,7 @@ export function WorkshopBuilderPage({
           {editorTab === "audience" ? (
             <Section
               title="Audience and price"
-              description="Everyone it is for gets the invitation in their calendar when you publish; nobody registers."
+              description="Everyone it is for gets the calendar invitation by email when you publish."
             >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
@@ -778,8 +778,8 @@ export function WorkshopBuilderPage({
                 </div>
                 {form.access === "course" ? (
                   <p className="rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5 text-[13px] leading-5 text-(--muted)">
-                    Free for the course&apos;s learners: they are in without
-                    registering and are told when you publish.
+                    Free for the course&apos;s learners. They are told by email,
+                    with the calendar invitation, when you publish.
                   </p>
                 ) : (
                   <div className="grid gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-3.5">

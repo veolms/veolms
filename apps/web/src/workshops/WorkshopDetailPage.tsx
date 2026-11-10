@@ -124,6 +124,7 @@ export function WorkshopDetailPage({
   }
 
   const viewer = viewerQuery.data;
+  const isStaff = can("workshop.read") || can("workshop.manage");
   const upcoming = workshop.sessions.find(
     (session) => new Date(session.endsAt).getTime() > now,
   );
@@ -145,11 +146,13 @@ export function WorkshopDetailPage({
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
-          onClick={() => onNavigatePage?.(WORKSHOPS_PATH)}
+          // Learners have no Workshops page in their menu: they come back
+          // to their home, where the banner is.
+          onClick={() => onNavigatePage?.(isStaff ? WORKSHOPS_PATH : "/")}
           className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-(--muted) hover:text-(--text)"
         >
           <ArrowLeft size={16} weight="bold" />
-          All workshops
+          {isStaff ? "All workshops" : "Home"}
         </button>
         {can("workshop.manage") ? (
           <Button

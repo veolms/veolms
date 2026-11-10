@@ -169,11 +169,11 @@ export function WorkshopPayButton({
         disabled={isProcessing}
         className="w-full"
       >
-        {isProcessing ? "Processing..." : "Pay and register"}
+        {isProcessing ? "Processing..." : "Pay and get a seat"}
       </Button>
       <p className="text-[13px] leading-5 text-(--muted)">
-        You get an invoice and the usual refund window. Reminders and the Join
-        button follow once you are registered.
+        You get an invoice and the usual refund window. The calendar invitation,
+        reminders and the Join button follow once you have paid.
       </p>
       {notice ? (
         <p className="text-[13px] leading-5 text-(--text)" role="status">

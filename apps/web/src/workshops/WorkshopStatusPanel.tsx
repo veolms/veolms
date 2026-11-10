@@ -109,8 +109,8 @@ export function WorkshopStatusPanel({
         {workshop && workshop.registrationCount > 0 ? (
           <p className="mt-2 text-[13px] text-(--text)">
             {workshop.registrationCount === 1
-              ? "1 learner registered"
-              : `${workshop.registrationCount} learners registered`}
+              ? "1 learner joined or added"
+              : `${workshop.registrationCount} learners joined or added`}
           </p>
         ) : null}
 
@@ -147,8 +147,8 @@ export function WorkshopStatusPanel({
               <>
                 {workshop.courseId ? (
                   <p className="text-[12px] leading-5 text-(--muted)">
-                    Learners of {workshop.courseTitle ?? "its course"} are told
-                    when you publish; they do not need to register.
+                    Learners of {workshop.courseTitle ?? "its course"} get the
+                    calendar invitation by email when you publish.
                   </p>
                 ) : !workshop.publishedAt && !workshop.priceMinor ? (
                   <p className="text-[12px] leading-5 text-(--muted)">
@@ -272,7 +272,7 @@ export function WorkshopStatusPanel({
       <ConfirmDeleteModal
         isOpen={deleteOpen}
         title="Delete this workshop?"
-        message="The draft and its sessions are removed. Registrations, if any, are kept in the database but no longer shown."
+        message="The draft and its sessions are removed."
         confirmLabel="Delete workshop"
         onClose={() => setDeleteOpen(false)}
         onConfirm={() => {

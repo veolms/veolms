@@ -17,6 +17,7 @@ import type {
 } from "@veolms/services/email";
 
 import { signedUpLearner, startFlowApp } from "./setup/flow-app.ts";
+import { FLOW_ADMIN } from "./setup/flow-fixtures.ts";
 
 const flow = await startFlowApp();
 const { config } = await import("../../src/config.ts");
@@ -27,6 +28,8 @@ const { createNotificationProcessor } =
 const { createAuthService } = await import("../../src/modules/auth/index.ts");
 const { unsubscribeUrlFor } =
   await import("../../src/modules/notifications/email-unsubscribe.ts");
+const { listPlatformPermissionHolderIds } =
+  await import("../../src/modules/authorization/authorization.repository.ts");
 
 const silentLogger = {
   level: "silent",
@@ -374,6 +377,60 @@ await test("the unsubscribe link turns that kind of email off, with no sign-in",
     .where("d.channel", "=", "in_app")
     .execute();
   assert.equal(inApp.length, 1);
+});
+
+await test("unsubscribing from workshop emails tells the workshop team once", async () => {
+  const { userId, learner } = await signedUpLearner(flow, "unsubws");
+  const url = unsubscribeUrlFor(userId, "workshop.announced");
+  assert.ok(url);
+  const path = new URL(url).pathname.replace(/^\/api(?=\/v1\/)/, "");
+  const inbox = flow.visitor();
+
+  const first = await inbox.post<{ unsubscribed: true; group: string }>(path);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(first.body.data?.group, "workshops");
+  // The mail client's one-click request after a click changes nothing.
+  assert.equal((await inbox.post(path)).status, 200);
+
+  const auth = createAuthService({ database: flow.database });
+  await createNotificationProcessor({
+    database: flow.database,
+    email: new ScriptedEmail(),
+    logger: silentLogger,
+    config,
+    handlers: {
+      listActiveCourseRecipientUserIds: async () => [],
+      listPermissionHolderUserIds: (permissionKey) =>
+        listPlatformPermissionHolderIds(flow.database, permissionKey),
+    },
+    recipients: {
+      findRecipient: async (id) => {
+        const user = await auth.findUserByIdForNotification(id);
+        return user
+          ? { id: user.id, email: user.email, isDeleted: user.is_deleted }
+          : undefined;
+      },
+      findRecipients: (ids) => auth.listNotificationRecipientsByIds(ids),
+    },
+  }).process();
+
+  const notices = await flow.database
+    .selectFrom("notifications as n")
+    .innerJoin("notification_deliveries as d", "d.notification_id", "n.id")
+    .select(["n.recipient_user_id", "n.body", "n.deep_link", "d.channel"])
+    .where("n.type", "=", "email.unsubscribed")
+    .where("n.body", "like", `%${learner.email}%`)
+    .execute();
+  const forAdmin = notices.filter(
+    (notice) => notice.recipient_user_id === FLOW_ADMIN.id,
+  );
+  assert.equal(forAdmin.length, 1, "the admin is told once");
+  assert.equal(forAdmin[0]?.channel, "in_app", "a note in the app, not mail");
+  assert.match(forAdmin[0]?.body ?? "", /Workshop invitations and reminders/);
+  assert.ok(
+    notices.every((notice) => notice.recipient_user_id !== userId),
+    "the learner is not told about themself",
+  );
 });
 
 await flow.close();
