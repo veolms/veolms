@@ -234,7 +234,9 @@ export function CommentPostButton({
             </div>
           </fieldset>
 
-          <div className="flex items-center justify-between gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3">
+          {/* The label above the choices, which share the menu's width:
+              beside them, a note's three (with Private) ran past its edge. */}
+          <div className="flex flex-col gap-2 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3">
             <span
               id={`${menuId}-visibility`}
               className="px-1 text-[0.68rem] font-bold tracking-[0.08em] text-(--muted) uppercase"
@@ -244,7 +246,7 @@ export function CommentPostButton({
             <div
               role="radiogroup"
               aria-labelledby={`${menuId}-visibility`}
-              className="flex gap-0.5 rounded-lg bg-[color-mix(in_srgb,var(--canvas)_55%,transparent)] p-0.5 ring-1 ring-[color-mix(in_srgb,var(--text)_8%,transparent)] ring-inset"
+              className={`grid gap-0.5 rounded-lg bg-[color-mix(in_srgb,var(--canvas)_55%,transparent)] p-0.5 ring-1 ring-[color-mix(in_srgb,var(--text)_8%,transparent)] ring-inset ${visibilities.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
             >
               {visibilities.map((option) => (
                 <button
@@ -254,7 +256,7 @@ export function CommentPostButton({
                   aria-checked={visibility === option.value}
                   title={option.description}
                   onClick={() => onVisibilityChange(option.value)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold text-(--muted) transition-colors hover:text-(--text) aria-checked:bg-(--surface) aria-checked:text-(--text) aria-checked:shadow-sm"
+                  className="inline-flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-semibold whitespace-nowrap text-(--muted) transition-colors hover:text-(--text) aria-checked:bg-(--surface) aria-checked:text-(--text) aria-checked:shadow-sm"
                 >
                   {option.icon}
                   {option.label}
