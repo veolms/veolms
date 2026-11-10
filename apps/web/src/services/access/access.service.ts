@@ -2,7 +2,9 @@ import { api } from "../../lib/api-client";
 import type {
   AccessGrant,
   CourseAccessChangeResponse,
+  CourseValidityResponse,
   CreateManualAccessGrantRequest,
+  ExtendCourseAccessRequest,
 } from "@veolms/contracts";
 
 const courseAccessPath = (userId: string, courseId: string) =>
@@ -23,6 +25,18 @@ export const accessService = {
   ): Promise<CourseAccessChangeResponse> => {
     return api.delete<CourseAccessChangeResponse>(
       courseAccessPath(userId, courseId),
+    );
+  },
+
+  /** Extends a learner's access to a course, or makes it lifetime. */
+  extendCourseAccess: (
+    userId: string,
+    courseId: string,
+    body: ExtendCourseAccessRequest,
+  ): Promise<CourseValidityResponse> => {
+    return api.post<CourseValidityResponse>(
+      `${courseAccessPath(userId, courseId)}/validity`,
+      body,
     );
   },
 

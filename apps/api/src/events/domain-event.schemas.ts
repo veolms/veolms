@@ -183,6 +183,16 @@ export const supportReplyPostedEventSchema = z.strictObject({
   emailAllowed: z.boolean().optional(),
 });
 
+/** Staff extended a learner's access to a course. */
+export const accessValidityExtendedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  courseId: z.uuid(),
+  courseTitle: z.string().min(1).max(255),
+  courseSlug: z.string().min(1).max(160),
+  /** The new end; null for lifetime. */
+  validUntil: z.string().nullable(),
+});
+
 /** A report or feedback given to a team member by someone else. */
 export const supportAssignedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),

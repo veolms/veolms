@@ -1,9 +1,14 @@
 import { z } from "zod";
+import type { FastifyRequest } from "fastify";
 import {
   accessGrantSchema,
   courseAccessChangeResponseSchema,
   courseAccessParamsSchema,
+  courseValidityResponseSchema,
   createManualAccessGrantRequestSchema,
+  extendCourseAccessRequestSchema,
+  type CourseAccessParams,
+  type ExtendCourseAccessRequest,
 } from "@veolms/contracts";
 import { jsonResponse } from "../../lib/responses.ts";
 import { errorResponse } from "../../lib/errors.ts";
@@ -11,6 +16,7 @@ import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createCommerceContext } from "../commerce/shared/commerce.context.ts";
 import { createAccessService } from "./access.service.ts";
 import { createAccessController } from "./access.controller.ts";
+import { createAccessValidityService } from "./access-validity.service.ts";
 
 const accessRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
@@ -19,6 +25,7 @@ const accessRoutes: RoutePlugin = async (app, options) => {
     database: options.database,
     service,
   });
+  const validity = createAccessValidityService({ database: options.database });
 
   // 1. POST /access/grants - Create manual access grant (Admin)
   app.post(
@@ -143,6 +150,45 @@ const accessRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.restoreCourseAccess,
+  );
+
+  // 6. POST /access/users/:userId/courses/:courseId/validity - Extend a learner's access (Admin)
+  app.post(
+    "/access/users/:userId/courses/:courseId/validity",
+    {
+      preHandler: ctx.requires("student.access.manage"),
+      schema: {
+        operationId: "extendCourseAccess",
+        tags: ["Access Grants"],
+        summary: "Extend a learner's access to a course",
+        description:
+          "Adds days, months or years to the current end date (from today when it has passed), or makes the access lifetime. Revoked access must be restored first. The learner is told by email unless notify is false.",
+        params: courseAccessParamsSchema,
+        body: extendCourseAccessRequestSchema,
+        response: {
+          200: jsonResponse("New access period", courseValidityResponseSchema),
+          400: errorResponse("Invalid request body"),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Admin required"),
+          404: errorResponse("Learner was never enrolled in this course"),
+          409: errorResponse(
+            "Access is revoked or suspended, or already lifetime",
+          ),
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: CourseAccessParams;
+        Body: ExtendCourseAccessRequest;
+      }>,
+    ) =>
+      await validity.extendCourseAccess(
+        request.user!.id,
+        request.params.userId,
+        request.params.courseId,
+        request.body,
+      ),
   );
 };
 

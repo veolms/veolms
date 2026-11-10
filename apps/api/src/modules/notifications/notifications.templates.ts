@@ -340,6 +340,16 @@ export function renderNotificationTemplate(
         body: stringValue(data, "replySnippet"),
       };
       break;
+    case "access.validity_extended": {
+      const until = stringValue(data, "validUntil");
+      inApp = {
+        title: `Your access to ${stringValue(data, "courseTitle")} was extended`,
+        body: until
+          ? `You can keep learning until ${until}.`
+          : "You now have lifetime access to it.",
+      };
+      break;
+    }
     case "support.assigned":
       inApp = {
         title: `${stringValue(data, "assignedByName")} assigned ${stringValue(data, "ticketKind") === "feedback" ? "feedback" : "report"} #${stringValue(data, "ticketNumber")} to you`,

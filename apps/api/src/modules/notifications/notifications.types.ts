@@ -24,6 +24,7 @@ export type NotificationTemplateKey =
   | "moderation.user_unsuspended"
   | "moderation.report_resolved"
   | "support.reply_posted"
+  | "access.validity_extended"
   | "support.assigned"
   | "chat.mentioned"
   | "chat.platform_restriction"
