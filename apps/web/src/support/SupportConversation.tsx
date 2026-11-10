@@ -176,16 +176,26 @@ export function SupportReplyBox({
   const note = staff && mode === "note";
   const canSend =
     draft.hasText && !draft.uploading && !draft.failed && !post.isPending;
-  const problemOpen = ticket.kind === "problem" && ticket.status !== "resolved";
+  // Replying can close it in the same step: a report is resolved, feedback
+  // is marked reviewed.
+  const closingStatus =
+    ticket.kind === "problem"
+      ? ticket.status !== "resolved"
+        ? ("resolved" as const)
+        : null
+      : ticket.status === "new"
+        ? ("reviewed" as const)
+        : null;
+  const studentFirstName = ticket.requester.name.split(" ")[0] || "The student";
 
-  const send = (resolve = false) => {
+  const send = (close = false) => {
     if (!canSend) return;
     post.mutate(
       {
         content: draft.draft.markdown,
         attachmentIds: draft.attachmentIds,
         internal: note,
-        ...(resolve ? { status: "resolved" as const } : {}),
+        ...(close && closingStatus ? { status: closingStatus } : {}),
       },
       { onSuccess: () => draft.reset() },
     );
@@ -230,6 +240,15 @@ export function SupportReplyBox({
           ))}
         </div>
       ) : null}
+      {staff ? (
+        <p className="m-0 text-xs text-(--muted)">
+          {note
+            ? "Only the team sees internal notes."
+            : ticket.kind === "feedback" && !ticket.contactAllowed
+              ? `${studentFirstName} asked not to be emailed; they'll see this in the app.`
+              : `${studentFirstName} will get this by email.`}
+        </p>
+      ) : null}
       <SupportComposer
         state={draft}
         documentId={`support-reply-${ticket.id}-${mode}`}
@@ -245,7 +264,7 @@ export function SupportReplyBox({
         className={note ? "ring-amber-400/40" : ""}
         actions={
           <>
-            {staff && !note && problemOpen ? (
+            {staff && !note && closingStatus ? (
               <button
                 type="button"
                 className={quietButtonClasses}
@@ -253,7 +272,11 @@ export function SupportReplyBox({
                 onClick={() => send(true)}
               >
                 <CheckCircle size={17} weight="bold" aria-hidden="true" />
-                <span className="max-sm:sr-only">Reply &amp; resolve</span>
+                <span className="max-sm:sr-only">
+                  {closingStatus === "resolved"
+                    ? "Reply & resolve"
+                    : "Reply & mark reviewed"}
+                </span>
               </button>
             ) : null}
             <button

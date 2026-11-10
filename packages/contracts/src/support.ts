@@ -126,14 +126,53 @@ export type CreateSupportMessageRequest = z.input<
   typeof createSupportMessageRequestSchema
 >;
 
-export const updateSupportTicketRequestSchema = z.strictObject({
-  status: supportTicketStatusSchema,
-});
+/** How urgent the team thinks it is. None until someone sets it. */
+export const supportPriorities = ["low", "medium", "high", "urgent"] as const;
+export const supportPrioritySchema = z.enum(supportPriorities);
+export type SupportPriority = z.infer<typeof supportPrioritySchema>;
+
+/**
+ * Staff change a report or feedback: its status, who works on it, its
+ * priority or its category. At least one, any together.
+ */
+export const updateSupportTicketRequestSchema = z
+  .strictObject({
+    status: supportTicketStatusSchema.optional(),
+    /** A member of the support team, or null to unassign. */
+    assigneeId: z.uuid().nullable().optional(),
+    priority: supportPrioritySchema.nullable().optional(),
+    category: supportTicketCategorySchema.optional(),
+  })
+  .refine(
+    (body) =>
+      body.status !== undefined ||
+      body.assigneeId !== undefined ||
+      body.priority !== undefined ||
+      body.category !== undefined,
+    { message: "Nothing to change." },
+  );
 export type UpdateSupportTicketRequest = z.infer<
   typeof updateSupportTicketRequestSchema
 >;
 
+/** An internal note rewritten by its author or an admin. */
+export const updateSupportNoteRequestSchema = z.strictObject({
+  content: z.string().trim().min(1).max(SUPPORT_MESSAGE_MAX_LENGTH),
+});
+export type UpdateSupportNoteRequest = z.infer<
+  typeof updateSupportNoteRequestSchema
+>;
+
+export const pinSupportNoteRequestSchema = z.strictObject({
+  pinned: z.boolean(),
+});
+export type PinSupportNoteRequest = z.infer<typeof pinSupportNoteRequestSchema>;
+
 export const supportTicketParamsSchema = z.object({ ticketId: z.uuid() });
+export const supportNoteParamsSchema = z.object({
+  ticketId: z.uuid(),
+  messageId: z.uuid(),
+});
 
 /** `as=staff`: open it as the team, even a ticket the viewer sent themself. */
 export const supportTicketViewQuerySchema = z.object({
@@ -173,9 +212,68 @@ export const supportMessageSchema = z.strictObject({
   internal: z.boolean(),
   content: z.string(),
   createdAt: z.string(),
+  /** When an internal note was last edited; null when it never was. */
+  editedAt: z.string().nullable(),
+  /** Internal notes only: pinned to the top of the Activity log. */
+  pinned: z.boolean(),
   attachments: z.array(supportAttachmentSchema),
 });
 export type SupportMessage = z.infer<typeof supportMessageSchema>;
+
+export const supportEventTypes = [
+  "assigned",
+  "unassigned",
+  "status_changed",
+  "priority_changed",
+  "category_changed",
+  "note_pinned",
+  "note_unpinned",
+  "note_deleted",
+] as const;
+export const supportEventTypeSchema = z.enum(supportEventTypes);
+export type SupportEventType = z.infer<typeof supportEventTypeSchema>;
+
+/** Something the team did to a ticket, in its Activity log. */
+export const supportEventSchema = z.strictObject({
+  id: z.uuid(),
+  type: supportEventTypeSchema,
+  actor: supportPersonSchema,
+  createdAt: z.string(),
+  /** For a status, priority or category change: the values before and after. */
+  from: z.string().nullable(),
+  to: z.string().nullable(),
+  /** For an assignment: who it went to. */
+  assignee: supportPersonSchema.nullable(),
+  /** For a note pinned, unpinned or deleted. */
+  messageId: z.uuid().nullable(),
+});
+export type SupportEvent = z.infer<typeof supportEventSchema>;
+
+/** Someone who can work on reports, for the assignee picker. */
+export const supportTeamMemberSchema = supportPersonSchema.extend({
+  id: z.uuid(),
+  roleLabel: z.string(),
+  /** Reports and feedback assigned to them that are not done. */
+  openReports: z.number().int().nonnegative(),
+  openFeedback: z.number().int().nonnegative(),
+});
+export type SupportTeamMember = z.infer<typeof supportTeamMemberSchema>;
+
+export const supportTeamResponseSchema = z.strictObject({
+  members: z.array(supportTeamMemberSchema),
+});
+export type SupportTeamResponse = z.infer<typeof supportTeamResponseSchema>;
+
+/** What only the team sees about a ticket. */
+export const supportTicketStaffSchema = z.strictObject({
+  assignee: supportPersonSchema.nullable(),
+  assignedAt: z.string().nullable(),
+  priority: supportPrioritySchema.nullable(),
+  events: z.array(supportEventSchema),
+  /** Whether the viewer may edit and delete any note, not only their own. */
+  canModerateNotes: z.boolean(),
+});
+export type SupportTicketStaff = z.infer<typeof supportTicketStaffSchema>;
 
 export const supportTicketSummarySchema = z.strictObject({
   id: z.uuid(),
@@ -201,6 +299,8 @@ export const supportAdminTicketSummarySchema =
     requester: supportPersonSchema.extend({ email: z.string().nullable() }),
     contactAllowed: z.boolean(),
     snippet: z.string(),
+    assignee: supportPersonSchema.nullable(),
+    priority: supportPrioritySchema.nullable(),
   });
 export type SupportAdminTicketSummary = z.infer<
   typeof supportAdminTicketSummarySchema
@@ -218,6 +318,8 @@ export const supportTicketDetailSchema = supportTicketSummarySchema.extend({
   requester: supportPersonSchema.extend({ email: z.string().nullable() }),
   /** Whether the viewer is answering as support staff. */
   viewerIsStaff: z.boolean(),
+  /** For the team only; null for the learner. */
+  staff: supportTicketStaffSchema.nullable(),
 });
 export type SupportTicketDetail = z.infer<typeof supportTicketDetailSchema>;
 
@@ -233,6 +335,10 @@ export const supportAdminListQuerySchema = z.object({
   status: supportTicketStatusSchema.optional(),
   category: supportTicketCategorySchema.optional(),
   rating: z.coerce.number().int().min(1).max(5).optional(),
+  /** "me", "none" (unassigned) or a team member's id. */
+  assignee: z.union([z.enum(["me", "none"]), z.uuid()]).optional(),
+  /** Leave out what is done (resolved reports). */
+  active: z.stringbool().optional(),
   search: z.string().trim().max(200).optional(),
   sort: z.enum(["newest", "oldest"]).default("newest"),
   cursor: z.string().max(512).optional(),
@@ -256,6 +362,8 @@ export const supportAdminStatsResponseSchema = z.strictObject({
     waiting: z.number().int(),
     resolved: z.number().int(),
     unread: z.number().int(),
+    /** Not resolved and assigned to the viewer. */
+    assignedToMe: z.number().int(),
   }),
   feedback: z.strictObject({
     new: z.number().int(),
@@ -269,6 +377,7 @@ export const supportAdminStatsResponseSchema = z.strictObject({
     confusing: z.number().int(),
     content: z.number().int(),
     contactable: z.number().int(),
+    assignedToMe: z.number().int(),
   }),
 });
 export type SupportAdminStatsResponse = z.infer<

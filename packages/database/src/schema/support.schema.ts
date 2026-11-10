@@ -54,6 +54,11 @@ export interface SupportTicketTable {
     string | null
   >;
   contact_allowed: Generated<boolean>;
+  /** The team member working on it; internal, never shown to the learner. */
+  assignee_id: string | null;
+  assigned_at: Date | null;
+  assigned_by: string | null;
+  priority: SupportTicketPriority | null;
   user_unread: Generated<boolean>;
   staff_unread: Generated<boolean>;
   last_message_at: Generated<Date>;
@@ -70,6 +75,38 @@ export interface SupportMessageTable {
   internal: Generated<boolean>;
   content: string;
   plain_text: string;
+  created_at: Generated<Date>;
+  /** Set when an internal note is edited. */
+  updated_at: Date | null;
+  edited_by: string | null;
+  pinned: Generated<boolean>;
+  pinned_at: Date | null;
+  /** An internal note deleted: kept for the record, never listed. */
+  deleted_at: Date | null;
+  deleted_by: string | null;
+}
+
+export type SupportTicketPriority = "low" | "medium" | "high" | "urgent";
+
+export type SupportEventType =
+  | "assigned"
+  | "unassigned"
+  | "status_changed"
+  | "priority_changed"
+  | "category_changed"
+  | "note_pinned"
+  | "note_unpinned"
+  | "note_deleted";
+
+/** What the team did to a ticket, for its Activity log. */
+export interface SupportEventTable {
+  id: string;
+  /** The order they happened in; changes made in one step share a time. */
+  seq: Generated<string>;
+  ticket_id: string;
+  actor_id: string | null;
+  type: SupportEventType;
+  data: JSONColumnType<Record<string, unknown>, string, string>;
   created_at: Generated<Date>;
 }
 
