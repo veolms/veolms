@@ -195,3 +195,155 @@ test("a new course keeps its draft when the curriculum is refreshed", async ({
   await page.reload();
   await expect(page.getByText("New Lesson 1").first()).toBeVisible();
 });
+
+test("a replacement for a failed video stays attached while queued", async ({
+  page,
+  context,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    status: "draft",
+    lessons: [
+      { title: "Failed lesson", video: "queued" },
+      { title: "Replacement fixture", video: "queued" },
+    ],
+  });
+  const oldId = course.lessons[0]!.mediaId!;
+  const newId = course.lessons[1]!.mediaId!;
+  const headers = {
+    "access-control-allow-origin": "http://127.0.0.1:43917",
+    "access-control-allow-credentials": "true",
+  };
+  const failed = {
+    status: "failed",
+    progressPercent: 0,
+    playbackReady: false,
+    error: "Video processing failed.",
+  };
+  await academy.signInAsAdmin();
+  await context.route(`**/media/${oldId}/progress`, (route) =>
+    route.fulfill({ json: failed, headers }),
+  );
+  await context.route(`**/media/${oldId}/progress/stream`, (route) =>
+    route.fulfill({
+      contentType: "text/event-stream",
+      headers,
+      body: `event: progress\ndata: ${JSON.stringify(failed)}\n\n`,
+    }),
+  );
+  await context.route("**/media/multipart/start", (route) =>
+    route.fulfill({
+      headers,
+      json: {
+        success: true,
+        data: { mediaAssetId: newId, partSize: 1024, totalParts: 1 },
+      },
+    }),
+  );
+  await context.route(`**/media/${newId}/multipart/parts`, (route) =>
+    route.fulfill({
+      headers,
+      json: {
+        success: true,
+        data: {
+          parts: [
+            {
+              partNumber: 1,
+              url: "http://127.0.0.1:43917/test-replacement-part",
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await context.route("**/test-replacement-part", (route) =>
+    route.fulfill({ status: 200, body: "" }),
+  );
+  await context.route(`**/media/${newId}/multipart/complete`, (route) =>
+    route.fulfill({
+      headers,
+      json: { success: true, data: { status: "uploaded" } },
+    }),
+  );
+  await page.goto(`/courses/${course.id}/edit/curriculum`);
+  const expandSection = page.getByRole("button", { name: "Expand section" });
+  if (await expandSection.count()) await expandSection.first().click();
+  await page
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Choose Replacement Video" }),
+  ).toBeVisible();
+  await page
+    .getByLabel("Choose a video file")
+    .last()
+    .setInputFiles({
+      name: "replacement.mp4",
+      mimeType: "video/mp4",
+      buffer: Buffer.from("test video"),
+    });
+  await page.getByRole("button", { name: "Upload video", exact: true }).click();
+  await expect(
+    page.getByText("Processing", { exact: true }).first(),
+  ).toBeVisible();
+  const reopened = await context.newPage();
+  await reopened.goto(`/courses/${course.id}/edit/curriculum`);
+  const reopenSection = reopened.getByRole("button", {
+    name: "Expand section",
+  });
+  if (await reopenSection.count()) await reopenSection.first().click();
+  await reopened
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  await expect(
+    reopened.getByText("Processing", { exact: true }).first(),
+  ).toBeVisible();
+});
+
+test("an author can replace a failed lesson video", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    status: "draft",
+    lessons: [{ title: "Failed video", video: "queued" }],
+  });
+  const mediaId = course.lessons[0]!.mediaId!;
+  await academy.signInAsAdmin();
+  const progress = {
+    status: "failed",
+    progressPercent: 0,
+    playbackReady: false,
+    error: "Video processing failed.",
+  };
+  const headers = {
+    "access-control-allow-origin": "http://127.0.0.1:43917",
+    "access-control-allow-credentials": "true",
+  };
+  await page.route(`**/media/${mediaId}/progress`, (route) =>
+    route.fulfill({ json: progress, headers }),
+  );
+  await page.route(`**/media/${mediaId}/progress/stream`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      headers,
+      body: `event: progress\ndata: ${JSON.stringify(progress)}\n\n`,
+    }),
+  );
+  await page.goto(`/courses/${course.id}/edit/curriculum`);
+  const expandSection = page.getByRole("button", { name: "Expand section" });
+  if (await expandSection.count()) await expandSection.first().click();
+  await page
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  await expect(
+    page.getByText("Video processing failed.").first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Choose Replacement Video" }),
+  ).toBeVisible();
+});

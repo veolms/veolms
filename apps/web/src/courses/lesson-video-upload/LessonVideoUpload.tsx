@@ -161,6 +161,7 @@ export const LessonVideoUpload = forwardRef<
   const committedMediaIdRef = useRef<string | null>(null);
   const committingMediaIdRef = useRef<string | null>(null);
   const replacementForMediaIdRef = useRef<string | null>(null);
+  const failedReplacementForMediaIdRef = useRef<string | null>(null);
   const progressMediaIdRef = useRef<string | null>(mediaAssetId ?? null);
   const highestTranscodeProgressRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -561,13 +562,9 @@ export const LessonVideoUpload = forwardRef<
       requestIdRef.current += 1;
       uploadAbortControllerRef.current?.abort();
 
-      // The lesson's first video is attached when this component sees
-      // processing finish. If the editor closes before that — another step,
-      // another lesson, another page — nothing was left to attach it and the
-      // uploaded video was orphaned. Attach it now instead: processing
-      // carries on server-side, and a lesson cannot be published with a
-      // video that is not ready. A replacement is left alone, so the video
-      // students are watching stays in place until its successor is ready.
+      // If a first video's attachment was not completed before the editor
+      // closed, make a best-effort attempt so it does not become orphaned.
+      // Replacements for playable videos stay separate until they are ready.
       const unattached = unattachedCandidateRef.current;
       if (
         unattached &&
@@ -583,10 +580,8 @@ export const LessonVideoUpload = forwardRef<
   }, []);
 
   useEffect(() => {
-    // A candidate becomes the current lesson asset only after a completed
-    // terminal event invokes onMediaAttached and the parent sends the new ID
-    // back through this prop. Do not reset the candidate while that commit is
-    // in flight.
+    // Keep a candidate while its attachment is in flight. A first lesson
+    // video or a replacement for a failed video may be attached while queued.
     if (candidateMediaId && mediaAssetId !== candidateMediaId) {
       // The normal replacement render keeps the original current media ID.
       // If another tab/editor changed the lesson binding, stop tracking this
@@ -908,6 +903,11 @@ export const LessonVideoUpload = forwardRef<
         return;
       }
 
+      failedReplacementForMediaIdRef.current =
+        mediaAssetId && phase === "failed" && !playbackReady
+          ? mediaAssetId
+          : null;
+
       uploadedThisSessionRef.current = false;
       resetReconnectBackoff();
       committedMediaIdRef.current = null;
@@ -936,6 +936,7 @@ export const LessonVideoUpload = forwardRef<
       mediaAssetId,
       onPreviewFile,
       phase,
+      playbackReady,
       resetReconnectBackoff,
       validateFile,
       visibility,
@@ -1033,7 +1034,11 @@ export const LessonVideoUpload = forwardRef<
         setHasReceivedProgress(false);
         setAttachmentError(null);
         setTrackProgress(true);
-        if (attachWhileProcessing && !mediaAssetId) {
+        if (
+          attachWhileProcessing &&
+          (!mediaAssetId ||
+            failedReplacementForMediaIdRef.current === mediaAssetId)
+        ) {
           void commitCandidate(result.mediaAssetId);
         }
       } catch (error: unknown) {
