@@ -347,3 +347,26 @@ test("an author can replace a failed lesson video", async ({
     page.getByRole("button", { name: "Choose Replacement Video" }),
   ).toBeVisible();
 });
+
+test("the editor explains that a submitted video remains after cancel", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    status: "draft",
+    lessons: [{ title: "Queued lesson", video: "queued" }],
+  });
+  await academy.signInAsAdmin();
+  await page.goto(`/courses/${course.id}/edit/curriculum`);
+  const expandSection = page.getByRole("button", { name: "Expand section" });
+  if (await expandSection.count()) await expandSection.first().click();
+  await page
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  await expect(
+    page.getByText(
+      "This submitted video stays attached if you cancel editing.",
+    ),
+  ).toBeVisible();
+});

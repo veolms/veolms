@@ -1500,6 +1500,14 @@ export const LessonVideoUpload = forwardRef<
           )}
 
           {stageContent}
+          {attachWhileProcessing &&
+            mediaAssetId &&
+            phase === "transcoding" &&
+            !isPendingReplacement && (
+              <p className="m-0 text-sm text-(--muted)">
+                This submitted video stays attached if you cancel editing.
+              </p>
+            )}
         </div>
       ) : null}
 
