@@ -264,8 +264,22 @@ const INTERRUPTED_LOAD_CODES = new Set([
   "SHAKA_7003",
   "SHAKA_7006",
 ]);
-/** Wait before a load cut off inside the player is made again. */
-const INTERRUPTED_LOAD_RETRY_DELAY_MS = 250;
+/**
+ * Waits before a load cut off inside the player is made again, one per
+ * try: the first at once on a new player, the later ones longer, each on a
+ * new player that takes no preload or standby (the "clean" load). Counted
+ * apart from network retries, so a slow network never uses them up.
+ */
+const INTERRUPTED_LOAD_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000];
+
+/** Reloads after an interruption outside a load: at most so many a minute. */
+const INTERRUPTION_RELOAD_LIMIT = 3;
+const INTERRUPTION_RELOAD_WINDOW_MS = 60_000;
+
+/** Whether `code` is a load cut off inside the player. */
+function isInterruptedLoadCode(code: string | undefined): boolean {
+  return code !== undefined && INTERRUPTED_LOAD_CODES.has(code);
+}
 
 /** Whether the browser says it has no network. */
 function browserOffline(): boolean {
@@ -556,6 +570,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   /** The source and options of the load most recently asked for. */
   #lastLoad: { src: string; options: VideoLoadOptions } | null = null;
   #timedOutLoadRetries = 0;
+  /** The next load takes no standby or preload (reloadAfterInterruption). */
+  #nextLoadClean = false;
+  /** When each reload after an interruption outside a load began. */
+  #interruptionReloads: number[] = [];
+  #interruptionReloadInFlight = false;
   /** The watchdog's timer and what it last saw (see `watchPlayback`). */
   #watchdog: number | null = null;
   #watchdogMedia: HTMLMediaElement | null = null;
@@ -645,26 +664,44 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#timedOutLoadRetries = 0;
     }
     this.#lastLoad = { src: source.src, options };
-    for (let attempt = 0; ; attempt += 1) {
+    // Asked for by a reload after an interruption (reloadAfterInterruption).
+    const startClean = this.#nextLoadClean;
+    this.#nextLoadClean = false;
+    let interruptions = 0;
+    for (let attempt = 0; ;) {
       try {
-        await this.loadOnce(source, options, attempt);
+        // After an interruption, the load takes nothing prepared before
+        // (no standby, no preload): whatever cut it off cannot again.
+        await this.loadOnce(
+          source,
+          options,
+          attempt,
+          interruptions,
+          startClean || interruptions > 0,
+        );
         return;
       } catch (error) {
         if (!(error instanceof LoadRetry)) throw error;
         const generation = this.#loadGeneration;
         if (error.interrupted) {
+          const delayMs =
+            INTERRUPTED_LOAD_RETRY_DELAYS_MS[interruptions] ??
+            INTERRUPTED_LOAD_RETRY_DELAYS_MS.at(-1) ??
+            1_000;
+          interruptions += 1;
           markPlayback("load-interrupted-retry", {
-            attempt: attempt + 1,
+            attempt: interruptions,
             code: error.failure.code,
+            delayMs,
           });
           this.emit("streamingretry", {
-            attempt: attempt + 1,
-            delaySeconds: INTERRUPTED_LOAD_RETRY_DELAY_MS / 1000,
+            attempt: interruptions,
+            delaySeconds: delayMs / 1000,
             code: error.failure.code,
             httpStatus: null,
             offline: false,
           });
-          await delay(INTERRUPTED_LOAD_RETRY_DELAY_MS);
+          await delay(delayMs);
           if (!this.isCurrentOperation(generation)) return;
           await this.rebuildPlayer();
           if (!this.isCurrentOperation(generation)) return;
@@ -674,16 +711,17 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         const delayMs = offline
           ? LOAD_RETRY_OFFLINE_WAIT_MS
           : LOAD_RETRY_FIRST_DELAY_MS * 2 ** attempt;
+        attempt += 1;
         const httpStatus = networkFailureHttpStatus(error.failure);
         markPlayback("load-retry", {
-          attempt: attempt + 1,
+          attempt,
           delayMs,
           code: error.failure.code,
           status: httpStatus,
           offline,
         });
         this.emit("streamingretry", {
-          attempt: attempt + 1,
+          attempt,
           delaySeconds: delayMs / 1000,
           code: error.failure.code,
           httpStatus,
@@ -770,6 +808,45 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     return true;
   }
 
+  /**
+   * A load cut off inside the player that reached Shaka's error event
+   * outside a load (a playing video's player was reached by something
+   * else). The video is loaded again where it was, on a clean load, and
+   * plays on if it was playing. Three in a minute at most; past that the
+   * failure is shown, so a loop never hides behind a spinner.
+   */
+  private reloadAfterInterruption(error: VideoEngineError): void {
+    const media = this.mediaElement;
+    const source = this.getSnapshot().source;
+    if (!media || !source || this.#interruptionReloadInFlight) return;
+    const now = Date.now();
+    this.#interruptionReloads = this.#interruptionReloads.filter(
+      (at) => now - at < INTERRUPTION_RELOAD_WINDOW_MS,
+    );
+    if (this.#interruptionReloads.length >= INTERRUPTION_RELOAD_LIMIT) {
+      this.emitError(error);
+      return;
+    }
+    this.#interruptionReloads.push(now);
+    this.#interruptionReloadInFlight = true;
+    const startTime = media.currentTime;
+    const wasPlaying = !media.paused && !media.ended;
+    markPlayback("interruption-reload", { code: error.code, startTime });
+    void (async () => {
+      await Promise.resolve();
+      try {
+        await this.rebuildPlayer();
+        this.#nextLoadClean = true;
+        await this.load(source, { startTime });
+        if (wasPlaying) await this.play();
+      } catch {
+        // The load showed its own failure.
+      } finally {
+        this.#interruptionReloadInFlight = false;
+      }
+    })();
+  }
+
   /** See `MediaElementEngineBase.retryTimedOutLoad`. */
   protected override retryTimedOutLoad(): boolean {
     const last = this.#lastLoad;
@@ -839,6 +916,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     source: VideoSource,
     options: VideoLoadOptions,
     attempt: number,
+    interruptions = 0,
+    clean = false,
   ): Promise<void> {
     const media = this.requireMedia();
     let player = this.requirePlayer();
@@ -866,7 +945,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
 
     try {
       // Prepared out of sight (a hovered or next lesson): switch to it.
-      const standbySession = await this.readyStandbyFor(source);
+      if (clean) markPlayback("clean-load", { interruptions });
+      const standbySession = clean ? null : await this.readyStandbyFor(source);
       if (!this.isCurrentOperation(generation)) return;
       if (standbySession) {
         this.switchToStandby(standbySession, media);
@@ -880,10 +960,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         return;
       }
 
-      const speculativeSession = await this.adoptSpeculativePreloadSession(
-        source,
-        media,
-      );
+      const speculativeSession = clean
+        ? null
+        : await this.adoptSpeculativePreloadSession(source, media);
       if (!this.isCurrentOperation(generation)) {
         if (speculativeSession) {
           await discardEarlyShakaPreloadManager(speculativeSession);
@@ -892,8 +971,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       }
       player = this.requirePlayer();
       this.clearNetworkingFilters();
-      const preloadSession =
-        speculativeSession ?? this.takeMatchingPreloadSession(source);
+      const preloadSession = clean
+        ? null
+        : (speculativeSession ?? this.takeMatchingPreloadSession(source));
       if (!preloadSession) noteShakaSourceLoading(source.src);
       const keepPreloadStreaming = Boolean(preloadSession?.preloadPromise);
       if (
@@ -990,10 +1070,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       // A failure on the network is not shown yet: `load` tries again
       // (the error event during a load leaves such failures to this path,
       // see bindShakaEvents).
+      // A load cut off inside the player: made again on a new player (see
+      // INTERRUPTED_LOAD_RETRY_DELAYS_MS). Shaka's error event leaves these
+      // to this path while loading, so none is on the snapshot yet.
       if (
         !existing &&
-        attempt < LOAD_RETRY_LIMIT &&
-        INTERRUPTED_LOAD_CODES.has(normalized.code)
+        interruptions < INTERRUPTED_LOAD_RETRY_DELAYS_MS.length &&
+        isInterruptedLoadCode(normalized.code)
       ) {
         throw new LoadRetry(normalized, true);
       }
@@ -1263,7 +1346,32 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.bindShakaEvents(this.#player);
     }
     this.#player.setVideoContainer?.(subtitleLayerFor(media));
-    await this.#player.attach(media);
+    try {
+      await this.#player.attach(media);
+    } catch (error) {
+      const adopted = this.#adoptedPreloadSession;
+      if (!adopted) throw error;
+      // The preloaded player could not take the element (its preload was
+      // cut off meanwhile): a new player takes over and loads from scratch,
+      // rather than "Something went wrong" before the video was asked for.
+      markPlayback("preload-attach-failed", {
+        code: this.normalizeShakaError(error, "SHAKA_ATTACH_FAILED", "PLAYER")
+          .code,
+      });
+      const previous = this.#player;
+      this.clearNetworkingFilters();
+      this.unbindShakaEvents(previous);
+      this.#adoptedPreloadSession = null;
+      if (!adopted.consumed) {
+        consumeEarlyShakaPreloadSession(adopted);
+        await discardEarlyShakaPreloadManager(adopted);
+      }
+      await previous.destroy().catch(() => undefined);
+      this.#player = new runtime.Player();
+      this.bindShakaEvents(this.#player);
+      this.#player.setVideoContainer?.(subtitleLayerFor(media));
+      await this.#player.attach(media);
+    }
   }
 
   protected override async onDetaching(
@@ -2260,6 +2368,31 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         networkFailureKind(error) === "transient"
       ) {
         this.emit("error", { error });
+        return;
+      }
+      // A load cut off inside the player is never the learner's error.
+      // While loading, `load` makes it again (it also rejects the load
+      // promise). From a player this engine no longer uses, it is that
+      // player's teardown. Otherwise the video is loaded again where it
+      // was, as a recovery.
+      if (isInterruptedLoadCode(error.code)) {
+        this.emit("error", {
+          error: new VideoEngineError({
+            category: error.category,
+            code: error.code,
+            message: error.message,
+            fatal: false,
+            recoverable: true,
+            cause: error.cause,
+            details: error.details,
+          }),
+        });
+        if (
+          this.#player === player &&
+          this.getSnapshot().lifecycle !== "loading"
+        ) {
+          this.reloadAfterInterruption(error);
+        }
         return;
       }
       // One Shaka got over by itself (another quality took over) is told to
