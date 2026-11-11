@@ -433,6 +433,15 @@ const serverConfigSchema = z.object({
   LOCAL_ANY_COURSE_UNENROLL: booleanEnvironmentValueSchema.default(false),
 
   /**
+   * Development only: the shared test accounts (TEST_LOGIN_ACCOUNTS) may be
+   * staff, so a demo admin on a development server signs in with its fixed
+   * code. Without it a listed account holding any role other than student
+   * gets an emailed code instead. Honoured only when `NODE_ENV` is
+   * `development`, and the API refuses to start in production with it set.
+   */
+  TEST_LOGIN_STAFF_ALLOWED: booleanEnvironmentValueSchema.default(false),
+
+  /**
    * Enables the `mock_<email>` OAuth short-circuit, which skips both the
    * provider round-trip and the state/CSRF check. Requires `NODE_ENV` to be
    * `development` as well, so it can never be switched on in a deployed
@@ -1033,6 +1042,7 @@ export function loadServerConfig(
   const developmentOnly = [
     parsed.LOCAL_FIXED_OTP ? "LOCAL_FIXED_OTP" : null,
     parsed.LOCAL_ANY_COURSE_UNENROLL ? "LOCAL_ANY_COURSE_UNENROLL" : null,
+    parsed.TEST_LOGIN_STAFF_ALLOWED ? "TEST_LOGIN_STAFF_ALLOWED" : null,
   ].filter((name): name is string => name !== null);
   if (developmentOnly.length > 0 && !environment.NODE_ENV?.trim()) {
     throw new Error(
@@ -1047,6 +1057,12 @@ export function loadServerConfig(
     if (parsed.LOCAL_FIXED_OTP) {
       throw new Error(
         "Refusing to start in production with LOCAL_FIXED_OTP set: it lets anyone sign in to any account. " +
+          "Remove it from the environment.",
+      );
+    }
+    if (parsed.TEST_LOGIN_STAFF_ALLOWED) {
+      throw new Error(
+        "Refusing to start in production with TEST_LOGIN_STAFF_ALLOWED set: it lets a shared test code open a staff account. " +
           "Remove it from the environment.",
       );
     }

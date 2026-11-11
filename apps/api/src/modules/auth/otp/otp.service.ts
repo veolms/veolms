@@ -293,7 +293,11 @@ export function createOtpService({
       identifier,
       identifierType,
     );
-    if (user) {
+    // On a development server a listed account may be staff (a demo admin,
+    // TEST_LOGIN_STAFF_ALLOWED); never in production.
+    const staffAllowed =
+      config.NODE_ENV === "development" && config.TEST_LOGIN_STAFF_ALLOWED;
+    if (user && !staffAllowed) {
       const roles = await userRepository.listUserRoleNames(database, user.id);
       if (roles.some((role) => role !== STUDENT_ROLE)) return null;
     }
