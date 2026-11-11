@@ -12,6 +12,13 @@
  * This browser's choices (previews, quiet hours) are written to IndexedDB
  * by the page (services/webPush/webPush.prefs.ts), because a service
  * worker cannot read localStorage.
+ *
+ * A site has one service worker for "/". An extension that registers its
+ * own there must load this file inside it (`importScripts("/sw.js")`, as
+ * cloud's offline-sw.js does), or pushes reach a worker that cannot show
+ * them. The page keeps whatever worker the site already runs
+ * (services/webPush/webPush.ts, registration()). Top-level names here
+ * must not clash with that worker's.
  */
 
 const PREFS_DB = "veolms-push";
