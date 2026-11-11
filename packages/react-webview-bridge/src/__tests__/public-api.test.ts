@@ -29,6 +29,7 @@ describe("public API", () => {
         "NativeBridgeProvider",
         "computeRetryDelay",
         "disposeNativeBridge",
+        "getBridgeClient",
         "getBridgeController",
         "getNativeBridgeDiagnostics",
         "hasBridgeController",

@@ -52,9 +52,10 @@ Read [README.md](README.md) first. The details are in [docs/API.md](docs/API.md)
 2. **Confirm the path.** `bridge.ns.method()` is the wire path `ns:method`. Check the generated interface for argument and return types
    (`Promise<void>` means an `ack`, which resolves `undefined`).
 3. **Pick the API** (README, "When to use what"):
-   - rendering request state → `useBridgeCall((b: B, ...args) => b.ns.method(...args))`;
-   - an imperative call in a handler or effect → `const { call } = useNativeBridge<C>(); await call(b => b.ns.method(x))`;
-   - outside React → `getBridgeController<C>(name).call(...)`.
+   - a direct call, anywhere (handler, effect, service) → `const client = getBridgeClient(); await client.ns.method(x)`;
+   - rendering request state → `useBridgeCall((b, ...args) => b.ns.method(...args))`;
+   - an imperative call in a handler or effect → `const { call } = useNativeBridge(); await call(b => b.ns.method(x))`;
+   - outside React → `getBridgeClient()` or `getBridgeController(name).call(...)`.
    - native → web event → `useBridgeEvent<P>("eventName", handler)`.
 4. **Handle three outcomes:** the value; `BridgeNotReadyError` (`unavailable` means not in the app, so hide or skip it); and call errors
    (`BridgeNativeError`, `BridgeTimeoutError`, `BridgeTransportError`) by `code`.

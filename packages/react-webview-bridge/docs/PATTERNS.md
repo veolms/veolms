@@ -284,7 +284,20 @@ const canHide = bridge?.$has("systemBars:hideStatusBar") ?? false; // member (fu
 
 ## 9. Non-React code
 
-Services, stores, routers, and analytics can share the same session through the controller:
+The simplest form is the client: one object whose functions you call directly, typed by the registered contract.
+
+```ts
+// src/native/native.ts
+import { getBridgeClient } from "@veolms/react-webview-bridge";
+
+export const native = getBridgeClient("NativeBridge", { unavailable: "null" });
+
+// anywhere, in or out of React:
+const platform = await native.platform(); // PlatformInfo | null (null: not inside the app)
+```
+
+For more control (several calls on one proxy, state subscriptions), services, stores, routers, and analytics can share the
+same session through the controller:
 
 ```ts
 // src/native/bridge-service.ts

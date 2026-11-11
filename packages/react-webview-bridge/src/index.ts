@@ -27,6 +27,9 @@ export {
 } from "./controller.ts";
 export type { NativeBridgeDiagnostics } from "./controller.ts";
 
+export { getBridgeClient } from "./client.ts";
+export type { BridgeClient, BridgeClientConfig } from "./client.ts";
+
 export { BridgeNotReadyError, isBridgeNotReadyError } from "./errors.ts";
 export type { BridgeNotReadyReason } from "./errors.ts";
 
