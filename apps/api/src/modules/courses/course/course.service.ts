@@ -83,7 +83,6 @@ import {
 import { resolveCoursePricing } from "../../commerce/index.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
 
-/** The largest lesson PDF given to the reader, which draws it page by page. */
 /** How long an audio or image lesson's file address works. */
 const LESSON_MEDIA_LINK_SECONDS = 15 * 60;
 /**
@@ -92,6 +91,18 @@ const LESSON_MEDIA_LINK_SECONDS = 15 * 60;
  * pause), so it must outlast a long lesson, not only its start.
  */
 const LESSON_AUDIO_LINK_SECONDS = 3 * 60 * 60;
+/** A reading's file as text (Markdown or plain): never more than this. */
+const LESSON_TEXT_DOCUMENT_MAX_BYTES = 2 * 1024 * 1024;
+/**
+ * The files a reading lesson can be read from, and the largest of each. A
+ * PDF's limit (`LESSON_DOCUMENT_MAX_BYTES`) is the one the editor checks
+ * an upload against; the reader draws it page by page.
+ */
+const LESSON_DOCUMENT_TYPES: ReadonlyMap<string, number> = new Map([
+  ["application/pdf", LESSON_DOCUMENT_MAX_BYTES],
+  ["text/markdown", LESSON_TEXT_DOCUMENT_MAX_BYTES],
+  ["text/plain", LESSON_TEXT_DOCUMENT_MAX_BYTES],
+]);
 import { resolveAliasedBasicsUpdate } from "./basics-aliased-field.ts";
 import { resolveBasicsCategoryUpdate } from "./basics-category.ts";
 import { resolveDetailsLevelUpdate } from "./details-level.ts";
@@ -1911,10 +1922,13 @@ export function createCourseService({
   }
 
   /**
-   * A reading lesson's PDF, for whoever may open the lesson (as its
+   * A reading lesson's file, for whoever may open the lesson (as its
    * description is). Read from storage here for the caller to stream, so
-   * there is no link to the file to pass around. Only an uploaded PDF that
-   * a document lesson names, of a size worth drawing, is given.
+   * there is no link to the file to pass around. Only an uploaded PDF,
+   * Markdown or plain-text file that a document lesson names, of a size
+   * worth showing, is given, with its type: the page draws a PDF's pages
+   * and shows a text file as a reading's text. (A Markdown file used to be
+   * refused as "not a PDF", and the lesson said it couldn't load.)
    */
   async function getLessonDocument(
     courseId: string,
@@ -1937,19 +1951,25 @@ export function createCourseService({
       throw notFound();
     }
     const media = await mediaService.getMediaAsset(lesson.content_media_id);
+    const maxBytes = media
+      ? LESSON_DOCUMENT_TYPES.get(media.mime_type)
+      : undefined;
     if (
       !media ||
+      maxBytes === undefined ||
       media.type !== "document" ||
-      media.mime_type !== "application/pdf" ||
       (media.status !== "uploaded" && media.status !== "ready") ||
-      (media.size_bytes !== null &&
-        Number(media.size_bytes) > LESSON_DOCUMENT_MAX_BYTES)
+      (media.size_bytes !== null && Number(media.size_bytes) > maxBytes)
     ) {
       throw notFound();
     }
     const file = await services.storage.getObject(media.storage_key);
     if (!file) throw notFound();
-    return { body: file.body, contentLength: file.contentLength };
+    return {
+      body: file.body,
+      contentLength: file.contentLength,
+      mimeType: media.mime_type,
+    };
   }
 
   /**

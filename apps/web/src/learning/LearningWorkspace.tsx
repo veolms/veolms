@@ -683,6 +683,7 @@ export function LearningWorkspace({
       playbackAccessError,
       lessonTextPending,
       playbackBootstrapPending,
+      lessonStage: lessonStagePlan.stage,
       lessonSequence,
       courseComplete,
       currentLessonIndex,

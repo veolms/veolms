@@ -18,6 +18,7 @@ import type { CourseLesson } from "@veolms/contracts";
 import type { LessonAudioSource } from "./useLessonStagePlan";
 import type { useSecondPressHold } from "../../../gestures/useSecondPressHold";
 import type { OctopusKind } from "../../../components/OctopusIllustration";
+import type { LessonStagePlan } from "../../lessonWithoutVideo";
 
 /** How long a lesson plays before its neighbours' bootstraps are fetched. */
 const NEIGHBOUR_BOOTSTRAP_DELAY_MS = 2_500;
@@ -67,6 +68,8 @@ export interface UseLessonPlayerPropsArgs {
     | undefined;
   lessonTextPending: boolean;
   playbackBootstrapPending: boolean;
+  /** What stands in the player for the open lesson (useLessonStagePlan). */
+  lessonStage: LessonStagePlan["stage"];
   lessonSequence: number[];
   courseComplete: boolean;
   currentLessonIndex: number;
@@ -134,6 +137,7 @@ export function useLessonPlayerProps({
   playbackAccessError,
   lessonTextPending,
   playbackBootstrapPending,
+  lessonStage,
   lessonSequence,
   courseComplete,
   currentLessonIndex,
@@ -265,6 +269,7 @@ export function useLessonPlayerProps({
       playbackBootstrapPending:
         playbackBootstrapPending || lessonTextPending || audioSourcePending,
       readingPending: lessonTextPending,
+      lessonStage,
       playbackUnavailableMessage: audioSource
         ? null
         : (playbackBootstrapError?.message ?? null),
@@ -358,6 +363,7 @@ export function useLessonPlayerProps({
       lessonDrawer,
       lessonSequence.length,
       lessonTextPending,
+      lessonStage,
       nextLessonId,
       nextLessonInfo,
       onMiniPlayerRestoreReady,

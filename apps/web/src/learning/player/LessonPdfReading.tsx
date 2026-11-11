@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   PDFDocumentLoadingTask,
   PDFDocumentProxy,
@@ -40,10 +40,20 @@ class LessonPdfError extends Error {
  * The files fetched this visit, by lesson, so the mini player's picture
  * and a lesson opened again do not fetch them again. A few at most.
  */
-const files = new Map<string, Promise<ArrayBuffer>>();
+const files = new Map<string, Promise<LessonReadingFile>>();
 const MAX_KEPT_FILES = 3;
 
-function loadLessonPdf(courseId: string, lessonId: string) {
+/**
+ * A reading lesson's file: a PDF's bytes, or the text of a Markdown or
+ * plain-text file (the server says which in Content-Type).
+ */
+type LessonReadingFile =
+  { kind: "pdf"; data: ArrayBuffer } | { kind: "text"; text: string };
+
+function loadLessonPdf(
+  courseId: string,
+  lessonId: string,
+): Promise<LessonReadingFile> {
   const key = `${courseId}/${lessonId}`;
   const kept = files.get(key);
   if (kept) return kept;
@@ -52,9 +62,13 @@ function loadLessonPdf(courseId: string, lessonId: string) {
       `/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/document`,
     ),
     { credentials: "include", cache: "no-store" },
-  ).then((response) => {
+  ).then(async (response): Promise<LessonReadingFile> => {
     if (!response.ok) throw new LessonPdfError(response.status);
-    return response.arrayBuffer();
+    const type = response.headers.get("content-type") ?? "";
+    if (type.startsWith("text/")) {
+      return { kind: "text", text: await response.text() };
+    }
+    return { kind: "pdf", data: await response.arrayBuffer() };
   });
   loading.catch(() => files.delete(key));
   files.set(key, loading);
@@ -88,14 +102,18 @@ function isPrintOrSaveKey(event: KeyboardEvent) {
 export function LessonPdfReading({
   courseId,
   lessonId,
+  renderText,
   loadFile,
   fileKey,
 }: {
   courseId: string;
   lessonId: string;
+  /** How a reading's text is shown, for a lesson whose file is text. */
+  renderText: (text: string) => ReactNode;
   /**
-   * Where the file comes from, in place of the lesson's own document (the
-   * studio previews a document before it is what learners are shown).
+   * Where the file comes from (a PDF's bytes), in place of the lesson's own
+   * document: the studio previews a document before it is what learners
+   * are shown.
    */
   loadFile?: () => Promise<ArrayBuffer>;
   /** Which file `loadFile` gives: a new one is read afresh. */
@@ -106,6 +124,7 @@ export function LessonPdfReading({
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasesRef = useRef<(HTMLCanvasElement | null)[]>([]);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+  const [text, setText] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [width, setWidth] = useState(0);
@@ -119,18 +138,23 @@ export function LessonPdfReading({
     let loading: PDFDocumentLoadingTask | null = null;
     setFailed(false);
     setPdf(null);
+    setText(null);
     void (async () => {
-      const [pdfjs, file] = await Promise.all([
-        loadPdfJs(),
-        loadFileRef.current
-          ? loadFileRef.current()
-          : loadLessonPdf(courseId, lessonId),
-      ]);
+      const file: LessonReadingFile = loadFileRef.current
+        ? { kind: "pdf", data: await loadFileRef.current() }
+        : await loadLessonPdf(courseId, lessonId);
+      if (cancelled) return;
+      // A Markdown or plain-text file is read as a text reading is.
+      if (file.kind === "text") {
+        setText(file.text);
+        return;
+      }
+      const pdfjs = await loadPdfJs();
       if (cancelled) return;
       // pdf.js takes the bytes over; the kept file stays whole for the
       // next reader.
       loading = pdfjs.getDocument({
-        data: new Uint8Array(file.slice(0)),
+        data: new Uint8Array(file.data.slice(0)),
         enableXfa: false,
       });
       const opened = await loading.promise;
@@ -219,6 +243,10 @@ export function LessonPdfReading({
     return () =>
       window.removeEventListener("keydown", block, { capture: true });
   }, []);
+
+  // A text file: shown as a reading's text is, selectable and at the
+  // learner's text size, by the stage.
+  if (text !== null) return <>{renderText(text)}</>;
 
   return (
     <div

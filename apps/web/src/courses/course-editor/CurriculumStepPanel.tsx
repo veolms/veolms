@@ -568,7 +568,7 @@ export function CurriculumStepPanel({
               loadFileLink={currentCourseId ? (kind) => coursesService.getLessonContentLink(currentCourseId, activeLesson.id, kind).then((link) => link.url) : undefined}
               readingBody={activeLesson.readingBody ?? ""}
               onReadingChange={(readingBody) => handleUpdateLesson(activeSection.id, activeLesson.id, { readingBody })}
-              documentPreview={(() => { const pdfId = currentCourseId ? findLessonContent(activeLesson, "document")?.mediaId : null; return currentCourseId && pdfId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={activeLesson.id} fileKey={pdfId} loadFile={loadLessonDocumentPreview(currentCourseId, activeLesson.id)} /></Suspense>) : undefined; })()}
+              documentPreview={(() => { const pdfId = currentCourseId ? findLessonContent(activeLesson, "document")?.mediaId : null; return currentCourseId && pdfId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={activeLesson.id} fileKey={pdfId} renderText={(text) => <p className="m-0 whitespace-pre-wrap">{text}</p>} loadFile={loadLessonDocumentPreview(currentCourseId, activeLesson.id)} /></Suspense>) : undefined; })()}
               resources={activeLesson.resources.map((r) => ({
                 id: r.id,
                 name: r.name,
@@ -1727,7 +1727,7 @@ export function CurriculumStepPanel({
                                                 loadFileLink={currentCourseId ? (kind) => coursesService.getLessonContentLink(currentCourseId, les.id, kind).then((link) => link.url) : undefined}
                                                 readingBody={les.readingBody ?? ""}
                                                 onReadingChange={(readingBody) => handleUpdateLesson(sec.id, les.id, { readingBody })}
-                                                documentPreview={(() => { const pdfId = currentCourseId ? findLessonContent(les, "document")?.mediaId : null; return currentCourseId && pdfId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={les.id} fileKey={pdfId} loadFile={loadLessonDocumentPreview(currentCourseId, les.id)} /></Suspense>) : undefined; })()}
+                                                documentPreview={(() => { const pdfId = currentCourseId ? findLessonContent(les, "document")?.mediaId : null; return currentCourseId && pdfId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={les.id} fileKey={pdfId} renderText={(text) => <p className="m-0 whitespace-pre-wrap">{text}</p>} loadFile={loadLessonDocumentPreview(currentCourseId, les.id)} /></Suspense>) : undefined; })()}
                                                 resources={les.resources.map(
                                                   (resource) => ({
                                                     id: resource.id,

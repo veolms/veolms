@@ -119,6 +119,7 @@ import {
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
 import { isLowMemoryDevice } from "./deviceTier";
+import type { LessonStagePlan } from "../lessonWithoutVideo";
 
 /**
  * The stream has been waiting out failures for this many retries in a row
@@ -327,6 +328,13 @@ export interface LessonVideoPlayerProps {
    * video loader on black.
    */
   readingPending?: boolean;
+  /**
+   * What the open lesson is in the player: a video, a quiz, or a reading
+   * (or a lesson with nothing to play). Before the player has started, its
+   * stand-in draws the video chrome only for a video
+   * (`LessonPlayerChromePlaceholder`).
+   */
+  lessonStage?: LessonStagePlan["stage"];
   /** Shown when the lesson has no playable source because loading it failed. */
   playbackUnavailableMessage?: string | null;
   onRetryPlayback?: () => void;

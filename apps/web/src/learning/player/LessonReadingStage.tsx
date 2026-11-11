@@ -9,6 +9,7 @@ import { BookOpenText } from "@phosphor-icons/react/BookOpenText";
 import { cn } from "../../lib/utils";
 import { DiscussionMarkdown } from "../discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../discussion-editor/types";
+import type { DiscussionContent } from "../discussion-editor/types";
 import { LESSON_READING_SCROLL_ATTRIBUTE } from "./useLessonPlayerMinimizeGesture";
 import { useReadingFontScale } from "./readingFontScale";
 import {
@@ -96,6 +97,18 @@ export function LessonReadingStage({
     [article, pdfReading, mediaReading],
   );
   const [fontScale] = useReadingFontScale();
+  // A reading's text, from its description or from its Markdown or text
+  // file. `zoom` is the learner's text size (see below).
+  const renderReadingText = (reading: DiscussionContent) => (
+    <div style={fontScale === 1 ? undefined : { zoom: fontScale }}>
+      <DiscussionMarkdown
+        content={reading}
+        label="Lesson reading"
+        preserveSoftBreaks
+        className="max-w-none! wrap-anywhere [&>:first-child]:mt-0"
+      />
+    </div>
+  );
   // At the top of the text a finger moving down has nothing to scroll: the
   // browser is left only the upward swipes there, and the downward one goes
   // to the player, which puts the reading away like a video.
@@ -259,20 +272,15 @@ export function LessonReadingStage({
           would not do for a larger font size alone, and the lines wrap at
           the new size. */}
       {pdfReading ? (
-        // A reading whose text is a PDF: its pages, drawn by the page.
+        // A reading whose text is a file: a PDF's pages, drawn by the page,
+        // or a Markdown or text file, shown as any reading's text is.
         <LessonPdfReading
           courseId={pdfReading.courseId}
           lessonId={pdfReading.lessonId}
+          renderText={(text) => renderReadingText(createDiscussionDraft(text))}
         />
       ) : (
-        <div style={fontScale === 1 ? undefined : { zoom: fontScale }}>
-          <DiscussionMarkdown
-            content={content}
-            label="Lesson reading"
-            preserveSoftBreaks
-            className="max-w-none! wrap-anywhere [&>:first-child]:mt-0"
-          />
-        </div>
+        renderReadingText(content)
       )}
     </div>
   );
