@@ -1,5 +1,7 @@
 import {
   Fragment,
+  Suspense,
+  lazy,
   type LazyExoticComponent,
   type Dispatch,
   type SetStateAction,
@@ -52,6 +54,7 @@ import {
 import {
   type CurriculumLessonItem,
   getLessonMediaInfo,
+  getFilledContentTypes,
   getCourseWideLessonNumber,
   type CurriculumSectionItem,
   type DraggedLessonState,
@@ -60,6 +63,15 @@ import {
 import { CurriculumItemStatusIndicator } from "./statusIndicators";
 import type { ApiError } from "../../lib/api-error";
 import type { PersistLessonOptions } from "./editorLocalTypes";
+import {
+  lessonUploadKind,
+  uploadLessonContentFile,
+} from "./uploadLessonContent";
+const LessonPdfReading = lazy(() =>
+  import("../../learning/player/LessonPdfReading").then((module) => ({
+    default: module.LessonPdfReading,
+  })),
+);
 import { getYoutubeImportTarget } from "../lesson-video-upload/youtube-import-target";
 import { useCapabilities } from "../../services/authorization";
 import { useAuthStore } from "../../store/auth.store";
@@ -102,7 +114,7 @@ export interface CurriculumStepPanelProps {
             | {
                 id: string;
                 title: string;
-                contentType: "video" | "document" | "quiz";
+                contentType: "video" | "audio" | "image" | "document" | "quiz";
                 position: number;
                 isPreview: boolean;
                 isPublished: boolean;
@@ -206,6 +218,10 @@ export interface CurriculumStepPanelProps {
     sectionId: string,
     lessonId: string,
     mediaAssetId: string,
+  ) => Promise<boolean>;
+  handleLessonContentRemoved: (
+    sectionId: string,
+    lessonId: string,
   ) => Promise<boolean>;
   handleLessonProcessingComplete: () => Promise<void>;
   handleCreateLessonResource: (
@@ -395,6 +411,7 @@ export function CurriculumStepPanel({
   handleDeleteLesson,
   currentCourseId,
   handleLessonMediaAttached,
+  handleLessonContentRemoved,
   handleLessonProcessingComplete,
   handleCreateLessonResource,
   handleLessonResourceAdded,
@@ -520,6 +537,13 @@ export function CurriculumStepPanel({
               isPublished={activeLesson.isPublished !== false}
               isPreview={activeLesson.isPreview === true}
               mediaInfo={getLessonMediaInfo(activeLesson)}
+              filledContentTypes={getFilledContentTypes(activeLesson)}
+              savedContentType={activeLesson.initialState?.contentType ?? activeLesson.contentType}
+              onRemoveMedia={uploadsLessonMedia ? () => handleLessonContentRemoved(activeSection.id, activeLesson.id) : undefined}
+              onNotice={setToastMessage}
+              readingBody={activeLesson.readingBody ?? ""}
+              onReadingChange={(readingBody) => handleUpdateLesson(activeSection.id, activeLesson.id, { readingBody })}
+              documentPreview={currentCourseId && activeLesson.contentMediaId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={activeLesson.id} /></Suspense>) : undefined}
               resources={activeLesson.resources.map((r) => ({
                 id: r.id,
                 name: r.name,
@@ -603,40 +627,10 @@ export function CurriculumStepPanel({
               }
               onUploadMedia={uploadsLessonMedia ? async (file) => {
                 try {
-                  let mediaAssetId: string;
-                  if (
-                    activeLesson.contentType === "video" ||
-                    file.type.startsWith("video/")
-                  ) {
-                    const result = await uploadVideoResumable({
-                      file,
-                      visibility: "protected",
-                    });
-                    mediaAssetId = result.mediaAssetId;
-                  } else {
-                    const presigned =
-                      await mediaService.presignMediaUpload({
-                        filename: file.name,
-                        contentType:
-                          file.type || "application/octet-stream",
-                        fileSize: file.size,
-                        type:
-                          activeLesson.contentType === "image"
-                            ? "image"
-                            : activeLesson.contentType === "document"
-                              ? "document"
-                              : "video",
-                        visibility: "protected",
-                      });
-                    await mediaService.uploadFileToPresignedUrl(
-                      presigned.uploadUrl,
-                      file,
-                    );
-                    await mediaService.confirmUpload(
-                      presigned.mediaAssetId,
-                    );
-                    mediaAssetId = presigned.mediaAssetId;
-                  }
+                  const mediaAssetId = await uploadLessonContentFile(
+                    lessonUploadKind(activeLesson.contentType),
+                    file,
+                  );
                   const attached = await handleLessonMediaAttached(
                     activeSection.id,
                     activeLesson.id,
@@ -645,7 +639,7 @@ export function CurriculumStepPanel({
                   // A failed attach has already shown its own error.
                   if (!attached) return;
                   setToastMessage(
-                    "Media uploaded and attached successfully.",
+                    "File uploaded and attached.",
                   );
                 } catch (err: unknown) {
                   setToastMessage(
@@ -1705,9 +1699,14 @@ export function CurriculumStepPanel({
                                                 playbackSuspended={
                                                   !isExpanded
                                                 }
-                                                mediaInfo={getLessonMediaInfo(
-                                                  les,
-                                                )}
+                                                mediaInfo={getLessonMediaInfo(les)}
+                                                filledContentTypes={getFilledContentTypes(les)}
+                                                savedContentType={les.initialState?.contentType ?? les.contentType}
+                                                onRemoveMedia={uploadsLessonMedia ? () => handleLessonContentRemoved(sec.id, les.id) : undefined}
+                                                onNotice={setToastMessage}
+                                                readingBody={les.readingBody ?? ""}
+                                                onReadingChange={(readingBody) => handleUpdateLesson(sec.id, les.id, { readingBody })}
+                                                documentPreview={currentCourseId && les.contentMediaId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={les.id} /></Suspense>) : undefined}
                                                 resources={les.resources.map(
                                                   (resource) => ({
                                                     id: resource.id,
@@ -1809,48 +1808,10 @@ export function CurriculumStepPanel({
                                                   file,
                                                 ) => {
                                                   try {
-                                                    let mediaAssetId: string;
-                                                    if (
-                                                      les.contentType === "video" ||
-                                                      file.type.startsWith("video/")
-                                                    ) {
-                                                      const result = await uploadVideoResumable({
-                                                        file,
-                                                        visibility: "protected",
-                                                      });
-                                                      mediaAssetId = result.mediaAssetId;
-                                                    } else {
-                                                      const presigned =
-                                                        await mediaService.presignMediaUpload(
-                                                          {
-                                                            filename:
-                                                              file.name,
-                                                            contentType:
-                                                              file.type ||
-                                                              "application/octet-stream",
-                                                            fileSize:
-                                                              file.size,
-                                                            type:
-                                                              les.contentType ===
-                                                              "image"
-                                                                ? "image"
-                                                                : les.contentType ===
-                                                                    "document"
-                                                                  ? "document"
-                                                                  : "video",
-                                                            visibility:
-                                                              "protected",
-                                                          },
-                                                        );
-                                                      await mediaService.uploadFileToPresignedUrl(
-                                                        presigned.uploadUrl,
-                                                        file,
-                                                      );
-                                                      await mediaService.confirmUpload(
-                                                        presigned.mediaAssetId,
-                                                      );
-                                                      mediaAssetId = presigned.mediaAssetId;
-                                                    }
+                                                    const mediaAssetId = await uploadLessonContentFile(
+                    lessonUploadKind(les.contentType),
+                    file,
+                  );
                                                     const attached =
                                                       await handleLessonMediaAttached(
                                                         sec.id,
@@ -1861,7 +1822,7 @@ export function CurriculumStepPanel({
                                                     if (!attached)
                                                       return;
                                                     setToastMessage(
-                                                      "Media uploaded and attached successfully.",
+                                                      "File uploaded and attached.",
                                                     );
                                                   } catch (err: unknown) {
                                                     setToastMessage(

@@ -7,6 +7,8 @@ import type {
   UpdateCourseLessonRequest,
   ReorderLessonsRequest,
   CreateLessonResourceRequest,
+  LessonContentKind,
+  SetLessonContentRequest,
 } from "@veolms/contracts";
 import type { CurriculumService } from "./curriculum.service.ts";
 
@@ -208,7 +210,51 @@ export function createCurriculumController({
     );
   }
 
+  async function setLessonContent(
+    request: FastifyRequest<{
+      Params: { id: string; lessonId: string; contentType: LessonContentKind };
+      Body: SetLessonContentRequest;
+    }>,
+    reply: FastifyReply,
+  ) {
+    const { id, lessonId, contentType } = request.params;
+    const { accepted, ...contents } = await service.setLessonContent(
+      id,
+      lessonId,
+      contentType,
+      request.body,
+      request.user!.id,
+      request.log,
+      request.user?.roles,
+    );
+    // 202 tells the editor a new video still has to be processed.
+    if (accepted) reply.code(202);
+    return contents;
+  }
+
+  async function clearLessonContent(
+    request: FastifyRequest<{
+      Params: { id: string; lessonId: string; contentType: LessonContentKind };
+    }>,
+  ) {
+    const { id, lessonId, contentType } = request.params;
+    const { accepted: _accepted, ...contents } = await service.setLessonContent(
+      id,
+      lessonId,
+      contentType,
+      contentType === "document"
+        ? { mediaId: null, body: null }
+        : { mediaId: null },
+      request.user!.id,
+      request.log,
+      request.user?.roles,
+    );
+    return contents;
+  }
+
   return {
+    setLessonContent,
+    clearLessonContent,
     createCourseSection,
     updateCourseSection,
     deleteCourseSection,

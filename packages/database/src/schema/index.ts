@@ -56,6 +56,7 @@ import type {
   CategoryTable,
   CourseSectionTable,
   CourseLessonTable,
+  CourseLessonContentTable,
   LessonResourceTable,
   CourseAccessRuleTable,
   CoursePricingTable,
@@ -201,6 +202,7 @@ export interface Database {
   categories: CategoryTable;
   course_sections: CourseSectionTable;
   course_lessons: CourseLessonTable;
+  course_lesson_contents: CourseLessonContentTable;
   lesson_resources: LessonResourceTable;
   course_access_rules: CourseAccessRuleTable;
   course_pricing: CoursePricingTable;

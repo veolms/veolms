@@ -8,8 +8,11 @@ import type {
 import type {
   CreateCourseSectionRequest,
   CreateCourseLessonRequest,
+  LessonContentKind,
+  LessonContentsResponse,
   UpdateCourseLessonRequest,
 } from "@veolms/contracts";
+import { useSetLessonContent } from "../../../services/courses/courses.mutations";
 import { clearVideoPlaybackBootstrapCache } from "../../../learning/videoPlaybackBootstrap";
 import {
   readLessonEditorDraft,
@@ -64,7 +67,7 @@ export interface UseLessonHandlersArgs {
             | {
                 id: string;
                 title: string;
-                contentType: "video" | "document" | "quiz";
+                contentType: "video" | "audio" | "image" | "document" | "quiz";
                 position: number;
                 isPreview: boolean;
                 isPublished: boolean;
@@ -179,7 +182,7 @@ export interface UseLessonHandlersArgs {
             | {
                 id: string;
                 title: string;
-                contentType: "video" | "document" | "quiz";
+                contentType: "video" | "audio" | "image" | "document" | "quiz";
                 position: number;
                 isPreview: boolean;
                 isPublished: boolean;
@@ -365,6 +368,11 @@ export interface UseLessonHandlersResult {
     lessonId: string,
     mediaAssetId: string,
   ) => Promise<boolean>;
+  /** Removes what the kind being edited holds (its file stays in the library). */
+  handleLessonContentRemoved: (
+    sectionId: string,
+    lessonId: string,
+  ) => Promise<boolean>;
   handleLessonProcessingComplete: () => Promise<void>;
   saveAllDirtyLessons: (explicitCourseId?: string | null) => Promise<boolean>;
   handleToggleLessonExpand: (
@@ -400,6 +408,46 @@ export function useLessonHandlers({
   setToastMessage,
   setDeleteModalState,
 }: UseLessonHandlersArgs): UseLessonHandlersResult {
+  const setLessonContentMutation = useSetLessonContent();
+
+  /** The lesson as it is now, which a handler awaiting a request may outlive. */
+  const findLatestLesson = (sectionId: string, lessonId: string) =>
+    (sectionsRef.current || sections)
+      .find((section) => section.id === sectionId)
+      ?.lessons.find((item) => item.id === lessonId);
+
+  /**
+   * Takes in the server's account of every kind's content after a change:
+   * the kinds' files, and the media learners are shown (saved, so the
+   * lesson's initial state has it too).
+   */
+  const applyLessonContents = (
+    sectionId: string,
+    lessonId: string,
+    response: LessonContentsResponse,
+  ) => {
+    const latest = findLatestLesson(sectionId, lessonId);
+    const savedMediaChanged =
+      (latest?.initialState?.contentMediaId ?? null) !==
+      response.contentMediaId;
+    handleUpdateLesson(sectionId, lessonId, {
+      contents: response.contents,
+      ...(savedMediaChanged
+        ? {
+            contentMediaId: response.contentMediaId,
+            ...(latest?.initialState
+              ? {
+                  initialState: {
+                    ...latest.initialState,
+                    contentMediaId: response.contentMediaId,
+                  },
+                }
+              : {}),
+          }
+        : {}),
+    });
+  };
+
   // Lesson actions
   const handleAddLesson = async (sectionId: string) => {
     if (
@@ -723,33 +771,55 @@ export function useLessonHandlers({
       const isPreviewVal = les.isPreview !== undefined ? les.isPreview : false;
 
       // 4. Snapshot the exact payload being persisted
+      const init = getLessonInitialState(les);
+      const typeChanged = les.contentType !== init.contentType;
+      // A switch shows the selected kind's own file, which the server
+      // brings back itself: no file is sent with it.
+      const selectedMediaId = typeChanged
+        ? les.contentType === "quiz"
+          ? null
+          : (les.contents?.find(
+              (content) => content.contentType === les.contentType,
+            )?.mediaId ?? null)
+        : (les.contentMediaId ?? null);
+      const readingBody = les.readingBody ?? "";
+      const readingChanged = readingBody !== (init.readingBody ?? readingBody);
+      // A reading written before kinds existed was its description; saved
+      // as the document's text, the server empties the description.
+      const movesLegacyReading =
+        readingChanged &&
+        !les.contents?.some((content) => content.contentType === "document") &&
+        init.contentType === "document" &&
+        !init.contentMediaId &&
+        (init.description || "").trim() !== "" &&
+        (les.description || "") === (init.description || "");
       const persistedSnapshot = {
         title: trimmedTitle,
-        description: les.description || "",
-        contentType: (les.contentType === "audio"
-          ? "video"
-          : les.contentType === "image"
-            ? "document"
-            : les.contentType) as "video" | "document" | "quiz",
-        contentMediaId: les.contentMediaId ?? null,
+        description: movesLegacyReading ? "" : les.description || "",
+        contentType: les.contentType,
+        contentMediaId: selectedMediaId,
         durationSeconds: les.durationSeconds,
         isPublished: isPublishedVal,
         isPreview: isPreviewVal,
+        readingBody,
       };
 
       // Only what changed is sent: the API asks for a permission per field
       // (details, content, publishing), so an untouched field must not ask
       // for one the editor may not hold.
-      const init = getLessonInitialState(les);
       const changes: UpdateCourseLessonRequest = {};
       if (trimmedTitle !== init.title.trim()) changes.title = trimmedTitle;
-      if (persistedSnapshot.description !== (init.description || "")) {
-        changes.description = persistedSnapshot.description;
+      if (
+        !movesLegacyReading &&
+        (les.description || "") !== (init.description || "")
+      ) {
+        changes.description = les.description || "";
       }
-      if (les.contentType !== init.contentType) {
-        changes.contentType = persistedSnapshot.contentType;
-      }
-      if (persistedSnapshot.contentMediaId !== (init.contentMediaId ?? null)) {
+      if (typeChanged) {
+        changes.contentType = les.contentType;
+      } else if (
+        persistedSnapshot.contentMediaId !== (init.contentMediaId ?? null)
+      ) {
         changes.contentMediaId = persistedSnapshot.contentMediaId;
       }
       if (isPublishedVal !== (init.isPublished ?? true)) {
@@ -769,11 +839,25 @@ export function useLessonHandlers({
       ) {
         setSavingLessonId(lessonId);
         try {
-          await updateLessonMutation.mutateAsync({
-            courseId: targetCourseId,
-            lessonId,
-            payload: changes,
-          });
+          if (Object.keys(changes).length > 0) {
+            await updateLessonMutation.mutateAsync({
+              courseId: targetCourseId,
+              lessonId,
+              payload: changes,
+            });
+          }
+          // The document's text is the document kind's content, saved
+          // after the lesson (a switch to Doc first, then its text).
+          let savedContents = les.contents;
+          if (readingChanged) {
+            const response = await setLessonContentMutation.mutateAsync({
+              courseId: targetCourseId,
+              lessonId,
+              contentType: "document",
+              payload: { body: readingBody.trim() ? readingBody : null },
+            });
+            savedContents = response.contents;
+          }
 
           setSections((prev) => {
             const next = prev.map((s) => {
@@ -787,6 +871,9 @@ export function useLessonHandlers({
                     isExpanded: options?.collapseOnSuccess
                       ? false
                       : l.isExpanded,
+                    contentMediaId: persistedSnapshot.contentMediaId,
+                    contents: savedContents,
+                    ...(movesLegacyReading ? { description: "" } : {}),
                     initialState: {
                       ...persistedSnapshot,
                     },
@@ -1007,19 +1094,28 @@ export function useLessonHandlers({
       return true;
     }
 
-    // Persist the binding before exposing it to the editor. The media
-    // workspace requests playback for the lesson as soon as it sees the new
-    // media ID, and that request fails until the API lesson references it.
+    // The file is the content of the kind being edited, which need not be
+    // the kind saved: it is attached to that kind, and learners see it only
+    // once that kind is the lesson's. Persisted before the editor shows it:
+    // the media workspace asks for playback as soon as it sees the new id.
+    const kind: LessonContentKind =
+      lesson.contentType === "quiz" ? "video" : lesson.contentType;
     try {
-      await updateLessonMutation.mutateAsync({
+      const response = await setLessonContentMutation.mutateAsync({
         courseId,
         lessonId,
-        payload: { contentMediaId: mediaAssetId },
+        contentType: kind,
+        payload: { mediaId: mediaAssetId },
       });
+      handleUpdateLesson(sectionId, lessonId, { contents: response.contents });
+      if (kind !== (lesson.initialState?.contentType ?? lesson.contentType)) {
+        // Not the saved kind: nothing learners see changed.
+        return true;
+      }
     } catch (err: unknown) {
       setToastMessage(
         (err as { message?: string })?.message ||
-          "The video could not be attached to this lesson.",
+          `The ${kind === "document" ? "document" : kind} could not be attached to this lesson.`,
       );
       return false;
     }
@@ -1051,6 +1147,38 @@ export function useLessonHandlers({
         : {}),
     });
     return true;
+  };
+
+  const handleLessonContentRemoved = async (
+    sectionId: string,
+    lessonId: string,
+  ): Promise<boolean> => {
+    const lesson = findLatestLesson(sectionId, lessonId);
+    const courseId = currentCourseIdRef.current || currentCourseId;
+    if (!lesson || lesson.contentType === "quiz") return false;
+    const kind: LessonContentKind = lesson.contentType;
+    if (!courseId || lesson.isPendingCreation) {
+      handleUpdateLesson(sectionId, lessonId, { contentMediaId: null });
+      return true;
+    }
+    try {
+      const response = await setLessonContentMutation.mutateAsync({
+        courseId,
+        lessonId,
+        contentType: kind,
+        // A document's text is edited in the editor; only its file goes.
+        payload: kind === "document" ? { mediaId: null } : null,
+      });
+      applyLessonContents(sectionId, lessonId, response);
+      clearVideoPlaybackBootstrapCache();
+      return true;
+    } catch (err: unknown) {
+      setToastMessage(
+        (err as { message?: string })?.message ||
+          "The file could not be removed from this lesson.",
+      );
+      return false;
+    }
   };
 
   const handleLessonProcessingComplete = async (): Promise<void> => {
@@ -1126,6 +1254,7 @@ export function useLessonHandlers({
     handleCancelLessonDescriptionEdit,
     handleLessonDiscreteChange,
     handleLessonMediaAttached,
+    handleLessonContentRemoved,
     handleLessonProcessingComplete,
     saveAllDirtyLessons,
     handleToggleLessonExpand,

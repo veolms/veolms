@@ -173,7 +173,7 @@ export async function insertMediaAsset(
   values: {
     id: string;
     owner_id: string;
-    type: "image" | "video" | "document";
+    type: "image" | "video" | "audio" | "document";
     storage_provider: string;
     storage_key: string;
     original_filename: string;

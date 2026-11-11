@@ -23,6 +23,10 @@ import type {
   CourseSummary,
   CourseValidationResponse,
   LessonDescriptionResponse,
+  LessonContentKind,
+  LessonContentsResponse,
+  LessonMediaLinkResponse,
+  SetLessonContentRequest,
   CourseIncludeItem,
   CourseIncludesListResponse,
   CreateCategoryRequest,
@@ -314,6 +318,37 @@ export const coursesService = {
       payload,
     );
   },
+
+  /** Sets what one kind of a lesson holds (see `setLessonContent`). */
+  setLessonContent: (
+    courseId: string,
+    lessonId: string,
+    contentType: LessonContentKind,
+    payload: SetLessonContentRequest,
+  ): Promise<LessonContentsResponse> =>
+    api.put<LessonContentsResponse>(
+      `/courses/${courseId}/lessons/${lessonId}/contents/${contentType}`,
+      payload,
+    ),
+
+  /** Removes what one kind of a lesson holds; its file stays in the library. */
+  clearLessonContent: (
+    courseId: string,
+    lessonId: string,
+    contentType: LessonContentKind,
+  ): Promise<LessonContentsResponse> =>
+    api.delete<LessonContentsResponse>(
+      `/courses/${courseId}/lessons/${lessonId}/contents/${contentType}`,
+    ),
+
+  /** A short-lived address of an audio or image lesson's file. */
+  getLessonMediaLink: (
+    courseId: string,
+    lessonId: string,
+  ): Promise<LessonMediaLinkResponse> =>
+    api.get<LessonMediaLinkResponse>(
+      `/courses/${courseId}/lessons/${lessonId}/media-link`,
+    ),
 
   deleteLesson: (
     courseId: string,

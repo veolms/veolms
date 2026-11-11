@@ -19,6 +19,12 @@ export interface CourseDescriptionEditorProps {
   placeholder?: string;
   maxLength?: number;
   disabled?: boolean;
+  /** Headings, lists and quotes on the toolbar, always shown (a reading). */
+  documentTools?: boolean;
+  /** The editor's least height, as a Tailwind class. */
+  minHeightClassName?: string;
+  /** What the counter counts: characters against the limit, or words. */
+  counter?: "characters" | "words";
 }
 
 const EMPTY_FORMATTING_STATE: DiscussionFormattingState = {
@@ -41,6 +47,9 @@ export function CourseDescriptionEditor({
   placeholder = "Add a detailed description...",
   maxLength = 1500,
   disabled = false,
+  documentTools = false,
+  minHeightClassName = "min-h-[140px]",
+  counter = "characters",
 }: CourseDescriptionEditorProps) {
   const [draft, setDraft] = useState(() => createDiscussionDraft(value));
   const [controller, setController] =
@@ -106,14 +115,14 @@ export function CourseDescriptionEditor({
           : ""
       }`}
     >
-      <div className="relative min-h-[140px] flex-1">
+      <div className={`relative flex-1 ${minHeightClassName}`}>
         <DiscussionEditor
           documentId={id}
           value={draft}
           label={label}
           placeholderText={placeholder}
           invalid={isOverLimit}
-          className="min-h-[140px]"
+          className={minHeightClassName}
           onChange={handleDraftChange}
           onControllerChange={setController}
           onFormattingStateChange={setFormattingState}
@@ -129,6 +138,10 @@ export function CourseDescriptionEditor({
             editor={controller}
             formattingState={formattingState}
             attachmentsEnabled={false}
+            documentTools={documentTools}
+            toolsAlwaysOpen={documentTools}
+            leadingDivider={!documentTools}
+            ariaLabel={documentTools ? "Reading formatting" : undefined}
           />
         )}
         <div
@@ -137,11 +150,18 @@ export function CourseDescriptionEditor({
           }`}
           aria-live="polite"
         >
-          {value.length} / {maxLength}
+          {counter === "words"
+            ? `${countWords(value).toLocaleString()} ${countWords(value) === 1 ? "word" : "words"}`
+            : `${value.length} / ${maxLength}`}
         </div>
       </div>
     </div>
   );
+}
+
+function countWords(text: string): number {
+  const words = text.trim().match(/\S+/g);
+  return words ? words.length : 0;
 }
 
 export interface LessonDescriptionEditorProps extends Omit<

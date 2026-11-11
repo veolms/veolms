@@ -6,13 +6,19 @@ import {
   type ReactNode,
 } from "react";
 import { BookOpenText } from "@phosphor-icons/react/BookOpenText";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { ImageIcon as ImageGlyph } from "@phosphor-icons/react/Image";
 import { cn } from "../../lib/utils";
 import { DiscussionMarkdown } from "../discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../discussion-editor/types";
 import { LESSON_READING_SCROLL_ATTRIBUTE } from "./useLessonPlayerMinimizeGesture";
 import { useReadingFontScale } from "./readingFontScale";
-import { parseLessonPdfReading } from "../lessonWithoutVideo";
+import {
+  parseLessonMediaReading,
+  parseLessonPdfReading,
+} from "../lessonWithoutVideo";
 import { LessonPdfReading } from "./LessonPdfReading";
+import { LessonMediaStage } from "./LessonMediaStage";
 
 /**
  * What the player's shell wears while it holds a reading, in place of the
@@ -53,8 +59,11 @@ export function LessonReadingStage({
   initialScrollTop = 0,
   controlsHidden = false,
   onTap,
+  picture = false,
 }: {
   article: string;
+  /** The mini player's still of it: an audio file does not play there. */
+  picture?: boolean;
   /**
    * The minimize button. It stands at the start of the reading, in the
    * label's row, and scrolls away with the text.
@@ -75,9 +84,13 @@ export function LessonReadingStage({
   onTap?: () => void;
 }) {
   const pdfReading = useMemo(() => parseLessonPdfReading(article), [article]);
+  const mediaReading = useMemo(
+    () => parseLessonMediaReading(article),
+    [article],
+  );
   const content = useMemo(
-    () => createDiscussionDraft(pdfReading ? "" : article),
-    [article, pdfReading],
+    () => createDiscussionDraft(pdfReading || mediaReading ? "" : article),
+    [article, pdfReading, mediaReading],
   );
   const [fontScale] = useReadingFontScale();
   // At the top of the text a finger moving down has nothing to scroll: the
@@ -181,15 +194,35 @@ export function LessonReadingStage({
           </div>
         ) : null}
         <p className="m-0 flex items-center gap-2 text-base font-semibold text-(--muted) capitalize sm:text-[17px]">
-          <BookOpenText size={18} weight="bold" aria-hidden="true" />
-          Reading
+          {mediaReading?.kind === "audio" ? (
+            <Headphones size={18} weight="bold" aria-hidden="true" />
+          ) : mediaReading?.kind === "image" ? (
+            <ImageGlyph size={18} weight="bold" aria-hidden="true" />
+          ) : (
+            <BookOpenText size={18} weight="bold" aria-hidden="true" />
+          )}
+          {mediaReading?.kind === "audio"
+            ? "Audio"
+            : mediaReading?.kind === "image"
+              ? "Image"
+              : "Reading"}
         </p>
       </div>
       {/* The learner's text size. `zoom` grows everything in the text
           together (headings, code, lists), which their own fixed sizes
           would not do for a larger font size alone, and the lines wrap at
           the new size. */}
-      {pdfReading ? (
+      {mediaReading ? (
+        // An audio or image lesson: its file, in the reading's place.
+        <div className="mx-auto w-full max-w-3xl">
+          <LessonMediaStage
+            kind={mediaReading.kind}
+            courseId={mediaReading.courseId}
+            lessonId={mediaReading.lessonId}
+            picture={picture}
+          />
+        </div>
+      ) : pdfReading ? (
         // A reading whose text is a PDF: its pages, drawn by the page.
         <LessonPdfReading
           courseId={pdfReading.courseId}
@@ -260,6 +293,7 @@ export function LessonReadingMiniature({
           <LessonReadingStage
             article={article}
             initialScrollTop={frame.scrollTop}
+            picture
           />
         </div>
       ) : null}

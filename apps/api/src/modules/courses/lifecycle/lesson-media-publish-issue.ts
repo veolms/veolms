@@ -11,7 +11,9 @@
  *
  * Media that IS attached is still checked: it must exist, belong to the
  * course's creator (an admin may publish with anyone's), and be finished
- * (a video processed, a document uploaded). A quiz lesson holds no media
+ * (a video processed; an audio file, image or document uploaded). Only
+ * the selected kind's media is checked: learners see no other. A quiz
+ * lesson holds no media
  * and is not checked.
  */
 export function lessonMediaPublishIssue({
@@ -40,11 +42,17 @@ export function lessonMediaPublishIssue({
     return `Video for lesson "${lesson.title}" is still processing or failed.`;
   }
   if (
-    lesson.content_type === "document" &&
+    lesson.content_type !== "video" &&
     media.status !== "uploaded" &&
     media.status !== "ready"
   ) {
-    return `Document for lesson "${lesson.title}" is not completely uploaded.`;
+    const kind =
+      lesson.content_type === "audio"
+        ? "Audio"
+        : lesson.content_type === "image"
+          ? "Image"
+          : "Document";
+    return `${kind} for lesson "${lesson.title}" is not completely uploaded.`;
   }
   return null;
 }

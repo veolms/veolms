@@ -14,7 +14,11 @@ import {
   normalizeBasicsState,
 } from "../basicsState";
 import { readLessonEditorDraft } from "../lessonEditorDraft";
-import { type CurriculumSectionItem, isLessonDirty } from "../curriculumItems";
+import {
+  type CurriculumSectionItem,
+  getSavedReadingBody,
+  isLessonDirty,
+} from "../curriculumItems";
 import {
   type AccessType,
   type DurationUnit,
@@ -84,12 +88,14 @@ export interface UseEditorHydrationArgs {
             | {
                 id: string;
                 title: string;
-                contentType: "video" | "document" | "quiz";
+                contentType: "video" | "audio" | "image" | "document" | "quiz";
                 position: number;
                 isPreview: boolean;
                 isPublished: boolean;
                 description?: string | null | undefined;
                 contentMediaId?: string | null | undefined;
+                contents?:
+                  import("@veolms/contracts").LessonContent[] | undefined;
                 durationSeconds?: number | undefined;
                 resources?:
                   | {
@@ -533,8 +539,15 @@ export function useEditorHydration({
                     : (storedLessonDraft?.isPreview ??
                       (les.isPreview !== undefined ? les.isPreview : false));
                 const desc = les.description || "";
+                const savedReadingBody = getSavedReadingBody(les);
+                const readingBody =
+                  isDirty && existingLesson
+                    ? (existingLesson.readingBody ?? savedReadingBody)
+                    : savedReadingBody;
                 return {
                   id: les.id,
+                  contents: les.contents ?? [],
+                  readingBody,
                   title,
                   isEditingTitle: existingLesson?.isEditingTitle ?? false,
                   contentTypeSelected:
@@ -557,6 +570,7 @@ export function useEditorHydration({
                       les.isPublished !== undefined ? les.isPublished : true,
                     isPreview:
                       les.isPreview !== undefined ? les.isPreview : false,
+                    readingBody: savedReadingBody,
                   },
                   resources: (les.resources || []).map((res) =>
                     toLessonResourceItem(res),

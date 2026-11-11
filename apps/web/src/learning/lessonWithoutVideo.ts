@@ -26,6 +26,8 @@ type LessonContent = Pick<CourseLesson, "contentType" | "contentMediaId">;
  */
 export const NON_VIDEO_LESSON_LABELS: Partial<Record<string, string>> = {
   document: "Reading",
+  audio: "Audio",
+  image: "Image",
   quiz: "Quiz",
 };
 type LessonReadingContent = LessonContent &
@@ -44,7 +46,11 @@ export function lessonHasNoVideo(
   return (
     lesson !== null &&
     lesson !== undefined &&
-    (lesson.contentMediaId === null || lesson.contentType === "document")
+    (lesson.contentMediaId === null ||
+      lesson.contentType === "document" ||
+      // An audio or image file is drawn by the page, never played as video.
+      lesson.contentType === "audio" ||
+      lesson.contentType === "image")
   );
 }
 
@@ -271,6 +277,46 @@ export function parseLessonPdfReading(
   return { courseId, lessonId };
 }
 
+const MEDIA_READING_PREFIXES = {
+  audio: "lesson-audio:",
+  image: "lesson-image:",
+} as const;
+
+/**
+ * An audio or image lesson's file, as the string the player carries where a
+ * reading's text goes (as a PDF reading is; see `lessonPdfReadingRef`): the
+ * stage draws the file in place of text. Null for any other lesson, one with
+ * no file, and until the course's id is known.
+ */
+export function getLessonMediaReading(
+  lesson: LessonReadingContent | null | undefined,
+  courseId: string | null | undefined,
+): string | null {
+  if (!lesson || !lesson.id || !courseId || !lesson.contentMediaId) {
+    return null;
+  }
+  if (lesson.contentType !== "audio" && lesson.contentType !== "image") {
+    return null;
+  }
+  return `${MEDIA_READING_PREFIXES[lesson.contentType]}${courseId}/${lesson.id}`;
+}
+
+/** The kind, course and lesson an audio or image reading names. */
+export function parseLessonMediaReading(
+  reading: string,
+): { kind: "audio" | "image"; courseId: string; lessonId: string } | null {
+  for (const kind of ["audio", "image"] as const) {
+    const prefix = MEDIA_READING_PREFIXES[kind];
+    if (!reading.startsWith(prefix)) continue;
+    const [courseId, lessonId, ...rest] = reading
+      .slice(prefix.length)
+      .split("/");
+    if (!courseId || !lessonId || rest.length) return null;
+    return { kind, courseId, lessonId };
+  }
+  return null;
+}
+
 /**
  * What stands where the video would be for a lesson with none: its reading
  * when it is a reading lesson, the plain statement otherwise. The small
@@ -280,6 +326,19 @@ export function noVideoNoticeFor(
   lesson: LessonReadingContent | null | undefined,
   courseId?: string | null,
 ) {
+  const media = getLessonMediaReading(lesson, courseId);
+  if (media) {
+    const isAudio = lesson?.contentType === "audio";
+    return {
+      kind: "notice",
+      title: isAudio ? "Audio" : "Image",
+      message: isAudio
+        ? "This lesson is an audio lesson."
+        : "This lesson is an image.",
+      actionLabel: "",
+      article: media,
+    } as const;
+  }
   const article =
     getLessonPdfReading(lesson, courseId) ?? getLessonReading(lesson);
   return article
