@@ -115,4 +115,46 @@ await test("a lesson with no PDF, or no such lesson, gives no file", async () =>
   assert.equal(missing.status, 404);
 });
 
+await test("a reading whose file is Markdown is given as text, a file of another kind is not", async () => {
+  const course = await createCourse(flow, {
+    pricing: "free",
+    lessons: [{}, { pdf: true }],
+  });
+  const { client } = await signedUpLearner(flow);
+  assert.equal((await enrollForFree(client, course)).status, 200);
+
+  // The lesson's file becomes a Markdown file (as an uploaded .md is).
+  const lesson = await flow.database
+    .selectFrom("course_lessons")
+    .select("content_media_id")
+    .where("id", "=", course.lessons[1]!.id)
+    .executeTakeFirstOrThrow();
+  const media = await flow.database
+    .selectFrom("media_assets")
+    .select("storage_key")
+    .where("id", "=", lesson.content_media_id!)
+    .executeTakeFirstOrThrow();
+  const markdown = ["# Project ideas", "", "- A log parser", ""].join("\n");
+  flow.storage.put(media.storage_key, Buffer.from(markdown), "text/markdown");
+  await flow.database
+    .updateTable("media_assets")
+    .set({ mime_type: "text/markdown", size_bytes: markdown.length })
+    .where("id", "=", lesson.content_media_id!)
+    .execute();
+
+  const text = await readPdf(client, course, 1, { "sec-fetch-dest": "empty" });
+  assert.equal(text.status, 200);
+  assert.match(String(text.headers["content-type"]), /^text\/markdown/u);
+  assert.equal(text.body.raw, markdown);
+
+  await flow.database
+    .updateTable("media_assets")
+    .set({ mime_type: "application/zip" })
+    .where("id", "=", lesson.content_media_id!)
+    .execute();
+  const zip = await readPdf(client, course, 1);
+  assert.equal(zip.status, 404);
+  assert.equal(zip.body.error?.code, "LESSON_DOCUMENT_NOT_FOUND");
+});
+
 await flow.close();
