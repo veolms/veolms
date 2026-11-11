@@ -360,12 +360,31 @@ export function LearnerGoalScreen({
       ) : (
         <>
           <GoalHeading standing={standing} />
-          <p className="mt-4 flex items-baseline leading-none whitespace-nowrap @[50rem]/home:mt-3">
-            <strong className="text-[128px] font-extrabold tracking-[-0.03em] @[50rem]/home:text-[104px]">
+          {/* A goal in hours and minutes ("1h 10m / 1 hr 35 min") is set a
+              size smaller, to keep within the sheet, with the room it gives
+              up kept above it (the editor is as tall as the larger line). */}
+          <p
+            className={`mt-4 flex items-baseline leading-none whitespace-nowrap @[50rem]/home:mt-3 ${
+              today.long ? "pt-10 @[50rem]/home:pt-6" : ""
+            }`}
+          >
+            <strong
+              className={`font-extrabold tracking-[-0.03em] ${
+                today.long
+                  ? "text-[88px] @[50rem]/home:text-[80px]"
+                  : "text-[128px] @[50rem]/home:text-[104px]"
+              }`}
+            >
               {today.done}
             </strong>
-            <span className="ml-5 text-[66px] font-semibold text-(--goal-ink)/90 @[50rem]/home:text-[56px]">
-              / {today.goal} {today.unit}
+            <span
+              className={`ml-5 font-semibold text-(--goal-ink)/90 ${
+                today.long
+                  ? "text-[52px] @[50rem]/home:text-[48px]"
+                  : "text-[66px] @[50rem]/home:text-[56px]"
+              }`}
+            >
+              / {today.goal}
             </span>
           </p>
         </>
@@ -377,7 +396,7 @@ export function LearnerGoalScreen({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.min(100, percent)}
-        aria-valuetext={`${today.done} of ${today.goal} ${today.unit}`}
+        aria-valuetext={`${today.done} of ${today.goal}`}
         className="mt-8 flex h-10 gap-2 overflow-hidden rounded-full bg-white/16 @[50rem]/home:mt-6 @[50rem]/home:h-7 @[50rem]/home:gap-1.5"
       >
         <span
