@@ -95,14 +95,24 @@ function deviceLabel(): string | undefined {
 }
 
 let registering: Promise<ServiceWorkerRegistration> | null = null;
+/**
+ * The site's service worker, registering /sw.js only when the site has none.
+ * A site has one worker for "/": an extension that registers its own there
+ * (cloud's offline downloads, offline-sw.js) loads /sw.js inside it with
+ * importScripts. Registering /sw.js over it would swap the two on every
+ * visit, and pushes would reach whichever lacked the push handler.
+ */
 function registration(): Promise<ServiceWorkerRegistration> {
-  registering ??= navigator.serviceWorker
-    .register(SW_URL, { scope: "/" })
-    .then(() => navigator.serviceWorker.ready)
-    .catch((error: unknown) => {
-      registering = null;
-      throw error;
-    });
+  registering ??= (async () => {
+    const existing = await navigator.serviceWorker.getRegistration("/");
+    if (!existing || new URL(existing.scope).pathname !== "/") {
+      await navigator.serviceWorker.register(SW_URL, { scope: "/" });
+    }
+    return navigator.serviceWorker.ready;
+  })().catch((error: unknown) => {
+    registering = null;
+    throw error;
+  });
   return registering;
 }
 
