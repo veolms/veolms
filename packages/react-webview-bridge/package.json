@@ -1,0 +1,27 @@
+{
+  "name": "@veolms/react-webview-bridge",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "version": "0.2.0",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\""
+  },
+  "peerDependencies": {
+    "@veolms/webview-bridge": "workspace:*",
+    "react": ">=18 <20"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/jsdom": "^30.0.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "jsdom": "^31.0.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tsx": "^4.23.15"
+  }
+}

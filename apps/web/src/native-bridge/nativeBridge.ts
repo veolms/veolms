@@ -1,50 +1,55 @@
 import {
-  BridgeError,
-  buildNativeBridge,
-  type BridgeEventHandler,
-} from "@veolms/webview-bridge";
+  getBridgeClient,
+  type NativeBridgeOptions,
+} from "@veolms/react-webview-bridge";
 import type { NativeBridgeContract } from "./native-bridge-contracts";
 
-/** The name the native app registers the bridge under (the library's default). */
+// Types every SDK hook and helper by the generated contract, so app code
+// never passes it as a type argument: `useBridgeCall((bridge) => ...)` and
+// `useNativeBridge()` already know the native API. The contract is generated
+// from the native code and lives here, in the app; the SDK never names it.
+declare module "@veolms/react-webview-bridge" {
+  interface Register {
+    contract: NativeBridgeContract;
+  }
+}
+
+/** The name the native app registers the bridge under. */
 export const NATIVE_BRIDGE_NAME = "NativeBridge";
 
 /**
- * How long to wait for the native app to answer: the start-up handshake and
- * every call after it. Without a limit, a call the app never answers would
- * leave its promise pending forever.
+ * Options for the page's one session with the native app. The SDK reads them
+ * once, when the session's controller is created, and either this file or
+ * the `NativeBridgeProvider` in root.tsx may create it, so both pass these.
+ * `timeoutMs` limits the handshake and every call, so a call the app never
+ * answers does not hang forever. The connection starts when the provider
+ * mounts.
  */
-const NATIVE_BRIDGE_TIMEOUT_MS = 10_000;
-
-/** What the bridge adds at its root; the generated contract leaves these out. */
-interface NativeBridgeRootMembers {
-  /** Listens for an event the native app sends; returns the unsubscribe. */
-  onEvent(eventName: string, handler: BridgeEventHandler): () => void;
-  dispose(): void;
-}
-
-export type NativeBridge = NativeBridgeContract & NativeBridgeRootMembers;
-
-// A plain browser has no native app, which the library reports as a plain
-// Error and is nothing to warn about. A failed start-up inside the app (no
-// answer, a protocol mismatch, an error from native) is a BridgeError.
-const reportInitError = (error: Error) => {
-  if (error instanceof BridgeError) {
-    console.warn("[NativeBridge] Could not connect to the native app:", error);
-  }
-};
+export const NATIVE_BRIDGE_OPTIONS: NativeBridgeOptions = { timeoutMs: 10_000 };
 
 /**
- * Connects to the native app the page is running in (Android WebView or iOS
- * WKWebView). Resolves `null` in a plain browser, on the server, or when the
- * connection could not be set up; it never rejects.
+ * The native app the page runs in (Android WebView or iOS WKWebView), typed
+ * by the generated contract. Call native functions directly, from a
+ * component, a service or anywhere else:
  *
- * The library keeps one connection for the whole page and honours only the
- * options of the call that opens it, so every caller goes through here.
+ * ```ts
+ * const platform = await nativeBridge.platform(); // PlatformInfo | null
+ * ```
+ *
+ * Each call waits until the bridge is ready. It resolves `null` when there is
+ * no native app (a plain browser, or the server while it renders) or the app
+ * lacks that function, and rejects only on a real failure: the connection or
+ * the call itself went wrong. For an answer a component renders, use
+ * `useNativeQuery` (./useNativeQuery.ts).
+ *
+ * It is the SDK's `getBridgeClient`. The SDK's hooks (`useBridgeCall`,
+ * `useBridgeEvent`, `useNativeBridge`) work too, on this same connection,
+ * through the `NativeBridgeProvider` in root.tsx.
  */
-export const loadNativeBridge = (): Promise<NativeBridge | null> => {
-  if (typeof window === "undefined") return Promise.resolve(null);
-  return buildNativeBridge<NativeBridge>(NATIVE_BRIDGE_NAME, {
-    timeoutMs: NATIVE_BRIDGE_TIMEOUT_MS,
-    onInitError: reportInitError,
-  });
-};
+export const nativeBridge = getBridgeClient(NATIVE_BRIDGE_NAME, {
+  options: NATIVE_BRIDGE_OPTIONS,
+  unavailable: "null",
+});
+
+/** `nativeBridge`'s type: the contract's functions, answering `null` outside the app. */
+export type NativeBridge = typeof nativeBridge;
