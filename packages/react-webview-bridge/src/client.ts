@@ -5,11 +5,13 @@ import type { BridgeControllerConfig, RegisteredContract } from "./types.ts";
 
 /**
  * A contract as plain async functions: every native function keeps its arguments and returns a
- * promise of its answer (plus `Empty` when the client resolves `null` outside the native app).
+ * promise of its answer or `null`. `null` is always possible: a function the installed app build
+ * lacks resolves `null` without calling native (a NOOP), whatever `unavailable` says, and with
+ * `unavailable: "null"` so does every call outside the native app.
  * Namespaces nest. Native properties are left out (read them inside `controller.call`), and so is
  * anything typed as a promise, which a contract uses for a property getter.
  */
-export type BridgeClient<T, Empty = never> = {
+export type BridgeClient<T> = {
   readonly [
     K in keyof T as T[K] extends (...args: never[]) => unknown
       ? K
@@ -19,8 +21,8 @@ export type BridgeClient<T, Empty = never> = {
           ? K
           : never
   ]: T[K] extends (...args: infer A) => infer R
-    ? (...args: A) => Promise<Awaited<R> | Empty>
-    : BridgeClient<T[K], Empty>;
+    ? (...args: A) => Promise<Awaited<R> | null>
+    : BridgeClient<T[K]>;
 };
 
 /** Configuration of {@link getBridgeClient}. */
@@ -58,16 +60,8 @@ type NativeFunction = (...args: unknown[]) => unknown;
  */
 export function getBridgeClient<T extends object = RegisteredContract>(
   endpointName?: string,
-  config?: BridgeClientConfig & { unavailable?: "reject" },
-): BridgeClient<T>;
-export function getBridgeClient<T extends object = RegisteredContract>(
-  endpointName: string | undefined,
-  config: BridgeClientConfig & { unavailable: "null" },
-): BridgeClient<T, null>;
-export function getBridgeClient(
-  endpointName?: string,
   config?: BridgeClientConfig,
-): unknown {
+): BridgeClient<T> {
   const name = normalizeEndpointName(endpointName);
   const resolveNull = config?.unavailable === "null";
 
@@ -117,5 +111,5 @@ export function getBridgeClient(
     });
   };
 
-  return forward([]);
+  return forward([]) as BridgeClient<T>;
 }

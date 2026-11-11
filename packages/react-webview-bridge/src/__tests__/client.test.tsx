@@ -102,12 +102,12 @@ describe("getBridgeClient", () => {
     fake();
     const client = getBridgeClient<TestContract>();
     const first = render(<NativeBridgeProvider />);
-    assert.equal((await client.device.getInfo()).model, "FakePhone");
+    assert.equal((await client.device.getInfo())?.model, "FakePhone");
     first.unmount();
     await tick(5); // the first controller is disposed and dropped
 
     render(<NativeBridgeProvider />);
-    assert.equal((await client.device.getInfo()).model, "FakePhone");
+    assert.equal((await client.device.getInfo())?.model, "FakePhone");
   });
 
   it("is never a thenable and never calls native for then/toJSON", async () => {
@@ -123,9 +123,25 @@ describe("getBridgeClient", () => {
     assert.equal(native.invokeCount, 0);
   });
 
+  it("resolves null for a function this app build lacks, in the default mode too", async () => {
+    // Native exposes only device:getInfo; vibrate is in the contract but not in this build.
+    fake({
+      capabilities: [
+        { path: "device", kind: "namespace" },
+        { path: "device:getInfo", kind: "function" },
+      ],
+    });
+    render(<NativeBridgeProvider retry={FAST_RETRY} />);
+    const client = getBridgeClient<TestContract>();
+    assert.equal(await client.device.vibrate(1), null);
+  });
+
   it("is typed by the contract", () => {
     const client = getBridgeClient<TestContract>();
-    const typed: () => Promise<number> = () => client.device.vibrate(1);
+    // `null` is part of every result: a function the installed app lacks resolves null (NOOP).
+    const typed: () => Promise<number | null> = () => client.device.vibrate(1);
+    // @ts-expect-error the result may be null, so it is not a plain number
+    const notNull: () => Promise<number> = () => client.device.vibrate(1);
     // @ts-expect-error wrong argument type
     const wrongArg = () => client.device.vibrate("1");
     // @ts-expect-error properties are left out (read them inside controller.call)
@@ -134,6 +150,7 @@ describe("getBridgeClient", () => {
     const missing = () => client.device.nope();
     assert.equal(typeof typed, "function");
     void wrongArg;
+    void notNull;
     void property;
     void missing;
   });
