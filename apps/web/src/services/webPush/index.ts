@@ -32,3 +32,8 @@ export async function closeChatNotifications(roomId: string) {
     // Nothing to close.
   }
 }
+
+export {
+  CHAT_NOTIFICATIONS_BLOCKED_HELP,
+  useChatNotifications,
+} from "./useChatNotifications";
