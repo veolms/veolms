@@ -17,13 +17,14 @@ import {
   openCoursePage,
   openLesson,
   test,
+  waitForProgressSave,
   type TestCourse,
 } from "./support/test";
 
-/** One second of a quiet tone, as a WAV file. */
+/** Three seconds of a quiet tone, as a WAV file. */
 function testSound(): Buffer {
   const rate = 8000;
-  const samples = rate;
+  const samples = rate * 3;
   const data = Buffer.alloc(samples * 2);
   for (let index = 0; index < samples; index += 1) {
     data.writeInt16LE(
@@ -187,15 +188,42 @@ test("a creator writes a reading and adds audio to a video lesson, and learners 
   await saveLesson(page);
   expect((await selected).ok()).toBe(true);
 
-  // The learner now listens; the reading waits under Doc.
+  // The learner now listens, in the lesson player itself; the reading
+  // waits under Doc. Listening to the end finishes the lesson, as watching
+  // a video does (opening it is not enough).
   await academy.signInAs(learner);
   await openLesson(page, course, 1);
-  const play = page.getByRole("button", { name: "Play", exact: true });
-  await expect(play).toBeEnabled({ timeout: 60_000 });
-  await play.click();
   await expect(
-    page.getByRole("button", { name: "Pause", exact: true }),
-  ).toBeVisible();
+    page.getByRole("region", { name: /^Lesson audio player/u }),
+  ).toBeVisible({ timeout: 60_000 });
+  const lessonId = course.lessons[0]!.id;
+  const finished = waitForProgressSave(page, (lessons) =>
+    lessons.some(
+      (lesson) =>
+        lesson.lessonId === lessonId && lesson.progressPercent === 100,
+    ),
+  );
+  const playOrPause = page.getByRole("button", { name: /^(Play|Pause)$/u });
+  await expect(playOrPause).toBeVisible();
+  if (
+    (await page.getByRole("button", { name: "Pause", exact: true }).count()) ===
+    0
+  ) {
+    await playOrPause.click();
+  }
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const media = [...document.querySelectorAll("video")].find(
+            (element) => element.currentSrc !== "",
+          );
+          return media ? media.currentTime : -1;
+        }),
+      { timeout: 25_000 },
+    )
+    .toBeGreaterThan(1);
+  await finished;
 
   // Back in the editor every kind still holds its content.
   await academy.signInAsAdmin();

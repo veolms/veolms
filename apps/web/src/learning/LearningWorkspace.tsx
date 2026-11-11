@@ -314,6 +314,8 @@ export function LearningWorkspace({
     playbackAccessError,
     lessonTextPending,
     playbackBootstrapPending,
+    audioSource,
+    retryAudioSource,
   } = useLessonStagePlan({
     courseSlug,
     onUnlockCourse: unlockCourse,
@@ -652,6 +654,8 @@ export function LearningWorkspace({
   );
   const { seekCurrentLessonToTimestamp, lessonPlayerProps } =
     useLessonPlayerProps({
+      audioSource,
+      retryAudioSource,
       courseSlug,
       onMinimizePlayer,
       onMiniPlayerRestoreReady,

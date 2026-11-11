@@ -54,6 +54,13 @@ export function lessonHasNoVideo(
   );
 }
 
+/** An audio lesson with its file: played in the video player. */
+export function isAudioLessonWithFile(
+  lesson: LessonContent | null | undefined,
+): boolean {
+  return Boolean(lesson?.contentType === "audio" && lesson.contentMediaId);
+}
+
 /**
  * Whether the open lesson's description is known. A lesson with no video is
  * its description: until that is known the page can neither say "there is
@@ -101,9 +108,15 @@ export interface LessonStagePlan {
     | "no-video-notice"
     | "description-loading"
     | "description-failed"
-    | "description-locked";
+    | "description-locked"
+    | "audio";
   /** Whether the page asks the server for the lesson's video. */
   requestsPlayback: boolean;
+  /**
+   * Whether the page asks for the lesson's audio file: an audio lesson plays
+   * in the video player, from its file, and is finished by listening.
+   */
+  requestsAudio: boolean;
   /** Whether opening the lesson is all there is to finishing it. */
   completesWhenOpened: boolean;
 }
@@ -132,27 +145,32 @@ export function planLessonStage({
   descriptionState,
 }: LessonStageInput): LessonStagePlan {
   const noVideo = lessonHasNoVideo(lesson);
+  const audio = isAudioLessonWithFile(lesson);
   return {
     stage: showingQuiz
       ? "quiz"
-      : !noVideo
-        ? "video"
-        : descriptionState === "loading"
-          ? "description-loading"
-          : descriptionState === "failed"
-            ? "description-failed"
-            : descriptionState === "login" || descriptionState === "locked"
-              ? "description-locked"
-              : "no-video-notice",
+      : audio
+        ? "audio"
+        : !noVideo
+          ? "video"
+          : descriptionState === "loading"
+            ? "description-loading"
+            : descriptionState === "failed"
+              ? "description-failed"
+              : descriptionState === "login" || descriptionState === "locked"
+                ? "description-locked"
+                : "no-video-notice",
     // A lesson with no media has nothing to play whichever view is open, a
     // quiz lesson included: the request could only come back "not found".
     requestsPlayback: !noVideo,
+    requestsAudio: audio && !showingQuiz,
     // A quiz is finished by passing it, and the server checks that. A
     // lesson that still has a quiz attached is not finished by looking at
     // it either, so nothing is recorded until it is known to have none.
     // Nor is a lesson finished whose text has not reached the learner yet.
     completesWhenOpened:
       noVideo &&
+      !audio &&
       descriptionState === "known" &&
       lesson?.contentType !== "quiz" &&
       !showingQuiz &&
@@ -295,9 +313,9 @@ export function getLessonMediaReading(
   if (!lesson || !lesson.id || !courseId || !lesson.contentMediaId) {
     return null;
   }
-  if (lesson.contentType !== "audio" && lesson.contentType !== "image") {
-    return null;
-  }
+  // An audio lesson plays in the video player instead (see
+  // `isAudioLessonWithFile`).
+  if (lesson.contentType !== "image") return null;
   return `${MEDIA_READING_PREFIXES[lesson.contentType]}${courseId}/${lesson.id}`;
 }
 
@@ -328,13 +346,10 @@ export function noVideoNoticeFor(
 ) {
   const media = getLessonMediaReading(lesson, courseId);
   if (media) {
-    const isAudio = lesson?.contentType === "audio";
     return {
       kind: "notice",
-      title: isAudio ? "Audio" : "Image",
-      message: isAudio
-        ? "This lesson is an audio lesson."
-        : "This lesson is an image.",
+      title: "Image",
+      message: "This lesson is an image.",
       actionLabel: "",
       article: media,
     } as const;

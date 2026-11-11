@@ -28,6 +28,7 @@ import type {
 import type { CourseVideo } from "../courseContent";
 import { readLearningPreferences } from "../../settings/settingsPreferences";
 import { LessonAmbientProjection } from "./LessonAmbientProjection";
+import { LessonAudioArtwork } from "./LessonAudioArtwork";
 import { LessonTroubleIllustration } from "./LessonTroubleIllustration";
 import { useMiniPlayerSwipeVolume } from "./useMiniPlayerSwipeVolume";
 import type { SubscribeOutsideFraction } from "./useLearningMiniPlayerGestures";
@@ -328,6 +329,12 @@ export interface LessonVideoPlayerProps {
   protectedPlayback?: boolean;
   /** Engine injection is useful for deterministic integration testing. */
   engineFactory?: () => VideoEngine;
+  /**
+   * An audio lesson: its file plays here with the same controls, the
+   * picture's place taken by its artwork; what only a picture has
+   * (picture-in-picture, the ambient glow) is left out.
+   */
+  audioOnly?: boolean;
 }
 
 /**
@@ -484,6 +491,7 @@ export function LessonVideoPlayer({
   chaptersPanelHost,
   courseTitle,
   engineFactory,
+  audioOnly = false,
   description,
   lessonIndex,
   lessonTitle,
@@ -2061,7 +2069,11 @@ export function LessonVideoPlayer({
           ? "shell"
           : "player"
       }
-      ariaLabel={`Lesson video player for ${lessonTitle}`}
+      ariaLabel={
+        audioOnly
+          ? `Lesson audio player for ${lessonTitle}`
+          : `Lesson video player for ${lessonTitle}`
+      }
       theaterMode={theaterMode}
       onTheaterModeChange={handleTheaterModeChange}
       shortcuts={
@@ -2218,7 +2230,9 @@ export function LessonVideoPlayer({
           <LessonPlayerControls
             shortPlayer={shortPlayer && presentation === "full"}
             seekTimeOnly={seekTimeOnly && presentation === "full"}
-            ambientEnabled={ambientEnabled}
+            ambientEnabled={ambientEnabled && !audioOnly}
+            showAmbientControl={!audioOnly}
+            audioOnly={audioOnly}
             autoplayEnabled={autoplayEnabled}
             showAutoplayControl={showAutoplayControl}
             circularSettingsControl={circularSettingsControl}
@@ -2253,6 +2267,12 @@ export function LessonVideoPlayer({
       }
       overlays={
         <>
+          {audioOnly ? (
+            <LessonAudioArtwork
+              lessonTitle={lessonTitle}
+              courseTitle={courseTitle}
+            />
+          ) : null}
           {reconnecting && !streamConflict && presentation === "full" ? (
             // The engine is asking for segments that would not come (the
             // connection is down, or the CDN refused them); the loader is
@@ -2308,7 +2328,7 @@ export function LessonVideoPlayer({
               <VideoLoadingSpinner />
             </div>
           ) : presentation === "full" && !minimizeGesture.controlsSuppressed ? (
-            <LessonAmbientProjection enabled={ambientEnabled} />
+            <LessonAmbientProjection enabled={ambientEnabled && !audioOnly} />
           ) : undefined}
           {/* In the same place for both presentations, so minimizing keeps
               the countdown where it was instead of starting it again. */}
