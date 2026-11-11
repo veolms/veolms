@@ -1,5 +1,5 @@
 import type { BridgeCapability, BridgeMetadataPayload } from "./types.d.ts";
-import { PATH_SEPARATOR } from "../protocol/constants.ts";
+import { PATH_SEPARATOR, RESERVED_ROOT_NAMES } from "../protocol/constants.ts";
 
 /**
  * Registry maintaining runtime native capability metadata.
@@ -19,6 +19,7 @@ export class MetadataRegistry {
     this.protocolVersion = payload.protocolVersion;
     this.bridgeVersion = payload.bridgeVersion;
     this.sessionId = payload.sessionId;
+    const shadowedRootNames = new Set<string>();
 
     for (const capPayload of payload.capabilities) {
       const capability: BridgeCapability = {
@@ -31,6 +32,10 @@ export class MetadataRegistry {
 
       // Index prefix namespaces (e.g. "systemBars:hideStatusBar" -> namespace "systemBars")
       const segments = capPayload.path.split(PATH_SEPARATOR);
+      const rootName = segments[0];
+      if (rootName !== undefined && RESERVED_ROOT_NAMES.has(rootName)) {
+        shadowedRootNames.add(rootName);
+      }
       for (let i = 1; i < segments.length; i++) {
         const nsPath = segments.slice(0, i).join(PATH_SEPARATOR);
         this.knownNamespaces.add(nsPath);
@@ -51,6 +56,21 @@ export class MetadataRegistry {
         parent =
           parent === "" ? segment : `${parent}${PATH_SEPARATOR}${segment}`;
       }
+    }
+
+    if (
+      shadowedRootNames.size > 0 &&
+      typeof console !== "undefined" &&
+      typeof console.warn === "function"
+    ) {
+      console.warn(
+        `[NativeBridge] Native exposes root member(s) ${Array.from(
+          shadowedRootNames,
+        )
+          .map((name) => `"${name}"`)
+          .join(", ")} whose names are reserved by the bridge proxy ` +
+          `(${Array.from(RESERVED_ROOT_NAMES).join(", ")}); they are unreachable from JS. Rename them on native.`,
+      );
     }
   }
 

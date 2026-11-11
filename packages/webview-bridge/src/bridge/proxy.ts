@@ -1,6 +1,9 @@
 import { PATH_SEPARATOR } from "../protocol/constants.ts";
 import type { BridgeValue } from "../protocol/types.d.ts";
-import { BridgeReadOnlyError } from "../transport/errors.ts";
+import {
+  BridgeReadOnlyError,
+  BridgeTransportError,
+} from "../transport/errors.ts";
 import type {
   BridgeEventHandler,
   NativeTransport,
@@ -21,9 +24,14 @@ type AssignmentErrorReporter = (error: unknown, path: string) => void;
  * - `$set(name, value)`: writes a property and resolves once native acknowledged it; rejects with
  *   native/transport errors or `BridgeReadOnlyError` (unlike the fire-and-forget assignment).
  * - `$has(name?)`: whether native exposes `name` (or this namespace) — explicit feature detection,
- *   since unsupported functions resolve `null` (NOOP) instead of failing.
+ *   since unsupported functions resolve `null` (NOOP) instead of failing. `false` once disposed.
+ * - `$disposed`: `true` once the bridge was disposed (a boolean, not a function). A disposed bridge
+ *   rejects every call (NOOP members included) with `BridgeTransportError`; build a new one instead.
+ *
+ * The root proxy additionally reserves `toString`, `toJSON`, `onEvent` and `dispose`
+ * (see `RESERVED_ROOT_NAMES`).
  */
-const HELPER_NAMES = new Set(["$get", "$set", "$has"]);
+const HELPER_NAMES = new Set(["$get", "$set", "$has", "$disposed"]);
 
 function joinPath(basePath: string, prop: string): string {
   return basePath === "" ? prop : `${basePath}${PATH_SEPARATOR}${prop}`;
@@ -48,10 +56,18 @@ function createPathOperations(
   metadata: MetadataRegistry,
   reportAssignmentError: AssignmentErrorReporter,
 ) {
+  const disposedError = (path: string): BridgeTransportError =>
+    new BridgeTransportError(
+      `Native bridge "${transport.endpointName}" is disposed; "${path}" is no longer available.`,
+    );
+
   const invoke = (
     path: string,
     args: unknown[],
   ): Promise<BridgeValue | null> => {
+    if (transport.isDisposed) {
+      return Promise.reject(disposedError(path));
+    }
     if (metadata.hasCapability(path) && metadata.isFunction(path)) {
       return transport.invoke(path, toBridgeArgs(args));
     }
@@ -61,6 +77,9 @@ function createPathOperations(
   };
 
   const write = (path: string, value: unknown): Promise<void> => {
+    if (transport.isDisposed) {
+      return Promise.reject(disposedError(path));
+    }
     if (!metadata.hasCapability(path)) {
       // NOOP for unsupported property setters
       return Promise.resolve();
@@ -85,25 +104,33 @@ function createPathOperations(
   };
 
   const has = (path: string): boolean =>
-    metadata.hasCapability(path) || metadata.isNamespace(path);
+    !transport.isDisposed &&
+    (metadata.hasCapability(path) || metadata.isNamespace(path));
 
   const helper = (basePath: string, name: string): unknown => {
     switch (name) {
       case "$get":
         return (member: string): Promise<BridgeValue | null> => {
           const path = joinPath(basePath, String(member));
+          if (transport.isDisposed) {
+            return Promise.reject(disposedError(path));
+          }
           if (metadata.isProperty(path) && metadata.isReadable(path)) {
             return transport.get(path);
           }
           return Promise.resolve(null);
         };
+      case "$disposed":
+        return transport.isDisposed;
       case "$set":
         return (member: string, value: unknown): Promise<void> =>
           write(joinPath(basePath, String(member)), value);
       case "$has":
         return (member?: string): boolean =>
           member === undefined
-            ? basePath === "" || has(basePath)
+            ? basePath === ""
+              ? !transport.isDisposed
+              : has(basePath)
             : has(joinPath(basePath, String(member)));
       default:
         return undefined;
@@ -123,7 +150,7 @@ function createPathOperations(
       );
     },
     ownKeys() {
-      return metadata.childrenOf(basePath);
+      return transport.isDisposed ? [] : metadata.childrenOf(basePath);
     },
     getOwnPropertyDescriptor(target, prop) {
       if (
@@ -185,7 +212,7 @@ export function createBridgeProxy<T extends object>(
         return undefined;
       }
 
-      // 3. Handle inspection and utility methods on root bridge proxy
+      // 3. Handle inspection and utility methods on root bridge proxy (RESERVED_ROOT_NAMES)
       if (basePath === "") {
         if (prop === "toString") {
           return () => `[NativeBridge ${transport.endpointName}]`;
