@@ -43,6 +43,7 @@
     "@veolms/services": "workspace:*",
     "@veolms/storage": "workspace:*",
     "@veolms/video-player": "workspace:*",
+    "@veolms/web-core": "workspace:*",
     "fastify": "^5.11.0",
     "fastify-type-provider-zod": "^7.0.0",
     "google-auth-library": "^11.1.0",

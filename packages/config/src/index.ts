@@ -312,6 +312,17 @@ const serverConfigSchema = z.object({
     .min(32, "MFA_ENCRYPTION_KEY must be at least 32 characters")
     .default("default_mfa_encryption_key_at_least_32_chars_long"),
   WEB_URL: z.url().default("http://localhost:3000"),
+  /**
+   * Short links (docs/short-links.md). The address the website Worker reads
+   * a link from, exactly as it asks for it (its `LINKS_API_URL` plus
+   * `/links/resolve`), for example
+   * `https://api.example.com/v1/links/resolve`. With a Cloudflare zone and a
+   * token that may purge its cache, the edge keeps each answer for a day and
+   * the API purges it when the link changes; without them, for 60 seconds.
+   */
+  SHORT_LINKS_RESOLVE_URL: z.url().optional(),
+  CLOUDFLARE_ZONE_ID: z.string().trim().min(1).optional(),
+  CLOUDFLARE_CACHE_PURGE_TOKEN: z.string().trim().min(1).optional(),
   SETUP_TOKEN: z.string().default("veo_setup_token_123"),
 
   // WebAuthn Passkeys Config
