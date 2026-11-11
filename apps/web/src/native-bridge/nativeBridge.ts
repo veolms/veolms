@@ -5,6 +5,16 @@ import {
 } from "@veolms/react-webview-bridge";
 import type { NativeBridgeContract } from "./native-bridge-contracts";
 
+// Types every SDK hook and helper by the generated contract, so app code
+// never passes it as a type argument: `useBridgeCall((bridge) => ...)` and
+// `useNativeBridge()` already know the native API. The contract is generated
+// from the native code and lives here, in the app; the SDK never names it.
+declare module "@veolms/react-webview-bridge" {
+  interface Register {
+    contract: NativeBridgeContract;
+  }
+}
+
 /** The name the native app registers the bridge under. */
 export const NATIVE_BRIDGE_NAME = "NativeBridge";
 
@@ -21,7 +31,7 @@ export const NATIVE_BRIDGE_OPTIONS: NativeBridgeOptions = { timeoutMs: 10_000 };
 // Looked up on every call, never kept: when the last provider unmounts its
 // controller is dropped, and a later mount creates a new one.
 const controller = () =>
-  getBridgeController<NativeBridgeContract>(NATIVE_BRIDGE_NAME, {
+  getBridgeController(NATIVE_BRIDGE_NAME, {
     options: NATIVE_BRIDGE_OPTIONS,
   });
 

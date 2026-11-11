@@ -27,7 +27,7 @@
  * | Render a native answer (shared, cached)             | a hook with `useQuery`, e.g. `usePlatform()` |
  * | Run a native action and render its pending/error    | `useMutation` over `nativeBridge.fn`  |
  * | React to an event the native app sends              | SDK `useBridgeEvent`                  |
- * | Show or hide UI by connection state                 | SDK `useNativeBridge<NativeBridgeContract>()` |
+ * | Show or hide UI by connection state                 | SDK `useNativeBridge()`               |
  * | Track one call's status without TanStack Query      | SDK `useBridgeCall`                   |
  *
  * Rules that hold for every option:
@@ -36,8 +36,11 @@
  *   browser fallback.
  * - Handle rejections (`.catch`, or a query's `error`). They are real
  *   failures: the connection or the call went wrong.
- * - Import the contract's types from "./native-bridge-contracts" where you
- *   need them; it is generated, so never edit it.
+ * - Never pass the contract as a type argument: nativeBridge.ts registers
+ *   it with the SDK, so `useBridgeCall((bridge) => ...)`, `useNativeBridge()`
+ *   and the rest are already typed. Import its other types (`PlatformInfo`,
+ *   ...) from "./native-bridge-contracts" where you need them; it is
+ *   generated, so never edit it.
  * - Never call `buildNativeBridge`, `bridge.dispose()` or
  *   `clearNativeBridgeCache()` from app code; the SDK owns the connection.
  */
@@ -46,13 +49,9 @@ import {
   useBridgeCall,
   useBridgeEvent,
   useNativeBridge,
-  type BridgeInstance,
 } from "@veolms/react-webview-bridge";
 import { useState, type ReactNode } from "react";
-import type {
-  NativeBridgeContract,
-  PlatformInfo,
-} from "./native-bridge-contracts";
+import type { PlatformInfo } from "./native-bridge-contracts";
 import { nativeBridge } from "./nativeBridge";
 import { usePlatform } from "./usePlatform";
 
@@ -122,7 +121,7 @@ export function RefreshPlatformButton() {
 // normal), or "error" (`retry()` tries again).
 
 export function InsideAppOnly({ children }: { children: ReactNode }) {
-  const { state } = useNativeBridge<NativeBridgeContract>();
+  const { state } = useNativeBridge();
   return state === "ready" ? <>{children}</> : null;
 }
 
@@ -141,15 +140,14 @@ export function NativeThemeListener() {
 }
 
 // ─── 6. One call's status without TanStack Query: SDK useBridgeCall ──────────
+// `bridge` needs no annotation: it is typed by the registered contract.
 // The raw SDK form. Unlike `nativeBridge`, a plain browser makes `run()`
 // reject with a `BridgeNotReadyError` (`reason: "unavailable"`) instead of
 // resolving `null`, and the answer is not shared between components. Prefer
 // options 2 and 3 in app code.
 
-type Bridge = BridgeInstance<NativeBridgeContract>;
-
 export function PlatformWithBridgeCall() {
-  const platform = useBridgeCall((bridge: Bridge) => bridge.platform());
+  const platform = useBridgeCall((bridge) => bridge.platform());
   return (
     <button
       type="button"
