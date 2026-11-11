@@ -500,6 +500,46 @@ export interface LessonAudioSource {
   key: string;
   url: string;
   mimeType: string;
+  /**
+   * Whether the file may be read across origins (storage's CORS allows
+   * it), so the player can load it so and draw its live waveform. When
+   * not, it is loaded as any file is and the waveform only moves.
+   */
+  analysable: boolean;
+}
+
+/** iPhone and iPad Safari stop audio sent through Web Audio when locked. */
+function webAudioKeepsPlayingWhenLocked(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const appleTouch =
+    /iP(hone|ad|od)/u.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return !appleTouch;
+}
+
+/**
+ * Asks storage for one byte of the file across origins: whether it may be
+ * read so (and analysed). Never long: a slow answer is taken as no.
+ */
+async function canReadAcrossOrigins(url: string): Promise<boolean> {
+  if (!webAudioKeepsPlayingWhenLocked() || typeof fetch !== "function") {
+    return false;
+  }
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 3000);
+  try {
+    const response = await fetch(url, {
+      headers: { Range: "bytes=0-0" },
+      mode: "cors",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 /**
@@ -523,12 +563,14 @@ function useLessonAudioLink(
     let active = true;
     coursesService
       .getLessonMediaLink(courseId, lessonId)
-      .then((link) => {
+      .then(async (link) => {
+        const analysable = await canReadAcrossOrigins(link.url);
         if (!active) return;
         setSource({
           key: `${lessonId}:${attempt}`,
           url: link.url,
           mimeType: link.mimeType,
+          analysable,
         });
       })
       .catch((error: unknown) => {

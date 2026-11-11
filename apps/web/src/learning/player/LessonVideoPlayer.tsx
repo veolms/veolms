@@ -335,6 +335,11 @@ export interface LessonVideoPlayerProps {
    * (picture-in-picture, the ambient glow) is left out.
    */
   audioOnly?: boolean;
+  /**
+   * The audio file may be read across origins: it is loaded so, and its
+   * artwork draws the sound's live waveform.
+   */
+  audioAnalysable?: boolean;
 }
 
 /**
@@ -492,6 +497,7 @@ export function LessonVideoPlayer({
   courseTitle,
   engineFactory,
   audioOnly = false,
+  audioAnalysable = false,
   description,
   lessonIndex,
   lessonTitle,
@@ -2143,6 +2149,11 @@ export function LessonVideoPlayer({
         // A hovered or next lesson is prepared in a hidden second element
         // and switched to at once when opened.
         withStandby,
+        // An audio file storage lets be read across origins is loaded so,
+        // for its waveform to be drawn from the sound.
+        ...(audioOnly && audioAnalysable
+          ? { crossOrigin: "anonymous" as const }
+          : {}),
       }}
       className={cn(
         // A failure's message is drawn on the video, and the window is
@@ -2271,6 +2282,8 @@ export function LessonVideoPlayer({
             <LessonAudioArtwork
               lessonTitle={lessonTitle}
               courseTitle={courseTitle}
+              src={media.src}
+              analysable={audioAnalysable}
             />
           ) : null}
           {reconnecting && !streamConflict && presentation === "full" ? (

@@ -266,6 +266,7 @@ export function useLessonPlayerProps({
       refreshPlaybackToken,
       protectedPlayback: audioSource ? false : protectedPlayback,
       audioOnly: Boolean(audioSource),
+      audioAnalysable: audioSource?.analysable ?? false,
       lessonTitle: currentLesson[1],
       lessonId:
         currentLesson[6] ??
