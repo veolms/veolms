@@ -145,6 +145,30 @@ export function MessageList({
   const [newBelow, setNewBelow] = useState(0);
   const lastSeq = thread.messages.at(-1)?.seq ?? 0;
   const lastSeenSeqRef = useRef(lastSeq);
+  const lastSeqRef = useRef(lastSeq);
+  lastSeqRef.current = lastSeq;
+  const onAtBottomRef = useRef(onAtBottom);
+  onAtBottomRef.current = onAtBottom;
+
+  /** The newest message is on screen (the list's bottom is in view). */
+  function bottomInView(): boolean {
+    const box = scrollRef.current;
+    if (!box) return false;
+    return box.scrollHeight - box.scrollTop - box.clientHeight < STICK_PX;
+  }
+
+  /**
+   * Seen is what is on screen, as in WhatsApp: once the newest message is
+   * in view, the chat is read (blue ticks for the sender), whether or not
+   * the view is held at the unread divider. A chat too short to scroll
+   * never gets a scroll event, so this is also checked after the first
+   * paint, when rows settle and when the tab comes back into view.
+   */
+  function readIfInView() {
+    if (lastSeqRef.current > 0 && bottomInView()) {
+      onAtBottomRef.current(lastSeqRef.current);
+    }
+  }
   // Only messages already there when the chat opened count as unread:
   // one arriving while you watch is read.
   const openedAtSeqRef = useRef(lastSeq);
@@ -180,7 +204,8 @@ export function MessageList({
       anchorRef.current = "bottom";
       box.scrollTop = box.scrollHeight;
     }
-  }, [thread.messages.length, unreadCount]);
+    readIfInView();
+  }, [thread.messages.length, unreadCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Rows growing to their real height (and photos loading) keep the view
   // where it was put: at the bottom while the reader is there, or at the
@@ -201,6 +226,7 @@ export function MessageList({
       } else if (atBottomRef.current) {
         box.scrollTop = box.scrollHeight;
       }
+      readIfInView();
     });
     observer.observe(content);
     // The reader taking over ends the hold at the divider or a message.
@@ -211,14 +237,19 @@ export function MessageList({
     box.addEventListener("touchmove", release, { passive: true });
     box.addEventListener("keydown", release);
     box.addEventListener("pointerdown", release);
+    const onShown = () => {
+      if (document.visibilityState === "visible") readIfInView();
+    };
+    document.addEventListener("visibilitychange", onShown);
     return () => {
       observer.disconnect();
+      document.removeEventListener("visibilitychange", onShown);
       box.removeEventListener("wheel", release);
       box.removeEventListener("touchmove", release);
       box.removeEventListener("keydown", release);
       box.removeEventListener("pointerdown", release);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A message asked for (notification, reply quote, search, pin, @): in the
   // middle of the list, blinking, held there while rows settle. Waits for
@@ -277,8 +308,10 @@ export function MessageList({
   }, [lastSeq, pending.length, thread.messages, ctx.viewerId]);
 
   useEffect(() => {
-    if (atBottomRef.current && lastSeq > 0) onAtBottom(lastSeq);
-  }, [lastSeq, onAtBottom]);
+    if (lastSeq <= 0) return;
+    if (atBottomRef.current) onAtBottom(lastSeq);
+    else readIfInView();
+  }, [lastSeq, onAtBottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onScroll() {
     const box = scrollRef.current;
@@ -296,8 +329,9 @@ export function MessageList({
       if (unreadMentions.length > 0) {
         setSeenMentions(new Set([...seenMentions, ...unreadMentions]));
       }
-      if (lastSeq > 0) onAtBottom(lastSeq);
     }
+    // Read once the newest message is in view, even while held.
+    if (atBottom && lastSeq > 0) onAtBottom(lastSeq);
     // About two screens before the top: older messages are usually in
     // before the reader gets there, so scrolling up a long group never
     // stops at a spinner.
