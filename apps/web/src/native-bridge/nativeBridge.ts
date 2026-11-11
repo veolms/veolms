@@ -54,8 +54,12 @@ const NOT_NATIVE = new Set(["then", "toJSON", "toString", "valueOf"]);
  * resolves `null` when the page is not running inside the native app.
  */
 function forwardCalls(path: readonly string[]): unknown {
-  const invoke = (...args: unknown[]) =>
-    controller()
+  const invoke = (...args: unknown[]): Promise<unknown> => {
+    // On the server (the dev server's render, prerendering) there is no
+    // native app and no provider ever connects, so the call would only wait
+    // for its timeout and then reject. Answer at once instead.
+    if (typeof window === "undefined") return Promise.resolve(null);
+    return controller()
       .call((bridge) => {
         const owner = path
           .slice(0, -1)
@@ -72,6 +76,7 @@ function forwardCalls(path: readonly string[]): unknown {
         }
         throw error;
       });
+  };
   return new Proxy(invoke, {
     get: (_target, key) =>
       typeof key === "string" && !NOT_NATIVE.has(key)
@@ -96,7 +101,8 @@ function forwardCalls(path: readonly string[]): unknown {
  * ```
  *
  * Each call waits until the bridge is ready. It resolves `null` when there is
- * no native app (a plain browser) or the app lacks that function, and rejects
+ * no native app (a plain browser, or the server while it renders) or the
+ * app lacks that function, and rejects
  * only on a real failure: the connection or the call itself went wrong.
  *
  * The SDK's own hooks (`useBridgeCall`, `useBridgeEvent`, `useNativeBridge`)
