@@ -164,6 +164,7 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
           onChange={setSearchInput}
           label={kind === "problem" ? "Search reports" : "Search feedback"}
           placeholder="Search by name, email, text or #number"
+          shortcut
           className="max-w-sm min-w-60"
         />
       </div>
