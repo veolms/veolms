@@ -67,9 +67,12 @@ the handshake timeout (`options.timeoutMs` if > 0, else 10000 ms) **per attempt*
 | `unavailable`, `error`                | rejects immediately with that reason                                                                        |
 | any, `waitForReady: false`, not ready | rejects immediately with `"not-ready"`                                                                      |
 
-A call made while `idle` with **no owner** (no provider mounted, nothing called `acquire()`) waits for its whole `timeoutMs`,
-because nothing starts initialization. This is the only way to "hang" until the timeout, so make sure a provider (or an
-`acquire()`) exists.
+A queued call rejects with `"timeout"` whenever readiness takes longer than its `timeoutMs`. That happens:
+
+- while initialization runs longer than the wait, for example a present but silent endpoint: each attempt waits for the
+  handshake timeout (10 s by default), so the default 10 s readiness wait ends before the first attempt fails;
+- while `idle` with **no owner** (no provider mounted, nothing called `acquire()`), because nothing starts initialization.
+  Make sure a provider (or an `acquire()`) exists.
 
 ## Ref-counting and deferred dispose
 

@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import { getBridgeController } from "./controller.ts";
@@ -58,10 +59,35 @@ export function NativeBridgeProvider({
     [name],
   );
 
+  // One owner per controller. `keepAlive` is read when the effect cleans up, so changing it
+  // never acquires a second owner, and turning it off lets unmount release the one held.
+  const keepAliveRef = useRef(keepAlive);
+  useEffect(() => {
+    keepAliveRef.current = keepAlive;
+  });
+  // A release kept back by a keepAlive cleanup (StrictMode's simulated unmount, or a name
+  // change), so at most one owner per provider is ever kept.
+  const kept = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     const release = controller.acquire();
-    return keepAlive ? undefined : release;
-  }, [controller, keepAlive]);
+    return () => {
+      if (keepAliveRef.current) {
+        kept.current?.();
+        kept.current = release;
+      } else {
+        release();
+      }
+    };
+  }, [controller]);
+
+  // keepAlive turned off while a release is kept back: hand it back now.
+  useEffect(() => {
+    if (!keepAlive && kept.current) {
+      kept.current();
+      kept.current = null;
+    }
+  }, [keepAlive]);
 
   return (
     <NativeBridgeContext.Provider value={controller}>

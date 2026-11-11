@@ -116,10 +116,13 @@ export function useBridgeCall<T extends object, A extends unknown[], R>(
   const run = useCallback(
     async (...args: A): Promise<Awaited<R>> => {
       const id = ++latestRun.current;
+      // The function of the render that started this run, even if the bridge becomes ready
+      // only after a later render: the arguments belong to it.
+      const fn = fnRef.current;
       setState((prev) => ({ ...prev, status: "pending", error: undefined }));
       try {
         const result = await controller.call(
-          (bridge) => fnRef.current(bridge, ...args),
+          (bridge) => fn(bridge, ...args),
           optionsRef.current,
         );
         if (mounted.current && id === latestRun.current) {

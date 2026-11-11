@@ -257,9 +257,16 @@ class BridgeControllerImpl implements BridgeController<
       this.inFlightRun = null;
     }
     if (run !== this.runId) {
-      // Disposed/reset while in flight. A newer run that started meanwhile joined the same
-      // library init (in-flight dedupe) and owns that session; otherwise nobody does, so release it.
-      if (bridge && this.snapshot.state === "idle") {
+      // Disposed/reset while in flight. The library shares one session per name, so a newer run
+      // that started meanwhile, in this controller or in a replacement one, joined the same init
+      // (in-flight dedupe) or will get it from the library's cache, and owns it. Release the
+      // session only when no one does.
+      const current = registry.get(this.endpointName);
+      const ownedElsewhere =
+        current !== undefined &&
+        current !== this &&
+        current.getSnapshot().state !== "idle";
+      if (bridge && this.snapshot.state === "idle" && !ownedElsewhere) {
         this.disposeProxy(bridge);
       }
       return;

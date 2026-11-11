@@ -358,3 +358,62 @@ describe("bridge semantics", () => {
     assert.equal(native.listenerCount, 1);
   });
 });
+
+describe("review fixes", () => {
+  const SLOW_RETRY = { maxAttempts: 20, initialDelayMs: 5, maxDelayMs: 5 };
+
+  it("a provider mounted again during the handshake keeps the shared session", async () => {
+    fake({ replyDelayMs: 20 });
+    const first = renderWithProvider(null);
+    first.unmount();
+    await tick(5); // the first controller is disposed while the handshake is in flight
+
+    renderWithProvider(null);
+    await waitFor(() => assert.equal(stateText(), "ready"));
+    const info = await getBridgeController<TestContract>().call((b) =>
+      b.device.getInfo(),
+    );
+    assert.deepEqual(info, { model: "FakePhone", sdk: 34 });
+  });
+
+  it("useBridgeCall runs the function of the render that started the run", async () => {
+    let runRef: (() => Promise<string>) | null = null;
+    function Caller({ label }: { label: string }) {
+      const call = useBridgeCall((_b: TestBridge) => label);
+      useEffect(() => {
+        runRef = call.run;
+      });
+      return null;
+    }
+    const tree = (label: string) => (
+      <NativeBridgeProvider retry={SLOW_RETRY}>
+        <Caller label={label} />
+      </NativeBridgeProvider>
+    );
+
+    // No endpoint yet, so the run waits for readiness.
+    const view = render(tree("A"));
+    let result: Promise<string> | null = null;
+    act(() => {
+      result = runRef!();
+    });
+    view.rerender(tree("B"));
+    fake();
+    assert.equal(await result!, "A");
+  });
+
+  it("releases the kept owner when keepAlive turns false", async () => {
+    fake();
+    const tree = (keepAlive: boolean) => (
+      <NativeBridgeProvider keepAlive={keepAlive}>
+        <StateProbe />
+      </NativeBridgeProvider>
+    );
+    const view = render(tree(true));
+    await waitFor(() => assert.equal(stateText(), "ready"));
+    view.rerender(tree(false));
+    view.unmount();
+    await tick(5);
+    assert.equal(getNativeBridgeDiagnostics().disposeCount, 1);
+  });
+});

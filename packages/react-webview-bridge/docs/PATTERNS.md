@@ -161,7 +161,11 @@ You don't need to wait for ready yourself: `call` and `useBridgeCall.run` **queu
 ```tsx
 function Analytics() {
   const { call } = useNativeBridge<NativeBridgeContract>();
+  const reported = useRef(false);
   useEffect(() => {
+    // StrictMode runs this effect twice; report once.
+    if (reported.current) return;
+    reported.current = true;
     // Runs on first mount, possibly while state is idle/initializing: queued, then executed once ready.
     void call((b) => b.platform(), { timeoutMs: 20000 })
       .then((p) => report(p.type))
@@ -278,17 +282,23 @@ Services, stores, routers, and analytics can share the same session through the 
 import {
   getBridgeController,
   isBridgeNotReadyError,
+  type NativeBridgeOptions,
 } from "@veolms/react-webview-bridge";
 import type { NativeBridgeContract } from "./bridge";
 
-// Same name (and, if this module runs first, the same config) as the provider.
-const controller = getBridgeController<NativeBridgeContract>("NativeBridge", {
-  options: { timeoutMs: 15000 },
-});
+// The same options object as the provider: whichever creates the controller first sets them.
+export const BRIDGE_OPTIONS: NativeBridgeOptions = { timeoutMs: 15000 };
+
+// Look the controller up on every use. When the last provider unmounts, its controller is dropped
+// and a later mount creates a new one, so a reference kept at module level would go stale.
+const controller = () =>
+  getBridgeController<NativeBridgeContract>("NativeBridge", {
+    options: BRIDGE_OPTIONS,
+  });
 
 export async function getPlatformType(): Promise<string | null> {
   try {
-    return (await controller.call((b) => b.platform())).type;
+    return (await controller().call((b) => b.platform())).type;
   } catch (e) {
     if (isBridgeNotReadyError(e)) return null; // not inside the app / not ready in time
     throw e;
@@ -296,8 +306,9 @@ export async function getPlatformType(): Promise<string | null> {
 }
 
 // Subscribe to state outside React:
-const unsubscribe = controller.subscribe(() =>
-  console.debug("bridge state", controller.getSnapshot().state),
+const live = controller();
+const unsubscribe = live.subscribe(() =>
+  console.debug("bridge state", live.getSnapshot().state),
 );
 ```
 
@@ -305,12 +316,14 @@ const unsubscribe = controller.subscribe(() =>
   provider (a worker-like module, a non-React page, a test) must own a reference itself:
 
 ```ts
-const release = controller.acquire(); // starts init if idle
+const owned = controller();
+const release = owned.acquire(); // starts init if idle; the controller lives until release()
 // … later, when done (the session is disposed one macrotask after the last release):
 release();
 ```
 
-- With both a provider and module code, the config comes from whoever creates the controller first. Keep one shared constant.
+- With both a provider and module code, the config comes from whoever creates the controller first. Keep one shared constant
+  and pass it to both (`<NativeBridgeProvider options={BRIDGE_OPTIONS}>`).
 
 ## 10. Multiple endpoints
 
