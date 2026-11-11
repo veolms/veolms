@@ -1,5 +1,5 @@
 import { OctopusIllustration } from "./components/OctopusIllustration";
-import { useEffect, useLayoutEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import {
   isRouteErrorResponse,
   Links,
@@ -91,7 +91,8 @@ import {
   academyThemes,
 } from "./themes";
 import { useRememberAppPage } from "./legal/legalReturn";
-import { NativeBridgePlatformLog } from "./native-bridge";
+import { NativeBridgeProvider } from "@veolms/react-webview-bridge";
+import { NATIVE_BRIDGE_NAME, nativeBridge } from "./native-bridge";
 
 interface LayoutProps {
   children: ReactNode;
@@ -373,7 +374,14 @@ export function Layout({ children }: LayoutProps) {
         {pathname === "/login" ? <PrefetchPageLinks page="/" /> : null}
       </head>
       <body {...initialLayoutDomState.bodyAttributes}>
-        <div id="root">{children}</div>
+        <div id="root">
+          {/* Above every route element (the app, its error screen and the
+              hydration fallback), so none of them unmounts the native
+              connection. Renders no markup of its own. */}
+          <NativeBridgeProvider endpointName={NATIVE_BRIDGE_NAME}>
+            {children}
+          </NativeBridgeProvider>
+        </div>
         <Scripts />
         <ReadingModeEffects />
       </body>
@@ -420,6 +428,29 @@ export function HydrateFallback() {
   // Wait for the academy route to mount before rendering its page-level
   // loading state. A root-level skeleton would cover the real sidebar/layout.
   return <div aria-hidden="true" className="min-h-dvh bg-(--canvas)" />;
+}
+
+/**
+ * Asks the native app once which platform it is and logs the answer, or that
+ * the page is not running inside the app. Shows the connection works.
+ */
+function useNativePlatformLog() {
+  // StrictMode runs effects twice in development; ask once.
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current) return;
+    asked.current = true;
+    nativeBridge.platform().then(
+      (platform) =>
+        platform
+          ? console.log("[NativeBridge] platform()", platform)
+          : console.info(
+              "[NativeBridge] Not available: not inside the native app.",
+            ),
+      (error: unknown) =>
+        console.warn("[NativeBridge] platform() failed:", error),
+    );
+  }, []);
 }
 
 function SessionInitializer({ children }: { children: ReactNode }) {
@@ -512,10 +543,10 @@ export function ErrorBoundary() {
 export default function Root() {
   // Whatever the app cuts off with an ellipsis shows in full on hover.
   useTruncatedTextTitles();
+  useNativePlatformLog();
   return (
     <QueryProvider>
       <HydrationMarker />
-      <NativeBridgePlatformLog />
       <SessionInitializer>
         <GlobalGoogleOneTap />
         <AnalyticsPageViews />

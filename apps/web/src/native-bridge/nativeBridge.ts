@@ -1,50 +1,100 @@
 import {
-  BridgeError,
-  buildNativeBridge,
-  type BridgeEventHandler,
-} from "@veolms/webview-bridge";
+  getBridgeController,
+  isBridgeNotReadyError,
+} from "@veolms/react-webview-bridge";
 import type { NativeBridgeContract } from "./native-bridge-contracts";
 
-/** The name the native app registers the bridge under (the library's default). */
+/** The name the native app registers the bridge under. */
 export const NATIVE_BRIDGE_NAME = "NativeBridge";
 
-/**
- * How long to wait for the native app to answer: the start-up handshake and
- * every call after it. Without a limit, a call the app never answers would
- * leave its promise pending forever.
- */
-const NATIVE_BRIDGE_TIMEOUT_MS = 10_000;
+// The page's one session with the native app. Creating it here, at module
+// load, fixes its options for the whole page (the library reads them once).
+// `timeoutMs` limits the handshake and every call, so a call the app never
+// answers does not hang forever. The connection itself starts when the
+// `NativeBridgeProvider` in root.tsx mounts.
+const controller = getBridgeController<NativeBridgeContract>(
+  NATIVE_BRIDGE_NAME,
+  { options: { timeoutMs: 10_000 } },
+);
 
-/** What the bridge adds at its root; the generated contract leaves these out. */
-interface NativeBridgeRootMembers {
-  /** Listens for an event the native app sends; returns the unsubscribe. */
-  onEvent(eventName: string, handler: BridgeEventHandler): () => void;
-  dispose(): void;
+/**
+ * A contract as callable functions: every native function keeps its
+ * arguments and returns a promise of its answer, or of `null` when there is
+ * no native app to answer. Namespaces nest. Plain native properties are left
+ * out; read them through the SDK's `useNativeBridge` if one is ever needed.
+ */
+type NativeCalls<T> = {
+  [
+    K in keyof T as T[K] extends (...args: never[]) => unknown
+      ? K
+      : T[K] extends object
+        ? K
+        : never
+  ]: T[K] extends (...args: infer A) => infer R
+    ? (...args: A) => Promise<Awaited<R> | null>
+    : NativeCalls<T[K]>;
+};
+
+// Names that must never become native calls: `then` (or `await` would treat
+// a namespace as a promise), and the ones JSON and string conversion look up.
+const NOT_NATIVE = new Set(["then", "toJSON", "toString", "valueOf"]);
+
+/**
+ * Turns `nativeBridge.a.b(...args)` into
+ * `controller.call((bridge) => bridge.a.b(...args))`. The call waits until
+ * the bridge is ready, so callers never deal with the connection, and
+ * resolves `null` when the page is not running inside the native app.
+ */
+function forwardCalls(path: readonly string[]): unknown {
+  const invoke = (...args: unknown[]) =>
+    controller
+      .call((bridge) => {
+        const owner = path
+          .slice(0, -1)
+          .reduce<unknown>(
+            (node, key) => (node as Record<string, unknown>)[key],
+            bridge,
+          ) as Record<string, (...callArgs: unknown[]) => unknown>;
+        return owner[path[path.length - 1] ?? ""]?.(...args);
+      })
+      .catch((error: unknown) => {
+        // A plain browser has no native app: normal, so no error.
+        if (isBridgeNotReadyError(error) && error.reason === "unavailable") {
+          return null;
+        }
+        throw error;
+      });
+  return new Proxy(invoke, {
+    get: (_target, key) =>
+      typeof key === "string" && !NOT_NATIVE.has(key)
+        ? forwardCalls([...path, key])
+        : undefined,
+  });
 }
 
-export type NativeBridge = NativeBridgeContract & NativeBridgeRootMembers;
-
-// A plain browser has no native app, which the library reports as a plain
-// Error and is nothing to warn about. A failed start-up inside the app (no
-// answer, a protocol mismatch, an error from native) is a BridgeError.
-const reportInitError = (error: Error) => {
-  if (error instanceof BridgeError) {
-    console.warn("[NativeBridge] Could not connect to the native app:", error);
-  }
-};
-
 /**
- * Connects to the native app the page is running in (Android WebView or iOS
- * WKWebView). Resolves `null` in a plain browser, on the server, or when the
- * connection could not be set up; it never rejects.
+ * The native app the page runs in (Android WebView or iOS WKWebView), typed
+ * by the generated contract. Call native functions directly, from a
+ * component, a service or anywhere else:
  *
- * The library keeps one connection for the whole page and honours only the
- * options of the call that opens it, so every caller goes through here.
+ * ```ts
+ * const platform = await nativeBridge.platform(); // PlatformInfo | null
+ *
+ * // A component that renders the answer:
+ * const { data } = useQuery({
+ *   queryKey: ["native", "platform"],
+ *   queryFn: () => nativeBridge.platform(),
+ * });
+ * ```
+ *
+ * Each call waits until the bridge is ready. It resolves `null` when there is
+ * no native app (a plain browser) or the app lacks that function, and rejects
+ * only on a real failure: the connection or the call itself went wrong.
+ *
+ * The SDK's own hooks (`useBridgeCall`, `useBridgeEvent`, `useNativeBridge`)
+ * work too, on this same connection, through the `NativeBridgeProvider` in
+ * root.tsx.
  */
-export const loadNativeBridge = (): Promise<NativeBridge | null> => {
-  if (typeof window === "undefined") return Promise.resolve(null);
-  return buildNativeBridge<NativeBridge>(NATIVE_BRIDGE_NAME, {
-    timeoutMs: NATIVE_BRIDGE_TIMEOUT_MS,
-    onInitError: reportInitError,
-  });
-};
+export const nativeBridge = forwardCalls(
+  [],
+) as NativeCalls<NativeBridgeContract>;
