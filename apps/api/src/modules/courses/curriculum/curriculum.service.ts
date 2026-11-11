@@ -506,14 +506,26 @@ export function createCurriculumService({
       throw new AppError(404, "SECTION_NOT_FOUND", "Section not found.");
     }
 
+    // The list holds every lesson of the section, in its new order. A lesson
+    // of another section of this course may be in it too: that lesson moves
+    // into this section, and the section it left closes the gap.
     const currentLessons = await curriculumRepo.findLessonsBySection(
       database,
       sectionId,
     );
     const currentLessonIds = new Set(currentLessons.map((l) => l.id));
+    const incomingIds = orderedLessonIds.filter(
+      (id) => !currentLessonIds.has(id),
+    );
+    const incomingLessons = await curriculumRepo.findCourseLessonSections(
+      database,
+      courseId,
+      incomingIds,
+    );
     if (
-      currentLessons.length !== orderedLessonIds.length ||
-      !orderedLessonIds.every((id) => currentLessonIds.has(id))
+      new Set(orderedLessonIds).size !== orderedLessonIds.length ||
+      !currentLessons.every((lesson) => orderedLessonIds.includes(lesson.id)) ||
+      incomingLessons.length !== incomingIds.length
     ) {
       throw new AppError(
         400,
@@ -521,6 +533,9 @@ export function createCurriculumService({
         "Ordered lesson IDs list does not match this section's lessons.",
       );
     }
+    const leftSectionIds = [
+      ...new Set(incomingLessons.map((lesson) => lesson.section_id)),
+    ];
 
     await database.transaction().execute(async (trx) => {
       const now = new Date();
@@ -536,13 +551,31 @@ export function createCurriculumService({
       assertOptimisticUpdate(updateResult);
 
       for (let i = 0; i < orderedLessonIds.length; i++) {
-        await curriculumRepo.updateLessonPosition(
+        await curriculumRepo.moveLessonToSection(
           trx,
           orderedLessonIds[i]!,
+          courseId,
           sectionId,
           i,
           now,
         );
+      }
+
+      for (const leftSectionId of leftSectionIds) {
+        const remaining = await curriculumRepo.findLessonsBySection(
+          trx,
+          leftSectionId,
+        );
+        for (let i = 0; i < remaining.length; i++) {
+          if (remaining[i]!.position === i) continue;
+          await curriculumRepo.updateLessonPosition(
+            trx,
+            remaining[i]!.id,
+            leftSectionId,
+            i,
+            now,
+          );
+        }
       }
     });
 

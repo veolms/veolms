@@ -342,6 +342,39 @@ export async function updateLessonPosition(
     .execute();
 }
 
+/** Live lessons of the course among `lessonIds`, with the section each is in. */
+export async function findCourseLessonSections(
+  database: Kysely<Database>,
+  courseId: string,
+  lessonIds: readonly string[],
+) {
+  if (lessonIds.length === 0) return [];
+  return await database
+    .selectFrom("course_lessons")
+    .select(["id", "section_id"])
+    .where("course_id", "=", courseId)
+    .where("id", "in", lessonIds)
+    .where("deleted_at", "is", null)
+    .execute();
+}
+
+/** Puts a lesson of the course into `sectionId` at `position`. */
+export async function moveLessonToSection(
+  database: Kysely<Database>,
+  lessonId: string,
+  courseId: string,
+  sectionId: string,
+  position: number,
+  now: Date,
+) {
+  await database
+    .updateTable("course_lessons")
+    .set({ section_id: sectionId, position, updated_at: now })
+    .where("id", "=", lessonId)
+    .where("course_id", "=", courseId)
+    .execute();
+}
+
 // --- Resources ---
 
 export async function findMaxResourcePosition(
