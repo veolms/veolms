@@ -383,217 +383,249 @@ export function ScrollbarSettings() {
             </p>
           </div>
           <span className="settings-section__count" aria-live="polite">
-            {selectedElasticAppearanceLabel} · {selectedElasticIconLabel}
+            {elasticScrollPreferences.enabled
+              ? `${selectedElasticAppearanceLabel} · ${selectedElasticIconLabel}`
+              : "Off"}
           </span>
         </div>
 
-        <div className="mt-5">
-          <div className="mb-3">
-            <h3 className="m-0 text-sm font-semibold tracking-[-0.015em] text-(--text)">
-              Control depth
-            </h3>
-            <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
-              Keep the original flat design or use the raised control and
-              recessed socket.
-            </p>
-          </div>
-          <RadioGroup
-            label="Elastic scroller depth"
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-          >
-            {ELASTIC_SCROLL_APPEARANCES.map(({ id, label, note }) => (
-              <ChoiceCard
-                key={id}
-                checked={elasticScrollPreferences.appearance === id}
-                onChange={() =>
-                  setElasticScrollPreferences((current) => ({
-                    ...current,
-                    appearance: id,
-                  }))
-                }
-                label={label}
-                note={note}
-                preview={
-                  <ElasticScrollAppearancePreview
-                    appearance={id}
-                    icon={elasticScrollPreferences.icon}
-                  />
-                }
-                className="min-h-44"
-              />
-            ))}
-          </RadioGroup>
-        </div>
-
-        <div className="mt-6">
-          <div className="mb-3">
-            <h3 className="m-0 text-sm font-semibold tracking-[-0.015em] text-(--text)">
-              Direction icon
-            </h3>
-            <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
-              Choose the symbol that points toward the available scroll
-              direction.
-            </p>
-          </div>
-          <RadioGroup
-            label="Elastic scroll direction icon"
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
-          >
-            {ELASTIC_SCROLL_ICONS.map(({ id, label, note }) => (
-              <ChoiceCard
-                key={id}
-                checked={elasticScrollPreferences.icon === id}
-                onChange={() =>
-                  setElasticScrollPreferences((current) => ({
-                    ...current,
-                    icon: id,
-                  }))
-                }
-                label={label}
-                note={note}
-                preview={<ElasticScrollIconPreview icon={id} />}
-                className="min-h-36"
-              />
-            ))}
-          </RadioGroup>
-        </div>
-
-        <div className="mt-6">
-          <div className="mb-3">
-            <h3 className="m-0 text-sm font-semibold tracking-[-0.015em] text-(--text)">
-              Speed lock gestures
-            </h3>
-            <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
-              Choose the horizontal directions for docking and releasing a
-              speed. Vertical movement always controls speed and direction.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <div>
-              <div className="mb-2">
-                <h4 className="m-0 text-xs font-semibold text-(--text)">
-                  Lock side
-                </h4>
-                <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
-                  Cross this side while dragging, then release to keep
-                  scrolling.
-                </p>
-              </div>
-              <RadioGroup
-                label="Elastic scroll lock side"
-                className="grid grid-cols-2 gap-3"
-              >
-                {ELASTIC_SCROLL_GESTURE_SIDES.map(({ id, label }) => (
-                  <ChoiceCard
-                    key={id}
-                    checked={elasticScrollPreferences.lockSide === id}
-                    onChange={() =>
-                      setElasticScrollPreferences((current) => ({
-                        ...current,
-                        lockSide: id,
-                      }))
-                    }
-                    label={label}
-                    note={`Drag ${id} to lock`}
-                    preview={
-                      <ElasticScrollGesturePreview side={id} action="lock" />
-                    }
-                    className="min-h-30"
-                  />
-                ))}
-              </RadioGroup>
-            </div>
-
-            <div>
-              <div className="mb-2">
-                <h4 className="m-0 text-xs font-semibold text-(--text)">
-                  Unlock side
-                </h4>
-                <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
-                  Cross this side while locked, then release to stop.
-                </p>
-              </div>
-              <RadioGroup
-                label="Elastic scroll unlock side"
-                className="grid grid-cols-2 gap-3"
-              >
-                {ELASTIC_SCROLL_GESTURE_SIDES.map(({ id, label }) => (
-                  <ChoiceCard
-                    key={id}
-                    checked={elasticScrollPreferences.unlockSide === id}
-                    onChange={() =>
-                      setElasticScrollPreferences((current) => ({
-                        ...current,
-                        unlockSide: id,
-                      }))
-                    }
-                    label={label}
-                    note={`Drag ${id} to unlock`}
-                    preview={
-                      <ElasticScrollGesturePreview side={id} action="unlock" />
-                    }
-                    className="min-h-30"
-                  />
-                ))}
-              </RadioGroup>
-            </div>
-          </div>
-        </div>
-
-        <div className="settings-row-list mt-5">
+        <div className="settings-row-list mt-4">
           <SettingRow
-            icon={ArrowsDownUp}
-            label="Animate direction changes"
-            note="Rotate the icon when direction changes. Keep this off to switch instantly"
+            icon={Eye}
+            label="Show elastic scroller"
+            note="Show the floating drag control while scrolling long lists. Turn it off to scroll without it everywhere"
           >
             <SettingsToggle
-              checked={elasticScrollPreferences.animateIcon}
-              onChange={(animateIcon) =>
+              checked={elasticScrollPreferences.enabled}
+              onChange={(enabled) =>
                 setElasticScrollPreferences((current) => ({
                   ...current,
-                  animateIcon,
+                  enabled,
                 }))
               }
-              label="Animate direction changes"
+              label="Show elastic scroller"
             />
           </SettingRow>
-          <SettingRow
-            icon={Timer}
-            label="Hide after scrolling stops"
-            note={`How long the scroll control stays on screen once scrolling stops, from ${ELASTIC_SCROLL_HIDE_DELAY_MIN} to ${ELASTIC_SCROLL_HIDE_DELAY_MAX} seconds`}
-          >
-            <div className="flex w-48 max-w-full items-center gap-3">
-              <AppSlider
-                id="elastic-scroll-hide-delay"
-                className="min-w-0 flex-1"
-                min={ELASTIC_SCROLL_HIDE_DELAY_MIN}
-                max={ELASTIC_SCROLL_HIDE_DELAY_MAX}
-                step={1}
-                value={elasticScrollPreferences.hideDelaySeconds}
-                aria-label="Hide the scroll control after this many seconds"
-                aria-valuetext={`${elasticScrollPreferences.hideDelaySeconds} seconds`}
-                onChange={(event) => {
-                  // Read now: the event lets go of its target before the
-                  // update below runs.
-                  const hideDelaySeconds = normalizeElasticScrollHideDelay(
-                    event.currentTarget.value,
-                  );
-                  setElasticScrollPreferences((current) => ({
-                    ...current,
-                    hideDelaySeconds,
-                  }));
-                }}
-              />
-              <output
-                htmlFor="elastic-scroll-hide-delay"
-                className="w-7 shrink-0 text-right text-xs font-semibold text-(--text) tabular-nums"
-              >
-                {elasticScrollPreferences.hideDelaySeconds}s
-              </output>
-            </div>
-          </SettingRow>
         </div>
+
+        {/* Its options only matter while it shows. */}
+        {elasticScrollPreferences.enabled ? (
+          <>
+            <div className="mt-5">
+              <div className="mb-3">
+                <h3 className="m-0 text-sm font-semibold tracking-[-0.015em] text-(--text)">
+                  Control depth
+                </h3>
+                <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
+                  Keep the original flat design or use the raised control and
+                  recessed socket.
+                </p>
+              </div>
+              <RadioGroup
+                label="Elastic scroller depth"
+                className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+              >
+                {ELASTIC_SCROLL_APPEARANCES.map(({ id, label, note }) => (
+                  <ChoiceCard
+                    key={id}
+                    checked={elasticScrollPreferences.appearance === id}
+                    onChange={() =>
+                      setElasticScrollPreferences((current) => ({
+                        ...current,
+                        appearance: id,
+                      }))
+                    }
+                    label={label}
+                    note={note}
+                    preview={
+                      <ElasticScrollAppearancePreview
+                        appearance={id}
+                        icon={elasticScrollPreferences.icon}
+                      />
+                    }
+                    className="min-h-44"
+                  />
+                ))}
+              </RadioGroup>
+            </div>
+
+            <div className="mt-6">
+              <div className="mb-3">
+                <h3 className="m-0 text-sm font-semibold tracking-[-0.015em] text-(--text)">
+                  Direction icon
+                </h3>
+                <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
+                  Choose the symbol that points toward the available scroll
+                  direction.
+                </p>
+              </div>
+              <RadioGroup
+                label="Elastic scroll direction icon"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+              >
+                {ELASTIC_SCROLL_ICONS.map(({ id, label, note }) => (
+                  <ChoiceCard
+                    key={id}
+                    checked={elasticScrollPreferences.icon === id}
+                    onChange={() =>
+                      setElasticScrollPreferences((current) => ({
+                        ...current,
+                        icon: id,
+                      }))
+                    }
+                    label={label}
+                    note={note}
+                    preview={<ElasticScrollIconPreview icon={id} />}
+                    className="min-h-36"
+                  />
+                ))}
+              </RadioGroup>
+            </div>
+
+            <div className="mt-6">
+              <div className="mb-3">
+                <h3 className="m-0 text-sm font-semibold tracking-[-0.015em] text-(--text)">
+                  Speed lock gestures
+                </h3>
+                <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
+                  Choose the horizontal directions for docking and releasing a
+                  speed. Vertical movement always controls speed and direction.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                <div>
+                  <div className="mb-2">
+                    <h4 className="m-0 text-xs font-semibold text-(--text)">
+                      Lock side
+                    </h4>
+                    <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
+                      Cross this side while dragging, then release to keep
+                      scrolling.
+                    </p>
+                  </div>
+                  <RadioGroup
+                    label="Elastic scroll lock side"
+                    className="grid grid-cols-2 gap-3"
+                  >
+                    {ELASTIC_SCROLL_GESTURE_SIDES.map(({ id, label }) => (
+                      <ChoiceCard
+                        key={id}
+                        checked={elasticScrollPreferences.lockSide === id}
+                        onChange={() =>
+                          setElasticScrollPreferences((current) => ({
+                            ...current,
+                            lockSide: id,
+                          }))
+                        }
+                        label={label}
+                        note={`Drag ${id} to lock`}
+                        preview={
+                          <ElasticScrollGesturePreview
+                            side={id}
+                            action="lock"
+                          />
+                        }
+                        className="min-h-30"
+                      />
+                    ))}
+                  </RadioGroup>
+                </div>
+
+                <div>
+                  <div className="mb-2">
+                    <h4 className="m-0 text-xs font-semibold text-(--text)">
+                      Unlock side
+                    </h4>
+                    <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
+                      Cross this side while locked, then release to stop.
+                    </p>
+                  </div>
+                  <RadioGroup
+                    label="Elastic scroll unlock side"
+                    className="grid grid-cols-2 gap-3"
+                  >
+                    {ELASTIC_SCROLL_GESTURE_SIDES.map(({ id, label }) => (
+                      <ChoiceCard
+                        key={id}
+                        checked={elasticScrollPreferences.unlockSide === id}
+                        onChange={() =>
+                          setElasticScrollPreferences((current) => ({
+                            ...current,
+                            unlockSide: id,
+                          }))
+                        }
+                        label={label}
+                        note={`Drag ${id} to unlock`}
+                        preview={
+                          <ElasticScrollGesturePreview
+                            side={id}
+                            action="unlock"
+                          />
+                        }
+                        className="min-h-30"
+                      />
+                    ))}
+                  </RadioGroup>
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-row-list mt-5">
+              <SettingRow
+                icon={ArrowsDownUp}
+                label="Animate direction changes"
+                note="Rotate the icon when direction changes. Keep this off to switch instantly"
+              >
+                <SettingsToggle
+                  checked={elasticScrollPreferences.animateIcon}
+                  onChange={(animateIcon) =>
+                    setElasticScrollPreferences((current) => ({
+                      ...current,
+                      animateIcon,
+                    }))
+                  }
+                  label="Animate direction changes"
+                />
+              </SettingRow>
+              <SettingRow
+                icon={Timer}
+                label="Hide after scrolling stops"
+                note={`How long the scroll control stays on screen once scrolling stops, from ${ELASTIC_SCROLL_HIDE_DELAY_MIN} to ${ELASTIC_SCROLL_HIDE_DELAY_MAX} seconds`}
+              >
+                <div className="flex w-48 max-w-full items-center gap-3">
+                  <AppSlider
+                    id="elastic-scroll-hide-delay"
+                    className="min-w-0 flex-1"
+                    min={ELASTIC_SCROLL_HIDE_DELAY_MIN}
+                    max={ELASTIC_SCROLL_HIDE_DELAY_MAX}
+                    step={1}
+                    value={elasticScrollPreferences.hideDelaySeconds}
+                    aria-label="Hide the scroll control after this many seconds"
+                    aria-valuetext={`${elasticScrollPreferences.hideDelaySeconds} seconds`}
+                    onChange={(event) => {
+                      // Read now: the event lets go of its target before the
+                      // update below runs.
+                      const hideDelaySeconds = normalizeElasticScrollHideDelay(
+                        event.currentTarget.value,
+                      );
+                      setElasticScrollPreferences((current) => ({
+                        ...current,
+                        hideDelaySeconds,
+                      }));
+                    }}
+                  />
+                  <output
+                    htmlFor="elastic-scroll-hide-delay"
+                    className="w-7 shrink-0 text-right text-xs font-semibold text-(--text) tabular-nums"
+                  >
+                    {elasticScrollPreferences.hideDelaySeconds}s
+                  </output>
+                </div>
+              </SettingRow>
+            </div>
+          </>
+        ) : null}
       </section>
     </>
   );
