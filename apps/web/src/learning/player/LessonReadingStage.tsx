@@ -11,6 +11,8 @@ import { DiscussionMarkdown } from "../discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../discussion-editor/types";
 import { LESSON_READING_SCROLL_ATTRIBUTE } from "./useLessonPlayerMinimizeGesture";
 import { useReadingFontScale } from "./readingFontScale";
+import { parseLessonPdfReading } from "../lessonWithoutVideo";
+import { LessonPdfReading } from "./LessonPdfReading";
 
 /**
  * What the player's shell wears while it holds a reading, in place of the
@@ -72,7 +74,11 @@ export function LessonReadingStage({
    */
   onTap?: () => void;
 }) {
-  const content = useMemo(() => createDiscussionDraft(article), [article]);
+  const pdfReading = useMemo(() => parseLessonPdfReading(article), [article]);
+  const content = useMemo(
+    () => createDiscussionDraft(pdfReading ? "" : article),
+    [article, pdfReading],
+  );
   const [fontScale] = useReadingFontScale();
   // At the top of the text a finger moving down has nothing to scroll: the
   // browser is left only the upward swipes there, and the downward one goes
@@ -183,14 +189,22 @@ export function LessonReadingStage({
           together (headings, code, lists), which their own fixed sizes
           would not do for a larger font size alone, and the lines wrap at
           the new size. */}
-      <div style={fontScale === 1 ? undefined : { zoom: fontScale }}>
-        <DiscussionMarkdown
-          content={content}
-          label="Lesson reading"
-          preserveSoftBreaks
-          className="max-w-none! wrap-anywhere [&>:first-child]:mt-0"
+      {pdfReading ? (
+        // A reading whose text is a PDF: its pages, drawn by the page.
+        <LessonPdfReading
+          courseId={pdfReading.courseId}
+          lessonId={pdfReading.lessonId}
         />
-      </div>
+      ) : (
+        <div style={fontScale === 1 ? undefined : { zoom: fontScale }}>
+          <DiscussionMarkdown
+            content={content}
+            label="Lesson reading"
+            preserveSoftBreaks
+            className="max-w-none! wrap-anywhere [&>:first-child]:mt-0"
+          />
+        </div>
+      )}
     </div>
   );
 }

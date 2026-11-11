@@ -347,6 +347,33 @@ const courseRoutes: RoutePlugin = async (app, options) => {
     controller.getLessonDescription,
   );
 
+  app.get(
+    "/courses/:courseId/lessons/:lessonId/document",
+    {
+      schema: {
+        operationId: "getLessonDocument",
+        tags: ["Courses"],
+        summary: "Read a reading lesson's PDF",
+        description:
+          "Streams the PDF a document lesson holds, to whoever may open the lesson (the same rule as its description: 401 to sign in, 403 without the course). Only a page's own request is answered: a request the browser marks as a navigation, an iframe or an embed (Sec-Fetch-Dest other than empty) gets 403, so the file is not opened in the browser's own viewer. Never cached. 404 when the lesson has no PDF.",
+        params: lessonDescriptionParamsSchema,
+        response: {
+          401: errorResponse("Sign in to read this lesson."),
+          403: errorResponse(
+            "The viewer does not have the course, MFA step-up is required, or the request is not the lesson page's own.",
+          ),
+          404: errorResponse("No such course, lesson or file for this viewer."),
+        },
+      },
+      // The same optional session as the description.
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getLessonDocument,
+  );
+
   // --- Course Authoring Basics ---
 
   app.post(
