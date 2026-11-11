@@ -310,7 +310,11 @@ export function useLessonStagePlan({
     } as const;
 
     if (!courseNotFound && !requestsLessonPlayback) {
-      const stage = noVideoStageFor(stageLesson, lessonDescriptionState);
+      const stage = noVideoStageFor(
+        stageLesson,
+        lessonDescriptionState,
+        courseOverview?.course.id,
+      );
       // The loader stands in meanwhile; see `lessonTextPending`.
       if (stage.kind === "pending") return null;
       if (stage.kind === "locked") {
@@ -355,7 +359,7 @@ export function useLessonStagePlan({
     // The same statement as when the course itself says the lesson has no
     // video: it is asked for only while the course is still loading.
     if (playbackBootstrapError.code === "MEDIA_NOT_FOUND") {
-      return noVideoNoticeFor(stageLesson);
+      return noVideoNoticeFor(stageLesson, courseOverview?.course.id);
     }
 
     return {
@@ -364,6 +368,7 @@ export function useLessonStagePlan({
     };
   }, [
     courseAccessQuery.data?.openSectionIds,
+    courseOverview?.course.id,
     courseUnavailable,
     lessonDescriptionState,
     onUnlockCourse,

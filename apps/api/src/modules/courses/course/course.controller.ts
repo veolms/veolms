@@ -173,6 +173,45 @@ export function createCourseController({
     return await service.getLessonDescription(courseId, lessonId, user);
   }
 
+  /**
+   * A reading lesson's PDF, for the lesson page's reader to draw. Only a
+   * page's own request gets it: a browser marks how it asked
+   * (`Sec-Fetch-Dest`), and the address opened in a tab, an iframe or an
+   * embed (which would offer to save or print the file) is refused. A
+   * browser too old to say is let through. It is never cached.
+   */
+  async function getLessonDocument(
+    request: FastifyRequest<{ Params: LessonDescriptionParams }>,
+    reply: FastifyReply,
+  ) {
+    const destination = request.headers["sec-fetch-dest"];
+    if (typeof destination === "string" && destination !== "empty") {
+      throw httpError(
+        403,
+        "LESSON_DOCUMENT_READER_ONLY",
+        "Open this lesson to read it.",
+      );
+    }
+    const { courseId, lessonId } = request.params;
+    const user = request.user
+      ? {
+          id: request.user.id,
+          roles: request.user.roles,
+          learnerView: isLearnerViewRequest(request),
+        }
+      : undefined;
+    const file = await service.getLessonDocument(courseId, lessonId, user);
+    reply
+      .header("Content-Type", "application/pdf")
+      .header("Content-Disposition", "inline")
+      .header("Cache-Control", "private, no-store")
+      .header("X-Content-Type-Options", "nosniff");
+    if (file.contentLength !== undefined) {
+      reply.header("Content-Length", String(file.contentLength));
+    }
+    return reply.send(file.body);
+  }
+
   async function deleteCourse(
     request: FastifyRequest<{ Params: { id: string } }>,
   ) {
@@ -287,6 +326,7 @@ export function createCourseController({
     getCourseTrailerPlaybackToken,
     getPublicCurriculum,
     getLessonDescription,
+    getLessonDocument,
     deleteCourse,
     getStaticPageRefreshStatus,
     retryStaticPageRefresh,
