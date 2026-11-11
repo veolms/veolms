@@ -22,6 +22,13 @@ export interface PageTabDefinition<Id extends string = string> {
   label: string;
   Icon: SettingsTabIcon;
   tone: "blue" | "cyan" | "gold" | "green" | "orange" | "rose" | "violet";
+  /**
+   * How the icon is drawn while its tab is open (default "fill"). An icon
+   * whose filled form is a solid tile with the symbol cut out (the link
+   * icons) reads as a background behind it, unlike the others: such a tab
+   * keeps its outline, in the active colour.
+   */
+  activeWeight?: "fill" | "regular";
 }
 
 export type SettingsTabDefinition = PageTabDefinition<SettingsTab>;
@@ -56,7 +63,13 @@ export const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
   { id: "profile", label: "Profile", Icon: UserCircle, tone: "blue" },
   { id: "account", label: "Account", Icon: GearSix, tone: "rose" },
   // Short links on the site's domain, for staff with link.manage.
-  { id: "links", label: "Links", Icon: LinkSimple, tone: "cyan" },
+  {
+    id: "links",
+    label: "Links",
+    Icon: LinkSimple,
+    tone: "cyan",
+    activeWeight: "regular",
+  },
 ];
 
 const GUEST_SETTINGS_TABS = SETTINGS_TABS.filter(
