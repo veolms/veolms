@@ -46,7 +46,8 @@ export function LessonPlayerChromePlaceholder({
   }, []);
   const resolvedTheme = resolvePlayerTheme(playerTheme);
 
-  if (lessonStage !== "video") {
+  // An audio lesson plays in the video player: its chrome too.
+  if (lessonStage !== "video" && lessonStage !== "audio") {
     const reading = lessonStage !== "quiz";
     return (
       <div

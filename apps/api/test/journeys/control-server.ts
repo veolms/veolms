@@ -64,6 +64,14 @@ export function startControlServer(
       code: flow.email.lastCodeFor(url.searchParams.get("to") ?? ""),
     }),
 
+    // A browser sent a file to an upload link the API gave out: the test
+    // stands in for storage (see fake-object-storage.ts) and receives it.
+    "POST /storage/uploads": async (_url, request) => {
+      const { url } = (await readJson(request)) as { url: string };
+      flow.storage.upload(url);
+      return { ok: true };
+    },
+
     "POST /courses": async (_url, request) =>
       createCourse(flow, (await readJson(request)) as FlowCourseOptions),
 

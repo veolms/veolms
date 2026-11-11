@@ -103,12 +103,24 @@ export function LessonPdfReading({
   courseId,
   lessonId,
   renderText,
+  loadFile,
+  fileKey,
 }: {
   courseId: string;
   lessonId: string;
   /** How a reading's text is shown, for a lesson whose file is text. */
   renderText: (text: string) => ReactNode;
+  /**
+   * Where the file comes from (a PDF's bytes), in place of the lesson's own
+   * document: the studio previews a document before it is what learners
+   * are shown.
+   */
+  loadFile?: () => Promise<ArrayBuffer>;
+  /** Which file `loadFile` gives: a new one is read afresh. */
+  fileKey?: string;
 }) {
+  const loadFileRef = useRef(loadFile);
+  loadFileRef.current = loadFile;
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasesRef = useRef<(HTMLCanvasElement | null)[]>([]);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
@@ -128,7 +140,9 @@ export function LessonPdfReading({
     setPdf(null);
     setText(null);
     void (async () => {
-      const file = await loadLessonPdf(courseId, lessonId);
+      const file: LessonReadingFile = loadFileRef.current
+        ? { kind: "pdf", data: await loadFileRef.current() }
+        : await loadLessonPdf(courseId, lessonId);
       if (cancelled) return;
       // A Markdown or plain-text file is read as a text reading is.
       if (file.kind === "text") {
@@ -163,7 +177,7 @@ export function LessonPdfReading({
       // Ends pdf.js's work on this file and lets its pages go.
       void loading?.destroy();
     };
-  }, [attempt, courseId, lessonId]);
+  }, [attempt, courseId, lessonId, fileKey]);
 
   // The width the pages are drawn at, settled after a resize.
   useEffect(() => {

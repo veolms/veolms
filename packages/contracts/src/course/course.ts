@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { mediaAssetStatusSchema } from "../media.ts";
 import {
+  lessonContentSchema,
+  lessonContentTypeSchema,
+} from "./lesson-content.ts";
+import {
   COURSE_INCLUDE_DETAIL_MAX,
   COURSE_INCLUDE_TEXT_MAX,
   courseIncludeColorSchema,
@@ -611,13 +615,15 @@ export const courseLessonSchema = z.object({
   id: z.uuid(),
   title: z.string().min(1),
   description: z.string().nullable().optional(),
-  contentType: z.enum(["video", "document", "quiz"]),
+  contentType: lessonContentTypeSchema,
   contentMediaId: z.uuid().nullable().optional(),
   durationSeconds: z.number().int().nonnegative().optional(),
   position: z.number().int().nonnegative(),
   isPreview: z.boolean(),
   isPublished: z.boolean(),
   resources: z.array(lessonResourceSchema).optional(),
+  /** Every kind's content; in the editor's curriculum only. */
+  contents: z.array(lessonContentSchema).optional(),
 });
 
 export const courseSectionSchema = z.object({
@@ -643,13 +649,13 @@ export const reorderSectionsRequestSchema = z.object({
 export const createCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().max(10000).nullable().optional(),
-  contentType: z.enum(["video", "document", "quiz"]),
+  contentType: lessonContentTypeSchema,
 });
 
 export const updateCourseLessonRequestSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   description: z.string().max(10000).nullable().optional(),
-  contentType: z.enum(["video", "document", "quiz"]).optional(),
+  contentType: lessonContentTypeSchema.optional(),
   contentMediaId: z.uuid().nullable().optional(),
   isPreview: z.boolean().optional(),
   isPublished: z.boolean().optional(),

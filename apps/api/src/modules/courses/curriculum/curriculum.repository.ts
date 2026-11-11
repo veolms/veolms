@@ -1,5 +1,9 @@
 import { sql, type Kysely } from "kysely";
-import type { Database, DatabaseExecutor } from "@veolms/database";
+import type {
+  Database,
+  DatabaseExecutor,
+  LessonContentType,
+} from "@veolms/database";
 
 // --- Sections ---
 
@@ -121,7 +125,7 @@ export async function insertLesson(
     section_id: string;
     title: string;
     description: string | null;
-    content_type: "video" | "document" | "quiz";
+    content_type: LessonContentType;
     position: number;
     is_preview: boolean;
     is_published: boolean;
@@ -153,7 +157,7 @@ export async function updateLesson(
   values: {
     title?: string;
     description?: string | null;
-    content_type?: "video" | "document" | "quiz";
+    content_type?: LessonContentType;
     content_media_id?: string | null;
     is_preview?: boolean;
     is_published?: boolean;

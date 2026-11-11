@@ -300,6 +300,7 @@ export function LessonReadingNavigationControls({
   onGoNext,
   onGoPrevious,
   showLessonNavigation,
+  showTextSize = true,
   style,
 }: {
   canGoNext: boolean;
@@ -308,6 +309,8 @@ export function LessonReadingNavigationControls({
   onGoNext: () => void;
   onGoPrevious: () => void;
   showLessonNavigation: boolean;
+  /** The text size: only a text has one (not an audio or image lesson). */
+  showTextSize?: boolean;
   /** The player theme's colours, which a video's own controls are given. */
   style?: CSSProperties;
 }) {
@@ -335,7 +338,7 @@ export function LessonReadingNavigationControls({
           onGoPrevious={onGoPrevious}
         />
       ) : null}
-      <ReadingFontSizeControl />
+      {showTextSize ? <ReadingFontSizeControl /> : null}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { Permission } from "@veolms/contracts";
+import { LESSON_DOCUMENT_MAX_BYTES, type Permission } from "@veolms/contracts";
 import crypto from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
@@ -13,6 +13,7 @@ import type {
   CourseOverviewResponse,
   CourseSummary,
   LessonDescriptionResponse,
+  LessonMediaLinkResponse,
   CoursePricingSummary,
   CoursePublicCurriculum,
   ManagedCourseSummary,
@@ -82,11 +83,21 @@ import {
 import { resolveCoursePricing } from "../../commerce/index.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
 
-/** The largest lesson PDF given to the reader, which draws it page by page. */
-const LESSON_DOCUMENT_MAX_BYTES = 50 * 1024 * 1024;
+/** How long an audio or image lesson's file address works. */
+const LESSON_MEDIA_LINK_SECONDS = 15 * 60;
+/**
+ * How long an audio lesson's file address works: the browser goes on
+ * asking for parts of the file while it is listened to (and after a
+ * pause), so it must outlast a long lesson, not only its start.
+ */
+const LESSON_AUDIO_LINK_SECONDS = 3 * 60 * 60;
 /** A reading's file as text (Markdown or plain): never more than this. */
 const LESSON_TEXT_DOCUMENT_MAX_BYTES = 2 * 1024 * 1024;
-/** The files a reading lesson can be read from, and the largest of each. */
+/**
+ * The files a reading lesson can be read from, and the largest of each. A
+ * PDF's limit (`LESSON_DOCUMENT_MAX_BYTES`) is the one the editor checks
+ * an upload against; the reader draws it page by page.
+ */
 const LESSON_DOCUMENT_TYPES: ReadonlyMap<string, number> = new Map([
   ["application/pdf", LESSON_DOCUMENT_MAX_BYTES],
   ["text/markdown", LESSON_TEXT_DOCUMENT_MAX_BYTES],
@@ -1269,7 +1280,15 @@ export function createCourseService({
         banner,
         totalDurationSeconds,
       }),
-      sections: presentCurriculum({ sections, lessons, resources, mediaById }),
+      sections: presentCurriculum({
+        sections,
+        lessons,
+        resources,
+        mediaById,
+        contents: await curriculumService.listLessonContents(
+          lessons.map((lesson) => lesson.id),
+        ),
+      }),
       accessRules: accessRules ? presentAccessRule(accessRules) : null,
       pricing: pricing ? presentPricing(pricing) : null,
       settings: settings ? presentSettings(settings) : null,
@@ -1839,7 +1858,67 @@ export function createCourseService({
       user,
       isLessonDescriptionPublic,
     );
+    // A reading's text is its document's; one written before kinds
+    // existed is still its description.
+    if (lesson.content_type === "document" && !lesson.content_media_id) {
+      const body = (
+        await curriculumService.listLessonContents([lesson.id])
+      ).find((content) => content.content_type === "document")?.body;
+      if (body?.trim()) return { lessonId: lesson.id, description: body };
+    }
     return { lessonId: lesson.id, description: lesson.description };
+  }
+
+  /**
+   * A short-lived address of an audio or image lesson's file, for whoever
+   * may open the lesson (as a reading's PDF is). Learners are shown the
+   * kind selected only, so only its file is given.
+   */
+  async function getLessonMediaLink(
+    courseId: string,
+    lessonId: string,
+    user?: OverviewViewer,
+  ): Promise<LessonMediaLinkResponse> {
+    const lesson = await findReadableLesson(
+      courseId,
+      lessonId,
+      user,
+      () => false,
+    );
+    const notFound = () =>
+      new AppError(
+        404,
+        "LESSON_MEDIA_NOT_FOUND",
+        "This lesson has no file to play.",
+      );
+    if (
+      (lesson.content_type !== "audio" && lesson.content_type !== "image") ||
+      !lesson.content_media_id
+    ) {
+      throw notFound();
+    }
+    const media = await mediaService.getMediaAsset(lesson.content_media_id);
+    if (
+      !media ||
+      media.type !== lesson.content_type ||
+      (media.status !== "uploaded" && media.status !== "ready")
+    ) {
+      throw notFound();
+    }
+    const linkSeconds =
+      lesson.content_type === "audio"
+        ? LESSON_AUDIO_LINK_SECONDS
+        : LESSON_MEDIA_LINK_SECONDS;
+    const url = await services.storage.getPresignedGetUrl(
+      media.storage_key,
+      linkSeconds,
+      { responseContentDisposition: "inline" },
+    );
+    return {
+      url,
+      mimeType: media.mime_type,
+      expiresAt: new Date(Date.now() + linkSeconds * 1000).toISOString(),
+    };
   }
 
   /**
@@ -2166,6 +2245,7 @@ export function createCourseService({
     listCourseAccessFacts,
     getLessonDescription,
     getLessonDocument,
+    getLessonMediaLink,
     deleteCourse,
     findLessonById,
     findCourseById,

@@ -17,6 +17,7 @@ import {
   courseOverviewSchema,
   coursePublicCurriculumSchema,
   lessonDescriptionParamsSchema,
+  lessonMediaLinkResponseSchema,
   lessonDescriptionResponseSchema,
   courseDeleteResponseSchema,
   courseStaticPageRefreshStatusResponseSchema,
@@ -372,6 +373,36 @@ const courseRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.getLessonDocument,
+  );
+
+  app.get(
+    "/courses/:courseId/lessons/:lessonId/media-link",
+    {
+      schema: {
+        operationId: "getLessonMediaLink",
+        tags: ["Courses"],
+        summary: "Get a short-lived address of an audio or image lesson's file",
+        description:
+          "For whoever may open the lesson (the same rule as a reading's PDF: 401 to sign in, 403 without the course). The address works for 15 minutes for an image and 3 hours for an audio file (which is fetched in parts while it is listened to); ask again when it has expired. Never cached. 404 when the lesson is not an audio or image lesson with a file.",
+        params: lessonDescriptionParamsSchema,
+        response: {
+          200: jsonResponse(
+            "The file's address",
+            lessonMediaLinkResponseSchema,
+          ),
+          401: errorResponse("Sign in to open this lesson."),
+          403: errorResponse(
+            "The viewer does not have the course, or MFA step-up is required.",
+          ),
+          404: errorResponse("No such course, lesson or file for this viewer."),
+        },
+      },
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getLessonMediaLink,
   );
 
   // --- Course Authoring Basics ---

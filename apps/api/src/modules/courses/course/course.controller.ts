@@ -217,6 +217,26 @@ export function createCourseController({
     return reply.send(file.body);
   }
 
+  /**
+   * A short-lived address of an audio or image lesson's file. The address
+   * itself is a secret for a while: it is never cached.
+   */
+  async function getLessonMediaLink(
+    request: FastifyRequest<{ Params: LessonDescriptionParams }>,
+    reply: FastifyReply,
+  ) {
+    const { courseId, lessonId } = request.params;
+    const user = request.user
+      ? {
+          id: request.user.id,
+          roles: request.user.roles,
+          learnerView: isLearnerViewRequest(request),
+        }
+      : undefined;
+    reply.header("Cache-Control", "private, no-store");
+    return await service.getLessonMediaLink(courseId, lessonId, user);
+  }
+
   async function deleteCourse(
     request: FastifyRequest<{ Params: { id: string } }>,
   ) {
@@ -332,6 +352,7 @@ export function createCourseController({
     getPublicCurriculum,
     getLessonDescription,
     getLessonDocument,
+    getLessonMediaLink,
     deleteCourse,
     getStaticPageRefreshStatus,
     retryStaticPageRefresh,

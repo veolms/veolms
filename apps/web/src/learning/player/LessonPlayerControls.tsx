@@ -539,6 +539,8 @@ export interface LessonPlayerControlsProps {
   ambientEnabled: boolean;
   /** False leaves ambient mode out of the settings. */
   showAmbientControl?: boolean;
+  /** An audio lesson: no picture, so no picture-in-picture. */
+  audioOnly?: boolean;
   /**
    * Classes for the phone layout's settings and chapters sheets outside a
    * sideways full screen (a page that shows the phone layout on a wide
@@ -1333,6 +1335,7 @@ export function LessonPlayerControls({
   seekTimeOnly = false,
   ambientEnabled,
   showAmbientControl = true,
+  audioOnly = false,
   sheetPanelClassName,
   settingsPresentation = "sheet",
   progressWhileHidden = true,
@@ -1807,7 +1810,7 @@ export function LessonPlayerControls({
         />
       ) : null}
       <SettingsMenu
-        includePictureInPicture
+        includePictureInPicture={!audioOnly}
         mobilePresentation={settingsPresentation}
         forceSheet={desktopSettingsAsSheet}
         mobileSheetPanelClassName={mobileSheetPanelClassName}

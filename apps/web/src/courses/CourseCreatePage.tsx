@@ -981,6 +981,7 @@ export function CourseCreatePage({
     handleCancelLessonDescriptionEdit,
     handleLessonDiscreteChange,
     handleLessonMediaAttached,
+    handleLessonContentRemoved,
     handleLessonProcessingComplete,
     saveAllDirtyLessons,
     handleToggleLessonExpand,
@@ -1597,6 +1598,7 @@ export function CourseCreatePage({
                   handleDeleteLesson={handleDeleteLesson}
                   currentCourseId={currentCourseId}
                   handleLessonMediaAttached={handleLessonMediaAttached}
+                  handleLessonContentRemoved={handleLessonContentRemoved}
                   handleLessonProcessingComplete={
                     handleLessonProcessingComplete
                   }

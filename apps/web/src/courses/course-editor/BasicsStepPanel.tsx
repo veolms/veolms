@@ -138,7 +138,7 @@ export interface BasicsStepPanelProps {
             | {
                 id: string;
                 title: string;
-                contentType: "video" | "document" | "quiz";
+                contentType: "video" | "audio" | "image" | "document" | "quiz";
                 position: number;
                 isPreview: boolean;
                 isPublished: boolean;
@@ -252,7 +252,7 @@ export interface BasicsStepPanelProps {
             | {
                 id: string;
                 title: string;
-                contentType: "video" | "document" | "quiz";
+                contentType: "video" | "audio" | "image" | "document" | "quiz";
                 position: number;
                 isPreview: boolean;
                 isPublished: boolean;

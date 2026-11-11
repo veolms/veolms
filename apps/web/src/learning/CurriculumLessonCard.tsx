@@ -2,6 +2,8 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { ImageIcon as ImageGlyph } from "@phosphor-icons/react/Image";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
 import { memo } from "react";
 import type { RefObject } from "react";
@@ -40,6 +42,17 @@ function NowPlayingGlyph({
   contentType: string;
   className?: string;
 }) {
+  if (contentType === "audio" || contentType === "image") {
+    const Glyph = contentType === "audio" ? Headphones : ImageGlyph;
+    return (
+      <Glyph
+        size={15}
+        weight="fill"
+        className={`text-(--accent) ${className}`}
+        aria-hidden="true"
+      />
+    );
+  }
   if (contentType === "document") {
     return (
       <BookOpen
@@ -326,11 +339,13 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
               <span
                 className={`sr-only hidden [[data-curriculum-lesson-card]:not([data-unavailable]):not([data-locked])_&]:block`}
               >
-                {contentType === "document"
+                {contentType === "document" || contentType === "image"
                   ? ", now reading"
                   : contentType === "quiz"
                     ? ", now open"
-                    : ", now playing"}
+                    : contentType === "audio"
+                      ? ", now listening"
+                      : ", now playing"}
               </span>
             ) : null}
             <span

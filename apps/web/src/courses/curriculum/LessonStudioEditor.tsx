@@ -38,8 +38,16 @@ import {
   type AttachedMediaInfo,
 } from "./LessonMediaWorkspace";
 import { LessonResourceIcon } from "../lesson-resources/LessonResourceIcon";
+import { LessonReadingEditor } from "./LessonReadingEditor";
 import { mediaService } from "../../services/media";
 import { ElevatedCard } from "../../components/ElevatedCard";
+
+const CONTENT_TYPE_NAMES: Record<StudioLessonContentType, string> = {
+  video: "video",
+  audio: "audio",
+  image: "image",
+  document: "document",
+};
 
 export interface StudioLessonResourceItem {
   id: string;
@@ -108,6 +116,21 @@ export interface LessonStudioEditorProps {
   canEditContent?: boolean;
   /** Visibility: lesson.publish. */
   canPublish?: boolean;
+  /** The types that already hold content. */
+  filledContentTypes?: ReadonlySet<StudioLessonContentType>;
+  /** The type learners are shown now (saved); the editor may be on another. */
+  savedContentType?: StudioLessonContentType | "quiz";
+  /** Detaches the file of the type being edited. */
+  onRemoveMedia?: () => unknown;
+  /** A message for the creator (a file the type does not take, say). */
+  onNotice?: (message: string) => void;
+  /** The document's text, written in the editor. */
+  readingBody?: string;
+  onReadingChange?: (value: string) => void;
+  /** The attached PDF drawn as learners read it. */
+  documentPreview?: ReactNode;
+  /** The address of a type's file, for its preview. */
+  loadFileLink?: (contentType: StudioLessonContentType) => Promise<string>;
 }
 
 export const LessonStudioEditor = forwardRef<
@@ -149,6 +172,14 @@ export const LessonStudioEditor = forwardRef<
     canEditDetails = true,
     canEditContent = true,
     canPublish = true,
+    filledContentTypes,
+    savedContentType,
+    onRemoveMedia,
+    onNotice,
+    readingBody,
+    onReadingChange,
+    documentPreview,
+    loadFileLink,
   }: LessonStudioEditorProps,
   ref,
 ) {
@@ -158,6 +189,10 @@ export const LessonStudioEditor = forwardRef<
   const [contentType, setContentType] =
     useState<StudioLessonContentType>(initialContentType);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  // A text file dropped on the document's upload area, for the reading.
+  const [pendingReadingFile, setPendingReadingFile] = useState<File | null>(
+    null,
+  );
   // Bumped when processing finishes so the workspace requests playback again.
   const [playbackRevision, setPlaybackRevision] = useState(0);
   // Asset whose generated thumbnail is available while it is still processing.
@@ -585,6 +620,34 @@ export const LessonStudioEditor = forwardRef<
             }
             onUploadThumbnail={onUploadThumbnail}
             playbackSuspended={playbackSuspended}
+            onRemoveMedia={canEditContent ? onRemoveMedia : undefined}
+            onInvalidFile={onNotice}
+            readingEditor={
+              onReadingChange ? (
+                <LessonReadingEditor
+                  id={`lesson-reading-${lessonNumber}`}
+                  value={readingBody ?? ""}
+                  onChange={onReadingChange}
+                  disabled={isSaving || !canEditContent}
+                  onError={onNotice}
+                  pendingFile={pendingReadingFile}
+                  onPendingFileHandled={() => setPendingReadingFile(null)}
+                />
+              ) : undefined
+            }
+            onReadingFile={onReadingChange ? setPendingReadingFile : undefined}
+            loadFileLink={loadFileLink}
+            hasReadingText={Boolean(readingBody?.trim())}
+            documentPreview={
+              contentType === "document" ? documentPreview : undefined
+            }
+            videoPreviewUnavailableText={
+              contentType === "video" &&
+              savedContentType !== undefined &&
+              savedContentType !== "video"
+                ? "Save the lesson as Video to play this video here."
+                : null
+            }
           />
         </div>
 
@@ -596,7 +659,19 @@ export const LessonStudioEditor = forwardRef<
               value={contentType}
               onChange={handleContentTypeChange}
               disabled={isSaving || !canEditContent}
+              filledTypes={filledContentTypes}
             />
+            {savedContentType &&
+            savedContentType !== "quiz" &&
+            savedContentType !== contentType ? (
+              <p
+                role="status"
+                className="m-0 mt-3 rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-3 py-2 text-[0.74rem] text-(--text)"
+              >
+                Students see the {CONTENT_TYPE_NAMES[savedContentType]} until
+                you save. Content you upload here is kept either way.
+              </p>
+            ) : null}
           </ElevatedCard>
 
           {/* Card 2: Visibility Setting */}

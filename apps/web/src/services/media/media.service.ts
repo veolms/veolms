@@ -1,4 +1,5 @@
 import type {
+  MediaDeliveryResponse,
   MediaImageVariantManifest,
   MediaSourceResponse,
   MediaUploadCompleteResponse,
@@ -209,6 +210,11 @@ export const mediaService = {
     return api.post<MediaUploadCompleteResponse>(
       `/media/${mediaAssetId}/upload-complete`,
     );
+  },
+
+  /** A file's address, for its owner (or a staff member) to preview. */
+  getMediaDelivery(mediaAssetId: string): Promise<MediaDeliveryResponse> {
+    return api.get<MediaDeliveryResponse>(`/media/${mediaAssetId}`);
   },
 
   getMediaSource(mediaAssetId: string): Promise<MediaSourceResponse> {
