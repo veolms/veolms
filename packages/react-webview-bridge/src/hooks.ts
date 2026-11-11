@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -15,6 +16,14 @@ import type {
   ReadyBridge,
   WaitOptions,
 } from "./types.ts";
+
+/**
+ * Runs before the component's own layout effects (and its children's later ones), so refs it
+ * updates are current for anything a layout effect calls. `useEffect` on the server, where
+ * React 18 warns about `useLayoutEffect` and neither runs.
+ */
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /** Result of {@link useNativeBridge}. */
 export interface UseNativeBridgeResult<
@@ -94,7 +103,9 @@ export function useBridgeCall<T extends object, A extends unknown[], R>(
   const controller = useBridgeController<T>();
   const fnRef = useRef(fn);
   const optionsRef = useRef(options);
-  useEffect(() => {
+  // A layout effect, not a passive one: the caller's own layout effects may call `run()` and
+  // must see this render's `fn` and `options`.
+  useIsomorphicLayoutEffect(() => {
     fnRef.current = fn;
     optionsRef.current = options;
   });

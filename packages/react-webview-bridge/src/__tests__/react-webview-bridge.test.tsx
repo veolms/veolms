@@ -1,7 +1,13 @@
 import "./dom.ts";
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { StrictMode, useEffect, useState, type ReactNode } from "react";
+import {
+  StrictMode,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { BridgeError, BridgeInitializationError } from "@veolms/webview-bridge";
 import {
@@ -400,6 +406,27 @@ describe("review fixes", () => {
     view.rerender(tree("B"));
     fake();
     assert.equal(await result!, "A");
+  });
+
+  it("useBridgeCall sees the new function in the caller's layout effects", async () => {
+    fake();
+    const results: Promise<string>[] = [];
+    function Caller({ label }: { label: string }) {
+      const call = useBridgeCall((_b: TestBridge) => label);
+      const { run } = call;
+      useLayoutEffect(() => {
+        results.push(run());
+      }, [label, run]);
+      return null;
+    }
+    const tree = (label: string) => (
+      <NativeBridgeProvider>
+        <Caller label={label} />
+      </NativeBridgeProvider>
+    );
+    const view = render(tree("A"));
+    view.rerender(tree("B"));
+    assert.deepEqual(await Promise.all(results), ["A", "B"]);
   });
 
   it("releases the kept owner when keepAlive turns false", async () => {
