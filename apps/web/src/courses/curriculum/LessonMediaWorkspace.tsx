@@ -20,7 +20,7 @@ import {
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { LessonAudioPlayer } from "./LessonAudioPlayer";
-import { isMarkdownFile } from "./LessonReadingEditor";
+import { isReadingTextFile } from "./LessonReadingEditor";
 import {
   lessonContentAccept,
   lessonContentFileProblem,
@@ -92,6 +92,8 @@ export interface LessonMediaWorkspaceProps {
    * write the reading here instead of uploading one.
    */
   readingEditor?: ReactNode;
+  /** A text file chosen for the document, for the reading editor to import. */
+  onReadingFile?: (file: File) => void;
   /** Whether the document's text holds anything (it opens on the text). */
   hasReadingText?: boolean;
   /** The attached PDF drawn as learners read it, shown on request. */
@@ -120,6 +122,7 @@ export function LessonMediaWorkspace({
   onRemoveMedia,
   onInvalidFile,
   readingEditor,
+  onReadingFile,
   hasReadingText = false,
   documentPreview,
   videoPreviewUnavailableText = null,
@@ -142,9 +145,12 @@ export function LessonMediaWorkspace({
     setShowDocumentPreview(false);
   }, [contentType, mediaInfo?.id]);
 
-  // An audio file plays in the studio from its address, for its owner.
+  // An audio file or image is shown in the studio from its address, given
+  // to its owner (it is stored privately: there is no public one).
   const audioMediaId =
-    contentType === "audio" && !previewFile ? mediaInfo?.id : undefined;
+    (contentType === "audio" || contentType === "image") && !previewFile
+      ? mediaInfo?.id
+      : undefined;
   useEffect(() => {
     if (!audioMediaId) {
       setAudioPreview(null);
@@ -170,12 +176,16 @@ export function LessonMediaWorkspace({
 
   /** Hands a file on only when this type takes it; says why otherwise. */
   const submitFile = (file: File) => {
-    if (contentType === "document" && isMarkdownFile(file) && readingEditor) {
-      // A Markdown file is text: it goes into the reading, not uploaded.
+    if (
+      contentType === "document" &&
+      isReadingTextFile(file) &&
+      readingEditor &&
+      onReadingFile
+    ) {
+      // A Markdown, text or HTML file is text: it becomes the reading, to
+      // edit and format, instead of a file to keep.
       setDocumentMode("text");
-      onInvalidFile?.(
-        "Markdown is text: use Import .md in the reading editor.",
-      );
+      onReadingFile(file);
       return;
     }
     const problem = lessonContentFileProblem(contentType, file);
@@ -215,20 +225,25 @@ export function LessonMediaWorkspace({
       : undefined;
   // Without variants (still processing, or the manifest could not be read)
   // the asset's own delivery URL is the only image there is to show.
+  // A smaller copy when there is one; the file itself otherwise, and when
+  // a copy does not load (a lesson's picture is stored privately).
+  const [imageVariantFailed, setImageVariantFailed] = useState(false);
+  useEffect(() => setImageVariantFailed(false), [mediaInfoId]);
+  const usesImageVariants = Boolean(
+    !previewFile &&
+    mediaInfoId &&
+    !imageVariantFailed &&
+    imageVariantManifest?.variants.length,
+  );
+  const imageFileUrl = mediaInfo?.url ?? audioPreview?.url ?? null;
   const imagePreviewSrc = previewFile
     ? (previewUrl ?? undefined)
-    : mediaInfoId
-      ? imageVariantManifest
-        ? imageVariantManifest.variants.length
-          ? mediaService.getImageVariantUrl(
-              mediaInfoId,
-              imageVariantManifest.variants.at(-1)!.width,
-            )
-          : mediaInfo?.url
-        : imageVariantManifestQuery.isError
-          ? mediaInfo?.url
-          : undefined
-      : mediaInfo?.url || "/api/placeholder/1280/720";
+    : usesImageVariants
+      ? mediaService.getImageVariantUrl(
+          mediaInfoId!,
+          imageVariantManifest!.variants.at(-1)!.width,
+        )
+      : (imageFileUrl ?? undefined);
 
   useEffect(() => {
     // A thumbnail requested early in processing may not have existed yet.
@@ -556,15 +571,27 @@ export function LessonMediaWorkspace({
               {imagePreviewSrc ? (
                 <img
                   src={imagePreviewSrc}
-                  srcSet={imageVariantSrcSet}
+                  srcSet={usesImageVariants ? imageVariantSrcSet : undefined}
                   sizes="(max-width: 820px) calc(100vw - 2rem), 640px"
-                  alt="Lesson Content Preview"
+                  alt="Lesson image preview"
+                  onError={() => {
+                    if (usesImageVariants) setImageVariantFailed(true);
+                  }}
                   width={imageVariantManifest?.width ?? 1280}
                   height={imageVariantManifest?.height ?? 720}
                   decoding="async"
                   className="h-full w-full object-contain"
                 />
-              ) : null}
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-white/70">
+                  <Image size={34} weight="fill" aria-hidden="true" />
+                  <p className="m-0 text-[0.80rem]">
+                    {audioPreview?.failed
+                      ? "This image could not be loaded."
+                      : "Loading image…"}
+                  </p>
+                </div>
+              )}
             </div>
           ) : showDocumentPreview && documentPreview ? (
             <div className="relative max-h-[640px] w-full overflow-y-auto rounded-[16px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-3 shadow-(--card-shadow) sm:p-4">
@@ -650,7 +677,7 @@ export function LessonMediaWorkspace({
                     ? "Supports MP3, M4A, AAC, WAV, OGG."
                     : contentType === "image"
                       ? "Supports JPG, PNG, WebP, GIF."
-                      : "PDF, up to 50 MB. Students read it in the lesson page."
+                      : "PDF (up to 50 MB), or Markdown, text or HTML to edit as the reading."
               }
               isDragging={isDragOver}
               disabled={disabled}
@@ -908,7 +935,7 @@ export function LessonMediaWorkspace({
                 <p className="m-0 mt-1 text-[0.74rem] sm:text-[0.78rem] text-(--muted) leading-relaxed">
                   {contentType === "image"
                     ? "For best results, use a 16:9 ratio. Supported formats: JPG, PNG, WebP."
-                    : "Upload a PDF (up to 50 MB), or write the reading with the formatting toolbar. Word files: export them as PDF first."}
+                    : "PDF files (up to 50 MB) are read as they are. Markdown (.md), text (.txt) and HTML files become the reading, to edit with the formatting toolbar. Word and PowerPoint files: export them as PDF first."}
                 </p>
               </div>
             </div>

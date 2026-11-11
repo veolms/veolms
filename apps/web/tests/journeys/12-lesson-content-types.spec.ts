@@ -42,6 +42,12 @@ function testSound(): Buffer {
   return Buffer.concat([header, data]);
 }
 
+/** A 2×2 red PNG. */
+const TEST_PICTURE = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDK+mmyAAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
@@ -51,8 +57,17 @@ const CORS = {
 /** Stands in for object storage on the test API's signed links. */
 async function serveStorage(context: BrowserContext) {
   const sound = testSound();
-  // The test CDN serves the test video only; a creator's preview of an
-  // audio file is answered with the sound.
+  // The test CDN serves the test video only; a creator's preview of a
+  // lesson's picture or audio file is answered with the test file.
+  await context.route(
+    "http://127.0.0.1:4190/protected/thumbnails/**",
+    (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { ...CORS, "Content-Type": "image/png" },
+        body: TEST_PICTURE,
+      }),
+  );
   await context.route("http://127.0.0.1:4190/protected/media/**", (route) =>
     route.fulfill({
       status: 200,
@@ -74,10 +89,14 @@ async function serveStorage(context: BrowserContext) {
       await route.fulfill({ status: received.ok ? 200 : 500, headers: CORS });
       return;
     }
+    const isPicture = request.url().includes("/thumbnails/");
     await route.fulfill({
       status: 200,
-      headers: { ...CORS, "Content-Type": "audio/wav" },
-      body: sound,
+      headers: {
+        ...CORS,
+        "Content-Type": isPicture ? "image/png" : "audio/wav",
+      },
+      body: isPicture ? TEST_PICTURE : sound,
     });
   });
 }
@@ -192,4 +211,118 @@ test("a creator writes a reading and adds audio to a video lesson, and learners 
       page.getByRole("radio", { name: new RegExp(`^${kind}, has content`) }),
     ).toBeVisible();
   }
+});
+
+test("a document takes a Markdown, text or HTML file as its reading, to edit, and keeps the text it replaced", async ({
+  page,
+  academy,
+}) => {
+  test.setTimeout(240_000);
+  const course = await academy.createCourse({
+    title: "Regular Expressions",
+    pricing: "free",
+    lessons: [{ title: "RegEx Project Ideas", preview: true }],
+  });
+  await academy.signInAsAdmin();
+  await openLessonEditor(page, course);
+  await page.getByRole("radio", { name: /^Doc/ }).click();
+
+  // A Markdown file on the document's upload area becomes the reading.
+  await page.locator('input[aria-label="Upload lesson media"]').setInputFiles({
+    name: "ideas.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("## Project ideas\n\n- A log file parser\n"),
+  });
+  const editor = page.getByRole("textbox", { name: "Reading" });
+  await expect(editor).toContainText("A log file parser");
+
+  // A web page is imported over it as Markdown, its script dropped; the
+  // text it replaced can be brought back.
+  await page
+    .locator('input[aria-label="Import a Markdown, text or HTML file"]')
+    .setInputFiles({
+      name: "page.html",
+      mimeType: "text/html",
+      buffer: Buffer.from(
+        "<h2>From the web</h2><script>window.hacked = true</script><p>Hello <strong>there</strong></p>",
+      ),
+    });
+  await expect(editor).toContainText("From the web");
+  await expect(editor).not.toContainText("hacked");
+  await expect(
+    page.getByText("Imported page.html in place of your text."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Restore previous text" }).click();
+  await expect(editor).toContainText("A log file parser");
+
+  // A Word file is turned away with what to do instead.
+  await page.locator('input[aria-label="Upload lesson media"]').setInputFiles({
+    name: "notes.docx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    buffer: Buffer.from("not really a docx"),
+  });
+  await expect(page.getByText(/Export the document as a PDF/u)).toBeVisible();
+
+  const readingSaved = page.waitForResponse(
+    (response) =>
+      response.url().includes("/contents/document") &&
+      response.request().method() === "PUT",
+  );
+  await saveLesson(page);
+  expect((await readingSaved).status()).toBe(200);
+
+  await academy.signedInLearner("reader");
+  await openLesson(page, course, 1);
+  await expect(
+    page.getByRole("heading", { name: "Project ideas", exact: true }),
+  ).toBeVisible({ timeout: 60_000 });
+});
+
+test("an image lesson shows its picture to the creator and, once selected, to learners", async ({
+  page,
+  context,
+  academy,
+}) => {
+  test.setTimeout(240_000);
+  await serveStorage(context);
+  const course = await academy.createCourse({
+    title: "Regular Expressions",
+    pricing: "free",
+    lessons: [{ title: "RegEx Project Ideas", preview: true }],
+  });
+  await academy.signInAsAdmin();
+  await openLessonEditor(page, course);
+  await page.getByRole("radio", { name: /^Image/ }).click();
+  const attached = page.waitForResponse(
+    (response) =>
+      response.url().includes("/contents/image") &&
+      response.request().method() === "PUT",
+  );
+  await page.locator('input[aria-label="Upload lesson media"]').setInputFiles({
+    name: "diagram.png",
+    mimeType: "image/png",
+    buffer: TEST_PICTURE,
+  });
+  expect((await attached).status()).toBe(200);
+  await expect(page.getByText("diagram.png")).toBeVisible();
+
+  // The creator sees the picture itself, not an empty frame.
+  const preview = page.getByRole("img", { name: "Lesson image preview" });
+  await expect
+    .poll(() =>
+      preview.evaluate((image: HTMLImageElement) => image.naturalWidth),
+    )
+    .toBeGreaterThan(0);
+
+  await saveLesson(page);
+  await academy.signedInLearner("viewer");
+  await openLesson(page, course, 1);
+  const picture = page.getByRole("img", { name: "Lesson image" });
+  await expect
+    .poll(
+      () => picture.evaluate((image: HTMLImageElement) => image.naturalWidth),
+      { timeout: 60_000 },
+    )
+    .toBeGreaterThan(0);
 });

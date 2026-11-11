@@ -186,6 +186,10 @@ export const LessonStudioEditor = forwardRef<
   const [contentType, setContentType] =
     useState<StudioLessonContentType>(initialContentType);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  // A text file dropped on the document's upload area, for the reading.
+  const [pendingReadingFile, setPendingReadingFile] = useState<File | null>(
+    null,
+  );
   // Bumped when processing finishes so the workspace requests playback again.
   const [playbackRevision, setPlaybackRevision] = useState(0);
   // Asset whose generated thumbnail is available while it is still processing.
@@ -623,9 +627,12 @@ export const LessonStudioEditor = forwardRef<
                   onChange={onReadingChange}
                   disabled={isSaving || !canEditContent}
                   onError={onNotice}
+                  pendingFile={pendingReadingFile}
+                  onPendingFileHandled={() => setPendingReadingFile(null)}
                 />
               ) : undefined
             }
+            onReadingFile={onReadingChange ? setPendingReadingFile : undefined}
             hasReadingText={Boolean(readingBody?.trim())}
             documentPreview={
               contentType === "document" && savedContentType === "document"

@@ -6,12 +6,21 @@ import {
   isLessonContentMimeType,
   type LessonContentKind,
 } from "@veolms/contracts";
+import {
+  READING_TEXT_FILE_EXTENSIONS,
+  READING_TEXT_MIME_TYPES,
+} from "./LessonReadingEditor";
 
 /** What a kind's file picker offers: its types and its extensions. */
 export function lessonContentAccept(kind: LessonContentKind): string {
   const types =
     kind === "video" ? ["video/*"] : [...LESSON_CONTENT_MIME_TYPES[kind]];
-  return [...types, ...LESSON_CONTENT_FILE_EXTENSIONS[kind]].join(",");
+  // A document also takes text, which becomes its reading.
+  const text =
+    kind === "document"
+      ? [...READING_TEXT_MIME_TYPES, ...READING_TEXT_FILE_EXTENSIONS]
+      : [];
+  return [...types, ...LESSON_CONTENT_FILE_EXTENSIONS[kind], ...text].join(",");
 }
 
 /** The largest file a kind takes. */
@@ -25,7 +34,7 @@ const KIND_NAMES: Record<LessonContentKind, string> = {
   video: "a video",
   audio: "an audio file (MP3, M4A, AAC, WAV, OGG or WebM)",
   image: "an image (JPEG, PNG, WebP or GIF)",
-  document: "a PDF",
+  document: "a PDF, or a Markdown, text or HTML file",
 };
 
 function formatLimit(bytes: number) {
@@ -48,8 +57,11 @@ export function lessonContentFileProblem(
     LESSON_CONTENT_FILE_EXTENSIONS[kind] as readonly string[]
   ).includes(extension);
   if (!typeFits && !extensionFits) {
-    if (kind === "document" && /\.(docx?|odt|pages|rtf)$/i.test(file.name)) {
-      return "Export the document as a PDF and upload that.";
+    if (
+      kind === "document" &&
+      /\.(docx?|odt|pages|rtf|pptx?|odp|key)$/i.test(file.name)
+    ) {
+      return "Export the document as a PDF and upload that, or paste its text into Write text.";
     }
     return `This lesson type takes ${KIND_NAMES[kind]}.`;
   }
