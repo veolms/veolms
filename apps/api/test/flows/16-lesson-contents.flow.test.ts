@@ -357,4 +357,107 @@ await test("the editor previews any kind's file through a short-lived address, w
   assert.equal(refused.status, 403);
 });
 
+interface OverviewLesson {
+  id: string;
+  description?: string | null;
+  contentType: string;
+}
+
+async function overviewLesson(
+  client: {
+    get: <T>(url: string) => Promise<{ status: number; body: { data?: T } }>;
+  },
+  course: FlowCourse,
+) {
+  const overview = ok(
+    await client.get<{ sections: { lessons?: OverviewLesson[] }[] }>(
+      `/v1/courses/${course.slug}/overview`,
+    ),
+  );
+  return overview.sections.flatMap((section) => section.lessons ?? [])[0]!;
+}
+
+await test("a text reading reaches learners as written, whatever its description says", async () => {
+  const course = await createCourse(flow, { pricing: "free", lessons: [{}] });
+  ok(await setContent(course, "document", { body: "## The whole reading" }));
+  ok(await selectKind(course, "document"));
+  ok(
+    await admin.request("PATCH", lessonPath(course), {
+      description: "A short summary.",
+    }),
+  );
+  const { client } = await signedUpLearner(flow);
+  assert.equal((await enrollForFree(client, course)).status, 200);
+
+  const lesson = await overviewLesson(client, course);
+  assert.equal(lesson.contentType, "document");
+  // Wherever the page reads it from, it is the reading, not the summary.
+  if (lesson.description !== undefined && lesson.description !== null) {
+    assert.equal(lesson.description, "## The whole reading");
+  }
+  const described = ok<{ description: string | null }>(
+    await client.get(`${lessonPath(course)}/description`),
+  );
+  assert.equal(described.description, "## The whole reading");
+});
+
+await test("switching to a text reading and back to the video keeps learners' progress", async () => {
+  const course = await createCourse(flow, { pricing: "free", lessons: [{}] });
+  const { client } = await signedUpLearner(flow);
+  assert.equal((await enrollForFree(client, course)).status, 200);
+  const lessonId = course.lessons[0]!.id;
+  const saved = await client.post(
+    `/v1/learning-progress/${course.slug}/batch`,
+    {
+      items: [{ lessonId, progressPercent: 100, positionSeconds: 600 }],
+      watchedSeconds: 30,
+      timeZone: "Asia/Kolkata",
+    },
+  );
+  assert.ok(saved.status < 300, JSON.stringify(saved.body));
+  const progress = async () =>
+    (
+      await flow.database
+        .selectFrom("learning_progress")
+        .select("progress_percent")
+        .where("lesson_id", "=", lessonId)
+        .executeTakeFirst()
+    )?.progress_percent;
+  assert.equal(Number(await progress()), 100);
+
+  ok(await setContent(course, "document", { body: "A reading." }));
+  ok(await selectKind(course, "document"));
+  ok(await selectKind(course, "video"));
+  assert.equal(
+    Number(await progress()),
+    100,
+    "the video they had watched is back, and so is their progress",
+  );
+});
+
+await test("an older reading switched to another type keeps its text to learners who have the course", async () => {
+  const course = await createCourse(flow, {
+    pricing: "paid",
+    lessons: [{ preview: true }, {}],
+  });
+  await flow.database
+    .updateTable("course_lessons")
+    .set({
+      content_type: "document",
+      content_media_id: null,
+      description: "The paid reading.",
+    })
+    .where("id", "=", course.lessons[1]!.id)
+    .execute();
+  ok(await selectKind(course, "video", 1));
+
+  const row = await lessonRow(course, 1);
+  assert.equal(row.description, null, "no longer everyone's description");
+  assert.equal(
+    (await kindsHeld(course, 1)).document?.body,
+    "The paid reading.",
+    "kept as the document's text",
+  );
+});
+
 await flow.close();

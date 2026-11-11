@@ -783,7 +783,9 @@ export function useLessonHandlers({
             )?.mediaId ?? null)
         : (les.contentMediaId ?? null);
       const readingBody = les.readingBody ?? "";
-      const readingChanged = readingBody !== (init.readingBody ?? readingBody);
+      // A lesson made in this session has no saved text yet: "" (any
+      // text written for it is a change to save).
+      const readingChanged = readingBody !== (init.readingBody ?? "");
       // A reading written before kinds existed was its description; saved
       // as the document's text, the server empties the description.
       const movesLegacyReading =

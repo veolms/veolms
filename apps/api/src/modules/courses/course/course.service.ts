@@ -86,6 +86,12 @@ import { createMediaService, type MediaService } from "../../media/index.ts";
 /** The largest lesson PDF given to the reader, which draws it page by page. */
 /** How long an audio or image lesson's file address works. */
 const LESSON_MEDIA_LINK_SECONDS = 15 * 60;
+/**
+ * How long an audio lesson's file address works: the browser goes on
+ * asking for parts of the file while it is listened to (and after a
+ * pause), so it must outlast a long lesson, not only its start.
+ */
+const LESSON_AUDIO_LINK_SECONDS = 3 * 60 * 60;
 import { resolveAliasedBasicsUpdate } from "./basics-aliased-field.ts";
 import { resolveBasicsCategoryUpdate } from "./basics-category.ts";
 import { resolveDetailsLevelUpdate } from "./details-level.ts";
@@ -1888,17 +1894,19 @@ export function createCourseService({
     ) {
       throw notFound();
     }
+    const linkSeconds =
+      lesson.content_type === "audio"
+        ? LESSON_AUDIO_LINK_SECONDS
+        : LESSON_MEDIA_LINK_SECONDS;
     const url = await services.storage.getPresignedGetUrl(
       media.storage_key,
-      LESSON_MEDIA_LINK_SECONDS,
+      linkSeconds,
       { responseContentDisposition: "inline" },
     );
     return {
       url,
       mimeType: media.mime_type,
-      expiresAt: new Date(
-        Date.now() + LESSON_MEDIA_LINK_SECONDS * 1000,
-      ).toISOString(),
+      expiresAt: new Date(Date.now() + linkSeconds * 1000).toISOString(),
     };
   }
 

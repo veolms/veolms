@@ -55,6 +55,18 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
+  // A text reading goes back to where readings were kept before kinds: the
+  // lesson's description (a document lesson showing no PDF).
+  await sql`
+    update course_lessons l
+      set description = c.body
+      from course_lesson_contents c
+      where c.lesson_id = l.id
+        and c.content_type = 'document'
+        and c.body is not null
+        and l.content_type = 'document'
+        and l.content_media_id is null
+  `.execute(database);
   await sql`drop table if exists course_lesson_contents`.execute(database);
   // Audio and image lessons did not exist before: they go back to video
   // lessons without media, as a video lesson with none is shown.

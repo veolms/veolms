@@ -2,7 +2,7 @@ import { cacheTags, invalidateCache } from "@veolms/api-core";
 import type { Permission } from "@veolms/contracts";
 import crypto from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
-import type { Kysely } from "kysely";
+import type { Kysely, Transaction } from "kysely";
 import type { Database } from "@veolms/database";
 import {
   isLessonContentMimeType,
@@ -172,6 +172,40 @@ export function createCurriculumService({
       );
     }
     return media;
+  }
+
+  /**
+   * Locks the lesson's row for the rest of the transaction and checks it
+   * still shows the type and file it was read with: two changes at once
+   * (an upload's attach while a save switches the type) would otherwise
+   * leave its file of one type on a lesson of another. The later one is
+   * refused, to be tried again.
+   */
+  async function assertLessonUnchanged(
+    trx: Transaction<Database>,
+    lesson: {
+      id: string;
+      content_type: string;
+      content_media_id: string | null;
+    },
+  ) {
+    const current = await trx
+      .selectFrom("course_lessons")
+      .select(["content_type", "content_media_id"])
+      .where("id", "=", lesson.id)
+      .forUpdate()
+      .executeTakeFirst();
+    if (
+      !current ||
+      current.content_type !== lesson.content_type ||
+      current.content_media_id !== lesson.content_media_id
+    ) {
+      throw new AppError(
+        409,
+        "LESSON_CHANGED",
+        "This lesson was changed at the same time. Try again.",
+      );
+    }
   }
 
   // --- Sections ---
@@ -466,7 +500,17 @@ export function createCurriculumService({
       is_published: payload.isPublished,
       updated_at: now,
     };
+    // A reading from before kinds keeps its text in its description, which
+    // is everyone's to read once the lesson is not a document: switched
+    // away, the text moves to the document kind it now belongs to.
+    const movesLegacyReading =
+      typeChanged &&
+      lesson.content_type === "document" &&
+      !lesson.content_media_id &&
+      payload.description === undefined &&
+      Boolean(lesson.description?.trim());
     await database.transaction().execute(async (trx) => {
+      await assertLessonUnchanged(trx, lesson);
       // The kind switched away from keeps its file, even one attached
       // without passing here (an import, a lesson older than kinds).
       if (
@@ -481,7 +525,21 @@ export function createCurriculumService({
           now,
         });
       }
-      await curriculumRepo.updateLesson(trx, lessonId, courseId, lessonUpdate);
+      if (movesLegacyReading) {
+        const document = await findLessonContent(trx, lessonId, "document");
+        if (!document?.body?.trim()) {
+          await saveLessonContent(trx, {
+            lessonId,
+            contentType: "document",
+            body: lesson.description,
+            now,
+          });
+        }
+      }
+      await curriculumRepo.updateLesson(trx, lessonId, courseId, {
+        ...lessonUpdate,
+        ...(movesLegacyReading ? { description: null } : {}),
+      });
       if (kind && payload.contentMediaId !== undefined) {
         await saveLessonContent(trx, {
           lessonId,
@@ -490,11 +548,17 @@ export function createCurriculumService({
           now,
         });
       }
-      if (givesLessonItsFirstMedia(lesson.content_media_id, effectiveMediaId)) {
+      if (
+        payload.contentMediaId !== undefined &&
+        givesLessonItsFirstMedia(lesson.content_media_id, effectiveMediaId)
+      ) {
         // A lesson with no media is finished by opening it. Now that it has
         // some, nobody has seen it: learners' progress on the lesson is
         // cleared together with the change, or neither happens. Learners
         // who passed the lesson's quiz keep theirs (see the reset service).
+        // Only a file newly attached does so: a switch back to a type's
+        // own file (a video, after a text reading) brings back what
+        // learners had already seen, and keeps their progress.
         await lessonProgressResetService.clearLessonProgress(trx, lessonId);
       }
     });
@@ -651,6 +715,7 @@ export function createCurriculumService({
     const isSelected = lesson.content_type === kind;
     const now = new Date();
     const result = await database.transaction().execute(async (trx) => {
+      await assertLessonUnchanged(trx, lesson);
       // The selected kind's file attached before kinds existed becomes its
       // kind's content, so the editor lists it beside the one set here.
       if (
@@ -1062,7 +1127,12 @@ export function createCurriculumService({
       const videoKindUnchanged =
         (videoContent?.media_id ?? null) === input.expectedMediaId ||
         (current?.content_type === "video" &&
-          current.content_media_id === input.expectedMediaId);
+          current.content_media_id === input.expectedMediaId) ||
+        // Another kind is shown and the video kind is empty: the import
+        // was for it (its expected media named the shown kind's file).
+        (current !== undefined &&
+          current.content_type !== "video" &&
+          !videoContent?.media_id);
       if (current && (attached || videoKindUnchanged)) {
         await saveLessonContent(trx, {
           lessonId: input.lessonId,

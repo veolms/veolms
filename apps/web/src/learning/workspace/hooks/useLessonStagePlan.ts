@@ -523,10 +523,25 @@ function webAudioKeepsPlayingWhenLocked(): boolean {
  * Asks storage for one byte of the file across origins: whether it may be
  * read so (and analysed). Never long: a slow answer is taken as no.
  */
+/**
+ * Storage hosts that have let a file be read across origins. Kept for the
+ * page's life: once a player element is routed through Web Audio it must
+ * keep loading files so (one loaded otherwise plays in silence), so a
+ * later check that is merely slow must not turn it back.
+ */
+const corsReadableHosts = new Set<string>();
+
 async function canReadAcrossOrigins(url: string): Promise<boolean> {
   if (!webAudioKeepsPlayingWhenLocked() || typeof fetch !== "function") {
     return false;
   }
+  let host: string;
+  try {
+    host = new URL(url).host;
+  } catch {
+    return false;
+  }
+  if (corsReadableHosts.has(host)) return true;
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 3000);
   try {
@@ -536,6 +551,7 @@ async function canReadAcrossOrigins(url: string): Promise<boolean> {
       cache: "no-store",
       signal: controller.signal,
     });
+    if (response.ok) corsReadableHosts.add(host);
     return response.ok;
   } catch {
     return false;

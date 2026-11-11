@@ -78,7 +78,10 @@ export function LessonMediaStage({
   picture?: boolean;
 }) {
   return (
+    // Another lesson's picture starts afresh: no image of the last one, no
+    // failure it had.
     <LessonImageStage
+      key={`${courseId}/${lessonId}`}
       courseId={courseId}
       lessonId={lessonId}
       lessonTitle={lessonTitle}

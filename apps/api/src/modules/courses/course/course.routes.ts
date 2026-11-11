@@ -383,7 +383,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         tags: ["Courses"],
         summary: "Get a short-lived address of an audio or image lesson's file",
         description:
-          "For whoever may open the lesson (the same rule as a reading's PDF: 401 to sign in, 403 without the course). The address works for 15 minutes; ask again when it has expired. Never cached. 404 when the lesson is not an audio or image lesson with a file.",
+          "For whoever may open the lesson (the same rule as a reading's PDF: 401 to sign in, 403 without the course). The address works for 15 minutes for an image and 3 hours for an audio file (which is fetched in parts while it is listened to); ask again when it has expired. Never cached. 404 when the lesson is not an audio or image lesson with a file.",
         params: lessonDescriptionParamsSchema,
         response: {
           200: jsonResponse(

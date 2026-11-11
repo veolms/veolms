@@ -110,6 +110,11 @@ async function connectAnalyser(
     source.connect(analyser);
     analyser.connect(context.destination);
     analysers.set(element, analyser);
+    // The element plays through this context for good, a later lesson's
+    // video too: whenever it plays, the context runs.
+    element.addEventListener("play", () => {
+      if (context.state !== "running") void context.resume().catch(() => {});
+    });
     return analyser;
   } catch {
     void context.close().catch(() => undefined);

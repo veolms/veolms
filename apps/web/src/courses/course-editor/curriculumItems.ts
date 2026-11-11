@@ -195,6 +195,6 @@ export const isLessonDirty = (les: CurriculumLessonItem): boolean => {
     (les.contentMediaId ?? null) !== (init.contentMediaId ?? null) ||
     isPub !== initPub ||
     isPrev !== initPrev ||
-    (les.readingBody ?? "") !== (init.readingBody ?? les.readingBody ?? "")
+    (les.readingBody ?? "") !== (init.readingBody ?? "")
   );
 };
