@@ -577,6 +577,7 @@ export async function findPlaybackLessonContext(
       "course_lessons.title as lesson_title",
       "course_lessons.section_id as section_id",
       "course_lessons.content_media_id as content_media_id",
+      "course_lessons.content_type as content_type",
       "course_lessons.is_preview as is_preview",
       "course_lessons.is_published as is_published",
       // The lesson's media travels with it so playback does not read the

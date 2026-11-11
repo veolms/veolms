@@ -1796,7 +1796,9 @@ export function createMediaService({
       lessonNumber,
       user,
     );
-    if (!context.content_media_id) {
+    // A reading lesson has no video to play, even with media still attached
+    // (a video lesson switched to a reading keeps its old video's id).
+    if (!context.content_media_id || context.content_type === "document") {
       throw new AppError(
         404,
         "MEDIA_NOT_FOUND",

@@ -241,6 +241,7 @@ export function useLessonPlayerProps({
       playbackBootstrap,
       playbackAccessError,
       playbackBootstrapPending: playbackBootstrapPending || lessonTextPending,
+      readingPending: lessonTextPending,
       playbackUnavailableMessage: playbackBootstrapError?.message ?? null,
       onRetryPlayback: retryPlaybackBootstrap,
       refreshPlaybackToken,

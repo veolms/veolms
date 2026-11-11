@@ -49,6 +49,7 @@ import {
 import {
   getLessonReadingFrame,
   LessonReadingMiniature,
+  LessonReadingPlaceholder,
   LessonReadingStage,
   lessonReadingShellClasses,
 } from "./LessonReadingStage";
@@ -318,6 +319,12 @@ export interface LessonVideoPlayerProps {
   } | null;
   /** Prevents the fallback media source from loading before protected bootstrap resolves. */
   playbackBootstrapPending?: boolean;
+  /**
+   * What is pending is a reading lesson's text, not a video: the stage
+   * wears the reading's colours and shows lines of text to come, not the
+   * video loader on black.
+   */
+  readingPending?: boolean;
   /** Shown when the lesson has no playable source because loading it failed. */
   playbackUnavailableMessage?: string | null;
   onRetryPlayback?: () => void;
@@ -519,6 +526,7 @@ export function LessonVideoPlayer({
   playbackBootstrap,
   playbackAccessError = null,
   playbackBootstrapPending = false,
+  readingPending = false,
   playbackUnavailableMessage = null,
   onRetryPlayback,
   refreshPlaybackToken,
@@ -1647,6 +1655,8 @@ export function LessonVideoPlayer({
     const FullscreenEnterIcon = playerTheme.icons.fullscreenEnter;
     const FullscreenExitIcon = playerTheme.icons.fullscreenExit;
     const isPending = !playbackAccessError;
+    // A reading lesson's text on its way: drawn as text to come.
+    const isReadingPending = isPending && readingPending;
     // A failure and a plain statement are both words on the bare stage; the
     // lock, the lesson's picture and the prominent action are for a lesson
     // that is waiting for the learner to sign in or to get the course.
@@ -1703,7 +1713,8 @@ export function LessonVideoPlayer({
           // sets no mark on the host; it says so here instead.
           minimizeGesture.controlsSuppressed &&
             "[&>:not([data-lesson-reading-scroll])]:invisible!",
-          (reading || miniReading) && lessonReadingShellClasses,
+          (reading || miniReading || isReadingPending) &&
+            lessonReadingShellClasses,
         )}
         ref={reading ? readingSurfaceRef : undefined}
         // The reading, its controls and the lessons panel share the width
@@ -1751,7 +1762,13 @@ export function LessonVideoPlayer({
               ? undefined
               : "alert"
         }
-        aria-label={isPending ? "Loading video" : undefined}
+        aria-label={
+          isReadingPending
+            ? "Loading reading"
+            : isPending
+              ? "Loading video"
+              : undefined
+        }
       >
         {/* A lesson that is waiting for the learner (to sign in, to get the
             course) shows what it is: its own picture, dimmed and out of
@@ -1894,7 +1911,9 @@ export function LessonVideoPlayer({
                 : undefined
             }
           />
-        ) : reading || miniReading ? null : (
+        ) : reading || miniReading ? null : isReadingPending ? (
+          <LessonReadingPlaceholder compact={presentation === "mini"} />
+        ) : (
           <div className="[container-type:size] pointer-events-none absolute inset-0 grid place-items-center p-6 text-center text-white">
             {isPending ? (
               <VideoLoadingSpinner />
