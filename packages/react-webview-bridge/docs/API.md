@@ -41,15 +41,16 @@ interface NativeBridgeProviderProps {
 | `endpointName` | no       | `"NativeBridge"`       | Name of the native endpoint object on `window`. It is trimmed, and an empty string falls back to the default. One controller exists per name.                                                                                     |
 | `options`      | no       | `{}`                   | Passed to `buildNativeBridge`: `debug`, `timeoutMs` (per-request timeout, default 30000; also the handshake timeout when > 0, else 10000), `onInitError`, `onError`. **Read once**, when the controller for this name is created. |
 | `retry`        | no       | `DEFAULT_RETRY_POLICY` | Backoff for init attempts. **Read once**, like `options`.                                                                                                                                                                         |
-| `keepAlive`    | no       | `false`                | `true` means this provider never releases its reference, so the session outlives the provider.                                                                                                                                    |
+| `keepAlive`    | no       | `false`                | `true` keeps this provider's reference after it unmounts, so the session outlives the provider. Read when the provider cleans up; turning it off while mounted hands a kept reference back.                                       |
 | `children`     | no       | —                      | —                                                                                                                                                                                                                                 |
 
 Behaviour:
 
 - During render, it gets or creates the module-level controller for `endpointName` (`getBridgeController(name, { options, retry })`).
   The `useMemo` depends on `name` only, so changing `options` or `retry` later has no effect.
-- In an effect, it calls `controller.acquire()`. The first acquire on an `idle` controller starts initialization. The
-  effect's cleanup releases the reference, except with `keepAlive`.
+- In an effect, it calls `controller.acquire()`, once per controller (changing `keepAlive` never acquires again). The first
+  acquire on an `idle` controller starts initialization. The effect's cleanup releases the reference unless `keepAlive` is
+  true at that moment; then it keeps at most one reference per provider.
 - It provides the controller through `NativeBridgeContext`.
 - Several providers for the same name share one controller and one session. Providers for different names are independent.
 - It renders `children` immediately. It does **not** block rendering until the bridge is ready, so gate the UI yourself on `state`.
@@ -85,7 +86,9 @@ Use it around bridge-dependent screens that prefer to throw instead of branching
 
 ## Hooks
 
-All hooks must be used under a `NativeBridgeProvider`. Otherwise they throw
+All hooks must be used under a `NativeBridgeProvider`, inside its children (not in the component that renders the provider).
+`getBridgeClient` and `getBridgeController` need no provider to be called, but initialization still needs one (or an
+`acquire()`). Outside a provider, the hooks throw
 `Error("[react-webview-bridge] No <NativeBridgeProvider> found. Wrap your app (or iframe root) in one.")`.
 
 ### `useNativeBridge<T>()`
@@ -132,7 +135,11 @@ Use it for gating UI on state, for showing retry UI, and for getting `call`/`whe
 ### `useBridgeCall(fn, options?)`
 
 ```ts
-function useBridgeCall<T extends object, A extends unknown[], R>(
+function useBridgeCall<
+  T extends object = RegisteredContract,
+  A extends unknown[] = [],
+  R = unknown,
+>(
   fn: (bridge: BridgeInstance<T>, ...args: A) => R | Promise<R>,
   options?: WaitOptions,
 ): UseBridgeCallResult<A, Awaited<R>>;

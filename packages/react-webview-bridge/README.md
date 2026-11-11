@@ -9,7 +9,8 @@ The package gives you **one shared native bridge session per endpoint** for the 
 - retries with exponential backoff, and clear terminal states (`unavailable` when the page runs outside the app, `error` when the handshake fails);
 - calls that are **queued until ready**, with bounded waits and typed `BridgeNotReadyError` rejections;
 - event subscriptions that clean up after themselves;
-- the same session for non-React code, through a framework-agnostic controller.
+- one object you call directly, in or out of React (`getBridgeClient()`), and a framework-agnostic controller for more control;
+- types from your generated contract, registered once (`Register`), with no type arguments on hooks.
 
 It is source-only TypeScript (`exports: "./src/index.ts"`, no build step), like `@veolms/webview-bridge`.
 
@@ -23,7 +24,7 @@ It is source-only TypeScript (`exports: "./src/index.ts"`, no build step), like 
 
 ```text
 your components / services
-        │  useNativeBridge · useBridgeCall · useBridgeEvent · getBridgeController
+        │  getBridgeClient · useNativeBridge · useBridgeCall · useBridgeEvent · getBridgeController
         ▼
 @veolms/react-webview-bridge   ← per-endpoint controller: state, retries, waiters, ref-count
         │  buildNativeBridge(name, options) · proxy.dispose() · clearNativeBridgeCache() (tests only)
@@ -42,20 +43,20 @@ Android (modern / legacy) / iOS WebView endpoint  ←→  native JSBridge
 
 ## Install / workspace wiring
 
-1. Copy this folder into the monorepo as `packages/react-webview-bridge/`, next to `packages/webview-bridge/`.
-   `tsconfig.json` extends `../../tsconfig.base.json`, the same as the bridge package.
+1. The package lives at `packages/react-webview-bridge/`, next to `packages/webview-bridge/`. Its `tsconfig.json` extends
+   `../../tsconfig.base.json`, the same as the bridge package.
 2. Add it to the app's dependencies:
 
    ```json
    {
      "dependencies": {
-       "@veolms/react-webview-bridge": "workspace:*",
-       "@veolms/webview-bridge": "workspace:*",
-       "react": "^19.0.0",
-       "react-dom": "^19.0.0"
+       "@veolms/react-webview-bridge": "workspace:*"
      }
    }
    ```
+
+   `@veolms/webview-bridge` is a peer, so add it too unless the package manager installs peers automatically (pnpm does by
+   default). App code imports only from this package; the bridge's error classes are the one reason to import it directly.
 
 3. Install with the workspace's package manager. The app's TypeScript and bundler then consume the `.ts` sources directly. The app's tsconfig
    needs what the bridge package already needs: `moduleResolution: "bundler"`, `allowImportingTsExtensions` (with `noEmit`),
@@ -72,10 +73,6 @@ Android (modern / legacy) / iOS WebView endpoint  ←→  native JSBridge
 are declared in this package only: `jsdom` and `@testing-library/react` for the React tests (`src/__tests__/dom.ts` installs the
 jsdom window), and `tsx` so Node can load the `.tsx` sources. The tests are in `src/__tests__/`. Run them with
 `pnpm --filter @veolms/react-webview-bridge test`.
-
-> This package was verified outside the monorepo with a harness that lives **next to** it, not in it:
-> `captures/packages/{local-check.sh, package.json, vitest.local-check.config.ts}` plus a stand-in `captures/tsconfig.base.json`.
-> Nothing inside `react-webview-bridge/` refers to it, so do not copy it.
 
 ## Quick start
 
@@ -146,7 +143,16 @@ export function DeviceCard() {
 }
 ```
 
-Calls made before the bridge is ready (`call`, `run`) wait for it, by default up to 10 s.
+Calls made before the bridge is ready (`call`, `run`, and every `getBridgeClient()` call) wait for it, by default up to 10 s.
+
+Outside React, or wherever a hook is not needed, call the bridge directly:
+
+```ts
+import { getBridgeClient } from "@veolms/react-webview-bridge";
+
+const client = getBridgeClient(); // typed by the registered contract
+const info = await client.device.getInfo(); // waits for the connection, then calls native
+```
 
 ---
 
@@ -158,7 +164,7 @@ The bridge does **not** live in React state. For each endpoint name there is one
 module-level registry outside React. It owns the init run (attempts and backoff), an immutable state **snapshot**, pending
 `whenReady`/`call` waiters, and an **owner ref-count**. Providers and hooks only read it, with `useSyncExternalStore`. As a result,
 re-renders, StrictMode and multiple providers can never cause a second handshake, and non-React code
-(`getBridgeController`) shares the same session. There is one registry per JS realm, so each iframe has its own.
+(`getBridgeClient`, `getBridgeController`) shares the same session. There is one registry per JS realm, so each iframe has its own.
 
 ### Lifecycle states
 
@@ -184,7 +190,8 @@ any state ──disposeNativeBridge / last provider unmounted (+1 macrotask) / r
 
 Each mounted provider `acquire()`s the controller (+1). The first acquire on an `idle` controller starts initialization.
 Unmounting releases its reference (−1). When the count reaches 0, the session is disposed **one macrotask later**, and any re-acquire
-before then cancels that. `keepAlive` providers never release.
+before then cancels that. A `keepAlive` provider keeps its one reference after it unmounts; turning `keepAlive` off
+while mounted hands that reference back.
 
 ### StrictMode
 
@@ -195,7 +202,7 @@ cancelled, so you get **one** `buildNativeBridge` call and **zero** disposals. T
 ### "First call wins"
 
 `options` and `retry` are read **once**, when the controller for a name is created, by the first provider render or the first
-`getBridgeController(name, config)`. Changing them later does nothing until the controller is gone. This matches the library's
+`getBridgeController(name, config)` / `getBridgeClient(name, config)` call. Changing them later does nothing until the controller is gone. This matches the library's
 session cache. Keep them in module-level constants.
 
 ### The `then`-undefined proxy rule
@@ -301,7 +308,7 @@ the fake native.
 **Do**
 
 - Mount **one** provider per endpoint at the root, with options and retry policy as **module-level constants**.
-- Use the **generated** contract type for `T`.
+- Register the **generated** contract once (`interface Register`) instead of passing `T` to every hook.
 - Treat `unavailable` as a normal state (the page runs in a browser) and keep non-native UI working.
 - Return **values** from `call`/`useBridgeCall` functions.
 - Attach a `.catch` to every fire-and-forget `call(...)` and `run(...)`.
@@ -312,7 +319,8 @@ the fake native.
 
 **Don't**
 
-- Don't call `buildNativeBridge()` yourself in a React app. Use the provider or controller (one session, one state).
+- Don't call `buildNativeBridge()` yourself in a React app. Use the provider with `getBridgeClient`, the hooks or the controller
+  (one session, one state).
 - Don't put the proxy into a promise (`resolve(bridge)`, `return bridge` from an `async` function or `call`), `useState`, or
   `JSON.stringify`.
 - Don't read bridge properties during render. Each read is a native request that returns a promise.
@@ -339,8 +347,8 @@ All findings from building and device-testing this SDK against JSBridge 0.2.0:
 | —   | **Android legacy iframes**: async native replies go only to the main frame, so a frame's handshake times out (`error`).                | Platform behaviour, not a bug. Same as the vanilla client. Modern endpoints route per document.                                                                                                                                              |
 | —   | Not exported from the bridge's public entry: `DEFAULT_BRIDGE_NAME`, `RESERVED_ROOT_NAMES`, `PROTOCOL_VERSION`, `createNativeEndpoint`. | This package mirrors the default name (`DEFAULT_ENDPOINT_NAME`) and the endpoint detection order (`isNativeEndpointPresent`). It needs no deep imports.                                                                                      |
 
-**Verification** (2026-11-11): typecheck clean and 18/18 unit tests pass for this package. On the Android emulator with JSBridge 0.2.0
-(debug APK), the React demo app built on this SDK matched the vanilla suite exactly: modern 32/32 PASS, legacy 31 PASS + 1 INFO
+**Verification:** typecheck clean and 30/30 unit tests pass for this package (2026-11-12). On the Android emulator with JSBridge 0.2.0
+(2026-11-11, debug APK), the React demo app built on this SDK matched the vanilla suite exactly: modern 32/32 PASS, legacy 31 PASS + 1 INFO
 (the legacy iframe row), and 6/6 SDK checks in both modes (StrictMode single init, queued call before ready, `waitForReady:false`
 rejection, `whenReady` box with a non-thenable proxy, event unsubscribe on unmount, missing endpoint → `unavailable` → `retry()`).
 Earlier runs also covered R8 release builds and legacy-sync mode, with identical results.

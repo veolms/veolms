@@ -475,4 +475,5 @@ Tips:
 - Use a small retry policy in tests (`{ maxAttempts: 2-3, initialDelayMs: 5 }`) so terminal states arrive fast.
 - Test "not inside the app" by installing **no** fake. The provider then ends in `unavailable`.
 - Runner: `node:test` with a jsdom window (`src/__tests__/dom.ts`). The tests in this package (`src/__tests__/`) cover StrictMode single-init, deferred dispose,
-  keepAlive, queued calls, timeouts, `unavailable`/`error`, retry, events, NOOP and dispose/re-init. Use them as examples.
+  keepAlive, queued calls, timeouts, `unavailable`/`error`, retry, events, NOOP, dispose/re-init, remounts during a handshake,
+  `useBridgeCall` function capture, the client (`client.test.tsx`) and contract registration (`register.test.ts`). Use them as examples.

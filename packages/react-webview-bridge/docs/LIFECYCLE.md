@@ -74,6 +74,9 @@ A queued call rejects with `"timeout"` whenever readiness takes longer than its 
 - while `idle` with **no owner** (no provider mounted, nothing called `acquire()`), because nothing starts initialization.
   Make sure a provider (or an `acquire()`) exists.
 
+On the server (no `window`) nothing ever connects, so `getBridgeClient()` calls answer at once (rejecting `"unavailable"`, or
+`null` with `unavailable: "null"`) and create no controller. `call`/`whenReady` have no such shortcut, so don't use them on the server.
+
 ## Ref-counting and deferred dispose
 
 - Every mounted `NativeBridgeProvider` calls `acquire()` in an effect, which is +1 owner. The effect cleanup calls the returned `release()`
@@ -82,7 +85,11 @@ A queued call rejects with `"timeout"` whenever readiness takes longer than its 
   session (state `idle`) and removes itself from the registry. A later provider mount creates a **new** controller, which reads
   `options`/`retry` again.
 - Any `acquire()` before the timer fires cancels it, so the session survives.
-- `keepAlive` providers never release, so the session lives until `disposeNativeBridge`/`resetNativeBridges`.
+- A `keepAlive` provider keeps its reference after it unmounts, so the session lives until `disposeNativeBridge`/`resetNativeBridges`.
+  It holds at most one reference, and turning `keepAlive` off while mounted hands it back.
+- If the last owner releases while a handshake is in flight and a new provider mounts before it settles, the new controller
+  joins the same library initialization (the library shares one session per name). The old controller's late result then
+  never disposes that session: it disposes only when no newer controller for the name is initializing or ready.
 
 ## StrictMode
 
@@ -99,7 +106,7 @@ disposeCount 0, controllersCreated 1`).
 ## "First call wins"
 
 `options` and `retry` are read **once**, when the controller for a name is created (the first provider render or the first
-`getBridgeController(name, config)` call). Later providers or calls with different values are silently ignored until that
+`getBridgeController(name, config)` or `getBridgeClient(name, config)` call). Later providers or calls with different values are silently ignored until that
 controller is gone (last owner released or `disposeNativeBridge` with no owners). This matches the library's own session cache,
 where the options of the first successful `buildNativeBridge` apply. Define options as **module-level constants** so every
 provider passes the same object.
