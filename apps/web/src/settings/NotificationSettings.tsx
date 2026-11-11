@@ -21,6 +21,7 @@ import {
   useUpdateNotificationPreferences,
 } from "../services/notifications";
 import { SettingRow, SettingsToggle } from "./SettingsControls";
+import { ChatChannelRow } from "./ChatChannelRow";
 
 // The type names come from the list the API sends from, so a toggle here
 // always controls notifications that actually exist.
@@ -154,6 +155,7 @@ export function NotificationSettings({
               disabled={!isAuthenticated || query.isPending || isSaving}
             />
           </SettingRow>
+          {isAuthenticated ? <ChatChannelRow /> : null}
         </div>
       </section>
 

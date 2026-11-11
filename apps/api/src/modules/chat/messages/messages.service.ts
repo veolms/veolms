@@ -587,7 +587,7 @@ export function createMessagesService(runtime: ChatRuntime) {
         });
         // Replying to a request accepts it, as in WhatsApp.
         if (recipientOfRequest) {
-          await acceptRequest(room.id);
+          await acceptRequest(room.id, userId);
         }
         if (room.kind !== "direct") {
           await notifyMentions(
@@ -846,9 +846,13 @@ export function createMessagesService(runtime: ChatRuntime) {
     }
   }
 
-  async function acceptRequest(roomId: string) {
+  /** As the Accept button (direct.service accept): the chat and the replier. */
+  async function acceptRequest(roomId: string, userId: string) {
     const updated = await repository.updateRoom(database, roomId, {
       direct_status: "accepted",
+    });
+    await repository.updateMember(database, roomId, userId, {
+      state: "active",
     });
     if (updated) {
       await repository.publish(

@@ -31,6 +31,7 @@ import { useDebounce } from "../hooks/useDebounce";
 import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
 import {
+  isRoomMuted,
   markRoomRead,
   prefetchChat,
   queueReceipt,
@@ -44,7 +45,7 @@ import {
 } from "../services/chat";
 import { useChatDraft } from "../store/chatDrafts.store";
 import { ChatAvatar } from "./ChatAvatar";
-import { ClearChatDialog } from "./ChatDialogs";
+import { ClearChatDialog, MuteChatDialog } from "./ChatDialogs";
 import { roomAvatarUrl } from "./chatIcon";
 import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
@@ -52,6 +53,10 @@ import { listTime, messageTime, ROLE_LABEL } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
 import { NotificationsPrompt } from "./NotificationsPrompt";
 import { ProfilePhotoPreview } from "./ProfilePhotoPreview";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../searchShortcut";
 
 type Filter = "all" | "unread" | "courses" | "direct" | "requests";
 export type ListPanel =
@@ -75,6 +80,7 @@ function SearchBox({
   onChange,
   onEnter,
   onEscape,
+  shortcut = false,
 }: {
   id?: string;
   value: string;
@@ -84,6 +90,8 @@ function SearchBox({
   onChange: (value: string) => void;
   onEnter?: () => void;
   onEscape?: () => void;
+  /** The chat list's own search: Ctrl+K (⌘K on a Mac) jumps to it. */
+  shortcut?: boolean;
 }) {
   return (
     <label className="mx-3 mb-2 flex h-10 shrink-0 items-center gap-3 rounded-full bg-(--chat-input) px-4 focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-(--accent)">
@@ -99,6 +107,10 @@ function SearchBox({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        data-search-shortcut-target={shortcut ? "" : undefined}
+        aria-keyshortcuts={
+          shortcut ? SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS : undefined
+        }
         className="min-w-0 flex-1 border-0 bg-transparent text-[0.9rem] text-(--text) outline-none placeholder:text-(--muted)"
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -108,6 +120,7 @@ function SearchBox({
           if (event.key === "Enter") onEnter?.();
         }}
       />
+      {shortcut && !value ? <SearchShortcutHint /> : null}
       {value ? (
         <button
           type="button"
@@ -277,6 +290,7 @@ export function ChatList({
           archivedView ? "Search archived chats" : "Search or start a new chat"
         }
         onEnter={() => visible[0] && onSelect(visible[0].id)}
+        shortcut
       />
 
       {!archivedView ? <NotificationsPrompt onToast={onToast} /> : null}
@@ -461,6 +475,7 @@ function ChatRow({
   const clearChat = useClearChat();
   const navigate = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [choosingMute, setChoosingMute] = useState(false);
   const typing = useTypingNames(room.id);
   // An unsent message shows instead of the last one (WhatsApp, Telegram).
   const draft = useChatDraft(room.id);
@@ -470,7 +485,7 @@ function ChatRow({
   const last = room.lastMessage;
   const mine = Boolean(last && viewerId && last.senderId === viewerId);
   const unread = room.unreadCount > 0;
-  const muted = room.me.notifyLevel === "none";
+  const muted = isRoomMuted(room.me);
   const isRequest =
     room.kind === "direct" &&
     room.directStatus === "requested" &&
@@ -661,7 +676,7 @@ function ChatRow({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
-                    setState({ notifyLevel: muted ? "all" : "none" })
+                    muted ? setState({ muteFor: "off" }) : setChoosingMute(true)
                   }
                 >
                   <BellSlash size={17} aria-hidden="true" />
@@ -739,6 +754,15 @@ function ChatRow({
           </button>
         )}
       </div>
+      {choosingMute ? (
+        <MuteChatDialog
+          onClose={() => setChoosingMute(false)}
+          onMute={(muteFor) => {
+            setChoosingMute(false);
+            setState({ muteFor });
+          }}
+        />
+      ) : null}
       {confirmDelete ? (
         <ClearChatDialog
           mode="delete"

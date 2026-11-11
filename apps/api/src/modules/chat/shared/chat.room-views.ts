@@ -305,6 +305,10 @@ export function createRoomViews(runtime: ChatRuntime) {
             "owner" | "moderator" | "member",
           notifyLevel: (row.notify_level ?? "all") as
             "all" | "mentions" | "none",
+          mutedUntil:
+            row.muted_until && row.muted_until.getTime() > Date.now()
+              ? row.muted_until.toISOString()
+              : null,
           archived: row.archived_at !== null,
           pinned: row.member_pinned_at !== null,
           lastReadSeq,

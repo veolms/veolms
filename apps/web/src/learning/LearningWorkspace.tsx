@@ -316,6 +316,7 @@ export function LearningWorkspace({
     playbackBootstrapPending,
     audioSource,
     retryAudioSource,
+    audioSourcePending,
   } = useLessonStagePlan({
     courseSlug,
     onUnlockCourse: unlockCourse,
@@ -656,6 +657,7 @@ export function LearningWorkspace({
     useLessonPlayerProps({
       audioSource,
       retryAudioSource,
+      audioSourcePending,
       courseSlug,
       onMinimizePlayer,
       onMiniPlayerRestoreReady,

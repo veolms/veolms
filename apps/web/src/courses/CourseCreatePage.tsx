@@ -1021,6 +1021,7 @@ export function CourseCreatePage({
     handleLessonResourceRemoved,
     handleLessonDragStart,
     handleLessonDragOver,
+    handleLessonDragOverSection,
     handleLessonDragEnd,
   } = useLessonResourceAndDragHandlers({
     navigate,
@@ -1646,6 +1647,7 @@ export function CourseCreatePage({
                   navigateToCurriculumFocus={navigateToCurriculumFocus}
                   handleLessonDragStart={handleLessonDragStart}
                   handleLessonDragOver={handleLessonDragOver}
+                  handleLessonDragOverSection={handleLessonDragOverSection}
                   handleLessonDragEnd={handleLessonDragEnd}
                   setDragEnabledLessonId={setDragEnabledLessonId}
                   handleLessonTitleBlur={handleLessonTitleBlur}

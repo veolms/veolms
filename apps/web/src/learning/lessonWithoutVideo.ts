@@ -356,16 +356,29 @@ export function noVideoNoticeFor(
   }
   const article =
     getLessonPdfReading(lesson, courseId) ?? getLessonReading(lesson);
-  return article
-    ? ({
-        kind: "notice",
-        title: "Reading",
-        message: "This lesson is a reading.",
-        actionLabel: "",
-        article,
-      } as const)
+  if (article) {
+    return {
+      kind: "notice",
+      title: "Reading",
+      message: "This lesson is a reading.",
+      actionLabel: "",
+      article,
+    } as const;
+  }
+  // A reading with no text and no PDF yet is not "a lesson with no video".
+  return lesson?.contentType === "document"
+    ? EMPTY_READING_NOTICE
     : NO_VIDEO_NOTICE;
 }
+
+/** Shown for a reading lesson whose text has not been written yet. */
+export const EMPTY_READING_NOTICE = {
+  kind: "notice",
+  illustration: "not-found",
+  title: "Nothing to read yet",
+  message: "This reading has no text yet.",
+  actionLabel: "",
+} as const;
 
 /**
  * What stands where the video would be for a lesson with none, by what is

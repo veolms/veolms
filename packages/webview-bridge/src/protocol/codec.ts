@@ -85,7 +85,8 @@ export function isBridgeEvent(val: unknown): val is BridgeEvent {
   if (typeof obj["name"] !== "string" || obj["name"] === "") {
     return false;
   }
-  if (!("payload" in obj) || !isBridgeValue(obj["payload"])) {
+  // `payload` may be omitted (native serializers may drop a null payload); it is then delivered as `null`.
+  if ("payload" in obj && !isBridgeValue(obj["payload"])) {
     return false;
   }
   return true;

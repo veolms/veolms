@@ -44,6 +44,7 @@ import {
 } from "../../store/pendingMfaLogin";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { forgetAccountBrowserState } from "../../store/accountBrowserState";
+import { loadWebPush, readSavedWebPush } from "../webPush";
 import { authKeys } from "./auth.keys";
 import { updatePublicProfileCacheFromUser } from "./auth.queries";
 import { authService, type TotpSetupResponse } from "./auth.service";
@@ -617,6 +618,17 @@ export function useSignOut() {
         // Autosync failed or timed out; sign out anyway so the visitor is
         // never trapped (the draft stays in this browser).
       }
+      setIsPending(false);
+    }
+
+    // This browser stops getting the account's chat notifications. Told
+    // while the session still holds; at most ~2 s, and the server drops a
+    // signed-out login's subscriptions anyway.
+    if (readSavedWebPush()) {
+      setIsPending(true);
+      await loadWebPush()
+        .then((webPush) => webPush.forgetWebPush())
+        .catch(() => undefined);
       setIsPending(false);
     }
 

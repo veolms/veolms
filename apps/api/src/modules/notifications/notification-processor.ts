@@ -101,6 +101,7 @@ export function createNotificationProcessor({
   const service = createNotificationService({
     database,
     pushEnabled: Boolean(push),
+    webPushEnabled: push?.sendsToBrowsers ?? false,
   });
   const log = logger.child({ job: "notification-worker" });
 

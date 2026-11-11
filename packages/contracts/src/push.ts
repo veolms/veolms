@@ -52,3 +52,58 @@ export const pushDeviceRemovedSchema = z.strictObject({
 
 export type PushPlatform = z.infer<typeof pushPlatformSchema>;
 export type RegisterPushDevice = z.infer<typeof registerPushDeviceSchema>;
+
+/**
+ * Web push: a browser's push subscription (PushSubscription.toJSON()),
+ * saved per account and login (PUT /me/web-push/subscription). The site
+ * re-sends it on each visit; `previousEndpoint` when the browser replaced
+ * its subscription.
+ */
+const webPushEndpointSchema = z.url().max(2048);
+const base64UrlSchema = (min: number, max: number) =>
+  z
+    .string()
+    .trim()
+    .min(min)
+    .max(max)
+    .regex(/^[A-Za-z0-9_-]+=*$/u, "Expected base64url.");
+
+export const webPushConfigSchema = z.strictObject({
+  /** False while the server sends no browser pushes. */
+  enabled: z.boolean(),
+  /** The VAPID public key to subscribe with (applicationServerKey). */
+  publicKey: z.string().nullable(),
+});
+
+export const registerWebPushSubscriptionSchema = z.strictObject({
+  endpoint: webPushEndpointSchema,
+  keys: z.strictObject({
+    p256dh: base64UrlSchema(80, 200),
+    auth: base64UrlSchema(16, 100),
+  }),
+  previousEndpoint: webPushEndpointSchema.optional(),
+  /** "Chrome on Windows": shown nowhere yet; helps support. */
+  deviceLabel: z.string().trim().min(1).max(100).optional(),
+});
+
+export const webPushSubscriptionEndpointSchema = z.strictObject({
+  endpoint: webPushEndpointSchema,
+});
+
+export const webPushSubscriptionRegisteredSchema = z.strictObject({
+  registered: z.literal(true),
+  enabled: z.boolean(),
+});
+
+export const webPushTestResultSchema = z.strictObject({
+  /** The push service took it; the browser shows it within seconds. */
+  sent: z.boolean(),
+  /** Why not, in a sentence, when it was not sent. */
+  problem: z.string().nullable(),
+});
+
+export type WebPushConfig = z.infer<typeof webPushConfigSchema>;
+export type RegisterWebPushSubscription = z.infer<
+  typeof registerWebPushSubscriptionSchema
+>;
+export type WebPushTestResult = z.infer<typeof webPushTestResultSchema>;

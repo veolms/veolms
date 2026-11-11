@@ -278,6 +278,55 @@ export function LessonReadingStage({
   );
 }
 
+/** Widths of the placeholder's lines: a heading, then a paragraph. */
+const PLACEHOLDER_LINES = ["w-2/5", "w-full", "w-11/12", "w-full", "w-3/4"];
+
+/**
+ * A reading lesson whose text is on its way: the reading's label and a few
+ * lines of text to come, where the text will stand. A reading used to wait
+ * behind the video loader on black, so it looked like a video at first.
+ */
+export function LessonReadingPlaceholder({
+  compact = false,
+}: {
+  /** The mini player: lines only, no label. */
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-0 overflow-hidden",
+        compact ? "px-3 py-3" : "px-5 py-6",
+      )}
+      aria-hidden="true"
+    >
+      {compact ? null : (
+        <p className="m-0 mb-4 flex items-center justify-center gap-2 text-base font-semibold text-(--muted) sm:text-[17px]">
+          <BookOpenText size={18} weight="bold" aria-hidden="true" />
+          Reading
+        </p>
+      )}
+      <div
+        className={cn(
+          "mx-auto flex max-w-3xl animate-pulse flex-col",
+          compact ? "gap-1.5" : "gap-3",
+        )}
+      >
+        {PLACEHOLDER_LINES.map((width, index) => (
+          <span
+            key={width + String(index)}
+            className={cn(
+              "block rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]",
+              compact ? "h-1.5" : index === 0 ? "mb-2 h-5" : "h-3",
+              width,
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * The reading in the mini player: the full player's picture of it (the same
  * line breaks, scrolled to the same place) scaled down to the small window,

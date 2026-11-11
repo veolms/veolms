@@ -662,6 +662,10 @@ export const updateCourseLessonRequestSchema = z.object({
 });
 
 export const reorderLessonsRequestSchema = z.object({
+  /**
+   * Every lesson of the section, in its new order. A lesson of another
+   * section of the same course moves into this one.
+   */
   orderedLessonIds: z.array(z.uuid()),
   version: z.number().int().positive(),
 });

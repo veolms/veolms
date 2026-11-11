@@ -98,6 +98,8 @@ export interface UseLessonStagePlanResult {
     | undefined;
   lessonTextPending: boolean;
   playbackBootstrapPending: boolean;
+  /** An audio lesson's file address is on its way (the player's loader). */
+  audioSourcePending: boolean;
   /** An audio lesson's file, once its address is known. */
   audioSource: LessonAudioSource | null;
   /** Asks for a new address (the last one expired, or failed). */
@@ -486,8 +488,8 @@ export function useLessonStagePlan({
   return {
     lessonStagePlan,
     playbackAccessError,
-    // The player's loader covers the audio file's address too.
-    lessonTextPending: lessonTextPending || audioLinkPending,
+    lessonTextPending,
+    audioSourcePending: audioLinkPending,
     playbackBootstrapPending,
     audioSource: requestsLessonAudio ? audioLink.source : null,
     retryAudioSource: audioLink.retry,

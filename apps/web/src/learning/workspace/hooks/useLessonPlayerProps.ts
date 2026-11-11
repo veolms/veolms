@@ -26,6 +26,8 @@ export interface UseLessonPlayerPropsArgs {
   /** An audio lesson's file, played in the player (see useLessonStagePlan). */
   audioSource?: LessonAudioSource | null;
   retryAudioSource?: () => void;
+  /** The audio file's address is on its way. */
+  audioSourcePending?: boolean;
   courseSlug: string | undefined;
   onMinimizePlayer: ((request: LearningMiniPlayerRequest) => void) | undefined;
   onMiniPlayerRestoreReady: (() => void) | undefined;
@@ -160,6 +162,7 @@ export function useLessonPlayerProps({
   fullscreenCoursePanel,
   audioSource = null,
   retryAudioSource,
+  audioSourcePending = false,
 }: UseLessonPlayerPropsArgs): UseLessonPlayerPropsResult {
   const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(null);
   const registerLessonPlayerSeek = useCallback(
@@ -257,7 +260,11 @@ export function useLessonPlayerProps({
       // An audio lesson's file needs no manifest or token: it is the file.
       playbackBootstrap: audioSource ? null : playbackBootstrap,
       playbackAccessError,
-      playbackBootstrapPending: playbackBootstrapPending || lessonTextPending,
+      // An audio lesson's file address on its way shows the player's loader
+      // (not a reading's text to come).
+      playbackBootstrapPending:
+        playbackBootstrapPending || lessonTextPending || audioSourcePending,
+      readingPending: lessonTextPending,
       playbackUnavailableMessage: audioSource
         ? null
         : (playbackBootstrapError?.message ?? null),
@@ -329,6 +336,7 @@ export function useLessonPlayerProps({
       autoplayEnabled,
       audioSource,
       retryAudioSource,
+      audioSourcePending,
       chaptersPanelHost,
       courseComplete,
       courseContentDrawerViewport,

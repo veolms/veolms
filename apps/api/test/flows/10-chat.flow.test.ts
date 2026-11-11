@@ -483,6 +483,17 @@ await test("private chats: only where allowed, as a request first; blocks stop t
   // Replying accepts, as in WhatsApp.
   ok(await send(b.client, dm, "Sure, here they are"), 201);
   ok(await send(a.client, dm, "Thanks!"), 201);
+  // Both are full members now: the one who replied too, so they get its
+  // pushes and show in Message info (they stayed "pending" before).
+  const members = await flow.database
+    .selectFrom("chat_members")
+    .select(["user_id", "state"])
+    .where("room_id", "=", dm)
+    .execute();
+  assert.deepEqual(
+    members.map((m) => m.state),
+    ["active", "active"],
+  );
   const again = ok<{ room: Room; created: boolean }>(
     await b.client.post("/v1/chat/direct", { userId: a.userId }),
   );

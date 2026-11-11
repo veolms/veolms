@@ -171,6 +171,7 @@ export function useUpdateMyChatState() {
       roomId: string;
       patch: {
         notifyLevel?: "all" | "mentions" | "none";
+        muteFor?: "8h" | "1w" | "always" | "off";
         archived?: boolean;
         pinned?: boolean;
       };

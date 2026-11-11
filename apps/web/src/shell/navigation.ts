@@ -81,9 +81,6 @@ const creatorNavigation: readonly NavigationItem[] = [
 const adminNavigation: readonly NavigationItem[] = [
   createNavigationItem("admin-home", "Home", House, "/"),
   createNavigationItem("creator-courses", "Courses", BookOpen, "/courses"),
-  // The academy's quizzes: building them, who they are assigned to, and
-  // their attempts and results.
-  createNavigationItem("admin-quizzes", "Quizzes", Exam, "/quizzes"),
   createNavigationItem(
     "creator-discussions",
     "Discussions",
@@ -100,6 +97,9 @@ const adminNavigation: readonly NavigationItem[] = [
     "/analytics",
   ),
   createNavigationItem("admin-coupons", "Coupons", Tag, "/coupons"),
+  // The academy's quizzes: building them, who they are assigned to, and
+  // their attempts and results.
+  createNavigationItem("admin-quizzes", "Quizzes", Exam, "/quizzes"),
   // Problems learners report and the feedback they send.
   createNavigationItem("admin-support", "Support", Lifebuoy, "/support-inbox"),
   // Academy-wide settings, the home page among them.

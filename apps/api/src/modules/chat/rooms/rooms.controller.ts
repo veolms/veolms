@@ -56,6 +56,7 @@ export function createRoomsController({ service }: { service: RoomsService }) {
         RoomParams & {
           Body: {
             notifyLevel?: "all" | "mentions" | "none";
+            muteFor?: "8h" | "1w" | "always" | "off";
             archived?: boolean;
             pinned?: boolean;
           };
