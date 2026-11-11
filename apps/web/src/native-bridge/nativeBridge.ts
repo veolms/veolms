@@ -1,21 +1,29 @@
 import {
   getBridgeController,
   isBridgeNotReadyError,
+  type NativeBridgeOptions,
 } from "@veolms/react-webview-bridge";
 import type { NativeBridgeContract } from "./native-bridge-contracts";
 
 /** The name the native app registers the bridge under. */
 export const NATIVE_BRIDGE_NAME = "NativeBridge";
 
-// The page's one session with the native app. Creating it here, at module
-// load, fixes its options for the whole page (the library reads them once).
-// `timeoutMs` limits the handshake and every call, so a call the app never
-// answers does not hang forever. The connection itself starts when the
-// `NativeBridgeProvider` in root.tsx mounts.
-const controller = getBridgeController<NativeBridgeContract>(
-  NATIVE_BRIDGE_NAME,
-  { options: { timeoutMs: 10_000 } },
-);
+/**
+ * Options for the page's one session with the native app. The SDK reads them
+ * once, when the session's controller is created, and either this file or
+ * the `NativeBridgeProvider` in root.tsx may create it, so both pass these.
+ * `timeoutMs` limits the handshake and every call, so a call the app never
+ * answers does not hang forever. The connection starts when the provider
+ * mounts.
+ */
+export const NATIVE_BRIDGE_OPTIONS: NativeBridgeOptions = { timeoutMs: 10_000 };
+
+// Looked up on every call, never kept: when the last provider unmounts its
+// controller is dropped, and a later mount creates a new one.
+const controller = () =>
+  getBridgeController<NativeBridgeContract>(NATIVE_BRIDGE_NAME, {
+    options: NATIVE_BRIDGE_OPTIONS,
+  });
 
 /**
  * A contract as callable functions: every native function keeps its
@@ -47,7 +55,7 @@ const NOT_NATIVE = new Set(["then", "toJSON", "toString", "valueOf"]);
  */
 function forwardCalls(path: readonly string[]): unknown {
   const invoke = (...args: unknown[]) =>
-    controller
+    controller()
       .call((bridge) => {
         const owner = path
           .slice(0, -1)

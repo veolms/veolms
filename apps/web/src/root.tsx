@@ -92,7 +92,11 @@ import {
 } from "./themes";
 import { useRememberAppPage } from "./legal/legalReturn";
 import { NativeBridgeProvider } from "@veolms/react-webview-bridge";
-import { NATIVE_BRIDGE_NAME, nativeBridge } from "./native-bridge";
+import {
+  NATIVE_BRIDGE_NAME,
+  NATIVE_BRIDGE_OPTIONS,
+  nativeBridge,
+} from "./native-bridge";
 
 interface LayoutProps {
   children: ReactNode;
@@ -378,7 +382,10 @@ export function Layout({ children }: LayoutProps) {
           {/* Above every route element (the app, its error screen and the
               hydration fallback), so none of them unmounts the native
               connection. Renders no markup of its own. */}
-          <NativeBridgeProvider endpointName={NATIVE_BRIDGE_NAME}>
+          <NativeBridgeProvider
+            endpointName={NATIVE_BRIDGE_NAME}
+            options={NATIVE_BRIDGE_OPTIONS}
+          >
             {children}
           </NativeBridgeProvider>
         </div>
