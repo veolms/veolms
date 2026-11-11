@@ -353,9 +353,9 @@ const courseRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "getLessonDocument",
         tags: ["Courses"],
-        summary: "Read a reading lesson's PDF",
+        summary: "Read a reading lesson's file (PDF, Markdown or text)",
         description:
-          "Streams the PDF a document lesson holds, to whoever may open the lesson (the same rule as its description: 401 to sign in, 403 without the course). Only a page's own request is answered: a request the browser marks as a navigation, an iframe or an embed (Sec-Fetch-Dest other than empty) gets 403, so the file is not opened in the browser's own viewer. Never cached. 404 when the lesson has no PDF.",
+          "Streams the file a document lesson is read from (a PDF, or a Markdown or plain-text file, with its type), to whoever may open the lesson (the same rule as its description: 401 to sign in, 403 without the course). Only a page's own request is answered: a request the browser marks as a navigation, an iframe or an embed (Sec-Fetch-Dest other than empty) gets 403, so the file is not opened in the browser's own viewer. Never cached. 404 when the lesson has no such file.",
         params: lessonDescriptionParamsSchema,
         response: {
           401: errorResponse("Sign in to read this lesson."),
