@@ -1,6 +1,6 @@
 /**
- * Short links (docs/short-links.md): staff create, check, pause, edit and
- * delete them; the website Worker resolves them and counts visits. A path
+ * Short links (docs/short-links.md): staff (here an instructor) create,
+ * check, pause, edit and delete them; the website Worker resolves them and counts visits. A path
  * the app or a profile uses is refused with a free one suggested, a
  * destination must be another site's https address, and a learner cannot
  * take a link's path as their username.
@@ -8,14 +8,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  signedInAdmin,
-  signedUpLearner,
-  startFlowApp,
-} from "./setup/flow-app.ts";
+import { grantPlatformRole } from "@veolms/database";
+
+import { SYSTEM_ROLES } from "../../../../packages/database/src/seed/rbac.ts";
+import { signedUpLearner, startFlowApp } from "./setup/flow-app.ts";
 
 const flow = await startFlowApp();
-const admin = await signedInAdmin(flow);
+// An instructor manages links (as the academy's own staff do), signed in
+// with an account of their own: the admin's sign-in codes for the day are
+// used up by the files before this one.
+const staffAccount = await signedUpLearner(flow, "linkstaff");
+await grantPlatformRole(flow.database, {
+  userId: staffAccount.userId,
+  roleId: SYSTEM_ROLES.instructor.id,
+});
+const staff = flow.visitor();
+await staff.signIn(staffAccount.learner.email);
 const { client: learner, learner: learnerAccount } = await signedUpLearner(
   flow,
   "links",
@@ -83,26 +91,26 @@ test("the app's pages, reserved prefixes and profiles are refused, with a free p
     [`/${learnerAccount.username}`, /profile/],
   ] as const) {
     const check = ok<PathCheck>(
-      await admin.get(`/v1/links/check?path=${encodeURIComponent(path)}`),
+      await staff.get(`/v1/links/check?path=${encodeURIComponent(path)}`),
     );
     assert.equal(check.available, false, path);
     assert.match(check.reason ?? "", reason, path);
     assert.ok(check.suggestion, `a suggestion for ${path}`);
     const free = ok<PathCheck>(
-      await admin.get(
+      await staff.get(
         `/v1/links/check?path=${encodeURIComponent(check.suggestion!)}`,
       ),
     );
     assert.equal(free.available, true, `${check.suggestion} is free`);
   }
 
-  const refused = await admin.post("/v1/links", {
+  const refused = await staff.post("/v1/links", {
     path: "/courses",
     destination: "https://example.com",
   });
   assert.equal(refused.status, 409);
 
-  const empty = ok<PathCheck>(await admin.get("/v1/links/check?path="));
+  const empty = ok<PathCheck>(await staff.get("/v1/links/check?path="));
   assert.match(empty.suggestion ?? "", /^\/[a-z0-9]+$/);
 });
 
@@ -114,7 +122,7 @@ test("a destination must be another site's https address", async () => {
     "https://127.0.0.1/x",
     "https://localhost/x",
   ]) {
-    const response = await admin.post("/v1/links", {
+    const response = await staff.post("/v1/links", {
       path: `/d-${suffix}`,
       destination,
     });
@@ -126,7 +134,7 @@ test("a link is created case-insensitively, resolved, paused, edited and deleted
   const path = `/Node-${suffix}.JS`;
   const normalized = path.toLowerCase();
   const link = ok<Link>(
-    await admin.post("/v1/links", {
+    await staff.post("/v1/links", {
       path,
       destination: "https://procoder.example.org/node.js",
     }),
@@ -135,7 +143,7 @@ test("a link is created case-insensitively, resolved, paused, edited and deleted
   assert.equal(link.mode, "redirect");
   assert.equal(link.redirectStatus, 302);
 
-  const taken = await admin.post("/v1/links", {
+  const taken = await staff.post("/v1/links", {
     path: normalized.toUpperCase(),
     destination: "https://example.com",
   });
@@ -156,12 +164,12 @@ test("a link is created case-insensitively, resolved, paused, edited and deleted
   ok(await visitor.post("/v1/links/visits", { id: link.id }));
   ok(await visitor.post("/v1/links/visits", { id: link.id }));
 
-  ok(await admin.patch(`/v1/links/${link.id}`, { isActive: false }));
+  ok(await staff.patch(`/v1/links/${link.id}`, { isActive: false }));
   assert.equal(await resolve(normalized), null);
-  ok(await admin.patch(`/v1/links/${link.id}`, { isActive: true }));
+  ok(await staff.patch(`/v1/links/${link.id}`, { isActive: true }));
 
   const moved = ok<Link>(
-    await admin.patch(`/v1/links/${link.id}`, {
+    await staff.patch(`/v1/links/${link.id}`, {
       path: `/n-${suffix}`,
       mode: "rewrite",
     }),
@@ -170,20 +178,20 @@ test("a link is created case-insensitively, resolved, paused, edited and deleted
   assert.equal(await resolve(normalized), null);
   assert.equal((await resolve(`/n-${suffix}`))?.mode, "rewrite");
 
-  const listed = ok<{ links: Link[] }>(await admin.get("/v1/links")).links.find(
+  const listed = ok<{ links: Link[] }>(await staff.get("/v1/links")).links.find(
     (item) => item.id === link.id,
   );
   assert.equal(listed?.visitCount, 2);
 
-  ok(await admin.delete(`/v1/links/${link.id}`));
+  ok(await staff.delete(`/v1/links/${link.id}`));
   assert.equal(await resolve(`/n-${suffix}`), null);
-  assert.equal((await admin.delete(`/v1/links/${link.id}`)).status, 404);
+  assert.equal((await staff.delete(`/v1/links/${link.id}`)).status, 404);
 });
 
 test("a learner cannot take a link's path as their username", async () => {
   const name = `taken_${suffix}`.slice(0, 24);
   const link = ok<Link>(
-    await admin.post("/v1/links", {
+    await staff.post("/v1/links", {
       path: `/${name}`,
       destination: "https://example.com/page",
     }),
@@ -191,5 +199,5 @@ test("a learner cannot take a link's path as their username", async () => {
   const response = await learner.patch("/v1/auth/me", { username: name });
   assert.equal(response.status, 400);
   assert.match(JSON.stringify(response.body.error), /USERNAME_TAKEN/);
-  ok(await admin.delete(`/v1/links/${link.id}`));
+  ok(await staff.delete(`/v1/links/${link.id}`));
 });
