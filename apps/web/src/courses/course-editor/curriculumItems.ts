@@ -84,9 +84,13 @@ export interface DraggedLessonState {
   lessonId: string;
 }
 
+/**
+ * Where a dragged lesson would land: next to a lesson, or (`lessonId` null)
+ * at the end of a section, which may be another, empty or collapsed one.
+ */
 export interface LessonDropTarget {
   sectionId: string;
-  lessonId: string;
+  lessonId: string | null;
   position: "before" | "after";
 }
 

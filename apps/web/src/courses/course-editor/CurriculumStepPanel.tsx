@@ -353,6 +353,10 @@ export interface CurriculumStepPanelProps {
     targetSectionId: string,
     targetLessonId: string,
   ) => void;
+  handleLessonDragOverSection: (
+    e: React.DragEvent,
+    targetSectionId: string,
+  ) => void;
   handleLessonDragEnd: () => Promise<void>;
   setDragEnabledLessonId: Dispatch<SetStateAction<string | null>>;
   handleLessonTitleBlur: (sectionId: string, lessonId: string) => Promise<void>;
@@ -439,6 +443,7 @@ export function CurriculumStepPanel({
   navigateToCurriculumFocus,
   handleLessonDragStart,
   handleLessonDragOver,
+  handleLessonDragOverSection,
   handleLessonDragEnd,
   setDragEnabledLessonId,
   handleLessonTitleBlur,
@@ -891,7 +896,10 @@ export function CurriculumStepPanel({
                   ? "opacity-45 pointer-events-none border-red-500/30"
                   : draggedSectionIndex === secIndex
                     ? "opacity-35 border-dashed border-(--accent)"
-                    : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+                    : lessonDropTarget?.sectionId === sec.id &&
+                        lessonDropTarget.lessonId === null
+                      ? "border-(--accent) shadow-[0_0_0_2px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
+                      : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
               }`}
               draggable={
                 editsSections &&
@@ -905,7 +913,11 @@ export function CurriculumStepPanel({
               onDragStart={(e) =>
                 handleSectionDragStart(e, secIndex, sec)
               }
-              onDragOver={(e) => handleSectionDragOver(e, secIndex)}
+              onDragOver={(e) => {
+                // Each returns at once unless its own kind of drag is on.
+                handleLessonDragOverSection(e, sec.id);
+                handleSectionDragOver(e, secIndex);
+              }}
               onDragEnd={handleSectionDragEnd}
             >
               {/* Section Header */}
@@ -1013,22 +1025,10 @@ export function CurriculumStepPanel({
                             ? "opacity-60 pointer-events-none"
                             : ""
                         }`}
-                        onClick={editsSections ? (e) => {
-                          e.stopPropagation();
-                          if (
-                            sec.isPendingCreation ||
-                            updatingSectionId === sec.id ||
-                            deletingSectionId === sec.id
-                          )
-                            return;
-                          handleStartEditSectionTitle(sec.id);
-                        } : undefined}
                         title={
                           sec.isPendingCreation
                             ? "Creating section..."
-                            : editsSections
-                              ? "Click to edit section title"
-                              : undefined
+                            : undefined
                         }
                       >
                         {sec.title}
@@ -2586,6 +2586,13 @@ export function CurriculumStepPanel({
                       }}
                     />
                   )}
+                  {sec.isExpanded &&
+                    lessonDropTarget?.sectionId === sec.id &&
+                    lessonDropTarget.lessonId === null && (
+                      <div className={sec.lessons.length > 0 ? "mt-2.5" : ""}>
+                        <LessonDropIndicator />
+                      </div>
+                    )}
 
                   {/* Add Lesson Action */}
                   <div hidden={!addsLessons} className="mt-3.5">

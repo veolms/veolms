@@ -457,9 +457,27 @@ export function useReorderSectionLessons() {
         const lessonOrderMap = new Map(
           payload.orderedLessonIds.map((id, index) => [id, index]),
         );
+        // Lessons named from other sections move into this one.
+        const incomingLessons = previousEditorData.sections.flatMap((sec) =>
+          sec.id === sectionId
+            ? []
+            : (sec.lessons || []).filter((les) => lessonOrderMap.has(les.id)),
+        );
         const updatedSections = previousEditorData.sections.map((sec) => {
-          if (sec.id !== sectionId) return sec;
-          const sortedLessons = [...(sec.lessons || [])].sort((a, b) => {
+          if (sec.id !== sectionId) {
+            if (!(sec.lessons || []).some((les) => lessonOrderMap.has(les.id)))
+              return sec;
+            return {
+              ...sec,
+              lessons: (sec.lessons || [])
+                .filter((les) => !lessonOrderMap.has(les.id))
+                .map((les, idx) => ({ ...les, position: idx })),
+            };
+          }
+          const sortedLessons = [
+            ...(sec.lessons || []),
+            ...incomingLessons,
+          ].sort((a, b) => {
             const posA = lessonOrderMap.get(a.id) ?? a.position;
             const posB = lessonOrderMap.get(b.id) ?? b.position;
             return posA - posB;
