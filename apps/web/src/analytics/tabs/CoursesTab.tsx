@@ -5,6 +5,8 @@ import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { ImageIcon as ImageGlyph } from "@phosphor-icons/react/Image";
 import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
 import { ListNumbersIcon as ListNumbers } from "@phosphor-icons/react/ListNumbers";
 import type { AnalyticsCoursesResponse } from "@veolms/contracts";
@@ -193,6 +195,8 @@ export default function CoursesTab({
           ["Lessons", courses.content.lessons],
           ["Video lessons", courses.content.videoLessons],
           ["Document lessons", courses.content.documentLessons],
+          ["Audio lessons", courses.content.audioLessons],
+          ["Image lessons", courses.content.imageLessons],
           ["Quiz lessons", courses.content.quizLessons],
           ["Resources", courses.content.resources],
           ["Video hours", percentCell(courses.content.durationHours)],
@@ -364,6 +368,16 @@ export default function CoursesTab({
               value={formatWholeNumber(content.documentLessons)}
             />
             <FigureRow
+              icon={<Headphones size={16} weight="bold" />}
+              label="Audio lessons"
+              value={formatWholeNumber(content.audioLessons)}
+            />
+            <FigureRow
+              icon={<ImageGlyph size={16} weight="bold" />}
+              label="Image lessons"
+              value={formatWholeNumber(content.imageLessons)}
+            />
+            <FigureRow
               icon={<Exam size={16} weight="bold" />}
               label="Quiz lessons"
               value={formatWholeNumber(content.quizLessons)}
@@ -395,6 +409,8 @@ export default function CoursesTab({
                 value: content.documentLessons,
                 tone: "blue",
               },
+              { label: "Audio", value: content.audioLessons, tone: "rose" },
+              { label: "Image", value: content.imageLessons, tone: "emerald" },
               { label: "Quiz", value: content.quizLessons, tone: "amber" },
             ]}
             totalLabel="Lessons"

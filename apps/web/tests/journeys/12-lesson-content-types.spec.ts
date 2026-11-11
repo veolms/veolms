@@ -12,7 +12,13 @@
 import type { BrowserContext, Page } from "@playwright/test";
 
 import { CONTROL_URL } from "./support/ports";
-import { expect, openLesson, test, type TestCourse } from "./support/test";
+import {
+  expect,
+  openCoursePage,
+  openLesson,
+  test,
+  type TestCourse,
+} from "./support/test";
 
 /** One second of a quiet tone, as a WAV file. */
 function testSound(): Buffer {
@@ -313,4 +319,11 @@ test("an image lesson shows its picture to the creator and, once selected, to le
       { timeout: 60_000 },
     )
     .toBeGreaterThan(0);
+
+  // The course page lists it as an image lesson, not a video.
+  await openCoursePage(page, course);
+  await page.getByRole("button", { name: "Expand all sections" }).click();
+  const lessonRow = page.getByRole("button", { name: /RegEx Project Ideas/u });
+  await expect(lessonRow).toContainText("Image", { timeout: 60_000 });
+  await expect(lessonRow).not.toContainText("Video");
 });

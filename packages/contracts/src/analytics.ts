@@ -220,6 +220,8 @@ export const contentInsightsSchema = z.strictObject({
   lessons: z.number().int().nonnegative(),
   videoLessons: z.number().int().nonnegative(),
   documentLessons: z.number().int().nonnegative(),
+  audioLessons: z.number().int().nonnegative(),
+  imageLessons: z.number().int().nonnegative(),
   quizLessons: z.number().int().nonnegative(),
   resources: z.number().int().nonnegative(),
   durationHours: z.number().nonnegative(),
