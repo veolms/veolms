@@ -952,10 +952,23 @@ export function LessonVideoPlayer({
   const lessonIndexRef = useRef(lessonIndex);
   lessonIndexRef.current = lessonIndex;
   const [playbackTelemetry] = useState(() =>
-    createPlaybackTelemetry(() => ({
-      courseKey: watchTimeCourseKeyRef.current ?? null,
-      lessonNumber: lessonIndexRef.current ?? null,
-    })),
+    createPlaybackTelemetry(
+      () => ({
+        courseKey: watchTimeCourseKeyRef.current ?? null,
+        lessonNumber: lessonIndexRef.current ?? null,
+      }),
+      () => {
+        const media = playerRef.current?.getSnapshot().media;
+        if (!media) return null;
+        return {
+          currentTime: media.currentTime,
+          duration: media.duration,
+          buffered: media.buffered,
+          qualityHeight:
+            media.qualities.find((quality) => quality.active)?.height ?? null,
+        };
+      },
+    ),
   );
   useEffect(() => {
     const flush = () => playbackTelemetry.flush();

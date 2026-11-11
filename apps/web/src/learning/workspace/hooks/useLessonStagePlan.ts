@@ -34,6 +34,18 @@ import type {
 import type { VideoPlaybackBootstrap } from "@veolms/contracts";
 import type { CourseLesson } from "@veolms/contracts";
 import type { OctopusKind } from "../../../components/OctopusIllustration";
+import { reportPlaybackIncident } from "../../player/playbackIncidents";
+
+/**
+ * Bootstrap failures that are not a fault: the learner must sign in or get
+ * the course, or the lesson has no video. Everything else that stops a
+ * video from being prepared is reported as a `page_error` incident.
+ */
+const EXPECTED_BOOTSTRAP_REFUSALS = new Set([
+  "UNAUTHORIZED",
+  "MFA_REQUIRED",
+  "MEDIA_NOT_FOUND",
+]);
 
 export interface UseLessonStagePlanArgs {
   courseSlug: string | undefined;
@@ -400,6 +412,34 @@ export function useLessonStagePlan({
     playbackRequestKeyRef,
     setPlaybackBootstrapError,
   ]);
+  // A video that could not be prepared is an incident too: the learner
+  // sees "Something went wrong" (or "This is taking a while") where the
+  // player would be, and the playback summary never starts.
+  useEffect(() => {
+    const error = playbackBootstrapError;
+    if (!error || !courseSlug) return;
+    if (EXPECTED_BOOTSTRAP_REFUSALS.has(error.code)) return;
+    if (error.status === 401 || error.status === 403) return;
+    reportPlaybackIncident(
+      "page_error",
+      {
+        playbackId: crypto.randomUUID(),
+        courseKey: courseSlug,
+        lessonNumber: selectedLesson,
+        mediaKey: `${courseSlug}-lesson-${selectedLesson}`,
+        started: false,
+        positionSeconds: null,
+        durationSeconds: null,
+        qualityHeight: null,
+        bufferAheadSeconds: null,
+      },
+      {
+        code: error.code,
+        httpStatus: error.status > 0 ? error.status : null,
+      },
+    );
+  }, [courseSlug, playbackBootstrapError, selectedLesson]);
+
   return {
     lessonStagePlan,
     playbackAccessError,

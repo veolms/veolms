@@ -5,6 +5,7 @@ import {
 import type { PlaybackSummary } from "@veolms/web-core";
 import { trackPlayback } from "../../lib/analytics-track";
 import { readDeviceTier } from "./deviceTier";
+import { reportPlaybackIncident } from "./playbackIncidents";
 import {
   getTokenRefreshStats,
   type TokenRefreshStats,
@@ -15,6 +16,25 @@ export interface PlaybackTelemetryContext {
   courseKey: string | null;
   lessonNumber: number | null;
 }
+
+/** The player's state, read when an incident is reported. */
+export interface PlaybackTelemetryState {
+  currentTime: number;
+  duration: number;
+  buffered: readonly { start: number; end: number }[];
+  qualityHeight: number | null;
+}
+
+/** Play asked for this long with no picture: a stuck start. */
+const STUCK_START_REPORT_MS = 10_000;
+/** A rebuffer this long is an incident... */
+const LONG_BUFFERING_MS = 8_000;
+/** ...and one still going this long is reported before it ends. */
+const ONGOING_BUFFERING_MS = 30_000;
+/** Retries in a row that make an outage worth reporting. */
+const CONNECTION_LOST_ATTEMPTS = 2;
+/** Incidents one playback reports at most. */
+const MAX_INCIDENTS_PER_PLAYBACK = 20;
 
 interface OpenPlayback {
   playbackId: string;
@@ -83,15 +103,101 @@ const STUCK_START_MS = 8_000;
  */
 export function createPlaybackTelemetry(
   getContext: () => PlaybackTelemetryContext,
+  getState: () => PlaybackTelemetryState | null = () => null,
 ): {
   handle: (event: VideoPlayerEvent) => void;
   flush: () => void;
 } {
   let open: OpenPlayback | null = null;
+  // Incident bookkeeping for the open playback (see playbackIncidents.ts).
+  let incidentsSent = 0;
+  let stuckStartTimer: number | undefined;
+  let ongoingBufferingTimer: number | undefined;
+  let outage: {
+    since: number;
+    attempts: number;
+    code: string;
+    httpStatus: number | null;
+  } | null = null;
+
+  const clearIncidentTimers = () => {
+    window.clearTimeout(stuckStartTimer);
+    window.clearTimeout(ongoingBufferingTimer);
+    stuckStartTimer = undefined;
+    ongoingBufferingTimer = undefined;
+  };
+
+  const incident = (
+    kind: Parameters<typeof reportPlaybackIncident>[0],
+    fields: Parameters<typeof reportPlaybackIncident>[2] = {},
+  ) => {
+    const playback = open;
+    if (!playback || incidentsSent >= MAX_INCIDENTS_PER_PLAYBACK) return;
+    const context = getContext();
+    const courseKey = playback.courseKey ?? context.courseKey;
+    if (!courseKey) return;
+    incidentsSent += 1;
+    let state: PlaybackTelemetryState | null = null;
+    try {
+      state = getState();
+    } catch {
+      state = null;
+    }
+    const position = state?.currentTime ?? playback.lastMediaTime ?? null;
+    const ahead =
+      state && position !== null
+        ? (state.buffered.find(
+            (range) => range.start <= position + 0.1 && position < range.end,
+          )?.end ?? position) - position
+        : null;
+    reportPlaybackIncident(
+      kind,
+      {
+        playbackId: playback.playbackId,
+        courseKey,
+        lessonNumber: playback.lessonNumber ?? context.lessonNumber,
+        mediaKey: playback.mediaKey,
+        started: playback.firstFrameAt !== null,
+        positionSeconds: position,
+        durationSeconds: state?.duration ?? null,
+        qualityHeight: state?.qualityHeight ?? playback.currentHeight,
+        bufferAheadSeconds: ahead,
+      },
+      fields,
+    );
+  };
+
+  /** An outage the player waited out, reported once it is over. */
+  const endOutage = (recovered: boolean) => {
+    const current = outage;
+    outage = null;
+    if (!current || current.attempts < CONNECTION_LOST_ATTEMPTS) return;
+    incident("connection_lost", {
+      code: recovered ? current.code : `${current.code}:GAVE_UP`,
+      httpStatus: current.httpStatus,
+      attempts: current.attempts,
+      waitedMs: performance.now() - current.since,
+    });
+  };
 
   const finish = (reason: "unloaded" | "error" | "flush") => {
     const playback = open;
     if (!playback) return;
+    // A stall still running when the playback ends is reported first.
+    if (playback.bufferingSince !== null) {
+      const waited = performance.now() - playback.bufferingSince;
+      if (waited >= LONG_BUFFERING_MS) {
+        incident("long_buffering", { waitedMs: waited, code: "AT_END" });
+      }
+    }
+    if (playback.firstFrameAt === null && playback.playRequestedAt !== null) {
+      const waited = performance.now() - playback.playRequestedAt;
+      if (waited >= STUCK_START_MS && reason !== "error") {
+        incident("stuck_start", { waitedMs: waited, code: "GAVE_UP" });
+      }
+    }
+    endOutage(false);
+    clearIncidentTimers();
     open = null;
     if (playback.bufferingSince !== null) {
       playback.bufferingMs += performance.now() - playback.bufferingSince;
@@ -173,6 +279,7 @@ export function createPlaybackTelemetry(
     switch (event.type) {
       case "loadstart": {
         finish("unloaded");
+        incidentsSent = 0;
         const context = getContext();
         open = {
           playbackId: crypto.randomUUID(),
@@ -207,6 +314,12 @@ export function createPlaybackTelemetry(
           open.playRequestedAt === null
         ) {
           open.playRequestedAt = performance.now();
+          const playback = open;
+          window.clearTimeout(stuckStartTimer);
+          stuckStartTimer = window.setTimeout(() => {
+            if (open !== playback || playback.firstFrameAt !== null) return;
+            incident("stuck_start", { waitedMs: STUCK_START_REPORT_MS });
+          }, STUCK_START_REPORT_MS);
         }
         return;
       }
@@ -216,6 +329,8 @@ export function createPlaybackTelemetry(
         open.lastMediaTime = null;
         if (open.firstFrameAt === null) {
           open.firstFrameAt = performance.now();
+          window.clearTimeout(stuckStartTimer);
+          stuckStartTimer = undefined;
         }
         return;
       }
@@ -254,10 +369,30 @@ export function createPlaybackTelemetry(
           if (open.bufferingSince === null) {
             open.bufferingSince = performance.now();
             open.bufferingCount += 1;
+            const playback = open;
+            const since = open.bufferingSince;
+            window.clearTimeout(ongoingBufferingTimer);
+            ongoingBufferingTimer = window.setTimeout(() => {
+              if (open !== playback || playback.bufferingSince !== since) {
+                return;
+              }
+              incident("long_buffering", {
+                waitedMs: ONGOING_BUFFERING_MS,
+                code: "ONGOING",
+              });
+            }, ONGOING_BUFFERING_MS);
           }
         } else if (open.bufferingSince !== null) {
-          open.bufferingMs += performance.now() - open.bufferingSince;
+          const waited = performance.now() - open.bufferingSince;
+          open.bufferingMs += waited;
           open.bufferingSince = null;
+          window.clearTimeout(ongoingBufferingTimer);
+          ongoingBufferingTimer = undefined;
+          if (waited >= LONG_BUFFERING_MS && waited < ONGOING_BUFFERING_MS) {
+            incident("long_buffering", { waitedMs: waited });
+          } else if (waited >= ONGOING_BUFFERING_MS) {
+            incident("long_buffering", { waitedMs: waited, code: "ENDED" });
+          }
         }
         return;
       }
@@ -267,7 +402,23 @@ export function createPlaybackTelemetry(
         return;
       }
       case "streamingretry": {
-        if (open) open.streamingRetries += 1;
+        if (!open) return;
+        open.streamingRetries += 1;
+        if (!outage) {
+          outage = {
+            since: performance.now(),
+            attempts: 0,
+            code: event.detail.code,
+            httpStatus: event.detail.httpStatus,
+          };
+        }
+        outage.attempts = Math.max(outage.attempts, event.detail.attempt);
+        outage.code = event.detail.code;
+        outage.httpStatus = event.detail.httpStatus ?? outage.httpStatus;
+        return;
+      }
+      case "streamingrecovered": {
+        endOutage(true);
         return;
       }
       case "error": {
@@ -278,14 +429,23 @@ export function createPlaybackTelemetry(
         // close the summary as a failure, so the rest of the lesson went
         // unrecorded and the Viewing tab counted an error no learner saw.
         // It is counted and the playback goes on.
+        const status = networkFailureHttpStatus(error);
         if (!error.fatal) {
           open.recoveredErrors += 1;
+          incident("recovered", {
+            code: error.code !== undefined ? String(error.code) : "unknown",
+            httpStatus: status,
+          });
           return;
         }
         open.errorCode =
           error.code !== undefined ? String(error.code) : "unknown";
-        const status = networkFailureHttpStatus(error);
         open.errorHttpStatus = status === null ? undefined : status;
+        endOutage(false);
+        incident("error_shown", {
+          code: open.errorCode,
+          httpStatus: status,
+        });
         finish("error");
         return;
       }
