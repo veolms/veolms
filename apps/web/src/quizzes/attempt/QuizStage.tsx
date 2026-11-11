@@ -1,5 +1,8 @@
-import type { ReactNode } from "react";
+import { createContext, useContext, useRef, type ReactNode } from "react";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
+import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
+import { useLessonReadingFullscreen } from "../../learning/player/LessonReadingControls";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 
 /**
@@ -70,20 +73,55 @@ interface QuizStageProps {
   label?: string;
 }
 
+/**
+ * The stage's full screen, as a reading lesson has it: the quiz alone fills
+ * the screen and scrolls there, on the page's own ground. Offered in a
+ * lesson (where the bar has its way back to the video), and only where the
+ * browser lets an element go full screen.
+ */
+type QuizFullscreen = ReturnType<typeof useLessonReadingFullscreen>;
+const QuizFullscreenContext = createContext<QuizFullscreen | null>(null);
+
 export function QuizStage({
   children,
   fill = true,
   label = "Lesson quiz",
 }: QuizStageProps) {
+  const stageRef = useRef<HTMLElement>(null);
+  const fullscreen = useLessonReadingFullscreen(stageRef, true);
   return (
-    <section
-      data-quiz-surface=""
-      data-quiz-stage=""
+    <QuizFullscreenContext.Provider value={fullscreen}>
+      <section
+        ref={stageRef}
+        data-quiz-surface=""
+        data-quiz-stage=""
+        aria-label={label}
+        className={`relative flex w-full min-w-0 flex-col border-b ${QUIZ_HAIRLINE} text-(--text) ${STAGE_TONES} ${fill ? "sm:min-h-120 lg:min-h-128" : ""} [&:fullscreen]:overflow-y-auto [&:fullscreen]:border-b-0 [&:fullscreen]:bg-(--canvas)`}
+      >
+        {children}
+      </section>
+    </QuizFullscreenContext.Provider>
+  );
+}
+
+/** The bar's full screen button, beside the live status. */
+function QuizFullscreenButton() {
+  const fullscreen = useContext(QuizFullscreenContext);
+  if (!fullscreen?.available) return null;
+  const label = fullscreen.fullscreen ? "Exit full screen" : "Full screen";
+  const Icon = fullscreen.fullscreen ? CornersIn : CornersOut;
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        void (fullscreen.fullscreen ? fullscreen.exit() : fullscreen.enter())
+      }
       aria-label={label}
-      className={`relative flex w-full min-w-0 flex-col border-b ${QUIZ_HAIRLINE} text-(--text) ${STAGE_TONES} ${fill ? "sm:min-h-120 lg:min-h-128" : ""}`}
+      title={label}
+      className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) active:scale-[0.96]"
     >
-      {children}
-    </section>
+      <Icon size={18} weight="bold" aria-hidden="true" />
+    </button>
   );
 }
 
@@ -148,9 +186,10 @@ export function QuizStageBar({
         </p>
       ) : null}
 
-      {children ? (
+      {children || onBackToVideo ? (
         <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           {children}
+          {onBackToVideo ? <QuizFullscreenButton /> : null}
         </div>
       ) : null}
     </header>
