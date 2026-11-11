@@ -52,6 +52,7 @@ import {
 } from "../../avatars/index.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import { type SessionLocation } from "../shared/request-location.ts";
+import { isShortLinkPath } from "../../links/index.ts";
 
 const AVATAR_VALIDATION_RANGE = "bytes=0-31";
 const USER_AVATAR_RETENTION_LIMIT = 2;
@@ -394,7 +395,9 @@ export function createAuthService({
       if (
         username &&
         username !== currentUser.username.toLowerCase() &&
-        isReservedUsername(username)
+        (isReservedUsername(username) ||
+          // A short link at /<name> would hide the profile.
+          (await isShortLinkPath(executor, username)))
       ) {
         throw new AppError(
           400,
@@ -1141,7 +1144,10 @@ export function createAuthService({
       );
     }
 
-    if (isReservedUsername(input.username)) {
+    if (
+      isReservedUsername(input.username) ||
+      (await isShortLinkPath(database, input.username))
+    ) {
       throw new AppError(
         400,
         "USERNAME_TAKEN",
@@ -1228,6 +1234,7 @@ export function createAuthService({
     if (
       normalised.length >= PUBLIC_PROFILE_USERNAME_MIN_LENGTH &&
       !isReservedUsername(normalised) &&
+      !(await isShortLinkPath(database, normalised)) &&
       !(await userRepository.usernameExists(database, normalised))
     ) {
       return normalised;

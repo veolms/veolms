@@ -116,6 +116,9 @@ importers:
       '@veolms/video-player':
         specifier: workspace:*
         version: link:../../packages/video-player
+      '@veolms/web-core':
+        specifier: workspace:*
+        version: link:../../packages/web-core
       fastify:
         specifier: ^5.11.0
         version: 5.11.0
