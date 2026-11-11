@@ -11,9 +11,10 @@
  *   `await nativeBridge.platform()`. It waits for the connection, resolves
  *   `null` when there is no native app to answer (a plain browser), and
  *   rejects only on a real failure. Works anywhere: components, services,
- *   plain modules.
- * - Feature hooks such as `usePlatform` (./usePlatform.ts): `useQuery` over a
- *   `nativeBridge` call, for answers a component renders.
+ *   plain modules. It is the SDK's `getBridgeClient`.
+ * - `useNativeQuery` (./useNativeQuery.ts): an answer a component renders,
+ *   in one line. It runs on mount, and every component with the same key
+ *   shares one native call and one cached answer. `usePlatform` is one.
  * - The SDK, `@veolms/react-webview-bridge`, is still there underneath:
  *   `useBridgeCall`, `useBridgeEvent`, `useNativeBridge`. They work anywhere
  *   in the app (the `NativeBridgeProvider` is in root.tsx's `Layout`) and use
@@ -24,7 +25,7 @@
  * | You want to…                                        | Use                                   |
  * | --------------------------------------------------- | ------------------------------------- |
  * | Call native from a click, effect, service or module | `await nativeBridge.fn(...)`          |
- * | Render a native answer (shared, cached)             | a hook with `useQuery`, e.g. `usePlatform()` |
+ * | Render a native answer (shared, cached)             | `useNativeQuery(key, (native) => native.fn())` |
  * | Run a native action and render its pending/error    | `useMutation` over `nativeBridge.fn`  |
  * | React to an event the native app sends              | SDK `useBridgeEvent`                  |
  * | Show or hide UI by connection state                 | SDK `useNativeBridge()`               |
@@ -53,6 +54,7 @@ import {
 import { useState, type ReactNode } from "react";
 import type { PlatformInfo } from "./native-bridge-contracts";
 import { nativeBridge } from "./nativeBridge";
+import { useNativeQuery } from "./useNativeQuery";
 import { usePlatform } from "./usePlatform";
 
 // ─── 1. A direct call, from an event handler ─────────────────────────────────
@@ -72,9 +74,11 @@ export function CopyPlatformButton() {
   );
 }
 
-// ─── 2. Rendering an answer: a feature hook ──────────────────────────────────
-// `usePlatform()` is `useQuery` over `nativeBridge.platform()`. Every
-// component that uses it shares one request and one cached answer.
+// ─── 2. Rendering an answer: useNativeQuery ──────────────────────────────────
+// Runs on mount, waits for the connection, and shares one cached answer
+// between every component that uses the same key. `data` is `undefined`
+// while connecting, `null` in a plain browser, and the answer in the app.
+// `usePlatform()` is exactly `useNativeQuery(["platform"], ...)`.
 
 export function PlatformLabel() {
   const { data: platform, isPending, error } = usePlatform();
@@ -88,11 +92,17 @@ export function PlatformLabel() {
   );
 }
 
-// To write a hook for another native function, copy usePlatform.ts: add a
-// key to `nativeBridgeKeys`, and call that function in `queryFn`. Pass its
-// arguments through the key too, e.g.
-//   queryKey: [...nativeBridgeKeys.all, "fileInfo", path],
-//   queryFn: () => nativeBridge.files.info(path),
+export function PlatformName() {
+  // The same answer as usePlatform() above, without a named hook. Put a
+  // call's arguments in the key too: ["files", "info", path].
+  const { data: platform } = useNativeQuery(["platform"], (native) =>
+    native.platform(),
+  );
+  return platform ? <span>{platform.name}</span> : null;
+}
+
+// Name a hook (like usePlatform.ts) once several components need the same
+// answer, so the key and the call live in one place.
 
 // ─── 3. An action with pending and error state: useMutation ──────────────────
 // For calls that do something (vibrate, share, open a screen) rather than
