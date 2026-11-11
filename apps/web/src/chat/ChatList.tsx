@@ -53,6 +53,10 @@ import { listTime, messageTime, ROLE_LABEL } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
 import { NotificationsPrompt } from "./NotificationsPrompt";
 import { ProfilePhotoPreview } from "./ProfilePhotoPreview";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../searchShortcut";
 
 type Filter = "all" | "unread" | "courses" | "direct" | "requests";
 export type ListPanel =
@@ -76,6 +80,7 @@ function SearchBox({
   onChange,
   onEnter,
   onEscape,
+  shortcut = false,
 }: {
   id?: string;
   value: string;
@@ -85,6 +90,8 @@ function SearchBox({
   onChange: (value: string) => void;
   onEnter?: () => void;
   onEscape?: () => void;
+  /** The chat list's own search: Ctrl+K (⌘K on a Mac) jumps to it. */
+  shortcut?: boolean;
 }) {
   return (
     <label className="mx-3 mb-2 flex h-10 shrink-0 items-center gap-3 rounded-full bg-(--chat-input) px-4 focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-(--accent)">
@@ -100,6 +107,10 @@ function SearchBox({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        data-search-shortcut-target={shortcut ? "" : undefined}
+        aria-keyshortcuts={
+          shortcut ? SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS : undefined
+        }
         className="min-w-0 flex-1 border-0 bg-transparent text-[0.9rem] text-(--text) outline-none placeholder:text-(--muted)"
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -109,6 +120,7 @@ function SearchBox({
           if (event.key === "Enter") onEnter?.();
         }}
       />
+      {shortcut && !value ? <SearchShortcutHint /> : null}
       {value ? (
         <button
           type="button"
@@ -278,6 +290,7 @@ export function ChatList({
           archivedView ? "Search archived chats" : "Search or start a new chat"
         }
         onEnter={() => visible[0] && onSelect(visible[0].id)}
+        shortcut
       />
 
       {!archivedView ? <NotificationsPrompt onToast={onToast} /> : null}

@@ -8,6 +8,10 @@ import {
   filterControlClasses,
   filterSelectTriggerClasses,
 } from "../../components/FilterBar";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../../searchShortcut";
 import { ThemedSelect } from "../../ThemedSelect";
 import {
   hasActiveLinkFilters,
@@ -67,8 +71,11 @@ export function LinkFiltersBar({
             onChange={(event) => set("search", event.target.value)}
             placeholder="Search by address, destination or creator..."
             aria-label="Search links"
+            aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
+            data-search-shortcut-target
             className="w-full border-0 bg-transparent p-0 text-xs text-(--text-secondary) placeholder-(--muted) outline-none md:text-sm"
           />
+          <SearchShortcutHint />
           {filters.search && (
             <button
               type="button"
