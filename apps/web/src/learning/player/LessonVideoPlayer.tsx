@@ -52,6 +52,7 @@ import {
   LessonReadingStage,
   lessonReadingShellClasses,
 } from "./LessonReadingStage";
+import { parseLessonMediaReading } from "../lessonWithoutVideo";
 import {
   LessonReadingFullscreenControls,
   LessonReadingNavigationControls,
@@ -1782,6 +1783,8 @@ export function LessonVideoPlayer({
               ) : undefined
             }
             clearBottom
+            lessonTitle={lessonTitle}
+            courseTitle={courseTitle}
             controlsHidden={readingControlsHidden}
             onTap={toggleReadingControls}
           />
@@ -1798,6 +1801,7 @@ export function LessonVideoPlayer({
               canGoPrevious={canGoPrevious}
               hidden={readingControlsHidden}
               showLessonNavigation={showLessonNavigation}
+              showTextSize={!parseLessonMediaReading(reading ?? "")}
               style={getPlayerThemeStyle(playerTheme)}
               onGoNext={onGoNext}
               onGoPrevious={onGoPrevious}
