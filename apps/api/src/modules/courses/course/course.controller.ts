@@ -202,7 +202,12 @@ export function createCourseController({
       : undefined;
     const file = await service.getLessonDocument(courseId, lessonId, user);
     reply
-      .header("Content-Type", "application/pdf")
+      .header(
+        "Content-Type",
+        file.mimeType.startsWith("text/")
+          ? `${file.mimeType}; charset=utf-8`
+          : file.mimeType,
+      )
       .header("Content-Disposition", "inline")
       .header("Cache-Control", "private, no-store")
       .header("X-Content-Type-Options", "nosniff");
