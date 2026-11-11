@@ -56,4 +56,7 @@ export type {
   RetryPolicy,
   WaitOptions,
   ReadyBridge,
+  Register,
+  RegisteredContract,
+  ContractOf,
 } from "./types.ts";

@@ -14,7 +14,9 @@ Contents:
 [Types](#types)
 
 Throughout, `T` is your bridge contract, normally the generated `NativeBridgeContract` (see
-[PATTERNS.md § typed contract](PATTERNS.md#1-typed-contract)). `T` defaults to `Record<string, unknown>`.
+[PATTERNS.md § typed contract](PATTERNS.md#1-typed-contract)). `T` defaults to the contract your app registers on
+[`Register`](#register), or to `Record<string, unknown>` when it registers none. Pass `T` explicitly only for a second
+endpoint with its own contract.
 
 ---
 
@@ -103,20 +105,23 @@ interface UseNativeBridgeResult<T> extends BridgeSnapshot<T> {
 
 It subscribes to the controller with `useSyncExternalStore`, so it re-renders on every snapshot change.
 
-| Field             | Type                                             | Meaning                                                                                                       |
-| ----------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `endpointName`    | `string`                                         | Normalized endpoint name.                                                                                     |
-| `state`           | `BridgeState`                                    | `"idle" \| "initializing" \| "ready" \| "unavailable" \| "error"`. See [LIFECYCLE.md](LIFECYCLE.md).          |
-| `bridge`          | `BridgeInstance<T> \| null`                      | The typed proxy when `state === "ready"`, else `null`.                                                        |
-| `error`           | `Error \| null`                                  | Last init failure. It is kept while retrying and in terminal states, and cleared on success and on a new run. |
-| `attempt`         | `number`                                         | 1-based attempt number of the current run, `0` before the first attempt.                                      |
-| `maxAttempts`     | `number`                                         | From the resolved retry policy.                                                                               |
-| `endpointPresent` | `boolean`                                        | Whether `window[endpointName]` (or the iOS handler) existed at the last check.                                |
-| `nextRetryAt`     | `number \| null`                                 | Epoch ms of the next scheduled attempt while backing off, else `null`.                                        |
-| `isReady`         | `boolean`                                        | `state === "ready" && bridge !== null`.                                                                       |
-| `retry`           | `() => void`                                     | Same as [`controller.retry()`](#bridgecontrollert).                                                           |
-| `call`            | see [`controller.call`](#bridgecontrollert)      | Stable identity (the controller's bound method).                                                              |
-| `whenReady`       | see [`controller.whenReady`](#bridgecontrollert) | Stable identity.                                                                                              |
+| Field                | Type                                                                                                 | Meaning                                                                                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpointName`       | `string`                                                                                             | Normalized endpoint name.                                                                                                                                            |
+| `state`              | <a id="register"></a>`Register`                                                                      | Empty interface an app extends once, through declaration merging, with `contract: <its contract>`. See [PATTERNS.md § typed contract](PATTERNS.md#1-typed-contract). |
+| `RegisteredContract` | `ContractOf<Register>`: the registered contract, the default `T` of every generic export.            |
+| `ContractOf<R>`      | `R extends { contract: infer C extends object } ? C : Record<string, unknown>`                       |
+| `BridgeState`        | `"idle" \| "initializing" \| "ready" \| "unavailable" \| "error"`. See [LIFECYCLE.md](LIFECYCLE.md). |
+| `bridge`             | `BridgeInstance<T> \| null`                                                                          | The typed proxy when `state === "ready"`, else `null`.                                                                                                               |
+| `error`              | `Error \| null`                                                                                      | Last init failure. It is kept while retrying and in terminal states, and cleared on success and on a new run.                                                        |
+| `attempt`            | `number`                                                                                             | 1-based attempt number of the current run, `0` before the first attempt.                                                                                             |
+| `maxAttempts`        | `number`                                                                                             | From the resolved retry policy.                                                                                                                                      |
+| `endpointPresent`    | `boolean`                                                                                            | Whether `window[endpointName]` (or the iOS handler) existed at the last check.                                                                                       |
+| `nextRetryAt`        | `number \| null`                                                                                     | Epoch ms of the next scheduled attempt while backing off, else `null`.                                                                                               |
+| `isReady`            | `boolean`                                                                                            | `state === "ready" && bridge !== null`.                                                                                                                              |
+| `retry`              | `() => void`                                                                                         | Same as [`controller.retry()`](#bridgecontrollert).                                                                                                                  |
+| `call`               | see [`controller.call`](#bridgecontrollert)                                                          | Stable identity (the controller's bound method).                                                                                                                     |
+| `whenReady`          | see [`controller.whenReady`](#bridgecontrollert)                                                     | Stable identity.                                                                                                                                                     |
 
 The result object is memoized per snapshot. `retry`, `call` and `whenReady` are stable for the controller's lifetime, so they are safe
 in effect dependency arrays.

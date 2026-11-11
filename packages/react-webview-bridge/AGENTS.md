@@ -30,20 +30,20 @@ Read [README.md](README.md) first. The details are in [docs/API.md](docs/API.md)
 
 ## Do / don't when implementing in a webapp
 
-| Do                                                                          | Don't                                                                             |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| One `<NativeBridgeProvider>` per endpoint at the app root, above the router | Mount providers per page or per component                                         |
-| Module-level constants for `options` / `retry`                              | Pass inline objects and expect later changes to apply                             |
-| `T` = the **generated** `NativeBridgeContract`                              | Hand-write the native API surface                                                 |
-| `call(b => b.ns.fn(x))` / `useBridgeCall`                                   | `buildNativeBridge()`, `bridge.dispose()`, `clearNativeBridgeCache()` in app code |
-| `.catch` every fire-and-forget call                                         | Leave rejected promises unhandled                                                 |
-| Branch on `isBridgeNotReadyError(e)` + `e.reason`, or `e.code`              | Branch on `e.message` / `e.name`                                                  |
-| Treat `unavailable` as "running in a browser"                               | Show it as an error, or block the whole app on it                                 |
-| `$has("ns:member")` for feature detection                                   | Assume a `null` result means "native returned null"                               |
-| `useBridgeEvent` for events, typed `P \| null` if a payload is optional     | Expect events from before ready to be buffered                                    |
-| Read properties inside `call`                                               | Read `bridge.ns.prop` during render (each read is a native request)               |
-| `disposeNativeBridge(name)` + `retry()` for logout or reset                 | Dispose by unmounting providers while others still need the bridge                |
-| `resetNativeBridges()` + `fake.uninstall()` in test `afterEach`             | Share controller state across tests                                               |
+| Do                                                                            | Don't                                                                             |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| One `<NativeBridgeProvider>` per endpoint at the app root, above the router   | Mount providers per page or per component                                         |
+| Module-level constants for `options` / `retry`                                | Pass inline objects and expect later changes to apply                             |
+| Register the **generated** `NativeBridgeContract` once (`interface Register`) | Hand-write the native API surface, or repeat `<Contract>` on every hook           |
+| `call(b => b.ns.fn(x))` / `useBridgeCall`                                     | `buildNativeBridge()`, `bridge.dispose()`, `clearNativeBridgeCache()` in app code |
+| `.catch` every fire-and-forget call                                           | Leave rejected promises unhandled                                                 |
+| Branch on `isBridgeNotReadyError(e)` + `e.reason`, or `e.code`                | Branch on `e.message` / `e.name`                                                  |
+| Treat `unavailable` as "running in a browser"                                 | Show it as an error, or block the whole app on it                                 |
+| `$has("ns:member")` for feature detection                                     | Assume a `null` result means "native returned null"                               |
+| `useBridgeEvent` for events, typed `P \| null` if a payload is optional       | Expect events from before ready to be buffered                                    |
+| Read properties inside `call`                                                 | Read `bridge.ns.prop` during render (each read is a native request)               |
+| `disposeNativeBridge(name)` + `retry()` for logout or reset                   | Dispose by unmounting providers while others still need the bridge                |
+| `resetNativeBridges()` + `fake.uninstall()` in test `afterEach`               | Share controller state across tests                                               |
 
 ## Adding a bridge call to a webapp, step by step
 

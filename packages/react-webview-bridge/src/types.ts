@@ -52,8 +52,36 @@ export interface NativeBridgeRoot {
   };
 }
 
+/**
+ * Where an app registers its bridge contract once, so every hook and helper of this package is typed
+ * by it without a type argument. The contract stays in the app (it is generated from the native
+ * code); this package never names it:
+ *
+ * ```ts
+ * import type { NativeBridgeContract } from "./native-bridge-contracts";
+ *
+ * declare module "@veolms/react-webview-bridge" {
+ *   interface Register {
+ *     contract: NativeBridgeContract;
+ *   }
+ * }
+ * ```
+ *
+ * The registered contract is only the default: a second endpoint names its own contract as a type
+ * argument (`useNativeBridge<PaymentsContract>()`, `(b: BridgeInstance<PaymentsContract>) => …`).
+ */
+export interface Register {}
+
+/** The contract registered in `R` (see {@link Register}), or `Record<string, unknown>` when none is. */
+export type ContractOf<R> = R extends { contract: infer C extends object }
+  ? C
+  : Record<string, unknown>;
+
+/** The app's registered contract (see {@link Register}); the default type argument everywhere. */
+export type RegisteredContract = ContractOf<Register>;
+
 /** The typed proxy handed to consumers: the generated contract plus the root helpers. */
-export type BridgeInstance<T extends object = Record<string, unknown>> = T &
+export type BridgeInstance<T extends object = RegisteredContract> = T &
   NativeBridgeRoot;
 
 /** Untyped event handler as used by the library. */
@@ -86,7 +114,7 @@ export interface BridgeControllerConfig {
 /**
  * Immutable state snapshot (a new object on every change; safe for `useSyncExternalStore`).
  */
-export interface BridgeSnapshot<T extends object = Record<string, unknown>> {
+export interface BridgeSnapshot<T extends object = RegisteredContract> {
   readonly endpointName: string;
   readonly state: BridgeState;
   /** The proxy when `state === "ready"`, else `null`. Never `await` it or resolve a promise with it. */
@@ -120,12 +148,12 @@ export interface WaitOptions {
 }
 
 /** Wrapper used to hand out the proxy through promises (the proxy itself must never be a resolution value). */
-export interface ReadyBridge<T extends object = Record<string, unknown>> {
+export interface ReadyBridge<T extends object = RegisteredContract> {
   readonly bridge: BridgeInstance<T>;
 }
 
 /** Public, framework-agnostic surface of a per-endpoint controller. */
-export interface BridgeController<T extends object = Record<string, unknown>> {
+export interface BridgeController<T extends object = RegisteredContract> {
   readonly endpointName: string;
   /** Subscribe to snapshot changes (for `useSyncExternalStore`). */
   subscribe(listener: () => void): () => void;

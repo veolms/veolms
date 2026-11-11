@@ -11,6 +11,7 @@ import { normalizeEndpointName } from "./presence.ts";
 import type {
   BridgeController,
   NativeBridgeOptions,
+  RegisteredContract,
   RetryPolicy,
 } from "./types.ts";
 
@@ -101,7 +102,7 @@ export function NativeBridgeProvider({
  * @throws when used outside a provider.
  */
 export function useBridgeController<
-  T extends object = Record<string, unknown>,
+  T extends object = RegisteredContract,
 >(): BridgeController<T> {
   const controller = useContext(NativeBridgeContext);
   if (!controller) {

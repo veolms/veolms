@@ -14,6 +14,7 @@ import type {
   BridgeInstance,
   BridgeSnapshot,
   ReadyBridge,
+  RegisteredContract,
   WaitOptions,
 } from "./types.ts";
 
@@ -27,7 +28,7 @@ const useIsomorphicLayoutEffect =
 
 /** Result of {@link useNativeBridge}. */
 export interface UseNativeBridgeResult<
-  T extends object = Record<string, unknown>,
+  T extends object = RegisteredContract,
 > extends BridgeSnapshot<T> {
   /** `state === "ready"` (then `bridge` is non-null). */
   readonly isReady: boolean;
@@ -47,7 +48,7 @@ export interface UseNativeBridgeResult<
  * ```
  */
 export function useNativeBridge<
-  T extends object = Record<string, unknown>,
+  T extends object = RegisteredContract,
 >(): UseNativeBridgeResult<T> {
   const controller = useBridgeController<T>();
   const snapshot = useSyncExternalStore(
@@ -90,13 +91,17 @@ export interface UseBridgeCallResult<A extends unknown[], R> {
  * `fn` is read through a ref, so an inline arrow is fine. Only the latest run updates state.
  *
  * ```tsx
- * const info = useBridgeCall((b: BridgeInstance<MyContract>) => b.device.getInfo());
+ * const info = useBridgeCall((b) => b.device.getInfo()); // typed by the registered contract
  * <button onClick={() => info.run()}>Load</button>
  * ```
  *
  * Never return the proxy (or a nested proxy) from `fn`.
  */
-export function useBridgeCall<T extends object, A extends unknown[], R>(
+export function useBridgeCall<
+  T extends object = RegisteredContract,
+  A extends unknown[] = [],
+  R = unknown,
+>(
   fn: (bridge: BridgeInstance<T>, ...args: A) => R | Promise<R>,
   options?: WaitOptions,
 ): UseBridgeCallResult<A, Awaited<R>> {

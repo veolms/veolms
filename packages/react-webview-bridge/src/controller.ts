@@ -14,6 +14,7 @@ import type {
   BridgeState,
   NativeBridgeOptions,
   ReadyBridge,
+  RegisteredContract,
   RetryPolicy,
   WaitOptions,
 } from "./types.ts";
@@ -477,7 +478,7 @@ class BridgeControllerImpl implements BridgeController<
  * matching `buildNativeBridge`'s session cache). Creating a controller does not start init;
  * `acquire()` (done by `NativeBridgeProvider`) does.
  */
-export function getBridgeController<T extends object = Record<string, unknown>>(
+export function getBridgeController<T extends object = RegisteredContract>(
   endpointName?: string,
   config?: BridgeControllerConfig,
 ): BridgeController<T> {

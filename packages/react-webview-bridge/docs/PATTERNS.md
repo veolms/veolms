@@ -25,14 +25,31 @@ The native build generates `native-bridge-contracts.d.ts` (KSP output, e.g.
 `app/build/generated/ksp/<variant>/resources/native-bridge-contracts.d.ts`). Put it into the webapp (copy it, or sync it in CI) and
 **do not hand-write** the native API surface when a generated one exists.
 
+Then register it once, in the one place that names it. The contract stays in your app; this package never imports it.
+
 ```ts
 // src/native/bridge.ts — the one place that names the contract
-import type { BridgeInstance } from "@veolms/react-webview-bridge";
 import type { NativeBridgeContract } from "./native-bridge-contracts"; // generated
 
-export type AppBridge = BridgeInstance<NativeBridgeContract>;
-export type { NativeBridgeContract };
+declare module "@veolms/react-webview-bridge" {
+  interface Register {
+    contract: NativeBridgeContract;
+  }
+}
 ```
+
+Every generic export now defaults to it, so no hook needs a type argument:
+
+```ts
+const platform = useBridgeCall((b) => b.platform()); // b: BridgeInstance<NativeBridgeContract>
+const { bridge } = useNativeBridge();
+await getBridgeController().call((b) => b.files.info(path)); // typed arguments and result
+```
+
+- The file must be part of the app's TypeScript program (inside its `include`). Importing it is not required for types.
+- One contract per app. A second endpoint names its own contract as a type argument: `useNativeBridge<PaymentsContract>()`,
+  `useBridgeCall((b: BridgeInstance<PaymentsContract>) => b.pay())`. See [§10](#10-multiple-endpoints).
+- Without a registration, `T` defaults to `Record<string, unknown>`, as before.
 
 The contract is **compile-time only**. Native metadata from the handshake decides at runtime what exists (see [§8](#8-feature-detection-has-and-noop-null)).
 Wire paths are colon-separated: `bridge.systemBars.hideStatusBar()` is sent as `systemBars:hideStatusBar`.
@@ -76,11 +93,9 @@ createRoot(document.getElementById("root")!).render(
 
 ```tsx
 import { useNativeBridge } from "@veolms/react-webview-bridge";
-import type { NativeBridgeContract } from "./native/bridge";
 
 export function NativeGate({ children }: { children: React.ReactNode }) {
-  const { state, error, attempt, maxAttempts, retry } =
-    useNativeBridge<NativeBridgeContract>();
+  const { state, error, attempt, maxAttempts, retry } = useNativeBridge();
   switch (state) {
     case "ready":
       return <>{children}</>;
@@ -110,16 +125,10 @@ desktop browser or a preview environment, so it is not an error.
 ## 4. Fire-and-forget vs awaited calls
 
 ```tsx
-import {
-  useBridgeCall,
-  useNativeBridge,
-  type BridgeInstance,
-} from "@veolms/react-webview-bridge";
-import type { NativeBridgeContract } from "./native/bridge";
-type B = BridgeInstance<NativeBridgeContract>;
+import { useBridgeCall, useNativeBridge } from "@veolms/react-webview-bridge";
 
 function Toolbar() {
-  const { call } = useNativeBridge<NativeBridgeContract>();
+  const { call } = useNativeBridge();
 
   // Fire-and-forget: still attach a catch (call() returns a promise that can reject).
   const toast = (msg: string) =>
@@ -128,7 +137,7 @@ function Toolbar() {
     );
 
   // Awaited with request state rendered by the component:
-  const platform = useBridgeCall((b: B) => b.platform());
+  const platform = useBridgeCall((b) => b.platform());
 
   return (
     <>
@@ -148,7 +157,7 @@ function Toolbar() {
 }
 ```
 
-- `useBridgeCall` with arguments: `const greet = useBridgeCall((b: B, name: string) => b.greet(name)); greet.run("Ann")`.
+- `useBridgeCall` with arguments: `const greet = useBridgeCall((b, name: string) => b.greet(name)); greet.run("Ann")`.
 - Inside an async handler where you need the result, just `await call(...)` in `try/catch`.
 - `void` results resolve to `undefined` (native `ack`). An explicit `null` stays `null`.
 - To bound long native operations, set `options.timeoutMs` (provider level, default 30000). `0` disables it, but then a lost
@@ -160,7 +169,7 @@ You don't need to wait for ready yourself: `call` and `useBridgeCall.run` **queu
 
 ```tsx
 function Analytics() {
-  const { call } = useNativeBridge<NativeBridgeContract>();
+  const { call } = useNativeBridge();
   const reported = useRef(false);
   useEffect(() => {
     // StrictMode runs this effect twice; report once.
@@ -262,7 +271,7 @@ A member that is in your contract but **missing from native metadata** (an older
 return `null`, so detect features explicitly:
 
 ```ts
-const { bridge } = useNativeBridge<NativeBridgeContract>();
+const { bridge } = useNativeBridge();
 const canHideBars = bridge?.$has("systemBars") ?? false;          // namespace
 const canHide = bridge?.$has("systemBars:hideStatusBar") ?? false; // member (full colon path)
 
@@ -284,7 +293,6 @@ import {
   isBridgeNotReadyError,
   type NativeBridgeOptions,
 } from "@veolms/react-webview-bridge";
-import type { NativeBridgeContract } from "./bridge";
 
 // The same options object as the provider: whichever creates the controller first sets them.
 export const BRIDGE_OPTIONS: NativeBridgeOptions = { timeoutMs: 15000 };
@@ -292,7 +300,7 @@ export const BRIDGE_OPTIONS: NativeBridgeOptions = { timeoutMs: 15000 };
 // Look the controller up on every use. When the last provider unmounts, its controller is dropped
 // and a later mount creates a new one, so a reference kept at module level would go stale.
 const controller = () =>
-  getBridgeController<NativeBridgeContract>("NativeBridge", {
+  getBridgeController("NativeBridge", {
     options: BRIDGE_OPTIONS,
   });
 
@@ -341,7 +349,7 @@ release();
 Hooks read the **nearest** provider. For an outer endpoint inside an inner provider, use its controller directly:
 
 ```ts
-const main = getBridgeController<NativeBridgeContract>("NativeBridge");
+const main = getBridgeController("NativeBridge"); // typed by the registered contract
 const payments = useBridgeController<PaymentsContract>(); // nearest = PaymentsBridge
 ```
 
