@@ -129,6 +129,8 @@ export interface LessonStudioEditorProps {
   onReadingChange?: (value: string) => void;
   /** The attached PDF drawn as learners read it. */
   documentPreview?: ReactNode;
+  /** The address of a type's file, for its preview. */
+  loadFileLink?: (contentType: StudioLessonContentType) => Promise<string>;
 }
 
 export const LessonStudioEditor = forwardRef<
@@ -177,6 +179,7 @@ export const LessonStudioEditor = forwardRef<
     readingBody,
     onReadingChange,
     documentPreview,
+    loadFileLink,
   }: LessonStudioEditorProps,
   ref,
 ) {
@@ -633,6 +636,7 @@ export const LessonStudioEditor = forwardRef<
               ) : undefined
             }
             onReadingFile={onReadingChange ? setPendingReadingFile : undefined}
+            loadFileLink={loadFileLink}
             hasReadingText={Boolean(readingBody?.trim())}
             documentPreview={
               contentType === "document" && savedContentType === "document"

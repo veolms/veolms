@@ -92,6 +92,12 @@ export interface LessonMediaWorkspaceProps {
    * write the reading here instead of uploading one.
    */
   readingEditor?: ReactNode;
+  /**
+   * The address of the file the type being edited holds, for its preview
+   * (a lesson's files are stored privately). Left out, the media library's
+   * address is asked for.
+   */
+  loadFileLink?: (contentType: StudioLessonContentType) => Promise<string>;
   /** A text file chosen for the document, for the reading editor to import. */
   onReadingFile?: (file: File) => void;
   /** Whether the document's text holds anything (it opens on the text). */
@@ -123,6 +129,7 @@ export function LessonMediaWorkspace({
   onInvalidFile,
   readingEditor,
   onReadingFile,
+  loadFileLink,
   hasReadingText = false,
   documentPreview,
   videoPreviewUnavailableText = null,
@@ -158,8 +165,11 @@ export function LessonMediaWorkspace({
     }
     let active = true;
     setAudioPreview({ mediaId: audioMediaId, url: null, failed: false });
-    mediaService
-      .getMediaDelivery(audioMediaId)
+    const kind = contentType;
+    (loadFileLink
+      ? loadFileLink(kind).then((url) => ({ url }))
+      : mediaService.getMediaDelivery(audioMediaId)
+    )
       .then(({ url }) => {
         if (active)
           setAudioPreview({ mediaId: audioMediaId, url, failed: false });
@@ -172,6 +182,8 @@ export function LessonMediaWorkspace({
     return () => {
       active = false;
     };
+    // The loader is a fresh function each render; the file is what counts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioMediaId, audioAttempt]);
 
   /** Hands a file on only when this type takes it; says why otherwise. */
@@ -230,6 +242,7 @@ export function LessonMediaWorkspace({
   const [imageVariantFailed, setImageVariantFailed] = useState(false);
   useEffect(() => setImageVariantFailed(false), [mediaInfoId]);
   const usesImageVariants = Boolean(
+    !loadFileLink &&
     !previewFile &&
     mediaInfoId &&
     !imageVariantFailed &&

@@ -341,6 +341,16 @@ export const coursesService = {
       `/courses/${courseId}/lessons/${lessonId}/contents/${contentType}`,
     ),
 
+  /** A short-lived address of one kind's file, for its editor to preview. */
+  getLessonContentLink: (
+    courseId: string,
+    lessonId: string,
+    contentType: LessonContentKind,
+  ): Promise<LessonMediaLinkResponse> =>
+    api.get<LessonMediaLinkResponse>(
+      `/courses/${courseId}/lessons/${lessonId}/contents/${contentType}/link`,
+    ),
+
   /** A short-lived address of an audio or image lesson's file. */
   getLessonMediaLink: (
     courseId: string,

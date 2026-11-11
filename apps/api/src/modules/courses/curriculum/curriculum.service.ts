@@ -13,6 +13,7 @@ import {
   type CreateLessonResourceRequest,
   type LessonContentKind,
   type LessonContentsResponse,
+  type LessonMediaLinkResponse,
   type SetLessonContentRequest,
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
@@ -36,6 +37,9 @@ import {
   saveLessonContent,
 } from "./lesson-contents.repository.ts";
 import { presentLessonContent } from "../shared/courses.presenters.ts";
+
+/** How long the editor's address of a lesson's file works. */
+const LESSON_CONTENT_LINK_SECONDS = 15 * 60;
 
 export interface CurriculumServiceOptions {
   database: Kysely<Database>;
@@ -529,6 +533,60 @@ export function createCurriculumService({
     return { accepted: Boolean(transcodeJobInfo?.should202) };
   }
 
+  /**
+   * A short-lived address of one kind's file, for the lesson's editor to
+   * preview it (also a kind learners are not shown). Signed by storage
+   * itself, as a learner's audio or image is: a lesson's files are stored
+   * privately and are not on the CDN.
+   */
+  async function getLessonContentLink(
+    courseId: string,
+    lessonId: string,
+    kind: LessonContentKind,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ): Promise<LessonMediaLinkResponse> {
+    await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "lesson.content.update",
+    );
+    const lesson = await curriculumRepo.findLessonById(
+      database,
+      lessonId,
+      courseId,
+    );
+    if (!lesson) {
+      throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
+    }
+    const mediaId =
+      (await findLessonContent(database, lessonId, kind))?.media_id ??
+      (lesson.content_type === kind ? lesson.content_media_id : null);
+    const media = mediaId
+      ? await mediaService.getMediaAsset(mediaId, creatorId, userRoles)
+      : undefined;
+    if (!media || media.status === "uploading" || media.status === "failed") {
+      throw new AppError(
+        404,
+        "LESSON_MEDIA_NOT_FOUND",
+        "This lesson has no such file.",
+      );
+    }
+    const url = await services.storage.getPresignedGetUrl(
+      media.storage_key,
+      LESSON_CONTENT_LINK_SECONDS,
+      { responseContentDisposition: "inline" },
+    );
+    return {
+      url,
+      mimeType: media.mime_type,
+      expiresAt: new Date(
+        Date.now() + LESSON_CONTENT_LINK_SECONDS * 1000,
+      ).toISOString(),
+    };
+  }
+
   /** Every kind's content of one lesson, as the editor shows it. */
   async function getLessonContents(lesson: {
     id: string;
@@ -1018,6 +1076,7 @@ export function createCurriculumService({
     createCourseLesson,
     updateCourseLesson,
     setLessonContent,
+    getLessonContentLink,
     getLessonContents,
     listLessonContents: (lessonIds: readonly string[]) =>
       listLessonContents(database, lessonIds),

@@ -67,6 +67,7 @@ import {
   lessonUploadKind,
   uploadLessonContentFile,
 } from "./uploadLessonContent";
+import { coursesService } from "../../services/courses/courses.service";
 const LessonPdfReading = lazy(() =>
   import("../../learning/player/LessonPdfReading").then((module) => ({
     default: module.LessonPdfReading,
@@ -541,6 +542,7 @@ export function CurriculumStepPanel({
               savedContentType={activeLesson.initialState?.contentType ?? activeLesson.contentType}
               onRemoveMedia={uploadsLessonMedia ? () => handleLessonContentRemoved(activeSection.id, activeLesson.id) : undefined}
               onNotice={setToastMessage}
+              loadFileLink={currentCourseId ? (kind) => coursesService.getLessonContentLink(currentCourseId, activeLesson.id, kind).then((link) => link.url) : undefined}
               readingBody={activeLesson.readingBody ?? ""}
               onReadingChange={(readingBody) => handleUpdateLesson(activeSection.id, activeLesson.id, { readingBody })}
               documentPreview={currentCourseId && activeLesson.contentMediaId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={activeLesson.id} /></Suspense>) : undefined}
@@ -1704,6 +1706,7 @@ export function CurriculumStepPanel({
                                                 savedContentType={les.initialState?.contentType ?? les.contentType}
                                                 onRemoveMedia={uploadsLessonMedia ? () => handleLessonContentRemoved(sec.id, les.id) : undefined}
                                                 onNotice={setToastMessage}
+                                                loadFileLink={currentCourseId ? (kind) => coursesService.getLessonContentLink(currentCourseId, les.id, kind).then((link) => link.url) : undefined}
                                                 readingBody={les.readingBody ?? ""}
                                                 onReadingChange={(readingBody) => handleUpdateLesson(sec.id, les.id, { readingBody })}
                                                 documentPreview={currentCourseId && les.contentMediaId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={les.id} /></Suspense>) : undefined}

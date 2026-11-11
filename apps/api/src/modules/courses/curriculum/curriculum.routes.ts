@@ -10,6 +10,7 @@ import {
   lessonResourceSchema,
   lessonContentKindSchema,
   lessonContentsResponseSchema,
+  lessonMediaLinkResponseSchema,
   setLessonContentRequestSchema,
   type Permission,
   type UpdateCourseLessonRequest,
@@ -253,6 +254,34 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
       preHandler: ctx.authorize("lesson.content.update", "lesson"),
     },
     controller.clearLessonContent,
+  );
+
+  app.get(
+    "/courses/:id/lessons/:lessonId/contents/:contentType/link",
+    {
+      schema: {
+        operationId: "getLessonContentLink",
+        tags: ["Course Curriculum"],
+        summary: "A short-lived address of one kind's file, to preview it",
+        description:
+          "For the lesson's editor: an address of the file one kind holds (whether or not it is the kind learners are shown), signed by storage and working for 15 minutes. Never cached.",
+        params: z.object({
+          id: z.uuid(),
+          lessonId: z.uuid(),
+          contentType: lessonContentKindSchema,
+        }),
+        response: {
+          200: jsonResponse(
+            "The file's address",
+            lessonMediaLinkResponseSchema,
+          ),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("No such lesson, or the kind holds no file"),
+        },
+      },
+      preHandler: ctx.authorize("lesson.content.update", "lesson"),
+    },
+    controller.getLessonContentLink,
   );
 
   app.delete(

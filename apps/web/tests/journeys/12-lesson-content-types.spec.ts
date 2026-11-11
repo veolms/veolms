@@ -57,23 +57,11 @@ const CORS = {
 /** Stands in for object storage on the test API's signed links. */
 async function serveStorage(context: BrowserContext) {
   const sound = testSound();
-  // The test CDN serves the test video only; a creator's preview of a
-  // lesson's picture or audio file is answered with the test file.
-  await context.route(
-    "http://127.0.0.1:4190/protected/thumbnails/**",
-    (route) =>
-      route.fulfill({
-        status: 200,
-        headers: { ...CORS, "Content-Type": "image/png" },
-        body: TEST_PICTURE,
-      }),
-  );
-  await context.route("http://127.0.0.1:4190/protected/media/**", (route) =>
-    route.fulfill({
-      status: 200,
-      headers: { ...CORS, "Content-Type": "audio/wav" },
-      body: sound,
-    }),
+  // A lesson's files are stored privately and are not on the CDN: the
+  // editor must not depend on it to show them (as it once did, showing an
+  // empty frame), so here the CDN refuses them.
+  await context.route("http://127.0.0.1:4190/protected/**", (route) =>
+    route.fulfill({ status: 403, headers: CORS }),
   );
   await context.route("http://127.0.0.1:9/**", async (route) => {
     const request = route.request();

@@ -252,7 +252,26 @@ export function createCurriculumController({
     return contents;
   }
 
+  async function getLessonContentLink(
+    request: FastifyRequest<{
+      Params: { id: string; lessonId: string; contentType: LessonContentKind };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const { id, lessonId, contentType } = request.params;
+    // The address is a secret for a while: never cached.
+    reply.header("Cache-Control", "private, no-store");
+    return await service.getLessonContentLink(
+      id,
+      lessonId,
+      contentType,
+      request.user!.id,
+      request.user?.roles,
+    );
+  }
+
   return {
+    getLessonContentLink,
     setLessonContent,
     clearLessonContent,
     createCourseSection,

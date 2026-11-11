@@ -328,4 +328,33 @@ await test("an audio or image lesson's file is given to whoever may open the les
   failsWith(await link(admin, 2), 404, "LESSON_MEDIA_NOT_FOUND");
 });
 
+await test("the editor previews any kind's file through a short-lived address, which learners are refused", async () => {
+  const course = await createCourse(flow, { pricing: "free", lessons: [{}] });
+  const imageId = await mediaAsset({ type: "image", mimeType: "image/jpeg" });
+  ok(await setContent(course, "image", { mediaId: imageId }));
+
+  // Image is not the kind learners are shown; its editor still sees it.
+  const link = await admin.get<{ url: string; mimeType: string }>(
+    `${lessonPath(course)}/contents/image/link`,
+  );
+  const opened = ok(link);
+  assert.equal(link.headers["cache-control"], "private, no-store");
+  assert.equal(opened.mimeType, "image/jpeg");
+  assert.ok(opened.url.includes(imageId));
+
+  // The lesson's own video, attached before kinds existed, too.
+  ok(await admin.get(`${lessonPath(course)}/contents/video/link`));
+
+  failsWith(
+    await admin.get(`${lessonPath(course)}/contents/audio/link`),
+    404,
+    "LESSON_MEDIA_NOT_FOUND",
+  );
+
+  const { client } = await signedUpLearner(flow);
+  assert.equal((await enrollForFree(client, course)).status, 200);
+  const refused = await client.get(`${lessonPath(course)}/contents/image/link`);
+  assert.equal(refused.status, 403);
+});
+
 await flow.close();
