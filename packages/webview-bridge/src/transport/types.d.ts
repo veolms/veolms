@@ -5,6 +5,10 @@ import type {
 
 /**
  * Event handler callback for native events.
+ *
+ * `T` is the payload type the caller expects; it is not checked at runtime. Native can deliver
+ * `null` (an explicit `"payload": null`, or an omitted `payload`, which is delivered as `null`),
+ * so include it in `T` (e.g. `onEvent<string | null>(...)`) when the event may carry no payload.
  */
 export type BridgeEventHandler<T = BridgeValue> = (payload: T) => void;
 
@@ -13,9 +17,11 @@ export type BridgeEventHandler<T = BridgeValue> = (payload: T) => void;
  */
 export interface NativeTransportOptions {
   /**
-   * Optional default timeout duration in milliseconds for pending requests.
-   * If set to 0 or undefined, requests do not time out by default, allowing
-   * long-running native operations (e.g. downloadFile) to complete.
+   * Default timeout in milliseconds for pending requests.
+   * Defaults to 30000 ms so a request that native never answers cannot hang forever.
+   * Set to 0 to disable timeouts (e.g. for long-running native operations such as downloads),
+   * or pass a per-call `timeoutMs`. The init handshake uses this value when it is greater than 0,
+   * else 10000 ms (the handshake is never unbounded).
    */
   defaultTimeoutMs?: number;
 }
@@ -37,6 +43,12 @@ export interface NativeTransport {
 
   /** Whether the transport has completed initialization handshake */
   readonly isInitialized: boolean;
+
+  /**
+   * Whether `dispose()` was called. A disposed transport rejects every request and never
+   * becomes usable again; `sessionId` and `metadata` are `null` after disposal.
+   */
+  readonly isDisposed: boolean;
 
   /**
    * Performs the initial protocol handshake to establish session and retrieve capability metadata.

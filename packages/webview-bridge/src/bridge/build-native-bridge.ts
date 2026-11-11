@@ -13,13 +13,22 @@ export interface BuildBridgeOptions {
    */
   debug?: boolean;
   /**
-   * Default timeout in milliseconds for native requests (0 or undefined disables timeout).
+   * Default timeout in milliseconds for native requests. Defaults to 30000 ms; 0 disables timeouts
+   * (e.g. for long-running native operations). The init handshake uses this value when it is
+   * greater than 0, else 10000 ms (the handshake is never unbounded).
    */
   timeoutMs?: number;
   /**
    * Optional callback invoked with detailed diagnostic error if bridge initialization fails.
+   * Also invoked for callers that joined an initialization already in flight.
    */
   onInitError?: (error: Error) => void;
+  /**
+   * Optional callback for failures of property assignments (`bridge.ns.prop = value`), which cannot
+   * be awaited. Without it, failures are logged with `console.warn`. Use `await bridge.ns.$set("prop", value)`
+   * to handle the result in place.
+   */
+  onError?: (error: unknown, path: string) => void;
 }
 
 /**
@@ -59,6 +68,9 @@ export function evictBridgeSession(
  * Handles endpoint discovery, initialization handshake, capability metadata caching,
  * and concurrent request deduplication.
  *
+ * Sessions are cached per endpoint name, so the options of the first successful call apply
+ * ("first call wins"); later calls return the cached bridge and only use their `onInitError`.
+ *
  * @param endpointName Registration name of the native endpoint (default: "NativeBridge")
  * @param options Build & debug options
  * @returns Promise resolving to typed proxy `T`, or `null` if native endpoint is unavailable.
@@ -82,7 +94,7 @@ export async function buildNativeBridge<
   if (existingSession) {
     if (options?.debug) {
       console.log(
-        `[NativeBridge Debug] Returning cached session for "${name}".`,
+        `[NativeBridge Debug] Returning cached session for "${name}" (options of the first call apply).`,
       );
     }
     return existingSession.getProxy<T>();
@@ -94,7 +106,10 @@ export async function buildNativeBridge<
     try {
       const session = await inFlightPromise;
       return session.getProxy<T>();
-    } catch {
+    } catch (err) {
+      if (options?.onInitError && err instanceof Error) {
+        options.onInitError(err);
+      }
       return null;
     }
   }
@@ -140,11 +155,14 @@ export async function buildNativeBridge<
         name,
         transport,
         metadataRegistry,
+        options?.onError,
       );
 
       bridgeCache.set(name, session);
       return session;
     } catch (err) {
+      // Release the endpoint listener and window receive callbacks of the failed attempt.
+      transport.dispose();
       if (options?.onInitError && err instanceof Error) {
         options.onInitError(err);
       }

@@ -38,7 +38,11 @@ export const chatDirectStatusSchema = z.enum([
 export const chatPostingPolicySchema = z.enum(["everyone", "staff_only"]);
 export const chatRoomStatusSchema = z.enum(["active", "locked", "archived"]);
 export const chatRoomRoleSchema = z.enum(["owner", "moderator", "member"]);
+/** all; mentions (groups: only @mentions); none (muted for good). */
 export const chatNotifyLevelSchema = z.enum(["all", "mentions", "none"]);
+/** Mute for a while (WhatsApp: 8 hours, a week), for good, or unmute. */
+export const chatMuteForSchema = z.enum(["8h", "1w", "always", "off"]);
+export type ChatMuteFor = z.infer<typeof chatMuteForSchema>;
 export const chatSenderRoleSchema = z.enum([
   "admin",
   "instructor",
@@ -281,6 +285,11 @@ export const chatRoomSummarySchema = z.object({
   me: z.object({
     roomRole: chatRoomRoleSchema,
     notifyLevel: chatNotifyLevelSchema,
+    /**
+     * Muted until then (8 hours, a week); null when not muted for a while.
+     * Muted for good is notifyLevel "none".
+     */
+    mutedUntil: isoDate.nullable(),
     archived: z.boolean(),
     pinned: z.boolean(),
     lastReadSeq: z.number().int(),
@@ -477,7 +486,9 @@ export const chatReceiptsRequestSchema = z.strictObject({
 
 export const chatMemberStateRequestSchema = z
   .strictObject({
+    /** Also ends a mute for a while. */
     notifyLevel: chatNotifyLevelSchema.optional(),
+    muteFor: chatMuteForSchema.optional(),
     archived: z.boolean().optional(),
     pinned: z.boolean().optional(),
   })

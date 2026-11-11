@@ -49,6 +49,7 @@ import {
 import {
   getLessonReadingFrame,
   LessonReadingMiniature,
+  LessonReadingPlaceholder,
   LessonReadingStage,
   lessonReadingShellClasses,
 } from "./LessonReadingStage";
@@ -115,6 +116,15 @@ import {
   type PlaybackDeniedPlayingOn,
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
+import { isLowMemoryDevice } from "./deviceTier";
+
+/**
+ * The stream has been waiting out failures for this many retries in a row
+ * (about 7 s with the engine's 1s, 2s, 4s waits) before the player says so
+ * over the loader: a single missed segment passes unremarked, as on any
+ * streaming site.
+ */
+const RECONNECTING_NOTICE_AFTER_RETRIES = 3;
 
 // Where the learner is, kept this often while the video plays: a reload
 // then starts within half a second of where it was (it is also kept the
@@ -309,6 +319,12 @@ export interface LessonVideoPlayerProps {
   } | null;
   /** Prevents the fallback media source from loading before protected bootstrap resolves. */
   playbackBootstrapPending?: boolean;
+  /**
+   * What is pending is a reading lesson's text, not a video: the stage
+   * wears the reading's colours and shows lines of text to come, not the
+   * video loader on black.
+   */
+  readingPending?: boolean;
   /** Shown when the lesson has no playable source because loading it failed. */
   playbackUnavailableMessage?: string | null;
   onRetryPlayback?: () => void;
@@ -510,6 +526,7 @@ export function LessonVideoPlayer({
   playbackBootstrap,
   playbackAccessError = null,
   playbackBootstrapPending = false,
+  readingPending = false,
   playbackUnavailableMessage = null,
   onRetryPlayback,
   refreshPlaybackToken,
@@ -900,6 +917,13 @@ export function LessonVideoPlayer({
 
   const [streamConflict, setStreamConflict] =
     useState<PlaybackDeniedPlayingOn | null>(null);
+  // Retries in a row the engine has made for a segment that would not
+  // come (see `streamingretry`); 0 once one does, or a video is loaded.
+  const [streamingRetries, setStreamingRetries] = useState(0);
+  const reconnecting = streamingRetries >= RECONNECTING_NOTICE_AFTER_RETRIES;
+  // A small device prepares no second video out of sight: the standby is
+  // a whole second media pipeline (see deviceTier.ts).
+  const [withStandby] = useState(() => !isLowMemoryDevice());
   const effectiveLessonId = lessonId ?? playbackBootstrap?.lessonId ?? null;
   const effectiveLessonIdRef = useRef(effectiveLessonId);
   useEffect(() => {
@@ -936,10 +960,23 @@ export function LessonVideoPlayer({
   const lessonIndexRef = useRef(lessonIndex);
   lessonIndexRef.current = lessonIndex;
   const [playbackTelemetry] = useState(() =>
-    createPlaybackTelemetry(() => ({
-      courseKey: watchTimeCourseKeyRef.current ?? null,
-      lessonNumber: lessonIndexRef.current ?? null,
-    })),
+    createPlaybackTelemetry(
+      () => ({
+        courseKey: watchTimeCourseKeyRef.current ?? null,
+        lessonNumber: lessonIndexRef.current ?? null,
+      }),
+      () => {
+        const media = playerRef.current?.getSnapshot().media;
+        if (!media) return null;
+        return {
+          currentTime: media.currentTime,
+          duration: media.duration,
+          buffered: media.buffered,
+          qualityHeight:
+            media.qualities.find((quality) => quality.active)?.height ?? null,
+        };
+      },
+    ),
   );
   useEffect(() => {
     const flush = () => playbackTelemetry.flush();
@@ -956,6 +993,18 @@ export function LessonVideoPlayer({
       playbackTelemetry.handle(event);
       if (event.type === "fullscreenchange") {
         setPlayerFullscreen(event.detail.active);
+      }
+      if (event.type === "streamingretry") {
+        setStreamingRetries(event.detail.attempt);
+      } else if (
+        event.type === "streamingrecovered" ||
+        event.type === "loaded" ||
+        // A failure the player got over by itself (Shaka moving to
+        // another quality while one is refused) is reported too, and is
+        // not the end of the wait.
+        (event.type === "error" && event.detail.error.fatal)
+      ) {
+        setStreamingRetries(0);
       }
       if (event.type === "play" || event.type === "playing") {
         setStreamConflict(null);
@@ -1606,6 +1655,8 @@ export function LessonVideoPlayer({
     const FullscreenEnterIcon = playerTheme.icons.fullscreenEnter;
     const FullscreenExitIcon = playerTheme.icons.fullscreenExit;
     const isPending = !playbackAccessError;
+    // A reading lesson's text on its way: drawn as text to come.
+    const isReadingPending = isPending && readingPending;
     // A failure and a plain statement are both words on the bare stage; the
     // lock, the lesson's picture and the prominent action are for a lesson
     // that is waiting for the learner to sign in or to get the course.
@@ -1662,7 +1713,8 @@ export function LessonVideoPlayer({
           // sets no mark on the host; it says so here instead.
           minimizeGesture.controlsSuppressed &&
             "[&>:not([data-lesson-reading-scroll])]:invisible!",
-          (reading || miniReading) && lessonReadingShellClasses,
+          (reading || miniReading || isReadingPending) &&
+            lessonReadingShellClasses,
         )}
         ref={reading ? readingSurfaceRef : undefined}
         // The reading, its controls and the lessons panel share the width
@@ -1710,7 +1762,13 @@ export function LessonVideoPlayer({
               ? undefined
               : "alert"
         }
-        aria-label={isPending ? "Loading video" : undefined}
+        aria-label={
+          isReadingPending
+            ? "Loading reading"
+            : isPending
+              ? "Loading video"
+              : undefined
+        }
       >
         {/* A lesson that is waiting for the learner (to sign in, to get the
             course) shows what it is: its own picture, dimmed and out of
@@ -1853,7 +1911,9 @@ export function LessonVideoPlayer({
                 : undefined
             }
           />
-        ) : reading || miniReading ? null : (
+        ) : reading || miniReading ? null : isReadingPending ? (
+          <LessonReadingPlaceholder compact={presentation === "mini"} />
+        ) : (
           <div className="[container-type:size] pointer-events-none absolute inset-0 grid place-items-center p-6 text-center text-white">
             {isPending ? (
               <VideoLoadingSpinner />
@@ -2085,7 +2145,7 @@ export function LessonVideoPlayer({
         muted: restoreAutoplayRef.current !== null ? true : muted,
         // A hovered or next lesson is prepared in a hidden second element
         // and switched to at once when opened.
-        withStandby: true,
+        withStandby,
       }}
       className={cn(
         // A failure's message is drawn on the video, and the window is
@@ -2208,6 +2268,23 @@ export function LessonVideoPlayer({
       }
       overlays={
         <>
+          {reconnecting && !streamConflict && presentation === "full" ? (
+            // The engine is asking for segments that would not come (the
+            // connection is down, or the CDN refused them); the loader is
+            // up where the buffer ran out. Said in a word under the top
+            // row, as a status, never as a failure: the video goes on by
+            // itself once they arrive.
+            <div
+              className="pointer-events-none absolute inset-x-0 top-14 z-30 flex justify-center"
+              role="status"
+              aria-live="polite"
+              data-learning-player-reconnecting=""
+            >
+              <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-sm">
+                Reconnecting…
+              </span>
+            </div>
+          ) : null}
           {streamConflict ? (
             <VideoPlayerNotice
               className="z-35"

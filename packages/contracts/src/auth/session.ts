@@ -141,6 +141,31 @@ export const sessionParamsSchema = z.object({
   id: z.uuid().describe("The UUID of the session to revoke."),
 });
 
+export const sendActiveSessionsVerificationRequestSchema = z.object({
+  channel: z.enum(["email", "phone"]).optional(),
+});
+
+export const sendActiveSessionsVerificationResponseSchema = z.object({
+  message: z.string().max(255),
+  codeExpiresInSeconds: z.number().int().positive(),
+  channel: z.enum(["email", "phone"]),
+  maskedDestination: z.string().max(255),
+});
+
+export const activeSessionsVerificationRequestSchema = z.object({
+  channel: z.enum(["email", "phone"]).optional(),
+  code: z
+    .string()
+    .length(6, "Code must be exactly 6 digits")
+    .regex(/^\d+$/, "Code must contain only digits")
+    .meta({ example: "123456" }),
+});
+
+export const activeSessionsVerificationResponseSchema = z.object({
+  message: z.string().max(255),
+  verifiedUntil: z.iso.datetime(),
+});
+
 // Passkeys & MFA
 
 /**
@@ -340,6 +365,18 @@ export type AuthMessageResponse = z.output<typeof authMessageResponseSchema>;
 export type OtpSendResponse = z.output<typeof otpSendResponseSchema>;
 export type SessionParams = z.input<typeof sessionParamsSchema>;
 export type SessionResponse = z.output<typeof sessionResponseSchema>;
+export type SendActiveSessionsVerificationRequest = z.input<
+  typeof sendActiveSessionsVerificationRequestSchema
+>;
+export type SendActiveSessionsVerificationResponse = z.output<
+  typeof sendActiveSessionsVerificationResponseSchema
+>;
+export type ActiveSessionsVerificationRequest = z.input<
+  typeof activeSessionsVerificationRequestSchema
+>;
+export type ActiveSessionsVerificationResponse = z.output<
+  typeof activeSessionsVerificationResponseSchema
+>;
 export type PasskeyRegisterVerifyRequest = z.input<
   typeof passkeyRegisterVerifyRequestSchema
 >;

@@ -372,10 +372,24 @@ export async function markVideoJobProcessing(
     .set({
       status: sql<VideoJobStatus>`case when status = 'ready' then 'ready' else 'processing' end`,
       progress_percent: progressPercent,
+      error_message: null,
       updated_at: new Date(),
     })
     .where("id", "=", jobId)
     .where("status", "not in", ["completed", "failed", "cancelled"])
+    .execute();
+}
+
+/** Records a transient capacity warning only while the job is still queued. */
+export async function markVideoJobWaitingForCapacity(
+  database: Kysely<Database>,
+  jobId: string,
+) {
+  await database
+    .updateTable("video_jobs")
+    .set({ error_message: "WAITING_FOR_CAPACITY", updated_at: new Date() })
+    .where("id", "=", jobId)
+    .where("status", "=", "queued")
     .execute();
 }
 
@@ -477,6 +491,7 @@ export async function findVideoJobProgress(
       "video_jobs.id as job_id",
       "video_jobs.status as job_status",
       "video_jobs.progress_percent as progress_percent",
+      "video_jobs.error_message as error_message",
     ])
     .where("media_assets.id", "=", videoId);
 
@@ -562,6 +577,7 @@ export async function findPlaybackLessonContext(
       "course_lessons.title as lesson_title",
       "course_lessons.section_id as section_id",
       "course_lessons.content_media_id as content_media_id",
+      "course_lessons.content_type as content_type",
       "course_lessons.is_preview as is_preview",
       "course_lessons.is_published as is_published",
       // The lesson's media travels with it so playback does not read the

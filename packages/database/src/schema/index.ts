@@ -16,6 +16,7 @@ export * from "./quizzes.schema.ts";
 export * from "./learning-goals.schema.ts";
 export * from "./home-page.schema.ts";
 export * from "./quotes.schema.ts";
+export * from "./short-links.schema.ts";
 export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
@@ -145,10 +146,12 @@ import type {
 import type { HomePageSettingsTable } from "./home-page.schema.ts";
 import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
+import type { ShortLinkTable } from "./short-links.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
   SupportAttachmentTable,
+  SupportEventTable,
   SupportMessageTable,
   SupportTicketTable,
 } from "./support.schema.ts";
@@ -281,12 +284,14 @@ export interface Database {
   home_page_settings: HomePageSettingsTable;
   platform_settings: PlatformSettingsTable;
   quotes: QuoteTable;
+  short_links: ShortLinkTable;
   wishlist_items: WishlistItemTable;
 
   // Support
   support_tickets: SupportTicketTable;
   support_messages: SupportMessageTable;
   support_attachments: SupportAttachmentTable;
+  support_events: SupportEventTable;
 
   // Chat
   chat_settings: ChatSettingsTable;

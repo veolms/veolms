@@ -44,12 +44,14 @@ import {
   useTypingNames,
   useClearChat,
   useUpdateMyChatState,
+  isRoomMuted,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
 import { roomAvatarUrl } from "./chatIcon";
 import {
   ClearChatDialog,
   DeleteMessageDialog,
+  MuteChatDialog,
   ReportDialog,
   RestrictDialog,
 } from "./ChatDialogs";
@@ -74,6 +76,7 @@ type DialogState =
   | { kind: "restrict"; message: ChatMessage; mode: "mute" | "ban" }
   | { kind: "react"; message: ChatMessage }
   | { kind: "clear-chat"; mode: "clear" | "delete" }
+  | { kind: "mute" }
   | null;
 
 export function Conversation({
@@ -448,19 +451,15 @@ export function Conversation({
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() =>
-                  myState.mutate(
-                    {
-                      roomId: room.id,
-                      patch: {
-                        notifyLevel:
-                          room.me.notifyLevel === "none" ? "all" : "none",
-                      },
-                    },
-                    { onError: fail },
-                  )
+                  isRoomMuted(room.me)
+                    ? myState.mutate(
+                        { roomId: room.id, patch: { muteFor: "off" } },
+                        { onError: fail },
+                      )
+                    : setDialog({ kind: "mute" })
                 }
               >
-                {room.me.notifyLevel === "none"
+                {isRoomMuted(room.me)
                   ? "Unmute notifications"
                   : "Mute notifications"}
               </DropdownMenuItem>
@@ -680,6 +679,18 @@ export function Conversation({
         />
       )}
 
+      {dialog?.kind === "mute" ? (
+        <MuteChatDialog
+          onClose={() => setDialog(null)}
+          onMute={(muteFor) => {
+            setDialog(null);
+            myState.mutate(
+              { roomId: room.id, patch: { muteFor } },
+              { onError: fail },
+            );
+          }}
+        />
+      ) : null}
       {dialog?.kind === "clear-chat" ? (
         <ClearChatDialog
           mode={dialog.mode}

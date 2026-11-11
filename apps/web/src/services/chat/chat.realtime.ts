@@ -10,20 +10,27 @@ import type {
 } from "@veolms/contracts";
 
 import { setChatStreamCarriesNotifications } from "../../lib/tabLiveStream";
-import { getChatPrefs } from "../../store/chatPrefs.store";
+import { getChatPrefs, inQuietHours } from "../../store/chatPrefs.store";
 import { notificationKeys } from "../notifications";
+import {
+  closeChatNotifications,
+  isWebPushActive,
+  loadWebPush,
+} from "../webPush";
 import {
   applyGroupRead,
   applyMessages,
   applyPresence,
   applyReceipt,
   applyToRoomList,
+  isRoomMuted,
   type ChatThread,
 } from "./chat.cache";
 import { chatKeys } from "./chat.keys";
 import { restoreChatCache, startChatCachePersistence } from "./chat.persist";
 import { queueReceipt } from "./chat.receipts";
 import { chatService } from "./chat.service";
+import { chime } from "./chat.sounds";
 
 /**
  * Live chat over Server-Sent Events (GET /chat/stream), one per tab while a
@@ -33,8 +40,9 @@ import { chatService } from "./chat.service";
  * a gap, a reconnect (`ready`) or `resync` fetches what was missed with
  * GET .../changes?since=. The stream closes 2 minutes after the tab is
  * hidden and reopens when it is shown (CHAT_ROOM_PLAN §14.3), except while
- * desktop notifications are on: then it stays open so they keep coming, as
- * on WhatsApp Web.
+ * desktop notifications are on without web push: then it stays open so
+ * they keep coming. With web push the service worker shows them, tab
+ * closed or not (services/webPush), and the stream closes as usual.
  */
 
 const HIDDEN_GRACE_MS = 2 * 60_000;
@@ -82,8 +90,11 @@ function desktopAlertsOn() {
 const visibleRooms = new Set<string>();
 
 export function setChatOnScreen(roomId: string, onScreen: boolean) {
-  if (onScreen) visibleRooms.add(roomId);
-  else visibleRooms.delete(roomId);
+  if (onScreen) {
+    visibleRooms.add(roomId);
+    // Opened here: its notification has been seen.
+    void closeChatNotifications(roomId);
+  } else visibleRooms.delete(roomId);
 }
 
 function setLive(next: boolean) {
@@ -221,33 +232,6 @@ async function catchUp(roomId: string) {
 }
 
 // ------------------------------------------------------------------ alerts
-const SOUND_GAP_MS = 2_000;
-let lastSoundAt = 0;
-let audio: AudioContext | null = null;
-
-/** A soft two-note chime, made on the spot (no sound file to load). */
-function chime() {
-  if (Date.now() - lastSoundAt < SOUND_GAP_MS) return;
-  lastSoundAt = Date.now();
-  try {
-    audio ??= new AudioContext();
-    const now = audio.currentTime;
-    for (const [i, freq] of [880, 1320].entries()) {
-      const osc = audio.createOscillator();
-      const gain = audio.createGain();
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, now + i * 0.09);
-      gain.gain.exponentialRampToValueAtTime(0.08, now + i * 0.09 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.09 + 0.22);
-      osc.connect(gain).connect(audio.destination);
-      osc.start(now + i * 0.09);
-      osc.stop(now + i * 0.09 + 0.25);
-    }
-  } catch {
-    // No sound before the page has been interacted with, or no audio.
-  }
-}
-
 /**
  * Settings › Notifications: a sound and (in the background) a desktop
  * alert for a private message, or an @mention in a group, unless the chat
@@ -261,7 +245,7 @@ function alertFor(message: ChatMessage) {
     chatKeys.rooms(),
   );
   const room = list?.rooms.find((r) => r.id === message.roomId);
-  if (!room || room.me.notifyLevel === "none") return;
+  if (!room || isRoomMuted(room.me)) return;
   const mentioned = Boolean(
     viewer && (message.mentions.includes(viewer) || message.mentionAll),
   );
@@ -272,8 +256,10 @@ function alertFor(message: ChatMessage) {
   const away = document.visibilityState === "hidden" || !document.hasFocus();
   if (!away && visibleRooms.has(message.roomId)) return;
   const prefs = getChatPrefs();
-  if (prefs.sounds) chime();
-  if (away && desktopAlertsOn()) {
+  const quiet = inQuietHours(prefs.quietHours);
+  if (prefs.messageSound && !quiet) chime();
+  // With web push the service worker shows it (once for every tab).
+  if (away && desktopAlertsOn() && !isWebPushActive()) {
     const who = message.sender?.name ?? "Someone";
     const body = prefs.previews
       ? message.body ||
@@ -286,6 +272,7 @@ function alertFor(message: ChatMessage) {
         body,
         // One per chat: a newer message replaces the last one's alert.
         tag: message.roomId,
+        silent: quiet,
         ...(icon && /^https?:\/\//.test(icon) ? { icon } : {}),
       },
     );
@@ -381,6 +368,9 @@ function attach(next: EventSource) {
   next.addEventListener("chat.read", (event) => {
     const data = parse<ChatStreamReadEvent>(event as MessageEvent<string>);
     if (data && client) applyReceipt(client, data, viewer);
+    // Read on another device or tab: its notification here can go.
+    if (data && data.userId === viewer)
+      void closeChatNotifications(data.roomId);
   });
   next.addEventListener("chat.group_read", (event) => {
     const data = parse<ChatStreamGroupReadEvent>(event as MessageEvent<string>);
@@ -458,7 +448,7 @@ function onVisibilityChange() {
   if (document.visibilityState === "hidden") {
     clearTimeout(hiddenTimer);
     hiddenTimer = setTimeout(() => {
-      if (!desktopAlertsOn()) close();
+      if (!desktopAlertsOn() || isWebPushActive()) close();
     }, HIDDEN_GRACE_MS);
     return;
   }
@@ -466,6 +456,28 @@ function onVisibilityChange() {
   if (!source) {
     open();
   }
+}
+
+/** A notification was clicked: open its chat in this tab, no reload. */
+function onWorkerMessage(event: MessageEvent) {
+  const data = event.data as { type?: string; path?: string } | null;
+  if (data?.type !== "veolms:open" || typeof data.path !== "string") return;
+  if (!data.path.startsWith("/")) return;
+  if (openLink) openLink(data.path);
+  else window.location.assign(data.path);
+}
+
+/** Keeps this browser's push subscription saved, once the page is quiet. */
+function syncWebPushWhenIdle(viewerId: string) {
+  const run = () =>
+    void loadWebPush()
+      .then((webPush) => webPush.syncWebPush(viewerId))
+      .catch(() => {
+        // Tried again on the next visit.
+      });
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 10_000 });
+  } else setTimeout(run, 3_000);
 }
 
 /** Joins the tab's chat stream; returns the function that leaves it. */
@@ -484,6 +496,8 @@ export function startChatStream(
   users += 1;
   if (users === 1) {
     document.addEventListener("visibilitychange", onVisibilityChange);
+    navigator.serviceWorker?.addEventListener("message", onWorkerMessage);
+    if (viewerId) syncWebPushWhenIdle(viewerId);
     // Last visit's chats first (instant), then the stream catches them up.
     if (viewerId) {
       void restoreChatCache(queryClient, viewerId);
@@ -500,6 +514,7 @@ export function startChatStream(
       stopPersisting?.();
       stopPersisting = undefined;
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      navigator.serviceWorker?.removeEventListener("message", onWorkerMessage);
       clearTimeout(hiddenTimer);
       close();
       readyBefore = false;

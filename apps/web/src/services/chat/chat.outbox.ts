@@ -4,6 +4,8 @@ import type { ChatAttachment, ChatUploadKind } from "@veolms/contracts";
 import { getApiError } from "../../lib/api-error";
 import { applyMessages, applyToRoomList, markRoomRead } from "./chat.cache";
 import { chatService } from "./chat.service";
+import { getChatPrefs } from "../../store/chatPrefs.store";
+import { sentPop } from "./chat.sounds";
 
 /**
  * Messages on their way (WhatsApp's clock icon). A message shows at once;
@@ -143,6 +145,7 @@ async function deliver(
         applyToRoomList(client, message, { viewerId, isNew: true, open: true });
         markRoomRead(client, roomId, message.seq);
         remove(roomId, next.clientId);
+        if (getChatPrefs().sentSound) sentPop();
       } catch (error) {
         update(roomId, next.clientId, {
           status: "failed",

@@ -28,18 +28,23 @@ export const NON_VIDEO_LESSON_LABELS: Partial<Record<string, string>> = {
   document: "Reading",
   quiz: "Quiz",
 };
-type LessonReadingContent = LessonContent & Pick<CourseLesson, "description">;
+type LessonReadingContent = LessonContent &
+  Pick<CourseLesson, "description"> &
+  Partial<Pick<CourseLesson, "id">>;
 
 /**
- * True when the course lists the lesson with no media. `null` is the
- * server's "none attached"; a lesson whose record is not known yet (the
+ * True when the course lists the lesson with no video: no media (`null` is
+ * the server's "none attached"), or a reading, whose media is a PDF to read
+ * and never a video to play. A lesson whose record is not known yet (the
  * course is still loading) or does not say is treated as having a video.
  */
 export function lessonHasNoVideo(
   lesson: LessonContent | null | undefined,
 ): boolean {
   return (
-    lesson !== null && lesson !== undefined && lesson.contentMediaId === null
+    lesson !== null &&
+    lesson !== undefined &&
+    (lesson.contentMediaId === null || lesson.contentType === "document")
   );
 }
 
@@ -209,8 +214,61 @@ export function getLessonReading(
   lesson: LessonReadingContent | null | undefined,
 ): string | null {
   if (!lesson || lesson.contentType !== "document") return null;
-  if (!lessonHasNoVideo(lesson)) return null;
+  if (lesson.contentMediaId !== null) return null;
   return lesson.description?.trim() || null;
+}
+
+/**
+ * A reading lesson whose text is a PDF file (one brought over from another
+ * platform, say) rather than its description. It used to be taken for a
+ * video lesson: its file was asked for as a video, the server found no
+ * video, and the page said "No video". Such a lesson is read in the page's
+ * own PDF reader (`LessonPdfReading`).
+ *
+ * The reading travels through the player as its text does, as one string
+ * (see `lessonPdfReadingRef`). Null for any other lesson, and until the
+ * course's id is known.
+ */
+export function getLessonPdfReading(
+  lesson: LessonReadingContent | null | undefined,
+  courseId: string | null | undefined,
+): string | null {
+  if (!lesson || lesson.contentType !== "document") return null;
+  if (!lesson.contentMediaId || !lesson.id || !courseId) return null;
+  return lessonPdfReadingRef(courseId, lesson.id);
+}
+
+/** Whether the lesson is read rather than watched: its text or its PDF. */
+export function lessonIsReading(
+  lesson: LessonReadingContent | null | undefined,
+): boolean {
+  return (
+    getLessonReading(lesson) !== null ||
+    (lesson?.contentType === "document" && Boolean(lesson.contentMediaId))
+  );
+}
+
+const PDF_READING_PREFIX = "lesson-pdf:";
+
+/**
+ * A PDF reading, as the reading string the player carries: a reading is
+ * otherwise its Markdown text, which never starts this way (it is trimmed
+ * text a person wrote).
+ */
+export function lessonPdfReadingRef(courseId: string, lessonId: string) {
+  return `${PDF_READING_PREFIX}${courseId}/${lessonId}`;
+}
+
+/** The course and lesson a PDF reading names; null for a text reading. */
+export function parseLessonPdfReading(
+  reading: string,
+): { courseId: string; lessonId: string } | null {
+  if (!reading.startsWith(PDF_READING_PREFIX)) return null;
+  const [courseId, lessonId, ...rest] = reading
+    .slice(PDF_READING_PREFIX.length)
+    .split("/");
+  if (!courseId || !lessonId || rest.length) return null;
+  return { courseId, lessonId };
 }
 
 /**
@@ -220,18 +278,33 @@ export function getLessonReading(
  */
 export function noVideoNoticeFor(
   lesson: LessonReadingContent | null | undefined,
+  courseId?: string | null,
 ) {
-  const article = getLessonReading(lesson);
-  return article
-    ? ({
-        kind: "notice",
-        title: "Reading",
-        message: "This lesson is a reading.",
-        actionLabel: "",
-        article,
-      } as const)
+  const article =
+    getLessonPdfReading(lesson, courseId) ?? getLessonReading(lesson);
+  if (article) {
+    return {
+      kind: "notice",
+      title: "Reading",
+      message: "This lesson is a reading.",
+      actionLabel: "",
+      article,
+    } as const;
+  }
+  // A reading with no text and no PDF yet is not "a lesson with no video".
+  return lesson?.contentType === "document"
+    ? EMPTY_READING_NOTICE
     : NO_VIDEO_NOTICE;
 }
+
+/** Shown for a reading lesson whose text has not been written yet. */
+export const EMPTY_READING_NOTICE = {
+  kind: "notice",
+  illustration: "not-found",
+  title: "Nothing to read yet",
+  message: "This reading has no text yet.",
+  actionLabel: "",
+} as const;
 
 /**
  * What stands where the video would be for a lesson with none, by what is
@@ -243,11 +316,12 @@ export function noVideoNoticeFor(
 export function noVideoStageFor(
   lesson: LessonReadingContent | null | undefined,
   descriptionState: LessonDescriptionState,
+  courseId?: string | null,
 ) {
   if (descriptionState === "loading") return { kind: "pending" } as const;
   if (descriptionState === "failed") return LESSON_TEXT_FAILED_NOTICE;
   if (descriptionState === "login" || descriptionState === "locked") {
     return { kind: "locked", reason: descriptionState } as const;
   }
-  return noVideoNoticeFor(lesson);
+  return noVideoNoticeFor(lesson, courseId);
 }

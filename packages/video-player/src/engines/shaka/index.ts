@@ -16,6 +16,7 @@ export {
 } from "./hls-inline-manifest";
 export {
   abandonEarlyShakaPreloadSession,
+  claimEarlyShakaPreloadSession,
   consumeEarlyShakaPreloadSession,
   getEarlyShakaPreloadSession,
   setEarlyShakaPreloadSessionForTests,

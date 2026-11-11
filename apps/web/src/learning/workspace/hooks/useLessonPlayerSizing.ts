@@ -13,7 +13,7 @@ import {
   useLessonPlayerHeight,
   useLessonTitleHeightSwipe,
 } from "../../player/LessonPlayerHeightHandle";
-import { getLessonReading } from "../../lessonWithoutVideo";
+import { lessonIsReading as lessonIsReadingLesson } from "../../lessonWithoutVideo";
 import {
   isPhoneLayoutHeld,
   onPhoneLayoutRelease,
@@ -65,7 +65,7 @@ export function useLessonPlayerSizing({
   // the grip). Taller, it scrolls away with the page as a video at its full
   // height does; only a shortened one stays at the top.
   const [readingGrowth, setReadingGrowth] = useState<number | null>(null);
-  const lessonIsReading = getLessonReading(stageLesson ?? null) !== null;
+  const lessonIsReading = lessonIsReadingLesson(stageLesson ?? null);
   const readingGrowable =
     lessonIsReading && stickyPlayer
       ? { growth: readingGrowth, onGrowthChange: setReadingGrowth }

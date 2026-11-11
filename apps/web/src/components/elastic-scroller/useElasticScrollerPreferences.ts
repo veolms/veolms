@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ELASTIC_SCROLL_APPEARANCE_KEY,
+  ELASTIC_SCROLL_ENABLED_KEY,
   ELASTIC_SCROLL_HIDE_DELAY_KEY,
   ELASTIC_SCROLL_ICON_ANIMATION_KEY,
   ELASTIC_SCROLL_ICON_KEY,
@@ -13,6 +14,7 @@ import {
 import type { ElasticScrollPreferences } from "../../settings/settingsPreferences";
 
 const ELASTIC_SCROLL_STORAGE_KEYS = new Set([
+  ELASTIC_SCROLL_ENABLED_KEY,
   ELASTIC_SCROLL_APPEARANCE_KEY,
   ELASTIC_SCROLL_ICON_KEY,
   ELASTIC_SCROLL_ICON_ANIMATION_KEY,

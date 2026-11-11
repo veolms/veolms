@@ -87,6 +87,10 @@ import {
 } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
 import { ThreadReplyComposer } from "./ThreadReplyComposer";
+import { CreatorHeartButton } from "./CreatorHeartButton";
+import { useThreadStaffActions } from "./useThreadStaffActions";
+import { useCommentTapGestures } from "./useCommentTapGestures";
+import { useReplyHeartMutation } from "../services/learning-interactions/thread-marks";
 import type { LessonParticipationState } from "./Discussion";
 import { TimeAgo } from "../components/TimeAgo";
 import { cheerLike } from "../components/likeFeedback";
@@ -878,6 +882,7 @@ function ThreadSlide({
 }: ThreadSlideProps) {
   const isQuestion =
     entry.entryKind === "question" || Boolean(entry.isQuestion);
+  const isNote = entry.entryKind === "note";
   const canLock = canParticipate && Boolean(entry.isOwn || canModerate);
   const canAcceptAnswer =
     canParticipate && isQuestion && Boolean(entry.isOwn || canModerate);
@@ -1136,6 +1141,8 @@ function ThreadSlide({
           isBackendMode={isBackendMode}
           canParticipate={canParticipate}
           canLock={canLock}
+          canModerate={Boolean(canModerate)}
+          courseId={courseId}
           onToggleLock={() => onToggleLockThread?.(entry.id, !entry.isLocked)}
           onToggleBookmark={canParticipate ? onToggleBookmark : undefined}
           onToggleFollow={canParticipate ? onToggleFollow : undefined}
@@ -1209,6 +1216,12 @@ function ThreadSlide({
                 onCopyTextNotice={onCopyTextNotice}
                 courseId={courseId}
                 canParticipate={canParticipate}
+                canHeart={
+                  Boolean(canModerate) &&
+                  !isNote &&
+                  (entry.visibility ?? "public") === "public"
+                }
+                threadServerId={getServerEntityId(entry)}
               />
             ))
           ) : (
@@ -1302,6 +1315,8 @@ function ThreadRootEntry({
   isBackendMode = false,
   canParticipate = true,
   canLock = false,
+  canModerate = false,
+  courseId,
   onToggleLock,
   onToggleBookmark,
   onToggleFollow,
@@ -1317,6 +1332,9 @@ function ThreadRootEntry({
   isBackendMode?: boolean;
   canParticipate?: boolean;
   canLock?: boolean;
+  /** Course staff: may give the creator's heart. */
+  canModerate?: boolean;
+  courseId?: string;
   onToggleLock?: () => void;
   onToggleBookmark?: (
     threadId: string | number,
@@ -1337,13 +1355,34 @@ function ThreadRootEntry({
   const isEntryLiked = Boolean(entry.liked);
   const isNote = entry.entryKind === "note" || (entry as any).kind === "note";
   const serverId = getServerEntityId(entry);
+  // The creator's heart, as on the card in the lesson's discussion.
+  const staff = useThreadStaffActions({
+    thread: {
+      id: isNote ? undefined : serverId,
+      courseId: entry.courseId ?? courseId,
+      lessonId: entry.lessonId,
+      isPublic: (entry.visibility ?? "public") === "public",
+      pinnedAt: entry.pinnedAt,
+      creatorHeart: entry.creatorHeart,
+    },
+    canModerate,
+    onNotice: onCopyTextNotice,
+  });
+  // The thread is already open: a double tap likes, a triple tap does nothing more.
+  const tapGestures = useCommentTapGestures({});
   const clientId = getClientEntityId(entry);
   const isEditing = optimisticEditCoordinator.isEditing("thread", clientId);
 
   const replyCount = Math.max(entry.replies ?? 0, entry.thread?.length ?? 0);
 
   return (
-    <article className="mx-auto mb-1 max-w-4xl pt-3 pb-4">
+    <article
+      className="mx-auto mb-1 max-w-4xl pt-3 pb-4"
+      data-tap-gesture=""
+      style={tapGestures.style}
+      onMouseDown={tapGestures.onMouseDown}
+      onClick={tapGestures.onClick}
+    >
       <div className="flex gap-3 sm:gap-3.5">
         <ProfileLink username={entry.authorUsername} variant="picture">
           <DiscussionAvatar src={entry.avatar} className="size-10 sm:size-11" />
@@ -1479,6 +1518,7 @@ function ThreadRootEntry({
                 type="button"
                 aria-pressed={isEntryLiked}
                 aria-label={isEntryLiked ? "Unlike" : "Like"}
+                data-comment-like
                 onClick={(event) => {
                   if (!isEntryLiked) cheerLike(event.currentTarget);
                   onLike(entry.id, !isEntryLiked);
@@ -1518,6 +1558,13 @@ function ThreadRootEntry({
                 </span>
               </button>
             )}
+            {!isNote && (
+              <CreatorHeartButton
+                heart={entry.creatorHeart}
+                canGive={staff.canMark}
+                onToggle={staff.setHeart}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -1541,9 +1588,14 @@ function ThreadReplyEntry({
   onSeekToTimestamp,
   onCopyTextNotice,
   courseId,
+  canHeart = false,
+  threadServerId,
 }: {
   parentId: string | number;
   reply: CommentReply;
+  /** Course staff on a public post: may give the reply the creator's heart. */
+  canHeart?: boolean;
+  threadServerId?: string;
   isBackendMode?: boolean;
   canParticipate?: boolean;
   isQuestion?: boolean;
@@ -1584,6 +1636,13 @@ function ThreadReplyEntry({
   const replyServerId = getServerEntityId(reply);
   const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
   const isEditing = optimisticEditCoordinator.isEditing("reply", replyClientId);
+  const heartMutation = useReplyHeartMutation({
+    onError: (error) =>
+      onCopyTextNotice?.(error.message || "That change could not be saved."),
+  });
+  const canGiveHeart =
+    canHeart && Boolean(courseId && replyServerId && threadServerId);
+  const tapGestures = useCommentTapGestures({});
 
   const saveEdit = async () => {
     if (!hasDiscussionDraftContent(editDraft) || isUpdating) return;
@@ -1611,6 +1670,10 @@ function ThreadReplyEntry({
     <article
       data-thread-reply-entry
       data-deletion-pending={deletion.hidden || undefined}
+      data-tap-gesture=""
+      style={tapGestures.style}
+      onMouseDown={tapGestures.onMouseDown}
+      onClick={tapGestures.onClick}
       className={`relative px-3 py-2.5 sm:px-8 ${deletion.hidden ? "min-h-10" : ""}`}
     >
       <div
@@ -1733,6 +1796,7 @@ function ThreadReplyEntry({
                     type="button"
                     aria-pressed={Boolean(reply.liked)}
                     aria-label={reply.liked ? "Unlike reply" : "Like reply"}
+                    data-comment-like
                     onClick={(event) => {
                       if (!reply.liked) cheerLike(event.currentTarget);
                       onLikeReply(reply.id);
@@ -1769,6 +1833,23 @@ function ThreadReplyEntry({
                     />
                   </button>
                 )}
+                <CreatorHeartButton
+                  heart={reply.creatorHeart}
+                  canGive={canGiveHeart}
+                  size="sm"
+                  onToggle={(give) => {
+                    if (!courseId || !replyServerId || !threadServerId) return;
+                    heartMutation.mutate({
+                      reply: {
+                        id: replyServerId,
+                        threadId: threadServerId,
+                        courseId,
+                        creatorHeart: reply.creatorHeart,
+                      },
+                      give,
+                    });
+                  }}
+                />
               </div>
             </div>
           </div>

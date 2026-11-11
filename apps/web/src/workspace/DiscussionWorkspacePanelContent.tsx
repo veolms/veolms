@@ -45,6 +45,10 @@ import { TimeAgo } from "../components/TimeAgo";
 import { DiscussionCourseThumbnail } from "./DiscussionCourseThumbnail";
 import { DiscussionAttachmentsList } from "../learning/discussion-attachments/DiscussionAttachmentsList";
 import { DiscussionStaffActions } from "./DiscussionStaffActions";
+import { CreatorHeartButton } from "../learning/CreatorHeartButton";
+import { useCommentTapGestures } from "../learning/useCommentTapGestures";
+import { useCapabilities } from "../services/authorization";
+import { useReplyHeartMutation } from "../services/learning-interactions/thread-marks";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 
 /** The thread's replies as the replies query keeps them. */
@@ -196,17 +200,27 @@ function PanelReply({
   reply,
   highlighted,
   onLike,
+  canHeart,
+  onHeart,
   edit,
 }: {
   reply: LearningReply;
   /** The reply the panel was opened for. */
   highlighted: boolean;
   onLike: (reply: LearningReply) => void;
+  /** Course staff on a public post: may give the creator's heart. */
+  canHeart: boolean;
+  onHeart: (reply: LearningReply, give: boolean) => void;
   /** Given, the reply's text is shown in the editor to change it. */
   edit?: PanelEditHandlers;
 }) {
+  const tapGestures = useCommentTapGestures({});
   return (
     <article
+      data-tap-gesture=""
+      style={tapGestures.style}
+      onMouseDown={tapGestures.onMouseDown}
+      onClick={tapGestures.onClick}
       className={`flex gap-3 rounded-xl ${
         highlighted
           ? "-mx-3 bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] px-3 py-3"
@@ -243,13 +257,19 @@ function PanelReply({
         {!edit && reply.attachments && reply.attachments.length > 0 && (
           <DiscussionAttachmentsList attachments={reply.attachments} />
         )}
-        <div className="-ml-2.5">
+        <div className="-ml-2.5 flex items-center gap-1">
           <DiscussionLikeButton
             liked={Boolean(reply.isLiked)}
             count={reply.likesCount}
             onToggle={() => onLike(reply)}
             noun="reply"
             iconSize={14}
+          />
+          <CreatorHeartButton
+            heart={reply.creatorHeart}
+            canGive={canHeart}
+            size="sm"
+            onToggle={(give) => onHeart(reply, give)}
           />
         </div>
       </div>
@@ -561,6 +581,34 @@ export function DiscussionPanelContent({
     },
   };
 
+  // Hearts go on replies anyone can see: under a public post, given by
+  // someone who moderates discussions.
+  const moderatesDiscussions = useCapabilities({
+    enabled: Boolean(currentUser),
+  }).canOnCourse("discussion.moderate", null);
+  const canHeartReplies =
+    moderatesDiscussions &&
+    Boolean(card.courseId) &&
+    thread.data?.visibility === "public";
+  // The discussion is open: a double tap likes, a triple tap does nothing more.
+  const postGestures = useCommentTapGestures({});
+  const replyHeart = useReplyHeartMutation({
+    onError: (error) =>
+      setNotice?.(error.message || "That change could not be saved."),
+  });
+  const heartReply = (reply: LearningReply, give: boolean) => {
+    if (!threadId || !card.courseId) return;
+    replyHeart.mutate({
+      reply: {
+        id: reply.id,
+        threadId,
+        courseId: card.courseId,
+        creatorHeart: reply.creatorHeart,
+      },
+      give,
+    });
+  };
+
   // The count changes at once; the server's answer then refreshes it, and
   // a failure puts it back.
   const likeReply = (reply: LearningReply) => {
@@ -789,7 +837,13 @@ export function DiscussionPanelContent({
         {!lessonInBar &&
           renderLessonLink(`border-b ${LINE} hover:bg-(--hover)`)}
 
-        <article className="px-5 pt-5 pb-4">
+        <article
+          className="px-5 pt-5 pb-4"
+          data-tap-gesture=""
+          style={postGestures.style}
+          onMouseDown={postGestures.onMouseDown}
+          onClick={postGestures.onClick}
+        >
           <div className="flex items-center gap-3">
             <DiscussionAvatar
               src={
@@ -890,6 +944,8 @@ export function DiscussionPanelContent({
                   reply={reply}
                   highlighted={isReplyCard && reply.id === card.id}
                   onLike={likeReply}
+                  canHeart={canHeartReplies}
+                  onHeart={heartReply}
                   edit={
                     isEditingReply && reply.id === card.id
                       ? editHandlers

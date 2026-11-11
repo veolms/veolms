@@ -91,6 +91,7 @@ import {
   academyThemes,
 } from "./themes";
 import { useRememberAppPage } from "./legal/legalReturn";
+import { NativeBridgePlatformLog } from "./native-bridge";
 
 interface LayoutProps {
   children: ReactNode;
@@ -514,6 +515,7 @@ export default function Root() {
   return (
     <QueryProvider>
       <HydrationMarker />
+      <NativeBridgePlatformLog />
       <SessionInitializer>
         <GlobalGoogleOneTap />
         <AnalyticsPageViews />

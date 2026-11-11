@@ -32,6 +32,7 @@ import type { SettingsTab } from "./routing/tabSessionState";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
 import { SwipeableTabPanel } from "./navigation/SwipeableTabPanel";
 import { authStore, useAuthStore } from "./store/auth.store";
+import { useCapabilities } from "./services/authorization";
 import { getSettingsTabs } from "./settings/settingsTabs";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
 import { useSettingsTabShortcuts } from "./settings/useSettingsTabShortcuts";
@@ -165,7 +166,16 @@ export function SettingsPage({
   // session hint, so neither a guest nor an account sees the tab row change
   // on a reload. Once it has answered, a guest's row has only their tabs.
   const isConfirmedGuest = isAuthReady && !isAuthenticated;
-  const visibleTabs = getSettingsTabs(!isConfirmedGuest);
+  // Staff with link.manage also get Links. Added once the page has mounted,
+  // so the first render matches the prerendered tab row.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const capabilities = useCapabilities({
+    enabled: canEditAuthenticatedSettings,
+  });
+  const showLinksTab =
+    mounted && canEditAuthenticatedSettings && capabilities.can("link.manage");
+  const visibleTabs = getSettingsTabs(!isConfirmedGuest, showLinksTab);
   const visibleTabIds = useMemo(
     () => visibleTabs.map(({ id }) => id),
     [visibleTabs],

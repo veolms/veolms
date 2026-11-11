@@ -126,6 +126,9 @@ export const permissions = [
   "chat.moderate",
   "chat.manage",
   "chat.restrict_platform",
+
+  // Short links on the site's own domain (Settings > Links).
+  "link.manage",
 ] as const;
 
 /** Every key that opens a section of the Analytics page. */

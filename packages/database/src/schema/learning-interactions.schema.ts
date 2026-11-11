@@ -60,6 +60,9 @@ export interface LearningReplyTable {
   is_accepted: Generated<boolean>;
   status: Generated<InteractionStatus>;
   likes_count: Generated<number>;
+  /** The creator's heart on a reply, as on a comment: when and by whom. */
+  hearted_at: Date | null;
+  hearted_by_user_id: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

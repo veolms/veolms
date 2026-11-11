@@ -34,6 +34,18 @@ import type {
 import type { VideoPlaybackBootstrap } from "@veolms/contracts";
 import type { CourseLesson } from "@veolms/contracts";
 import type { OctopusKind } from "../../../components/OctopusIllustration";
+import { reportPlaybackIncident } from "../../player/playbackIncidents";
+
+/**
+ * Bootstrap failures that are not a fault: the learner must sign in or get
+ * the course, or the lesson has no video. Everything else that stops a
+ * video from being prepared is reported as a `page_error` incident.
+ */
+const EXPECTED_BOOTSTRAP_REFUSALS = new Set([
+  "UNAUTHORIZED",
+  "MFA_REQUIRED",
+  "MEDIA_NOT_FOUND",
+]);
 
 export interface UseLessonStagePlanArgs {
   courseSlug: string | undefined;
@@ -298,7 +310,11 @@ export function useLessonStagePlan({
     } as const;
 
     if (!courseNotFound && !requestsLessonPlayback) {
-      const stage = noVideoStageFor(stageLesson, lessonDescriptionState);
+      const stage = noVideoStageFor(
+        stageLesson,
+        lessonDescriptionState,
+        courseOverview?.course.id,
+      );
       // The loader stands in meanwhile; see `lessonTextPending`.
       if (stage.kind === "pending") return null;
       if (stage.kind === "locked") {
@@ -343,7 +359,7 @@ export function useLessonStagePlan({
     // The same statement as when the course itself says the lesson has no
     // video: it is asked for only while the course is still loading.
     if (playbackBootstrapError.code === "MEDIA_NOT_FOUND") {
-      return noVideoNoticeFor(stageLesson);
+      return noVideoNoticeFor(stageLesson, courseOverview?.course.id);
     }
 
     return {
@@ -352,6 +368,7 @@ export function useLessonStagePlan({
     };
   }, [
     courseAccessQuery.data?.openSectionIds,
+    courseOverview?.course.id,
     courseUnavailable,
     lessonDescriptionState,
     onUnlockCourse,
@@ -400,6 +417,34 @@ export function useLessonStagePlan({
     playbackRequestKeyRef,
     setPlaybackBootstrapError,
   ]);
+  // A video that could not be prepared is an incident too: the learner
+  // sees "Something went wrong" (or "This is taking a while") where the
+  // player would be, and the playback summary never starts.
+  useEffect(() => {
+    const error = playbackBootstrapError;
+    if (!error || !courseSlug) return;
+    if (EXPECTED_BOOTSTRAP_REFUSALS.has(error.code)) return;
+    if (error.status === 401 || error.status === 403) return;
+    reportPlaybackIncident(
+      "page_error",
+      {
+        playbackId: crypto.randomUUID(),
+        courseKey: courseSlug,
+        lessonNumber: selectedLesson,
+        mediaKey: `${courseSlug}-lesson-${selectedLesson}`,
+        started: false,
+        positionSeconds: null,
+        durationSeconds: null,
+        qualityHeight: null,
+        bufferAheadSeconds: null,
+      },
+      {
+        code: error.code,
+        httpStatus: error.status > 0 ? error.status : null,
+      },
+    );
+  }, [courseSlug, playbackBootstrapError, selectedLesson]);
+
   return {
     lessonStagePlan,
     playbackAccessError,

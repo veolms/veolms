@@ -115,10 +115,14 @@ export const ELASTIC_SCROLL_HIDE_DELAY_KEY = "veolms-elastic-scroll-hide-delay";
 export const ELASTIC_SCROLL_HIDE_DELAY_MIN = 1;
 export const ELASTIC_SCROLL_HIDE_DELAY_MAX = 10;
 export const ELASTIC_SCROLL_HIDE_DELAY_DEFAULT = 2;
+/** Whether the elastic scroller shows at all while scrolling. */
+export const ELASTIC_SCROLL_ENABLED_KEY = "veolms-elastic-scroll-enabled";
+export const ELASTIC_SCROLL_ENABLED_DEFAULT = true;
 export const ELASTIC_SCROLL_PREFERENCES_EVENT =
   "veolms:elastic-scroll-preferences";
 
 export interface ElasticScrollPreferences {
+  enabled: boolean;
   appearance: ElasticScrollAppearance;
   icon: ElasticScrollIcon;
   animateIcon: boolean;
@@ -128,6 +132,7 @@ export interface ElasticScrollPreferences {
 }
 
 export const ELASTIC_SCROLL_PREFERENCES_DEFAULT: ElasticScrollPreferences = {
+  enabled: ELASTIC_SCROLL_ENABLED_DEFAULT,
   appearance: ELASTIC_SCROLL_APPEARANCE_DEFAULT,
   icon: ELASTIC_SCROLL_ICON_DEFAULT,
   animateIcon: ELASTIC_SCROLL_ICON_ANIMATION_DEFAULT,
@@ -552,6 +557,10 @@ export const normalizeElasticScrollHideDelay = (value: unknown): number => {
 };
 
 export const readElasticScrollPreferences = (): ElasticScrollPreferences => ({
+  enabled: readStoredBoolean(
+    ELASTIC_SCROLL_ENABLED_KEY,
+    ELASTIC_SCROLL_ENABLED_DEFAULT,
+  ),
   appearance: normalizeElasticScrollAppearance(
     readStored(
       ELASTIC_SCROLL_APPEARANCE_KEY,
@@ -588,6 +597,10 @@ export const applyElasticScrollPreferences = (
   preferences: Partial<ElasticScrollPreferences>,
 ): ElasticScrollPreferences => {
   const normalizedPreferences = {
+    enabled:
+      typeof preferences.enabled === "boolean"
+        ? preferences.enabled
+        : ELASTIC_SCROLL_ENABLED_DEFAULT,
     appearance: normalizeElasticScrollAppearance(preferences.appearance),
     icon: normalizeElasticScrollIcon(preferences.icon),
     animateIcon:
@@ -628,6 +641,10 @@ export const persistElasticScrollPreferences = (
   const normalizedPreferences = applyElasticScrollPreferences(preferences);
   if (typeof window !== "undefined") {
     try {
+      window.localStorage.setItem(
+        ELASTIC_SCROLL_ENABLED_KEY,
+        String(normalizedPreferences.enabled),
+      );
       window.localStorage.setItem(
         ELASTIC_SCROLL_APPEARANCE_KEY,
         normalizedPreferences.appearance,

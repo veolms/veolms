@@ -19,6 +19,7 @@ import {
   type ChatWallpaper,
 } from "../store/chatPrefs.store";
 import { ChatAvatar } from "./ChatAvatar";
+import { ChatNotificationSettings } from "./ChatNotificationSettings";
 import {
   ChatSelect,
   ChatToggle,
@@ -88,7 +89,7 @@ function RadioRow({
 /**
  * WhatsApp's Settings, in the chat list's place: your profile, then
  * Privacy, Chats (Enter is send, text size, wallpaper), Notifications
- * (sounds, desktop alerts, previews), Keyboard shortcuts and Blocked.
+ * (ChatNotificationSettings.tsx), Keyboard shortcuts and Blocked.
  * Privacy and Enter is send follow you; the rest stays on this device.
  */
 export function ChatSettingsPanel({
@@ -306,66 +307,10 @@ export function ChatSettingsPanel({
   }
 
   if (page === "notifications") {
-    const permission =
-      typeof Notification === "undefined"
-        ? "unsupported"
-        : Notification.permission;
     return panel(
       "Notifications",
       "root",
-      <>
-        <SettingsRow
-          title="Sounds"
-          note="A soft sound for a new message in another chat, or while this tab is in the background."
-        >
-          <ChatToggle
-            checked={prefs.sounds}
-            label="Sounds"
-            onChange={(on) => setChatPrefs({ sounds: on })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          title="Desktop alerts"
-          note={
-            permission === "denied"
-              ? "Your browser blocks notifications for this site. Allow them in the browser’s site settings."
-              : permission === "unsupported"
-                ? "This browser can’t show notifications."
-                : "Private messages and @mentions while the app is in the background."
-          }
-        >
-          <ChatToggle
-            checked={prefs.desktopAlerts && permission === "granted"}
-            disabled={permission === "denied" || permission === "unsupported"}
-            label="Desktop alerts"
-            onChange={(on) => {
-              if (!on) {
-                setChatPrefs({ desktopAlerts: false });
-                return;
-              }
-              void Notification.requestPermission().then((result) => {
-                setChatPrefs({ desktopAlerts: result === "granted" });
-                if (result !== "granted") {
-                  onToast("Notifications weren’t allowed by the browser.");
-                }
-              });
-            }}
-          />
-        </SettingsRow>
-        <SettingsRow
-          title="Show previews"
-          note="The message text in desktop alerts."
-        >
-          <ChatToggle
-            checked={prefs.previews}
-            label="Show previews"
-            onChange={(on) => setChatPrefs({ previews: on })}
-          />
-        </SettingsRow>
-        <p className="m-0 px-4 pt-2 text-[0.8rem] leading-snug text-(--muted)">
-          Mute a chat, or get only @mentions, from its menu or its info.
-        </p>
-      </>,
+      <ChatNotificationSettings onToast={onToast} />,
     );
   }
 
@@ -412,7 +357,7 @@ export function ChatSettingsPanel({
         </SettingsRow>
         <SettingsRow
           title="Notifications"
-          note="Sounds, desktop alerts, previews"
+          note="Message notifications, sounds, quiet hours"
           icon={<Bell size={21} />}
           onClick={() => setPage("notifications")}
         >

@@ -391,6 +391,26 @@ async function parseBootstrap(data: unknown): Promise<VideoPlaybackBootstrap> {
   };
 }
 
+/**
+ * How long a token request may take. The requests are shared by key
+ * (`playbackTokenRequests`) until they settle, so one that never settled
+ * (a connection gone quiet) was handed back to every renewal after it, and
+ * the lesson's segments waited on it for good. Given up at this point, the
+ * next renewal starts afresh.
+ */
+const PLAYBACK_TOKEN_REQUEST_LIMIT_MS = 12_000;
+
+/** `signal`, or one that aborts after the limit when none is given. */
+function playbackTokenSignal(signal: AbortSignal | undefined): AbortSignal {
+  if (signal) return signal;
+  if (typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(PLAYBACK_TOKEN_REQUEST_LIMIT_MS);
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), PLAYBACK_TOKEN_REQUEST_LIMIT_MS);
+  return controller.signal;
+}
+
 async function requestPlaybackToken(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackToken> {
@@ -401,7 +421,7 @@ async function requestPlaybackToken(
       credentials: "include",
       cache: "no-store",
       headers: playbackRequestHeaders(),
-      signal: options.signal,
+      signal: playbackTokenSignal(options.signal),
     },
   );
   const payload = await readResponsePayload(response);

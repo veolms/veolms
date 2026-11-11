@@ -124,12 +124,18 @@ iOS gets an alert for both kinds (`thread-id` = the channel group, or
 ## 4. Who gets a chat push
 
 Everyone in the chat but the sender, except people who muted it
-(`notify_level` none; "mentions" pushes only when mentioned), already read
+(`notify_level` none, or for a while: `muted_until`, set with
+`PATCH /chat/rooms/:id/me {"muteFor":"8h"|"1w"|"always"|"off"}` and shown
+as `me.mutedUntil`; "mentions" pushes only when mentioned), already read
 it on another device, blocked the sender, or turned chat pushes off in
 settings (`chat.message` / `push`). Groups above
 `CHAT_PUSH_GROUP_MAX_MEMBERS` (256) push only mentions and @everyone.
 Deleted and system messages push nothing. A chat mention does not send a
 second push: the chat message already says `isMention`.
+
+Browsers get the same chat pushes through Web Push (see
+[web-push.md](web-push.md)): they are `push_devices` rows with platform
+`web` in the same queue. Phone apps are unaffected.
 
 ## 5. Settings for push per type
 

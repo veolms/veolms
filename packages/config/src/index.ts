@@ -312,6 +312,17 @@ const serverConfigSchema = z.object({
     .min(32, "MFA_ENCRYPTION_KEY must be at least 32 characters")
     .default("default_mfa_encryption_key_at_least_32_chars_long"),
   WEB_URL: z.url().default("http://localhost:3000"),
+  /**
+   * Short links (docs/short-links.md). The address the website Worker reads
+   * a link from, exactly as it asks for it (its `LINKS_API_URL` plus
+   * `/links/resolve`), for example
+   * `https://api.example.com/v1/links/resolve`. With a Cloudflare zone and a
+   * token that may purge its cache, the edge keeps each answer for a day and
+   * the API purges it when the link changes; without them, for 60 seconds.
+   */
+  SHORT_LINKS_RESOLVE_URL: z.url().optional(),
+  CLOUDFLARE_ZONE_ID: z.string().trim().min(1).optional(),
+  CLOUDFLARE_CACHE_PURGE_TOKEN: z.string().trim().min(1).optional(),
   SETUP_TOKEN: z.string().default("veo_setup_token_123"),
 
   // WebAuthn Passkeys Config
@@ -433,6 +444,15 @@ const serverConfigSchema = z.object({
   LOCAL_ANY_COURSE_UNENROLL: booleanEnvironmentValueSchema.default(false),
 
   /**
+   * Development only: the shared test accounts (TEST_LOGIN_ACCOUNTS) may be
+   * staff, so a demo admin on a development server signs in with its fixed
+   * code. Without it a listed account holding any role other than student
+   * gets an emailed code instead. Honoured only when `NODE_ENV` is
+   * `development`, and the API refuses to start in production with it set.
+   */
+  TEST_LOGIN_STAFF_ALLOWED: booleanEnvironmentValueSchema.default(false),
+
+  /**
    * Enables the `mock_<email>` OAuth short-circuit, which skips both the
    * provider round-trip and the state/CSRF check. Requires `NODE_ENV` to be
    * `development` as well, so it can never be switched on in a deployed
@@ -543,6 +563,37 @@ const serverConfigSchema = z.object({
    * phones. Private chats always push.
    */
   CHAT_PUSH_GROUP_MAX_MEMBERS: z.coerce.number().int().min(2).default(256),
+
+  // Web push (browsers, VAPID): chat messages with the tab closed
+  /**
+   * Kill switch for browser pushes. Off, browsers cannot subscribe and
+   * none are sent; saved subscriptions are kept for when it is back on.
+   * Needs PUSH_ENABLED too (the switch for every push).
+   */
+  WEB_PUSH_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * The VAPID key pair, base64url (65-byte public point, 32-byte private
+   * scalar). `pnpm --filter @veolms/api web-push:keys` makes one. Unset:
+   * web push is off. Changing it orphans every subscription: browsers
+   * subscribe again on their next visit.
+   */
+  WEB_PUSH_VAPID_PUBLIC_KEY: z.string().trim().optional(),
+  WEB_PUSH_VAPID_PRIVATE_KEY: z.string().trim().optional(),
+  /**
+   * Who the push services can contact about our pushes: a `mailto:` or
+   * `https:` URL. Unset: WEB_URL.
+   */
+  WEB_PUSH_SUBJECT: z.string().trim().optional(),
+  /**
+   * Hosts a browser subscription may point at (a host or a `.suffix`),
+   * comma-separated: the browsers' own push services. Anything else is
+   * refused, so the API never posts to an address a visitor chose.
+   */
+  WEB_PUSH_ALLOWED_HOSTS: z
+    .string()
+    .default(
+      "fcm.googleapis.com,.push.services.mozilla.com,.notify.windows.com,.push.apple.com",
+    ),
 
   // Chat (course groups, team groups, private chats)
   /**
@@ -1033,6 +1084,7 @@ export function loadServerConfig(
   const developmentOnly = [
     parsed.LOCAL_FIXED_OTP ? "LOCAL_FIXED_OTP" : null,
     parsed.LOCAL_ANY_COURSE_UNENROLL ? "LOCAL_ANY_COURSE_UNENROLL" : null,
+    parsed.TEST_LOGIN_STAFF_ALLOWED ? "TEST_LOGIN_STAFF_ALLOWED" : null,
   ].filter((name): name is string => name !== null);
   if (developmentOnly.length > 0 && !environment.NODE_ENV?.trim()) {
     throw new Error(
@@ -1047,6 +1099,12 @@ export function loadServerConfig(
     if (parsed.LOCAL_FIXED_OTP) {
       throw new Error(
         "Refusing to start in production with LOCAL_FIXED_OTP set: it lets anyone sign in to any account. " +
+          "Remove it from the environment.",
+      );
+    }
+    if (parsed.TEST_LOGIN_STAFF_ALLOWED) {
+      throw new Error(
+        "Refusing to start in production with TEST_LOGIN_STAFF_ALLOWED set: it lets a shared test code open a staff account. " +
           "Remove it from the environment.",
       );
     }

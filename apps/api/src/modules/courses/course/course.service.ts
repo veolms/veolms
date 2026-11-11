@@ -81,6 +81,9 @@ import {
 } from "../../access/index.ts";
 import { resolveCoursePricing } from "../../commerce/index.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
+
+/** The largest lesson PDF given to the reader, which draws it page by page. */
+const LESSON_DOCUMENT_MAX_BYTES = 50 * 1024 * 1024;
 import { resolveAliasedBasicsUpdate } from "./basics-aliased-field.ts";
 import { resolveBasicsCategoryUpdate } from "./basics-category.ts";
 import { resolveDetailsLevelUpdate } from "./details-level.ts";
@@ -1715,17 +1718,20 @@ export function createCourseService({
   }
 
   /**
-   * One lesson's description, for the viewers the overview lists that lesson
-   * for and nobody else: the overview is where the lesson page used to read
-   * it, so the two must agree. A listed lesson the viewer may not open (see
-   * `createLessonContentAccess`) is refused as its video is: 401 for a
-   * visitor who is not signed in, 403 for a learner without the course.
+   * A lesson the course overview lists for this viewer, once the viewer is
+   * known to be allowed its content: the course and lesson as the overview
+   * sees them (anything else is not found), then the lesson's content rule,
+   * unless `publicContent` says its content is for everyone. A listed lesson
+   * the viewer may not open (see `createLessonContentAccess`) is refused as
+   * its video is: 401 for a visitor who is not signed in, 403 for a learner
+   * without the course.
    */
-  async function getLessonDescription(
+  async function findReadableLesson(
     courseId: string,
     lessonId: string,
-    user?: OverviewViewer,
-  ): Promise<LessonDescriptionResponse> {
+    user: OverviewViewer | undefined,
+    publicContent: (lesson: { content_type: string | null }) => boolean,
+  ) {
     const course = await courseRepo.findCourseById(database, courseId);
     const viewer = await withPreviewReach(user);
     const visibility = course
@@ -1752,9 +1758,7 @@ export function createCourseService({
     if (!lesson || !isLessonListedInOverview(lesson, visibility)) {
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
-    if (isLessonDescriptionPublic(lesson)) {
-      return { lessonId: lesson.id, description: lesson.description };
-    }
+    if (publicContent(lesson)) return lesson;
 
     const [accessRule, pricing] = await Promise.all([
       configurationService.findAccessRuleByCourseId(course.id),
@@ -1806,8 +1810,70 @@ export function createCourseService({
         "You do not have access to this course.",
       );
     }
+    return lesson;
+  }
 
+  /**
+   * One lesson's description, for the viewers the overview lists that lesson
+   * for and nobody else: the overview is where the lesson page used to read
+   * it, so the two must agree. A video's or a quiz's description is for
+   * everyone; a reading's is read by whoever may open the lesson (see
+   * `findReadableLesson`).
+   */
+  async function getLessonDescription(
+    courseId: string,
+    lessonId: string,
+    user?: OverviewViewer,
+  ): Promise<LessonDescriptionResponse> {
+    const lesson = await findReadableLesson(
+      courseId,
+      lessonId,
+      user,
+      isLessonDescriptionPublic,
+    );
     return { lessonId: lesson.id, description: lesson.description };
+  }
+
+  /**
+   * A reading lesson's PDF, for whoever may open the lesson (as its
+   * description is). Read from storage here for the caller to stream, so
+   * there is no link to the file to pass around. Only an uploaded PDF that
+   * a document lesson names, of a size worth drawing, is given.
+   */
+  async function getLessonDocument(
+    courseId: string,
+    lessonId: string,
+    user?: OverviewViewer,
+  ) {
+    const lesson = await findReadableLesson(
+      courseId,
+      lessonId,
+      user,
+      () => false,
+    );
+    const notFound = () =>
+      new AppError(
+        404,
+        "LESSON_DOCUMENT_NOT_FOUND",
+        "This lesson has no file to read.",
+      );
+    if (lesson.content_type !== "document" || !lesson.content_media_id) {
+      throw notFound();
+    }
+    const media = await mediaService.getMediaAsset(lesson.content_media_id);
+    if (
+      !media ||
+      media.type !== "document" ||
+      media.mime_type !== "application/pdf" ||
+      (media.status !== "uploaded" && media.status !== "ready") ||
+      (media.size_bytes !== null &&
+        Number(media.size_bytes) > LESSON_DOCUMENT_MAX_BYTES)
+    ) {
+      throw notFound();
+    }
+    const file = await services.storage.getObject(media.storage_key);
+    if (!file) throw notFound();
+    return { body: file.body, contentLength: file.contentLength };
   }
 
   /**
@@ -2082,6 +2148,7 @@ export function createCourseService({
       getCourseContent(contentSources, course),
     listCourseAccessFacts,
     getLessonDescription,
+    getLessonDocument,
     deleteCourse,
     findLessonById,
     findCourseById,

@@ -53,13 +53,15 @@ export const ElasticScroller = forwardRef<
   ref,
 ) {
   const preferences = useElasticScrollerPreferences();
+  // Switched off in Settings › Appearance: it never shows, anywhere.
+  const off = disabled || !preferences.enabled;
   const control = useElasticScroller({
     scrollportRef,
     contentRevision,
     lockSide: preferences.lockSide,
     unlockSide: preferences.unlockSide,
     hideDelaySeconds: preferences.hideDelaySeconds,
-    disabled,
+    disabled: off,
   });
   // Held still and then dragged, the control is moved instead of scrolling.
   const placement = useElasticScrollerPlacement({
@@ -107,7 +109,7 @@ export const ElasticScroller = forwardRef<
     [scrollToStart, stop],
   );
 
-  if (disabled) return null;
+  if (off) return null;
 
   return (
     <div

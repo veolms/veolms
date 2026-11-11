@@ -5,7 +5,11 @@ import {
   createSupportMessageRequestSchema,
   createSupportTicketRequestSchema,
   createSupportTicketResponseSchema,
+  pinSupportNoteRequestSchema,
   supportAdminListQuerySchema,
+  supportNoteParamsSchema,
+  supportTeamResponseSchema,
+  updateSupportNoteRequestSchema,
   supportAdminListResponseSchema,
   supportAdminStatsResponseSchema,
   supportAttachmentParamsSchema,
@@ -173,7 +177,10 @@ const supportRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "updateSupportTicket",
         tags,
-        summary: "Change the status of a report or feedback",
+        summary:
+          "Change the status, assignee, priority or category of a report or feedback",
+        description:
+          "Each change is logged in the ticket's Activity. A new assignee other than the caller is notified by email and in the app.",
         params: supportTicketParamsSchema,
         body: updateSupportTicketRequestSchema,
         response: {
@@ -186,6 +193,83 @@ const supportRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.updateTicket,
+  );
+
+  const noteResponses = {
+    200: jsonResponse("The ticket.", supportTicketDetailSchema),
+    401: errorResponse("Authentication required"),
+    403: errorResponse("Not the note's author or an admin"),
+    404: errorResponse("Not found"),
+  };
+
+  app.patch(
+    "/support/tickets/:ticketId/notes/:messageId",
+    {
+      preHandler: requires("support.manage"),
+      schema: {
+        operationId: "editSupportNote",
+        tags,
+        summary: "Edit an internal note",
+        description: "Its author or an admin only.",
+        params: supportNoteParamsSchema,
+        body: updateSupportNoteRequestSchema,
+        response: noteResponses,
+      },
+    },
+    controller.editNote,
+  );
+
+  app.put(
+    "/support/tickets/:ticketId/notes/:messageId/pin",
+    {
+      preHandler: requires("support.manage"),
+      schema: {
+        operationId: "pinSupportNote",
+        tags,
+        summary: "Pin an internal note to the top of the Activity, or unpin it",
+        params: supportNoteParamsSchema,
+        body: pinSupportNoteRequestSchema,
+        response: noteResponses,
+      },
+    },
+    controller.pinNote,
+  );
+
+  app.delete(
+    "/support/tickets/:ticketId/notes/:messageId",
+    {
+      preHandler: requires("support.manage"),
+      schema: {
+        operationId: "deleteSupportNote",
+        tags,
+        summary: "Delete an internal note",
+        description:
+          "Its author or an admin only. The note is kept for the record and no longer listed.",
+        params: supportNoteParamsSchema,
+        response: noteResponses,
+      },
+    },
+    controller.deleteNote,
+  );
+
+  app.get(
+    "/support/admin/team",
+    {
+      preHandler: requires("support.manage"),
+      schema: {
+        operationId: "listSupportTeam",
+        tags,
+        summary: "Who reports can be assigned to",
+        description:
+          "Everyone with support.manage, the caller first, with what is assigned to them and not done.",
+        response: {
+          200: jsonResponse("The team.", supportTeamResponseSchema),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Missing support.manage"),
+        },
+      },
+    },
+    controller.listTeam,
   );
 
   app.get(

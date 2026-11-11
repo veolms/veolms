@@ -266,6 +266,9 @@ export function ThreadReplyComposer({
           onAttachmentSelected={(attachment) => {
             setReplyAttachments((prev) => [...prev, attachment]);
           }}
+          // Enter posts the reply (Shift+Enter for a new line), as in the
+          // lesson's comment box.
+          onSubmitShortcut={() => void submit()}
         />
       ) : (
         editorPlaceholder

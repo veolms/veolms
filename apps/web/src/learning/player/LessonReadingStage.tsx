@@ -11,6 +11,8 @@ import { DiscussionMarkdown } from "../discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../discussion-editor/types";
 import { LESSON_READING_SCROLL_ATTRIBUTE } from "./useLessonPlayerMinimizeGesture";
 import { useReadingFontScale } from "./readingFontScale";
+import { parseLessonPdfReading } from "../lessonWithoutVideo";
+import { LessonPdfReading } from "./LessonPdfReading";
 
 /**
  * What the player's shell wears while it holds a reading, in place of the
@@ -72,7 +74,11 @@ export function LessonReadingStage({
    */
   onTap?: () => void;
 }) {
-  const content = useMemo(() => createDiscussionDraft(article), [article]);
+  const pdfReading = useMemo(() => parseLessonPdfReading(article), [article]);
+  const content = useMemo(
+    () => createDiscussionDraft(pdfReading ? "" : article),
+    [article, pdfReading],
+  );
   const [fontScale] = useReadingFontScale();
   // At the top of the text a finger moving down has nothing to scroll: the
   // browser is left only the upward swipes there, and the downward one goes
@@ -183,13 +189,70 @@ export function LessonReadingStage({
           together (headings, code, lists), which their own fixed sizes
           would not do for a larger font size alone, and the lines wrap at
           the new size. */}
-      <div style={fontScale === 1 ? undefined : { zoom: fontScale }}>
-        <DiscussionMarkdown
-          content={content}
-          label="Lesson reading"
-          preserveSoftBreaks
-          className="max-w-none! wrap-anywhere [&>:first-child]:mt-0"
+      {pdfReading ? (
+        // A reading whose text is a PDF: its pages, drawn by the page.
+        <LessonPdfReading
+          courseId={pdfReading.courseId}
+          lessonId={pdfReading.lessonId}
         />
+      ) : (
+        <div style={fontScale === 1 ? undefined : { zoom: fontScale }}>
+          <DiscussionMarkdown
+            content={content}
+            label="Lesson reading"
+            preserveSoftBreaks
+            className="max-w-none! wrap-anywhere [&>:first-child]:mt-0"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Widths of the placeholder's lines: a heading, then a paragraph. */
+const PLACEHOLDER_LINES = ["w-2/5", "w-full", "w-11/12", "w-full", "w-3/4"];
+
+/**
+ * A reading lesson whose text is on its way: the reading's label and a few
+ * lines of text to come, where the text will stand. A reading used to wait
+ * behind the video loader on black, so it looked like a video at first.
+ */
+export function LessonReadingPlaceholder({
+  compact = false,
+}: {
+  /** The mini player: lines only, no label. */
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-0 overflow-hidden",
+        compact ? "px-3 py-3" : "px-5 py-6",
+      )}
+      aria-hidden="true"
+    >
+      {compact ? null : (
+        <p className="m-0 mb-4 flex items-center justify-center gap-2 text-base font-semibold text-(--muted) sm:text-[17px]">
+          <BookOpenText size={18} weight="bold" aria-hidden="true" />
+          Reading
+        </p>
+      )}
+      <div
+        className={cn(
+          "mx-auto flex max-w-3xl animate-pulse flex-col",
+          compact ? "gap-1.5" : "gap-3",
+        )}
+      >
+        {PLACEHOLDER_LINES.map((width, index) => (
+          <span
+            key={width + String(index)}
+            className={cn(
+              "block rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]",
+              compact ? "h-1.5" : index === 0 ? "mb-2 h-5" : "h-3",
+              width,
+            )}
+          />
+        ))}
       </div>
     </div>
   );

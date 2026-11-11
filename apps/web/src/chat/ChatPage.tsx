@@ -12,6 +12,7 @@ import { cn } from "../lib/utils";
 import { useCurrentUser } from "../services/auth";
 import {
   flushReceipts,
+  isRoomMuted,
   prefetchChat,
   syncWithRoomList,
   useChatRoom,
@@ -35,6 +36,7 @@ import { useChatListWidth } from "./useChatListWidth";
 import { useChatPrefs } from "../store/chatPrefs.store";
 import { CHAT_TEXT_SIZES, CHAT_WALLPAPERS } from "./chatWallpapers";
 import { useChatShortcuts } from "./useChatShortcuts";
+import { MOBILE_NAV_KEEP_ATTRIBUTE } from "../shell/academyShellConstants";
 
 /** Chats loaded ahead, from the top of the list. */
 const WARM_CHATS = 6;
@@ -199,9 +201,9 @@ export function ChatPage() {
       current &&
       myState.mutate({
         roomId: current.id,
-        patch: {
-          notifyLevel: current.me.notifyLevel === "none" ? "all" : "none",
-        },
+        // The shortcut mutes for good, or unmutes (the menus offer 8 hours
+        // and a week).
+        patch: { muteFor: isRoomMuted(current.me) ? "off" : "always" },
       }),
     pin: () =>
       current &&
@@ -309,6 +311,10 @@ export function ChatPage() {
         // only rise above the bar when the screen does.
         roomId && "max-[640px]:z-150",
       )}
+      // On a phone this screen stops at the bottom menu's top edge (or an
+      // open chat covers it), so its scrolling must not hide the menu: that
+      // left an empty band under the list once a chat was closed.
+      {...{ [MOBILE_NAV_KEEP_ATTRIBUTE]: "" }}
       // Settings › Chats: wallpaper, its pattern and the text size.
       data-chat-pattern={prefs.pattern}
       style={
