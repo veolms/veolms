@@ -122,6 +122,10 @@ export interface UseLessonResourceAndDragHandlersResult {
     targetSectionId: string,
     targetLessonId: string,
   ) => void;
+  handleLessonDragOverSection: (
+    e: React.DragEvent,
+    targetSectionId: string,
+  ) => void;
   handleLessonDragEnd: () => Promise<void>;
 }
 
@@ -174,7 +178,8 @@ export function useLessonResourceAndDragHandlers({
     const sec = currentSections.find((s) => s.id === sectionId);
     if (!sec) return;
 
-    // 1. When the section is being EXPANDED:
+    // 1. When the section is being EXPANDED. Other open sections stay open,
+    // so nothing above it moves and it can scroll into view at once.
     if (!sec.isExpanded) {
       if (
         isCollapsingSectionRef.current ||
@@ -183,51 +188,10 @@ export function useLessonResourceAndDragHandlers({
         return;
       }
 
-      const sectionsToCollapse = currentSections.filter(
-        (section) => section.id !== sectionId && section.isExpanded,
-      );
-      const targetIndex = currentSections.findIndex(
-        (section) => section.id === sectionId,
-      );
-      sectionScrollDelayRef.current = currentSections
-        .slice(0, targetIndex)
-        .some((section) => section.isExpanded)
-        ? 300
-        : 0;
-      const dirtyLessons = sectionsToCollapse.flatMap((section) =>
-        section.lessons
-          .filter(
-            (lesson) => isLessonDirty(lesson) && !lesson.isPendingCreation,
-          )
-          .map((lesson) => ({ sectionId: section.id, lesson })),
-      );
-
-      if (dirtyLessons.length > 0) {
-        isCollapsingSectionRef.current = true;
-        let allSuccessful = true;
-        try {
-          for (const { sectionId: dirtySectionId, lesson } of dirtyLessons) {
-            const success = await persistLesson(dirtySectionId, lesson.id, {
-              collapseOnSuccess: true,
-            });
-            if (!success) {
-              allSuccessful = false;
-              break;
-            }
-          }
-        } finally {
-          isCollapsingSectionRef.current = false;
-        }
-        if (!allSuccessful) return;
-      }
-
+      sectionScrollDelayRef.current = 0;
       setSections((prev) => {
         const next = prev.map((section) =>
-          section.id === sectionId
-            ? { ...section, isExpanded: true }
-            : section.isExpanded
-              ? { ...section, isExpanded: false }
-              : section,
+          section.id === sectionId ? { ...section, isExpanded: true } : section,
         );
         sectionsRef.current = next;
         return next;
@@ -408,32 +372,93 @@ export function useLessonResourceAndDragHandlers({
     e.stopPropagation();
   };
 
+  const setDropTarget = (nextDropTarget: LessonDropTarget | null) => {
+    const current = lessonDropTargetRef.current;
+    if (
+      current?.sectionId === nextDropTarget?.sectionId &&
+      current?.lessonId === nextDropTarget?.lessonId &&
+      current?.position === nextDropTarget?.position
+    ) {
+      return;
+    }
+    lessonDropTargetRef.current = nextDropTarget;
+    setLessonDropTarget(nextDropTarget);
+  };
+
   const handleLessonDragOver = (
     e: React.DragEvent,
     targetSectionId: string,
     targetLessonId: string,
   ) => {
     const draggedLesson = draggedLessonStateRef.current;
-    if (!draggedLesson || targetSectionId !== draggedLesson.sectionId) return;
+    if (!draggedLesson) return;
     e.preventDefault();
     e.stopPropagation();
     if (targetLessonId === draggedLesson.lessonId) {
-      lessonDropTargetRef.current = null;
-      setLessonDropTarget(null);
+      setDropTarget(null);
       return;
     }
 
     const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const position =
       e.clientY < targetRect.top + targetRect.height / 2 ? "before" : "after";
-    const nextDropTarget = {
+    setDropTarget({
       sectionId: targetSectionId,
       lessonId: targetLessonId,
       position,
-    } satisfies LessonDropTarget;
-    lessonDropTargetRef.current = nextDropTarget;
-    setLessonDropTarget(nextDropTarget);
+    });
   };
+
+  /**
+   * A lesson dragged over a section but not over one of its lessons: its
+   * header, its padding, or the whole of a collapsed or empty section. It
+   * lands at the end of that section. Over the gaps between the lessons of
+   * the section it already points into, the current target is kept, so the
+   * drop line does not jump to the end and back.
+   */
+  const handleLessonDragOverSection = (
+    e: React.DragEvent,
+    targetSectionId: string,
+  ) => {
+    const draggedLesson = draggedLessonStateRef.current;
+    if (!draggedLesson) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const section = sectionsRef.current.find((s) => s.id === targetSectionId);
+    if (!section) return;
+    const current = lessonDropTargetRef.current;
+    if (
+      current?.sectionId === targetSectionId &&
+      current.lessonId !== null &&
+      section.isExpanded
+    ) {
+      return;
+    }
+    const lastOtherLesson = section.lessons
+      .filter((lesson) => lesson.id !== draggedLesson.lessonId)
+      .at(-1);
+    if (targetSectionId === draggedLesson.sectionId) {
+      // Its own section's end: after the last other lesson, if any.
+      setDropTarget(
+        lastOtherLesson
+          ? {
+              sectionId: targetSectionId,
+              lessonId: lastOtherLesson.id,
+              position: "after",
+            }
+          : null,
+      );
+      return;
+    }
+    setDropTarget({
+      sectionId: targetSectionId,
+      lessonId: null,
+      position: "after",
+    });
+  };
+
+  const isSavedId = (id: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
   const handleLessonDragEnd = async () => {
     const initial = dragInitialLessonStateRef.current;
@@ -442,102 +467,98 @@ export function useLessonResourceAndDragHandlers({
     setDraggedLessonState(null);
     setDragEnabledLessonId(null);
     draggedLessonStateRef.current = null;
-    lessonDropTargetRef.current = null;
-    setLessonDropTarget(null);
+    setDropTarget(null);
     dragInitialLessonStateRef.current = null;
 
-    if (
-      !initial ||
-      !draggedLesson ||
-      !dropTarget ||
-      dropTarget.sectionId !== initial.sectionId
-    ) {
-      return;
-    }
+    if (!initial || !draggedLesson || !dropTarget) return;
 
-    const currentSec = sectionsRef.current.find(
-      (s) => s.id === initial.sectionId,
+    const previousSections = sectionsRef.current;
+    const sourceSec = previousSections.find((s) => s.id === initial.sectionId);
+    const targetSec = previousSections.find(
+      (s) => s.id === dropTarget.sectionId,
     );
-    if (!currentSec) return;
+    if (!sourceSec || !targetSec) return;
 
-    const sourceIndex = currentSec.lessons.findIndex(
+    const sourceIndex = sourceSec.lessons.findIndex(
       (lesson) => lesson.id === draggedLesson.lessonId,
     );
-    const targetIndex = currentSec.lessons.findIndex(
-      (lesson) => lesson.id === dropTarget.lessonId,
-    );
-    if (sourceIndex < 0 || targetIndex < 0) return;
-
-    let insertionIndex =
-      targetIndex + (dropTarget.position === "after" ? 1 : 0);
-    if (sourceIndex < insertionIndex) insertionIndex -= 1;
-    if (sourceIndex === insertionIndex) return;
-
-    const nextLessons = [...currentSec.lessons];
-    const [movedLesson] = nextLessons.splice(sourceIndex, 1);
+    const movedLesson = sourceSec.lessons[sourceIndex];
     if (!movedLesson) return;
-    nextLessons.splice(insertionIndex, 0, movedLesson);
+    const isMove = targetSec.id !== sourceSec.id;
 
-    const nextSections = sectionsRef.current.map((section) =>
-      section.id === initial.sectionId
-        ? { ...section, lessons: nextLessons }
-        : section,
+    // The target section's lessons without the dragged one, and where it goes.
+    const targetLessons = targetSec.lessons.filter(
+      (lesson) => lesson.id !== movedLesson.id,
     );
+    let insertionIndex = targetLessons.length;
+    if (dropTarget.lessonId !== null) {
+      const targetIndex = targetLessons.findIndex(
+        (lesson) => lesson.id === dropTarget.lessonId,
+      );
+      if (targetIndex < 0) return;
+      insertionIndex = targetIndex + (dropTarget.position === "after" ? 1 : 0);
+    }
+    if (!isMove && insertionIndex === sourceIndex) return;
+
+    const nextTargetLessons = [...targetLessons];
+    nextTargetLessons.splice(insertionIndex, 0, movedLesson);
+    const orderedLessonIds = nextTargetLessons.map((l) => l.id);
+    // A lesson or section not saved yet has no server order to change. Its
+    // order within a section can still change here; a move to another
+    // section cannot, or the server would keep it where it was.
+    const canSave =
+      Boolean(currentCourseId) &&
+      isSavedId(targetSec.id) &&
+      orderedLessonIds.every(isSavedId);
+    if (isMove && !canSave) return;
+
+    const nextSections = previousSections.map((section) => {
+      if (section.id === targetSec.id) {
+        return { ...section, lessons: nextTargetLessons };
+      }
+      if (section.id === sourceSec.id) {
+        return {
+          ...section,
+          lessons: section.lessons.filter((l) => l.id !== movedLesson.id),
+        };
+      }
+      return section;
+    });
     sectionsRef.current = nextSections;
     setSections(nextSections);
 
-    const currentLessonIds = nextLessons.map((l) => l.id);
-    const initialLessonIds = initial.lessonIds;
+    if (!canSave || !currentCourseId) return;
 
-    const orderChanged =
-      initialLessonIds.length === currentLessonIds.length &&
-      initialLessonIds.some((id, idx) => id !== currentLessonIds[idx]);
-
-    if (!orderChanged) return;
-
-    if (
-      currentCourseId &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        initial.sectionId,
-      )
-    ) {
-      const allValidUuids = currentLessonIds.every((id) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          id,
-        ),
-      );
-
-      if (allValidUuids) {
-        setReorderingLessonsSectionId(initial.sectionId);
-        try {
-          await reorderLessonsMutation.mutateAsync({
-            courseId: currentCourseId,
-            sectionId: initial.sectionId,
-            payload: {
-              orderedLessonIds: currentLessonIds,
-              version: courseVersion || 1,
-            },
-          });
-          setCourseVersion((prev) => prev + 1);
-        } catch (err: unknown) {
-          // Rollback to previous order on failure
-          setSections((prev) =>
-            prev.map((s) => {
-              if (s.id !== initial.sectionId) return s;
-              return {
-                ...s,
-                lessons: initial.previousLessons,
-              };
-            }),
-          );
-          const errorMsg =
-            (err as { message?: string })?.message ||
-            "Failed to save lesson order. Restored previous order.";
-          setToastMessage(errorMsg);
-        } finally {
-          setReorderingLessonsSectionId(null);
-        }
-      }
+    setReorderingLessonsSectionId(targetSec.id);
+    try {
+      await reorderLessonsMutation.mutateAsync({
+        courseId: currentCourseId,
+        sectionId: targetSec.id,
+        payload: {
+          orderedLessonIds,
+          version: courseVersion || 1,
+        },
+      });
+      setCourseVersion((prev) => prev + 1);
+    } catch (err: unknown) {
+      // Put both sections back as they were before the drop.
+      setSections((prev) => {
+        const next = prev.map((s) =>
+          s.id === sourceSec.id
+            ? { ...s, lessons: sourceSec.lessons }
+            : s.id === targetSec.id
+              ? { ...s, lessons: targetSec.lessons }
+              : s,
+        );
+        sectionsRef.current = next;
+        return next;
+      });
+      const errorMsg =
+        (err as { message?: string })?.message ||
+        "Failed to save lesson order. Restored previous order.";
+      setToastMessage(errorMsg);
+    } finally {
+      setReorderingLessonsSectionId(null);
     }
   };
   return {
@@ -549,6 +570,7 @@ export function useLessonResourceAndDragHandlers({
     handleLessonResourceRemoved,
     handleLessonDragStart,
     handleLessonDragOver,
+    handleLessonDragOverSection,
     handleLessonDragEnd,
   };
 }

@@ -218,7 +218,8 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "reorderSectionLessons",
         tags: ["Course Curriculum"],
-        summary: "Update position of lessons inside a section",
+        summary:
+          "Set the order of a section's lessons; a lesson of another section of the course moves into it",
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         body: reorderLessonsRequestSchema,
         response: {
