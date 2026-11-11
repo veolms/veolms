@@ -55,6 +55,30 @@ const TEST_PICTURE = Buffer.from(
   "base64",
 );
 
+/** A one-page PDF that says "Project ideas", with a correct index. */
+function testPdf(): Buffer {
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    "<< /Length 44 >>\nstream\nBT /F1 24 Tf 40 100 Td (Project ideas) Tj ET\nendstream",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let body = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(body.length);
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = body.length;
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    body += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  }
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(body, "latin1");
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
@@ -85,13 +109,18 @@ async function serveStorage(context: BrowserContext) {
       return;
     }
     const isPicture = request.url().includes("/thumbnails/");
+    const isPdf = new URL(request.url()).pathname.endsWith(".pdf");
     await route.fulfill({
       status: 200,
       headers: {
         ...CORS,
-        "Content-Type": isPicture ? "image/png" : "audio/wav",
+        "Content-Type": isPdf
+          ? "application/pdf"
+          : isPicture
+            ? "image/png"
+            : "audio/wav",
       },
-      body: isPicture ? TEST_PICTURE : sound,
+      body: isPdf ? testPdf() : isPicture ? TEST_PICTURE : sound,
     });
   });
 }
@@ -354,4 +383,44 @@ test("an image lesson shows its picture to the creator and, once selected, to le
   const lessonRow = page.getByRole("button", { name: /RegEx Project Ideas/u });
   await expect(lessonRow).toContainText("Image", { timeout: 60_000 });
   await expect(lessonRow).not.toContainText("Video");
+});
+
+test("a PDF uploaded under Doc shows its pages in the editor at once, before the lesson is saved as Doc", async ({
+  page,
+  context,
+  academy,
+}) => {
+  test.setTimeout(240_000);
+  await serveStorage(context);
+  const course = await academy.createCourse({
+    title: "Regular Expressions",
+    pricing: "free",
+    lessons: [{ title: "RegEx Project Ideas", preview: true }],
+  });
+  await academy.signInAsAdmin();
+  await openLessonEditor(page, course);
+  await page.getByRole("radio", { name: /^Doc/ }).click();
+  const attached = page.waitForResponse(
+    (response) =>
+      response.url().includes("/contents/document") &&
+      response.request().method() === "PUT",
+  );
+  await page.locator('input[aria-label="Upload lesson media"]').setInputFiles({
+    name: "ideas.pdf",
+    mimeType: "application/pdf",
+    buffer: testPdf(),
+  });
+  expect((await attached).status()).toBe(200);
+
+  // Its pages, drawn as learners will read them: not saved as Doc yet.
+  await expect(page.getByText("As students see it")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        [...document.querySelectorAll("canvas")].some(
+          (canvas) => canvas.width > 100 && canvas.height > 50,
+        ),
+      ),
+    )
+    .toBe(true);
 });

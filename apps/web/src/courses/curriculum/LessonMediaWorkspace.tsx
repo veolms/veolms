@@ -138,7 +138,8 @@ export function LessonMediaWorkspace({
   const [documentMode, setDocumentMode] = useState<"pdf" | "text">(
     hasReadingText ? "text" : "pdf",
   );
-  const [showDocumentPreview, setShowDocumentPreview] = useState(false);
+  // An attached PDF opens on its pages; the card is a click away.
+  const [showDocumentPreview, setShowDocumentPreview] = useState(true);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [audioPreview, setAudioPreview] = useState<{
     mediaId: string;
@@ -149,7 +150,7 @@ export function LessonMediaWorkspace({
 
   useEffect(() => {
     setConfirmingRemove(false);
-    setShowDocumentPreview(false);
+    setShowDocumentPreview(true);
   }, [contentType, mediaInfo?.id]);
 
   // An audio file or image is shown in the studio from its address, given
@@ -645,11 +646,7 @@ export function LessonMediaWorkspace({
                   <Eye size={15} weight="bold" />
                   <span>Preview as students see it</span>
                 </button>
-              ) : (
-                <p className="m-0 mt-3 text-[0.72rem] text-(--muted)">
-                  Save the lesson as Doc to preview it as students see it.
-                </p>
-              )}
+              ) : null}
             </div>
           )
         ) : contentType === "video" && videoUploadSection ? (

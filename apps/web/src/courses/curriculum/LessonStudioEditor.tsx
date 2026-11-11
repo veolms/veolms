@@ -639,9 +639,7 @@ export const LessonStudioEditor = forwardRef<
             loadFileLink={loadFileLink}
             hasReadingText={Boolean(readingBody?.trim())}
             documentPreview={
-              contentType === "document" && savedContentType === "document"
-                ? documentPreview
-                : undefined
+              contentType === "document" ? documentPreview : undefined
             }
             videoPreviewUnavailableText={
               contentType === "video" &&

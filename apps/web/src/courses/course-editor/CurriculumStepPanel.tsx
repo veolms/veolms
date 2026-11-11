@@ -55,6 +55,7 @@ import {
   type CurriculumLessonItem,
   getLessonMediaInfo,
   getFilledContentTypes,
+  findLessonContent,
   getCourseWideLessonNumber,
   type CurriculumSectionItem,
   type DraggedLessonState,
@@ -68,6 +69,23 @@ import {
   uploadLessonContentFile,
 } from "./uploadLessonContent";
 import { coursesService } from "../../services/courses/courses.service";
+
+/**
+ * Reads the PDF a lesson's Doc holds through its editor's address (it need
+ * not be what learners are shown yet), for the studio's preview.
+ */
+function loadLessonDocumentPreview(courseId: string, lessonId: string) {
+  return async () => {
+    const link = await coursesService.getLessonContentLink(
+      courseId,
+      lessonId,
+      "document",
+    );
+    const response = await fetch(link.url, { cache: "no-store" });
+    if (!response.ok) throw new Error("The document could not be read.");
+    return response.arrayBuffer();
+  };
+}
 const LessonPdfReading = lazy(() =>
   import("../../learning/player/LessonPdfReading").then((module) => ({
     default: module.LessonPdfReading,
@@ -545,7 +563,7 @@ export function CurriculumStepPanel({
               loadFileLink={currentCourseId ? (kind) => coursesService.getLessonContentLink(currentCourseId, activeLesson.id, kind).then((link) => link.url) : undefined}
               readingBody={activeLesson.readingBody ?? ""}
               onReadingChange={(readingBody) => handleUpdateLesson(activeSection.id, activeLesson.id, { readingBody })}
-              documentPreview={currentCourseId && activeLesson.contentMediaId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={activeLesson.id} /></Suspense>) : undefined}
+              documentPreview={(() => { const pdfId = currentCourseId ? findLessonContent(activeLesson, "document")?.mediaId : null; return currentCourseId && pdfId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={activeLesson.id} fileKey={pdfId} loadFile={loadLessonDocumentPreview(currentCourseId, activeLesson.id)} /></Suspense>) : undefined; })()}
               resources={activeLesson.resources.map((r) => ({
                 id: r.id,
                 name: r.name,
@@ -1709,7 +1727,7 @@ export function CurriculumStepPanel({
                                                 loadFileLink={currentCourseId ? (kind) => coursesService.getLessonContentLink(currentCourseId, les.id, kind).then((link) => link.url) : undefined}
                                                 readingBody={les.readingBody ?? ""}
                                                 onReadingChange={(readingBody) => handleUpdateLesson(sec.id, les.id, { readingBody })}
-                                                documentPreview={currentCourseId && les.contentMediaId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={les.id} /></Suspense>) : undefined}
+                                                documentPreview={(() => { const pdfId = currentCourseId ? findLessonContent(les, "document")?.mediaId : null; return currentCourseId && pdfId ? (<Suspense fallback={null}><LessonPdfReading courseId={currentCourseId} lessonId={les.id} fileKey={pdfId} loadFile={loadLessonDocumentPreview(currentCourseId, les.id)} /></Suspense>) : undefined; })()}
                                                 resources={les.resources.map(
                                                   (resource) => ({
                                                     id: resource.id,

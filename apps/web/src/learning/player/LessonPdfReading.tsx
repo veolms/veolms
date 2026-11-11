@@ -88,10 +88,21 @@ function isPrintOrSaveKey(event: KeyboardEvent) {
 export function LessonPdfReading({
   courseId,
   lessonId,
+  loadFile,
+  fileKey,
 }: {
   courseId: string;
   lessonId: string;
+  /**
+   * Where the file comes from, in place of the lesson's own document (the
+   * studio previews a document before it is what learners are shown).
+   */
+  loadFile?: () => Promise<ArrayBuffer>;
+  /** Which file `loadFile` gives: a new one is read afresh. */
+  fileKey?: string;
 }) {
+  const loadFileRef = useRef(loadFile);
+  loadFileRef.current = loadFile;
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasesRef = useRef<(HTMLCanvasElement | null)[]>([]);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
@@ -111,7 +122,9 @@ export function LessonPdfReading({
     void (async () => {
       const [pdfjs, file] = await Promise.all([
         loadPdfJs(),
-        loadLessonPdf(courseId, lessonId),
+        loadFileRef.current
+          ? loadFileRef.current()
+          : loadLessonPdf(courseId, lessonId),
       ]);
       if (cancelled) return;
       // pdf.js takes the bytes over; the kept file stays whole for the
@@ -140,7 +153,7 @@ export function LessonPdfReading({
       // Ends pdf.js's work on this file and lets its pages go.
       void loading?.destroy();
     };
-  }, [attempt, courseId, lessonId]);
+  }, [attempt, courseId, lessonId, fileKey]);
 
   // The width the pages are drawn at, settled after a resize.
   useEffect(() => {
