@@ -1,3 +1,5 @@
+import { goalTextFromMinutes } from "./goalInput";
+
 /** One decimal at most, and none when it would be ".0". */
 function trimmed(value: number) {
   return String(Math.round(value * 10) / 10);
@@ -8,26 +10,39 @@ function hoursLearned(seconds: number) {
   return trimmed(Math.floor((seconds / 3600) * 10) / 10);
 }
 
+/** Minutes as hours and minutes, short: "45m", "1h 10m", "2h". */
+function shortHoursAndMinutes(minutes: number) {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
 /**
- * Today's time against the daily goal, in the parts the laptop sets in
- * different sizes: minutes for a goal under two hours, hours from there on
- * ("45", "60", "min"; "1.5", "2", "hrs").
+ * Today's time against the daily goal, in the two parts the laptop and the
+ * phone's card set in different sizes. A goal under an hour is in minutes
+ * ("12", "45 min"). From an hour on the goal is written as the learner
+ * types it in the editor ("1 hr 35 min", "2 hr"; see `goalTextFromMinutes`)
+ * and the time done in hours and minutes ("0", "45m", "1h 10m"): it read
+ * "0 / 95 min" for a goal entered as 1 hr 35 min. That line is longer, so
+ * `long` tells whoever sets it to set it a size smaller.
  */
 export function todayAgainstGoalParts(
   todaySeconds: number,
   goalMinutes: number,
 ) {
-  if (goalMinutes >= 120) {
+  const doneMinutes = Math.floor(Math.max(0, todaySeconds) / 60);
+  if (goalMinutes >= 60) {
     return {
-      done: hoursLearned(todaySeconds),
-      goal: trimmed(goalMinutes / 60),
-      unit: "hrs",
+      done: doneMinutes ? shortHoursAndMinutes(doneMinutes) : "0",
+      goal: goalTextFromMinutes(goalMinutes),
+      long: true,
     };
   }
   return {
-    done: String(Math.floor(todaySeconds / 60)),
-    goal: String(goalMinutes),
-    unit: "min",
+    done: String(doneMinutes),
+    goal: `${goalMinutes} min`,
+    long: false,
   };
 }
 
