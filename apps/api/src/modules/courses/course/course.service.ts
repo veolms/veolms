@@ -81,7 +81,6 @@ import {
 } from "../../access/index.ts";
 import { resolveCoursePricing } from "../../commerce/index.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
-import * as mediaRepo from "../../media/media.repository.ts";
 
 /** The largest lesson PDF given to the reader, which draws it page by page. */
 const LESSON_DOCUMENT_MAX_BYTES = 50 * 1024 * 1024;
@@ -1861,10 +1860,7 @@ export function createCourseService({
     if (lesson.content_type !== "document" || !lesson.content_media_id) {
       throw notFound();
     }
-    const media = await mediaRepo.findMediaAssetSummaryById(
-      database,
-      lesson.content_media_id,
-    );
+    const media = await mediaService.getMediaAsset(lesson.content_media_id);
     if (
       !media ||
       media.type !== "document" ||

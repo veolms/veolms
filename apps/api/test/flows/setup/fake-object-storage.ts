@@ -5,6 +5,8 @@
  * Asking whether a file is there answers from what was uploaded; nothing
  * reaches a real bucket.
  */
+import { Readable } from "node:stream";
+
 import type { S3StorageService } from "@veolms/storage";
 
 interface StoredObject {
@@ -16,6 +18,8 @@ export class FakeObjectStorage {
   /** Upload links the API signed, with the file each one is for. */
   readonly #signed = new Map<string, { key: string } & StoredObject>();
   readonly #objects = new Map<string, StoredObject>();
+  /** The bytes of files a test put in place, for the API to read back. */
+  readonly #files = new Map<string, Buffer>();
 
   /** Replaces, on the API's storage, the calls that would reach a bucket. */
   install(storage: S3StorageService): void {
@@ -39,8 +43,23 @@ export class FakeObjectStorage {
         return url;
       },
       headObject: async (key: string) => this.#objects.get(key) ?? null,
+      getObject: async (key: string) => {
+        const bytes = this.#files.get(key);
+        if (!bytes) return null;
+        return {
+          body: Readable.from([bytes]),
+          contentType: this.#objects.get(key)?.contentType,
+          contentLength: bytes.length,
+        };
+      },
       ensureBucketCors: async () => {},
     });
+  }
+
+  /** Puts a file in the bucket as it would be after its upload. */
+  put(key: string, bytes: Buffer, contentType: string): void {
+    this.#files.set(key, bytes);
+    this.#objects.set(key, { contentType, contentLength: bytes.length });
   }
 
   /** Sends the file to an upload link the API gave out. */
