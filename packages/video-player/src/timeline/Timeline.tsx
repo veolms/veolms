@@ -243,6 +243,15 @@ export function Timeline({
     releaseXRef.current = event.pointerType === "mouse" ? event.clientX : null;
   };
 
+  const cancelPointerInteraction = (event: PointerEvent<HTMLDivElement>) => {
+    if (pointerIdRef.current !== event.pointerId) return;
+    pointerIdRef.current = null;
+    scrubOriginRef.current = null;
+    setCancelArmed(false);
+    controller.setScrubbing(false);
+    controller.setPreviewTime(null);
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!Number.isFinite(duration) || duration <= 0) return;
     let nextTime: number | null = null;
@@ -328,14 +337,12 @@ export function Timeline({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={finishPointerInteraction}
-        onPointerCancel={(event) => {
-          if (pointerIdRef.current !== event.pointerId) return;
-          pointerIdRef.current = null;
-          scrubOriginRef.current = null;
-          setCancelArmed(false);
-          controller.setScrubbing(false);
-          controller.setPreviewTime(null);
-        }}
+        onPointerCancel={cancelPointerInteraction}
+        // Something else took the pointer mid-drag (a page gesture around
+        // the player), so its lift will not come here: the drag ends now,
+        // as a cancelled one does, rather than leaving the video paused for
+        // it with the controls hidden.
+        onLostPointerCapture={cancelPointerInteraction}
         onPointerEnter={(event) => {
           releaseXRef.current = null;
           previewAtPointer(event);
