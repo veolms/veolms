@@ -2,7 +2,9 @@ import { BellRingingIcon as BellRinging } from "@phosphor-icons/react/BellRingin
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useState } from "react";
 
-import { setChatPrefs, useChatPrefs } from "../store/chatPrefs.store";
+import { useCurrentUser } from "../services/auth";
+import { loadWebPush } from "../services/webPush";
+import { useChatPrefs } from "../store/chatPrefs.store";
 
 const DISMISSED_KEY = "veolms.chat.notifyPromptDismissed";
 
@@ -37,6 +39,7 @@ export function NotificationsPrompt({
   onToast: (message: string) => void;
 }) {
   const prefs = useChatPrefs();
+  const me = useCurrentUser();
   const [hidden, setHidden] = useState(() => !canAsk() || dismissedBefore());
   const [permission, setPermission] = useState(() =>
     typeof Notification === "undefined" ? "denied" : Notification.permission,
@@ -54,18 +57,20 @@ export function NotificationsPrompt({
   }
 
   async function turnOn() {
-    const result =
-      Notification.permission === "granted"
-        ? "granted"
-        : await Notification.requestPermission();
-    setPermission(result);
-    if (result === "granted") {
-      setChatPrefs({ desktopAlerts: true });
-      onToast("Desktop notifications are on");
-    } else if (result === "denied") {
+    const userId = me.data?.id;
+    if (!userId) return;
+    // Loaded with the chat page already: the click still counts as asking.
+    const webPush = await loadWebPush();
+    const result = await webPush.enableWebPush(userId);
+    setPermission(Notification.permission);
+    if (result.ok) {
+      onToast("Notifications are on, even with ProCodrr closed");
+    } else if (result.reason === "denied") {
       onToast(
         "Notifications are blocked for this site. Allow them in the browser’s site settings.",
       );
+    } else if (result.reason === "off" || result.reason === "failed") {
+      onToast("Notifications will show while a ProCodrr tab is open.");
     }
   }
 
@@ -83,7 +88,7 @@ export function NotificationsPrompt({
           onClick={() => void turnOn()}
           className="cursor-pointer border-0 bg-transparent p-0 text-left text-[0.8rem] font-semibold text-(--accent-ink) hover:underline"
         >
-          Turn on desktop notifications ›
+          Turn on notifications ›
         </button>
       </span>
       <button

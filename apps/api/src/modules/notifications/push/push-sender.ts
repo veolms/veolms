@@ -8,13 +8,17 @@ import * as deliveryRepository from "./push-deliveries.repository.ts";
 import * as deviceRepository from "./push-devices.repository.ts";
 import {
   buildFcmMessage,
+  buildWebPushMessage,
   pushPayloadSchema,
   type PushPayload,
   type PushTargetField,
 } from "./push-message.ts";
+import type { WebPushClient } from "./web-push.client.ts";
 
 /**
- * Sends queued pushes (push_deliveries) to each of the user's installs.
+ * Sends queued pushes (push_deliveries) to each of the user's installs:
+ * phones through Firebase, browsers through their own push service (Web
+ * Push). Browsers get chat messages only; the bell has its own stream.
  *
  * Per install, Firebase's answer decides: delivered → done; dead (app
  * removed, FID expired, other Firebase project) → the install is deleted;
@@ -45,6 +49,8 @@ export interface PushSendResult {
 }
 
 export interface PushSender {
+  /** Browsers are sent to too (web push is on and has its keys). */
+  readonly sendsToBrowsers: boolean;
   process(): Promise<PushSendResult>;
   /** Hourly upkeep: stale and signed-out installs, old queue rows. */
   maintain(
@@ -89,6 +95,7 @@ export function createPushSender({
   database,
   apps,
   fcm,
+  web = null,
   logger,
   sessions,
   config,
@@ -97,6 +104,8 @@ export function createPushSender({
   database: Kysely<Database>;
   apps: PushAppRegistry;
   fcm: FcmClient;
+  /** Browser pushes; null while web push is off or has no keys. */
+  web?: WebPushClient | null;
   logger: FastifyBaseLogger;
   sessions?: RevokedSessionLookup;
   config: {
@@ -126,7 +135,7 @@ export function createPushSender({
     if (!already) {
       log.error(
         { applicationId, reason, keyProblem: app?.problem ?? null },
-        "Push paused for this app: its Firebase key was refused or is missing",
+        "Push paused for this app: its Firebase or VAPID key was refused or is missing",
       );
     }
   }
@@ -164,6 +173,38 @@ export function createPushSender({
     };
   }
 
+  async function sendToBrowser(task: {
+    delivery: deliveryRepository.ClaimedPushDelivery;
+    payload: PushPayload;
+    device: DeviceRow;
+  }): Promise<FcmOutcome> {
+    const { device } = task;
+    if (!web || isPaused(device.application_id)) {
+      return { ok: false, kind: "auth", error: "Web push paused." };
+    }
+    if (!device.web_endpoint || !device.web_p256dh || !device.web_auth) {
+      return { ok: false, kind: "dead", error: "No subscription saved." };
+    }
+    const message = buildWebPushMessage({
+      payload: task.payload,
+      expiresAt: task.delivery.expires_at,
+      now: now(),
+    });
+    return await web.send(
+      {
+        endpoint: device.web_endpoint,
+        p256dh: device.web_p256dh,
+        auth: device.web_auth,
+      },
+      message.json,
+      {
+        ttlSeconds: message.ttlSeconds,
+        urgency: message.urgency,
+        topic: message.topic,
+      },
+    );
+  }
+
   async function process(): Promise<PushSendResult> {
     const result: PushSendResult = {
       sent: 0,
@@ -187,6 +228,7 @@ export function createPushSender({
     const loaded = await deviceRepository.listDevicesForUsers(
       database,
       claimed.map((delivery) => delivery.user_id),
+      { includeWeb: web !== null },
     );
     const { kept: devices, removed } = await dropSignedOut(loaded);
     result.devicesRemoved += removed;
@@ -238,7 +280,9 @@ export function createPushSender({
         ? new Set(delivery.pending_device_ids)
         : null;
       const targets = (devicesByUser.get(delivery.user_id) ?? []).filter(
-        (device) => pending === null || pending.has(device.id),
+        (device) =>
+          (pending === null || pending.has(device.id)) &&
+          (device.platform !== "web" || delivery.source === "chat"),
       );
       if (targets.length === 0) {
         // Never started: the user has no install now. Started: the
@@ -267,6 +311,9 @@ export function createPushSender({
       tasks,
       config.concurrency,
       async (task): Promise<FcmOutcome> => {
+        if (task.device.platform === "web") {
+          return await sendToBrowser(task);
+        }
         const account = task.app?.serviceAccount;
         if (!account || isPaused(task.device.application_id)) {
           return {
@@ -472,5 +519,5 @@ export function createPushSender({
     return { devicesRemoved, deliveriesRemoved };
   }
 
-  return { process, maintain };
+  return { sendsToBrowsers: web !== null, process, maintain };
 }

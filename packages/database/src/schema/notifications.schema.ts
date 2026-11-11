@@ -45,10 +45,13 @@ export interface NotificationPreferenceTable {
   enabled: boolean;
 }
 
-export type PushPlatform = "android" | "ios";
+export type PushPlatform = "android" | "ios" | "web";
 export type PushDeliverySource = "notification" | "chat";
 
-/** One app install that can receive pushes, keyed by its Firebase Installation ID. */
+/**
+ * One app install that can receive pushes, keyed by its Firebase
+ * Installation ID, or one browser (platform web, fid "web:" + endpoint hash).
+ */
 export interface PushDeviceTable {
   id: string;
   user_id: string;
@@ -65,6 +68,10 @@ export interface PushDeviceTable {
   created_at: Generated<Date>;
   last_seen_at: Generated<Date>;
   last_success_at: Date | null;
+  /** Browsers only: the push subscription (endpoint and its keys). */
+  web_endpoint: string | null;
+  web_p256dh: string | null;
+  web_auth: string | null;
 }
 
 /** The push queue: one row per message per user. */

@@ -379,9 +379,14 @@ export function RoomInfoPanel({
           <Row
             title="Notifications"
             note={
-              isGroup
-                ? "Group messages raise the unread count; @mentions also alert you."
-                : "New messages alert you."
+              room.me.mutedUntil && Date.parse(room.me.mutedUntil) > Date.now()
+                ? `Muted until ${new Date(room.me.mutedUntil).toLocaleString(
+                    undefined,
+                    { weekday: "short", hour: "numeric", minute: "2-digit" },
+                  )}.`
+                : isGroup
+                  ? "All messages, or only when someone @mentions you. Muted: no sound or notification."
+                  : "New messages alert you, on all your devices."
             }
           >
             <ChatSelect<"all" | "mentions" | "none">

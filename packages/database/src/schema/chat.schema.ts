@@ -73,6 +73,8 @@ export interface ChatMemberTable {
   last_read_seq: GeneratedBigInt;
   last_delivered_seq: GeneratedBigInt;
   notify_level: Generated<ChatNotifyLevel>;
+  /** Muted for a while (8 hours, a week); for good is notify_level none. */
+  muted_until: Date | null;
   archived_at: Date | null;
   pinned_at: Date | null;
   /** Messages up to here are cleared for this member ("Clear chat"). */

@@ -31,6 +31,7 @@ import { useDebounce } from "../hooks/useDebounce";
 import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
 import {
+  isRoomMuted,
   markRoomRead,
   prefetchChat,
   queueReceipt,
@@ -44,7 +45,7 @@ import {
 } from "../services/chat";
 import { useChatDraft } from "../store/chatDrafts.store";
 import { ChatAvatar } from "./ChatAvatar";
-import { ClearChatDialog } from "./ChatDialogs";
+import { ClearChatDialog, MuteChatDialog } from "./ChatDialogs";
 import { roomAvatarUrl } from "./chatIcon";
 import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
@@ -461,6 +462,7 @@ function ChatRow({
   const clearChat = useClearChat();
   const navigate = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [choosingMute, setChoosingMute] = useState(false);
   const typing = useTypingNames(room.id);
   // An unsent message shows instead of the last one (WhatsApp, Telegram).
   const draft = useChatDraft(room.id);
@@ -470,7 +472,7 @@ function ChatRow({
   const last = room.lastMessage;
   const mine = Boolean(last && viewerId && last.senderId === viewerId);
   const unread = room.unreadCount > 0;
-  const muted = room.me.notifyLevel === "none";
+  const muted = isRoomMuted(room.me);
   const isRequest =
     room.kind === "direct" &&
     room.directStatus === "requested" &&
@@ -661,7 +663,7 @@ function ChatRow({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
-                    setState({ notifyLevel: muted ? "all" : "none" })
+                    muted ? setState({ muteFor: "off" }) : setChoosingMute(true)
                   }
                 >
                   <BellSlash size={17} aria-hidden="true" />
@@ -739,6 +741,15 @@ function ChatRow({
           </button>
         )}
       </div>
+      {choosingMute ? (
+        <MuteChatDialog
+          onClose={() => setChoosingMute(false)}
+          onMute={(muteFor) => {
+            setChoosingMute(false);
+            setState({ muteFor });
+          }}
+        />
+      ) : null}
       {confirmDelete ? (
         <ClearChatDialog
           mode="delete"

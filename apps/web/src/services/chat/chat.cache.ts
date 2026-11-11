@@ -17,6 +17,21 @@ import type { ChatMessagePage, ChatRoomList } from "./chat.service";
  * older pages load again when scrolled to.
  */
 
+/**
+ * Muted: for good (notifyLevel "none") or for a while not yet over
+ * (mutedUntil, WhatsApp's 8 hours or a week). Its messages make no sound
+ * or notification and do not count in the unread total.
+ */
+export function isRoomMuted(me: {
+  notifyLevel: string;
+  mutedUntil?: string | null;
+}): boolean {
+  return (
+    me.notifyLevel === "none" ||
+    (Boolean(me.mutedUntil) && Date.parse(me.mutedUntil!) > Date.now())
+  );
+}
+
 export const MESSAGE_CACHE_CAP = 300;
 
 export type ChatThread = ChatMessagePage;
@@ -135,7 +150,7 @@ export function applyToRoomList(
       ...list,
       rooms,
       unreadTotal: rooms
-        .filter((r) => !r.me.archived && r.me.notifyLevel !== "none")
+        .filter((r) => !r.me.archived && !isRoomMuted(r.me))
         .reduce((sum, r) => sum + r.unreadCount, 0),
     };
   });
@@ -201,7 +216,7 @@ export function applyReceipt(
       ...list,
       rooms,
       unreadTotal: rooms
-        .filter((r) => !r.me.archived && r.me.notifyLevel !== "none")
+        .filter((r) => !r.me.archived && !isRoomMuted(r.me))
         .reduce((sum, r) => sum + r.unreadCount, 0),
     };
   });
@@ -273,7 +288,7 @@ export function markRoomRead(client: QueryClient, roomId: string, seq: number) {
       ...list,
       rooms,
       unreadTotal: rooms
-        .filter((r) => !r.me.archived && r.me.notifyLevel !== "none")
+        .filter((r) => !r.me.archived && !isRoomMuted(r.me))
         .reduce((sum, r) => sum + r.unreadCount, 0),
     };
   });
