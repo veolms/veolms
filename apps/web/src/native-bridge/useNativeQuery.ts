@@ -26,11 +26,13 @@ export const nativeBridgeKeys = {
  *   be invalidated together.
  * - Native answers do not go stale while the page is open (`staleTime:
  *   Infinity`), and a failure is not retried: `nativeBridge` already waits
- *   for the connection and the SDK retries the handshake. Override either
+ *   for the connection and the SDK retries the handshake. It also runs while
+ *   the device is offline (`networkMode: "always"`). Override any of these
  *   through `options`.
  *
  * For native actions (vibrate, share, open a screen), call `nativeBridge`
- * from the handler, or use `useMutation`; never a query.
+ * from the handler, or use `useMutation` with `networkMode: "always"`;
+ * never a query.
  */
 export function useNativeQuery<R>(
   key: readonly unknown[],
@@ -42,6 +44,10 @@ export function useNativeQuery<R>(
     queryFn: () => call(nativeBridge),
     staleTime: Infinity,
     retry: false,
+    // Native answers come from the app, not the network: run (and stay
+    // runnable) while the device is offline. TanStack Query's default,
+    // "online", would pause the query until a connection returns.
+    networkMode: "always",
     ...options,
   });
 }

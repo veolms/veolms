@@ -97,15 +97,15 @@ connection. Do not add another provider anywhere.
 
 ## Which API, for which job
 
-| You need…                                                        | Use                                                                        |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| A native value a component **renders**                           | `useNativeQuery(key, (native) => native.ns.fn())`, or a named hook over it |
-| A native value for **logic**: build a request, send analytics    | `await nativeBridge.ns.fn()` in a handler, effect or service               |
-| A native **action** (vibrate, share, open a screen) from a click | `await nativeBridge.ns.fn()` in the handler                                |
-| An action whose pending / error state the UI shows               | `useMutation({ mutationFn: () => nativeBridge.ns.fn() })`                  |
-| An **event** the native app sends                                | `useBridgeEvent(name, handler)` (SDK), wrapped in a named hook here        |
-| UI shown only **inside the app**                                 | the answer being non-`null`, or `useNativeBridge().state === "ready"`      |
-| Whether this app build **supports** a function                   | `useNativeBridge().bridge?.$has("ns:fn")`                                  |
+| You need…                                                        | Use                                                                              |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| A native value a component **renders**                           | `useNativeQuery(key, (native) => native.ns.fn())`, or a named hook over it       |
+| A native value for **logic**: build a request, send analytics    | `await nativeBridge.ns.fn()` in a handler, effect or service                     |
+| A native **action** (vibrate, share, open a screen) from a click | `await nativeBridge.ns.fn()` in the handler                                      |
+| An action whose pending / error state the UI shows               | `useMutation({ mutationFn: () => nativeBridge.ns.fn(), networkMode: "always" })` |
+| An **event** the native app sends                                | `useBridgeEvent(name, handler)` (SDK), wrapped in a named hook here              |
+| UI shown only **inside the app**                                 | the answer being non-`null`, or `useNativeBridge().state === "ready"`            |
+| Whether this app build **supports** a function                   | `useNativeBridge().bridge?.$has("ns:fn")`                                        |
 
 Not used in feature code: `useBridgeCall` (`useNativeQuery` and `useMutation`
 cover it, with caching and shared state), `getBridgeController`,
@@ -128,6 +128,10 @@ const { data: platform } = useNativeQuery(["platform"], (native) =>
 - Once two places need the same value, give it a named hook in
   `native-bridge/` (like `usePlatform`), so the key and the call live in one
   place.
+- It runs while the device is offline (`networkMode: "always"`): native
+  answers need no network. TanStack Query's default pauses queries and
+  mutations offline, so a `useMutation` that only calls native sets
+  `networkMode: "always"` too. One that also calls the API keeps the default.
 - Use it only for calls that are safe to repeat: a query may run again (see
   below).
 

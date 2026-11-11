@@ -112,6 +112,8 @@ export function RefreshPlatformButton() {
   const [platform, setPlatform] = useState<PlatformInfo | null>(null);
   const refresh = useMutation({
     mutationFn: () => nativeBridge.platform(),
+    // A native call needs no network: never pause it while offline.
+    networkMode: "always",
     onSuccess: setPlatform,
   });
   return (
