@@ -10,6 +10,7 @@ import { NotificationCard } from "./NotificationCard";
 import { NotificationFiltersBar } from "./NotificationFiltersBar";
 import { NotificationSummaryWidget } from "./NotificationSummaryWidget";
 import { RecentMentionsWidget } from "./RecentMentionsWidget";
+import { ChatNotificationsCard } from "./ChatNotificationsCard";
 import type { NotificationTabId } from "./notificationsData";
 import { useNotificationsFilter } from "./useNotificationsFilter";
 import {
@@ -332,6 +333,9 @@ export function NotificationsPage({
 
         {/* Right Column / Subgrid: Sidebar Widgets */}
         <aside className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-5 xl:col-span-4 min-w-0">
+          {/* Chat notifications on this device, until they are on */}
+          <ChatNotificationsCard onNotice={setNotice} />
+
           {/* Summary Widget */}
           <NotificationSummaryWidget
             counts={tabCounts}
