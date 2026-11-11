@@ -12,6 +12,7 @@ import {
   MOBILE_NAV_USER_SCROLL_STEP_MS,
   MOBILE_NAV_PLAYER_SELECTOR,
   MOBILE_NAV_TOP_GUARD,
+  MOBILE_NAV_KEEP_ATTRIBUTE,
 } from "../academyShellConstants";
 import type { SidebarResize } from "../academyShellTypes";
 
@@ -179,6 +180,12 @@ export function useShellKeyboardEffects({
     };
 
     const handleScroll = (event: Event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(`[${MOBILE_NAV_KEEP_ATTRIBUTE}]`)
+      ) {
+        return;
+      }
       pendingScrollSource = resolveScrollSource(event.target);
       if (frame !== null) return;
       frame = window.requestAnimationFrame(updateFromScroll);
