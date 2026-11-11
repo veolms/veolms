@@ -13,6 +13,7 @@
     "notifications:process": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts",
     "notifications:watch": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts --watch",
     "user:cli": "node --env-file-if-exists=../../.env src/cli/user.ts",
+    "web-push:keys": "node src/cli/web-push-keys.ts",
     "check:team-permissions": "node --env-file-if-exists=../../.env src/cli/check-team-permissions.ts",
     "user:mfa-reset": "node --env-file-if-exists=../../.env src/cli/mfa-reset.ts",
     "encryption-key:rotate": "node --env-file-if-exists=../../.env src/cli/rotate-encryption-key.ts",

@@ -2,6 +2,7 @@ import {
   CHAT_DELETE_FOR_EVERYONE_HOURS,
   CHAT_HELPER_MAX_MUTE_MINUTES,
   type ChatMessage,
+  type ChatMuteFor,
   type ChatReason,
 } from "@veolms/contracts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -94,6 +95,60 @@ export function ClearChatDialog({
         </button>
         <button type="button" className={dangerPill} onClick={onConfirm}>
           {mode === "delete" ? "Delete chat" : "Clear chat"}
+        </button>
+      </div>
+    </ChatDialog>
+  );
+}
+
+/**
+ * WhatsApp's "Mute notifications": 8 hours, 1 week or always. Muted
+ * chats make no sound or notification on any of your devices; the chat
+ * stays in your list and its unread count still shows.
+ */
+export function MuteChatDialog({
+  onMute,
+  onClose,
+}: {
+  onMute: (muteFor: ChatMuteFor) => void;
+  onClose: () => void;
+}) {
+  const [choice, setChoice] = useState<Exclude<ChatMuteFor, "off">>("8h");
+  const options = [
+    ["8h", "8 hours"],
+    ["1w", "1 week"],
+    ["always", "Always"],
+  ] as const;
+  return (
+    <ChatDialog title="Mute notifications for…" onClose={onClose}>
+      <p className="m-0 mb-3 text-[0.9rem] leading-relaxed text-(--text-secondary)">
+        No sound or notification for this chat, on all your devices. You can
+        still see its new messages.
+      </p>
+      <fieldset className="m-0 mb-3 border-0 p-0">
+        <legend className="sr-only">For how long</legend>
+        {options.map(([value, label]) => (
+          <label
+            key={value}
+            className="flex cursor-pointer items-center gap-3 py-1.5 text-[0.92rem]"
+          >
+            <input
+              type="radio"
+              name="chat-mute-for"
+              checked={choice === value}
+              onChange={() => setChoice(value)}
+              className="size-4.5 accent-(--accent)"
+            />
+            {label}
+          </label>
+        ))}
+      </fieldset>
+      <div className="mt-6 flex justify-end gap-2">
+        <button type="button" className={pill} onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className={pill} onClick={() => onMute(choice)}>
+          Mute
         </button>
       </div>
     </ChatDialog>

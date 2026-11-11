@@ -553,6 +553,37 @@ const serverConfigSchema = z.object({
    */
   CHAT_PUSH_GROUP_MAX_MEMBERS: z.coerce.number().int().min(2).default(256),
 
+  // Web push (browsers, VAPID): chat messages with the tab closed
+  /**
+   * Kill switch for browser pushes. Off, browsers cannot subscribe and
+   * none are sent; saved subscriptions are kept for when it is back on.
+   * Needs PUSH_ENABLED too (the switch for every push).
+   */
+  WEB_PUSH_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * The VAPID key pair, base64url (65-byte public point, 32-byte private
+   * scalar). `pnpm --filter @veolms/api web-push:keys` makes one. Unset:
+   * web push is off. Changing it orphans every subscription: browsers
+   * subscribe again on their next visit.
+   */
+  WEB_PUSH_VAPID_PUBLIC_KEY: z.string().trim().optional(),
+  WEB_PUSH_VAPID_PRIVATE_KEY: z.string().trim().optional(),
+  /**
+   * Who the push services can contact about our pushes: a `mailto:` or
+   * `https:` URL. Unset: WEB_URL.
+   */
+  WEB_PUSH_SUBJECT: z.string().trim().optional(),
+  /**
+   * Hosts a browser subscription may point at (a host or a `.suffix`),
+   * comma-separated: the browsers' own push services. Anything else is
+   * refused, so the API never posts to an address a visitor chose.
+   */
+  WEB_PUSH_ALLOWED_HOSTS: z
+    .string()
+    .default(
+      "fcm.googleapis.com,.push.services.mozilla.com,.notify.windows.com,.push.apple.com",
+    ),
+
   // Chat (course groups, team groups, private chats)
   /**
    * Kill switch for chat. Off, every /chat route answers 404 and the live

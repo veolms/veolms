@@ -80,6 +80,7 @@ export interface RoomListRow extends ChatRoomRow {
   last_read_seq: string | null;
   last_delivered_seq: string | null;
   notify_level: string | null;
+  muted_until: Date | null;
   archived_at: Date | null;
   member_pinned_at: Date | null;
   cleared_seq: string | null;
@@ -429,6 +430,7 @@ export function createChatRepository() {
           "m.last_read_seq",
           "m.last_delivered_seq",
           "m.notify_level",
+          "m.muted_until",
           "m.archived_at",
           "m.pinned_at as member_pinned_at",
           "m.cleared_seq",
@@ -959,6 +961,7 @@ export function createChatRepository() {
         room_role: "owner" | "moderator" | "member";
         state: "active" | "left" | "pending" | "hidden";
         notify_level: "all" | "mentions" | "none";
+        muted_until: Date | null;
         archived_at: Date | null;
         pinned_at: Date | null;
         deleted_at: Date | null;
@@ -987,6 +990,12 @@ export function createChatRepository() {
         .where("user_id", "in", userIds)
         .where("state", "=", "active")
         .where("notify_level", "<>", "none")
+        .where((eb) =>
+          eb.or([
+            eb("muted_until", "is", null),
+            eb("muted_until", "<=", sql<Date>`now()`),
+          ]),
+        )
         .execute();
       return rows.map((row) => row.user_id);
     },
@@ -1036,6 +1045,7 @@ export function createChatRepository() {
           and cm.user_id <> ${input.senderId}
           and cm.last_read_seq < m.seq
           and u.is_deleted = false
+          and (cm.muted_until is null or cm.muted_until <= now())
           and (
             cm.notify_level = 'all'
             or (

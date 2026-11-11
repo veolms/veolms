@@ -12,6 +12,7 @@ import { cn } from "../lib/utils";
 import { useCurrentUser } from "../services/auth";
 import {
   flushReceipts,
+  isRoomMuted,
   prefetchChat,
   syncWithRoomList,
   useChatRoom,
@@ -200,9 +201,9 @@ export function ChatPage() {
       current &&
       myState.mutate({
         roomId: current.id,
-        patch: {
-          notifyLevel: current.me.notifyLevel === "none" ? "all" : "none",
-        },
+        // The shortcut mutes for good, or unmutes (the menus offer 8 hours
+        // and a week).
+        patch: { muteFor: isRoomMuted(current.me) ? "off" : "always" },
       }),
     pin: () =>
       current &&

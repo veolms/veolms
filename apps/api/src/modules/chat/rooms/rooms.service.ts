@@ -1,6 +1,7 @@
 import {
   CHAT_MAX_PINNED_CHATS,
   CHAT_TEAM_ROOM_MAX_MEMBERS,
+  type ChatMuteFor,
   type ChatSenderRole,
 } from "@veolms/contracts";
 
@@ -9,6 +10,34 @@ import { encodeChatEvent } from "../realtime/chat-bus.ts";
 import { ChatErrors } from "../shared/chat.errors.ts";
 import { createRoomViews } from "../shared/chat.room-views.ts";
 import type { ChatRuntime } from "../shared/chat.runtime.ts";
+
+const MUTE_FOR_MS: Record<"8h" | "1w", number> = {
+  "8h": 8 * 60 * 60 * 1000,
+  "1w": 7 * 24 * 60 * 60 * 1000,
+};
+
+/** Muted for good, or for a while that has not ended. */
+function isMuted(me: { notifyLevel: string; mutedUntil: string | null }) {
+  return me.notifyLevel === "none" || me.mutedUntil !== null;
+}
+
+/**
+ * The member columns for a mute choice. A mute for a while keeps the
+ * chat's level (a group on "mentions" goes back to mentions); unmuting a
+ * chat muted for good brings back every message.
+ */
+function muteChange(
+  muteFor: ChatMuteFor,
+  level: string,
+): { notify_level?: "all" | "mentions" | "none"; muted_until: Date | null } {
+  if (muteFor === "always") return { notify_level: "none", muted_until: null };
+  const unmutedLevel = level === "none" ? { notify_level: "all" as const } : {};
+  if (muteFor === "off") return { ...unmutedLevel, muted_until: null };
+  return {
+    ...unmutedLevel,
+    muted_until: new Date(Date.now() + MUTE_FOR_MS[muteFor]),
+  };
+}
 
 export function createRoomsService(runtime: ChatRuntime) {
   const { database, repository, access } = runtime;
@@ -96,7 +125,7 @@ export function createRoomsService(runtime: ChatRuntime) {
             s.requestedByMe === false,
         ).length,
         unreadTotal: summaries
-          .filter((s) => !s.me.archived && s.me.notifyLevel !== "none")
+          .filter((s) => !s.me.archived && !isMuted(s.me))
           .reduce((sum, s) => sum + s.unreadCount, 0),
       };
     },
@@ -241,6 +270,7 @@ export function createRoomsService(runtime: ChatRuntime) {
       roomId: string,
       patch: {
         notifyLevel?: "all" | "mentions" | "none";
+        muteFor?: ChatMuteFor;
         archived?: boolean;
         pinned?: boolean;
       },
@@ -256,9 +286,16 @@ export function createRoomsService(runtime: ChatRuntime) {
           throw ChatErrors.pinLimit(CHAT_MAX_PINNED_CHATS);
         }
       }
+      const member =
+        patch.muteFor !== undefined
+          ? await repository.findMember(database, roomId, userId)
+          : undefined;
       await repository.updateMember(database, roomId, userId, {
         ...(patch.notifyLevel !== undefined
-          ? { notify_level: patch.notifyLevel }
+          ? { notify_level: patch.notifyLevel, muted_until: null }
+          : {}),
+        ...(patch.muteFor !== undefined
+          ? muteChange(patch.muteFor, member?.notify_level ?? "all")
           : {}),
         ...(patch.archived !== undefined
           ? { archived_at: patch.archived ? new Date() : null }

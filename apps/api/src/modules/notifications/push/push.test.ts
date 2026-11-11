@@ -390,13 +390,25 @@ await test("push counts as set up only when on and an app is listed", async () =
   const apps = JSON.stringify([
     { applicationId: "com.procodrr.app", serviceAccountPath: "/nowhere.json" },
   ]);
-  assert.equal(isPushConfigured({ PUSH_ENABLED: true, PUSH_APPS: apps }), true);
+  // Web push without keys: off.
+  const web = {
+    WEB_PUSH_ENABLED: true,
+    WEB_PUSH_VAPID_PUBLIC_KEY: undefined,
+    WEB_PUSH_VAPID_PRIVATE_KEY: undefined,
+    WEB_PUSH_SUBJECT: undefined,
+    WEB_PUSH_ALLOWED_HOSTS: "fcm.googleapis.com",
+    WEB_URL: "https://example.test",
+  };
   assert.equal(
-    isPushConfigured({ PUSH_ENABLED: false, PUSH_APPS: apps }),
+    isPushConfigured({ ...web, PUSH_ENABLED: true, PUSH_APPS: apps }),
+    true,
+  );
+  assert.equal(
+    isPushConfigured({ ...web, PUSH_ENABLED: false, PUSH_APPS: apps }),
     false,
   );
   assert.equal(
-    isPushConfigured({ PUSH_ENABLED: true, PUSH_APPS: undefined }),
+    isPushConfigured({ ...web, PUSH_ENABLED: true, PUSH_APPS: undefined }),
     false,
   );
 });
