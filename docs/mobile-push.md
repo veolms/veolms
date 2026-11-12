@@ -168,7 +168,11 @@ that app's pushes for 5 minutes at a time (logged as an error); queued
 pushes wait instead of failing, until they expire. The ops heartbeat logs
 `pushBacklog`.
 
-Sending details: the queue is `push_deliveries` (one row per message per
+Sending details: the API sends with the official Firebase Admin SDK
+(`firebase-admin/messaging`, one Firebase app per `applicationId`), addressed
+by `fid` (or `token`). The SDK itself retries a send a few times on HTTP 503
+and dropped connections before the queue sees the error. The queue is
+`push_deliveries` (one row per message per
 user, retried per phone, never sent after its expiry: chats 2 days,
 reminders 1 day, others up to 7). `UNREGISTERED`, an invalid FID and
 `SENDER_ID_MISMATCH` delete the phone; `UNAVAILABLE`, `INTERNAL` and network
