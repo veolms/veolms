@@ -270,12 +270,17 @@ export function useOrdersFilter(options?: {
     total,
     pageCount,
     setPage,
-    isLoading: !ready || list.isLoading,
+    // Loading too while the previous filters' rows stand in for the new
+    // ones (a filter, the range or the page changed): those rows are not
+    // the answer, so the skeleton shows instead of them. A refresh of the
+    // same query keeps its rows.
+    isLoading: !ready || list.isLoading || list.isPlaceholderData,
     isFetching: list.isFetching,
     loadError,
     refetch: () => void list.refetch(),
     stats: statsQuery.data,
-    isLoadingStats: !ready || statsQuery.isLoading,
+    isLoadingStats:
+      !ready || statsQuery.isLoading || statsQuery.isPlaceholderData,
     exportUrl: ordersService.getOrdersExportUrl(filterParams),
     selectedOrder,
     selectedPosition,
