@@ -2,6 +2,7 @@ import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/Ar
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { ChatCircleIcon as ChatCircle } from "@phosphor-icons/react/ChatCircle";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
+import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
@@ -32,6 +33,7 @@ export type MessageAction =
   | "info"
   | "copy"
   | "copy-link"
+  | "download"
   | "edit"
   | "pin"
   | "unpin"
@@ -137,6 +139,14 @@ export function MessageMenu({
           {message.body ? (
             <DropdownMenuItem onClick={() => onAction("copy")}>
               <Copy size={16} aria-hidden="true" /> Copy
+            </DropdownMenuItem>
+          ) : null}
+          {message.seq > 0 && message.attachments.length > 0 ? (
+            <DropdownMenuItem onClick={() => onAction("download")}>
+              <DownloadSimple size={16} aria-hidden="true" /> Download
+              {message.attachments.length > 1
+                ? ` all (${message.attachments.length})`
+                : ""}
             </DropdownMenuItem>
           ) : null}
           {message.seq > 0 ? (

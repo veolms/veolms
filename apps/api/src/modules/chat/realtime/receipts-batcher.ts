@@ -36,10 +36,17 @@ export interface ReceiptsBatcher {
 export function createReceiptsBatcher({
   database,
   repository,
+  receiptsOff = async (_db, profiles) =>
+    new Set(profiles.filter((p) => !p.read_receipts).map((p) => p.user_id)),
   logger,
 }: {
   database: Executor;
   repository: ChatRepository;
+  /** Whose read receipts are off (chat.access: staff only). */
+  receiptsOff?: (
+    db: Executor,
+    profiles: readonly { user_id: string; read_receipts: boolean }[],
+  ) => Promise<Set<string>>;
   logger: { warn(object: object, message: string): void };
 }): ReceiptsBatcher {
   let pending = new Map<string, Pending>();
@@ -75,10 +82,9 @@ export function createReceiptsBatcher({
           rows.filter((row) => row.kind === "direct").map((row) => row.user_id),
         ),
       ];
-      const hidden = new Set(
-        (await repository.getProfiles(database, directUsers))
-          .filter((profile) => !profile.read_receipts)
-          .map((profile) => profile.user_id),
+      const hidden = await receiptsOff(
+        database,
+        await repository.getProfiles(database, directUsers),
       );
       // Only "delivered" moved in a group: nobody's own tabs need it (it
       // changes no unread count); the group's ticks went out above.

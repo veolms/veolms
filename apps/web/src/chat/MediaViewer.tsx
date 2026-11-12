@@ -28,14 +28,20 @@ export function MediaViewer({
   const item = items[index];
 
   useEffect(() => {
+    // First, and only: Esc closes the photo, not the chat behind it.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onClose();
+        return;
+      }
       if (event.key === "ArrowRight" && index < items.length - 1)
         onIndex(index + 1);
       if (event.key === "ArrowLeft" && index > 0) onIndex(index - 1);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [index, items.length, onClose, onIndex]);
 
   if (!item) return null;

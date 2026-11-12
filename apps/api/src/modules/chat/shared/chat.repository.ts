@@ -1476,6 +1476,20 @@ export function createChatRepository() {
         .executeTakeFirst();
     },
 
+    /** Who replied to a message (Message info shows staff only then). */
+    async listRepliers(db: Executor, roomId: string, seq: number) {
+      const rows = await db
+        .selectFrom("chat_messages")
+        .select("sender_id")
+        .distinct()
+        .where("room_id", "=", roomId)
+        .where("reply_to_seq", "=", String(seq))
+        .where("deleted_at", "is", null)
+        .where("sender_id", "is not", null)
+        .execute();
+      return rows.map((row) => row.sender_id!);
+    },
+
     async listReactions(
       db: Executor,
       roomId: string,

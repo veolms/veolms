@@ -146,16 +146,20 @@ export function ChatSettingsPanel({
           people’s either.
         </p>
         <div className="my-1 h-px bg-(--chat-line)" />
-        <SettingsRow
-          title="Read receipts"
-          note="If turned off, you won’t send or receive blue ticks in private chats. Groups always show them."
-        >
-          <ChatToggle
-            checked={values.readReceipts}
-            label="Read receipts"
-            onChange={(on) => save({ readReceipts: on })}
-          />
-        </SettingsRow>
+        {profile.data?.readReceiptsChoice ? (
+          // For admins and instructors (as staff they read many chats):
+          // learners always send read receipts.
+          <SettingsRow
+            title="Read receipts"
+            note="Off: people won’t see blue ticks when you read their private messages, and you won’t see theirs. You never appear in a group message’s read list unless you reply or react."
+          >
+            <ChatToggle
+              checked={values.readReceipts}
+              label="Read receipts"
+              onChange={(on) => save({ readReceipts: on })}
+            />
+          </SettingsRow>
+        ) : null}
       </>,
     );
   }

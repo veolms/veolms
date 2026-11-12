@@ -401,9 +401,12 @@ export const chatProfileSchema = z.object({
   showPresence: z.boolean(),
   readReceipts: z.boolean(),
   enterToSend: z.boolean(),
+  /** Whether you may turn read receipts off (chat staff only). */
+  readReceiptsChoice: z.boolean().optional(),
 });
 export type ChatProfile = z.infer<typeof chatProfileSchema>;
 export const updateChatProfileRequestSchema = chatProfileSchema
+  .omit({ readReceiptsChoice: true })
   .partial()
   .strict();
 export type UpdateChatProfileRequest = z.infer<

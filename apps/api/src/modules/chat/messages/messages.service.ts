@@ -326,11 +326,28 @@ export function createMessagesService(runtime: ChatRuntime) {
           userId,
           ...reached.map((r) => r.id),
         ]);
-        receiptsHidden = profiles.some((p) => !p.read_receipts);
+        receiptsHidden =
+          (await access.receiptsOff(database, profiles)).size > 0;
+      }
+      // Admins, moderators and instructors read along quietly: they are
+      // listed only when they answered the message (a reply or a reaction).
+      const [repliers, reactors] = await Promise.all([
+        repository.listRepliers(database, roomId, seq),
+        repository.listReactions(database, roomId, seq, MESSAGE_INFO_LIMIT),
+      ]);
+      const answered = new Set([...repliers, ...reactors.map((r) => r.id)]);
+      const shown = [];
+      for (const person of reached) {
+        if (
+          answered.has(person.id) ||
+          !(await access.isChatStaff(database, person.id))
+        ) {
+          shown.push(person);
+        }
       }
       const readBy = receiptsHidden
         ? []
-        : reached.filter((r) => Number(r.last_read_seq) >= seq);
+        : shown.filter((r) => Number(r.last_read_seq) >= seq);
       const read = new Set(readBy.map((r) => r.id));
       const withTime = (row: (typeof reached)[number], at: Date | null) => ({
         ...presentPerson(row),
@@ -338,7 +355,7 @@ export function createMessagesService(runtime: ChatRuntime) {
       });
       return {
         readBy: readBy.map((r) => withTime(r, r.read_at)),
-        deliveredTo: reached
+        deliveredTo: shown
           .filter((r) => !read.has(r.id))
           .map((r) => withTime(r, r.delivered_at)),
         waiting,

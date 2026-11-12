@@ -218,7 +218,16 @@ export function MessageList({
     const box = scrollRef.current;
     const content = contentRef.current;
     if (!box || !content || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
+    // A row switching between skipped and drawn (content-visibility) changes
+    // the list by a fraction of a pixel; acting on that put the reader back
+    // at the bottom on every frame of a swipe (the chat "shook", seen on an
+    // Android phone at devicePixelRatio 3). Only a real change of 1px or
+    // more counts; small steps that add up still do.
+    let lastHeight = content.getBoundingClientRect().height;
+    const observer = new ResizeObserver(([entry]) => {
+      const height = entry?.contentRect.height ?? lastHeight;
+      if (Math.abs(height - lastHeight) < 1) return;
+      lastHeight = height;
       if (!initialisedRef.current) return;
       const anchor = anchorRef.current;
       if (anchor === "divider") {
@@ -401,7 +410,9 @@ export function MessageList({
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="absolute inset-0 overflow-y-auto overscroll-contain py-3 [scrollbar-gutter:stable]"
+        // Up and down only: nothing in a message may push the list sideways
+        // (it drifted right while scrolling on phones).
+        className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain py-3 [scrollbar-gutter:stable] [overscroll-behavior-x:none]"
         role="log"
         aria-live="polite"
         aria-relevant="additions"

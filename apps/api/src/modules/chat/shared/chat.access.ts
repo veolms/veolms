@@ -233,7 +233,26 @@ export function createChatAccess(repository: ChatRepository) {
     return repository.anyCourseAllowsDirect(db, shared);
   }
 
+  /**
+   * Whose read receipts are off. Only chat staff (admins, moderators,
+   * instructors) may turn them off; for everyone else a stored "off" (from
+   * before the switch became staff-only) does not count.
+   */
+  async function receiptsOff(
+    db: Executor,
+    profiles: readonly { user_id: string; read_receipts: boolean }[],
+  ): Promise<Set<string>> {
+    const off = new Set<string>();
+    for (const profile of profiles) {
+      if (!profile.read_receipts && (await isChatStaff(db, profile.user_id))) {
+        off.add(profile.user_id);
+      }
+    }
+    return off;
+  }
+
   return {
+    receiptsOff,
     isPlatformModerator,
     isChatStaff,
     isManager,

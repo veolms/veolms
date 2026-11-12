@@ -314,6 +314,7 @@ export const Composer = forwardRef<
             senderName: replyTo.sender?.name ?? null,
             preview: replyTo.body.slice(0, 120),
             media: quoteMediaOf(replyTo.attachments),
+            ...(replyTo.seq === 0 ? { clientId: replyTo.id } : {}),
           }
         : null,
       mentions: mentioned,
@@ -343,6 +344,7 @@ export const Composer = forwardRef<
             senderName: replyTo.sender?.name ?? null,
             preview: replyTo.body.slice(0, 120),
             media: quoteMediaOf(replyTo.attachments),
+            ...(replyTo.seq === 0 ? { clientId: replyTo.id } : {}),
           }
         : null,
       mentions: [],
@@ -606,6 +608,11 @@ export const Composer = forwardRef<
                   event.preventDefault();
                   void addFiles(pasted);
                 }
+              }}
+              onDrop={(event) => {
+                if (event.dataTransfer.files.length === 0) return;
+                event.preventDefault();
+                void addFiles([...event.dataTransfer.files]);
               }}
               onKeyDown={(event) => {
                 if (
