@@ -206,12 +206,18 @@ export function MediaStage({
                 }
                 if (Math.abs(dx) < 6) return;
                 current.started = true;
-                event.currentTarget.setPointerCapture(event.pointerId);
+                try {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                } catch {
+                  // Pointer already gone: the move still counts.
+                }
               }
               setDragging({ id: current.id, dx });
             }}
             onPointerUp={(event) => endDrag(event.clientX)}
             onPointerCancel={() => endDrag(null)}
+            // The browser would drag the picture itself (and cancel ours).
+            onDragStart={(event) => event.preventDefault()}
             onKeyDown={(event) => {
               // Alt + ← / → moves the file, for the keyboard.
               if (!event.altKey) return;
@@ -255,13 +261,14 @@ export function MediaStage({
                 <img
                   src={file.previewUrl}
                   alt=""
-                  className="size-full object-cover"
+                  draggable={false}
+                  className="pointer-events-none size-full object-cover"
                 />
               ) : file.kind === "video" && file.previewUrl ? (
                 <video
                   src={file.previewUrl}
                   muted
-                  className="size-full object-cover"
+                  className="pointer-events-none size-full object-cover"
                 />
               ) : file.kind === "audio" ? (
                 <MusicNotes size={22} />

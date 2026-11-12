@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { formatDuration } from "./chatFormat";
+import { resolveMediaLength } from "./chatMedia";
 
 const SPEEDS = [1, 1.5, 2] as const;
 /** Bars drawn: the stored waveform is averaged down to fit the bubble. */
@@ -76,9 +77,17 @@ export function VoiceMessage({
       setProgress(0);
       setElapsed(0);
     };
+    let probed = false;
     const onMeta = () => {
       if (Number.isFinite(audio.duration) && audio.duration > 0) {
         setDuration(audio.duration);
+      } else if (!probed && !durationRef.current && audio.paused) {
+        // Sent without a length (an older upload) and a WebM that does
+        // not say: find it, so the time reads right before playing.
+        probed = true;
+        void resolveMediaLength(audio).then((seconds) => {
+          if (seconds > 0) setDuration(seconds);
+        });
       }
     };
     const onPause = () => setIsPlaying(false);
