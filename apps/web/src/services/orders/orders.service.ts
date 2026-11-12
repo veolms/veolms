@@ -6,6 +6,8 @@ import type {
   OrdersListQueryInput,
   OrderStatsQueryInput,
   OrderStatsResponse,
+  OrderCourseOptionsResponse,
+  OrdersExportQueryInput,
   Invoice,
   OrderDirectRefundRequest,
   RefundResult,
@@ -38,6 +40,24 @@ export const ordersService = {
     return api.get<LearnerOrdersListResponse>("/orders", {
       params: { ...params, view: "student" },
     });
+  },
+
+  /** The courses the Orders screen filters by (staff). */
+  listOrderCourseOptions: (): Promise<OrderCourseOptionsResponse> => {
+    return api.get<OrderCourseOptionsResponse>("/orders/course-options");
+  },
+
+  /** A link that downloads every order matching the filters as CSV. */
+  getOrdersExportUrl: (params: OrdersExportQueryInput): string => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined || value === null || value === "") continue;
+      query.set(
+        key,
+        value instanceof Date ? value.toISOString() : String(value),
+      );
+    }
+    return `${getApiBaseUrl()}/orders/export.csv?${query.toString()}`;
   },
 
   getOrderStats: (

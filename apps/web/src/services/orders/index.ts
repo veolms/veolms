@@ -1,7 +1,8 @@
 export { orderKeys } from "./orders.keys";
 export { ordersService, type OrdersListParams } from "./orders.service";
 export {
-  useAdminOrders,
+  useAdminOrdersPage,
+  useOrderCourseOptions,
   useMyOrders,
   useOrderStats,
   useOrdersNeedingRefund,

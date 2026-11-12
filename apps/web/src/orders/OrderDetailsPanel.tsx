@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { AdminOrder } from "@veolms/contracts";
+import type { AdminOrder, OrderCourseOption } from "@veolms/contracts";
 import { SlideOverFrame } from "../components/SlideOverPanel";
 import {
   SplitFrameGutter,
@@ -22,6 +22,9 @@ import {
 export interface OrderDetailsPanelProps {
   /** The order shown; none while no order is open. */
   order: AdminOrder | null;
+  courses: ReadonlyMap<string, OrderCourseOption>;
+  /** Where the order sits among every matching one ("3 of 34"). */
+  position: { index: number; total: number } | null;
   onClose: () => void;
   /** The desktop gutter was dragged or double-clicked open: show this order
    * again (the last one shown). */
@@ -158,6 +161,8 @@ function DesktopPanel(props: OrderDetailsPanelProps) {
           {!collapsed && order && (
             <OrderDetailsContent
               order={order}
+              courses={props.courses}
+              position={props.position}
               variant="desktop"
               onClose={onClose}
               step={toStep(props)}
@@ -189,6 +194,8 @@ function TabletPanel(props: OrderDetailsPanelProps & { order: AdminOrder }) {
     >
       <OrderDetailsContent
         order={order}
+        courses={props.courses}
+        position={props.position}
         variant="tablet"
         step={toStep(props)}
         onRequestRefund={props.onRequestRefund}
@@ -227,6 +234,8 @@ function PhonePanel(props: OrderDetailsPanelProps & { order: AdminOrder }) {
       >
         <OrderDetailsContent
           order={order}
+          courses={props.courses}
+          position={props.position}
           variant="phone"
           step={toStep(props)}
           onRequestRefund={(target) => {

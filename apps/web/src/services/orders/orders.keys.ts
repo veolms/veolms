@@ -11,6 +11,7 @@ export const orderKeys = {
     [...orderKeys.lists(), params] as const,
   stats: (params?: OrderStatsQueryInput) =>
     [...orderKeys.all, "stats", params] as const,
+  courseOptions: () => [...orderKeys.all, "course-options"] as const,
   needsRefund: () => [...orderKeys.all, "needs-refund"] as const,
   detail: (id: string, view?: OrderView) =>
     [...orderKeys.all, "detail", id, view] as const,
