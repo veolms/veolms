@@ -166,7 +166,10 @@ export interface ShakaPlayerLike {
   destroy(): Promise<void>;
   configure(configuration: unknown): boolean;
   resetConfiguration?(): void;
-  getConfiguration?(): { drm?: { servers?: Record<string, string> } };
+  getConfiguration?(): {
+    drm?: { servers?: Record<string, string> };
+    streaming?: { segmentPrefetchLimit?: number };
+  };
   getNetworkingEngine(): ShakaNetworkingEngineLike | null;
   getStats?(): { estimatedBandwidth?: number; maxSegmentDuration?: number };
   /** Resumes streams stopped by a failure, after `retryDelaySeconds`. */
@@ -257,13 +260,16 @@ export const SHAKA_STREAMING_DEFAULTS = {
  * apart. No limit on a request's total time: on 3G (~50KB/s) a 1080p
  * segment (~1.6MB) needs over 30s, and a retry starts again from its first
  * byte, so a total limit made it fail forever. A request is given up when
- * no byte has arrived for 8s (connecting, or mid-body): a connection that
- * quiet is dead, and the 20s given before, four times over, was a minute
- * and a half of loader for one dead connection. Production's playback log
- * showed buffering stretches averaging 100s on lessons whose segments
- * come from the CDN cache in under a second. (An extension that hands the
- * page a body only once complete answers from the device, not over the
- * network, so these limits never apply to it.)
+ * no byte has arrived for 4s (connecting, or mid-body): a connection that
+ * quiet is dead. The 20s given before, four times over, was a minute and a
+ * half of loader for one dead connection (production's playback log showed
+ * buffering stretches averaging 100s on lessons whose segments come from the
+ * CDN cache in under a second), and the 8s after it still held a seek back
+ * on a still picture for 10s, 20s when the retry hung too (a learner's
+ * recording, 12 Nov). A segment the CDN has to fetch cold answers in about
+ * 1s; a slow but moving download is never cut, as every byte restarts the
+ * wait. (An extension that hands the page a body only once complete answers
+ * from the device, not over the network, so these limits never apply to it.)
  */
 export const SHAKA_SEGMENT_RETRY_DEFAULTS = {
   maxAttempts: 5,
@@ -271,8 +277,8 @@ export const SHAKA_SEGMENT_RETRY_DEFAULTS = {
   backoffFactor: 1.5,
   fuzzFactor: 0.3,
   timeout: 0,
-  connectionTimeout: 8_000,
-  stallTimeout: 8_000,
+  connectionTimeout: 4_000,
+  stallTimeout: 4_000,
 } as const;
 
 /**
@@ -777,11 +783,15 @@ export function createShakaConfiguration(
       streaming?.abrDroppedFrames ?? SHAKA_ABR_DEFAULTS.droppedFrames,
   };
 
-  if (networking?.manifestRetry) {
-    result.manifest = {
-      retryParameters: retryConfiguration(networking.manifestRetry),
-    };
-  }
+  result.manifest = {
+    // See `VideoStreamingConfiguration.detectEmbeddedCaptions`.
+    hls: {
+      disableClosedCaptionsDetection: !streaming?.detectEmbeddedCaptions,
+    },
+    ...(networking?.manifestRetry
+      ? { retryParameters: retryConfiguration(networking.manifestRetry) }
+      : {}),
+  };
 
   if (streaming?.transmuxWorkerUrl) {
     result.mediaSource = {

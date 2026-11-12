@@ -517,6 +517,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       error: null,
       ended: false,
       buffering: false,
+      bufferingHold: false,
       currentTime: 0,
       duration: 0,
       buffered: [],
@@ -575,6 +576,12 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     }
     this.updateSnapshot({ buffering });
     this.#events.emit("bufferingchange", { buffering });
+  }
+
+  /** See `VideoEngineSnapshot.bufferingHold`. */
+  protected setBufferingHold(bufferingHold: boolean): void {
+    if (this.#snapshot.bufferingHold === bufferingHold) return;
+    this.updateSnapshot({ bufferingHold });
   }
 
   protected setTrackState(options: {

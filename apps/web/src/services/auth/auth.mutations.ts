@@ -38,6 +38,7 @@ import { autosyncManager } from "../../lib/autosync/manager";
 import { authStore } from "../../store/auth.store";
 import { clearActiveSessionsVerification } from "../../auth/activeSessionsVerification";
 import { writeSessionPresence } from "../../store/sessionPresence";
+import { holdUntilSignedOut } from "../../store/signOutInFlight";
 import {
   endPendingMfaLogin,
   notePendingMfaLogin,
@@ -171,11 +172,14 @@ let pendingLoginCancellation: Promise<void> | null = null;
  */
 export function cancelPendingLogin(queryClient: QueryClient): Promise<void> {
   pendingLoginCancellation ??= (async () => {
+    // Sent before the page turns signed out (see store/signOutInFlight.ts).
+    const loggedOut = authService.logout();
+    holdUntilSignedOut(loggedOut);
     authStore.clearAuth();
     queryClient.setQueryData(authKeys.me(), null);
     let sessionEnded = false;
     try {
-      await authService.logout();
+      await loggedOut;
       sessionEnded = true;
     } catch {
       // Unreachable or already ended. The tab stays signed out either way;
@@ -634,11 +638,15 @@ export function useSignOut() {
 
     const previousUser =
       queryClient.getQueryData<CurrentUserResponse>(authKeys.me()) ?? null;
+    // Sent before the page turns signed out, so what the signed-out page
+    // asks for at once waits for it (see store/signOutInFlight.ts).
+    const loggedOut = authService.logout();
+    holdUntilSignedOut(loggedOut);
     signedOutHere = true;
     clearSignedOutState(queryClient, true);
 
     try {
-      await authService.logout();
+      await loggedOut;
     } catch {
       let user: CurrentUserResponse | null = previousUser;
       try {
