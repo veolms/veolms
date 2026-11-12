@@ -12,6 +12,7 @@ import { cn } from "../lib/utils";
 import { useCurrentUser } from "../services/auth";
 import { useChatProfile, useUpdateChatProfile } from "../services/chat";
 import {
+  isTouchOnlyDevice,
   setChatPrefs,
   useChatPrefs,
   type ChatPattern,
@@ -265,16 +266,29 @@ export function ChatSettingsPanel({
       "Chats",
       "root",
       <>
-        <SettingsRow
-          title="Enter is send"
-          note="Off: Enter starts a new line and Ctrl + Enter sends."
-        >
-          <ChatToggle
-            checked={values.enterToSend}
-            label="Enter is send"
-            onChange={(on) => save({ enterToSend: on })}
-          />
-        </SettingsRow>
+        {isTouchOnlyDevice() ? (
+          <SettingsRow
+            title="Enter is send"
+            note="On this phone. Off: Enter starts a new line; tap send to send."
+          >
+            <ChatToggle
+              checked={prefs.phoneEnterToSend}
+              label="Enter is send"
+              onChange={(on) => setChatPrefs({ phoneEnterToSend: on })}
+            />
+          </SettingsRow>
+        ) : (
+          <SettingsRow
+            title="Enter is send"
+            note="Off: Enter starts a new line and Ctrl + Enter sends."
+          >
+            <ChatToggle
+              checked={values.enterToSend}
+              label="Enter is send"
+              onChange={(on) => save({ enterToSend: on })}
+            />
+          </SettingsRow>
+        )}
         <SettingsRow title="Message text size" note="On this device">
           <ChatSelect<ChatTextSize>
             ariaLabel="Message text size"

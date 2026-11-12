@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { ChatImage } from "./ChatImage";
 import type { ViewableMedia } from "./MessageAttachments";
 
 /**
@@ -88,7 +89,7 @@ export function MediaViewer({
           </button>
         ) : null}
         {item.kind === "image" ? (
-          <img
+          <ChatImage
             src={item.url}
             alt={item.name}
             className="max-h-full max-w-full object-contain"

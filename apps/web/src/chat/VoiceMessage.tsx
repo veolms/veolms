@@ -6,6 +6,22 @@ import { cn } from "../lib/utils";
 import { formatDuration } from "./chatFormat";
 
 const SPEEDS = [1, 1.5, 2] as const;
+/** Bars drawn: the stored waveform is averaged down to fit the bubble. */
+const BAR_COUNT = 36;
+
+function fitBars(waveform: readonly number[] | null): number[] {
+  if (!waveform || waveform.length === 0) {
+    return Array.from({ length: BAR_COUNT }, () => 30);
+  }
+  if (waveform.length <= BAR_COUNT) return [...waveform];
+  const step = waveform.length / BAR_COUNT;
+  return Array.from({ length: BAR_COUNT }, (_, i) => {
+    const from = Math.floor(i * step);
+    const to = Math.max(from + 1, Math.floor((i + 1) * step));
+    const slice = waveform.slice(from, to);
+    return Math.max(...slice);
+  });
+}
 
 /** Only one voice message plays at a time, as in WhatsApp. */
 let playing: HTMLAudioElement | null = null;
@@ -28,36 +44,56 @@ export function VoiceMessage({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
   const [duration, setDuration] = useState((durationMs ?? 0) / 1000);
-  const bars =
-    waveform && waveform.length > 0
-      ? waveform
-      : Array.from({ length: 40 }, () => 30);
+  const durationRef = useRef(duration);
+  durationRef.current = duration;
+  const bars = fitBars(waveform);
+
+  /**
+   * The length to measure against. Recorded voice files (WebM) often tell
+   * the browser their length is "Infinity" until played through, which
+   * made the time read 0:00 while playing; the length saved at sending
+   * time is used then.
+   */
+  function lengthOf(audio: HTMLAudioElement): number {
+    return Number.isFinite(audio.duration) && audio.duration > 0
+      ? audio.duration
+      : durationRef.current;
+  }
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    const onTime = () =>
-      setProgress(audio.duration ? audio.currentTime / audio.duration : 0);
+    const onTime = () => {
+      const length = lengthOf(audio);
+      setElapsed(audio.currentTime);
+      setProgress(length ? Math.min(1, audio.currentTime / length) : 0);
+    };
     const onEnd = () => {
       setIsPlaying(false);
       setProgress(0);
+      setElapsed(0);
     };
     const onMeta = () => {
-      if (Number.isFinite(audio.duration)) setDuration(audio.duration);
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
+      }
     };
     const onPause = () => setIsPlaying(false);
     const onPlay = () => setIsPlaying(true);
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("ended", onEnd);
     audio.addEventListener("loadedmetadata", onMeta);
+    audio.addEventListener("durationchange", onMeta);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("play", onPlay);
     return () => {
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("ended", onEnd);
       audio.removeEventListener("loadedmetadata", onMeta);
+      audio.removeEventListener("durationchange", onMeta);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("play", onPlay);
       if (playing === audio) playing = null;
@@ -79,14 +115,16 @@ export function VoiceMessage({
 
   function seek(event: React.PointerEvent<HTMLDivElement>) {
     const audio = audioRef.current;
-    if (!audio || !audio.duration) return;
+    const length = audio ? lengthOf(audio) : 0;
+    if (!audio || !length) return;
     const box = event.currentTarget.getBoundingClientRect();
     const fraction = Math.min(
       1,
       Math.max(0, (event.clientX - box.left) / box.width),
     );
-    audio.currentTime = fraction * audio.duration;
+    audio.currentTime = fraction * length;
     setProgress(fraction);
+    setElapsed(fraction * length);
   }
 
   function nextSpeed() {
@@ -95,11 +133,11 @@ export function VoiceMessage({
     if (audioRef.current) audioRef.current.playbackRate = next;
   }
 
-  const shownSeconds =
-    isPlaying || progress > 0 ? progress * duration : duration;
+  // WhatsApp: the length until played, then the time played so far.
+  const shownSeconds = isPlaying || elapsed > 0 ? elapsed : duration;
 
   return (
-    <div className="flex w-64 max-w-full items-center gap-2.5 py-1">
+    <div className="flex w-64 max-w-full min-w-0 items-center gap-2.5 py-1">
       <audio ref={audioRef} src={src} preload="metadata" />
       <button
         type="button"
@@ -130,22 +168,21 @@ export function VoiceMessage({
           }}
           onKeyDown={(event) => {
             const audio = audioRef.current;
-            if (!audio || !audio.duration) return;
+            const length = audio ? lengthOf(audio) : 0;
+            if (!audio || !length) return;
             if (event.key === "ArrowRight")
-              audio.currentTime = Math.min(
-                audio.duration,
-                audio.currentTime + 5,
-              );
+              audio.currentTime = Math.min(length, audio.currentTime + 5);
             if (event.key === "ArrowLeft")
               audio.currentTime = Math.max(0, audio.currentTime - 5);
           }}
-          className="flex h-7 cursor-pointer touch-none items-center gap-[2px]"
+          className="flex h-7 cursor-pointer touch-none items-center justify-between gap-[2px] overflow-hidden"
         >
           {bars.map((bar, index) => (
             <span
               key={index}
               className={cn(
-                "w-[3px] shrink-0 rounded-full transition-colors",
+                // Shrinks to fit: never wider than the bubble.
+                "max-w-[3px] min-w-[1.5px] flex-1 rounded-full transition-colors",
                 index / bars.length < progress
                   ? outgoing
                     ? "bg-(--accent-ink)"

@@ -185,6 +185,7 @@ export function ChatPage() {
   }
 
   useChatShortcuts({
+    showShortcuts: () => setShortcutsOpen(true),
     newChat: () => setPanel("new"),
     previousChat: () => step(-1),
     nextChat: () => step(1),

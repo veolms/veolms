@@ -1,5 +1,6 @@
 import { AtIcon as At } from "@phosphor-icons/react/At";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
+import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
 import type { ChatMessage } from "@veolms/contracts";
 import {
   Fragment,
@@ -100,7 +101,10 @@ export function MessageList({
   onAtBottom,
   onRetry,
   onDiscard,
+  typing = [],
 }: {
+  /** Who is typing now: a bubble of moving dots under the last message. */
+  typing?: readonly string[];
   thread: ChatThread;
   outgoing: OutgoingMessage[];
   ctx: BubbleContext;
@@ -408,12 +412,26 @@ export function MessageList({
             {loadingOlder ? <LoadingSpinnerIcon /> : null}
           </div>
         ) : (
-          <div className="mx-auto mb-3 max-w-md rounded-lg bg-(--chat-in) px-3 py-2 text-center text-[0.75rem] text-(--muted) shadow-sm">
-            {thread.oldestSeq && thread.oldestSeq > 1
-              ? "Older messages are removed after the retention period."
-              : ctx.isDirect
-                ? "Only the two of you can read this chat. Admins see a message only if one of you reports it."
-                : "Messages are visible to everyone in this group. Be kind and keep it on topic."}
+          // WhatsApp's note at the top of a chat: amber text on a soft
+          // panel, a lock, and room on both sides.
+          <div className="chat-privacy-note mx-6 mt-1 mb-3 flex justify-center sm:mx-auto sm:max-w-md">
+            <p className="m-0 rounded-lg px-3.5 py-2 text-center text-[0.75rem] leading-snug shadow-sm">
+              {thread.oldestSeq && thread.oldestSeq > 1 ? (
+                "Older messages are removed after the retention period."
+              ) : (
+                <>
+                  <LockSimple
+                    size={12}
+                    weight="fill"
+                    aria-hidden="true"
+                    className="mr-1 inline-block -translate-y-px align-middle"
+                  />
+                  {ctx.isDirect
+                    ? "Your messages are private. Only you and the other person in this chat can read them."
+                    : "Messages are visible to everyone in this group. Be kind and keep it on topic."}
+                </>
+              )}
+            </p>
           </div>
         )}
         <div ref={contentRef}>
@@ -488,6 +506,39 @@ export function MessageList({
                 })}
             </section>
           ))}
+          {typing.length > 0 ? (
+            <div className="mt-2.5 flex px-[4%]" aria-live="polite">
+              <div
+                className="relative rounded-lg rounded-tl-none bg-(--chat-in) px-3 py-2.5 shadow-[0_1px_0.5px_rgb(0_0_0/0.13)]"
+                role="status"
+                aria-label={
+                  ctx.isGroup
+                    ? `${typing.slice(0, 2).join(", ")} typing`
+                    : "Typing"
+                }
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 8 13"
+                  className="absolute top-0 -left-2 h-3.25 w-2 -scale-x-100 fill-(--chat-in)"
+                >
+                  <path d="M0 0h8L1.5 9.5C1 10.3 0 10 0 9z" />
+                </svg>
+                {ctx.isGroup ? (
+                  <span className="mb-1 block max-w-48 truncate text-[0.72rem] font-semibold text-(--accent-ink)">
+                    {typing.length === 1
+                      ? typing[0]
+                      : `${typing.slice(0, 2).join(", ")}${typing.length > 2 ? " +" + (typing.length - 2) : ""}`}
+                  </span>
+                ) : null}
+                <span className="chat-typing-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
       {unreadMentions.length > 0 ? (

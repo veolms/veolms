@@ -595,6 +595,7 @@ export function Conversation({
               retryMessage(client, viewerId, room.id, clientId)
             }
             onDiscard={(clientId) => discardMessage(room.id, clientId)}
+            typing={typing}
           />
         ) : thread.isError ? (
           <div className="relative flex flex-1 items-center justify-center p-6 text-center text-(--muted)">

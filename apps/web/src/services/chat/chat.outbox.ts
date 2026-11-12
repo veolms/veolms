@@ -1,5 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { ChatAttachment, ChatUploadKind } from "@veolms/contracts";
+import type {
+  ChatAttachment,
+  ChatMessage,
+  ChatUploadKind,
+} from "@veolms/contracts";
 
 import { getApiError } from "../../lib/api-error";
 import { applyMessages, applyToRoomList, markRoomRead } from "./chat.cache";
@@ -35,7 +39,12 @@ export interface OutgoingMessage {
   clientId: string;
   roomId: string;
   body: string;
-  replyTo: { seq: number; senderName: string | null; preview: string } | null;
+  replyTo: {
+    seq: number;
+    senderName: string | null;
+    preview: string;
+    media?: NonNullable<ChatMessage["replyTo"]>["media"];
+  } | null;
   mentions: string[];
   mentionAll: boolean;
   files: OutgoingFile[];
@@ -79,8 +88,15 @@ function remove(roomId: string, clientId: string) {
   const list = outbox.get(roomId);
   if (!list) return;
   const message = list.find((m) => m.clientId === clientId);
-  for (const file of message?.files ?? []) {
-    if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+  // This browser's copies are let go a while later: a photo just sent may
+  // still be open in the viewer (it showed broken when let go at once).
+  const previews = (message?.files ?? [])
+    .map((file) => file.previewUrl)
+    .filter((url): url is string => Boolean(url));
+  if (previews.length > 0) {
+    setTimeout(() => {
+      for (const url of previews) URL.revokeObjectURL(url);
+    }, 5 * 60_000);
   }
   outbox.set(
     roomId,

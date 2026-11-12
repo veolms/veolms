@@ -60,6 +60,23 @@ function asRole(value: string): ChatSenderRole {
     : "learner";
 }
 
+/** The quoted message's first file, for the quote's label and thumbnail. */
+function replyMedia(row: MessageRow) {
+  const files =
+    row.reply_deleted_at === null ? (row.reply_attachments ?? []) : [];
+  const first = files[0];
+  if (!first) return {};
+  return {
+    media: {
+      kind: first.kind,
+      url: chatUploadUrl(first.id),
+      name: first.name,
+      durationMs: first.durationMs ?? null,
+      count: files.length,
+    },
+  };
+}
+
 /** A stored message as clients see it. Deleted text is never sent out. */
 export function presentMessage(row: MessageRow): ChatMessage {
   const deleted = row.deleted_at !== null;
@@ -94,6 +111,7 @@ export function presentMessage(row: MessageRow): ChatMessage {
                 ? ""
                 : preview(row.reply_body),
             deleted: row.reply_deleted_at !== null || row.reply_body === null,
+            ...replyMedia(row),
           },
     mentions: deleted ? [] : row.mentions,
     mentionAll: deleted ? false : row.mention_all,

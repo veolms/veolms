@@ -41,11 +41,16 @@ import {
   type OutgoingFile,
 } from "../services/chat";
 import { getApiError } from "../lib/api-error";
-import { chatDrafts as drafts } from "../store/chatDrafts.store";
+import {
+  chatDraftFiles,
+  chatDrafts as drafts,
+} from "../store/chatDrafts.store";
+import { isTouchOnlyDevice, useChatPrefs } from "../store/chatPrefs.store";
 import { ChatFileError, prepareFile } from "./chatMedia";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
 import { MediaStage } from "./MediaStage";
+import { quoteMediaOf, ReplyQuoteBody } from "./ReplyQuote";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 
 export interface ComposerHandle {
@@ -105,7 +110,14 @@ export const Composer = forwardRef<
 ) {
   const client = useQueryClient();
   const [text, setText] = useState(() => drafts.get(room.id) ?? "");
-  const [files, setFiles] = useState<OutgoingFile[]>([]);
+  const [files, setFiles] = useState<OutgoingFile[]>(() =>
+    chatDraftFiles.get<OutgoingFile>(room.id),
+  );
+  /** The draft that was in the box before Edit, put back afterwards. */
+  const draftBeforeEditRef = useRef("");
+  /** The chat the files on screen belong to (kept as its draft). */
+  const filesRoomRef = useRef(room.id);
+  const prefs = useChatPrefs();
   const [mentions, setMentions] = useState<Map<string, string>>(new Map());
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -133,17 +145,28 @@ export const Composer = forwardRef<
   const editMessage = useEditMessage();
   const isGroup = room.kind !== "direct";
   // Settings › Chats › Enter is send (off: Enter starts a new line and
-  // Ctrl/⌘ + Enter sends).
-  const enterToSend = useChatProfile().data?.enterToSend ?? true;
+  // Ctrl/⌘ + Enter sends). On a phone Enter starts a new line unless
+  // turned on there, as in WhatsApp.
+  const accountEnterToSend = useChatProfile().data?.enterToSend ?? true;
+  const enterToSend = isTouchOnlyDevice()
+    ? prefs.phoneEnterToSend
+    : accountEnterToSend;
   const members = useChatMembers(
     isGroup && mentionQuery !== null ? room.id : null,
     mentionQuery ?? "",
   );
 
+  // Picked files stay with their chat's draft (declared before the switch
+  // below, so a chat's files are never saved under the next chat).
+  useEffect(() => {
+    if (filesRoomRef.current === room.id) chatDraftFiles.set(room.id, files);
+  }, [files, room.id]);
+
   // Each chat keeps its own draft; on desktop the box is ready to type in.
   useEffect(() => {
+    filesRoomRef.current = room.id;
     setText(drafts.get(room.id) ?? "");
-    setFiles([]);
+    setFiles(chatDraftFiles.get<OutgoingFile>(room.id));
     setMentions(new Map());
     if (window.matchMedia("(pointer: fine)").matches) {
       textareaRef.current?.focus({ preventScroll: true });
@@ -152,6 +175,7 @@ export const Composer = forwardRef<
 
   useEffect(() => {
     if (editing) {
+      draftBeforeEditRef.current = drafts.get(room.id) ?? "";
       setText(editing.body);
       requestAnimationFrame(() => {
         const area = textareaRef.current;
@@ -159,7 +183,8 @@ export const Composer = forwardRef<
         area?.setSelectionRange(area.value.length, area.value.length);
       });
     }
-  }, [editing]);
+    // Only when Edit starts; the chat is the same while editing.
+  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (replyTo) textareaRef.current?.focus({ preventScroll: true });
@@ -222,7 +247,8 @@ export const Composer = forwardRef<
 
   function updateText(value: string) {
     setText(value);
-    drafts.set(room.id, value);
+    // The text of a message being edited is not this chat's draft.
+    if (!editing) drafts.set(room.id, value);
     // "@na…" at the caret opens the member picker.
     const caret = textareaRef.current?.selectionStart ?? value.length;
     const match = /(^|\s)@([\p{L}\p{N}_.-]{0,30})$/u.exec(
@@ -260,7 +286,7 @@ export const Composer = forwardRef<
     if (editing) {
       if (!body || body === editing.body) {
         onDoneEditing();
-        setText(drafts.get(room.id) ?? "");
+        setText(draftBeforeEditRef.current);
         return;
       }
       editMessage.mutate(
@@ -268,7 +294,7 @@ export const Composer = forwardRef<
         { onError: (error) => onError(getApiError(error).message) },
       );
       onDoneEditing();
-      setText(drafts.get(room.id) ?? "");
+      setText(draftBeforeEditRef.current);
       return;
     }
     if (!body && files.length === 0) return;
@@ -287,6 +313,7 @@ export const Composer = forwardRef<
             seq: replyTo.seq,
             senderName: replyTo.sender?.name ?? null,
             preview: replyTo.body.slice(0, 120),
+            media: quoteMediaOf(replyTo.attachments),
           }
         : null,
       mentions: mentioned,
@@ -315,6 +342,7 @@ export const Composer = forwardRef<
             seq: replyTo.seq,
             senderName: replyTo.sender?.name ?? null,
             preview: replyTo.body.slice(0, 120),
+            media: quoteMediaOf(replyTo.attachments),
           }
         : null,
       mentions: [],
@@ -369,16 +397,17 @@ export const Composer = forwardRef<
             />
           ) : null}
           <div className="min-w-0 flex-1">
-            <div className="text-[0.78rem] font-semibold text-(--accent-ink)">
-              {editing
-                ? "Edit message"
-                : replyTo?.sender?.id === viewerId
-                  ? "You"
-                  : replyTo?.sender?.name}
-            </div>
-            <div className="truncate text-[0.82rem] text-(--text-secondary)">
-              {(editing ?? replyTo)?.body || "Media"}
-            </div>
+            <ReplyQuoteBody
+              title={
+                editing
+                  ? "Edit message"
+                  : replyTo?.sender?.id === viewerId
+                    ? "You"
+                    : (replyTo?.sender?.name ?? "Message")
+              }
+              text={(editing ?? replyTo)?.body ?? ""}
+              media={quoteMediaOf((editing ?? replyTo)?.attachments ?? [])}
+            />
           </div>
           <button
             type="button"
@@ -387,7 +416,7 @@ export const Composer = forwardRef<
             onClick={() => {
               if (editing) {
                 onDoneEditing();
-                setText(drafts.get(room.id) ?? "");
+                setText(draftBeforeEditRef.current);
               } else onCancelReply();
             }}
           >
@@ -407,6 +436,14 @@ export const Composer = forwardRef<
                 if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
               }
               return [];
+            })
+          }
+          onReorder={(from, to) =>
+            setFiles((current) => {
+              const next = [...current];
+              const [moved] = next.splice(from, 1);
+              if (moved) next.splice(to, 0, moved);
+              return next;
             })
           }
           onRemove={(localId) =>
@@ -517,8 +554,8 @@ export const Composer = forwardRef<
             >
               {(
                 [
-                  ["Document", FileText, "bg-[#7f66ff]", documentInputRef],
                   ["Photos & videos", Images, "bg-[#007bfc]", mediaInputRef],
+                  ["Document", FileText, "bg-[#7f66ff]", documentInputRef],
                   ["Camera", Camera, "bg-[#ff2e74]", cameraInputRef],
                   ["Audio", MusicNotes, "bg-[#ff7a1a]", audioInputRef],
                 ] as const
@@ -594,7 +631,7 @@ export const Composer = forwardRef<
                   else if (emojiOpen) setEmojiOpen(false);
                   else if (editing) {
                     onDoneEditing();
-                    setText(drafts.get(room.id) ?? "");
+                    setText(draftBeforeEditRef.current);
                   } else if (replyTo) onCancelReply();
                   else return;
                   event.stopPropagation();

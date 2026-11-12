@@ -287,6 +287,61 @@ function alertFor(message: ChatMessage) {
   }
 }
 
+/**
+ * Someone reacted to your message (WhatsApp: "Reacted 👍 to: …"): a sound,
+ * and while you're away a notification, unless the chat is muted. With web
+ * push the service worker shows it (the server pushes reactions too).
+ */
+function reactionAlertFor(before: ChatMessage, after: ChatMessage) {
+  if (!client || !viewer || after.sender?.id !== viewer || after.deleted) {
+    return;
+  }
+  const added = Object.entries(after.reactions).find(
+    ([emoji, count]) => count > (before.reactions[emoji] ?? 0),
+  );
+  if (!added) return;
+  const list = client.getQueryData<{ rooms: ChatRoomSummary[] }>(
+    chatKeys.rooms(),
+  );
+  const room = list?.rooms.find((r) => r.id === after.roomId);
+  if (!room || isRoomMuted(room.me) || room.me.notifyLevel === "none") return;
+  const away = document.visibilityState === "hidden" || !document.hasFocus();
+  if (!away && visibleRooms.has(after.roomId)) return;
+  const [emoji] = added;
+  // Who reacted (the newest first); your own reaction alerts no one.
+  void chatService
+    .messageReactions(after.roomId, after.seq)
+    .then(({ reactions }) => reactions.find((r) => r.id !== viewer))
+    .catch(() => undefined)
+    .then((person) => {
+      if (!person) return;
+      const prefs = getChatPrefs();
+      const quiet = inQuietHours(prefs.quietHours);
+      if (prefs.messageSound && !quiet) chime();
+      if (!away || !desktopAlertsOn() || isWebPushActive()) return;
+      const who = person.name;
+      const what = prefs.previews
+        ? after.body ||
+          (after.attachments[0]?.kind === "audio" ? "Voice message" : "Media")
+        : "your message";
+      const alert = new Notification(
+        room.kind === "direct" ? who : `${who} @ ${room.title}`,
+        {
+          body: `Reacted ${person?.emoji ?? emoji} to: ${what}`,
+          tag: `${after.roomId}:reaction`,
+          silent: quiet,
+        },
+      );
+      alert.onclick = () => {
+        window.focus();
+        const path = `/chat/${after.roomId}?seq=${after.seq}`;
+        if (openLink) openLink(path);
+        else window.location.assign(path);
+        alert.close();
+      };
+    });
+}
+
 function onMessage(
   message: ChatMessage | { pointer: true; roomId: string },
   isNew: boolean,
@@ -302,6 +357,10 @@ function onMessage(
   // A gap: something was missed; fetch it rather than show holes.
   if (thread && isNew && message.seq > thread.lastSeq + 1) {
     void catchUp(message.roomId);
+  }
+  if (!isNew) {
+    const before = thread?.messages.find((m) => m.seq === message.seq);
+    if (before) reactionAlertFor(before, message);
   }
   applyMessages(client, message.roomId, [message]);
   const open =

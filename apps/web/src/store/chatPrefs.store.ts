@@ -61,6 +61,11 @@ export interface ChatPrefs {
   previews: boolean;
   /** Notifications arrive without sound between these times (device time). */
   quietHours: { from: string; to: string } | null;
+  /**
+   * Enter is send on a phone (WhatsApp: off, Enter starts a new line and
+   * the send button sends). Computers use the account's setting.
+   */
+  phoneEnterToSend: boolean;
 }
 
 const STORAGE_KEY = "veolms.chat.prefs";
@@ -73,7 +78,16 @@ const DEFAULTS: ChatPrefs = {
   desktopAlerts: false,
   previews: true,
   quietHours: null,
+  phoneEnterToSend: false,
 };
+
+/** A phone or tablet: touch only, no mouse (Enter starts a new line there). */
+export function isTouchOnlyDevice(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(hover: none) and (pointer: coarse)").matches === true
+  );
+}
 
 let current: ChatPrefs | null = null;
 const listeners = new Set<() => void>();

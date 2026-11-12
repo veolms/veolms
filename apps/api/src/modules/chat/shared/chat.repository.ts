@@ -70,6 +70,7 @@ export interface MessageRow {
   sender_deleted: boolean | null;
   deleted_by_name: string | null;
   reply_body: string | null;
+  reply_attachments: ChatAttachmentRef[] | null;
   reply_deleted_at: Date | null;
   reply_sender_name: string | null;
 }
@@ -170,6 +171,7 @@ export function createChatRepository() {
         "su.is_deleted as sender_deleted",
         "du.display_name as deleted_by_name",
         "rm.body as reply_body",
+        "rm.attachments as reply_attachments",
         "rm.deleted_at as reply_deleted_at",
         "ru.display_name as reply_sender_name",
       ]);
@@ -1007,6 +1009,58 @@ export function createChatRepository() {
      * have not blocked the sender. `mentionsOnly` limits it to the people
      * mentioned (large groups). Each with their unread count, capped at 99.
      */
+    /**
+     * Who hears about a reaction: the message's author, unless they reacted
+     * themselves, muted the chat or turned it off, left, or blocked the
+     * person reacting. With their unread count in the chat.
+     */
+    async reactionPushRecipient(
+      db: Executor,
+      input: { roomId: string; seq: number; reactorId: string },
+    ) {
+      const result = await sql<{ user_id: string; unread: string }>`
+        select
+          cm.user_id,
+          (
+            select count(*) from (
+              select 1 from chat_messages um
+              where um.room_id = cm.room_id
+                and um.seq > cm.last_read_seq
+                and um.kind = 'text'
+                and um.deleted_at is null
+                and um.sender_id is distinct from cm.user_id
+              limit 99
+            ) unread_rows
+          ) as unread
+        from chat_messages m
+        join chat_members cm
+          on cm.room_id = m.room_id and cm.user_id = m.sender_id
+        join users u on u.id = cm.user_id
+        where m.room_id = ${input.roomId}
+          and m.seq = ${String(input.seq)}
+          and m.deleted_at is null
+          and cm.user_id <> ${input.reactorId}
+          and cm.state = 'active'
+          and u.is_deleted = false
+          and (cm.muted_until is null or cm.muted_until <= now())
+          and cm.notify_level <> 'none'
+          and exists (
+            select 1 from chat_reactions r
+            where r.room_id = m.room_id and r.seq = m.seq
+              and r.user_id = ${input.reactorId}
+          )
+          and not exists (
+            select 1 from chat_user_blocks b
+            where b.blocker_id = cm.user_id and b.blocked_id = ${input.reactorId}
+          )
+      `.execute(db);
+      return result.rows.map((row) => ({
+        userId: row.user_id,
+        isMention: false,
+        unreadCount: Number(row.unread),
+      }));
+    },
+
     async listPushRecipients(
       db: Executor,
       input: {
