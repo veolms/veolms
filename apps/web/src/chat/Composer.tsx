@@ -2,6 +2,8 @@ import { CameraIcon as Camera } from "@phosphor-icons/react/Camera";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { ImagesIcon as Images } from "@phosphor-icons/react/Images";
 import { MicrophoneIcon as Microphone } from "@phosphor-icons/react/Microphone";
+import { StopIcon as Stop } from "@phosphor-icons/react/Stop";
+import { WaveformIcon as Waveform } from "@phosphor-icons/react/Waveform";
 import { MusicNotesIcon as MusicNotes } from "@phosphor-icons/react/MusicNotes";
 import { PaperPlaneRightIcon as PaperPlaneRight } from "@phosphor-icons/react/PaperPlaneRight";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
@@ -50,6 +52,7 @@ import { ChatFileError, prepareFile } from "./chatMedia";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
 import { MediaStage } from "./MediaStage";
+import { tidyDictation, useDictation } from "./useDictation";
 import { quoteMediaOf, ReplyQuoteBody } from "./ReplyQuote";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 
@@ -142,6 +145,34 @@ export const Composer = forwardRef<
   }, []);
   const lastTypingRef = useRef(0);
   const recorder = useVoiceRecorder();
+  // Voice typing: what was in the box when it started; the words heard go
+  // after it, live, as in Claude's and ChatGPT's message box.
+  const dictationBaseRef = useRef("");
+  const dictation = useDictation({
+    lang: prefs.dictationLang,
+    onText: (said) => {
+      const base = dictationBaseRef.current;
+      const startsSentence = base.trim() === "" || /[.?!]\s*$/.test(base);
+      const words = tidyDictation(said, startsSentence);
+      const gap = base && words && !/\s$/.test(base) ? " " : "";
+      updateText((base + gap + words).slice(0, CHAT_BODY_MAX_CHARS));
+      requestAnimationFrame(() => {
+        const area = textareaRef.current;
+        if (area) area.scrollTop = area.scrollHeight;
+      });
+    },
+    onError,
+  });
+  const listening = dictation.state !== "idle";
+  function toggleDictation() {
+    if (listening) {
+      dictation.stop();
+      return;
+    }
+    dictationBaseRef.current = text;
+    dictation.start();
+    textareaRef.current?.focus({ preventScroll: true });
+  }
   const editMessage = useEditMessage();
   const isGroup = room.kind !== "direct";
   // Settings › Chats › Enter is send (off: Enter starts a new line and
@@ -282,6 +313,7 @@ export const Composer = forwardRef<
   }
 
   function send() {
+    if (listening) dictation.stop();
     const body = text.trim();
     if (editing) {
       if (!body || body === editing.body) {
@@ -599,7 +631,11 @@ export const Composer = forwardRef<
               value={text}
               maxLength={CHAT_BODY_MAX_CHARS}
               placeholder={
-                files.length > 0 ? "Add a caption" : "Type a message"
+                listening
+                  ? "Listening… speak now"
+                  : files.length > 0
+                    ? "Add a caption"
+                    : "Type a message"
               }
               onChange={(event) => updateText(event.target.value)}
               onPaste={(event) => {
@@ -653,6 +689,39 @@ export const Composer = forwardRef<
               }}
               className="max-h-38 min-h-6 w-full resize-none border-0 bg-transparent py-2 text-[0.94rem] leading-6 text-(--text) outline-none placeholder:text-(--muted)"
             />
+            {dictation.supported ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  toggleDictation();
+                }}
+                aria-pressed={listening}
+                aria-label={listening ? "Stop voice typing" : "Voice typing"}
+                title={
+                  listening
+                    ? "Stop voice typing"
+                    : "Voice typing: speak, and your words are typed here"
+                }
+                className={cn(
+                  "relative -mr-1.5 ml-1 inline-flex size-8 shrink-0 cursor-pointer items-center justify-center self-end rounded-full border-0 bg-transparent text-(--muted) hover:text-(--text)",
+                  "mb-1",
+                  listening && "bg-red-500 text-white hover:text-white",
+                )}
+              >
+                {listening ? (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 animate-ping rounded-full bg-red-500/40 motion-reduce:animate-none"
+                    />
+                    <Stop size={14} weight="fill" className="relative" />
+                  </>
+                ) : (
+                  <Waveform size={19} />
+                )}
+              </button>
+            ) : null}
           </label>
           {canSend || editing || slowLeft > 0 || files.length > 0 ? (
             <button

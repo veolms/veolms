@@ -12,8 +12,10 @@ import { cn } from "../lib/utils";
 import { useCurrentUser } from "../services/auth";
 import { useChatProfile, useUpdateChatProfile } from "../services/chat";
 import {
+  DICTATION_LANGS,
   isTouchOnlyDevice,
   setChatPrefs,
+  type DictationLang,
   useChatPrefs,
   type ChatPattern,
   type ChatTextSize,
@@ -293,6 +295,27 @@ export function ChatSettingsPanel({
             />
           </SettingsRow>
         )}
+        <SettingsRow
+          title="Voice typing language"
+          note="The language the voice typing button in the message box listens for. On this device."
+        >
+          <select
+            value={prefs.dictationLang}
+            onChange={(event) =>
+              setChatPrefs({
+                dictationLang: event.target.value as DictationLang,
+              })
+            }
+            aria-label="Voice typing language"
+            className="h-9 max-w-44 cursor-pointer rounded-lg border border-solid border-(--chat-line-strong) bg-(--chat-input) px-2 text-[0.85rem] text-(--text)"
+          >
+            {DICTATION_LANGS.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        </SettingsRow>
         <SettingsRow title="Message text size" note="On this device">
           <ChatSelect<ChatTextSize>
             ariaLabel="Message text size"
