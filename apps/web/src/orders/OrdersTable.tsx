@@ -154,39 +154,34 @@ export const OrdersTable = memo(function OrdersTable(props: OrdersTableProps) {
         ) : (
           <>
             <table className="hidden w-full table-fixed border-collapse @3xl:table">
-              <colgroup>
-                <col className="w-[26%]" />
-                <col />
-                {!freeOnly && <col className="w-[8.5rem]" />}
-                <col className="w-[7rem]" />
-                <col className="w-[10rem]" />
-                <col className="w-10" />
-              </colgroup>
+              {/* Widths sit on the header cells, not a <colgroup>: a
+                  <col> is matched by position, so one left out for a
+                  column hidden at some widths shifts every later width. */}
               <thead>
                 <tr>
-                  <th scope="col" className={`${headCell} pl-4`}>
+                  <th scope="col" className={`${headCell} w-[26%] pl-4`}>
                     Learner
                   </th>
                   <th scope="col" className={headCell}>
                     Course
                   </th>
                   {!freeOnly && (
-                    <th scope="col" className={headCell}>
+                    <th scope="col" className={`${headCell} w-[10.5rem]`}>
                       Amount
                     </th>
                   )}
                   {!freeOnly && (
                     <th
                       scope="col"
-                      className={`${headCell} hidden @5xl:table-cell`}
+                      className={`${headCell} hidden w-[6.5rem] @5xl:table-cell`}
                     >
                       Method
                     </th>
                   )}
-                  <th scope="col" className={headCell}>
+                  <th scope="col" className={`${headCell} w-[7.5rem]`}>
                     {freeOnly ? "Enrolled" : "Date"}
                   </th>
-                  <th scope="col" className={headCell}>
+                  <th scope="col" className={`${headCell} w-[11rem]`}>
                     Status
                   </th>
                   <th scope="col" className="w-10">
