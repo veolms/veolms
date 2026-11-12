@@ -15,16 +15,30 @@ const VIDEO_START_WAIT_CAP_MS = 30_000;
 
 let videoStart: Promise<void> | null = null;
 
+/** A media segment (not an init segment): the first one ends the wait. */
+const MEDIA_SEGMENT = /\.(?:m4s|ts|mp4)(?:[?#]|$)/u;
+const INIT_SEGMENT = /init[^/]*\.(?:m4s|mp4)(?:[?#]|$)/u;
+
 /**
  * Says a lesson's video is being started (its preload has begun): warm-ups
- * wait until some video can play (or failed), or for at most 30 s.
+ * wait until its first media segment has arrived or some video can play (or
+ * failed), or for at most 30 s.
+ *
+ * Not only until a video can play: a lesson that does not play by itself
+ * only preloads until the learner presses Play, and no video plays until
+ * then. Holding the page's warm-ups that long left a lesson page bought a
+ * moment before without its curriculum list (the buying journey's
+ * "closing the payment window" test). The first segment is what the
+ * warm-ups were competing with.
  */
 export function noteVideoStartPending(): void {
   if (videoStart || typeof document === "undefined") return;
   videoStart = new Promise<void>((resolve) => {
+    let observer: PerformanceObserver | null = null;
     const done = () => {
       for (const type of EVENTS) document.removeEventListener(type, done, true);
       window.clearTimeout(cap);
+      observer?.disconnect();
       videoStart = null;
       resolve();
     };
@@ -33,6 +47,23 @@ export function noteVideoStartPending(): void {
     const EVENTS = ["canplay", "playing", "error"] as const;
     for (const type of EVENTS) document.addEventListener(type, done, true);
     const cap = window.setTimeout(done, VIDEO_START_WAIT_CAP_MS);
+    if (typeof PerformanceObserver === "function") {
+      try {
+        observer = new PerformanceObserver((list) => {
+          const arrived = list
+            .getEntries()
+            .some(
+              (entry) =>
+                MEDIA_SEGMENT.test(entry.name) &&
+                !INIT_SEGMENT.test(entry.name),
+            );
+          if (arrived) done();
+        });
+        observer.observe({ type: "resource" });
+      } catch {
+        observer = null;
+      }
+    }
   });
 }
 
