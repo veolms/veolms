@@ -224,6 +224,39 @@ function bufferedAheadSeconds(media: HTMLMediaElement): number {
   return 0;
 }
 
+/**
+ * How close before a buffered part a seek may land and still be moved onto
+ * it (see `seekTarget`): well under a frame of a 24 fps video.
+ */
+const SEEK_ONTO_BUFFER_SECONDS = 0.04;
+/**
+ * How far into that part the seek goes. Shaka checks each source buffer on
+ * its own and its check has no tolerance, so the seek lands a millisecond
+ * inside, not on the very edge.
+ */
+const SEEK_INTO_BUFFER_SECONDS = 0.001;
+
+/**
+ * The start of the buffered part that begins just after `time` (within
+ * SEEK_ONTO_BUFFER_SECONDS), or null when `time` is buffered or nothing
+ * begins that close after it.
+ */
+function bufferStartJustAfter(
+  media: HTMLMediaElement,
+  time: number,
+): number | null {
+  const { buffered } = media;
+  for (let index = 0; index < buffered.length; index += 1) {
+    const start = buffered.start(index);
+    const end = buffered.end(index);
+    if (time >= start && time < end) return null;
+    if (start > time && start - time <= SEEK_ONTO_BUFFER_SECONDS) {
+      return Math.min(start + SEEK_INTO_BUFFER_SECONDS, end);
+    }
+  }
+  return null;
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -1805,6 +1838,25 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     if (!media) return;
     this.#hiddenMedia = null;
     media.style.visibility = "";
+  }
+
+  /**
+   * A seek that lands a hair before the buffered part goes onto it instead.
+   * The usual case is a seek back to 0:00: in a DASH video whose first
+   * frame is a little after 0 (the encode has a presentation time offset,
+   * and Shaka adds 1 ms to every negative timestamp offset) the buffer
+   * starts at 0.001. The browser plays 0 from that
+   * buffer at once, but Shaka's `seeked` finds 0 unbuffered, clears every
+   * source buffer and downloads the start again. The video decoder is
+   * already past the keyframe by then and can only go on from the next one,
+   * so the clock and sound ran on over a still picture until the next
+   * keyframe, 5 s on (production, 12 Nov: lesson 86 of the backend course).
+   */
+  protected override seekTarget(media: HTMLMediaElement, time: number): number {
+    const target = bufferStartJustAfter(media, time);
+    if (target === null) return time;
+    markPlayback("seek-onto-buffer", { time, target });
+    return target;
   }
 
   private requirePlayer(): ShakaPlayerLike {
