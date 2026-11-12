@@ -61,6 +61,40 @@ export interface ChatPrefs {
   previews: boolean;
   /** Notifications arrive without sound between these times (device time). */
   quietHours: { from: string; to: string } | null;
+  /**
+   * Enter is send on a phone (WhatsApp: off, Enter starts a new line and
+   * the send button sends). Computers use the account's setting.
+   */
+  phoneEnterToSend: boolean;
+  /** The language voice typing listens for (a BCP 47 tag). */
+  dictationLang: DictationLang;
+}
+
+/** Languages offered for voice typing (Settings › Chats). */
+export const DICTATION_LANGS = [
+  { id: "en-IN", label: "English (India)" },
+  { id: "hi-IN", label: "हिन्दी (Hindi)" },
+  { id: "en-US", label: "English (US)" },
+  { id: "en-GB", label: "English (UK)" },
+  { id: "mr-IN", label: "मराठी (Marathi)" },
+  { id: "bn-IN", label: "বাংলা (Bengali)" },
+  { id: "ta-IN", label: "தமிழ் (Tamil)" },
+  { id: "te-IN", label: "తెలుగు (Telugu)" },
+  { id: "gu-IN", label: "ગુજરાતી (Gujarati)" },
+  { id: "kn-IN", label: "ಕನ್ನಡ (Kannada)" },
+  { id: "ml-IN", label: "മലയാളം (Malayalam)" },
+  { id: "pa-IN", label: "ਪੰਜਾਬੀ (Punjabi)" },
+] as const;
+export type DictationLang = (typeof DICTATION_LANGS)[number]["id"];
+
+/** Hindi for a Hindi browser, else Indian English (it follows Hinglish best). */
+function defaultDictationLang(): DictationLang {
+  if (typeof navigator === "undefined") return "en-IN";
+  const lang = navigator.language;
+  const exact = DICTATION_LANGS.find((l) => l.id === lang);
+  if (exact) return exact.id;
+  if (lang.startsWith("hi")) return "hi-IN";
+  return "en-IN";
 }
 
 const STORAGE_KEY = "veolms.chat.prefs";
@@ -73,7 +107,17 @@ const DEFAULTS: ChatPrefs = {
   desktopAlerts: false,
   previews: true,
   quietHours: null,
+  phoneEnterToSend: false,
+  dictationLang: "en-IN",
 };
+
+/** A phone or tablet: touch only, no mouse (Enter starts a new line there). */
+export function isTouchOnlyDevice(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(hover: none) and (pointer: coarse)").matches === true
+  );
+}
 
 let current: ChatPrefs | null = null;
 const listeners = new Set<() => void>();
@@ -103,6 +147,9 @@ function read(): ChatPrefs {
     }
     if (!CHAT_PATTERN_IDS.includes(prefs.pattern)) {
       prefs.pattern = DEFAULTS.pattern;
+    }
+    if (!DICTATION_LANGS.some((l) => l.id === prefs.dictationLang)) {
+      prefs.dictationLang = defaultDictationLang();
     }
     return prefs;
   } catch {

@@ -15,6 +15,7 @@ import { MessageAttachments, type ViewableMedia } from "./MessageAttachments";
 import { MessageMenu, type MessageAction } from "./MessageMenu";
 import { MessageText } from "./MessageText";
 import { ReactionDetails } from "./ReactionDetails";
+import { ReplyQuoteBody } from "./ReplyQuote";
 
 export interface BubbleContext {
   viewerId: string | null;
@@ -113,6 +114,9 @@ export function MessageBubble({
   const reactions = Object.entries(message.reactions).filter(
     ([, count]) => count > 0,
   );
+  const hasMedia =
+    !deleted &&
+    message.attachments.some((a) => a.kind === "image" || a.kind === "video");
   const onlyMedia =
     !deleted &&
     message.body === "" &&
@@ -130,7 +134,8 @@ export function MessageBubble({
         // selection and callout; Copy is in the menu.
         "[-webkit-touch-callout:none] [@media(hover:none)]:select-none",
         outgoing ? "justify-end" : "justify-start",
-        firstOfRun ? "mt-2" : "mt-0.5",
+        // Even gaps: 4px within one person's run, 10px between people.
+        firstOfRun ? "mt-2.5" : "mt-1",
         reactions.length > 0 && "pb-3.5",
       )}
       onContextMenu={(event) => {
@@ -219,6 +224,9 @@ export function MessageBubble({
           outgoing ? "bg-(--chat-out)" : "bg-(--chat-in)",
           firstOfRun && (outgoing ? "rounded-tr-none" : "rounded-tl-none"),
           onlyMedia && "p-1",
+          // A photo or video with a caption: the caption wraps at the
+          // photo's width instead of widening the bubble (WhatsApp).
+          hasMedia && !onlyMedia && "w-min max-w-[min(19rem,85vw)] min-w-0",
           reactions.length > 0 && "pb-3.5",
         )}
         data-bubble
@@ -258,16 +266,14 @@ export function MessageBubble({
           <button
             type="button"
             onClick={() => onJumpTo(message.replyTo!.seq, message.seq)}
-            className="mb-1 block w-full cursor-pointer rounded-md border-0 border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2 py-1 text-left"
+            className="mb-1 block w-full cursor-pointer overflow-hidden rounded-md border-0 border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2 py-1 text-left"
           >
-            <span className="block text-[0.76rem] font-semibold text-(--accent-ink)">
-              {message.replyTo.senderName ?? "Message"}
-            </span>
-            <span className="line-clamp-2 block text-[0.8rem] text-(--text-secondary)">
-              {message.replyTo.deleted
-                ? "This message was deleted"
-                : message.replyTo.preview || "Media"}
-            </span>
+            <ReplyQuoteBody
+              title={message.replyTo.senderName ?? "Message"}
+              text={message.replyTo.preview}
+              media={message.replyTo.media}
+              deleted={message.replyTo.deleted}
+            />
           </button>
         ) : null}
 
@@ -306,10 +312,16 @@ export function MessageBubble({
                       : undefined
                   }
                 />
-                {/* Room for the time so the last line does not run under it. */}
-                <span
-                  aria-hidden="true"
-                  className={cn("inline-block", outgoing ? "w-22" : "w-14")}
+                {/* Room for "Edited", the time and ticks, exactly as wide as
+                    they are, so the last line never runs under them. */}
+                <Meta
+                  spacer
+                  overlay={false}
+                  edited={message.editedAt !== null}
+                  pinned={message.pinned}
+                  starred={ctx.starred.has(message.id)}
+                  time={messageTime(message.createdAt)}
+                  ticks={ticks}
                 />
               </div>
             ) : null}
@@ -396,6 +408,7 @@ function Meta({
   starred,
   time,
   ticks,
+  spacer = false,
 }: {
   overlay: boolean;
   edited: boolean;
@@ -403,7 +416,23 @@ function Meta({
   starred: boolean;
   time: string;
   ticks: ReactNode;
+  /** An invisible copy at the end of the text that keeps its room free. */
+  spacer?: boolean;
 }) {
+  if (spacer) {
+    return (
+      <span
+        aria-hidden="true"
+        className="invisible ml-2 inline-flex items-center gap-1 align-baseline text-[0.68rem] leading-none tabular-nums select-none"
+      >
+        {starred ? <Star size={11} /> : null}
+        {pinned ? <PushPin size={11} /> : null}
+        {edited ? <span>Edited</span> : null}
+        <span>{time}</span>
+        {ticks}
+      </span>
+    );
+  }
   return (
     <span
       className={cn(

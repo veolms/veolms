@@ -126,6 +126,26 @@ export function ChatPage() {
   }, [roomId, linkedSeq, jumpIn, setSearchParams]);
 
   const prefs = useChatPrefs();
+  // A file dropped where Chats has no use for it is ignored, not opened by
+  // the browser in place of the page (or in a new tab).
+  useEffect(() => {
+    const ignore = (event: DragEvent) => {
+      if (
+        event.dataTransfer?.types.includes("Files") &&
+        !event.defaultPrevented
+      ) {
+        event.preventDefault();
+        if (event.type === "dragover") event.dataTransfer.dropEffect = "none";
+      }
+    };
+    window.addEventListener("dragover", ignore);
+    window.addEventListener("drop", ignore);
+    return () => {
+      window.removeEventListener("dragover", ignore);
+      window.removeEventListener("drop", ignore);
+    };
+  }, []);
+
   // The shell's padding comes off while Chats is open (chat.css).
   useEffect(() => {
     const root = document.documentElement;
@@ -185,6 +205,7 @@ export function ChatPage() {
   }
 
   useChatShortcuts({
+    showShortcuts: () => setShortcutsOpen(true),
     newChat: () => setPanel("new"),
     previousChat: () => step(-1),
     nextChat: () => step(1),
