@@ -52,7 +52,7 @@ const STATUS_GROUPS: readonly MultiSelectGroup[] = [
   },
 ];
 
-const filterButtonWidth = "w-full sm:w-auto sm:max-w-[15rem]";
+const filterButtonWidth = "w-full @lg/orders:w-auto @lg/orders:max-w-[15rem]";
 
 /**
  * Status, Course and Coupon, then a search box taking the rest of the row.
@@ -114,8 +114,8 @@ export const OrderFiltersBar = memo(function OrderFiltersBar({
   );
 
   return (
-    <div className="flex flex-col gap-2.5 md:flex-row md:items-center">
-      <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap md:flex-nowrap">
+    <div className="flex flex-col gap-2.5 @3xl/orders:flex-row @3xl/orders:items-center">
+      <div className="grid grid-cols-3 gap-2 @lg/orders:flex @3xl/orders:shrink-0">
         <MultiSelectFilter
           name="Status"
           noun="statuses"

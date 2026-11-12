@@ -127,7 +127,7 @@ export function OrderTableRow({
       aria-label={`Order ${order.orderNumber} by ${learnerName(order)}`}
       onClick={open}
       onKeyDown={(event) => openOnKey(event, open)}
-      className={`cursor-pointer border-t border-(--border) transition-colors outline-none hover:bg-(--hover) focus-visible:bg-(--hover) focus-visible:shadow-[inset_0_0_0_2px_var(--accent)] ${
+      className={`h-[4.25rem] cursor-pointer border-t border-(--border) transition-colors outline-none hover:bg-(--hover) focus-visible:bg-(--hover) focus-visible:shadow-[inset_0_0_0_2px_var(--accent)] ${
         selected
           ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] shadow-[inset_0_0_0_1.5px_var(--accent)]"
           : ""
@@ -275,6 +275,72 @@ export function OrderListCard({
           </div>
         )}
       </button>
+    </li>
+  );
+}
+
+const bone = "animate-pulse rounded bg-(--border)";
+
+/** A row's shape while orders load: same cells, same height. */
+export function SkeletonTableRow({ freeOnly }: { freeOnly: boolean }) {
+  return (
+    <tr aria-hidden="true" className="h-[4.25rem] border-t border-(--border)">
+      <td className="py-2.5 pr-3 pl-4">
+        <div className="flex items-center gap-3">
+          <div className={`${bone} size-9 shrink-0 rounded-full`} />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className={`${bone} h-3.5 w-28 max-w-full`} />
+            <div className={`${bone} h-3 w-40 max-w-full`} />
+          </div>
+        </div>
+      </td>
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-3">
+          <div className={`${bone} aspect-video w-12 shrink-0 rounded-md`} />
+          <div className={`${bone} h-3.5 w-44 max-w-full`} />
+        </div>
+      </td>
+      {!freeOnly && (
+        <td className="px-3 py-2.5">
+          <div className={`${bone} h-3.5 w-16`} />
+        </td>
+      )}
+      {!freeOnly && (
+        <td className="hidden px-3 py-2.5 @5xl:table-cell">
+          <div className={`${bone} h-3.5 w-10`} />
+        </td>
+      )}
+      <td className="px-3 py-2.5">
+        <div className="space-y-1.5">
+          <div className={`${bone} h-3.5 w-14`} />
+          <div className={`${bone} h-3 w-16`} />
+        </div>
+      </td>
+      <td className="px-3 py-2.5">
+        <div className={`${bone} h-5.5 w-20 rounded-full`} />
+      </td>
+      <td />
+    </tr>
+  );
+}
+
+/** A card's shape while orders load. */
+export function SkeletonListCard() {
+  return (
+    <li aria-hidden="true" className="flex flex-col gap-2.5 px-4 py-3.5">
+      <div className="flex items-start gap-3">
+        <div className={`${bone} size-9 shrink-0 rounded-full`} />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className={`${bone} h-3.5 w-28`} />
+          <div className={`${bone} h-3 w-24`} />
+        </div>
+        <div className={`${bone} h-3.5 w-12`} />
+      </div>
+      <div className="flex items-center gap-2.5">
+        <div className={`${bone} aspect-video w-12 shrink-0 rounded-md`} />
+        <div className={`${bone} h-3.5 flex-1`} />
+        <div className={`${bone} h-5.5 w-20 rounded-full`} />
+      </div>
     </li>
   );
 }

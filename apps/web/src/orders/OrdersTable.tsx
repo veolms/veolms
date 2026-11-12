@@ -4,11 +4,19 @@ import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-ic
 import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
-import { FunnelSimpleIcon as FunnelSimple } from "@phosphor-icons/react/FunnelSimple";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { ElevatedCard } from "../components/ElevatedCard";
+import { OctopusIllustration } from "../components/OctopusIllustration";
 import { formatNumber } from "./orderHelpers";
-import { OrderListCard, OrderTableRow } from "./OrdersTableRows";
+import {
+  OrderListCard,
+  OrderTableRow,
+  SkeletonListCard,
+  SkeletonTableRow,
+} from "./OrdersTableRows";
+
+/** A full page of placeholder rows, so the table keeps its height. */
+const SKELETON_ROWS = Array.from({ length: 10 }, (_, row) => row);
 
 export interface OrdersTableProps {
   orders: readonly AdminOrder[];
@@ -90,29 +98,36 @@ export const OrdersTable = memo(function OrdersTable(props: OrdersTableProps) {
     );
   }
 
-  if (!isLoading && orders.length === 0) {
+  // Rows still on their way are drawn as rows, never as "nothing found".
+  const showSkeleton = isLoading || (isFetching && orders.length === 0);
+
+  if (!showSkeleton && orders.length === 0) {
     return (
-      <ElevatedCard as="div" role="status" className="p-8 text-center sm:p-12">
-        <FunnelSimple
-          size={32}
-          weight="duotone"
-          className="mx-auto mb-3 text-(--muted)"
-          aria-hidden="true"
-        />
-        <h2 className="m-0 text-base font-bold text-(--text)">
-          Nothing matches these filters
-        </h2>
-        <p className="m-0 mt-1 text-sm text-(--muted)">
-          Try a longer date range or fewer filters.
-        </p>
-        <button
-          type="button"
-          onClick={onResetFilters}
-          className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-(--border) px-4 text-sm font-semibold text-(--text) hover:bg-(--hover)"
-        >
-          <ArrowCounterClockwise size={15} aria-hidden="true" />
-          Reset filters
-        </button>
+      <ElevatedCard
+        as="div"
+        role="status"
+        className="grid min-h-[26rem] place-items-center p-8 text-center sm:p-12"
+      >
+        <div>
+          <OctopusIllustration
+            kind="not-found"
+            className="mx-auto mb-4 h-28 w-auto sm:h-32"
+          />
+          <h2 className="m-0 text-base font-bold text-(--text)">
+            Nothing matches these filters
+          </h2>
+          <p className="m-0 mt-1 text-sm text-(--muted)">
+            Try a longer date range or fewer filters.
+          </p>
+          <button
+            type="button"
+            onClick={onResetFilters}
+            className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-(--border) px-4 text-sm font-semibold text-(--text) hover:bg-(--hover)"
+          >
+            <ArrowCounterClockwise size={15} aria-hidden="true" />
+            Reset filters
+          </button>
+        </div>
       </ElevatedCard>
     );
   }
@@ -134,24 +149,13 @@ export const OrdersTable = memo(function OrdersTable(props: OrdersTableProps) {
       className="@container overflow-hidden p-0"
     >
       <div
-        aria-busy={isLoading || isFetching || undefined}
+        aria-busy={showSkeleton || isFetching || undefined}
+        aria-label={showSkeleton ? "Loading orders" : undefined}
         className={
-          isFetching && !isLoading ? "opacity-70 transition-opacity" : ""
+          isFetching && !showSkeleton ? "opacity-70 transition-opacity" : ""
         }
       >
-        {isLoading ? (
-          <div className="space-y-px" aria-label="Loading orders">
-            {Array.from({ length: 6 }, (_, row) => (
-              <div
-                key={row}
-                className="flex items-center gap-3 border-t border-(--border) px-4 py-3.5 first:border-t-0"
-              >
-                <div className="size-9 animate-pulse rounded-full bg-(--border)" />
-                <div className="h-4 flex-1 animate-pulse rounded bg-(--border)" />
-              </div>
-            ))}
-          </div>
-        ) : (
+        {
           <>
             <table className="hidden w-full table-fixed border-collapse @3xl:table">
               {/* Widths sit on the header cells, not a <colgroup>: a
@@ -190,18 +194,24 @@ export const OrdersTable = memo(function OrdersTable(props: OrdersTableProps) {
                 </tr>
               </thead>
               <tbody>
-                {orders.map((order) => (
-                  <OrderTableRow key={order.id} {...rowProps(order)} />
-                ))}
+                {showSkeleton
+                  ? SKELETON_ROWS.map((row) => (
+                      <SkeletonTableRow key={row} freeOnly={freeOnly} />
+                    ))
+                  : orders.map((order) => (
+                      <OrderTableRow key={order.id} {...rowProps(order)} />
+                    ))}
               </tbody>
             </table>
             <ul className="m-0 list-none divide-y divide-(--border) p-0 @3xl:hidden">
-              {orders.map((order) => (
-                <OrderListCard key={order.id} {...rowProps(order)} />
-              ))}
+              {showSkeleton
+                ? SKELETON_ROWS.map((row) => <SkeletonListCard key={row} />)
+                : orders.map((order) => (
+                    <OrderListCard key={order.id} {...rowProps(order)} />
+                  ))}
             </ul>
           </>
-        )}
+        }
       </div>
 
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-(--border) px-4 py-3">
@@ -209,8 +219,8 @@ export const OrdersTable = memo(function OrdersTable(props: OrdersTableProps) {
           className="m-0 text-sm text-(--muted) tabular-nums"
           aria-live="polite"
         >
-          {isLoading
-            ? "Loading…"
+          {showSkeleton
+            ? "Loading orders…"
             : `${formatNumber(first)}–${formatNumber(last)} of ${formatNumber(total)} ${total === 1 ? "order" : "orders"}`}
         </p>
         <a
@@ -228,7 +238,7 @@ export const OrdersTable = memo(function OrdersTable(props: OrdersTableProps) {
           <button
             type="button"
             aria-label="Previous page"
-            disabled={page <= 1 || isLoading}
+            disabled={page <= 1 || showSkeleton}
             onClick={() => onPageChange(page - 1)}
             className="grid size-9 place-items-center rounded-lg border border-(--border) text-(--text) hover:bg-(--hover) disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-(--accent)"
           >
@@ -237,7 +247,7 @@ export const OrdersTable = memo(function OrdersTable(props: OrdersTableProps) {
           <button
             type="button"
             aria-label="Next page"
-            disabled={page >= pageCount || isLoading}
+            disabled={page >= pageCount || showSkeleton}
             onClick={() => onPageChange(page + 1)}
             className="grid size-9 place-items-center rounded-lg border border-(--border) text-(--text) hover:bg-(--hover) disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-(--accent)"
           >

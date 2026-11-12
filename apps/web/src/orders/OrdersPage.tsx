@@ -137,10 +137,12 @@ export function OrdersPage({
   return (
     <main
       data-orders-surface=""
-      className="mx-auto flex w-full max-w-[1800px] flex-col gap-5 font-sans sm:gap-6"
+      // Laid out by its own width (the order panel can narrow it), not the
+      // window's.
+      className="@container/orders mx-auto flex w-full max-w-[1800px] flex-col gap-5 font-sans sm:gap-6"
       aria-labelledby="orders-page-title"
     >
-      <header className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-start sm:justify-between">
+      <header className="flex flex-col gap-4 pt-1 @xl/orders:flex-row @xl/orders:items-start @xl/orders:justify-between">
         <div className="min-w-0">
           <h1
             id="orders-page-title"
