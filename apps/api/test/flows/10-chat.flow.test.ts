@@ -921,8 +921,24 @@ await test("group ticks: two once everyone received it, blue once all read it; M
     info.readBy.map((p) => p.id),
     [b.userId],
   );
-  assert.equal(info.deliveredTo.length, 1, "the admin received it");
+  // The admin received it too (two ticks above), but staff read along
+  // quietly: Message info lists them only once they answer the message.
+  assert.equal(info.deliveredTo.length, 0, "staff are not listed");
   assert.equal(info.waiting, 0);
+  ok(
+    await admin.put(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/reaction`, {
+      emoji: "👍",
+    }),
+  );
+  const answered = ok<{
+    readBy: Array<{ id: string }>;
+    deliveredTo: Array<{ id: string }>;
+  }>(await a.client.get(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/info`));
+  assert.equal(
+    answered.readBy.length + answered.deliveredTo.length,
+    2,
+    "a reaction brings the admin into the list",
+  );
   refused(
     await b.client.get(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/info`),
     403,
@@ -951,18 +967,31 @@ await test("chat privacy: last seen and read receipts are saved per person", asy
     showPresence: true,
     readReceipts: true,
     enterToSend: true,
+    readReceiptsChoice: false,
   });
+  // A learner can't turn read receipts off (staff only); the rest saves.
   const after = ok<{ showPresence: boolean; readReceipts: boolean }>(
-    await a.client.patch("/v1/chat/me/profile", { readReceipts: false }),
+    await a.client.patch("/v1/chat/me/profile", {
+      readReceipts: false,
+      showPresence: false,
+    }),
   );
-  assert.equal(after.readReceipts, false);
-  assert.equal(after.showPresence, true);
+  assert.equal(after.readReceipts, true);
+  assert.equal(after.showPresence, false);
+  ok(await a.client.patch("/v1/chat/me/profile", { showPresence: true }));
+
+  // Staff can, and it is kept.
+  const staff = ok<{ readReceipts: boolean; readReceiptsChoice: boolean }>(
+    await admin.patch("/v1/chat/me/profile", { readReceipts: false }),
+  );
+  assert.equal(staff.readReceiptsChoice, true);
+  assert.equal(staff.readReceipts, false);
   assert.equal(
-    ok<{ readReceipts: boolean }>(await a.client.get("/v1/chat/me/profile"))
+    ok<{ readReceipts: boolean }>(await admin.get("/v1/chat/me/profile"))
       .readReceipts,
     false,
   );
-  ok(await a.client.patch("/v1/chat/me/profile", { readReceipts: true }));
+  ok(await admin.patch("/v1/chat/me/profile", { readReceipts: true }));
 });
 
 await test("a message reaching someone's open app is delivered at once; search and Message info times", async () => {
@@ -1008,7 +1037,8 @@ await test("a message reaching someone's open app is delivered at once; search a
   const info = ok<{ deliveredTo: Array<{ at: string | null }> }>(
     await a.client.get(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/info`),
   );
-  assert.equal(info.deliveredTo.length, 2);
+  // B and the admin both got it; staff are not listed (see above).
+  assert.equal(info.deliveredTo.length, 1);
   assert.ok(
     info.deliveredTo.every((p) => p.at !== null),
     "Message info says when it reached each of them",
