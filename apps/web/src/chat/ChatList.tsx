@@ -16,7 +16,7 @@ import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatRoomSummary } from "@veolms/contracts";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import {
@@ -482,6 +482,14 @@ function ChatRow({
   const showDraft = Boolean(draft) && !selected;
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
+  // Files held over a chat for a moment open it, ready for the drop.
+  const dragOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const stopDragOpen = () => {
+    if (dragOpenTimer.current) clearTimeout(dragOpenTimer.current);
+    dragOpenTimer.current = null;
+    setDragOver(false);
+  };
   const last = room.lastMessage;
   const mine = Boolean(last && viewerId && last.senderId === viewerId);
   const unread = room.unreadCount > 0;
@@ -504,7 +512,34 @@ function ChatRow({
     myState.mutate({ roomId: room.id, patch });
 
   return (
-    <li className="group/row relative">
+    <li
+      className="group/row relative"
+      onDragEnter={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setDragOver(true);
+        if (selected || dragOpenTimer.current) return;
+        dragOpenTimer.current = setTimeout(() => {
+          dragOpenTimer.current = null;
+          onSelect(room.id);
+        }, 500);
+      }}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        // Dropped on the row itself: nothing to do with it (no new tab).
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "none";
+      }}
+      onDragLeave={(event) => {
+        const to = event.relatedTarget as Node | null;
+        if (!to || !event.currentTarget.contains(to)) stopDragOpen();
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        stopDragOpen();
+      }}
+    >
       {/* The picture opens the profile photo (WhatsApp), not the chat. */}
       <button
         type="button"
@@ -538,7 +573,7 @@ function ChatRow({
         aria-current={selected ? "true" : undefined}
         className={cn(
           "flex h-18 w-full cursor-pointer items-center gap-3 rounded-xl border-0 px-2.5 text-left text-(--text) transition-colors",
-          selected
+          selected || dragOver
             ? "bg-(--chat-selected)"
             : menuOpen
               ? "bg-(--chat-hover)"

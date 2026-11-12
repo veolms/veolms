@@ -15,6 +15,7 @@ import {
 import { preloadLessonPlayback } from "../../earlyHlsPreload";
 import type { VideoPlaybackBootstrap } from "@veolms/contracts";
 import type { CourseLesson } from "@veolms/contracts";
+import type { LessonAudioSource } from "./useLessonStagePlan";
 import type { useSecondPressHold } from "../../../gestures/useSecondPressHold";
 import type { OctopusKind } from "../../../components/OctopusIllustration";
 import type { LessonStagePlan } from "../../lessonWithoutVideo";
@@ -23,6 +24,11 @@ import type { LessonStagePlan } from "../../lessonWithoutVideo";
 const NEIGHBOUR_BOOTSTRAP_DELAY_MS = 2_500;
 
 export interface UseLessonPlayerPropsArgs {
+  /** An audio lesson's file, played in the player (see useLessonStagePlan). */
+  audioSource?: LessonAudioSource | null;
+  retryAudioSource?: () => void;
+  /** The audio file's address is on its way. */
+  audioSourcePending?: boolean;
   courseSlug: string | undefined;
   onMinimizePlayer: ((request: LearningMiniPlayerRequest) => void) | undefined;
   onMiniPlayerRestoreReady: (() => void) | undefined;
@@ -158,6 +164,9 @@ export function useLessonPlayerProps({
   playerCourseLessonsOpen,
   fullscreenVideoLayoutWidthPercent,
   fullscreenCoursePanel,
+  audioSource = null,
+  retryAudioSource,
+  audioSourcePending = false,
 }: UseLessonPlayerPropsArgs): UseLessonPlayerPropsResult {
   const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(null);
   const registerLessonPlayerSeek = useCallback(
@@ -218,23 +227,33 @@ export function useLessonPlayerProps({
   const lessonLocked =
     playbackAccessError?.kind === "login" ||
     playbackAccessError?.kind === "access";
-  const currentLessonMedia = useMemo(
-    () =>
-      createLessonVideo(currentLessonTitle, {
-        durationSeconds: selectedLessonDurationSeconds,
-        thumbnailSrc:
-          selectedLessonMediaId && !lessonLocked
-            ? mediaService.getVideoThumbnailUrl(selectedLessonMediaId)
-            : courseThumbnail,
-      }),
-    [
-      courseThumbnail,
-      currentLessonTitle,
-      lessonLocked,
-      selectedLessonDurationSeconds,
-      selectedLessonMediaId,
-    ],
-  );
+  const currentLessonMedia = useMemo(() => {
+    // An audio lesson plays its file as it is; its artwork stands where a
+    // video's picture would (see `audioOnly`).
+    if (audioSource) {
+      return {
+        ...createLessonVideo(currentLessonTitle, {
+          durationSeconds: selectedLessonDurationSeconds,
+        }),
+        src: audioSource.url,
+        mimeType: audioSource.mimeType,
+      };
+    }
+    return createLessonVideo(currentLessonTitle, {
+      durationSeconds: selectedLessonDurationSeconds,
+      thumbnailSrc:
+        selectedLessonMediaId && !lessonLocked
+          ? mediaService.getVideoThumbnailUrl(selectedLessonMediaId)
+          : courseThumbnail,
+    });
+  }, [
+    audioSource,
+    courseThumbnail,
+    currentLessonTitle,
+    lessonLocked,
+    selectedLessonDurationSeconds,
+    selectedLessonMediaId,
+  ]);
 
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
@@ -242,15 +261,24 @@ export function useLessonPlayerProps({
       seekTimeOnly,
       media: currentLessonMedia,
       description: selectedLessonDescription,
-      playbackBootstrap,
+      // An audio lesson's file needs no manifest or token: it is the file.
+      playbackBootstrap: audioSource ? null : playbackBootstrap,
       playbackAccessError,
-      playbackBootstrapPending: playbackBootstrapPending || lessonTextPending,
+      // An audio lesson's file address on its way shows the player's loader
+      // (not a reading's text to come).
+      playbackBootstrapPending:
+        playbackBootstrapPending || lessonTextPending || audioSourcePending,
       readingPending: lessonTextPending,
       lessonStage,
-      playbackUnavailableMessage: playbackBootstrapError?.message ?? null,
-      onRetryPlayback: retryPlaybackBootstrap,
+      playbackUnavailableMessage: audioSource
+        ? null
+        : (playbackBootstrapError?.message ?? null),
+      // An address that expired is replaced by a new one.
+      onRetryPlayback: audioSource ? retryAudioSource : retryPlaybackBootstrap,
       refreshPlaybackToken,
-      protectedPlayback,
+      protectedPlayback: audioSource ? false : protectedPlayback,
+      audioOnly: Boolean(audioSource),
+      audioAnalysable: audioSource?.analysable ?? false,
       lessonTitle: currentLesson[1],
       lessonId:
         currentLesson[6] ??
@@ -311,6 +339,9 @@ export function useLessonPlayerProps({
       seekTimeOnly,
       autoPlayOnLessonChange,
       autoplayEnabled,
+      audioSource,
+      retryAudioSource,
+      audioSourcePending,
       chaptersPanelHost,
       courseComplete,
       courseContentDrawerViewport,

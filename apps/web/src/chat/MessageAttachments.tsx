@@ -8,6 +8,7 @@ import { useState } from "react";
 import { chatService } from "../services/chat";
 import { cn } from "../lib/utils";
 import { formatBytes, formatDuration } from "./chatFormat";
+import { ChatImage } from "./ChatImage";
 import { FilePreview, previewKind } from "./FilePreview";
 import { VoiceMessage } from "./VoiceMessage";
 
@@ -112,7 +113,7 @@ function MediaTile({
       style={single ? { aspectRatio: `1 / ${ratio}` } : undefined}
     >
       {attachment.kind === "image" ? (
-        <img
+        <ChatImage
           src={url}
           alt=""
           loading="lazy"

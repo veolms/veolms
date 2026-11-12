@@ -5,6 +5,9 @@ import {
 } from "@tanstack/react-query";
 import type {
   Category,
+  LessonContentKind,
+  LessonContentsResponse,
+  SetLessonContentRequest,
   CourseAccessRule,
   CourseBasicsResponse,
   CourseCreatedResponse,
@@ -356,6 +359,44 @@ export function useUpdateCourseLesson() {
   });
 }
 export const useUpdateLesson = useUpdateCourseLesson;
+
+/**
+ * Sets, or with `payload: null` removes, what one kind of a lesson holds.
+ * The answer is every kind's content after the change.
+ */
+export function useSetLessonContent() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    LessonContentsResponse,
+    ApiError,
+    {
+      courseId: string;
+      lessonId: string;
+      contentType: LessonContentKind;
+      payload: SetLessonContentRequest | null;
+    }
+  >({
+    mutationFn: ({ courseId, lessonId, contentType, payload }) =>
+      payload
+        ? coursesService.setLessonContent(
+            courseId,
+            lessonId,
+            contentType,
+            payload,
+          )
+        : coursesService.clearLessonContent(courseId, lessonId, contentType),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
+    },
+  });
+}
 
 export function useDeleteCourseLesson() {
   const queryClient = useQueryClient();

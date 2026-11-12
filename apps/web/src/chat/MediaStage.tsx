@@ -3,7 +3,7 @@ import { MusicNotesIcon as MusicNotes } from "@phosphor-icons/react/MusicNotes";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { CHAT_MAX_ATTACHMENTS_PER_MESSAGE } from "@veolms/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import type { OutgoingFile } from "../services/chat";
@@ -19,12 +19,15 @@ export function MediaStage({
   files,
   composerHeight,
   onRemove,
+  onReorder,
   onClear,
   onAddMore,
 }: {
   files: OutgoingFile[];
   composerHeight: number;
   onRemove: (localId: string) => void;
+  /** Move a file in the order they are sent (drag a thumbnail). */
+  onReorder: (from: number, to: number) => void;
   onClear: () => void;
   onAddMore: () => void;
 }) {
@@ -35,6 +38,53 @@ export function MediaStage({
   useEffect(() => {
     setActiveId(files.at(-1)?.localId ?? null);
   }, [files.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Drag a thumbnail to change the order they are sent in: at once with a
+  // mouse, after a short hold on a touch screen (a swipe still scrolls).
+  const stripRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{
+    id: string;
+    x: number;
+    pointerId: number;
+    started: boolean;
+    timer: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
+  const [dragging, setDragging] = useState<{ id: string; dx: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    // Held on a phone: the finger moves the thumbnail, not the page.
+    const stopScroll = (event: TouchEvent) => {
+      if (drag.current?.started) event.preventDefault();
+    };
+    strip.addEventListener("touchmove", stopScroll, { passive: false });
+    return () => strip.removeEventListener("touchmove", stopScroll);
+  }, []);
+
+  /** Where a dragged file lands: after every other file it passed. */
+  function targetIndex(clientX: number, draggedId: string): number {
+    const others = [
+      ...(stripRef.current?.querySelectorAll<HTMLElement>("[data-thumb]") ??
+        []),
+    ].filter((thumb) => thumb.dataset.thumb !== draggedId);
+    return others.filter((thumb) => {
+      const box = thumb.getBoundingClientRect();
+      return box.left + box.width / 2 < clientX;
+    }).length;
+  }
+
+  function endDrag(clientX: number | null) {
+    const current = drag.current;
+    drag.current = null;
+    if (current?.timer) clearTimeout(current.timer);
+    setDragging(null);
+    if (!current?.started || clientX === null) return;
+    const from = files.findIndex((f) => f.localId === current.id);
+    const to = targetIndex(clientX, current.id);
+    if (from >= 0 && to !== from) onReorder(from, to);
+  }
 
   if (!active) return null;
   const totalBytes = files.reduce((sum, f) => sum + f.file.size, 0);
@@ -104,13 +154,95 @@ export function MediaStage({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-center gap-2 overflow-x-auto border-t border-solid border-(--chat-line) px-4 py-3">
-        {files.map((file) => (
-          <div key={file.localId} className="group/thumb relative shrink-0">
+      <div
+        ref={stripRef}
+        className="flex shrink-0 items-center justify-center gap-2 overflow-x-auto border-t border-solid border-(--chat-line) px-4 py-3"
+      >
+        {files.map((file, index) => (
+          <div
+            key={file.localId}
+            data-thumb={file.localId}
+            className={cn(
+              "group/thumb relative shrink-0 select-none",
+              dragging?.id === file.localId &&
+                "z-10 scale-110 opacity-90 shadow-lg",
+            )}
+            style={
+              dragging?.id === file.localId
+                ? { transform: `translateX(${dragging.dx}px) scale(1.1)` }
+                : undefined
+            }
+            onPointerDown={(event) => {
+              if (files.length < 2 || event.button !== 0) return;
+              const start = {
+                id: file.localId,
+                x: event.clientX,
+                pointerId: event.pointerId,
+                started: false,
+                timer: null as ReturnType<typeof setTimeout> | null,
+              };
+              if (event.pointerType === "touch") {
+                start.timer = setTimeout(() => {
+                  start.started = true;
+                  navigator.vibrate?.(10);
+                  setDragging({ id: file.localId, dx: 0 });
+                }, 260);
+              }
+              drag.current = start;
+            }}
+            onPointerMove={(event) => {
+              const current = drag.current;
+              if (!current || current.pointerId !== event.pointerId) return;
+              const dx = event.clientX - current.x;
+              if (!current.started) {
+                if (event.pointerType === "touch") {
+                  // Moved before the hold ended: it's a scroll.
+                  if (Math.abs(dx) > 8) endDrag(null);
+                  return;
+                }
+                if (Math.abs(dx) < 6) return;
+                current.started = true;
+                try {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                } catch {
+                  // Pointer already gone: the move still counts.
+                }
+              }
+              setDragging({ id: current.id, dx });
+            }}
+            onPointerUp={(event) => endDrag(event.clientX)}
+            onPointerCancel={() => endDrag(null)}
+            // The browser would drag the picture itself (and cancel ours).
+            onDragStart={(event) => event.preventDefault()}
+            onKeyDown={(event) => {
+              // Alt + ← / → moves the file, for the keyboard.
+              if (!event.altKey) return;
+              if (event.key === "ArrowLeft" && index > 0) {
+                event.preventDefault();
+                onReorder(index, index - 1);
+              } else if (
+                event.key === "ArrowRight" &&
+                index < files.length - 1
+              ) {
+                event.preventDefault();
+                onReorder(index, index + 1);
+              }
+            }}
+          >
+            {files.length > 1 ? (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-0.5 left-1 z-10 text-[0.65rem] font-bold text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.7)]"
+              >
+                {index + 1}
+              </span>
+            ) : null}
             <button
               type="button"
-              onClick={() => setActiveId(file.localId)}
-              aria-label={`Show ${file.name}`}
+              onClick={() => {
+                if (!dragging) setActiveId(file.localId);
+              }}
+              aria-label={`Show ${file.name}, ${index + 1} of ${files.length}${files.length > 1 ? ". Drag, or Alt + arrow keys, to reorder" : ""}`}
               aria-current={
                 file.localId === active.localId ? "true" : undefined
               }
@@ -125,13 +257,14 @@ export function MediaStage({
                 <img
                   src={file.previewUrl}
                   alt=""
-                  className="size-full object-cover"
+                  draggable={false}
+                  className="pointer-events-none size-full object-cover"
                 />
               ) : file.kind === "video" && file.previewUrl ? (
                 <video
                   src={file.previewUrl}
                   muted
-                  className="size-full object-cover"
+                  className="pointer-events-none size-full object-cover"
                 />
               ) : file.kind === "audio" ? (
                 <MusicNotes size={22} />
@@ -143,7 +276,7 @@ export function MediaStage({
               type="button"
               onClick={() => onRemove(file.localId)}
               aria-label={`Remove ${file.name}`}
-              className="absolute -top-1.5 -right-1.5 inline-flex size-5 cursor-pointer items-center justify-center rounded-full border-0 bg-(--text) text-(--chat-bg) opacity-0 shadow transition-opacity group-hover/thumb:opacity-100 focus-visible:opacity-100"
+              className="absolute -top-1.5 -right-1.5 inline-flex size-5 cursor-pointer items-center justify-center rounded-full border-0 bg-(--text) text-(--chat-bg) opacity-0 shadow transition-opacity group-hover/thumb:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
             >
               <X size={11} weight="bold" />
             </button>

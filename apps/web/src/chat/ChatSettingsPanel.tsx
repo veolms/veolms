@@ -12,7 +12,10 @@ import { cn } from "../lib/utils";
 import { useCurrentUser } from "../services/auth";
 import { useChatProfile, useUpdateChatProfile } from "../services/chat";
 import {
+  DICTATION_LANGS,
+  isTouchOnlyDevice,
   setChatPrefs,
+  type DictationLang,
   useChatPrefs,
   type ChatPattern,
   type ChatTextSize,
@@ -145,16 +148,20 @@ export function ChatSettingsPanel({
           people’s either.
         </p>
         <div className="my-1 h-px bg-(--chat-line)" />
-        <SettingsRow
-          title="Read receipts"
-          note="If turned off, you won’t send or receive blue ticks in private chats. Groups always show them."
-        >
-          <ChatToggle
-            checked={values.readReceipts}
-            label="Read receipts"
-            onChange={(on) => save({ readReceipts: on })}
-          />
-        </SettingsRow>
+        {profile.data?.readReceiptsChoice ? (
+          // For admins and instructors (as staff they read many chats):
+          // learners always send read receipts.
+          <SettingsRow
+            title="Read receipts"
+            note="Off: people won’t see blue ticks when you read their private messages, and you won’t see theirs. You never appear in a group message’s read list unless you reply or react."
+          >
+            <ChatToggle
+              checked={values.readReceipts}
+              label="Read receipts"
+              onChange={(on) => save({ readReceipts: on })}
+            />
+          </SettingsRow>
+        ) : null}
       </>,
     );
   }
@@ -265,15 +272,49 @@ export function ChatSettingsPanel({
       "Chats",
       "root",
       <>
+        {isTouchOnlyDevice() ? (
+          <SettingsRow
+            title="Enter is send"
+            note="On this phone. Off: Enter starts a new line; tap send to send."
+          >
+            <ChatToggle
+              checked={prefs.phoneEnterToSend}
+              label="Enter is send"
+              onChange={(on) => setChatPrefs({ phoneEnterToSend: on })}
+            />
+          </SettingsRow>
+        ) : (
+          <SettingsRow
+            title="Enter is send"
+            note="Off: Enter starts a new line and Ctrl + Enter sends."
+          >
+            <ChatToggle
+              checked={values.enterToSend}
+              label="Enter is send"
+              onChange={(on) => save({ enterToSend: on })}
+            />
+          </SettingsRow>
+        )}
         <SettingsRow
-          title="Enter is send"
-          note="Off: Enter starts a new line and Ctrl + Enter sends."
+          title="Voice typing language"
+          note="The language the voice typing button in the message box listens for. On this device."
         >
-          <ChatToggle
-            checked={values.enterToSend}
-            label="Enter is send"
-            onChange={(on) => save({ enterToSend: on })}
-          />
+          <select
+            value={prefs.dictationLang}
+            onChange={(event) =>
+              setChatPrefs({
+                dictationLang: event.target.value as DictationLang,
+              })
+            }
+            aria-label="Voice typing language"
+            className="h-9 max-w-44 cursor-pointer rounded-lg border border-solid border-(--chat-line-strong) bg-(--chat-input) px-2 text-[0.85rem] text-(--text)"
+          >
+            {DICTATION_LANGS.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
+            ))}
+          </select>
         </SettingsRow>
         <SettingsRow title="Message text size" note="On this device">
           <ChatSelect<ChatTextSize>

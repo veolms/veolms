@@ -52,6 +52,7 @@ import {
   initialDraft,
   countCharacters,
 } from "./discussion/discussionConstants";
+import { scheduleWarmUp } from "../lib/scheduleWarmUp";
 export {
   threadEntriesShareIdentity,
   mergeDirectThreadCommentIdentity,
@@ -1668,12 +1669,7 @@ function DiscussionInner({
       if (hasThreadEntries) void loadDiscussionThreadPanel().catch(() => {});
       if (canParticipate) preloadDiscussionEditor();
     };
-    if (typeof window.requestIdleCallback === "function") {
-      const handle = window.requestIdleCallback(warm, { timeout: 4000 });
-      return () => window.cancelIdleCallback(handle);
-    }
-    const handle = window.setTimeout(warm, 2000);
-    return () => window.clearTimeout(handle);
+    return scheduleWarmUp(warm, 4000);
   }, [canParticipate, hasThreadEntries]);
 
   useEffect(() => {

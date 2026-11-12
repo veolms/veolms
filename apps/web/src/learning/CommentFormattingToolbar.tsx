@@ -5,6 +5,12 @@ import { CodeBlockIcon as CodeBlock } from "@phosphor-icons/react/CodeBlock";
 import { CodeIcon as Code } from "@phosphor-icons/react/Code";
 import { HighlighterIcon as Highlighter } from "@phosphor-icons/react/Highlighter";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
+import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
+import { ListNumbersIcon as ListNumbers } from "@phosphor-icons/react/ListNumbers";
+import { QuotesIcon as Quotes } from "@phosphor-icons/react/Quotes";
+import { TextHTwoIcon as TextHTwo } from "@phosphor-icons/react/TextHTwo";
+import { TextHThreeIcon as TextHThree } from "@phosphor-icons/react/TextHThree";
+import { TextStrikethroughIcon as TextStrikethrough } from "@phosphor-icons/react/TextStrikethrough";
 import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
 import { TextBIcon as TextB } from "@phosphor-icons/react/TextB";
 import { TextItalicIcon as TextItalic } from "@phosphor-icons/react/TextItalic";
@@ -37,6 +43,13 @@ interface CommentFormattingToolbarProps {
   /** The tools always shown, with no arrow to fold them away (a form
    * with room for them, such as Help and feedback). */
   toolsAlwaysOpen?: boolean;
+  /**
+   * The tools a long text needs besides a comment's: headings, lists,
+   * quotes and strikethrough (a reading lesson's text).
+   */
+  documentTools?: boolean;
+  /** What the toolbar is named to assistive technology. */
+  ariaLabel?: string;
 }
 
 export function hasCommentToolbarOverflow(
@@ -53,6 +66,8 @@ export function CommentFormattingToolbar({
   onEditorNeeded,
   leadingDivider = true,
   toolsAlwaysOpen = false,
+  documentTools = false,
+  ariaLabel = "Comment formatting",
 }: CommentFormattingToolbarProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const scrollportRef = useRef<HTMLDivElement>(null);
@@ -253,7 +268,7 @@ export function CommentFormattingToolbar({
             data-base-ui-swipe-ignore=""
             data-learning-swipe-ignore=""
             role="toolbar"
-            aria-label="Comment formatting"
+            aria-label={ariaLabel}
             className="learning-comment-formatting-scrollport swiper-no-swiping flex h-full min-w-0 flex-1 touch-pan-x items-center gap-0.5 overflow-x-auto overscroll-x-contain"
           >
             <ToolbarButton
@@ -308,10 +323,51 @@ export function CommentFormattingToolbar({
             >
               <TextItalic size={17} />
             </ToolbarButton>
-            <CommentEmojiPicker
-              editor={editor}
-              onEditorNeeded={onEditorNeeded}
-            />
+            {documentTools ? (
+              <>
+                <ToolbarButton
+                  label="Strikethrough"
+                  onClick={withEditor((ready) => ready.toggleStrikethrough())}
+                >
+                  <TextStrikethrough size={17} />
+                </ToolbarButton>
+                <ToolbarButton
+                  label="Heading"
+                  onClick={withEditor((ready) => ready.toggleHeading(2))}
+                >
+                  <TextHTwo size={17} />
+                </ToolbarButton>
+                <ToolbarButton
+                  label="Subheading"
+                  onClick={withEditor((ready) => ready.toggleHeading(3))}
+                >
+                  <TextHThree size={17} />
+                </ToolbarButton>
+                <ToolbarButton
+                  label="Bulleted list"
+                  onClick={withEditor((ready) => ready.toggleBulletList())}
+                >
+                  <ListBullets size={17} />
+                </ToolbarButton>
+                <ToolbarButton
+                  label="Numbered list"
+                  onClick={withEditor((ready) => ready.toggleOrderedList())}
+                >
+                  <ListNumbers size={17} />
+                </ToolbarButton>
+                <ToolbarButton
+                  label="Quote"
+                  onClick={withEditor((ready) => ready.toggleBlockquote())}
+                >
+                  <Quotes size={17} />
+                </ToolbarButton>
+              </>
+            ) : (
+              <CommentEmojiPicker
+                editor={editor}
+                onEditorNeeded={onEditorNeeded}
+              />
+            )}
             <ToolbarButton
               label="Inline code"
               active={formattingState.code}

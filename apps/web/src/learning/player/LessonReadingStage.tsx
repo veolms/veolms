@@ -12,8 +12,12 @@ import { createDiscussionDraft } from "../discussion-editor/types";
 import type { DiscussionContent } from "../discussion-editor/types";
 import { LESSON_READING_SCROLL_ATTRIBUTE } from "./useLessonPlayerMinimizeGesture";
 import { useReadingFontScale } from "./readingFontScale";
-import { parseLessonPdfReading } from "../lessonWithoutVideo";
+import {
+  parseLessonMediaReading,
+  parseLessonPdfReading,
+} from "../lessonWithoutVideo";
 import { LessonPdfReading } from "./LessonPdfReading";
+import { LessonMediaStage } from "./LessonMediaStage";
 
 /**
  * What the player's shell wears while it holds a reading, in place of the
@@ -54,8 +58,16 @@ export function LessonReadingStage({
   initialScrollTop = 0,
   controlsHidden = false,
   onTap,
+  picture = false,
+  lessonTitle,
+  courseTitle,
 }: {
   article: string;
+  /** The mini player's still of it: an audio file does not play there. */
+  picture?: boolean;
+  /** Named on an audio lesson's stage and the device's media controls. */
+  lessonTitle?: string;
+  courseTitle?: string;
   /**
    * The minimize button. It stands at the start of the reading, in the
    * label's row, and scrolls away with the text.
@@ -76,9 +88,13 @@ export function LessonReadingStage({
   onTap?: () => void;
 }) {
   const pdfReading = useMemo(() => parseLessonPdfReading(article), [article]);
+  const mediaReading = useMemo(
+    () => parseLessonMediaReading(article),
+    [article],
+  );
   const content = useMemo(
-    () => createDiscussionDraft(pdfReading ? "" : article),
-    [article, pdfReading],
+    () => createDiscussionDraft(pdfReading || mediaReading ? "" : article),
+    [article, pdfReading, mediaReading],
   );
   const [fontScale] = useReadingFontScale();
   // A reading's text, from its description or from its Markdown or text
@@ -118,6 +134,59 @@ export function LessonReadingStage({
     sizes.observe(scroller);
     return () => sizes.disconnect();
   }, [initialScrollTop, recordsFrame]);
+
+  if (mediaReading) {
+    // An audio or image lesson fills the stage as a video does, with the
+    // minimize button in its corner; it is not scrolled like a text.
+    return (
+      <div
+        className="absolute inset-y-0 right-[var(--lesson-reading-panel-width,0px)] left-0 overflow-hidden"
+        data-lesson-media-stage={mediaReading.kind}
+        onClick={
+          onTap
+            ? (event) => {
+                const target = event.target;
+                if (
+                  target instanceof Element &&
+                  target.closest("a, button, input, textarea, select")
+                ) {
+                  return;
+                }
+                const { pointerType } = event.nativeEvent as PointerEvent;
+                const byMouse = pointerType
+                  ? pointerType === "mouse"
+                  : window.matchMedia("(hover: hover) and (pointer: fine)")
+                      .matches;
+                if (byMouse) return;
+                onTap();
+              }
+            : undefined
+        }
+      >
+        <LessonMediaStage
+          kind={mediaReading.kind}
+          courseId={mediaReading.courseId}
+          lessonId={mediaReading.lessonId}
+          lessonTitle={lessonTitle}
+          courseTitle={courseTitle}
+          picture={picture}
+        />
+        {minimizeControl ? (
+          <div
+            className={cn(
+              "absolute top-0 left-0 z-10 transition-opacity duration-200",
+              controlsHidden && "invisible opacity-0",
+              "[[data-learning-player-window-motion]_&]:invisible [[data-learning-player-restore-phase]_&]:invisible",
+            )}
+            aria-hidden={controlsHidden ? true : undefined}
+            inert={controlsHidden ? true : undefined}
+          >
+            {minimizeControl}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -317,6 +386,7 @@ export function LessonReadingMiniature({
           <LessonReadingStage
             article={article}
             initialScrollTop={frame.scrollTop}
+            picture
           />
         </div>
       ) : null}

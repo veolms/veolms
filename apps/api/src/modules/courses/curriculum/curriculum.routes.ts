@@ -8,6 +8,10 @@ import {
   reorderLessonsRequestSchema,
   createLessonResourceRequestSchema,
   lessonResourceSchema,
+  lessonContentKindSchema,
+  lessonContentsResponseSchema,
+  lessonMediaLinkResponseSchema,
+  setLessonContentRequestSchema,
   type Permission,
   type UpdateCourseLessonRequest,
 } from "@veolms/contracts";
@@ -188,6 +192,96 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
       preHandler: ctx.authorizeEach(lessonUpdatePermissions, "lesson"),
     },
     controller.updateCourseLesson,
+  );
+
+  app.put(
+    "/courses/:id/lessons/:lessonId/contents/:contentType",
+    {
+      schema: {
+        operationId: "setLessonContent",
+        tags: ["Course Curriculum"],
+        summary: "Set what one kind of a lesson holds",
+        description:
+          "A lesson holds one piece of content per kind (video, audio, image, document) and shows learners the kind selected as its content type. This sets one kind's file, and a document's text; a field left out is kept and null clears it. Content left empty is removed. When the kind is the selected one, the lesson's media follows.",
+        params: z.object({
+          id: z.uuid(),
+          lessonId: z.uuid(),
+          contentType: lessonContentKindSchema,
+        }),
+        body: setLessonContentRequestSchema,
+        response: {
+          200: jsonResponse(
+            "The lesson's contents",
+            lessonContentsResponseSchema,
+          ),
+          202: jsonResponse(
+            "The lesson's contents; the new video is being processed",
+            lessonContentsResponseSchema,
+          ),
+          400: errorResponse("Wrong file for this kind, or not uploaded"),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Lesson not found"),
+        },
+      },
+      preHandler: ctx.authorize("lesson.content.update", "lesson"),
+    },
+    controller.setLessonContent,
+  );
+
+  app.delete(
+    "/courses/:id/lessons/:lessonId/contents/:contentType",
+    {
+      schema: {
+        operationId: "clearLessonContent",
+        tags: ["Course Curriculum"],
+        summary: "Remove what one kind of a lesson holds",
+        description:
+          "Detaches the kind's file (kept in the media library) and a document's text. The lesson keeps its selected kind; it shows nothing until that kind is filled again.",
+        params: z.object({
+          id: z.uuid(),
+          lessonId: z.uuid(),
+          contentType: lessonContentKindSchema,
+        }),
+        response: {
+          200: jsonResponse(
+            "The lesson's contents",
+            lessonContentsResponseSchema,
+          ),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Lesson not found"),
+        },
+      },
+      preHandler: ctx.authorize("lesson.content.update", "lesson"),
+    },
+    controller.clearLessonContent,
+  );
+
+  app.get(
+    "/courses/:id/lessons/:lessonId/contents/:contentType/link",
+    {
+      schema: {
+        operationId: "getLessonContentLink",
+        tags: ["Course Curriculum"],
+        summary: "A short-lived address of one kind's file, to preview it",
+        description:
+          "For the lesson's editor: an address of the file one kind holds (whether or not it is the kind learners are shown), signed by storage and working for 15 minutes. Never cached.",
+        params: z.object({
+          id: z.uuid(),
+          lessonId: z.uuid(),
+          contentType: lessonContentKindSchema,
+        }),
+        response: {
+          200: jsonResponse(
+            "The file's address",
+            lessonMediaLinkResponseSchema,
+          ),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("No such lesson, or the kind holds no file"),
+        },
+      },
+      preHandler: ctx.authorize("lesson.content.update", "lesson"),
+    },
+    controller.getLessonContentLink,
   );
 
   app.delete(

@@ -59,6 +59,7 @@ import {
   loadMobileMenuDrawerModule,
 } from "../academyLazyPages";
 import type { AuthUser } from "../../store/auth.store";
+import { scheduleWarmUp } from "../../lib/scheduleWarmUp";
 
 export interface UseShellEffectsArgs {
   onNavigatePage: NavigateTo;
@@ -450,12 +451,7 @@ export function useShellEffects({
       void loadProfileMenuModule();
       setProfileMenuSurfaceMounted(true);
     };
-    if (typeof window.requestIdleCallback === "function") {
-      const handle = window.requestIdleCallback(mount, { timeout: 4000 });
-      return () => window.cancelIdleCallback(handle);
-    }
-    const handle = window.setTimeout(mount, 2000);
-    return () => window.clearTimeout(handle);
+    return scheduleWarmUp(mount, 4000);
   }, [
     isAuthenticated,
     profileMenu,

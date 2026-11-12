@@ -173,6 +173,11 @@ export const chatReadUploadQuerySchema = z.strictObject({
   download: z.enum(["1", "0"]).optional(),
   /** "1": answer with the short-lived link as JSON (the preview reads text). */
   link: z.enum(["1"]).optional(),
+  /** A retry after a failed load: makes the address new, so not cached. */
+  r: z
+    .string()
+    .regex(/^\d{1,15}$/)
+    .optional(),
 });
 export const chatUploadLinkResponseSchema = z.object({ url: z.string() });
 export type ChatUploadLink = z.infer<typeof chatUploadLinkResponseSchema>;
@@ -210,6 +215,21 @@ export const chatMessageSchema = z.object({
       senderName: z.string().nullable(),
       preview: z.string(),
       deleted: z.boolean(),
+      /**
+       * The quoted message's first photo, video, voice message or file, so
+       * the quote shows "📷 Photo" with a thumbnail as in WhatsApp.
+       */
+      media: z
+        .object({
+          kind: chatUploadKindSchema,
+          url: z.string(),
+          name: z.string(),
+          durationMs: z.number().int().nullable(),
+          /** Files on the quoted message. */
+          count: z.number().int(),
+        })
+        .nullable()
+        .optional(),
     })
     .nullable(),
   mentions: z.array(z.uuid()),
@@ -381,9 +401,12 @@ export const chatProfileSchema = z.object({
   showPresence: z.boolean(),
   readReceipts: z.boolean(),
   enterToSend: z.boolean(),
+  /** Whether you may turn read receipts off (chat staff only). */
+  readReceiptsChoice: z.boolean().optional(),
 });
 export type ChatProfile = z.infer<typeof chatProfileSchema>;
 export const updateChatProfileRequestSchema = chatProfileSchema
+  .omit({ readReceiptsChoice: true })
   .partial()
   .strict();
 export type UpdateChatProfileRequest = z.infer<

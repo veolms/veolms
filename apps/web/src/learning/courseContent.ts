@@ -5,10 +5,13 @@ export interface CourseVideo {
   duration: number;
   src: string;
   thumbnailSrc?: string;
+  /** A plain file's type (an audio lesson's MP3, say); a video's is MP4. */
+  mimeType?: string;
 }
 
 export type LessonStatus = "done" | "active" | "todo";
-export type LessonContentType = "video" | "document" | "quiz";
+export type LessonContentType =
+  "video" | "audio" | "image" | "document" | "quiz";
 export type Lesson = [
   number,
   string,

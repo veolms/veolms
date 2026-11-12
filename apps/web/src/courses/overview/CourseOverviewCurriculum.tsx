@@ -6,6 +6,8 @@ import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { Eye } from "@phosphor-icons/react/Eye";
 import { FileText } from "@phosphor-icons/react/FileText";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { ImageIcon as ImageGlyph } from "@phosphor-icons/react/Image";
 import { PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
 import { Question } from "@phosphor-icons/react/Question";
@@ -285,6 +287,8 @@ function CurriculumSectionRow({
                     ]) => {
                       const isDoc = contentType === "document";
                       const isQuiz = contentType === "quiz";
+                      const isAudio = contentType === "audio";
+                      const isImage = contentType === "image";
                       const isDone = status === "done";
                       // What the lesson is: a video, a document or a quiz,
                       // or a tick once it is done. It leads the line under
@@ -295,12 +299,20 @@ function CurriculumSectionRow({
                           ? FileText
                           : isQuiz
                             ? Question
-                            : PlayCircle;
+                            : isAudio
+                              ? Headphones
+                              : isImage
+                                ? ImageGlyph
+                                : PlayCircle;
                       const typeLabel = isDoc
                         ? "Document"
                         : isQuiz
                           ? "Quiz"
-                          : "Video";
+                          : isAudio
+                            ? "Audio"
+                            : isImage
+                              ? "Image"
+                              : "Video";
                       return (
                         // A lesson is a small card of its own, as on the
                         // learning page: its title (two lines at most),
@@ -323,7 +335,7 @@ function CurriculumSectionRow({
                           key={number}
                           disabled={isReadOnlyPreview}
                           // Only a video has anything to ready.
-                          {...(isDoc || isQuiz
+                          {...(isDoc || isQuiz || isAudio || isImage
                             ? undefined
                             : lessonIntentFor?.(number, Boolean(isPreview)))}
                           onClick={() => {
@@ -343,7 +355,8 @@ function CurriculumSectionRow({
                           <span className="flex min-h-6 w-full items-center gap-2 text-[0.8rem] font-medium text-(--muted) tabular-nums lg:contents">
                             {/* Filled and coloured by kind: a video in the
                                 theme's own colour, a violet document, a
-                                sky-blue quiz; green once done. */}
+                                sky-blue quiz, a rose audio lesson, an
+                                emerald image; green once done. */}
                             <TypeIcon
                               size={17}
                               weight="fill"
@@ -355,7 +368,11 @@ function CurriculumSectionRow({
                                     ? "text-violet-400 [:root[data-theme=light]_&]:text-violet-600"
                                     : isQuiz
                                       ? "text-sky-400 [:root[data-theme=light]_&]:text-sky-600"
-                                      : "text-(--accent-ink,var(--accent))"
+                                      : isAudio
+                                        ? "text-rose-400 [:root[data-theme=light]_&]:text-rose-600"
+                                        : isImage
+                                          ? "text-emerald-400 [:root[data-theme=light]_&]:text-emerald-600"
+                                          : "text-(--accent-ink,var(--accent))"
                               }`}
                             />
                             <span className="sr-only">{typeLabel}, </span>

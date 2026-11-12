@@ -28,6 +28,7 @@ import type {
 import type { CourseVideo } from "../courseContent";
 import { readLearningPreferences } from "../../settings/settingsPreferences";
 import { LessonAmbientProjection } from "./LessonAmbientProjection";
+import { LessonAudioArtwork } from "./LessonAudioArtwork";
 import { LessonTroubleIllustration } from "./LessonTroubleIllustration";
 import { useMiniPlayerSwipeVolume } from "./useMiniPlayerSwipeVolume";
 import type { SubscribeOutsideFraction } from "./useLearningMiniPlayerGestures";
@@ -53,6 +54,7 @@ import {
   LessonReadingStage,
   lessonReadingShellClasses,
 } from "./LessonReadingStage";
+import { parseLessonMediaReading } from "../lessonWithoutVideo";
 import {
   LessonReadingFullscreenControls,
   LessonReadingNavigationControls,
@@ -117,6 +119,11 @@ import {
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
 import { isLowMemoryDevice } from "./deviceTier";
+import { sendVideoProblemReport } from "./videoProblemReport";
+import { useAuthStore } from "../../store/auth.store";
+import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import type { PlayerErrorReport } from "@veolms/video-player";
 import type { LessonStagePlan } from "../lessonWithoutVideo";
 
 /**
@@ -342,6 +349,17 @@ export interface LessonVideoPlayerProps {
   protectedPlayback?: boolean;
   /** Engine injection is useful for deterministic integration testing. */
   engineFactory?: () => VideoEngine;
+  /**
+   * An audio lesson: its file plays here with the same controls, the
+   * picture's place taken by its artwork; what only a picture has
+   * (picture-in-picture, the ambient glow) is left out.
+   */
+  audioOnly?: boolean;
+  /**
+   * The audio file may be read across origins: it is loaded so, and its
+   * artwork draws the sound's live waveform.
+   */
+  audioAnalysable?: boolean;
 }
 
 /**
@@ -498,6 +516,8 @@ export function LessonVideoPlayer({
   chaptersPanelHost,
   courseTitle,
   engineFactory,
+  audioOnly = false,
+  audioAnalysable = false,
   description,
   lessonIndex,
   lessonTitle,
@@ -659,6 +679,21 @@ export function LessonVideoPlayer({
 
     return onSeekToTimestampReady(seekToTimestamp);
   }, [mediaKey, onSeekToTimestampReady]);
+
+  // Report on the error screen, for a signed-in learner: one press sends
+  // the team the page, a screenshot and the requests (videoProblemReport.ts).
+  const signedIn = useAuthStore((state) => state.isAuthenticated);
+  const errorReport = useMemo<PlayerErrorReport | undefined>(
+    () =>
+      signedIn
+        ? {
+            send: (error) => sendVideoProblemReport({ error, lessonTitle }),
+            icon: <Flag weight="bold" />,
+            sentIcon: <Check weight="bold" />,
+          }
+        : undefined,
+    [lessonTitle, signedIn],
+  );
 
   const playbackMedia = useMemo(
     () =>
@@ -1807,6 +1842,8 @@ export function LessonVideoPlayer({
               ) : undefined
             }
             clearBottom
+            lessonTitle={lessonTitle}
+            courseTitle={courseTitle}
             controlsHidden={readingControlsHidden}
             onTap={toggleReadingControls}
           />
@@ -1823,6 +1860,7 @@ export function LessonVideoPlayer({
               canGoPrevious={canGoPrevious}
               hidden={readingControlsHidden}
               showLessonNavigation={showLessonNavigation}
+              showTextSize={!parseLessonMediaReading(reading ?? "")}
               style={getPlayerThemeStyle(playerTheme)}
               onGoNext={onGoNext}
               onGoPrevious={onGoPrevious}
@@ -2084,7 +2122,11 @@ export function LessonVideoPlayer({
           ? "shell"
           : "player"
       }
-      ariaLabel={`Lesson video player for ${lessonTitle}`}
+      ariaLabel={
+        audioOnly
+          ? `Lesson audio player for ${lessonTitle}`
+          : `Lesson video player for ${lessonTitle}`
+      }
       theaterMode={theaterMode}
       onTheaterModeChange={handleTheaterModeChange}
       shortcuts={
@@ -2111,6 +2153,7 @@ export function LessonVideoPlayer({
         ) : (
           <PlayerErrorNotice
             source={playerSource}
+            report={errorReport}
             backdrop={false}
             // The lesson's own picture behind the message, as on the
             // surface that asks the learner to sign in.
@@ -2154,6 +2197,11 @@ export function LessonVideoPlayer({
         // A hovered or next lesson is prepared in a hidden second element
         // and switched to at once when opened.
         withStandby,
+        // An audio file storage lets be read across origins is loaded so,
+        // for its waveform to be drawn from the sound.
+        ...(audioOnly && audioAnalysable
+          ? { crossOrigin: "anonymous" as const }
+          : {}),
       }}
       className={cn(
         // A failure's message is drawn on the video, and the window is
@@ -2241,7 +2289,9 @@ export function LessonVideoPlayer({
           <LessonPlayerControls
             shortPlayer={shortPlayer && presentation === "full"}
             seekTimeOnly={seekTimeOnly && presentation === "full"}
-            ambientEnabled={ambientEnabled}
+            ambientEnabled={ambientEnabled && !audioOnly}
+            showAmbientControl={!audioOnly}
+            audioOnly={audioOnly}
             autoplayEnabled={autoplayEnabled}
             showAutoplayControl={showAutoplayControl}
             circularSettingsControl={circularSettingsControl}
@@ -2276,6 +2326,14 @@ export function LessonVideoPlayer({
       }
       overlays={
         <>
+          {audioOnly ? (
+            <LessonAudioArtwork
+              lessonTitle={lessonTitle}
+              courseTitle={courseTitle}
+              src={media.src}
+              analysable={audioAnalysable}
+            />
+          ) : null}
           {reconnecting && !streamConflict && presentation === "full" ? (
             // The engine is asking for segments that would not come (the
             // connection is down, or the CDN refused them); the loader is
@@ -2331,7 +2389,7 @@ export function LessonVideoPlayer({
               <VideoLoadingSpinner />
             </div>
           ) : presentation === "full" && !minimizeGesture.controlsSuppressed ? (
-            <LessonAmbientProjection enabled={ambientEnabled} />
+            <LessonAmbientProjection enabled={ambientEnabled && !audioOnly} />
           ) : undefined}
           {/* In the same place for both presentations, so minimizing keeps
               the countdown where it was instead of starting it again. */}
