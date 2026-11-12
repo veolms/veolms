@@ -5,9 +5,10 @@ There it can call native functions (platform info, Firebase IDs, permissions,
 notifications, ...) and receive native events. In a plain browser the same
 code runs and simply gets no native answers.
 
-Function names other than `platform()` in the code below (`firebase`,
-`media`, events) are examples of the shape, not functions the contract has
-today; check `native-bridge-contracts.d.ts` for what exists.
+Function names other than `platform()` and `firebase.getInstallationId()`
+in the code below (`media`, events) are examples of the shape, not
+functions the contract has today; check `native-bridge-contracts.d.ts` for
+what exists.
 
 This guide is the **project's rules**: which API to use for which job, where
 the code goes, and what to watch out for. The SDK's own docs explain every
@@ -256,8 +257,9 @@ native-bridge/
 ├── native-bridge-contracts.d.ts   generated, never edited
 ├── nativeBridge.ts                registration, nativeBridge, endpoint options
 ├── useNativeQuery.ts              useNativeQuery, nativeBridgeKeys
-├── usePlatform.ts                 one capability: platform info
-├── firebase.ts                    (example) getInstallationId(), once per page
+├── platform.ts                    getPlatform(), once per page (for logic)
+├── usePlatform.ts                 usePlatform(), over getPlatform (for rendering)
+├── firebase.ts                    getInstallationId(), once per page
 ├── useNativeThemeChange.ts        (example) one event
 ├── examples.tsx                   examples only, never imported
 └── index.ts                       the public exports
