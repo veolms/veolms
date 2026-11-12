@@ -119,6 +119,11 @@ import {
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
 import { isLowMemoryDevice } from "./deviceTier";
+import { sendVideoProblemReport } from "./videoProblemReport";
+import { useAuthStore } from "../../store/auth.store";
+import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import type { PlayerErrorReport } from "@veolms/video-player";
 import type { LessonStagePlan } from "../lessonWithoutVideo";
 
 /**
@@ -674,6 +679,21 @@ export function LessonVideoPlayer({
 
     return onSeekToTimestampReady(seekToTimestamp);
   }, [mediaKey, onSeekToTimestampReady]);
+
+  // Report on the error screen, for a signed-in learner: one press sends
+  // the team the page, a screenshot and the requests (videoProblemReport.ts).
+  const signedIn = useAuthStore((state) => state.isAuthenticated);
+  const errorReport = useMemo<PlayerErrorReport | undefined>(
+    () =>
+      signedIn
+        ? {
+            send: (error) => sendVideoProblemReport({ error, lessonTitle }),
+            icon: <Flag weight="bold" />,
+            sentIcon: <Check weight="bold" />,
+          }
+        : undefined,
+    [lessonTitle, signedIn],
+  );
 
   const playbackMedia = useMemo(
     () =>
@@ -2133,6 +2153,7 @@ export function LessonVideoPlayer({
         ) : (
           <PlayerErrorNotice
             source={playerSource}
+            report={errorReport}
             backdrop={false}
             // The lesson's own picture behind the message, as on the
             // surface that asks the learner to sign in.
