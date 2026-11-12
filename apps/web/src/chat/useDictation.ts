@@ -85,7 +85,7 @@ export function tidyDictation(text: string, startsSentence: boolean): string {
   let out = text;
   for (const [pattern, mark] of SPOKEN) out = out.replace(pattern, mark);
   out = out.replace(
-    /([.?!]\s+)(\p{Ll})/gu,
+    /((?:[.?!]\s+)|(?:\n\s*))(\p{Ll})/gu,
     (_, end: string, letter: string) => end + letter.toUpperCase(),
   );
   if (startsSentence) {
