@@ -1,6 +1,6 @@
 import type {
   OrdersListQueryInput,
-  OrderStatsQuery,
+  OrderStatsQueryInput,
   OrderView,
 } from "@veolms/contracts";
 
@@ -9,7 +9,7 @@ export const orderKeys = {
   lists: () => [...orderKeys.all, "list"] as const,
   list: (params?: OrdersListQueryInput) =>
     [...orderKeys.lists(), params] as const,
-  stats: (params?: OrderStatsQuery) =>
+  stats: (params?: OrderStatsQueryInput) =>
     [...orderKeys.all, "stats", params] as const,
   needsRefund: () => [...orderKeys.all, "needs-refund"] as const,
   detail: (id: string, view?: OrderView) =>

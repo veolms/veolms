@@ -3,7 +3,11 @@ import { test } from "node:test";
 
 import { orderItemSummarySchema } from "@veolms/contracts";
 
-import { orderItemInvoiceTitle, toOrderItemDisplay } from "./order.mapper.ts";
+import {
+  orderItemInvoiceTitle,
+  toAdminOrder,
+  toOrderItemDisplay,
+} from "./order.mapper.ts";
 
 const partRow = {
   title_snapshot: "Master TypeScript Core Concepts",
@@ -78,4 +82,41 @@ await test("an unlisted course that opens a whole course is not called partial",
   const row = { ...partRow, open_sections: null, total_sections: null };
   assert.equal(toOrderItemDisplay(row), undefined);
   assert.equal(orderItemInvoiceTitle(row), partRow.title_snapshot);
+});
+
+const adminRow = {
+  id: "00000000-0000-4000-8000-000000000010",
+  order_number: "ORD-1",
+  invoice_number: null,
+  status: "payment_failed" as const,
+  currency: "INR",
+  subtotal_amount: 79900,
+  discount_amount: 0,
+  tax_amount: 0,
+  total_amount: 79900,
+  after_commission_amount: null,
+  paid_at: null,
+  created_at: new Date("2026-11-11T08:00:00Z"),
+};
+const failedPayment = {
+  gateway_provider: "razorpay",
+  gateway_payment_id: "pay_1",
+  payment_method: null,
+  error_description: "  Payment declined by bank ",
+};
+
+await test("an order that was not paid says why its payment failed", () => {
+  const order = toAdminOrder(adminRow, [], {
+    avatarUrl: null,
+    payment: failedPayment,
+  });
+  assert.equal(order.admin.payment?.failureReason, "Payment declined by bank");
+});
+
+await test("a paid order shows no failure from an earlier attempt", () => {
+  const order = toAdminOrder({ ...adminRow, status: "paid" }, [], {
+    avatarUrl: null,
+    payment: failedPayment,
+  });
+  assert.equal(order.admin.payment?.failureReason, null);
 });

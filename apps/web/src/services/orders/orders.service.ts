@@ -4,7 +4,7 @@ import type {
   LearnerOrdersListResponse,
   OrderResponse,
   OrdersListQueryInput,
-  OrderStatsQuery,
+  OrderStatsQueryInput,
   OrderStatsResponse,
   Invoice,
   OrderDirectRefundRequest,
@@ -40,7 +40,9 @@ export const ordersService = {
     });
   },
 
-  getOrderStats: (params?: OrderStatsQuery): Promise<OrderStatsResponse> => {
+  getOrderStats: (
+    params?: OrderStatsQueryInput,
+  ): Promise<OrderStatsResponse> => {
     return api.get<OrderStatsResponse>("/orders/stats", { params });
   },
 

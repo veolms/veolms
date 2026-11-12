@@ -10,6 +10,8 @@ import {
   refundResultSchema,
   needsRefundListQuerySchema,
   needsRefundListResponseSchema,
+  orderCourseOptionsResponseSchema,
+  ordersExportQuerySchema,
 } from "@veolms/contracts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import { errorResponse } from "../../../lib/errors.ts";
@@ -104,6 +106,51 @@ const orderRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.getOrderStats,
+  );
+
+  // 2a. GET /orders/course-options - Courses the Orders screen filters by
+  app.get(
+    "/orders/course-options",
+    {
+      preHandler: ctx.requireAuthenticated,
+      schema: {
+        operationId: "listOrderCourseOptions",
+        tags: ["Commerce - Orders"],
+        summary: "List the courses orders can be filtered by",
+        description:
+          "Returns the published courses and any other course with orders, each with whether it is free, its price in minor units and its picture. Requires billing.read.",
+        response: {
+          200: jsonResponse(
+            "Courses to filter orders by",
+            orderCourseOptionsResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - billing.read required"),
+        },
+      },
+    },
+    controller.listCourseOptions,
+  );
+
+  // 2a'. GET /orders/export.csv - Every order matching the filters, as CSV
+  app.get(
+    "/orders/export.csv",
+    {
+      preHandler: ctx.requireAuthenticated,
+      schema: {
+        operationId: "exportOrdersCsv",
+        tags: ["Commerce - Orders"],
+        summary: "Export orders as CSV",
+        description:
+          "Streams every order matching the filters (the same as the statistics), newest first, as a CSV file, up to 20,000 orders. Requires billing.read. Cells a spreadsheet would read as a formula are written as text.",
+        querystring: ordersExportQuerySchema,
+        response: {
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - billing.read required"),
+        },
+      },
+    },
+    controller.exportOrdersCsv,
   );
 
   // 2b. GET /orders/needs-refund - Money staff must return by hand (registered BEFORE :orderId)

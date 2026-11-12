@@ -9,7 +9,7 @@ import type {
   AdminOrdersListResponse,
   LearnerOrdersListResponse,
   OrderResponse,
-  OrderStatsQuery,
+  OrderStatsQueryInput,
   OrderStatsResponse,
   Invoice,
   OrderView,
@@ -79,7 +79,7 @@ export function useMyOrders(
  * Aggregated statistics query for orders (Net Revenue, Total Orders, etc.).
  */
 export function useOrderStats(
-  params?: OrderStatsQuery,
+  params?: OrderStatsQueryInput,
   options?: { enabled?: boolean },
 ) {
   return useQuery<OrderStatsResponse, ApiError>({
