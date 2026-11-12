@@ -127,13 +127,15 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
       <section
         aria-label="Order summary"
         aria-busy={isLoading || undefined}
-        className={`grid grid-cols-2 gap-2.5 @2xl:gap-3 ${freeOnly ? "@3xl:grid-cols-4" : "@2xl:grid-cols-3 @5xl:grid-cols-5"}`}
+        // One row as soon as there is room for it (the list beside an open
+        // order included): tiles narrow and their text steps down instead.
+        className={`grid grid-cols-2 gap-2.5 @2xl:gap-3 ${freeOnly ? "@xl:grid-cols-4" : "@2xl:grid-cols-5"}`}
       >
         {tiles.map((tile, index) => (
           <ElevatedCard
             as="article"
             key={tile.id}
-            className={`min-w-0 px-4 py-3.5 @5xl:px-5 @5xl:py-4 ${
+            className={`min-w-0 px-4 py-3.5 @2xl:px-3.5 @2xl:py-3 @5xl:px-5 @5xl:py-4 ${
               // An odd last tile on two columns spans the row.
               !freeOnly && index === tiles.length - 1
                 ? "col-span-2 @2xl:col-span-1"
@@ -146,7 +148,7 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
                   {tile.title}
                 </p>
                 <p
-                  className="m-0 mt-1.5 truncate text-xl font-bold tracking-tight text-(--text) tabular-nums @5xl:text-2xl"
+                  className="m-0 mt-1.5 truncate text-xl font-bold tracking-tight text-(--text) tabular-nums @2xl:text-lg @5xl:text-2xl"
                   title={tile.value}
                 >
                   {tile.value}

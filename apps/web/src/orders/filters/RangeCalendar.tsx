@@ -42,7 +42,15 @@ export function RangeCalendar({ from, to, today, onPick }: RangeCalendarProps) {
       ),
   );
   const [focused, setFocused] = useState<Date>(from ?? todayStart);
+  // The day under the pointer (or keyboard) once a start is picked: the
+  // range is drawn up to it before the second click.
+  const [hovered, setHovered] = useState<Date | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  const end = to ?? (from ? hovered : null);
+  const [low, high] =
+    from && end ? (from <= end ? [from, end] : [end, from]) : [from, null];
+  const previewing = Boolean(from && !to && hovered);
 
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
   const lead = (first.getDay() + 6) % 7; // Monday first
@@ -133,6 +141,7 @@ export function RangeCalendar({ from, to, today, onPick }: RangeCalendarProps) {
         role="grid"
         aria-label={MONTH.format(month)}
         onKeyDown={onKeyDown}
+        onPointerLeave={() => setHovered(null)}
         className="grid grid-cols-7 gap-y-1"
       >
         {WEEKDAYS.map((day) => (
@@ -147,11 +156,15 @@ export function RangeCalendar({ from, to, today, onPick }: RangeCalendarProps) {
         {cells.map((day, index) => {
           if (!day) return <span key={`blank-${index}`} aria-hidden="true" />;
           const future = day > todayStart;
-          const isStart = sameDay(day, from);
-          const isEnd = sameDay(day, to);
-          const inRange = Boolean(from && to && day >= from && day <= to);
+          const isStart = sameDay(day, low);
+          const isEnd = sameDay(day, high);
+          const inRange = Boolean(low && high && day >= low && day <= high);
           const isToday = sameDay(day, todayStart);
           const tabbable = sameDay(day, focused);
+          // While previewing, the end that follows the pointer is drawn
+          // lighter than the start that was clicked.
+          const isFloatingEnd =
+            previewing && sameDay(day, hovered) && !sameDay(day, from);
           return (
             <button
               key={toDayKey(day)}
@@ -160,22 +173,41 @@ export function RangeCalendar({ from, to, today, onPick }: RangeCalendarProps) {
               data-day={toDayKey(day)}
               tabIndex={tabbable ? 0 : -1}
               disabled={future}
-              aria-selected={inRange || isStart}
+              aria-selected={
+                Boolean(from && to && day >= from && day <= to) ||
+                sameDay(day, from)
+              }
               aria-label={DAY_LABEL.format(day)}
               onClick={() => pick(day)}
-              onFocus={() => setFocused(day)}
+              onPointerEnter={() => !future && setHovered(day)}
+              onFocus={() => {
+                setFocused(day);
+                setHovered(day);
+              }}
               className={[
-                "mx-auto grid h-9 w-full max-w-10 place-items-center text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-(--accent)",
+                "grid h-9 w-full place-items-center text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-(--accent)",
                 future
                   ? "cursor-not-allowed text-(--muted) opacity-40"
-                  : "text-(--text) hover:bg-(--hover)",
+                  : "text-(--text)",
+                !future && !inRange ? "hover:bg-(--hover)" : "",
+                // One continuous band from start to end: the cells touch.
                 inRange
                   ? "bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]"
                   : "",
-                isStart || isEnd
-                  ? "rounded-lg bg-(--accent)! font-bold text-(--on-accent)!"
-                  : "",
-                inRange && !isStart && !isEnd ? "rounded-none" : "rounded-lg",
+                isFloatingEnd
+                  ? "bg-[color-mix(in_srgb,var(--accent)_55%,transparent)]! font-bold text-(--text)!"
+                  : isStart || isEnd
+                    ? "bg-(--accent)! font-bold text-(--on-accent)!"
+                    : "",
+                !inRange
+                  ? "rounded-lg"
+                  : isStart && isEnd
+                    ? "rounded-lg"
+                    : isStart
+                      ? "rounded-l-lg"
+                      : isEnd
+                        ? "rounded-r-lg"
+                        : "rounded-none",
                 isToday && !isStart && !isEnd
                   ? "ring-1 ring-(--text)/50 ring-inset"
                   : "",
