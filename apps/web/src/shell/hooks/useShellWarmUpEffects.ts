@@ -11,6 +11,7 @@ import {
   loadMobileMenuDrawerModule,
 } from "../academyLazyPages";
 import { SETTINGS_ENTRY_SELECTOR } from "../academyShellConstants";
+import { scheduleWarmUp } from "../../lib/scheduleWarmUp";
 
 export interface UseShellWarmUpEffectsArgs {
   compactNavigation: boolean;
@@ -39,8 +40,7 @@ export function useShellWarmUpEffects({
   // fetched outright.
   const [settingsWarmed, setSettingsWarmed] = useState(false);
   useEffect(() => {
-    let idleHandle = 0;
-    let timeoutHandle = 0;
+    let cancelWarmUp = () => {};
     const onIntent = (event: Event) => {
       if (
         event.target instanceof Element &&
@@ -50,8 +50,7 @@ export function useShellWarmUpEffects({
       }
     };
     const stop = () => {
-      if (idleHandle) window.cancelIdleCallback?.(idleHandle);
-      window.clearTimeout(timeoutHandle);
+      cancelWarmUp();
       document.removeEventListener("pointerover", onIntent, true);
       document.removeEventListener("focusin", onIntent, true);
       document.removeEventListener("pointerdown", onIntent, true);
@@ -91,13 +90,7 @@ export function useShellWarmUpEffects({
     const saveData =
       (navigator as Navigator & { connection?: { saveData?: boolean } })
         .connection?.saveData === true;
-    if (!saveData) {
-      if (typeof window.requestIdleCallback === "function") {
-        idleHandle = window.requestIdleCallback(warm, { timeout: 6000 });
-      } else {
-        timeoutHandle = window.setTimeout(warm, 3500);
-      }
-    }
+    if (!saveData) cancelWarmUp = scheduleWarmUp(warm, 6000);
     return stop;
   }, []);
 
@@ -111,25 +104,16 @@ export function useShellWarmUpEffects({
       (navigator as Navigator & { connection?: { saveData?: boolean } })
         .connection?.saveData === true;
     if (saveData) return undefined;
-    const warm = () => void loginDialogBody.preload().catch(() => undefined);
-    if (typeof window.requestIdleCallback === "function") {
-      const handle = window.requestIdleCallback(warm, { timeout: 2000 });
-      return () => window.cancelIdleCallback(handle);
-    }
-    const handle = window.setTimeout(warm, 1000);
-    return () => window.clearTimeout(handle);
+    return scheduleWarmUp(
+      () => void loginDialogBody.preload().catch(() => undefined),
+      2000,
+    );
   }, [isGuest]);
 
   useEffect(() => {
     // The catalogue module is behind a route-body lazy(); warm it once the
     // shell is idle so navigating to /courses never shows its fallback.
-    const warm = () => void loadCourseCatalogueModule();
-    if (typeof window.requestIdleCallback === "function") {
-      const handle = window.requestIdleCallback(warm, { timeout: 5000 });
-      return () => window.cancelIdleCallback(handle);
-    }
-    const handle = window.setTimeout(warm, 2500);
-    return () => window.clearTimeout(handle);
+    return scheduleWarmUp(() => void loadCourseCatalogueModule(), 5000);
   }, []);
 
   useEffect(() => {
@@ -147,12 +131,7 @@ export function useShellWarmUpEffects({
       void loadProfileMenuModule();
       setMobileNavigationSheetMounted(true);
     };
-    if (typeof window.requestIdleCallback === "function") {
-      const handle = window.requestIdleCallback(mount, { timeout: 3000 });
-      return () => window.cancelIdleCallback(handle);
-    }
-    const handle = window.setTimeout(mount, 1500);
-    return () => window.clearTimeout(handle);
+    return scheduleWarmUp(mount, 3000);
   }, [
     compactNavigation,
     mobileMenuOpen,

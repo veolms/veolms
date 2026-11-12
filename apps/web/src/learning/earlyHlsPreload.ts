@@ -10,6 +10,7 @@ import {
   type LearningPlaybackRequestMetadata,
 } from "./learningHlsBootstrap";
 import { createLearningHlsPreloadSource } from "./player/learningHlsPreloadSource";
+import { noteVideoStartPending } from "../lib/scheduleWarmUp";
 import { toAbsoluteLearningMediaUrl } from "./player/learningHlsConstants";
 import {
   getVideoPlaybackBootstrap,
@@ -91,6 +92,9 @@ function startPreloadForBootstrap(
 ) {
   const key = `${bootstrap.mediaKey}\u0000${bootstrap.manifestUrl}`;
   if (inFlight?.key === key) return inFlight.promise;
+  // The lesson being opened: the page's warm-ups wait for its first frame
+  // (see lib/scheduleWarmUp.ts). A lesson merely hovered does not hold them.
+  if (!speculative) noteVideoStartPending();
 
   preconnectToMediaOrigin(bootstrap.manifestUrl);
   mark("learning-bootstrap-ready");

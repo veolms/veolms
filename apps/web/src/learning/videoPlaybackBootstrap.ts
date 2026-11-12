@@ -17,6 +17,7 @@ import {
   LEARNER_VIEW_HEADER_VALUE,
 } from "@veolms/contracts/learner-view";
 import { authStore } from "../store/auth.store";
+import { afterSignOut } from "../store/signOutInFlight";
 import {
   keepPlaybackBootstrap,
   readKeptPlaybackBootstrap,
@@ -314,6 +315,9 @@ function keepAnswer(
 async function requestBootstrap(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackBootstrap> {
+  // Asked as the visitor a sign-out has just made: sent once the server has
+  // ended the session, or it is answered for the account (signOutInFlight.ts).
+  await afterSignOut();
   const bootstrap = await answerBootstrap(options);
   // The quality kept on this device, for the player to start at (a few ms).
   await prepareCachedStartHeight(bootstrap.manifestUrl);
