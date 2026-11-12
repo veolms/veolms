@@ -63,20 +63,16 @@ export function MediaStage({
     return () => strip.removeEventListener("touchmove", stopScroll);
   }, []);
 
-  function targetIndex(clientX: number): number {
-    const thumbs = [
+  /** Where a dragged file lands: after every other file it passed. */
+  function targetIndex(clientX: number, draggedId: string): number {
+    const others = [
       ...(stripRef.current?.querySelectorAll<HTMLElement>("[data-thumb]") ??
         []),
-    ];
-    let index = thumbs.length - 1;
-    for (const [i, thumb] of thumbs.entries()) {
+    ].filter((thumb) => thumb.dataset.thumb !== draggedId);
+    return others.filter((thumb) => {
       const box = thumb.getBoundingClientRect();
-      if (clientX < box.left + box.width / 2) {
-        index = i;
-        break;
-      }
-    }
-    return Math.max(0, index);
+      return box.left + box.width / 2 < clientX;
+    }).length;
   }
 
   function endDrag(clientX: number | null) {
@@ -86,7 +82,7 @@ export function MediaStage({
     setDragging(null);
     if (!current?.started || clientX === null) return;
     const from = files.findIndex((f) => f.localId === current.id);
-    const to = targetIndex(clientX);
+    const to = targetIndex(clientX, current.id);
     if (from >= 0 && to !== from) onReorder(from, to);
   }
 
@@ -165,7 +161,7 @@ export function MediaStage({
         {files.map((file, index) => (
           <div
             key={file.localId}
-            data-thumb
+            data-thumb={file.localId}
             className={cn(
               "group/thumb relative shrink-0 select-none",
               dragging?.id === file.localId &&
