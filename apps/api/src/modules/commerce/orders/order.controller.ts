@@ -1,5 +1,7 @@
+import { Readable } from "node:stream";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type {
+  OrdersExportQuery,
   OrdersListQuery,
   OrderScope,
   OrderStatsQuery,
@@ -95,6 +97,35 @@ export function createOrderController({
     await requireBillingPermission(request, "billing.read", "view order stats");
     const scope = await service.getAcademyScope();
     return await service.getOrderStats(scope, request.query);
+  }
+
+  async function listCourseOptions(request: FastifyRequest) {
+    await requireBillingPermission(
+      request,
+      "billing.read",
+      "view the orders' courses",
+    );
+    return await service.listCourseOptions();
+  }
+
+  async function exportOrdersCsv(
+    request: FastifyRequest<{ Querystring: OrdersExportQuery }>,
+    reply: FastifyReply,
+  ) {
+    await requireBillingPermission(request, "billing.read", "export orders");
+    const scope = await service.getAcademyScope();
+    const day = new Date().toISOString().slice(0, 10);
+    const lines = service.exportOrdersCsv(scope, request.query);
+    async function* withLineBreaks() {
+      // A byte-order mark, so spreadsheet apps read the file as UTF-8.
+      yield "﻿";
+      for await (const line of lines) yield `${line}\r\n`;
+    }
+    return reply
+      .header("Content-Type", "text/csv; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="orders-${day}.csv"`)
+      .header("Cache-Control", "private, no-store")
+      .send(Readable.from(withLineBreaks()));
   }
 
   async function listNeedsRefund(
@@ -196,6 +227,8 @@ export function createOrderController({
   }
 
   return {
+    listCourseOptions,
+    exportOrdersCsv,
     listOrders,
     getOrderStats,
     listNeedsRefund,

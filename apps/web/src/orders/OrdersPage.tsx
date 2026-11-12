@@ -1,20 +1,16 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo } from "react";
 import type { NeedsRefundEntry } from "@veolms/contracts";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
 import type { CourseRole } from "../courses/catalogue";
 import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
 import type { NavigateTo } from "../routing/navigation";
 import { useCurrentUser } from "../services/auth";
 import { useCapabilities } from "../services/authorization";
-import {
-  useFetchOrder,
-  useOrder,
-  useOrdersNeedingRefund,
-} from "../services/orders";
+import { useFetchOrder, useOrdersNeedingRefund } from "../services/orders";
 import { useAuthStore } from "../store/auth.store";
 import { getWorkspaceRoleStorageKey } from "../shell/workspaceRole";
-import { useOrdersFilter } from "./useOrdersFilter";
+import { ORDERS_PAGE_SIZE, useOrdersFilter } from "./useOrdersFilter";
+import { DateRangeControl } from "./filters/DateRangeControl";
 import { OrderSummaryCards } from "./OrderSummaryCards";
 import { OrderFiltersBar } from "./OrderFiltersBar";
 import { OrdersTable } from "./OrdersTable";
@@ -69,7 +65,7 @@ export function OrdersPage({
     user && capabilities.can("billing.read") && activeRole !== "student",
   );
 
-  const filterState = useOrdersFilter({ enabled: isStaff });
+  const filters = useOrdersFilter({ enabled: isStaff });
 
   // Payments staff have to refund by hand (a gateway payment for an order
   // that was already paid, a course paid for twice). Usually there are
@@ -78,48 +74,24 @@ export function OrdersPage({
   const needsRefundEntries =
     needsRefund.data?.entries ?? NO_NEEDS_REFUND_ENTRIES;
 
-  // An order opened from that notice need not be among the rows the table
-  // has loaded (they follow the filters and the date range), so it is read
-  // by its id. Fetched before the drawer is asked to open, so a failure is
-  // said rather than leaving a click that does nothing.
-  const { setSelectedOrderId } = filterState;
+  // An order opened from that notice need not be on this page of the list:
+  // it opens by its id (kept in the URL like any open order). Fetched first,
+  // so a failure is said rather than leaving a click that does nothing.
+  const { selectOrder } = filters;
   const fetchOrder = useFetchOrder();
-  const [flaggedOrderId, setFlaggedOrderId] = useState<string | null>(null);
-  const { data: flaggedOrderData } = useOrder(flaggedOrderId, "admin");
-  const flaggedOrder =
-    flaggedOrderId && flaggedOrderData && "admin" in flaggedOrderData
-      ? flaggedOrderData
-      : null;
-
   const openFlaggedOrder = useCallback(
     (orderId: string) => {
       fetchOrder(orderId, "admin").then(
-        () => {
-          setSelectedOrderId(null);
-          setFlaggedOrderId(orderId);
-        },
+        () => selectOrder(orderId),
         () => setNotice?.("That order could not be opened. Please try again."),
       );
     },
-    [fetchOrder, setSelectedOrderId, setNotice],
+    [fetchOrder, selectOrder, setNotice],
   );
-
-  const closeOrderDrawer = useCallback(() => {
-    setSelectedOrderId(null);
-    setFlaggedOrderId(null);
-  }, [setSelectedOrderId]);
-
-  // The desktop panel's gutter opens the order it showed last: from the
-  // list when it is still there, else as the flagged order was opened.
-  const reopenOrder = useCallback(
-    (orderId: string) => {
-      if (filterState.orders.some((order) => order.id === orderId)) {
-        setSelectedOrderId(orderId);
-      } else {
-        setFlaggedOrderId(orderId);
-      }
-    },
-    [filterState.orders, setSelectedOrderId],
+  const closeOrder = useCallback(() => selectOrder(null), [selectOrder]);
+  const courseLookup = useMemo(
+    () => new Map(filters.courses.map((course) => [course.id, course])),
+    [filters.courses],
   );
 
   usePageSearchShortcut("orders-search-input");
@@ -165,29 +137,30 @@ export function OrdersPage({
   return (
     <main
       data-orders-surface=""
-      className="mx-auto flex w-full max-w-[1800px] flex-col gap-6 font-sans"
+      // Laid out by its own width (the order panel can narrow it), not the
+      // window's.
+      className="@container/orders mx-auto flex w-full max-w-[1800px] flex-col gap-5 font-sans sm:gap-6"
       aria-labelledby="orders-page-title"
     >
-      {/* Top Header Row with Title, Description, and Header Icon Badge */}
-      <header className="flex items-start justify-between gap-5 pt-1">
-        <div>
+      <header className="flex flex-col gap-4 pt-1 @xl/orders:flex-row @xl/orders:items-start @xl/orders:justify-between">
+        <div className="min-w-0">
           <h1
             id="orders-page-title"
-            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
+            className="m-0 text-[clamp(1.75rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)"
           >
             Orders
           </h1>
-          <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
+          <p className="m-0 mt-1.5 text-sm leading-6 text-(--muted)">
             Manage purchases, transactions, and refunds across your academy.
           </p>
         </div>
-
-        <span
-          className="inline-flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent)"
-          aria-hidden="true"
-        >
-          <ShoppingBag size={26} weight="duotone" />
-        </span>
+        <DateRangeControl
+          range={filters.state.range}
+          customFrom={filters.state.customFrom}
+          customTo={filters.state.customTo}
+          onRangeChange={filters.setRange}
+          onCustomRange={filters.setCustomRange}
+        />
       </header>
 
       {/* Payments that need a manual refund. Renders nothing when there are
@@ -200,77 +173,73 @@ export function OrdersPage({
         setNotice={setNotice}
       />
 
-      {/* Filter toolbar card: placed ON TOP of stats cards as requested */}
       <OrderFiltersBar
-        searchQuery={filterState.searchQuery}
-        onSearchChange={filterState.setSearchQuery}
-        courseFilter={filterState.courseFilter}
-        onCourseFilterChange={filterState.setCourseFilter}
-        couponFilter={filterState.couponFilter}
-        onCouponFilterChange={filterState.setCouponFilter}
-        statusFilter={filterState.statusFilter}
-        onStatusFilterChange={filterState.setStatusFilter}
-        datePreset={filterState.datePreset}
-        dateLabel={filterState.dateLabel}
-        onDatePresetChange={filterState.setDatePreset}
-        isFiltered={filterState.isFiltered}
-        onResetFilters={filterState.resetFilters}
+        state={filters.state}
+        courses={filters.courses}
+        coursesLoading={filters.courses.length === 0 && filters.isLoading}
+        searchText={filters.searchText}
+        onSearchChange={filters.setSearchText}
+        onStatusesChange={filters.setStatuses}
+        onCoursesChange={filters.setCourses}
+        onCouponsChange={filters.setCoupons}
       />
 
-      {/* 4 KPI Summary Cards. Left out when the orders list was refused or
-          failed and no stats arrived either (they need the same permission):
-          a row of zeros read as "no sales" rather than "not loaded". */}
-      {!(filterState.loadError && !filterState.stats) && (
+      {/* Left out when the list was refused or failed: a row of zeros
+          would read as "no sales" rather than "not loaded". */}
+      {!filters.loadError && (
         <OrderSummaryCards
-          stats={filterState.stats}
-          isLoading={filterState.isLoadingStats}
+          stats={filters.stats}
+          isLoading={filters.isLoadingStats}
+          freeOnly={filters.freeOnly}
         />
       )}
 
-      {/* Virtualized Orders Table */}
       <OrdersTable
-        orders={filterState.orders}
-        isLoading={filterState.isLoading}
-        hasNextPage={filterState.hasNextPage}
-        isFetchingNextPage={filterState.isFetchingNextPage}
-        fetchNextPage={filterState.fetchNextPage}
-        sortOrder={filterState.sortOrder}
-        onToggleSortOrder={filterState.toggleSortOrder}
-        selectedOrderId={filterState.selectedOrderId}
-        onSelectOrder={filterState.setSelectedOrderId}
-        onRequestRefund={filterState.setRefundTargetOrder}
-        onNavigatePage={onNavigatePage}
-        setNotice={setNotice}
-        isFiltered={filterState.isFiltered}
-        onResetFilters={filterState.resetFilters}
-        loadError={filterState.loadError}
-        onRetry={filterState.refetch}
-        layoutRevision={needsRefundEntries.length}
+        orders={filters.orders}
+        courses={filters.courses}
+        total={filters.total}
+        page={filters.state.page}
+        pageCount={filters.pageCount}
+        pageSize={ORDERS_PAGE_SIZE}
+        onPageChange={filters.setPage}
+        isLoading={filters.isLoading}
+        isFetching={filters.isFetching}
+        freeOnly={filters.freeOnly}
+        selectedOrderId={filters.state.orderId}
+        onSelectOrder={selectOrder}
+        exportUrl={filters.exportUrl}
+        onResetFilters={filters.resetFilters}
+        loadError={filters.loadError}
+        onRetry={filters.refetch}
       />
 
-      {/* The open order, in the Discussions page's side panel. A row
-          picked in the table, or failing that the order opened from the
-          refund notice. */}
+      {/* The open order: beside the list on a computer, over the page on a
+          tablet, a sheet from the bottom on a phone. */}
       <OrderDetailsPanel
-        order={filterState.selectedOrder ?? flaggedOrder}
-        onClose={closeOrderDrawer}
-        onReopen={reopenOrder}
-        hasPrev={filterState.hasPrevOrder}
-        hasNext={filterState.hasNextOrder}
-        onPrev={filterState.selectPrevOrder}
-        onNext={filterState.selectNextOrder}
-        onRequestRefund={filterState.setRefundTargetOrder}
+        order={filters.selectedOrder}
+        courses={courseLookup}
+        position={
+          filters.selectedPosition
+            ? { index: filters.selectedPosition, total: filters.total }
+            : null
+        }
+        onClose={closeOrder}
+        onReopen={selectOrder}
+        hasPrev={filters.hasPrevOrder}
+        hasNext={filters.hasNextOrder}
+        onPrev={filters.selectPrevOrder}
+        onNext={filters.selectNextOrder}
+        onRequestRefund={filters.setRefundTargetOrder}
         onNavigatePage={onNavigatePage}
         setNotice={setNotice}
       />
 
-      {/* Refund Modal. Keyed per opening so the refund type, amount, reason
-          and "preserve access" tick of one order never carry over to the
-          next one. */}
+      {/* Keyed per opening so one order's refund choices never carry over
+          to the next. */}
       <OrderRefundModal
-        key={filterState.refundTargetOrder?.id ?? "closed"}
-        order={filterState.refundTargetOrder}
-        onClose={() => filterState.setRefundTargetOrder(null)}
+        key={filters.refundTargetOrder?.id ?? "closed"}
+        order={filters.refundTargetOrder}
+        onClose={() => filters.setRefundTargetOrder(null)}
         setNotice={setNotice}
       />
     </main>

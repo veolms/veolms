@@ -9,8 +9,9 @@ import type {
   AdminOrdersListResponse,
   LearnerOrdersListResponse,
   OrderResponse,
-  OrderStatsQuery,
+  OrderStatsQueryInput,
   OrderStatsResponse,
+  OrderCourseOptionsResponse,
   Invoice,
   OrderView,
   NeedsRefundListResponse,
@@ -22,31 +23,29 @@ import { ordersService, type OrdersListParams } from "./orders.service";
 const DEFAULT_ORDERS_PAGE_SIZE = 30;
 
 /**
- * Infinite-scrolling query for every order in the academy (admin view).
- * Uses cursor-based keyset pagination — each page returns a `nextCursor`
- * that feeds into the next `getNextPageParam` call.
+ * One numbered page of the academy's orders (admin view), with how many
+ * match in all. The previous page stays on screen while the next loads.
  */
-export function useAdminOrders(
-  params?: OrdersListParams,
+export function useAdminOrdersPage(
+  params: OrdersListParams & { page: number },
   options?: { enabled?: boolean },
 ) {
-  const queryParams = {
-    ...params,
-    limit: params?.limit ?? DEFAULT_ORDERS_PAGE_SIZE,
-  };
-
-  return useInfiniteQuery<AdminOrdersListResponse, ApiError>({
-    queryKey: orderKeys.list({ ...queryParams, view: "admin" }),
-    queryFn: ({ pageParam }) =>
-      ordersService.listAdminOrders({
-        ...queryParams,
-        cursor: pageParam as string | undefined,
-      }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  return useQuery<AdminOrdersListResponse, ApiError>({
+    queryKey: orderKeys.list({ ...params, view: "admin" }),
+    queryFn: () => ordersService.listAdminOrders(params),
     enabled: options?.enabled ?? true,
     placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
+  });
+}
+
+/** The courses the Orders screen filters by. */
+export function useOrderCourseOptions(options?: { enabled?: boolean }) {
+  return useQuery<OrderCourseOptionsResponse, ApiError>({
+    queryKey: orderKeys.courseOptions(),
+    queryFn: () => ordersService.listOrderCourseOptions(),
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -79,13 +78,14 @@ export function useMyOrders(
  * Aggregated statistics query for orders (Net Revenue, Total Orders, etc.).
  */
 export function useOrderStats(
-  params?: OrderStatsQuery,
+  params?: OrderStatsQueryInput,
   options?: { enabled?: boolean },
 ) {
   return useQuery<OrderStatsResponse, ApiError>({
     queryKey: orderKeys.stats(params),
     queryFn: () => ordersService.getOrderStats(params),
     enabled: options?.enabled ?? true,
+    placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
   });
 }
