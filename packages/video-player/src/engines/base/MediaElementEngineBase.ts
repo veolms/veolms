@@ -277,9 +277,9 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     }
 
     const duration = finiteOrZero(media.duration);
-    media.currentTime = Math.max(
-      0,
-      duration > 0 ? Math.min(time, duration) : time,
+    media.currentTime = this.seekTarget(
+      media,
+      Math.max(0, duration > 0 ? Math.min(time, duration) : time),
     );
     this.updateSnapshot({ currentTime: finiteOrZero(media.currentTime) });
     this.#events.emit("timeupdate", {
@@ -635,6 +635,14 @@ export abstract class MediaElementEngineBase implements VideoEngine {
    */
   protected retryTimedOutLoad(): boolean {
     return false;
+  }
+
+  /**
+   * Where a seek to `time` (already clamped to the video) goes. The base
+   * engine goes exactly there.
+   */
+  protected seekTarget(_media: HTMLMediaElement, time: number): number {
+    return time;
   }
 
   protected async onAttached(_media: HTMLMediaElement): Promise<void> {}
