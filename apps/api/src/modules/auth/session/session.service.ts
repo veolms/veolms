@@ -13,6 +13,7 @@ import {
 import {
   isMfaMandatoryAccount,
   isStaffAccount,
+  sessionNeedsMfaChallenge,
   skipsStaffMfa,
 } from "../shared/mfa-policy.ts";
 import type {
@@ -608,6 +609,34 @@ export function createSessionService({
     return await getAuthContext(tokenHash, () => loadAuthContext(tokenHash));
   }
 
+  /**
+   * The user of a login, for a request made with a narrower credential
+   * bound to it (a push action token from a phone notification): only while
+   * the login is signed in, has not run out, and has no two-factor step
+   * pending, the same rules as a request with the session cookie. Null
+   * otherwise.
+   */
+  async function authenticateSessionById(
+    sessionId: string,
+  ): Promise<{ userId: string } | null> {
+    const tokenHash = await sessionRepository.findSessionTokenHash(
+      database,
+      sessionId,
+    );
+    if (!tokenHash) return null;
+    const context = await getAuthContext(tokenHash, () =>
+      loadAuthContext(tokenHash),
+    );
+    if (!context) return null;
+    const mfaPending = sessionNeedsMfaChallenge({
+      mfaMandatory: context.user.mfaMandatory,
+      totpEnabled: context.user.totpEnabled,
+      passkeyEnabled: context.user.passkeyEnabled,
+      mfaVerified: context.session.mfa_verified,
+    });
+    return mfaPending ? null : { userId: context.user.id };
+  }
+
   async function loadAuthContext(
     tokenHash: string,
   ): Promise<AuthenticatedRequestContext | null> {
@@ -776,6 +805,7 @@ export function createSessionService({
     revokeAllSessions,
     purgeOldSessions,
     authenticate,
+    authenticateSessionById,
     reportPlayback,
     /**
      * Of `sessionIds`, those signed out (logout, sign-out elsewhere,

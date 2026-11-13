@@ -11,6 +11,7 @@ import type {
 
 import { setChatStreamCarriesNotifications } from "../../lib/tabLiveStream";
 import { getChatPrefs, inQuietHours } from "../../store/chatPrefs.store";
+import { setNativeChatOnScreen } from "../../native-bridge";
 import { notificationKeys } from "../notifications";
 import {
   closeChatNotifications,
@@ -90,6 +91,8 @@ function desktopAlertsOn() {
 const visibleRooms = new Set<string>();
 
 export function setChatOnScreen(roomId: string, onScreen: boolean) {
+  // The phone app does not draw pushes for the chat on screen.
+  setNativeChatOnScreen(roomId, onScreen);
   if (onScreen) {
     visibleRooms.add(roomId);
     // Opened here: its notification has been seen.
@@ -429,7 +432,7 @@ function attach(next: EventSource) {
     if (data && client) applyReceipt(client, data, viewer);
     // Read on another device or tab: its notification here can go.
     if (data && data.userId === viewer)
-      void closeChatNotifications(data.roomId);
+      void closeChatNotifications(data.roomId, data.readSeq);
   });
   next.addEventListener("chat.group_read", (event) => {
     const data = parse<ChatStreamGroupReadEvent>(event as MessageEvent<string>);

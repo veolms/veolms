@@ -4,10 +4,17 @@
  * Do not edit directly unless you know what you are doing.
  */
 
+export interface NotificationLaunchData {
+  deepLink?: string | null;
+  notificationId?: string | null;
+  type?: string | null;
+}
+
 export interface PlatformInfo {
   name: Platform;
   version: number;
   release: string;
+  applicationId: string;
 }
 
 export type Platform = "ANDROID" | "IOS";
@@ -16,10 +23,23 @@ export interface IFirebaseContract {
   getInstallationId(): Promise<string>;
 }
 
+export interface INotificationsContract {
+  getLaunchData(): Promise<NotificationLaunchData | null>;
+  setChatOnScreen(
+    roomId?: string | null,
+    onScreen?: boolean | null,
+  ): Promise<void>;
+  closeChatNotification(
+    roomId?: string | null,
+    readSeq?: number | null,
+  ): Promise<void>;
+}
+
 export interface RootBridgeContract {
   platform(): Promise<PlatformInfo>;
 }
 
 export interface NativeBridgeContract extends RootBridgeContract {
   readonly firebase: IFirebaseContract;
+  readonly notifications: INotificationsContract;
 }

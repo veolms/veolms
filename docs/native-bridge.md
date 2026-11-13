@@ -5,10 +5,12 @@ There it can call native functions (platform info, Firebase IDs, permissions,
 notifications, ...) and receive native events. In a plain browser the same
 code runs and simply gets no native answers.
 
-Function names other than `platform()` and `firebase.getInstallationId()`
-in the code below (`media`, events) are examples of the shape, not
-functions the contract has today; check `native-bridge-contracts.d.ts` for
-what exists.
+The contract today has `platform()` (with `applicationId`, the running
+app's package; missing in older builds), `firebase.getInstallationId()`,
+`notifications.getLaunchData()`, `notifications.setChatOnScreen()`,
+`notifications.closeChatNotification()` and the `notificationOpened`
+event. Other names in the code below (`media`, theme events) are examples
+of the shape; check `native-bridge-contracts.d.ts` for what exists.
 
 This guide is the **project's rules**: which API to use for which job, where
 the code goes, and what to watch out for. The SDK's own docs explain every
@@ -260,6 +262,8 @@ native-bridge/
 ├── platform.ts                    getPlatform(), once per page (for logic)
 ├── usePlatform.ts                 usePlatform(), over getPlatform (for rendering)
 ├── firebase.ts                    getInstallationId(), once per page
+├── notifications.ts               getLaunchDataOnce(), useNotificationTaps(),
+│                                  setNativeChatOnScreen(), closeNativeChatNotification()
 ├── useNativeThemeChange.ts        (example) one event
 ├── examples.tsx                   examples only, never imported
 └── index.ts                       the public exports
@@ -355,3 +359,20 @@ Before committing changes under `apps/web`, follow the commit checks in
   uses the same constants; keep it that way (the options are read once).
 - **The demo log** in `Root` (`root.tsx`) and `usePlatform` are there to
   check the setup and may be removed; nothing depends on them.
+
+## Notification taps and chat notifications
+
+- **Taps** (`useNotificationTaps`, used by `notifications/NotificationTapHandler.tsx`
+  in `Root`): subscribes to `notificationOpened` first, then pulls
+  `getLaunchData()` once per page load, so a tap in between is not lost.
+  Calling `getLaunchData()` tells native the page handles taps: later taps
+  arrive as the event instead of a page reload, so the handler must keep
+  working. The link is checked again (one leading `/`, no backslash or
+  whitespace) before React Router opens it; the tapped bell item is marked
+  read once the session check says the visitor is signed in.
+- **Chat on screen** (`setNativeChatOnScreen`, from `services/chat`
+  `setChatOnScreen`): native skips pushes for the chat that is open.
+  Native forgets it on every page load.
+- **Chat read** (`closeNativeChatNotification`, from `services/webPush`
+  `closeChatNotifications`): removes the chat's phone notification, up to
+  `readSeq` when the read event carries it.

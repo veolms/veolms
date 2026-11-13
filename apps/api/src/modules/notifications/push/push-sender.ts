@@ -1,8 +1,10 @@
+import { PUSH_ACTION_DATA_KEYS } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
 
 import type { FcmClient, FcmOutcome } from "./fcm.client.ts";
+import type { PushActionTokenService } from "./push-action-tokens.service.ts";
 import type { PushApp, PushAppRegistry } from "./push-apps.ts";
 import * as deliveryRepository from "./push-deliveries.repository.ts";
 import * as deviceRepository from "./push-devices.repository.ts";
@@ -98,6 +100,7 @@ export function createPushSender({
   web = null,
   logger,
   sessions,
+  actionTokens,
   config,
   now = () => new Date(),
 }: {
@@ -108,6 +111,8 @@ export function createPushSender({
   web?: WebPushClient | null;
   logger: FastifyBaseLogger;
   sessions?: RevokedSessionLookup;
+  /** Reply / mark-as-read tokens in chat pushes to phones. */
+  actionTokens?: Pick<PushActionTokenService, "issueForChatPush" | "deleteOld">;
   config: {
     batchSize: number;
     leaseSeconds: number;
@@ -170,6 +175,53 @@ export function createPushSender({
     return {
       kept: devices.filter((device) => !gone.includes(device)),
       removed,
+    };
+  }
+
+  /**
+   * A chat push to an Android phone carries its own push action token
+   * (reply / mark as read from the notification), issued now, for this
+   * phone and its login. Without one (no login on record, push actions
+   * off, an error) the push goes out without, and the app shows no buttons.
+   * A message request gets none: accepting a stranger from the notification
+   * shade is too easy, so it only opens the chat.
+   */
+  async function withActionToken(
+    payload: PushPayload,
+    device: DeviceRow,
+  ): Promise<PushPayload> {
+    if (
+      !actionTokens ||
+      payload.kind !== "chat_message" ||
+      payload.data.isRequest === "true" ||
+      device.platform !== "android" ||
+      !device.session_id
+    ) {
+      return payload;
+    }
+    const roomId = payload.data.roomId;
+    const seq = Number(payload.data.seq);
+    if (!roomId || !Number.isSafeInteger(seq)) return payload;
+    const issued = await actionTokens
+      .issueForChatPush({
+        userId: device.user_id,
+        deviceId: device.id,
+        sessionId: device.session_id,
+        roomId,
+        seq,
+      })
+      .catch((error: unknown) => {
+        log.warn({ err: error }, "Could not issue a push action token");
+        return null;
+      });
+    if (!issued) return payload;
+    return {
+      ...payload,
+      data: {
+        ...payload.data,
+        [PUSH_ACTION_DATA_KEYS.token]: issued.token,
+        [PUSH_ACTION_DATA_KEYS.expiresAt]: issued.expiresAt.toISOString(),
+      },
     };
   }
 
@@ -282,7 +334,9 @@ export function createPushSender({
       const targets = (devicesByUser.get(delivery.user_id) ?? []).filter(
         (device) =>
           (pending === null || pending.has(device.id)) &&
-          (device.platform !== "web" || delivery.source === "chat"),
+          (device.platform !== "web" || delivery.source === "chat") &&
+          // "Chat read" clears what the Android app drew itself.
+          (parsed.data.kind !== "chat_read" || device.platform === "android"),
       );
       if (targets.length === 0) {
         // Never started: the user has no install now. Started: the
@@ -327,7 +381,7 @@ export function createPushSender({
         return await fcm.send(
           account,
           buildFcmMessage({
-            payload: task.payload,
+            payload: await withActionToken(task.payload, task.device),
             fid: task.device.fid,
             platform: task.device.platform,
             targetField: config.targetField,
@@ -480,6 +534,12 @@ export function createPushSender({
       database,
       new Date(at.getTime() - retentionDays * 24 * 60 * 60 * 1000),
     );
+    const tokensRemoved = actionTokens
+      ? await actionTokens.deleteOld().catch((error: unknown) => {
+          log.warn({ err: error }, "Could not delete old push action tokens");
+          return 0;
+        })
+      : 0;
 
     // Installs whose login was signed out but that got no push since (the
     // send-time check catches the rest): before old sessions are purged
@@ -513,8 +573,11 @@ export function createPushSender({
       }
     }
 
-    if (devicesRemoved > 0 || deliveriesRemoved > 0) {
-      log.info({ devicesRemoved, deliveriesRemoved }, "Push upkeep done");
+    if (devicesRemoved > 0 || deliveriesRemoved > 0 || tokensRemoved > 0) {
+      log.info(
+        { devicesRemoved, deliveriesRemoved, tokensRemoved },
+        "Push upkeep done",
+      );
     }
     return { devicesRemoved, deliveriesRemoved };
   }

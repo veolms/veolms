@@ -252,6 +252,8 @@ interface FcmV1Message {
       body?: string;
       channel_id?: string;
       notification_priority?: string;
+      default_sound?: boolean;
+      default_vibrate_timings?: boolean;
       tag?: string;
     };
   };
@@ -311,6 +313,12 @@ export function toAdminMessage(raw: Record<string, unknown>): Message {
                 .replace(/^PRIORITY_/u, "")
                 .toLowerCase() as AndroidNotificationPriority,
             }
+          : {}),
+        ...(notification.default_sound !== undefined
+          ? { defaultSound: notification.default_sound }
+          : {}),
+        ...(notification.default_vibrate_timings !== undefined
+          ? { defaultVibrateTimings: notification.default_vibrate_timings }
           : {}),
         ...(notification.tag !== undefined ? { tag: notification.tag } : {}),
       };

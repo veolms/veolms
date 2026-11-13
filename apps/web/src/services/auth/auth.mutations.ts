@@ -45,6 +45,7 @@ import {
 } from "../../store/pendingMfaLogin";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { forgetAccountBrowserState } from "../../store/accountBrowserState";
+import { unregisterThisPushDevice } from "../notifications";
 import { loadWebPush, readSavedWebPush } from "../webPush";
 import { authKeys } from "./auth.keys";
 import { updatePublicProfileCacheFromUser } from "./auth.queries";
@@ -625,16 +626,24 @@ export function useSignOut() {
       setIsPending(false);
     }
 
-    // This browser stops getting the account's chat notifications. Told
-    // while the session still holds; at most ~2 s, and the server drops a
-    // signed-out login's subscriptions anyway.
+    // This browser stops getting the account's chat notifications, and
+    // this phone (inside the native app) the account's pushes. Told while
+    // the session still holds, side by side; at most ~2 s, and the server
+    // drops a signed-out login's subscriptions and pushes anyway. Nothing
+    // to wait for in a plain browser without web push.
+    const forgetting: Promise<unknown>[] = [
+      unregisterThisPushDevice(2_000).catch(() => undefined),
+    ];
     if (readSavedWebPush()) {
       setIsPending(true);
-      await loadWebPush()
-        .then((webPush) => webPush.forgetWebPush())
-        .catch(() => undefined);
-      setIsPending(false);
+      forgetting.push(
+        loadWebPush()
+          .then((webPush) => webPush.forgetWebPush())
+          .catch(() => undefined),
+      );
     }
+    await Promise.all(forgetting);
+    setIsPending(false);
 
     const previousUser =
       queryClient.getQueryData<CurrentUserResponse>(authKeys.me()) ?? null;

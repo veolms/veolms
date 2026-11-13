@@ -95,6 +95,9 @@ await test("an Android notification names its channel and the 7.x priority", () 
   assert.equal(android.ttl, "3600s");
   assert.equal(android.notification.channel_id, "purchases");
   assert.equal(android.notification.notification_priority, "PRIORITY_DEFAULT");
+  // Android 7.x has no channels: the system plays the default sound.
+  assert.equal(android.notification.default_sound, true);
+  assert.equal(android.notification.default_vibrate_timings, undefined);
   const data = message.data as Record<string, string>;
   assert.equal(data.deepLink, "/orders");
   assert.equal(data.kind, "notification");
@@ -700,4 +703,99 @@ await test("push counts as set up only when on and an app is listed", async () =
     isPushConfigured({ ...web, PUSH_ENABLED: true, PUSH_APPS: undefined }),
     false,
   );
+});
+
+const hasLoneSurrogate = (text: string) =>
+  /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u.test(
+    text,
+  );
+
+await test("long chat text is never cut in the middle of an emoji", () => {
+  // 499 letters, then emoji: a cut by UTF-16 units lands inside one.
+  const text = `${"a".repeat(498)}${"😀".repeat(10)}`;
+  const [delivery] = chatPushDeliveries(
+    {
+      roomId: "r1",
+      roomKind: "direct",
+      roomTitle: "Asha",
+      messageId: "m1",
+      seq: 1,
+      senderId: "s1",
+      senderName: "Asha",
+      text,
+      sentAt: now,
+      isRequest: false,
+      recipients: [{ userId: "u1", isMention: false, unreadCount: 1 }],
+    },
+    new Set(["u1"]),
+    now,
+  );
+  const payload = delivery!.payload as unknown as PushPayload;
+  assert.ok(payload.data.text!.endsWith("…"));
+  assert.equal(hasLoneSurrogate(payload.data.text!), false);
+  assert.equal(hasLoneSurrogate(payload.body), false);
+});
+
+await test("a long non-Latin push fits FCM's 4 KB, and a notification's text is sent once", () => {
+  const hindi = "नमस्ते दुनिया ".repeat(80); // 3 bytes a character
+  for (const platform of ["android", "ios"] as const) {
+    const { message } = buildFcmMessage({
+      payload: {
+        ...notificationPayload,
+        title: hindi.slice(0, 200),
+        body: hindi.slice(0, 1000),
+      },
+      fid,
+      platform,
+      targetField: "fid",
+      expiresAt: new Date(now.getTime() + 60_000),
+      now,
+    });
+    assert.ok(
+      Buffer.byteLength(JSON.stringify(message), "utf8") <= 4096,
+      `${platform} message fits`,
+    );
+    const data = message.data as Record<string, string>;
+    assert.equal(data.title, undefined, "the app reads the notification block");
+    assert.equal(data.body, undefined);
+    assert.equal(data.androidChannelId, undefined);
+    assert.equal(data.kind, "notification");
+    assert.equal(data.deepLink, "/orders");
+  }
+
+  const { message: chat } = buildFcmMessage({
+    payload: {
+      ...notificationPayload,
+      kind: "chat_message",
+      androidChannelId: "chat_messages",
+      importance: "HIGH",
+      androidDataOnly: true,
+      threadId: "chat:r1",
+      title: hindi.slice(0, 200),
+      body: hindi.slice(0, 1000),
+      data: {
+        roomId: "r1",
+        roomTitle: hindi.slice(0, 200),
+        senderName: hindi.slice(0, 200),
+        text: hindi.slice(0, 500),
+        seq: "7",
+      },
+    },
+    fid,
+    platform: "android",
+    targetField: "fid",
+    expiresAt: new Date(now.getTime() + 60_000),
+    now,
+  });
+  assert.ok(Buffer.byteLength(JSON.stringify(chat), "utf8") <= 4096);
+  const data = chat.data as Record<string, string>;
+  assert.ok(
+    data.title && data.body && data.text,
+    "the app draws chat from data",
+  );
+  assert.equal(data.androidChannelId, "chat_messages");
+  assert.equal(data.seq, "7");
+  for (const value of Object.values(data)) {
+    assert.equal(hasLoneSurrogate(value), false);
+  }
 });

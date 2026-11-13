@@ -38,6 +38,7 @@ export function createReceiptsBatcher({
   repository,
   receiptsOff = async (_db, profiles) =>
     new Set(profiles.filter((p) => !p.read_receipts).map((p) => p.user_id)),
+  onReadAdvanced,
   logger,
 }: {
   database: Executor;
@@ -47,6 +48,14 @@ export function createReceiptsBatcher({
     db: Executor,
     profiles: readonly { user_id: string; read_receipts: boolean }[],
   ) => Promise<Set<string>>;
+  /**
+   * Read positions that moved, once written: the one place every way of
+   * reading a chat ends up (push action tokens go stale, phones clear the
+   * chat's notification). A failure here loses only that clean-up.
+   */
+  onReadAdvanced?: (
+    reads: { userId: string; roomId: string; readSeq: number }[],
+  ) => Promise<void>;
   logger: { warn(object: object, message: string): void };
 }): ReceiptsBatcher {
   let pending = new Map<string, Pending>();
@@ -98,6 +107,20 @@ export function createReceiptsBatcher({
           row.kind === "direct" ||
           readMoved.has(`${row.room_id}|${row.user_id}`),
       );
+      if (onReadAdvanced) {
+        const reads = rows
+          .filter((row) => readMoved.has(`${row.room_id}|${row.user_id}`))
+          .map((row) => ({
+            userId: row.user_id,
+            roomId: row.room_id,
+            readSeq: Number(row.last_read_seq),
+          }));
+        if (reads.length > 0) {
+          await onReadAdvanced(reads).catch((error: unknown) =>
+            logger.warn({ err: error }, "Chat read clean-up failed"),
+          );
+        }
+      }
       if (told.length === 0) continue;
       await repository.publish(
         database,
