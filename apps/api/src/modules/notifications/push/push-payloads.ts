@@ -5,6 +5,7 @@ import {
 } from "@veolms/contracts";
 import type { Json } from "@veolms/database";
 
+import { clampText } from "../../../lib/text.ts";
 import type { ChatMessagePush } from "../notifications.types.ts";
 import type { NewPushDelivery } from "./push-deliveries.repository.ts";
 import type { PushPayload } from "./push-message.ts";
@@ -13,8 +14,9 @@ import type { PushPayload } from "./push-message.ts";
 export const CHAT_MESSAGE_PUSH_TYPE = "chat.message";
 
 function clip(text: string, max: number): string {
-  const single = text.replace(/\s+/gu, " ").trim();
-  return single.length > max ? `${single.slice(0, max - 1)}…` : single;
+  // Never cuts an emoji in half: a lone surrogate is refused in jsonb, and
+  // would fail the whole push.
+  return clampText(text.replace(/\s+/gu, " ").trim(), max);
 }
 
 /** Whether a notification of `type` is pushed at all. */

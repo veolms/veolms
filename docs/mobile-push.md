@@ -80,8 +80,10 @@ Descriptions are in `push-channels.ts`.
 
 ## 3. What arrives
 
-Every message's `data` (all values are strings) has `kind`, `title`, `body`
-and `androidChannelId`, plus:
+Every message's `data` (all values are strings) has `kind`. Chat messages
+also carry `title`, `body` and `androidChannelId` there (the app draws them);
+notifications carry them only in the notification block. Text is cut to keep
+the whole message under FCM's 4096-byte limit. Plus:
 
 ### Notifications (`kind = "notification"`)
 
