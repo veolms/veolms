@@ -65,25 +65,32 @@ export function PdfFirstPage({
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(() => drawn.get(attachment.id) ?? null);
   const [failed, setFailed] = useState(false);
+  // The newest props, read when the card comes into view: the watcher is
+  // set up once per file, not again on every re-render of the chat (which
+  // kept tearing it down before it could fire).
+  const latest = useRef({ attachment, onPages });
+  latest.current = { attachment, onPages };
+  const fileId = attachment.id;
+  const tooBig = attachment.size > MAX_BYTES;
 
   useEffect(() => {
     if (shown) {
-      onPages(shown.pages);
+      latest.current.onPages(shown.pages);
       return;
     }
     const box = ref.current;
-    if (!box || attachment.size > MAX_BYTES) return;
+    if (!box || tooBig) return;
     let cancelled = false;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry?.isIntersecting) return;
         observer.disconnect();
-        drawFirstPage(attachment)
+        drawFirstPage(latest.current.attachment)
           .then((result) => {
-            drawn.set(attachment.id, result);
+            drawn.set(fileId, result);
             if (!cancelled) {
               setShown(result);
-              onPages(result.pages);
+              latest.current.onPages(result.pages);
             }
           })
           .catch(() => {
@@ -97,7 +104,7 @@ export function PdfFirstPage({
       cancelled = true;
       observer.disconnect();
     };
-  }, [attachment, shown, onPages]);
+  }, [fileId, tooBig, shown]);
 
   if (failed || attachment.size > MAX_BYTES) return null;
   return (
