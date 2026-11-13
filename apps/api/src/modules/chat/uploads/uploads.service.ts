@@ -138,8 +138,19 @@ export function createUploadsService(
     };
   }
 
-  function diskName(upload: { id: string; mime_type: string }) {
-    return `${upload.id}${EXTENSIONS[upload.mime_type] ?? ".bin"}`;
+  /**
+   * The file's name on disk (development, no object storage): the stored
+   * object's, so a forwarded copy (its own row, same object) finds it.
+   */
+  function diskName(upload: {
+    id: string;
+    mime_type: string;
+    storage_key?: string;
+  }) {
+    return (
+      upload.storage_key?.split("/").pop() ??
+      `${upload.id}${EXTENSIONS[upload.mime_type] ?? ".bin"}`
+    );
   }
 
   function present(upload: {
