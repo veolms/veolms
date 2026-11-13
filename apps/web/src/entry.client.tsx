@@ -3,10 +3,15 @@ import { flushSync } from "react-dom";
 import { hydrateRoot } from "react-dom/client";
 import { HydratedRouter } from "react-router/dom";
 import { prepareDocumentForHydration } from "./bootstrap/documentHydration";
+import { clearOversizedCookies } from "./bootstrap/oversizedCookies";
 import {
   loginDialogBody,
   preloadPrerenderedBodies,
 } from "./routing/prerenderedBodies";
+
+// Before the first API call: an overgrown cookie jar made every call fail
+// (see bootstrap/oversizedCookies.ts).
+clearOversizedCookies();
 
 const hydrateApplication = () => {
   // Extensions such as Dark Mode mutate the SSR document at document_start
