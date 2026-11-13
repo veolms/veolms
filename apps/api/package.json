@@ -46,6 +46,7 @@
     "@veolms/web-core": "workspace:*",
     "fastify": "^5.11.0",
     "fastify-type-provider-zod": "^7.0.0",
+    "firebase-admin": "14.5.0",
     "google-auth-library": "^11.1.0",
     "kysely": "catalog:",
     "nodemailer": "^9.0.5",

@@ -77,6 +77,7 @@ import { AuthPageFrame } from "./auth/AuthPageFrame";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
 import { AnalyticsPageViews } from "./lib/AnalyticsPageViews";
 import { AnalyticsIdentity } from "./lib/AnalyticsIdentity";
+import { PushDeviceRegistration } from "./notifications/PushDeviceRegistration";
 import {
   OAUTH_REDIRECT_RESULT_STORAGE_KEY,
   getOauthDialogReturnScript,
@@ -95,7 +96,7 @@ import { NativeBridgeProvider } from "@veolms/react-webview-bridge";
 import {
   NATIVE_BRIDGE_NAME,
   NATIVE_BRIDGE_OPTIONS,
-  nativeBridge,
+  getPlatform,
 } from "./native-bridge";
 
 interface LayoutProps {
@@ -447,7 +448,7 @@ function useNativePlatformLog() {
   useEffect(() => {
     if (asked.current) return;
     asked.current = true;
-    nativeBridge.platform().then(
+    getPlatform().then(
       (platform) =>
         platform
           ? console.log("[NativeBridge] platform()", platform)
@@ -558,6 +559,7 @@ export default function Root() {
         <GlobalGoogleOneTap />
         <AnalyticsPageViews />
         <AnalyticsIdentity />
+        <PushDeviceRegistration />
         <Outlet />
       </SessionInitializer>
     </QueryProvider>
