@@ -182,13 +182,19 @@ export function createRoomViews(runtime: ChatRuntime) {
   ): Promise<ChatRoomSummary[]> {
     const directIds = rows.filter((r) => r.kind === "direct").map((r) => r.id);
     const groupIds = rows.filter((r) => r.kind !== "direct").map((r) => r.id);
-    const [peers, blocks, groups] = await Promise.all([
+    const [peers, blocks, groups, reactions] = await Promise.all([
       repository.listDirectPeers(db, userId, directIds),
       directIds.length > 0
         ? repository.listBlocksInvolving(db, userId)
         : Promise.resolve([]),
       repository.groupPositions(db, groupIds),
+      repository.latestReactions(
+        db,
+        userId,
+        rows.map((r) => r.id),
+      ),
     ]);
+    const reactionByRoom = new Map(reactions.map((r) => [r.room_id, r]));
     const peerByRoom = new Map(peers.map((p) => [p.room_id, p]));
     const groupByRoom = new Map(groups.map((g) => [g.room_id, g]));
     // Read receipts are reciprocal in private chats (WhatsApp): off on
@@ -291,6 +297,25 @@ export function createRoomViews(runtime: ChatRuntime) {
                 createdAt: (row.lm_created_at ?? new Date()).toISOString(),
               },
         lastMessageAt: row.last_message_at?.toISOString() ?? null,
+        lastReaction: (() => {
+          const reaction = reactionByRoom.get(row.id);
+          // Shown while it is newer than the last message, as in WhatsApp.
+          if (
+            !reaction ||
+            (row.lm_created_at && reaction.created_at <= row.lm_created_at)
+          ) {
+            return null;
+          }
+          return {
+            emoji: reaction.emoji,
+            byId: reaction.user_id,
+            byName: reaction.user_deleted ? "Deleted user" : reaction.user_name,
+            preview: reaction.body
+              ? preview(reaction.body)
+              : attachmentLabel(reaction.attachments),
+            at: reaction.created_at.toISOString(),
+          };
+        })(),
         unreadCount: Math.max(0, lastSeq - lastReadSeq),
         // A request not accepted yet shows no ticks either way: opening it
         // is not answering it.

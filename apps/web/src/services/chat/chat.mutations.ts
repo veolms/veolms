@@ -114,7 +114,11 @@ export function useReactToMessage() {
         };
       });
     },
-    onSuccess: ({ message }) => apply(message),
+    onSuccess: ({ message }) => {
+      apply(message);
+      // "You reacted 👍 to: …" in the chat list.
+      void client.invalidateQueries({ queryKey: chatKeys.rooms() });
+    },
   });
 }
 

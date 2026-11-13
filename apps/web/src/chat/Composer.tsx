@@ -51,6 +51,15 @@ import { isTouchOnlyDevice, useChatPrefs } from "../store/chatPrefs.store";
 import { ChatFileError, prepareFile } from "./chatMedia";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
+import {
+  continueList,
+  shortcutFor,
+  toggleInline,
+  toggleLines,
+  type InlineMark,
+  type LineMark,
+} from "./composerFormat";
+import { FormatBar } from "./FormatBar";
 import { MediaStage } from "./MediaStage";
 import { tidyDictation, useDictation } from "./useDictation";
 import { quoteMediaOf, ReplyQuoteBody } from "./ReplyQuote";
@@ -121,6 +130,8 @@ export const Composer = forwardRef<
   /** The chat the files on screen belong to (kept as its draft). */
   const filesRoomRef = useRef(room.id);
   const prefs = useChatPrefs();
+  /** Text selected in the box: the formatting bar shows. */
+  const [hasSelection, setHasSelection] = useState(false);
   const [mentions, setMentions] = useState<Map<string, string>>(new Map());
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -309,6 +320,23 @@ export const Composer = forwardRef<
     requestAnimationFrame(() => {
       area?.focus({ preventScroll: true });
       area?.setSelectionRange(before.length, before.length);
+    });
+  }
+
+  /** Applies a WhatsApp format to the selection (or at the caret). */
+  function applyFormat(mark: InlineMark | LineMark) {
+    const area = textareaRef.current;
+    if (!area) return;
+    const start = area.selectionStart;
+    const end = area.selectionEnd;
+    const edited =
+      mark === "bullet" || mark === "number" || mark === "quote"
+        ? toggleLines(text, start, end, mark)
+        : toggleInline(text, start, end, mark);
+    updateText(edited.text);
+    requestAnimationFrame(() => {
+      area.focus({ preventScroll: true });
+      area.setSelectionRange(edited.start, edited.end);
     });
   }
 
@@ -514,6 +542,8 @@ export const Composer = forwardRef<
         </div>
       ) : null}
 
+      {hasSelection && !emojiOpen ? <FormatBar onFormat={applyFormat} /> : null}
+
       {emojiOpen ? (
         <EmojiPanel
           // WhatsApp: the panel spans the chat above the message box.
@@ -650,7 +680,44 @@ export const Composer = forwardRef<
                 event.preventDefault();
                 void addFiles([...event.dataTransfer.files]);
               }}
+              onSelect={(event) => {
+                const area = event.currentTarget;
+                setHasSelection(area.selectionStart !== area.selectionEnd);
+              }}
+              onBlur={() => setHasSelection(false)}
               onKeyDown={(event) => {
+                // WhatsApp's formatting keys: Ctrl/⌘+B, I, Shift+X, Shift+M…
+                const format = shortcutFor(event);
+                if (format) {
+                  event.preventDefault();
+                  applyFormat(format);
+                  return;
+                }
+                const sending =
+                  event.key === "Enter" &&
+                  (enterToSend
+                    ? !event.shiftKey
+                    : event.ctrlKey || event.metaKey);
+                // A new line in a list or quote carries it on.
+                if (
+                  event.key === "Enter" &&
+                  !sending &&
+                  !event.nativeEvent.isComposing &&
+                  mentionQuery === null
+                ) {
+                  const area = event.currentTarget;
+                  if (area.selectionStart === area.selectionEnd) {
+                    const next = continueList(text, area.selectionStart);
+                    if (next) {
+                      event.preventDefault();
+                      updateText(next.text);
+                      requestAnimationFrame(() =>
+                        area.setSelectionRange(next.caret, next.caret),
+                      );
+                      return;
+                    }
+                  }
+                }
                 if (
                   event.key === "Enter" &&
                   !event.shiftKey &&

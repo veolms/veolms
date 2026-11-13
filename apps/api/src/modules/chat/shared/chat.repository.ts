@@ -457,6 +457,44 @@ export function createChatRepository() {
         .execute()) as RoomListRow[];
     },
 
+    /**
+     * Each chat's newest reaction that concerns `userId` (theirs, or to their
+     * message), on a message still there and not cleared for them.
+     */
+    async latestReactions(
+      db: Executor,
+      userId: string,
+      roomIds: readonly string[],
+    ) {
+      if (roomIds.length === 0) return [];
+      const result = await sql<{
+        room_id: string;
+        emoji: string;
+        created_at: Date;
+        user_id: string;
+        user_name: string;
+        user_deleted: boolean;
+        body: string;
+        attachments: Array<{ kind: string; name: string }> | null;
+      }>`
+        select distinct on (r.room_id)
+          r.room_id, r.emoji, r.created_at, r.user_id,
+          u.display_name as user_name, u.is_deleted as user_deleted,
+          m.body, m.attachments
+        from chat_reactions r
+        join chat_messages m on m.room_id = r.room_id and m.seq = r.seq
+        join users u on u.id = r.user_id
+        left join chat_members cm
+          on cm.room_id = r.room_id and cm.user_id = ${userId}::uuid
+        where r.room_id in (${sql.join(roomIds.map((id) => sql`${id}::uuid`))})
+          and m.deleted_at is null
+          and m.seq > coalesce(cm.cleared_seq, 0)
+          and (r.user_id = ${userId}::uuid or m.sender_id = ${userId}::uuid)
+        order by r.room_id, r.created_at desc
+      `.execute(db);
+      return result.rows;
+    },
+
     async listDirectPeers(
       db: Executor,
       userId: string,

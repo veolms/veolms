@@ -1278,4 +1278,36 @@ await test("forward: copies arrive in order, marked Forwarded, with the sender's
   );
 });
 
+await test('the chat list shows a newer reaction to your message, as WhatsApp\'s "Reacted 👍 to: …"', async () => {
+  const mine = ok<{ message: Message }>(
+    await send(admin, roomId, "React to this one"),
+    201,
+  ).message;
+  ok(
+    await a.client.put(
+      `/v1/chat/rooms/${roomId}/messages/${mine.seq}/reaction`,
+      { emoji: "🔥" },
+    ),
+  );
+  type Listed = Room & {
+    lastReaction?: {
+      emoji: string;
+      byId: string;
+      preview: string;
+    } | null;
+  };
+  const listed = ok<{ rooms: Listed[] }>(
+    await admin.get("/v1/chat/rooms"),
+  ).rooms.find((r) => r.id === roomId);
+  assert.equal(listed?.lastReaction?.emoji, "🔥");
+  assert.equal(listed?.lastReaction?.byId, a.userId);
+  assert.equal(listed?.lastReaction?.preview, "React to this one");
+  // A newer message takes its place again.
+  ok(await send(admin, roomId, "And a new message"), 201);
+  const after = ok<{ rooms: Listed[] }>(
+    await admin.get("/v1/chat/rooms"),
+  ).rooms.find((r) => r.id === roomId);
+  assert.equal(after?.lastReaction ?? null, null);
+});
+
 await flow.close();

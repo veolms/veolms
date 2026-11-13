@@ -300,6 +300,21 @@ export const chatRoomSummarySchema = z.object({
     })
     .nullable(),
   lastMessageAt: isoDate.nullable(),
+  /**
+   * WhatsApp's "Reacted 👍 to: …" in the chat list: the newest reaction by
+   * you or to your message, when newer than the last message.
+   */
+  lastReaction: z
+    .object({
+      emoji: z.string(),
+      byId: z.uuid(),
+      byName: z.string(),
+      /** The message reacted to, as one line. */
+      preview: z.string(),
+      at: isoDate,
+    })
+    .nullable()
+    .optional(),
   unreadCount: z.number().int(),
   /**
    * How far the others have received and read your messages (the ticks).
