@@ -22,7 +22,7 @@ const importanceSchema = z.enum(["HIGH", "DEFAULT", "LOW", "MIN"]);
 
 export const pushPayloadSchema = z.object({
   v: z.literal(1),
-  kind: z.enum(["notification", "chat_message"]),
+  kind: z.enum(["notification", "chat_message", "chat_read"]),
   title: z.string().min(1).max(200),
   body: z.string().min(1).max(1000),
   androidChannelId: z.string().min(1).max(100),
@@ -140,6 +140,14 @@ export function buildFcmMessage(input: {
               channel_id: payload.androidChannelId,
               notification_priority:
                 ANDROID_PRIORITY_FOR_IMPORTANCE[payload.importance],
+              // Android 7.x has no channels: without these a notification
+              // the system draws plays nothing. Android 8+ uses the
+              // channel's sound and vibration and ignores them.
+              ...(payload.importance === "HIGH" ||
+              payload.importance === "DEFAULT"
+                ? { default_sound: true }
+                : {}),
+              ...(urgent ? { default_vibrate_timings: true } : {}),
               ...(payload.collapseKey ? { tag: payload.collapseKey } : {}),
             },
           }),

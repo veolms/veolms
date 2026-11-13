@@ -95,6 +95,9 @@ await test("an Android notification names its channel and the 7.x priority", () 
   assert.equal(android.ttl, "3600s");
   assert.equal(android.notification.channel_id, "purchases");
   assert.equal(android.notification.notification_priority, "PRIORITY_DEFAULT");
+  // Android 7.x has no channels: the system plays the default sound.
+  assert.equal(android.notification.default_sound, true);
+  assert.equal(android.notification.default_vibrate_timings, undefined);
   const data = message.data as Record<string, string>;
   assert.equal(data.deepLink, "/orders");
   assert.equal(data.kind, "notification");

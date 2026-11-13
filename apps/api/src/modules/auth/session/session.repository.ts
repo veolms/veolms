@@ -444,3 +444,16 @@ export async function clearPlaybackClaim(
     .where("id", "=", sessionId)
     .execute();
 }
+
+/** A login's token hash, to authenticate it by id (push action tokens). */
+export async function findSessionTokenHash(
+  database: Executor,
+  sessionId: string,
+): Promise<string | null> {
+  const row = await database
+    .selectFrom("sessions")
+    .select("token_hash")
+    .where("id", "=", sessionId)
+    .executeTakeFirst();
+  return row?.token_hash ?? null;
+}

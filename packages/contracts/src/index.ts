@@ -18,6 +18,7 @@ export * from "./interactions/index.ts";
 export * from "./notification.ts";
 export * from "./notification-types.ts";
 export * from "./push.ts";
+export * from "./push-actions.ts";
 export * from "./push-channels.ts";
 export * from "./learning-goals.ts";
 export * from "./learning-history.ts";

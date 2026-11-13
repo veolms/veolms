@@ -25,7 +25,7 @@ PUT /v1/me/push-devices
 {
   "fid": "cXk7Hb3sR2mZ8a1bC4dE5f",
   "previousFid": "…",            // only when the FID changed
-  "applicationId": "com.procodrr.app",   // package name / bundle id
+  "applicationId": "org.veolms.app",     // the running app's package name / bundle id
   "platform": "android",         // or "ios"
   "appVersion": "1.4.0",         // optional
   "deviceLabel": "Pixel 7",      // optional
@@ -35,16 +35,25 @@ PUT /v1/me/push-devices
 → 400 PUSH_APP_UNKNOWN: this applicationId is not set up on the server
 ```
 
-On **logout**, before clearing the session:
+There is more than one app: the community app (`org.veolms.app`) and any
+number of whitelabel apps, each with its own package name. The web app,
+inside the app's WebView, makes this call (native code never has the
+session): it sends `platform().applicationId` from the bridge, which
+picks the Firebase project in `PUSH_APPS`; a wrong one would fail every
+send. Builds without that field fall back to `VITE_NATIVE_APP_ID`;
+without either, nothing is registered.
+
+On **sign-out**, the web app removes the phone first, while the session
+still holds (at most 2 s; the server stops pushes to a signed-out login
+anyway):
 
 ```
 DELETE /v1/me/push-devices/:fid      → 200 { "data": { "removed": true } }
 ```
 
-then delete the Firebase installation
-(`FirebaseInstallations.getInstance().delete()`), which gives a fresh FID.
-Offline at logout: keep an "unregister pending" flag and do both at the next
-start.
+The Firebase installation is **not** reset: in the community app one FID
+is registered with several academies, and a new FID would silently break
+pushes from all the others.
 
 Rules the server applies: one row per FID (the latest login owns the phone),
 10 phones per account (the least recently seen goes), rows unseen for 270
@@ -119,9 +128,23 @@ groups). Not shown when that chat is open on screen.
 | `isRequest`              | `"true"` for a first message from someone not yet accepted           |
 | `unreadCount`            | Unread messages in that chat for the reader (max 99)                 |
 | `deepLink`               | `/chat/<roomId>?seq=<seq>`                                           |
+| `actionToken`            | Android only: the token for Reply / Mark as read (section 5)         |
+| `actionTokenExpiresAt`   | ISO time the token stops working                                     |
 
 iOS gets an alert for both kinds (`thread-id` = the channel group, or
 `chat:<roomId>` for chats, so a chat's messages stack).
+
+### Chat read (`kind = "chat_read"`)
+
+Android only, **data-only, normal priority**: the chat was read up to
+`readSeq` (in the web app, on another device, or with Mark as read), so
+remove its notification lines up to there. Sent only to the phones that
+got a push for that chat that this read makes old.
+
+| data key  | Meaning                 |
+| --------- | ----------------------- |
+| `roomId`  | The chat                |
+| `readSeq` | Read up to this message |
 
 ## 4. Who gets a chat push
 
@@ -139,7 +162,53 @@ Browsers get the same chat pushes through Web Push (see
 [web-push.md](web-push.md)): they are `push_devices` rows with platform
 `web` in the same queue. Phone apps are unaffected.
 
-## 5. Settings for push per type
+## 5. Reply and Mark as read from a chat notification
+
+A chat notification's Reply and Mark as read buttons run in the app's
+native code, often with no WebView, and native code never gets the
+session. Each chat push to an Android phone therefore carries
+`actionToken`: random, single use, bound to that user, phone, login and
+chat, valid for `PUSH_ACTION_TOKEN_TTL_HOURS` (48). The server keeps only
+its SHA-256. Keep it in app-private storage (not in the notification's
+extras), the newest `seq` per chat winning; show the buttons only while
+one is valid.
+
+```
+POST /v1/push-actions/chat/reply
+Authorization: PushAction pat_...
+{ "clientId": "<uuid>", "body": "On my way" }
+→ 201 { "message": { "seq": 7, "sentAt": "…" }, "nextToken": "pat_…", "nextTokenExpiresAt": "…" }
+→ 200 the same: this clientId was already sent with this token (a fresh nextToken)
+
+POST /v1/push-actions/chat/read
+Authorization: PushAction pat_...
+→ 200 { "readSeq": 5 }
+```
+
+No cookie is read on these routes. Retry a reply with the **same token and
+clientId**: it is sent once. Errors:
+
+| Answer                         | Meaning; what the app does                               |
+| ------------------------------ | -------------------------------------------------------- |
+| 401 `PUSH_ACTION_INVALID`      | Used, replaced by a newer push, read elsewhere: drop it  |
+| 401 `PUSH_ACTION_EXPIRED`      | Expired: drop it, "Open the chat to reply"               |
+| 401 `PUSH_ACTION_SIGNED_OUT`   | The login was signed out or ran out: drop all, "Sign in" |
+| 409 `PUSH_ACTION_STALE`        | Read since the push: remove the notification             |
+| 403 / 429 (chat rules, limits) | Not spent: keep the token, show the message              |
+
+The checks: token (scope, not used, not revoked, not expired), the login
+as for any request with the cookie (signed in, not expired, no two-factor
+step pending), not read since the push, then every chat rule of the normal
+send. Limits: 10 replies per 10 s per user. A reply returns the token for
+the next reply; Mark as read does not. A chat read anywhere revokes its
+tokens and sends the phones a silent `chat_read` push. Off
+(`PUSH_ACTIONS_ENABLED=false`), pushes carry no token.
+
+The community app hosts several academies, each with its own API; a token
+works only on the API that issued it. Until pushes say which academy they
+belong to, the community app shows no Reply buttons.
+
+## 6. Settings for push per type
 
 The app saves switches with the existing endpoint, channel `push`:
 
@@ -150,7 +219,7 @@ PUT /v1/notification-preferences
 
 Security notices are mandatory and ignore switches.
 
-## 6. Server setup (ops)
+## 7. Server setup (ops)
 
 | Setting                         | Default          |                                                                                                                                                  |
 | ------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -162,6 +231,8 @@ Security notices are mandatory and ignore switches.
 | `PUSH_MAX_DEVICES_PER_USER`     | 10               |                                                                                                                                                  |
 | `NOTIFICATION_COURSE_WIDE_PUSH` | true             | Off keeps course-wide announcements off phones                                                                                                   |
 | `CHAT_PUSH_GROUP_MAX_MEMBERS`   | 256              |                                                                                                                                                  |
+| `PUSH_ACTIONS_ENABLED`          | true             | Reply / Mark as read tokens in chat pushes to phones                                                                                             |
+| `PUSH_ACTION_TOKEN_TTL_HOURS`   | 48               | How long a token works (the chat push's own lifetime)                                                                                            |
 
 The key file is a Firebase service account with the "Firebase Cloud
 Messaging API Admin" role; set it on every API server. iOS also needs the

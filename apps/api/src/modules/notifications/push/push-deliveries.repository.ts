@@ -18,6 +18,8 @@ export interface NewPushDelivery {
   dedupeKey: string;
   payload: Json;
   expiresAt: Date;
+  /** Only these installs; omitted = every install the user has. */
+  pendingDeviceIds?: string[];
 }
 
 /** Queues pushes; one already queued under the same key is kept as it is. */
@@ -38,7 +40,7 @@ export async function insertPushDeliveries(
           notification_id: delivery.notificationId,
           dedupe_key: delivery.dedupeKey,
           payload: delivery.payload,
-          pending_device_ids: null,
+          pending_device_ids: delivery.pendingDeviceIds ?? null,
           locked_until: null,
           last_error: null,
           sent_at: null,
