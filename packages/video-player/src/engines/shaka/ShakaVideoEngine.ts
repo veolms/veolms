@@ -184,6 +184,12 @@ const WATCHDOG_BUFFERED_AHEAD_SECONDS = 2;
 const WATCHDOG_FROZEN_PLAYHEAD_MS = 8_000;
 const WATCHDOG_WAITING_FOR_KEY_MS = 8_000;
 const WATCHDOG_NO_FRAMES_MS = 6_000;
+/**
+ * How long after a learner's seek, and how many times, a forward gap jump
+ * past the place they sought to is undone (see `keepLearnerSeekTarget`).
+ */
+const LEARNER_SEEK_HOLD_MS = 15_000;
+const LEARNER_SEEK_MAX_RESTORES = 3;
 
 /** Resolves true once `media` has a decoded frame to show, false on timeout. */
 function waitForFirstFrame(
@@ -210,6 +216,17 @@ function waitForFirstFrame(
   });
 }
 
+/** Whether media at `time` is buffered (a range holds it). */
+function isTimeBuffered(media: HTMLMediaElement, time: number): boolean {
+  const { buffered } = media;
+  for (let index = 0; index < buffered.length; index += 1) {
+    if (buffered.start(index) <= time + 0.1 && time < buffered.end(index)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Seconds buffered without a gap from the playhead on. */
 function bufferedAheadSeconds(media: HTMLMediaElement): number {
   const { buffered, currentTime } = media;
@@ -222,6 +239,39 @@ function bufferedAheadSeconds(media: HTMLMediaElement): number {
     }
   }
   return 0;
+}
+
+/**
+ * How close before a buffered part a seek may land and still be moved onto
+ * it (see `seekTarget`): well under a frame of a 24 fps video.
+ */
+const SEEK_ONTO_BUFFER_SECONDS = 0.04;
+/**
+ * How far into that part the seek goes. Shaka checks each source buffer on
+ * its own and its check has no tolerance, so the seek lands a millisecond
+ * inside, not on the very edge.
+ */
+const SEEK_INTO_BUFFER_SECONDS = 0.001;
+
+/**
+ * The start of the buffered part that begins just after `time` (within
+ * SEEK_ONTO_BUFFER_SECONDS), or null when `time` is buffered or nothing
+ * begins that close after it.
+ */
+function bufferStartJustAfter(
+  media: HTMLMediaElement,
+  time: number,
+): number | null {
+  const { buffered } = media;
+  for (let index = 0; index < buffered.length; index += 1) {
+    const start = buffered.start(index);
+    const end = buffered.end(index);
+    if (time >= start && time < end) return null;
+    if (start > time && start - time <= SEEK_ONTO_BUFFER_SECONDS) {
+      return Math.min(start + SEEK_INTO_BUFFER_SECONDS, end);
+    }
+  }
+  return null;
 }
 
 function delay(ms: number): Promise<void> {
@@ -586,6 +636,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #stopWatchingSpeculativePreloads: (() => void) | null = null;
   /** Drops a source's streaming settings still waiting for its first frame. */
   #cancelDeferredStreaming: (() => void) | null = null;
+  /** Turns a preload's segment prefetch off now (see `lowerPrefetchLater`). */
+  #lowerPrefetchNow: (() => void) | null = null;
+  /** Stops waiting to turn a preload's segment prefetch off. */
+  #cancelPrefetchOff: (() => void) | null = null;
+  /** The place the learner last sought to (see `keepLearnerSeekTarget`). */
+  #learnerSeek: { target: number; at: number; restores: number } | null = null;
   #autoQuality = true;
   /** The quality the viewer picked since the current load, if any. */
   #qualityChoice: "auto" | "manual" | null = null;
@@ -884,6 +940,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     if (!media || !runtime) return;
     const previous = this.#player;
     this.#cancelDeferredStreaming?.();
+    this.#cancelPrefetchOff?.();
+    this.#learnerSeek = null;
     this.stopWatchingForHoldRelease();
     this.clearNetworkingFilters();
     if (previous) this.unbindShakaEvents(previous);
@@ -932,6 +990,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#autoQuality = isShakaAutoQuality(source);
     this.#qualityChoice = null;
     this.#cancelDeferredStreaming?.();
+    this.#cancelPrefetchOff?.();
+    this.#learnerSeek = null;
     this.stopWatchingForHoldRelease();
     // Watched for release once the networking filters are in (they are
     // cleared and set again on the way, see installNetworkingFilters).
@@ -1106,7 +1166,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     media?.pause();
     if (!media || !runtime || !previous) return;
     this.updateSnapshot({ lifecycle: "unloading" });
+    this.setBufferingHold(false);
     this.#cancelDeferredStreaming?.();
+    this.#cancelPrefetchOff?.();
+    this.#learnerSeek = null;
     rememberShakaBandwidthEstimate(previous);
     this.clearNetworkingFilters();
     this.unbindShakaEvents(previous);
@@ -1378,8 +1441,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     _media: HTMLMediaElement,
   ): Promise<void> {
     this.stopWatchdog();
+    this.setBufferingHold(false);
     this.#selectedTextTrackId = null;
     this.#cancelDeferredStreaming?.();
+    this.#cancelPrefetchOff?.();
+    this.#learnerSeek = null;
     this.revealVideo();
     rememberShakaBandwidthEstimate(this.#player);
     this.clearNetworkingFilters();
@@ -1396,6 +1462,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.stopWatchdog();
     this.#retryOnOnline = false;
     this.#cancelDeferredStreaming?.();
+    this.#cancelPrefetchOff?.();
+    this.#learnerSeek = null;
     rememberShakaBandwidthEstimate(this.#player);
     this.clearNetworkingFilters();
     this.#stopWatchingSpeculativePreloads?.();
@@ -1447,13 +1515,15 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     runtime: ShakaRuntimeLike,
   ): void {
     this.#cancelDeferredStreaming?.();
+    this.#cancelPrefetchOff?.();
+    this.#learnerSeek = null;
     const media = this.mediaElement;
     const apply = (): void => {
       cancel();
       if (this.#player !== player) return;
       const abr = this.abrConfiguration(source, runtime);
       player.configure({
-        streaming: createShakaConfiguration(source, runtime).streaming,
+        streaming: this.streamingKeepingPrefetch(player, source, runtime),
         abr: { ...abr, ...this.startHeightBandwidthFloor(player, source, abr) },
       });
       this.keepPreferredQuality(player, source);
@@ -1470,6 +1540,130 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
     media.addEventListener("playing", apply);
     this.#cancelDeferredStreaming = cancel;
+  }
+
+  /**
+   * `source`'s streaming settings, but with the segment prefetch limit the
+   * player has now. A preload prefetches (it needs to, to fetch its first
+   * segment) and playback does not; in Shaka 5.2.7 a `configure` that
+   * lowers the limit to 0 aborts the segment being prefetched, or drops
+   * one already fetched, and the streaming engine fetches it again: the
+   * segment downloading at the first frame came twice on every start, at
+   * the moment the buffer is smallest. The limit is lowered later instead,
+   * when nothing is lost by it (`lowerPrefetchLater`).
+   */
+  private streamingKeepingPrefetch(
+    player: ShakaPlayerLike,
+    source: VideoSource,
+    runtime: ShakaRuntimeLike,
+  ): Record<string, unknown> {
+    const streaming = createShakaConfiguration(source, runtime)
+      .streaming as Record<string, unknown>;
+    const target = Number(streaming.segmentPrefetchLimit ?? 0);
+    const current =
+      player.getConfiguration?.()?.streaming?.segmentPrefetchLimit;
+    if (typeof current !== "number" || !(current > target)) return streaming;
+    const goal = Number(streaming.bufferingGoal);
+    this.lowerPrefetchLater(
+      player,
+      target,
+      Number.isFinite(goal) && goal > 0 ? goal : 60,
+    );
+    return { ...streaming, segmentPrefetchLimit: current };
+  }
+
+  /**
+   * Lowers the prefetch limit to `limit` once the buffer has reached its
+   * goal (the streaming engine stops fetching, so no prefetch is in flight)
+   * or just before the first seek, whichever comes first. A seek must run
+   * without prefetch: see `SHAKA_SEGMENT_PREFETCH_LIMIT` (a DASH seek that
+   * cancels an init segment left playback waiting forever).
+   */
+  private lowerPrefetchLater(
+    player: ShakaPlayerLike,
+    limit: number,
+    bufferingGoal: number,
+  ): void {
+    this.#cancelPrefetchOff?.();
+    this.#learnerSeek = null;
+    const media = this.mediaElement;
+    const cancel = (): void => {
+      media?.removeEventListener("progress", check);
+      media?.removeEventListener("timeupdate", check);
+      media?.removeEventListener("seeking", lower);
+      if (this.#cancelPrefetchOff === cancel) {
+        this.#cancelPrefetchOff = null;
+        this.#lowerPrefetchNow = null;
+      }
+    };
+    const lower = (): void => {
+      cancel();
+      if (this.#player !== player) return;
+      player.configure({ streaming: { segmentPrefetchLimit: limit } });
+      markPlayback("prefetch-off", { limit });
+    };
+    // Within half a second of the goal: Shaka fetches while less than the
+    // goal is ahead, and the playhead moves on between checks.
+    const check = (): void => {
+      if (!media) return;
+      const now = media.currentTime;
+      const ranges = media.buffered;
+      for (let index = 0; index < ranges.length; index += 1) {
+        if (ranges.start(index) <= now + 0.1 && ranges.end(index) > now) {
+          if (ranges.end(index) - now >= bufferingGoal - 0.5) lower();
+          return;
+        }
+      }
+    };
+    if (!media) {
+      lower();
+      return;
+    }
+    media.addEventListener("progress", check);
+    media.addEventListener("timeupdate", check);
+    // A seek made on the element itself, not through `seek`: late, but
+    // the limit still goes before the seek's own segments are fetched.
+    media.addEventListener("seeking", lower);
+    this.#cancelPrefetchOff = cancel;
+    this.#lowerPrefetchNow = lower;
+  }
+
+  override seek(time: number): void {
+    // Prefetch off before the seek starts (see `lowerPrefetchLater`).
+    this.#lowerPrefetchNow?.();
+    super.seek(time);
+    const media = this.mediaElement;
+    this.#learnerSeek = media
+      ? { target: media.currentTime, at: performance.now(), restores: 0 }
+      : null;
+  }
+
+  /**
+   * Shaka's gap jumper took the playhead forward, past where the learner
+   * just sought to. After a seek back into a part not downloaded yet, a
+   * segment still on its way for the old position can be appended first;
+   * Shaka then sees the learner's place as a gap before the first buffered
+   * range and jumps to that range: a seek back to 14:46 played from 15:12,
+   * skipping what the learner went back for (production, 12 Nov). The
+   * playhead goes back to the learner's place, where Shaka fetches it. Not
+   * for a gap the video itself has after the place (that place is buffered
+   * once played from), nor more than 3 times or 15 s after a seek.
+   */
+  private keepLearnerSeekTarget(): void {
+    const seek = this.#learnerSeek;
+    const media = this.mediaElement;
+    if (!seek || !media) return;
+    if (performance.now() - seek.at > LEARNER_SEEK_HOLD_MS) {
+      this.#learnerSeek = null;
+      return;
+    }
+    const jumpedTo = media.currentTime;
+    if (jumpedTo <= seek.target + 1) return;
+    if (isTimeBuffered(media, seek.target)) return;
+    if (seek.restores >= LEARNER_SEEK_MAX_RESTORES) return;
+    seek.restores += 1;
+    markPlayback("seek-target-kept", { target: seek.target, jumpedTo });
+    media.currentTime = seek.target;
   }
 
   /**
@@ -1805,6 +1999,25 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     if (!media) return;
     this.#hiddenMedia = null;
     media.style.visibility = "";
+  }
+
+  /**
+   * A seek that lands a hair before the buffered part goes onto it instead.
+   * The usual case is a seek back to 0:00: in a DASH video whose first
+   * frame is a little after 0 (the encode has a presentation time offset,
+   * and Shaka adds 1 ms to every negative timestamp offset) the buffer
+   * starts at 0.001. The browser plays 0 from that
+   * buffer at once, but Shaka's `seeked` finds 0 unbuffered, clears every
+   * source buffer and downloads the start again. The video decoder is
+   * already past the keyframe by then and can only go on from the next one,
+   * so the clock and sound ran on over a still picture until the next
+   * keyframe, 5 s on (production, 12 Nov: lesson 86 of the backend course).
+   */
+  protected override seekTarget(media: HTMLMediaElement, time: number): number {
+    const target = bufferStartJustAfter(media, time);
+    if (target === null) return time;
+    markPlayback("seek-onto-buffer", { time, target });
+    return target;
   }
 
   private requirePlayer(): ShakaPlayerLike {
@@ -2206,7 +2419,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.installNetworkingFilters(source);
     // The full buffer from here on (the standby kept only its start).
     player.configure({
-      streaming: createShakaConfiguration(source, runtime).streaming,
+      streaming: this.streamingKeepingPrefetch(player, source, runtime),
     });
     this.keepPreferredQuality(player, source);
     if (shakaStartVideoHeight(source) !== null) {
@@ -2414,7 +2627,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         this.emit("streamingrecovered", { attempts });
       }
     });
+    listen("gapjumped", () => this.keepLearnerSeekTarget());
     listen("buffering", (event) => {
+      // Shaka's own hold (see `VideoEngineSnapshot.bufferingHold`): the
+      // picture is stopped even while a little is still buffered.
+      this.setBufferingHold(Boolean(event.buffering));
       this.setBuffering(Boolean(event.buffering));
     });
     listen("trackschanged", () => this.refreshTracks(true));

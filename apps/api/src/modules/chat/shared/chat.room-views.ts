@@ -197,8 +197,9 @@ export function createRoomViews(runtime: ChatRuntime) {
       peers.length > 0
         ? await repository.getProfiles(db, [userId, ...peers.map((p) => p.id)])
         : [];
+    const off = await access.receiptsOff(db, profiles);
     const receiptsOn = new Map(
-      profiles.map((p) => [p.user_id, p.read_receipts]),
+      profiles.map((p) => [p.user_id, !off.has(p.user_id)]),
     );
     const myReceipts = receiptsOn.get(userId) ?? true;
     const blockedWith = new Set(

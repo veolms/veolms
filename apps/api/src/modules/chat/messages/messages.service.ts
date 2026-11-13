@@ -225,6 +225,21 @@ export function createMessagesService(runtime: ChatRuntime) {
     });
   }
 
+  /** A reaction's push to the message's author (same pipeline as messages). */
+  async function queueReactionPush(event: ChatMessageSentEvent) {
+    if (!isPushConfigured(config)) return;
+    await database.transaction().execute(async (trx) => {
+      await outbox.publish(trx, {
+        type: CHAT_MESSAGE_SENT_EVENT,
+        version: 1,
+        // One push per person, message and emoji: toggling does not spam.
+        dedupeKey: `${CHAT_MESSAGE_SENT_EVENT}:reaction:${event.messageId}:${event.senderId}:${event.reaction?.emoji ?? ""}`,
+        occurredAt: new Date(),
+        payload: event,
+      });
+    });
+  }
+
   /** One page of a chat as everyone sees it (cached above). */
   async function readPage(
     roomId: string,
@@ -311,11 +326,28 @@ export function createMessagesService(runtime: ChatRuntime) {
           userId,
           ...reached.map((r) => r.id),
         ]);
-        receiptsHidden = profiles.some((p) => !p.read_receipts);
+        receiptsHidden =
+          (await access.receiptsOff(database, profiles)).size > 0;
+      }
+      // Admins, moderators and instructors read along quietly: they are
+      // listed only when they answered the message (a reply or a reaction).
+      const [repliers, reactors] = await Promise.all([
+        repository.listRepliers(database, roomId, seq),
+        repository.listReactions(database, roomId, seq, MESSAGE_INFO_LIMIT),
+      ]);
+      const answered = new Set([...repliers, ...reactors.map((r) => r.id)]);
+      const shown = [];
+      for (const person of reached) {
+        if (
+          answered.has(person.id) ||
+          !(await access.isChatStaff(database, person.id))
+        ) {
+          shown.push(person);
+        }
       }
       const readBy = receiptsHidden
         ? []
-        : reached.filter((r) => Number(r.last_read_seq) >= seq);
+        : shown.filter((r) => Number(r.last_read_seq) >= seq);
       const read = new Set(readBy.map((r) => r.id));
       const withTime = (row: (typeof reached)[number], at: Date | null) => ({
         ...presentPerson(row),
@@ -323,7 +355,7 @@ export function createMessagesService(runtime: ChatRuntime) {
       });
       return {
         readBy: readBy.map((r) => withTime(r, r.read_at)),
-        deliveredTo: reached
+        deliveredTo: shown
           .filter((r) => !read.has(r.id))
           .map((r) => withTime(r, r.delivered_at)),
         waiting,
@@ -756,6 +788,20 @@ export function createMessagesService(runtime: ChatRuntime) {
         kind: "recount_reactions",
       });
       const message = presentMessage(await loadMessage(roomId, seq));
+      // The author hears about it (phone and web push), as in WhatsApp.
+      if (emoji !== null && row.sender_id && row.sender_id !== userId) {
+        try {
+          await queueReactionPush({
+            roomId,
+            messageId: row.id,
+            seq,
+            senderId: userId,
+            reaction: { emoji },
+          });
+        } catch {
+          // The reaction is saved; a lost push is not fatal.
+        }
+      }
       updates.submit(`${roomId}:${seq}`, version ?? 0, async () => {
         // The newest state when the window ends.
         const latest = presentMessage(await loadMessage(roomId, seq));

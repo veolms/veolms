@@ -59,7 +59,12 @@ export function getChatRuntime(
     repository,
     access: createChatAccess(repository),
     hub,
-    receipts: createReceiptsBatcher({ database, repository, logger: app.log }),
+    receipts: createReceiptsBatcher({
+      database,
+      repository,
+      receiptsOff: (db, profiles) => runtime.access.receiptsOff(db, profiles),
+      logger: app.log,
+    }),
     updates: createUpdateCoalescer(app.log),
     presence: createPresenceTracker({
       database,

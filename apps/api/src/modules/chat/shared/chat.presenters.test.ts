@@ -31,6 +31,7 @@ function row(overrides: Partial<MessageRow> = {}): MessageRow {
     sender_deleted: false,
     deleted_by_name: null,
     reply_body: null,
+    reply_attachments: null,
     reply_deleted_at: null,
     reply_sender_name: null,
     ...overrides,
@@ -114,4 +115,33 @@ await test("a private chat key is the same whoever starts it", () => {
   const b = "22222222-2222-4222-8222-222222222222";
   assert.equal(directKey(a, b), directKey(b, a));
   assert.equal(directKey(a, b), `${a}:${b}`);
+});
+
+await test("a reply to a photo carries the photo for the quote; a deleted one does not", () => {
+  const photo = {
+    id: "33333333-3333-4333-8333-333333333333",
+    kind: "image" as const,
+    name: "notes.jpg",
+    mimeType: "image/jpeg",
+    size: 1000,
+    width: 800,
+    height: 600,
+    durationMs: null,
+    waveform: null,
+  };
+  const quoted = presentMessage(
+    row({ reply_to_seq: "2", reply_body: "", reply_attachments: [photo] }),
+  );
+  assert.equal(quoted.replyTo?.media?.kind, "image");
+  assert.equal(quoted.replyTo?.media?.count, 1);
+  assert.ok(quoted.replyTo?.media?.url.includes(photo.id));
+  const gone = presentMessage(
+    row({
+      reply_to_seq: "2",
+      reply_body: "",
+      reply_attachments: [photo],
+      reply_deleted_at: new Date(),
+    }),
+  );
+  assert.equal(gone.replyTo?.media ?? null, null);
 });

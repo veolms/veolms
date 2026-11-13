@@ -110,6 +110,61 @@ function videoMeta(
   });
 }
 
+/**
+ * How long a media element plays, in seconds. WebM files (most recordings)
+ * often say "Infinity" until played through: jumping far past the end
+ * makes the browser find the real end, then the play position goes back.
+ */
+export function resolveMediaLength(media: HTMLMediaElement): Promise<number> {
+  if (Number.isFinite(media.duration) && media.duration > 0) {
+    return Promise.resolve(media.duration);
+  }
+  return new Promise((resolve) => {
+    const done = () => {
+      media.removeEventListener("durationchange", check);
+      media.removeEventListener("timeupdate", check);
+      clearTimeout(timer);
+      const length = Number.isFinite(media.duration) ? media.duration : 0;
+      try {
+        media.currentTime = 0;
+      } catch {
+        // Not seekable: nothing to put back.
+      }
+      resolve(length);
+    };
+    const check = () => {
+      if (Number.isFinite(media.duration) && media.duration > 0) done();
+    };
+    const timer = setTimeout(done, 4_000);
+    media.addEventListener("durationchange", check);
+    media.addEventListener("timeupdate", check);
+    try {
+      media.currentTime = 1e7;
+    } catch {
+      done();
+    }
+  });
+}
+
+/** An audio file's length, for the time shown before it is played. */
+function audioLengthMs(file: Blob): Promise<number> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    const finish = (ms: number) => {
+      URL.revokeObjectURL(url);
+      resolve(ms);
+    };
+    audio.onloadedmetadata = () =>
+      void resolveMediaLength(audio).then((seconds) =>
+        finish(Math.round(seconds * 1000)),
+      );
+    audio.onerror = () => finish(0);
+    audio.src = url;
+  });
+}
+
 /** Turns a picked file into something ready to send (or explains why not). */
 export async function prepareFile(
   file: File,
@@ -132,6 +187,10 @@ export async function prepareFile(
   if (kind === "image")
     prepared = { ...prepared, ...(await preparePhoto(file)) };
   if (kind === "video") prepared = { ...prepared, ...(await videoMeta(file)) };
+  if (kind === "audio" && prepared.durationMs === undefined) {
+    const durationMs = await audioLengthMs(file);
+    if (durationMs > 0) prepared = { ...prepared, durationMs };
+  }
   const blob = prepared.file ?? file;
   if (blob.size > CHAT_UPLOAD_MAX_BYTES[kind]) {
     throw new ChatFileError(

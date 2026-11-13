@@ -77,8 +77,25 @@ export const chatDrafts = {
   },
 };
 
+/**
+ * Photos and files picked but not sent, per chat, for this visit (files
+ * can't be stored like text): leaving a chat and coming back keeps them,
+ * as in WhatsApp.
+ */
+const draftFiles = new Map<string, unknown[]>();
+export const chatDraftFiles = {
+  get<T>(roomId: string): T[] {
+    return (draftFiles.get(roomId) as T[] | undefined) ?? [];
+  },
+  set<T>(roomId: string, files: readonly T[]) {
+    if (files.length === 0) draftFiles.delete(roomId);
+    else draftFiles.set(roomId, [...files]);
+  },
+};
+
 export function forgetChatDrafts() {
   clearTimeout(timer);
+  draftFiles.clear();
   drafts = new Map();
   try {
     window.localStorage.removeItem(STORAGE_KEY);
