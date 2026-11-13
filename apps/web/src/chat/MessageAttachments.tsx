@@ -3,13 +3,14 @@ import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import type { ChatAttachment } from "@veolms/contracts";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { chatService } from "../services/chat";
 import { cn } from "../lib/utils";
 import { formatBytes, formatDuration } from "./chatFormat";
 import { ChatImage } from "./ChatImage";
 import { FilePreview, previewKind } from "./FilePreview";
+import { PdfFirstPage } from "./PdfFirstPage";
 import { VoiceMessage } from "./VoiceMessage";
 
 export interface ViewableMedia {
@@ -163,46 +164,63 @@ function FileTile({ attachment }: { attachment: ChatAttachment }) {
   const extension = attachment.name.split(".").pop()?.toUpperCase() ?? "FILE";
   const [previewing, setPreviewing] = useState(false);
   const canPreview = previewKind(attachment) !== null;
+  const isPdf = attachment.mimeType === "application/pdf";
+  const [pages, setPages] = useState<number | null>(null);
+  const onPages = useCallback((count: number) => setPages(count), []);
   return (
-    <div className="flex w-72 max-w-full items-center rounded-lg bg-[color-mix(in_srgb,var(--text)_7%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_11%,transparent)]">
-      <button
-        type="button"
-        onClick={() => setPreviewing(true)}
-        aria-label={`${canPreview ? "Open" : "Show"} ${attachment.name}`}
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 border-0 bg-transparent py-2.5 pl-2.5 text-left text-(--text)"
-      >
-        <span
-          className={cn(
-            "relative flex h-11 w-9 shrink-0 items-end justify-center rounded-md pb-1 text-[0.58rem] font-bold tracking-wide text-white",
-            fileTone(extension),
-          )}
+    <div className="w-72 max-w-full overflow-hidden rounded-lg bg-[color-mix(in_srgb,var(--text)_7%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_11%,transparent)]">
+      {isPdf ? (
+        // WhatsApp: the top of the first page, tap to read it.
+        <button
+          type="button"
+          tabIndex={-1}
           aria-hidden="true"
+          onClick={() => setPreviewing(true)}
+          className="block w-full cursor-pointer border-0 bg-transparent p-0"
         >
-          <FileText
-            size={16}
-            weight="fill"
-            className="absolute top-1.5 opacity-60"
-          />
-          {extension.slice(0, 4)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[0.88rem] font-semibold">
-            {attachment.name}
+          <PdfFirstPage attachment={attachment} onPages={onPages} />
+        </button>
+      ) : null}
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={() => setPreviewing(true)}
+          aria-label={`${canPreview ? "Open" : "Show"} ${attachment.name}`}
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 border-0 bg-transparent py-2.5 pl-2.5 text-left text-(--text)"
+        >
+          <span
+            className={cn(
+              "relative flex h-11 w-9 shrink-0 items-end justify-center rounded-md pb-1 text-[0.58rem] font-bold tracking-wide text-white",
+              fileTone(extension),
+            )}
+            aria-hidden="true"
+          >
+            <FileText
+              size={16}
+              weight="fill"
+              className="absolute top-1.5 opacity-60"
+            />
+            {extension.slice(0, 4)}
           </span>
-          <span className="block text-[0.72rem] text-(--muted)">
-            {extension} · {formatBytes(attachment.size)}
-            {canPreview ? " · Tap to open" : ""}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[0.88rem] font-semibold">
+              {attachment.name}
+            </span>
+            <span className="block text-[0.72rem] text-(--muted)">
+              {pages ? `${pages} page${pages === 1 ? "" : "s"} · ` : ""}
+              {extension} · {formatBytes(attachment.size)}
+            </span>
           </span>
-        </span>
-      </button>
-      <a
-        href={chatService.fileUrl(attachment, true)}
-        download={attachment.name}
-        aria-label={`Download ${attachment.name}`}
-        className="flex size-11 shrink-0 items-center justify-center text-(--muted) hover:text-(--text)"
-      >
-        <DownloadSimple size={20} />
-      </a>
+        </button>
+        <a
+          href={chatService.fileUrl(attachment, true)}
+          download={attachment.name}
+          aria-label={`Download ${attachment.name}`}
+          className="flex size-11 shrink-0 items-center justify-center text-(--muted) hover:text-(--text)"
+        >
+          <DownloadSimple size={20} />
+        </a>
+      </div>
       {previewing ? (
         <FilePreview
           attachment={attachment}

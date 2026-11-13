@@ -1,5 +1,7 @@
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { ShareFatIcon as ShareFat } from "@phosphor-icons/react/ShareFat";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
@@ -28,6 +30,9 @@ export interface BubbleContext {
   isHelper: boolean;
   starred: ReadonlySet<string>;
   myReactions: ReadonlyMap<string, string>;
+  /** Choosing messages (Forward several): a tap ticks instead. */
+  selected?: ReadonlySet<number> | null;
+  onToggleSelect?: (seq: number) => void;
   /** A name, picture or @mention was clicked: show that person's card. */
   onOpenPerson?: (
     person: { id: string; name: string; avatarUrl: string | null },
@@ -121,6 +126,9 @@ export function MessageBubble({
     !deleted &&
     message.body === "" &&
     message.attachments.some((a) => a.kind === "image" || a.kind === "video");
+  const selecting = Boolean(ctx.selected);
+  const isSelected = Boolean(ctx.selected?.has(message.seq));
+  const selectable = selecting && !deleted && message.seq > 0;
 
   return (
     <div
@@ -137,6 +145,9 @@ export function MessageBubble({
         // Even gaps: 4px within one person's run, 10px between people.
         firstOfRun ? "mt-2.5" : "mt-1",
         reactions.length > 0 && "pb-3.5",
+        selecting &&
+          isSelected &&
+          "bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]",
       )}
       onContextMenu={(event) => {
         if (window.getSelection()?.toString()) return;
@@ -187,6 +198,32 @@ export function MessageBubble({
         setDragX(0);
       }}
     >
+      {selecting ? (
+        <>
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute top-1/2 left-2 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-full border-2 border-solid",
+              !selectable && "opacity-0",
+              isSelected
+                ? "border-(--accent) bg-(--accent) text-(--on-accent)"
+                : "border-(--chat-line-strong) bg-(--chat-panel)",
+            )}
+          >
+            {isSelected ? <Check size={11} weight="bold" /> : null}
+          </span>
+          {selectable ? (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={isSelected}
+              aria-label={`Select message: ${message.body.slice(0, 60) || "media"}`}
+              onClick={() => ctx.onToggleSelect?.(message.seq)}
+              className="absolute inset-0 z-10 cursor-pointer border-0 bg-transparent"
+            />
+          ) : null}
+        </>
+      ) : null}
       {dragX > 0 ? (
         <span
           aria-hidden="true"
@@ -259,6 +296,14 @@ export function MessageBubble({
                 {roleLabel}
               </span>
             ) : null}
+          </div>
+        ) : null}
+
+        {message.forwarded && !deleted ? (
+          // WhatsApp: a small "Forwarded" over the message.
+          <div className="mb-0.5 flex items-center gap-1 px-0.5 text-[0.74rem] text-(--muted) italic">
+            <ShareFat size={12} aria-hidden="true" />
+            Forwarded
           </div>
         ) : null}
 

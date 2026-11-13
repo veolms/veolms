@@ -51,6 +51,8 @@ export interface MessageRow {
   id: string;
   version_seq: string;
   sender_id: string | null;
+  client_id?: string | null;
+  forwarded?: boolean;
   sender_role: string;
   kind: string;
   body: string;
@@ -149,6 +151,8 @@ export function createChatRepository() {
         "m.room_id",
         "m.seq",
         "m.id",
+        "m.client_id",
+        "m.forwarded",
         "m.version_seq",
         "m.sender_id",
         "m.sender_role",
@@ -1701,6 +1705,49 @@ export function createChatRepository() {
         .execute();
     },
 
+    /**
+     * A forwarded file: a new ready upload for `roomId`, owned by the person
+     * forwarding, pointing at the same stored object. In the source's order.
+     */
+    async copyUploadsForForward(
+      db: Executor,
+      input: {
+        sourceRoomId: string;
+        sourceIds: readonly string[];
+        ownerId: string;
+        roomId: string;
+      },
+    ): Promise<string[]> {
+      const ids: string[] = [];
+      for (const sourceId of input.sourceIds) {
+        const row = await sql<{ id: string }>`
+          insert into chat_uploads (
+            id, owner_id, room_id, kind, mime_type, file_name, size_bytes,
+            width, height, duration_ms, waveform, storage_key, status
+          )
+          select gen_random_uuid(), ${input.ownerId}::uuid, ${input.roomId}::uuid,
+            kind, mime_type, file_name, size_bytes, width, height,
+            duration_ms, waveform, storage_key, 'ready'
+          from chat_uploads
+          where id = ${sourceId}::uuid and room_id = ${input.sourceRoomId}::uuid
+          returning id
+        `.execute(db);
+        const id = row.rows[0]?.id;
+        if (!id) throw new Error("Forwarded file is gone");
+        ids.push(id);
+      }
+      return ids;
+    },
+
+    async markForwarded(db: Executor, roomId: string, seq: number) {
+      await db
+        .updateTable("chat_messages")
+        .set({ forwarded: true })
+        .where("room_id", "=", roomId)
+        .where("seq", "=", String(seq))
+        .execute();
+    },
+
     async attachUploads(
       db: Executor,
       ids: readonly string[],
@@ -1740,8 +1787,18 @@ export function createChatRepository() {
       // A group's icon is attached to the group, not to a message: it is
       // never removable while a group uses it (deleting it would also clear
       // the group's icon, through the foreign key).
-      const result = await sql<{ id: string; storage_key: string }>`
-        select u.id, u.storage_key from chat_uploads u
+      // `shared`: a forwarded copy still uses the stored object, so only
+      // the row goes (the object stays for the copy).
+      const result = await sql<{
+        id: string;
+        storage_key: string;
+        shared: boolean;
+      }>`
+        select u.id, u.storage_key, exists (
+          select 1 from chat_uploads o
+          where o.storage_key = u.storage_key and o.id <> u.id
+        ) as shared
+        from chat_uploads u
         left join chat_messages m on m.room_id = u.room_id and m.seq = u.message_seq
         where (
              (u.status <> 'attached' and u.created_at < ${olderThan})

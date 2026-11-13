@@ -1233,4 +1233,49 @@ await test("a person’s card: groups in common, your chat, blocks, and nothing 
   );
 });
 
+await test("forward: copies arrive in order, marked Forwarded, with the sender's id; unknown chats are refused", async () => {
+  const one = ok<{ message: Message }>(
+    await send(admin, roomId, "Forward me first"),
+    201,
+  ).message;
+  const two = ok<{ message: Message }>(
+    await send(admin, roomId, "Forward me second"),
+    201,
+  ).message;
+  assert.ok(
+    (one as Message & { clientId?: string }).clientId,
+    "the sending app's id comes back (it swaps its copy for this one)",
+  );
+  const dm = ok<{ room: Room }>(
+    await admin.post("/v1/chat/direct", { userId: c.userId }),
+  ).room;
+  const result = ok<{
+    results: Array<{ roomId: string; sent: number; error: string | null }>;
+  }>(
+    await admin.post("/v1/chat/forward", {
+      fromRoomId: roomId,
+      seqs: [two.seq, one.seq],
+      toRoomIds: [dm.id],
+    }),
+  );
+  assert.deepEqual(result.results, [{ roomId: dm.id, sent: 2, error: null }]);
+  const arrived = (await messages(c.client, dm.id)).slice(-2) as Array<
+    Message & { forwarded?: boolean }
+  >;
+  assert.deepEqual(
+    arrived.map((m) => m.body),
+    ["Forward me first", "Forward me second"],
+  );
+  assert.ok(arrived.every((m) => m.forwarded === true));
+  refused(
+    await admin.post("/v1/chat/forward", {
+      fromRoomId: crypto.randomUUID(),
+      seqs: [1],
+      toRoomIds: [dm.id],
+    }),
+    404,
+    "CHAT_ROOM_NOT_FOUND",
+  );
+});
+
 await flow.close();

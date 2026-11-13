@@ -4,6 +4,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import type {
+  ChatForwardRequest,
   ChatMessage,
   ChatProfile,
   ChatReason,
@@ -215,6 +216,20 @@ export function useLeaveChat() {
  * "Clear chat" empties your copy at once; "Delete chat" also takes it out
  * of your list. The server is told in the background, then checked.
  */
+/** Forward: the chats it went to show it in the list straight away. */
+export function useForwardMessages() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ChatForwardRequest) => chatService.forward(input),
+    onSuccess: (_result, input) => {
+      void client.invalidateQueries({ queryKey: chatKeys.rooms() });
+      for (const roomId of input.toRoomIds) {
+        void client.invalidateQueries({ queryKey: chatKeys.messages(roomId) });
+      }
+    },
+  });
+}
+
 export function useClearChat() {
   const client = useQueryClient();
   return useMutation({

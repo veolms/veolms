@@ -99,6 +99,8 @@ export function presentMessage(row: MessageRow): ChatMessage {
           role: asRole(row.sender_role),
         }
       : null,
+    ...(row.client_id ? { clientId: row.client_id } : {}),
+    ...(row.forwarded && !deleted ? { forwarded: true } : {}),
     body: deleted ? "" : row.body,
     replyTo:
       row.reply_to_seq === null

@@ -207,6 +207,13 @@ export const chatMessageSchema = z.object({
   eventSeq: z.number().int(),
   kind: z.enum(["text", "system"]),
   sender: chatSenderSchema.nullable(),
+  /**
+   * The id the sending app gave it: that app swaps its "sending" copy for
+   * this message however it arrives (reply or live stream), never both.
+   */
+  clientId: z.string().nullable().optional(),
+  /** Forwarded from another chat ("Forwarded" above the text). */
+  forwarded: z.boolean().optional(),
   /** Empty when deleted. */
   body: z.string(),
   replyTo: z
@@ -489,6 +496,27 @@ export const chatReactionRequestSchema = z.strictObject({
   /** null removes your reaction. One reaction per person, like WhatsApp. */
   emoji: z.string().trim().min(1).max(16).nullable(),
 });
+/** WhatsApp's limits: up to 5 chats at once; we take 10 messages at a time. */
+export const CHAT_FORWARD_MAX_CHATS = 5;
+export const CHAT_FORWARD_MAX_MESSAGES = 10;
+export const chatForwardRequestSchema = z.strictObject({
+  fromRoomId: z.uuid(),
+  seqs: z.array(seqSchema).min(1).max(CHAT_FORWARD_MAX_MESSAGES),
+  toRoomIds: z.array(z.uuid()).min(1).max(CHAT_FORWARD_MAX_CHATS),
+});
+export type ChatForwardRequest = z.infer<typeof chatForwardRequestSchema>;
+export const chatForwardResponseSchema = z.object({
+  /** Per chat: how many were sent, and why it stopped if it did. */
+  results: z.array(
+    z.object({
+      roomId: z.uuid(),
+      sent: z.number().int(),
+      error: z.string().nullable(),
+    }),
+  ),
+});
+export type ChatForwardResponse = z.infer<typeof chatForwardResponseSchema>;
+
 export const chatMessageResponseSchema = z.object({
   message: chatMessageSchema,
 });

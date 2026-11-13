@@ -147,6 +147,8 @@ export interface ChatMessageTable {
   deleted_at: Date | null;
   deleted_by: string | null;
   deleted_reason: ChatDeletedReason | null;
+  /** Forwarded from another chat (WhatsApp's "Forwarded" label). */
+  forwarded: Generated<boolean>;
 }
 
 export interface ChatReactionTable {

@@ -179,14 +179,21 @@ export function MessageList({
   if (openedAtSeqRef.current === 0 && lastSeq > 0)
     openedAtSeqRef.current = lastSeq;
 
-  const pending = useMemo(
-    () =>
-      outgoing.map((o) => ({
+  const pending = useMemo(() => {
+    // Already in the chat (the live stream can bring it before the send
+    // reply): drawn once, not twice for a moment.
+    const arrived = new Set(
+      thread.messages
+        .map((m) => m.clientId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    return outgoing
+      .filter((o) => !arrived.has(o.clientId))
+      .map((o) => ({
         outgoing: o,
         message: asMessage(o, ctx.viewerId),
-      })),
-    [outgoing, ctx.viewerId],
-  );
+      }));
+  }, [outgoing, ctx.viewerId, thread.messages]);
   const unreadCount = thread.messages.filter(
     (m) =>
       m.seq > unreadAfterSeq &&
