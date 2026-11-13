@@ -49,6 +49,16 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * A PostgreSQL "data exception" (SQLSTATE class 22: text jsonb refuses, a
+ * value too long, ...). The same event fails the same way every time, so
+ * retrying it only delays the failure.
+ */
+function isDataError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" && code.startsWith("22");
+}
+
 function retryAt(
   now: Date,
   attemptCount: number,
@@ -185,7 +195,8 @@ export function createNotificationProcessor({
         const message = errorMessage(error);
         const permanent =
           error instanceof z.ZodError ||
-          error instanceof UnknownNotificationEventError;
+          error instanceof UnknownNotificationEventError ||
+          isDataError(error);
         if (
           permanent ||
           attemptCount >= config.NOTIFICATION_OUTBOX_MAX_ATTEMPTS

@@ -77,6 +77,7 @@ import { AuthPageFrame } from "./auth/AuthPageFrame";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
 import { AnalyticsPageViews } from "./lib/AnalyticsPageViews";
 import { AnalyticsIdentity } from "./lib/AnalyticsIdentity";
+import { NotificationTapHandler } from "./notifications/NotificationTapHandler";
 import { PushDeviceRegistration } from "./notifications/PushDeviceRegistration";
 import {
   OAUTH_REDIRECT_RESULT_STORAGE_KEY,
@@ -560,6 +561,7 @@ export default function Root() {
         <AnalyticsPageViews />
         <AnalyticsIdentity />
         <PushDeviceRegistration />
+        <NotificationTapHandler />
         <Outlet />
       </SessionInitializer>
     </QueryProvider>

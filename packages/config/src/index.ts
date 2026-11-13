@@ -563,6 +563,20 @@ const serverConfigSchema = z.object({
    * phones. Private chats always push.
    */
   CHAT_PUSH_GROUP_MAX_MEMBERS: z.coerce.number().int().min(2).default(256),
+  /**
+   * "Reply" and "Mark as read" on a phone's chat notification: each chat
+   * push to a phone carries a single-use token the app's native code uses
+   * instead of the session. Off, pushes carry no token and the app shows
+   * no buttons; a chat read elsewhere still clears the phone's notification.
+   */
+  PUSH_ACTIONS_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /** How long a push action token works: the chat push's own lifetime. */
+  PUSH_ACTION_TOKEN_TTL_HOURS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(168)
+    .default(48),
 
   // Web push (browsers, VAPID): chat messages with the tab closed
   /**

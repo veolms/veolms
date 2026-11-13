@@ -5,6 +5,7 @@ import {
   type ChatSenderRole,
 } from "@veolms/contracts";
 
+import { clampText } from "../../../lib/text.ts";
 import type { MessageRow, PersonRow } from "./chat.repository.ts";
 
 const DELETED_USER = "Deleted user";
@@ -37,10 +38,9 @@ export function chatRoomIconUrl(row: {
 const PREVIEW_CHARS = 120;
 
 export function preview(text: string): string {
-  const single = text.replace(/\s+/g, " ").trim();
-  return single.length > PREVIEW_CHARS
-    ? `${single.slice(0, PREVIEW_CHARS - 1)}…`
-    : single;
+  // Never cuts an emoji in half: a lone surrogate is refused in jsonb, and
+  // would fail the whole chat push.
+  return clampText(text.replace(/\s+/g, " ").trim(), PREVIEW_CHARS);
 }
 
 export function presentPerson(row: PersonRow): ChatPerson {

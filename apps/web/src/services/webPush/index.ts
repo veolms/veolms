@@ -3,6 +3,8 @@
  * anywhere; the rest (webPush.ts) is imported where it is used, or loaded
  * when the app is idle (`loadWebPush`).
  */
+import { closeNativeChatNotification } from "../../native-bridge";
+
 export {
   isWebPushActive,
   readSavedWebPush,
@@ -14,11 +16,14 @@ export function loadWebPush() {
 }
 
 /**
- * Closes this browser's notification for a chat (opened or read here or
- * on another device). Needs no service worker code: the page can close
- * what its worker showed.
+ * Closes a chat's notification (opened or read here or on another device):
+ * the phone app's, then this browser's. In the app, `readSeq` removes only
+ * the messages read so far. The browser needs no service worker code: the
+ * page can close what its worker showed.
  */
-export async function closeChatNotifications(roomId: string) {
+export async function closeChatNotifications(roomId: string, readSeq?: number) {
+  // First: the app's WebView may have no service worker.
+  closeNativeChatNotification(roomId, readSeq);
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
     return;
   }

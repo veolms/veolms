@@ -4,6 +4,7 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
 
 import { createFcmClient, type FcmClient } from "./fcm.client.ts";
+import { createPushActionTokenService } from "./push-action-tokens.service.ts";
 import { pushAppsFor } from "./push-apps.ts";
 import { webPushSetup, type WebPushConfig } from "./web-push.setup.ts";
 import { createWebPushClient, type WebPushClient } from "./web-push.client.ts";
@@ -57,6 +58,8 @@ export function createPushPipeline({
       | "NOTIFICATION_BATCH_SIZE"
       | "NOTIFICATION_LEASE_SECONDS"
       | "NOTIFICATION_RETRY_SECONDS"
+      | "PUSH_ACTIONS_ENABLED"
+      | "PUSH_ACTION_TOKEN_TTL_HOURS"
     >;
   sessions?: RevokedSessionLookup;
   /** A stand-in for Firebase (tests). */
@@ -93,6 +96,12 @@ export function createPushPipeline({
       : null,
     logger,
     sessions,
+    actionTokens: createPushActionTokenService({
+      database,
+      enabled: config.PUSH_ACTIONS_ENABLED,
+      ttlHours: config.PUSH_ACTION_TOKEN_TTL_HOURS,
+      pushEnabled: true,
+    }),
     config: {
       batchSize: config.NOTIFICATION_BATCH_SIZE,
       leaseSeconds: config.NOTIFICATION_LEASE_SECONDS,

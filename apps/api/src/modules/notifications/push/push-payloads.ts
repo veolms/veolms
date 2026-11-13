@@ -5,6 +5,7 @@ import {
 } from "@veolms/contracts";
 import type { Json } from "@veolms/database";
 
+import { clampText } from "../../../lib/text.ts";
 import type { ChatMessagePush } from "../notifications.types.ts";
 import type { NewPushDelivery } from "./push-deliveries.repository.ts";
 import type { PushPayload } from "./push-message.ts";
@@ -13,8 +14,9 @@ import type { PushPayload } from "./push-message.ts";
 export const CHAT_MESSAGE_PUSH_TYPE = "chat.message";
 
 function clip(text: string, max: number): string {
-  const single = text.replace(/\s+/gu, " ").trim();
-  return single.length > max ? `${single.slice(0, max - 1)}…` : single;
+  // Never cuts an emoji in half: a lone surrogate is refused in jsonb, and
+  // would fail the whole push.
+  return clampText(text.replace(/\s+/gu, " ").trim(), max);
 }
 
 /** Whether a notification of `type` is pushed at all. */
@@ -63,6 +65,48 @@ export function notificationPushDelivery(input: {
     payload: payload as unknown as Json,
     expiresAt: new Date(input.now.getTime() + route.ttlSeconds * 1000),
   };
+}
+
+/**
+ * Silent pushes telling phones a chat was read up to `readSeq` (here, on
+ * another device, or with "Mark as read"), so its notification goes away:
+ * data-only, normal priority, only to the phones that may still show it.
+ * A newer one replaces an older one still waiting (collapse key).
+ */
+export function chatReadPushDeliveries(
+  reads: ReadonlyArray<{
+    userId: string;
+    roomId: string;
+    readSeq: number;
+    deviceIds: string[];
+  }>,
+  now: Date,
+): NewPushDelivery[] {
+  const route = pushRouteFor(CHAT_MESSAGE_PUSH_TYPE)!;
+  const channel = androidChannel(route.androidChannelId)!;
+  return reads.map((read) => {
+    const payload: PushPayload = {
+      v: 1,
+      kind: "chat_read",
+      title: "Chat read",
+      body: " ",
+      androidChannelId: channel.id,
+      importance: "DEFAULT",
+      collapseKey: `chat_read:${read.roomId}`,
+      threadId: `chat:${read.roomId}`,
+      androidDataOnly: true,
+      data: { roomId: read.roomId, readSeq: String(read.readSeq) },
+    };
+    return {
+      userId: read.userId,
+      source: "chat" as const,
+      notificationId: null,
+      dedupeKey: `chat_read:${read.roomId}:${read.userId}:${read.readSeq}`,
+      payload: payload as unknown as Json,
+      expiresAt: new Date(now.getTime() + route.ttlSeconds * 1000),
+      pendingDeviceIds: read.deviceIds,
+    };
+  });
 }
 
 /**
