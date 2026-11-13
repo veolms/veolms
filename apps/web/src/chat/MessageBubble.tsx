@@ -46,6 +46,24 @@ export interface BubbleContext {
 }
 
 const SWIPE_TO_REPLY_PX = 56;
+/** Longer messages show this much, then "Read more". */
+const LONG_MESSAGE_CHARS = 700;
+/** Not folded for only a few more characters. */
+const FOLD_SLACK = 200;
+
+const EMOJI_ONLY =
+  /^(?:\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|\uFE0F|\u200D\p{Extended_Pictographic})*\s*){1,3}$/u;
+
+/** How many emoji a message of only emoji has (1-3), else 0. */
+function emojiOnlyCount(body: string): number {
+  const text = body.trim();
+  if (!text || text.length > 40 || !EMOJI_ONLY.test(text)) return 0;
+  return [
+    ...text.matchAll(
+      /\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|\uFE0F|\u200D\p{Extended_Pictographic})*/gu,
+    ),
+  ].length;
+}
 
 /**
  * One message, WhatsApp-style: a bubble with a tail on the first of a run,
@@ -69,6 +87,14 @@ export function MessageBubble({
   onJumpTo: (seq: number, from?: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // WhatsApp folds a very long message: the start, then "Read more".
+  const [expanded, setExpanded] = useState(false);
+  const collapsed =
+    !expanded && message.body.length > LONG_MESSAGE_CHARS + FOLD_SLACK;
+  const shownBody = collapsed
+    ? message.body.slice(0, LONG_MESSAGE_CHARS).replace(/\s+\S*$/, "")
+    : message.body;
+  const bigEmoji = emojiOnlyCount(message.body);
   const [menuMounted, setMenuMounted] = useState(false);
   const openMenu = () => {
     setMenuMounted(true);
@@ -341,9 +367,16 @@ export function MessageBubble({
               />
             ) : null}
             {message.body ? (
-              <div className="px-0.5 whitespace-pre-wrap break-words">
+              <div
+                className={cn(
+                  "px-0.5 whitespace-pre-wrap break-words",
+                  // WhatsApp: a message of only 1-3 emoji is shown large.
+                  bigEmoji === 1 && "text-[2.6rem] leading-[1.15]",
+                  bigEmoji > 1 && "text-[2rem] leading-[1.2]",
+                )}
+              >
                 <MessageText
-                  text={message.body}
+                  text={shownBody}
                   mentionsMe={mentionsMe}
                   onMention={
                     ctx.onOpenPerson && ctx.resolveMention
@@ -357,6 +390,18 @@ export function MessageBubble({
                       : undefined
                   }
                 />
+                {collapsed ? (
+                  <>
+                    {"… "}
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(true)}
+                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.88em] font-semibold text-(--accent-ink) hover:underline"
+                    >
+                      Read more
+                    </button>
+                  </>
+                ) : null}
                 {/* Room for "Edited", the time and ticks, exactly as wide as
                     they are, so the last line never runs under them. */}
                 <Meta
