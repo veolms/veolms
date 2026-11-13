@@ -1,5 +1,7 @@
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { ShareFatIcon as ShareFat } from "@phosphor-icons/react/ShareFat";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
@@ -28,6 +30,9 @@ export interface BubbleContext {
   isHelper: boolean;
   starred: ReadonlySet<string>;
   myReactions: ReadonlyMap<string, string>;
+  /** Choosing messages (Forward several): a tap ticks instead. */
+  selected?: ReadonlySet<number> | null;
+  onToggleSelect?: (seq: number) => void;
   /** A name, picture or @mention was clicked: show that person's card. */
   onOpenPerson?: (
     person: { id: string; name: string; avatarUrl: string | null },
@@ -41,6 +46,24 @@ export interface BubbleContext {
 }
 
 const SWIPE_TO_REPLY_PX = 56;
+/** Longer messages show this much, then "Read more". */
+const LONG_MESSAGE_CHARS = 700;
+/** Not folded for only a few more characters. */
+const FOLD_SLACK = 200;
+
+const EMOJI_ONLY =
+  /^(?:\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|\uFE0F|\u200D\p{Extended_Pictographic})*\s*){1,3}$/u;
+
+/** How many emoji a message of only emoji has (1-3), else 0. */
+function emojiOnlyCount(body: string): number {
+  const text = body.trim();
+  if (!text || text.length > 40 || !EMOJI_ONLY.test(text)) return 0;
+  return [
+    ...text.matchAll(
+      /\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|\uFE0F|\u200D\p{Extended_Pictographic})*/gu,
+    ),
+  ].length;
+}
 
 /**
  * One message, WhatsApp-style: a bubble with a tail on the first of a run,
@@ -64,6 +87,14 @@ export function MessageBubble({
   onJumpTo: (seq: number, from?: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // WhatsApp folds a very long message: the start, then "Read more".
+  const [expanded, setExpanded] = useState(false);
+  const collapsed =
+    !expanded && message.body.length > LONG_MESSAGE_CHARS + FOLD_SLACK;
+  const shownBody = collapsed
+    ? message.body.slice(0, LONG_MESSAGE_CHARS).replace(/\s+\S*$/, "")
+    : message.body;
+  const bigEmoji = emojiOnlyCount(message.body);
   const [menuMounted, setMenuMounted] = useState(false);
   const openMenu = () => {
     setMenuMounted(true);
@@ -121,6 +152,9 @@ export function MessageBubble({
     !deleted &&
     message.body === "" &&
     message.attachments.some((a) => a.kind === "image" || a.kind === "video");
+  const selecting = Boolean(ctx.selected);
+  const isSelected = Boolean(ctx.selected?.has(message.seq));
+  const selectable = selecting && !deleted && message.seq > 0;
 
   return (
     <div
@@ -137,6 +171,9 @@ export function MessageBubble({
         // Even gaps: 4px within one person's run, 10px between people.
         firstOfRun ? "mt-2.5" : "mt-1",
         reactions.length > 0 && "pb-3.5",
+        selecting &&
+          isSelected &&
+          "bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]",
       )}
       onContextMenu={(event) => {
         if (window.getSelection()?.toString()) return;
@@ -187,6 +224,32 @@ export function MessageBubble({
         setDragX(0);
       }}
     >
+      {selecting ? (
+        <>
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute top-1/2 left-2 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-full border-2 border-solid",
+              !selectable && "opacity-0",
+              isSelected
+                ? "border-(--accent) bg-(--accent) text-(--on-accent)"
+                : "border-(--chat-line-strong) bg-(--chat-panel)",
+            )}
+          >
+            {isSelected ? <Check size={11} weight="bold" /> : null}
+          </span>
+          {selectable ? (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={isSelected}
+              aria-label={`Select message: ${message.body.slice(0, 60) || "media"}`}
+              onClick={() => ctx.onToggleSelect?.(message.seq)}
+              className="absolute inset-0 z-10 cursor-pointer border-0 bg-transparent"
+            />
+          ) : null}
+        </>
+      ) : null}
       {dragX > 0 ? (
         <span
           aria-hidden="true"
@@ -262,6 +325,14 @@ export function MessageBubble({
           </div>
         ) : null}
 
+        {message.forwarded && !deleted ? (
+          // WhatsApp: a small "Forwarded" over the message.
+          <div className="mb-0.5 flex items-center gap-1 px-0.5 text-[0.74rem] text-(--muted) italic">
+            <ShareFat size={12} aria-hidden="true" />
+            Forwarded
+          </div>
+        ) : null}
+
         {message.replyTo && !deleted ? (
           <button
             type="button"
@@ -296,9 +367,16 @@ export function MessageBubble({
               />
             ) : null}
             {message.body ? (
-              <div className="px-0.5 whitespace-pre-wrap break-words">
+              <div
+                className={cn(
+                  "px-0.5 whitespace-pre-wrap break-words",
+                  // WhatsApp: a message of only 1-3 emoji is shown large.
+                  bigEmoji === 1 && "text-[2.6rem] leading-[1.15]",
+                  bigEmoji > 1 && "text-[2rem] leading-[1.2]",
+                )}
+              >
                 <MessageText
-                  text={message.body}
+                  text={shownBody}
                   mentionsMe={mentionsMe}
                   onMention={
                     ctx.onOpenPerson && ctx.resolveMention
@@ -312,6 +390,18 @@ export function MessageBubble({
                       : undefined
                   }
                 />
+                {collapsed ? (
+                  <>
+                    {"… "}
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(true)}
+                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.88em] font-semibold text-(--accent-ink) hover:underline"
+                    >
+                      Read more
+                    </button>
+                  </>
+                ) : null}
                 {/* Room for "Edited", the time and ticks, exactly as wide as
                     they are, so the last line never runs under them. */}
                 <Meta

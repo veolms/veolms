@@ -36,9 +36,7 @@ export function MessageText({
     // The line breaks around a block belong to the block, not the text.
     const before = text.slice(at, index).replace(/\n$/, "");
     if (before)
-      blocks.push(
-        <Inline key={`t${at}`} text={before} onMention={onMention} />,
-      );
+      blocks.push(<Lines key={`t${at}`} text={before} onMention={onMention} />);
     blocks.push(
       <CodeBlock
         key={`c${index}`}
@@ -51,7 +49,7 @@ export function MessageText({
   }
   if (at < text.length)
     blocks.push(
-      <Inline key={`t${at}`} text={text.slice(at)} onMention={onMention} />,
+      <Lines key={`t${at}`} text={text.slice(at)} onMention={onMention} />,
     );
   return (
     <span
@@ -91,6 +89,79 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
       </code>
     </span>
   );
+}
+
+const LIST_LINE = /^([-*]|\d{1,3}\.) (.*)$/;
+const QUOTE_LINE = /^> (.*)$/;
+
+/**
+ * WhatsApp's block formats, line by line: "- " and "* " bullets, "1. "
+ * numbered items (with a hanging indent, the number as typed) and "> "
+ * quotes; other lines stay plain text.
+ */
+const NEWLINE = "\n";
+
+function Lines({ text, onMention }: { text: string; onMention?: OnMention }) {
+  const lines = text.split(NEWLINE);
+  if (!lines.some((line) => LIST_LINE.test(line) || QUOTE_LINE.test(line))) {
+    return <Inline text={text} onMention={onMention} />;
+  }
+  const out: ReactNode[] = [];
+  let plain: string[] = [];
+  let quote: string[] = [];
+  const flushPlain = () => {
+    if (plain.length === 0) return;
+    out.push(
+      <Inline
+        key={out.length}
+        text={plain.join(NEWLINE)}
+        onMention={onMention}
+      />,
+    );
+    plain = [];
+  };
+  const flushQuote = () => {
+    if (quote.length === 0) return;
+    out.push(
+      <span
+        key={out.length}
+        className="my-0.5 block border-0 border-l-[3px] border-solid border-(--chat-line-strong) pl-2 text-(--text-secondary)"
+      >
+        <Inline text={quote.join(NEWLINE)} onMention={onMention} />
+      </span>,
+    );
+    quote = [];
+  };
+  for (const line of lines) {
+    const listed = LIST_LINE.exec(line);
+    const quoted = listed ? null : QUOTE_LINE.exec(line);
+    if (quoted) {
+      flushPlain();
+      quote.push(quoted[1] ?? "");
+      continue;
+    }
+    flushQuote();
+    if (listed) {
+      flushPlain();
+      const bullet = listed[1] === "-" || listed[1] === "*";
+      out.push(
+        <span key={out.length} className="relative block pl-5">
+          <span
+            aria-hidden={bullet ? "true" : undefined}
+            className="absolute left-0 w-4 text-right tabular-nums"
+          >
+            {bullet ? "•" : listed[1]}
+          </span>
+          <Inline text={listed[2] ?? ""} onMention={onMention} />
+        </span>,
+      );
+      continue;
+    }
+    plain.push(line);
+  }
+  flushQuote();
+  flushPlain();
+  return <>{out}</>;
 }
 
 function Inline({ text, onMention }: { text: string; onMention?: OnMention }) {

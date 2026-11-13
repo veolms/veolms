@@ -48,6 +48,7 @@ import {
   isRoomMuted,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { copyImage } from "./copyImage";
 import { roomAvatarUrl } from "./chatIcon";
 import {
   ClearChatDialog,
@@ -65,6 +66,8 @@ import type { ViewableMedia } from "./MessageAttachments";
 import type { BubbleContext } from "./MessageBubble";
 import { MessageList, type MessageFocus } from "./MessageList";
 import { PersonCard, type CardPerson } from "./PersonCard";
+import { ForwardDialog } from "./ForwardDialog";
+import { SelectionBar } from "./SelectionBar";
 import type { MessageAction } from "./MessageMenu";
 import { ChatThreadSkeleton } from "./ChatSkeletons";
 
@@ -117,6 +120,9 @@ export function Conversation({
     index: number;
   } | null>(null);
   const [focus, setFocus] = useState<MessageFocus | null>(null);
+  /** Messages ticked for Forward (WhatsApp's Select); null when not choosing. */
+  const [selected, setSelected] = useState<ReadonlySet<number> | null>(null);
+  const [forwarding, setForwarding] = useState<number[] | null>(null);
   const [person, setPerson] = useState<{
     person: CardPerson;
     anchor: HTMLElement | null;
@@ -169,6 +175,8 @@ export function Conversation({
     setEditing(null);
     setPinnedIndex(0);
     setPerson(null);
+    setSelected(null);
+    setForwarding(null);
     return () => setChatOnScreen(room.id, false);
   }, [room.id]);
 
@@ -252,6 +260,14 @@ export function Conversation({
     starred: starredIds,
     myReactions,
     onOpenPerson: (who, anchor) => setPerson({ person: who, anchor }),
+    selected,
+    onToggleSelect: (seq) =>
+      setSelected((current) => {
+        const next = new Set(current ?? []);
+        if (next.has(seq)) next.delete(seq);
+        else next.add(seq);
+        return next.size > 0 ? next : null;
+      }),
     resolveMention,
   };
 
@@ -303,6 +319,12 @@ export function Conversation({
       return;
     }
     switch (action) {
+      case "forward":
+        setForwarding([message.seq]);
+        return;
+      case "select":
+        setSelected(new Set([message.seq]));
+        return;
       case "reply":
         setEditing(null);
         setReplyTo(message);
@@ -329,6 +351,16 @@ export function Conversation({
           }, i * 400);
         });
         return;
+      case "copy-image": {
+        const photo = message.attachments.find((a) => a.kind === "image");
+        if (!photo) return;
+        copyImage(photo, message.body)
+          .then(() => onToast("Image copied"))
+          .catch(() =>
+            onToast("Couldn't copy this image. Use Download instead."),
+          );
+        return;
+      }
       case "copy-link":
         // Opens this chat at this message, blinking (for the people in it).
         void navigator.clipboard
@@ -461,7 +493,32 @@ export function Conversation({
           </span>
         </div>
       ) : null}
-      <header className="z-10 flex h-16 shrink-0 items-center gap-1 border-b border-solid border-(--chat-line) bg-(--chat-panel) pr-2 pl-2 @[720px]/chat:pl-4">
+      {selected ? (
+        <SelectionBar
+          count={selected.size}
+          onCancel={() => setSelected(null)}
+          onCopy={() => {
+            const text = (thread.data?.messages ?? [])
+              .filter((m) => selected.has(m.seq) && m.body)
+              .map((m) => m.body)
+              .join("\n\n");
+            if (!text) {
+              onToast("Only text can be copied.");
+              return;
+            }
+            void navigator.clipboard
+              ?.writeText(text)
+              .then(() => onToast("Messages copied"));
+          }}
+          onForward={() => setForwarding([...selected].sort((a, b) => a - b))}
+        />
+      ) : null}
+      <header
+        className={cn(
+          "z-10 flex h-16 shrink-0 items-center gap-1 border-b border-solid border-(--chat-line) bg-(--chat-panel) pr-2 pl-2 @[720px]/chat:pl-4",
+          selected && "hidden",
+        )}
+      >
         <button
           type="button"
           className={cn(iconButton, "@[720px]/chat:hidden")}
@@ -839,6 +896,22 @@ export function Conversation({
             />
           </div>
         </div>
+      ) : null}
+      {forwarding ? (
+        <ForwardDialog
+          fromRoomId={room.id}
+          seqs={forwarding}
+          onClose={() => setForwarding(null)}
+          onToast={onToast}
+          onDone={(roomIds) => {
+            setForwarding(null);
+            setSelected(null);
+            // One chat: open it, as WhatsApp does.
+            if (roomIds.length === 1 && roomIds[0] !== room.id) {
+              onOpenChat(roomIds[0]!);
+            }
+          }}
+        />
       ) : null}
       {person ? (
         <PersonCard

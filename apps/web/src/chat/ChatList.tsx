@@ -498,15 +498,27 @@ function ChatRow({
     room.kind === "direct" &&
     room.directStatus === "requested" &&
     room.requestedByMe === false;
-  const preview = last
-    ? last.deleted
-      ? mine
-        ? "You deleted this message"
-        : "This message was deleted"
-      : `${room.kind !== "direct" && last.senderName && !mine ? `${last.senderName.split(" ")[0]}: ` : ""}${plainPreview(last.preview)}`
-    : room.kind === "direct"
-      ? ""
-      : "No messages yet";
+  const reaction = room.lastReaction ?? null;
+  const reactionText = reaction
+    ? `${
+        reaction.byId === viewerId
+          ? "You reacted"
+          : room.kind === "direct"
+            ? "Reacted"
+            : `${reaction.byName.split(" ")[0]} reacted`
+      } ${reaction.emoji} to: "${plainPreview(reaction.preview)}"`
+    : null;
+  const preview = reactionText
+    ? reactionText
+    : last
+      ? last.deleted
+        ? mine
+          ? "You deleted this message"
+          : "This message was deleted"
+        : `${room.kind !== "direct" && last.senderName && !mine ? `${last.senderName.split(" ")[0]}: ` : ""}${plainPreview(last.preview)}`
+      : room.kind === "direct"
+        ? ""
+        : "No messages yet";
 
   const setState = (patch: Parameters<typeof myState.mutate>[0]["patch"]) =>
     myState.mutate({ roomId: room.id, patch });

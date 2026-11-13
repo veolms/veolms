@@ -1,6 +1,8 @@
 import type {
   ChatAttachment,
   ChatChangesResponse,
+  ChatForwardRequest,
+  ChatForwardResponse,
   ChatMessage,
   ChatMessageInfo,
   ChatMessageReactions,
@@ -19,6 +21,26 @@ import type {
 } from "@veolms/contracts";
 
 import api, { getApiRequestUrl } from "../../lib/api-client";
+
+/**
+ * Reads a file through its short-lived link (no cookies to the store), or
+ * from the API in development.
+ */
+async function readFile(
+  attachment: Pick<ChatAttachment, "url">,
+  signal?: AbortSignal,
+): Promise<Response> {
+  if (attachment.url.startsWith("blob:")) return fetch(attachment.url);
+  const path = attachment.url.replace(/^\/v1/, "");
+  const { url } = await api.get<ChatUploadLink>(`${path}?link=1`);
+  const viaApi = url.startsWith("/v1/");
+  const response = await fetch(
+    viaApi ? getApiRequestUrl(url.replace(/^\/v1/, "")) : url,
+    { signal, credentials: viaApi ? "include" : "omit" },
+  );
+  if (!response.ok) throw new Error(`File read failed (${response.status})`);
+  return response;
+}
 
 /** The chat list, as GET /chat/rooms answers it. */
 export interface ChatRoomList {
@@ -226,6 +248,9 @@ export const chatService = {
   leave: (roomId: string) =>
     api.post<{ ok: true }>(`/chat/rooms/${roomId}/leave`),
   /** Clear a chat for you, or (private chats) delete it from your list. */
+  /** Forwards messages to up to 5 chats (POST /chat/forward). */
+  forward: (input: ChatForwardRequest) =>
+    api.post<ChatForwardResponse>("/chat/forward", input),
   clearChat: (roomId: string, deleteChat: boolean) =>
     api.post<{ ok: true }>(`/chat/rooms/${roomId}/clear`, { deleteChat }),
   candidates: (search: string) =>
@@ -317,17 +342,12 @@ export const chatService = {
   readFileText: async (
     attachment: Pick<ChatAttachment, "url">,
     signal?: AbortSignal,
-  ) => {
-    const path = attachment.url.replace(/^\/v1/, "");
-    const { url } = await api.get<ChatUploadLink>(`${path}?link=1`);
-    const viaApi = url.startsWith("/v1/");
-    const response = await fetch(
-      viaApi ? getApiRequestUrl(url.replace(/^\/v1/, "")) : url,
-      { signal, credentials: viaApi ? "include" : "omit" },
-    );
-    if (!response.ok) throw new Error(`File read failed (${response.status})`);
-    return response.text();
-  },
+  ) => (await readFile(attachment, signal)).text(),
+  /** A file's bytes (copying a photo, drawing a PDF's first page). */
+  readFileBlob: async (
+    attachment: Pick<ChatAttachment, "url">,
+    signal?: AbortSignal,
+  ) => (await readFile(attachment, signal)).blob(),
   /** An attachment's address, read with the session cookie. */
   fileUrl: (attachment: Pick<ChatAttachment, "url">, download = false) => {
     // A file still on its way is shown from this browser's copy.

@@ -22,6 +22,7 @@ import {
   type ChatWallpaper,
 } from "../store/chatPrefs.store";
 import { ChatAvatar } from "./ChatAvatar";
+import { VOICE_TYPING_ENABLED } from "./useDictation";
 import { ChatNotificationSettings } from "./ChatNotificationSettings";
 import {
   ChatSelect,
@@ -153,7 +154,7 @@ export function ChatSettingsPanel({
           // learners always send read receipts.
           <SettingsRow
             title="Read receipts"
-            note="Off: people won’t see blue ticks when you read their private messages, and you won’t see theirs. You never appear in a group message’s read list unless you reply or react."
+            note="For all chats; each chat's info can set it differently. Off: people won’t see blue ticks when you read their private messages (you won’t see theirs), and groups don’t count you for blue ticks. You never appear in a message’s read list unless you reply or react."
           >
             <ChatToggle
               checked={values.readReceipts}
@@ -295,27 +296,29 @@ export function ChatSettingsPanel({
             />
           </SettingsRow>
         )}
-        <SettingsRow
-          title="Voice typing language"
-          note="The language the voice typing button in the message box listens for. On this device."
-        >
-          <select
-            value={prefs.dictationLang}
-            onChange={(event) =>
-              setChatPrefs({
-                dictationLang: event.target.value as DictationLang,
-              })
-            }
-            aria-label="Voice typing language"
-            className="h-9 max-w-44 cursor-pointer rounded-lg border border-solid border-(--chat-line-strong) bg-(--chat-input) px-2 text-[0.85rem] text-(--text)"
+        {VOICE_TYPING_ENABLED ? (
+          <SettingsRow
+            title="Voice typing language"
+            note="The language the voice typing button in the message box listens for. On this device."
           >
-            {DICTATION_LANGS.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-        </SettingsRow>
+            <select
+              value={prefs.dictationLang}
+              onChange={(event) =>
+                setChatPrefs({
+                  dictationLang: event.target.value as DictationLang,
+                })
+              }
+              aria-label="Voice typing language"
+              className="h-9 max-w-44 cursor-pointer rounded-lg border border-solid border-(--chat-line-strong) bg-(--chat-input) px-2 text-[0.85rem] text-(--text)"
+            >
+              {DICTATION_LANGS.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </SettingsRow>
+        ) : null}
         <SettingsRow title="Message text size" note="On this device">
           <ChatSelect<ChatTextSize>
             ariaLabel="Message text size"

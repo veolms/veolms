@@ -345,6 +345,15 @@ function reactionAlertFor(before: ChatMessage, after: ChatMessage) {
     });
 }
 
+let roomListTimer: ReturnType<typeof setTimeout> | undefined;
+/** One chat list refresh for a burst of changes. */
+function refreshRoomListSoon() {
+  clearTimeout(roomListTimer);
+  roomListTimer = setTimeout(() => {
+    void client?.invalidateQueries({ queryKey: chatKeys.rooms() });
+  }, 800);
+}
+
 function onMessage(
   message: ChatMessage | { pointer: true; roomId: string },
   isNew: boolean,
@@ -364,6 +373,13 @@ function onMessage(
   if (!isNew) {
     const before = thread?.messages.find((m) => m.seq === message.seq);
     if (before) reactionAlertFor(before, message);
+    // A reaction changed: the chat list's "Reacted 👍 to: …" catches up.
+    if (
+      !before ||
+      JSON.stringify(before.reactions) !== JSON.stringify(message.reactions)
+    ) {
+      refreshRoomListSoon();
+    }
   }
   applyMessages(client, message.roomId, [message]);
   const open =

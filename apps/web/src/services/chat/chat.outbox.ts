@@ -2,11 +2,13 @@ import type { QueryClient } from "@tanstack/react-query";
 import type {
   ChatAttachment,
   ChatMessage,
+  ChatRoomDetail,
   ChatUploadKind,
 } from "@veolms/contracts";
 
 import { getApiError } from "../../lib/api-error";
 import { applyMessages, applyToRoomList, markRoomRead } from "./chat.cache";
+import { chatKeys } from "./chat.keys";
 import { chatService } from "./chat.service";
 import { getChatPrefs } from "../../store/chatPrefs.store";
 import { sentPop } from "./chat.sounds";
@@ -136,6 +138,35 @@ async function uploadFile(
   return attachment;
 }
 
+/**
+ * Your first message of a request (a private chat they have not accepted):
+ * the box closes until they answer, without a reload, as the server will
+ * refuse a second one.
+ */
+function markRequestPending(
+  client: QueryClient,
+  roomId: string,
+  viewerId: string | null,
+) {
+  const key = chatKeys.room(roomId);
+  const room = client.getQueryData<ChatRoomDetail>(key);
+  if (
+    !room ||
+    !viewerId ||
+    room.kind !== "direct" ||
+    room.directStatus !== "requested" ||
+    !room.requestedByMe ||
+    room.me.cannotPostReason === "request_pending"
+  ) {
+    return;
+  }
+  client.setQueryData<ChatRoomDetail>(key, {
+    ...room,
+    me: { ...room.me, canPost: false, cannotPostReason: "request_pending" },
+  });
+  void client.invalidateQueries({ queryKey: key });
+}
+
 /** Numbers of messages this tab sent, by their client id (replies to them). */
 const sentSeqs = new Map<string, number>();
 
@@ -186,6 +217,7 @@ async function deliver(
             : {}),
         });
         sentSeqs.set(next.clientId, message.seq);
+        markRequestPending(client, roomId, viewerId);
         applyMessages(client, roomId, [message]);
         applyToRoomList(client, message, { viewerId, isNew: true, open: true });
         markRoomRead(client, roomId, message.seq);

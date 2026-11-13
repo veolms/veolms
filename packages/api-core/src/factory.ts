@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import http from "node:http";
 import { fileURLToPath } from "node:url";
 
 import fastifyAutoload from "@fastify/autoload";
@@ -40,6 +41,8 @@ export const API_ROUTE_PREFIX = "/v1";
  * in the router with a 414 that no route can document.
  */
 const MAX_PARAM_LENGTH = 512;
+/** Request headers accepted (cookies included); Node's default is 16 KB. */
+const MAX_HEADER_BYTES = 48 * 1024;
 
 /**
  * The course a request changed, for the public course page rebuild. Learner
@@ -128,6 +131,12 @@ export async function createVeoLMSApi<
     logger,
     trustProxy: config.TRUST_PROXY,
     routerOptions: { maxParamLength: MAX_PARAM_LENGTH },
+    // Node refuses requests whose headers pass 16 KB (431, with no CORS
+    // headers), and some learners' browsers carry that much in cookies for
+    // the whole domain (left from the site's earlier platform): Chrome then
+    // showed every API call as a "CORS error". Accept what Cloudflare passes.
+    serverFactory: (handler) =>
+      http.createServer({ maxHeaderSize: MAX_HEADER_BYTES }, handler),
   });
 
   // Before any route exists: an `onRoute` hook only sees the routes added

@@ -6,6 +6,7 @@ import {
   CHAT_MAX_PINNED_MESSAGES,
   CHAT_PAGE_SIZE,
   CHAT_RESTORE_DAYS,
+  type ChatForwardRequest,
   type ChatMessage,
   type ChatSendMessageRequest,
 } from "@veolms/contracts";
@@ -322,12 +323,17 @@ export function createMessagesService(runtime: ChatRuntime) {
       );
       let receiptsHidden = false;
       if (ctx.room.kind === "direct") {
-        const profiles = await repository.getProfiles(database, [
-          userId,
-          ...reached.map((r) => r.id),
-        ]);
+        // This chat's choice for each of you, else your settings.
         receiptsHidden =
-          (await access.receiptsOff(database, profiles)).size > 0;
+          (
+            await access.receiptsOffIn(
+              database,
+              [userId, ...reached.map((r) => r.id)].map((id) => ({
+                roomId,
+                userId: id,
+              })),
+            )
+          ).size > 0;
       }
       // Admins, moderators and instructors read along quietly: they are
       // listed only when they answered the message (a reply or a reaction).
@@ -486,7 +492,75 @@ export function createMessagesService(runtime: ChatRuntime) {
       };
     },
 
-    async send(userId: string, roomId: string, input: ChatSendMessageRequest) {
+    /**
+     * Forwards messages to up to 5 chats, in order, as the person forwarding
+     * (each chat's own rules apply: who may post, slow mode, requests). Files
+     * go along without uploading again; the text loses its @mentions.
+     */
+    async forward(userId: string, input: ChatForwardRequest) {
+      await views.assertCanRead(database, userId, input.fromRoomId);
+      const rows = [];
+      for (const seq of [...new Set(input.seqs)].sort((a, b) => a - b)) {
+        const row = await repository.findMessage(
+          database,
+          input.fromRoomId,
+          seq,
+        );
+        if (
+          row &&
+          row.kind === "text" &&
+          !row.deleted_at &&
+          (row.body || (row.attachments ?? []).length > 0)
+        ) {
+          rows.push(row);
+        }
+      }
+      if (rows.length === 0) throw ChatErrors.messageNotFound();
+      const results = [];
+      for (const roomId of [...new Set(input.toRoomIds)]) {
+        let sent = 0;
+        let error: string | null = null;
+        for (const row of rows) {
+          try {
+            const attachmentIds = await repository.copyUploadsForForward(
+              database,
+              {
+                sourceRoomId: input.fromRoomId,
+                sourceIds: (row.attachments ?? []).map((a) => a.id),
+                ownerId: userId,
+                roomId,
+              },
+            );
+            await this.send(
+              userId,
+              roomId,
+              {
+                clientId: crypto.randomUUID(),
+                body: row.body,
+                ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+              },
+              { forwarded: true },
+            );
+            sent += 1;
+          } catch (caught) {
+            error =
+              caught instanceof AppError
+                ? caught.message
+                : "This message couldn't be forwarded.";
+            break;
+          }
+        }
+        results.push({ roomId, sent, error });
+      }
+      return { results };
+    },
+
+    async send(
+      userId: string,
+      roomId: string,
+      input: ChatSendMessageRequest,
+      options: { forwarded?: boolean } = {},
+    ) {
       if (Buffer.byteLength(input.body) > CHAT_BODY_MAX_BYTES) {
         throw new AppError(
           400,
@@ -605,6 +679,9 @@ export function createMessagesService(runtime: ChatRuntime) {
       }
 
       const seq = Number(result.message_seq);
+      if (result.outcome === "sent" && options.forwarded) {
+        await repository.markForwarded(database, roomId, seq);
+      }
       const message = presentMessage(await loadMessage(roomId, seq));
       if (result.outcome === "sent") {
         await publishMessage("message", message);

@@ -1,4 +1,7 @@
-import type { ChatSendMessageRequest } from "@veolms/contracts";
+import type {
+  ChatForwardRequest,
+  ChatSendMessageRequest,
+} from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import type { MessagesService } from "./messages.service.ts";
@@ -68,6 +71,10 @@ export function createMessagesController({
         request.params.roomId,
         request.query.since,
       );
+    },
+
+    async forward(request: FastifyRequest<{ Body: ChatForwardRequest }>) {
+      return service.forward(request.user!.id, request.body);
     },
 
     async send(
