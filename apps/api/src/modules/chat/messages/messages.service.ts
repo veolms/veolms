@@ -323,12 +323,17 @@ export function createMessagesService(runtime: ChatRuntime) {
       );
       let receiptsHidden = false;
       if (ctx.room.kind === "direct") {
-        const profiles = await repository.getProfiles(database, [
-          userId,
-          ...reached.map((r) => r.id),
-        ]);
+        // This chat's choice for each of you, else your settings.
         receiptsHidden =
-          (await access.receiptsOff(database, profiles)).size > 0;
+          (
+            await access.receiptsOffIn(
+              database,
+              [userId, ...reached.map((r) => r.id)].map((id) => ({
+                roomId,
+                userId: id,
+              })),
+            )
+          ).size > 0;
       }
       // Admins, moderators and instructors read along quietly: they are
       // listed only when they answered the message (a reply or a reaction).

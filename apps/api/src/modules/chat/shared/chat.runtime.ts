@@ -76,6 +76,7 @@ export function getChatRuntime(
       database,
       repository,
       receiptsOff: (db, profiles) => runtime.access.receiptsOff(db, profiles),
+      receiptsOffIn: (db, pairs) => runtime.access.receiptsOffIn(db, pairs),
       onReadAdvanced: (reads) => actionTokens.onChatRead(reads),
       logger: app.log,
     }),

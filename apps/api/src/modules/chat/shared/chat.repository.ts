@@ -88,6 +88,7 @@ export interface RoomListRow extends ChatRoomRow {
   member_pinned_at: Date | null;
   cleared_seq: string | null;
   member_deleted_at: Date | null;
+  member_read_receipts?: boolean | null;
   course_title: string | null;
   course_thumbnail: string | null;
   course_thumbnail_media_id: string | null;
@@ -438,6 +439,7 @@ export function createChatRepository() {
           "m.notify_level",
           "m.muted_until",
           "m.archived_at",
+          "m.read_receipts as member_read_receipts",
           "m.pinned_at as member_pinned_at",
           "m.cleared_seq",
           "m.deleted_at as member_deleted_at",
@@ -533,17 +535,45 @@ export function createChatRepository() {
      */
     async groupPositions(db: Executor, roomIds: readonly string[]) {
       if (roomIds.length === 0) return [];
+      // Members whose read receipts are off here (staff only) don't count
+      // for "read by everyone": nobody can tell whether they read it.
       return db
-        .selectFrom("chat_members")
+        .selectFrom("chat_members as cm")
+        .leftJoin("chat_profiles as p", "p.user_id", "cm.user_id")
         .select([
-          "room_id",
-          sql<string>`min(last_delivered_seq)`.as("delivered"),
-          sql<string>`min(last_read_seq)`.as("read"),
+          "cm.room_id",
+          sql<string>`min(cm.last_delivered_seq)`.as("delivered"),
+          sql<string>`min(cm.last_read_seq) filter (
+            where coalesce(cm.read_receipts, p.read_receipts, true)
+          )`.as("read"),
           sql<string>`count(*)`.as("members"),
         ])
-        .where("room_id", "in", roomIds)
-        .where("state", "=", "active")
-        .groupBy("room_id")
+        .where("cm.room_id", "in", roomIds)
+        .where("cm.state", "=", "active")
+        .groupBy("cm.room_id")
+        .execute();
+    },
+
+    /** Per-chat read receipt choices (staff) for these members. */
+    async memberReceiptOverrides(
+      db: Executor,
+      pairs: ReadonlyArray<{ roomId: string; userId: string }>,
+    ) {
+      if (pairs.length === 0) return [];
+      return db
+        .selectFrom("chat_members")
+        .select(["room_id", "user_id", "read_receipts"])
+        .where((eb) =>
+          eb.or(
+            pairs.map((p) =>
+              eb.and([
+                eb("room_id", "=", p.roomId),
+                eb("user_id", "=", p.userId),
+              ]),
+            ),
+          ),
+        )
+        .where("read_receipts", "is not", null)
         .execute();
     },
 

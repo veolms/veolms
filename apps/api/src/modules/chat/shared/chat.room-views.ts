@@ -203,11 +203,15 @@ export function createRoomViews(runtime: ChatRuntime) {
       peers.length > 0
         ? await repository.getProfiles(db, [userId, ...peers.map((p) => p.id)])
         : [];
-    const off = await access.receiptsOff(db, profiles);
-    const receiptsOn = new Map(
-      profiles.map((p) => [p.user_id, !off.has(p.user_id)]),
+    void profiles;
+    // Per chat: this person's choice there, else their setting (staff).
+    const offIn = await access.receiptsOffIn(
+      db,
+      peers.flatMap((p) => [
+        { roomId: p.room_id, userId },
+        { roomId: p.room_id, userId: p.id },
+      ]),
     );
-    const myReceipts = receiptsOn.get(userId) ?? true;
     const blockedWith = new Set(
       blocks.map((b) =>
         b.blocker_id === userId ? b.blocked_id : b.blocker_id,
@@ -321,10 +325,14 @@ export function createRoomViews(runtime: ChatRuntime) {
         // is not answering it.
         ...(row.kind === "direct" && row.direct_status === "requested"
           ? { peerDeliveredSeq: null, peerReadSeq: null }
-          : ticks(row.kind, peer, groupByRoom.get(row.id), (id) =>
-              id === userId
-                ? myReceipts
-                : myReceipts && (receiptsOn.get(id) ?? true),
+          : ticks(
+              row.kind,
+              peer,
+              groupByRoom.get(row.id),
+              // Reciprocal, as in WhatsApp: off on either side hides them.
+              (id) =>
+                !offIn.has(`${row.id}:${userId}`) &&
+                (id === userId || !offIn.has(`${row.id}:${id}`)),
             )),
         me: {
           roomRole: (row.room_role ?? "member") as
@@ -337,6 +345,7 @@ export function createRoomViews(runtime: ChatRuntime) {
               : null,
           archived: row.archived_at !== null,
           pinned: row.member_pinned_at !== null,
+          readReceipts: row.member_read_receipts ?? null,
           lastReadSeq,
           canPost: reason === null,
           cannotPostReason: reason,

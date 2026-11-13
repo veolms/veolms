@@ -1310,4 +1310,50 @@ await test('the chat list shows a newer reaction to your message, as WhatsApp\'s
   assert.equal(after?.lastReaction ?? null, null);
 });
 
+await test("read receipts per chat: staff can turn them off in one chat, learners can't", async () => {
+  type Ticked = Room & {
+    peerReadSeq: number | null;
+    me: Room["me"] & { readReceipts?: boolean | null };
+  };
+  const dm = ok<{ room: Room }>(
+    await admin.post("/v1/chat/direct", { userId: c.userId }),
+  ).room;
+  const sent = ok<{ message: Message }>(
+    await send(admin, dm.id, "Did you read this?"),
+    201,
+  ).message;
+  ok(
+    await c.client.post("/v1/chat/receipts", {
+      receipts: [{ roomId: dm.id, readSeq: sent.seq }],
+    }),
+  );
+  const seen = async () =>
+    ok<{ rooms: Ticked[] }>(await admin.get("/v1/chat/rooms")).rooms.find(
+      (r) => r.id === dm.id,
+    )!;
+  let view = await seen();
+  for (let i = 0; i < 30 && (view.peerReadSeq ?? 0) < sent.seq; i += 1) {
+    await sleep(200);
+    view = await seen();
+  }
+  assert.ok((view.peerReadSeq ?? 0) >= sent.seq, "blue: C read it");
+
+  // A learner can't switch them off for a chat.
+  refused(
+    await c.client.patch(`/v1/chat/rooms/${dm.id}/me`, { readReceipts: false }),
+    403,
+    "CHAT_NOT_ADMIN",
+  );
+  // Staff can, in this chat only: no blue ticks either way here.
+  ok(await admin.patch(`/v1/chat/rooms/${dm.id}/me`, { readReceipts: false }));
+  view = await seen();
+  assert.equal(view.me.readReceipts, false);
+  assert.equal(view.peerReadSeq, null);
+  // Back to their setting for all chats.
+  ok(await admin.patch(`/v1/chat/rooms/${dm.id}/me`, { readReceipts: null }));
+  view = await seen();
+  assert.equal(view.me.readReceipts ?? null, null);
+  assert.ok((view.peerReadSeq ?? 0) >= sent.seq);
+});
+
 await flow.close();

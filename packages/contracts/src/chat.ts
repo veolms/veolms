@@ -334,6 +334,8 @@ export const chatRoomSummarySchema = z.object({
     mutedUntil: isoDate.nullable(),
     archived: z.boolean(),
     pinned: z.boolean(),
+    /** Your read receipts here (staff): null follows your setting. */
+    readReceipts: z.boolean().nullable().optional(),
     lastReadSeq: z.number().int(),
     canPost: z.boolean(),
     /** Why posting is off, for the bar that replaces the message box. */
@@ -557,6 +559,11 @@ export const chatMemberStateRequestSchema = z
     muteFor: chatMuteForSchema.optional(),
     archived: z.boolean().optional(),
     pinned: z.boolean().optional(),
+    /**
+     * Admins and instructors: read receipts in this chat. Null follows
+     * their setting for all chats (Settings › Privacy).
+     */
+    readReceipts: z.boolean().nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "Nothing to change");
 

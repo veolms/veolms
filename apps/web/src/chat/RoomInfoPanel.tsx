@@ -31,6 +31,7 @@ import {
   storeRoomDetail,
   useStartDirect,
   useUpdateMyChatState,
+  useChatProfile,
   useUpdateRoomSettings,
   type ChatThread,
 } from "../services/chat";
@@ -111,6 +112,7 @@ export function RoomInfoPanel({
   );
   const settings = useUpdateRoomSettings();
   const myState = useUpdateMyChatState();
+  const profile = useChatProfile();
   const setHelper = useSetHelper();
   const restrict = useRestrictMember();
   const startDirect = useStartDirect();
@@ -405,6 +407,48 @@ export function RoomInfoPanel({
               ]}
             />
           </Row>
+          {profile.data?.readReceiptsChoice ? (
+            // Admins and instructors: whether this chat learns they read.
+            <Row
+              title="Read receipts"
+              note={
+                isGroup
+                  ? "Off: you are not counted for blue ticks here and never shown as having read a message (unless you reply or react)."
+                  : "Off: no blue ticks here, for either of you."
+              }
+            >
+              <ChatSelect<"default" | "on" | "off">
+                ariaLabel="Read receipts in this chat"
+                value={
+                  room.me.readReceipts === true
+                    ? "on"
+                    : room.me.readReceipts === false
+                      ? "off"
+                      : "default"
+                }
+                onValueChange={(choice) =>
+                  myState.mutate(
+                    {
+                      roomId: room.id,
+                      patch: {
+                        readReceipts:
+                          choice === "default" ? null : choice === "on",
+                      },
+                    },
+                    { onError: fail },
+                  )
+                }
+                options={[
+                  [
+                    "default",
+                    `Default (${profile.data.readReceipts ? "on" : "off"})`,
+                  ],
+                  ["on", "On"],
+                  ["off", "Off"],
+                ]}
+              />
+            </Row>
+          ) : null}
         </div>
 
         {admin ? (

@@ -179,6 +179,8 @@ export function useUpdateMyChatState() {
         muteFor?: "8h" | "1w" | "always" | "off";
         archived?: boolean;
         pinned?: boolean;
+        /** Staff: read receipts in this chat (null: their setting). */
+        readReceipts?: boolean | null;
       };
     }) => chatService.updateMyState(v.roomId, v.patch),
     onSuccess: (_d, v) => refresh(v.roomId),

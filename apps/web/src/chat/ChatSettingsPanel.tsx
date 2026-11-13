@@ -154,7 +154,7 @@ export function ChatSettingsPanel({
           // learners always send read receipts.
           <SettingsRow
             title="Read receipts"
-            note="Off: people won’t see blue ticks when you read their private messages, and you won’t see theirs. You never appear in a group message’s read list unless you reply or react."
+            note="For all chats; each chat's info can set it differently. Off: people won’t see blue ticks when you read their private messages (you won’t see theirs), and groups don’t count you for blue ticks. You never appear in a message’s read list unless you reply or react."
           >
             <ChatToggle
               checked={values.readReceipts}
