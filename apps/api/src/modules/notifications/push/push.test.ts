@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import { test } from "node:test";
 
 import {
@@ -7,11 +9,12 @@ import {
   OPTIONAL_NOTIFICATION_TYPES,
   PUSH_ROUTES,
 } from "@veolms/contracts";
+import type { Credential } from "firebase-admin/app";
 
 import {
+  classifyAdminError,
   classifyFcmError,
   createFcmClient,
-  createServiceAccountAssertion,
 } from "./fcm.client.ts";
 import { parsePushApps, type ServiceAccount } from "./push-apps.ts";
 import { buildFcmMessage, type PushPayload } from "./push-message.ts";
@@ -20,7 +23,7 @@ import {
   notificationPushDelivery,
 } from "./push-payloads.ts";
 
-const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", {
+const { privateKey } = crypto.generateKeyPairSync("rsa", {
   modulusLength: 2048,
   privateKeyEncoding: { type: "pkcs8", format: "pem" },
   publicKeyEncoding: { type: "spki", format: "pem" },
@@ -203,63 +206,349 @@ await test("Firebase errors map to what happens to the install", () => {
   assert.equal(classifyFcmError(500, null, undefined).kind, "retry");
 });
 
-await test("the sign-in assertion is a JWT signed with the service key", () => {
-  const jwt = createServiceAccountAssertion(account, 1_800_000_000);
-  const [header, claims, signature] = jwt.split(".");
-  const verified = crypto
-    .createVerify("RSA-SHA256")
-    .update(`${header}.${claims}`)
-    .verify(publicKey, Buffer.from(signature!, "base64url"));
-  assert.ok(verified);
-  const body = JSON.parse(Buffer.from(claims!, "base64url").toString());
-  assert.equal(body.iss, account.clientEmail);
-  assert.equal(body.aud, account.tokenUri);
-  assert.equal(
-    body.scope,
-    "https://www.googleapis.com/auth/firebase.messaging",
-  );
-  assert.equal(body.exp - body.iat, 3600);
-});
+/**
+ * A stand-in for Firebase on localhost: records each request the Admin SDK
+ * makes and answers with the next queued reply (or a success).
+ */
+async function fakeFirebase() {
+  const requests: { path: string; authorization: string; body: unknown }[] = [];
+  const replies: {
+    status: number;
+    body: unknown;
+    headers?: Record<string, string>;
+  }[] = [];
+  const server = http.createServer((request, response) => {
+    let raw = "";
+    request.on("data", (chunk: Buffer) => (raw += chunk.toString("utf8")));
+    request.on("end", () => {
+      requests.push({
+        path: request.url ?? "",
+        authorization: request.headers.authorization ?? "",
+        body: JSON.parse(raw || "null"),
+      });
+      const reply = replies.shift() ?? {
+        status: 200,
+        body: { name: `projects/veolms-test/messages/${requests.length}` },
+      };
+      response.writeHead(reply.status, {
+        "content-type": "application/json",
+        ...reply.headers,
+      });
+      response.end(JSON.stringify(reply.body));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    endpoint: `http://127.0.0.1:${port}`,
+    requests,
+    replies,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}
+
+/** A sign-in that counts how often the SDK asks for a token. */
+function countingCredential() {
+  const state = { signIns: 0 };
+  const credential: Credential = {
+    getAccessToken: async () => {
+      state.signIns += 1;
+      return { access_token: `at-${state.signIns}`, expires_in: 3600 };
+    },
+  };
+  return { state, credentialFor: () => credential };
+}
+
+const sendPath = "/v1/projects/veolms-test/messages:send";
+
+function fcmErrorBody(errorCode: string, message = "x") {
+  return {
+    error: {
+      message,
+      status: errorCode,
+      details: [
+        {
+          "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError",
+          errorCode,
+        },
+      ],
+    },
+  };
+}
 
 await test("the client signs in once and reuses the token", async () => {
-  const calls: string[] = [];
-  const fetchImpl = (async (url: string) => {
-    calls.push(url);
-    if (url === account.tokenUri) {
-      return Response.json({ access_token: "at-1", expires_in: 3600 });
+  const firebase = await fakeFirebase();
+  try {
+    const { state, credentialFor } = countingCredential();
+    const client = createFcmClient({
+      endpoint: firebase.endpoint,
+      credentialFor,
+    });
+    const body = { message: { fid } };
+    const [a, b] = await Promise.all([
+      client.send(account, body),
+      client.send(account, body),
+    ]);
+    assert.ok(a.ok);
+    assert.match(
+      a.ok ? a.messageId : "",
+      /^projects\/veolms-test\/messages\//u,
+    );
+    assert.ok(b.ok);
+    assert.equal(state.signIns, 1);
+    assert.equal(
+      firebase.requests.filter((request) => request.path === sendPath).length,
+      2,
+    );
+    assert.equal(firebase.requests[0]?.authorization, "Bearer at-1");
+  } finally {
+    await firebase.close();
+  }
+});
+
+await test("the Admin SDK sends exactly the message buildFcmMessage writes", async () => {
+  const firebase = await fakeFirebase();
+  try {
+    const client = createFcmClient({
+      endpoint: firebase.endpoint,
+      credentialFor: countingCredential().credentialFor,
+    });
+    const chat: PushPayload = {
+      ...notificationPayload,
+      kind: "chat_message",
+      androidChannelId: "chat_messages",
+      importance: "HIGH",
+      androidDataOnly: true,
+      collapseKey: "chat:r1",
+      threadId: "chat:r1",
+      data: { roomId: "r1", seq: "12", unreadCount: "3" },
+    };
+    const cases = [
+      // Android notification, by FID (production).
+      { payload: notificationPayload, platform: "android", field: "fid" },
+      // Android notification with a collapse key, high priority.
+      {
+        payload: {
+          ...notificationPayload,
+          importance: "HIGH",
+          collapseKey: "learning.reminder",
+        },
+        platform: "android",
+        field: "fid",
+      },
+      // Android chat: data only.
+      { payload: chat, platform: "android", field: "fid" },
+      // Low importance, by token.
+      {
+        payload: { ...notificationPayload, importance: "MIN" },
+        platform: "android",
+        field: "token",
+      },
+      // iOS alert stacked per thread, with a collapse id.
+      {
+        payload: { ...notificationPayload, collapseKey: "learning.reminder" },
+        platform: "ios",
+        field: "fid",
+      },
+      { payload: chat, platform: "ios", field: "fid" },
+    ] as const;
+    for (const [index, item] of cases.entries()) {
+      const built = buildFcmMessage({
+        payload: item.payload as PushPayload,
+        fid,
+        platform: item.platform,
+        targetField: item.field,
+        expiresAt: new Date(now.getTime() + 3600_000),
+        now,
+      });
+      const outcome = await client.send(account, built);
+      assert.ok(outcome.ok, `case ${index}`);
+      // The SDK always writes the Android priority in lower case
+      // ("high", "normal"); Firebase reads both spellings the same.
+      const expected = structuredClone(built) as {
+        message: { android?: { priority?: string } };
+      };
+      if (expected.message.android?.priority) {
+        expected.message.android.priority =
+          expected.message.android.priority.toLowerCase();
+      }
+      assert.deepEqual(
+        firebase.requests[index]?.body,
+        expected,
+        `case ${index}: same JSON on the wire`,
+      );
     }
-    return Response.json({ name: "projects/veolms-test/messages/1" });
-  }) as typeof fetch;
-  const client = createFcmClient({ endpoint: "https://fcm.test", fetchImpl });
-  const body = { message: { fid } };
-  const [a, b] = await Promise.all([
-    client.send(account, body),
-    client.send(account, body),
-  ]);
-  assert.deepEqual(a, {
-    ok: true,
-    messageId: "projects/veolms-test/messages/1",
-  });
-  assert.ok(b.ok);
-  assert.equal(calls.filter((url) => url === account.tokenUri).length, 1);
-  assert.equal(
-    calls.filter(
-      (url) => url === "https://fcm.test/v1/projects/veolms-test/messages:send",
-    ).length,
-    2,
-  );
+  } finally {
+    await firebase.close();
+  }
+});
+
+await test("Firebase's answers through the SDK keep their meaning", async () => {
+  const firebase = await fakeFirebase();
+  try {
+    const { state, credentialFor } = countingCredential();
+    const client = createFcmClient({
+      endpoint: firebase.endpoint,
+      credentialFor,
+    });
+    const send = async (reply: (typeof firebase.replies)[number]) => {
+      firebase.replies.push(reply);
+      const outcome = await client.send(account, { message: { fid } });
+      assert.equal(outcome.ok, false);
+      return outcome.ok ? null! : outcome;
+    };
+
+    const unregistered = await send({
+      status: 404,
+      body: fcmErrorBody("UNREGISTERED", "Requested entity was not found."),
+    });
+    assert.equal(unregistered.kind, "dead");
+    assert.match(unregistered.error, /^UNREGISTERED: /u);
+
+    assert.equal(
+      (
+        await send({
+          status: 400,
+          body: fcmErrorBody(
+            "INVALID_ARGUMENT",
+            "The registration token is not a valid FCM registration token",
+          ),
+        })
+      ).kind,
+      "dead",
+      "an invalid FID",
+    );
+    assert.equal(
+      (
+        await send({
+          status: 400,
+          body: fcmErrorBody(
+            "INVALID_ARGUMENT",
+            "Invalid value at 'message.android.ttl'",
+          ),
+        })
+      ).kind,
+      "bad_message",
+    );
+    assert.equal(
+      (await send({ status: 403, body: fcmErrorBody("SENDER_ID_MISMATCH") }))
+        .kind,
+      "dead",
+    );
+    assert.equal(
+      (await send({ status: 403, body: fcmErrorBody("PERMISSION_DENIED") }))
+        .kind,
+      "auth",
+    );
+    assert.equal(
+      (
+        await send({
+          status: 401,
+          body: fcmErrorBody("THIRD_PARTY_AUTH_ERROR"),
+        })
+      ).kind,
+      "auth",
+    );
+
+    const quota = await send({
+      status: 429,
+      body: fcmErrorBody("QUOTA_EXCEEDED"),
+      headers: { "retry-after": "5" },
+    });
+    assert.equal(quota.kind, "retry");
+    assert.equal(quota.retryAfterMs, 60_000, "at least a minute");
+
+    const internal = await send({
+      status: 500,
+      body: fcmErrorBody("INTERNAL"),
+      headers: { "retry-after": "2" },
+    });
+    assert.equal(internal.kind, "retry");
+    assert.equal(internal.retryAfterMs, 2_000, "Retry-After is honoured");
+
+    // A stale token: retried at once, with a fresh sign-in.
+    const signInsBefore = state.signIns;
+    const stale = await send({
+      status: 401,
+      body: fcmErrorBody("UNAUTHENTICATED"),
+    });
+    assert.equal(stale.kind, "retry");
+    assert.equal(stale.retryAfterMs, 0);
+    const next = await client.send(account, { message: { fid } });
+    assert.ok(next.ok);
+    assert.equal(state.signIns, signInsBefore + 1, "signed in afresh");
+  } finally {
+    await firebase.close();
+  }
 });
 
 await test("a refused key pauses the app instead of failing the push", async () => {
-  const fetchImpl = (async () =>
-    Response.json(
-      { error: "invalid_grant" },
-      { status: 400 },
-    )) as unknown as typeof fetch;
-  const client = createFcmClient({ fetchImpl });
+  const refused: Credential = {
+    getAccessToken: () =>
+      Promise.reject(
+        Object.assign(new Error("invalid_grant: Invalid JWT Signature."), {
+          response: { status: 400, data: { error: "invalid_grant" } },
+        }),
+      ),
+  };
+  const client = createFcmClient({ credentialFor: () => refused });
   const outcome = await client.send(account, { message: { fid } });
   assert.equal(outcome.ok, false);
   assert.equal(!outcome.ok && outcome.kind, "auth");
+
+  const unreachable: Credential = {
+    getAccessToken: () =>
+      Promise.reject(
+        Object.assign(new Error("getaddrinfo ENOTFOUND"), {
+          code: "ENOTFOUND",
+        }),
+      ),
+  };
+  const offline = await createFcmClient({
+    credentialFor: () => unreachable,
+  }).send(account, { message: { fid } });
+  assert.equal(
+    !offline.ok && offline.kind,
+    "retry",
+    "sign-in unreachable is retried",
+  );
+
+  // The real cert(): a private key that does not parse is retried, as
+  // when signing with it threw before the SDK.
+  const broken = await createFcmClient().send(
+    { ...account, privateKey: "not a key" },
+    { message: { fid } },
+  );
+  assert.equal(!broken.ok && broken.kind, "retry");
+});
+
+await test("SDK errors without an answer from Firebase", () => {
+  const sdkError = (code: string) => Object.assign(new Error(code), { code });
+  assert.equal(classifyAdminError(sdkError("app/network-error")).kind, "retry");
+  assert.equal(
+    classifyAdminError(sdkError("app/network-timeout")).kind,
+    "retry",
+  );
+  assert.equal(
+    classifyAdminError(sdkError("messaging/invalid-payload")).kind,
+    "bad_message",
+  );
+  assert.equal(
+    classifyAdminError(sdkError("messaging/installation-id-not-registered"))
+      .kind,
+    "dead",
+  );
+  const rate = classifyAdminError(sdkError("messaging/message-rate-exceeded"));
+  assert.equal(rate.kind, "retry");
+  assert.equal(rate.retryAfterMs, 60_000);
+  assert.equal(
+    classifyAdminError(sdkError("messaging/third-party-auth-error")).kind,
+    "auth",
+  );
 });
 
 await test("PUSH_APPS: base64 keys, broken entries and bad JSON", () => {
