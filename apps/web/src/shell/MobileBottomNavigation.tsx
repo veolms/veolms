@@ -108,7 +108,7 @@ export function MobileBottomNavigation({
                   id={badgeId}
                   count={badgeCount}
                   unreadLabel="unread messages"
-                  className="absolute -top-1.5 left-[calc(50%+4px)] h-4.5 min-w-4.5 px-1 text-[0.625rem] shadow-[0_0_0_2px_var(--sidebar-background,var(--surface))]"
+                  className="absolute top-0 right-0 h-4.5 min-w-4.5 translate-x-1/2 -translate-y-1/2 px-1 text-[0.625rem] shadow-[0_0_0_2px_var(--sidebar-background,var(--surface))]"
                 />
               </span>
               <small>{displayLabel}</small>

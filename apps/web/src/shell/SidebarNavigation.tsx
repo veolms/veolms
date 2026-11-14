@@ -208,14 +208,14 @@ export function SidebarNavigation({
                 className="hidden! [.is-active>&]:block!"
               />
               <span className="courses-nav__text">{displayLabel}</span>
-              {/* At the row's end; on the icon's corner in a narrow rail
+              {/* At the row's end; half on the icon (its top-right) in a narrow rail
                   (the menu is a size container). No number shortcut is
                   shown on hover: the keys still work (aria-keyshortcuts). */}
               <NavCountBadge
                 id={badgeId}
                 count={badgeCount}
                 unreadLabel="unread messages"
-                className="ml-auto shrink-0 @max-[110px]:absolute @max-[110px]:top-0 @max-[110px]:right-0 @max-[110px]:ml-0 @max-[110px]:h-4.5 @max-[110px]:min-w-4.5 @max-[110px]:translate-x-[40%] @max-[110px]:-translate-y-[40%] @max-[110px]:px-1 @max-[110px]:text-[0.625rem] @max-[110px]:shadow-[0_0_0_2px_var(--sidebar-background,var(--surface))]"
+                className="ml-auto shrink-0 @max-[110px]:absolute @max-[110px]:top-[calc(50%-10px)] @max-[110px]:left-[calc(50%+10px)] @max-[110px]:ml-0 @max-[110px]:h-4.5 @max-[110px]:min-w-4.5 @max-[110px]:-translate-x-1/2 @max-[110px]:-translate-y-1/2 @max-[110px]:px-1 @max-[110px]:text-[0.625rem] @max-[110px]:shadow-[0_0_0_2px_var(--surface)]"
               />
             </a>
           </Fragment>
