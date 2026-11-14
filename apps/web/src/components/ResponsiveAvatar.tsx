@@ -1,5 +1,13 @@
 import type { AvatarImageVariant } from "@veolms/contracts";
-import { useEffect, useMemo, useState, type ImgHTMLAttributes } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ImgHTMLAttributes,
+  type SyntheticEvent,
+} from "react";
 
 type ResponsiveAvatarProps = Omit<
   ImgHTMLAttributes<HTMLImageElement>,
@@ -79,7 +87,9 @@ export function ResponsiveAvatar({
     : undefined;
 
   if (avatarPrefix) {
-    if (cachedUrl) {
+    // A remembered URL is only the first try: once it fails, the files
+    // after it are tried as for any other avatar.
+    if (cachedUrl && candidateIndex < 0) {
       activeSrc = cachedUrl;
       activeSrcSet = undefined;
     } else if (candidateIndex >= 0 && candidateIndex < candidates.length) {
@@ -109,10 +119,20 @@ export function ResponsiveAvatar({
     activeSrcSet = undefined;
   }
 
-  const handleError: ImgHTMLAttributes<HTMLImageElement>["onError"] = (
-    event,
-  ) => {
+  // The file whose failure was handled last: the browser's error event and
+  // the check below can both report the same one, which would skip a file.
+  const failedAttemptRef = useRef<string | null>(null);
+  const attempt = `${activeSrc ?? ""} ${activeSrcSet ?? ""}`;
+
+  const handleError = (event: SyntheticEvent<HTMLImageElement>) => {
+    if (failedAttemptRef.current === attempt) return;
+    failedAttemptRef.current = attempt;
     if (avatarPrefix) {
+      // The remembered URL failed: forget it, or every avatar of this
+      // person would keep trying it.
+      if (cachedUrl && candidateIndex < 0) {
+        resolvedAvatarCache.delete(avatarPrefix);
+      }
       const nextIndex = candidateIndex + 1;
       if (nextIndex < candidates.length) {
         setCandidateIndex(nextIndex);
@@ -132,9 +152,35 @@ export function ResponsiveAvatar({
     props.onLoad?.(event);
   };
 
+  // An image that failed before React was listening (a page drawn before
+  // the app took over), or whose next try is the same file as the one
+  // that failed, gets no new `error` event, and stayed a broken image
+  // instead of giving way to the fallback. Caught here by looking at it.
+  const imageRef = useRef<HTMLImageElement>(null);
+  useLayoutEffect(() => {
+    const image = imageRef.current;
+    if (!image || !image.complete || image.naturalWidth > 0) return;
+    if (!image.currentSrc && !image.getAttribute("src")) return;
+    // Finished with no size: broken, or an SVG drawn without one (which is
+    // fine). Only a broken image fails to decode.
+    let current = true;
+    image.decode().catch(() => {
+      if (!current || imageRef.current !== image) return;
+      handleError({
+        currentTarget: image,
+        target: image,
+      } as unknown as SyntheticEvent<HTMLImageElement>);
+    });
+    return () => {
+      current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- per file tried
+  }, [activeSrc, activeSrcSet]);
+
   return (
     <img
       {...props}
+      ref={imageRef}
       src={activeSrc}
       srcSet={activeSrcSet}
       sizes={sizes}
