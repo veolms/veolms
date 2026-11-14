@@ -39,38 +39,38 @@ export interface MobileSheetAppearanceProps {
     source?: "appearance" | "theme",
   ) => void;
   openAppearanceThemeMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   startDockLongPress: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     action: () => void,
     includeMouse?: boolean,
   ) => void;
-  moveDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  finishDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  moveDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
+  finishDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
   mobilePaletteTriggerRef: RefObject<HTMLButtonElement | null>;
   currentAcademyThemeIndex: number;
   setReadingModeMenu: Dispatch<SetStateAction<"desktop" | "mobile" | null>>;
   setPaletteMenuSource: Dispatch<SetStateAction<"appearance" | "theme">>;
   setMobilePaletteMenu: Dispatch<SetStateAction<boolean>>;
   startAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     source: AppearanceSwipeSource,
   ) => void;
   finishAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     source: AppearanceSwipeSource,
     mobile?: boolean,
   ) => void;
-  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLElement>) => void;
   displayedAcademyTheme: string;
   readingModeEnabled: boolean;
   updateReadingMode: (preferences: Partial<ReadingModePreferences>) => void;
   readingModeMenu: "desktop" | "mobile" | null;
   showReadingModeMenu: (mobile?: boolean) => void;
   openReadingModeMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   page: string;
@@ -80,7 +80,7 @@ export interface MobileSheetAppearanceProps {
   settingsQuickMenu: "desktop" | "mobile" | null;
   toggleSettingsNavigation: () => void;
   openSettingsQuickMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   showSettingsQuickMenu: (mobile?: boolean) => void;

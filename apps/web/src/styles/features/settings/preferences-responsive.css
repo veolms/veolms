@@ -65,8 +65,8 @@
   .sidebar-nav-tooltip.is-preference-controlled {
   display: none !important;
 }
-:root[data-active-fill="false"] .courses-nav button.is-active,
-:root[data-active-fill="false"] .sidebar-appearance > button.is-active,
+:root[data-active-fill="false"] .courses-nav :is(button, a).is-active,
+:root[data-active-fill="false"] .sidebar-appearance > :is(button, a).is-active,
 :root[data-active-fill="false"]
   .mobile-menu-sheet__appearance
   > button.is-active,
@@ -77,8 +77,10 @@
   background: transparent;
   box-shadow: none;
 }
-:root[data-active-fill="false"] .mobile-bottom-nav > button.is-active,
-:root[data-active-fill="false"] .mobile-menu-sheet__list > button.is-active {
+:root[data-active-fill="false"] .mobile-bottom-nav > :is(button, a).is-active,
+:root[data-active-fill="false"]
+  .mobile-menu-sheet__list
+  > :is(button, a).is-active {
   background: transparent;
   box-shadow: none;
 }

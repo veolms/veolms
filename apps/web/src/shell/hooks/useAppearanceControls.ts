@@ -83,11 +83,11 @@ export interface UseAppearanceControlsResult {
   showReadingModeMenu: (mobile?: boolean) => void;
   showSettingsQuickMenu: (mobile?: boolean) => void;
   openSettingsQuickMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   openReadingModeMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   fullscreenActionLabel: "Exit fullscreen" | "Fullscreen";
@@ -156,7 +156,7 @@ export function useAppearanceControls({
 
     const controls = [
       ...group.querySelectorAll<HTMLElement>(
-        ":scope > button, :scope > .sidebar-palette-wrap",
+        ":scope > button, :scope > a, :scope > .sidebar-palette-wrap",
       ),
     ];
     const nextRects = controls.map((control) =>
@@ -274,7 +274,7 @@ export function useAppearanceControls({
     setSettingsQuickMenu(mobile ? "mobile" : "desktop");
   };
   const openSettingsQuickMenu = (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile = false,
   ) => {
     event.preventDefault();
@@ -287,7 +287,7 @@ export function useAppearanceControls({
     showSettingsQuickMenu(mobile);
   };
   const openReadingModeMenu = (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile = false,
   ) => {
     event.preventDefault();

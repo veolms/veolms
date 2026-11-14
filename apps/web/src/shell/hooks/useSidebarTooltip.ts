@@ -44,16 +44,14 @@ export interface UseSidebarTooltipResult {
   sidebarClassName: string;
   dismissSidebarTooltipImmediately: () => void;
   showSidebarTooltip: (
-    event:
-      ReactMouseEvent<HTMLButtonElement> | ReactFocusEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement> | ReactFocusEvent<HTMLElement>,
     label: string,
     active: boolean,
     showWhenExpanded?: boolean,
     preferenceControlled?: boolean,
   ) => void;
   hideCollapsedNavigationTooltip: (
-    event:
-      ReactMouseEvent<HTMLButtonElement> | ReactFocusEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement> | ReactFocusEvent<HTMLElement>,
   ) => void;
 }
 
@@ -152,8 +150,7 @@ export function useSidebarTooltip({
   };
 
   const showSidebarTooltip = (
-    event:
-      ReactMouseEvent<HTMLButtonElement> | ReactFocusEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement> | ReactFocusEvent<HTMLElement>,
     label: string,
     active: boolean,
     showWhenExpanded = false,
@@ -194,8 +191,7 @@ export function useSidebarTooltip({
   };
 
   const hideCollapsedNavigationTooltip = (
-    event:
-      ReactMouseEvent<HTMLButtonElement> | ReactFocusEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement> | ReactFocusEvent<HTMLElement>,
   ) => {
     if (sidebarTooltipTimerRef.current !== null) {
       window.clearTimeout(sidebarTooltipTimerRef.current);

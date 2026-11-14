@@ -33,7 +33,7 @@ function applyLessonMenuSection(storageKey: string) {
       // The menu's last element: every item before it has been parsed.
       if (!document.querySelector("[data-nav-end-space]")) return false;
       document
-        .querySelectorAll("#courses-sidebar-nav-scrollport > button")
+        .querySelectorAll("#courses-sidebar-nav-scrollport > a")
         .forEach((item) =>
           item.classList.toggle(
             "is-active",

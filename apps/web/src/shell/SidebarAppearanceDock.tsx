@@ -16,6 +16,7 @@ import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { AcademyPaletteMenu } from "./AcademyPaletteMenu";
 import { getNavigationIconColor } from "./navigation";
+import { leavesClickToBrowser } from "./navigationLink";
 import { themeRevealOriginFromClick } from "./themeViewTransition";
 import type { ThemeRevealOrigin } from "./themeViewTransition";
 import { academyThemes } from "../themes";
@@ -50,36 +51,36 @@ export interface SidebarAppearanceDockProps {
     source?: "appearance" | "theme",
   ) => void;
   openAppearanceThemeMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   startDockLongPress: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     action: () => void,
     includeMouse?: boolean,
   ) => void;
-  moveDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  finishDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  moveDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
+  finishDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
   paletteTriggerRef: RefObject<HTMLButtonElement | null>;
   setReadingModeMenu: Dispatch<SetStateAction<"desktop" | "mobile" | null>>;
   setPaletteMenuSource: Dispatch<SetStateAction<"appearance" | "theme">>;
   setPaletteMenu: Dispatch<SetStateAction<boolean>>;
   startAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     source: AppearanceSwipeSource,
   ) => void;
   finishAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     source: AppearanceSwipeSource,
     mobile?: boolean,
   ) => void;
-  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLElement>) => void;
   displayedAcademyTheme: string;
   readingModeEnabled: boolean;
   readingModeMenu: "desktop" | "mobile" | null;
   showReadingModeMenu: (mobile?: boolean) => void;
   openReadingModeMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   page: string;
@@ -88,7 +89,7 @@ export interface SidebarAppearanceDockProps {
   settingsQuickMenu: "desktop" | "mobile" | null;
   toggleSettingsNavigation: () => void;
   openSettingsQuickMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   showSettingsQuickMenu: (mobile?: boolean) => void;
@@ -339,11 +340,16 @@ export function SidebarAppearanceDock({
 
         if (item === "settings") {
           const settingsActive = page === "settings";
+          // A link to Settings, so Ctrl/⌘ or middle click opens it in a
+          // new tab. A plain click still toggles it (back to where the
+          // reader was, from Settings), and right click and a long press
+          // still open the settings quick menu.
           return (
-            <button
+            <a
               key={item}
               data-dock-item={item}
-              type="button"
+              href="/settings"
+              data-control-radius-surface=""
               className={`sidebar-appearance__settings${settingsActive ? " is-active" : ""}`}
               style={
                 {
@@ -362,6 +368,8 @@ export function SidebarAppearanceDock({
               aria-controls="desktop-settings-quick-menu"
               data-settings-quick-trigger
               onClick={(event) => {
+                if (leavesClickToBrowser(event)) return;
+                event.preventDefault();
                 if (consumeAppearanceGestureClick(event)) return;
                 toggleSettingsNavigation();
               }}
@@ -383,7 +391,7 @@ export function SidebarAppearanceDock({
                 size={20}
                 weight={settingsActive ? "fill" : "regular"}
               />
-            </button>
+            </a>
           );
         }
 
