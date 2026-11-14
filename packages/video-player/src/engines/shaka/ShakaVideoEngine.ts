@@ -582,7 +582,7 @@ export function dashInitSegmentUris(
   height: number | null,
 ): string[] {
   const uris: string[] = [];
-  if (typeof DOMParser === "undefined" || !/<MPD[s>]/.test(mpd)) return uris;
+  if (typeof DOMParser === "undefined" || !/<MPD[\s>]/.test(mpd)) return uris;
   try {
     const doc = new DOMParser().parseFromString(mpd, "application/xml");
     const seen = new Set<string>();
@@ -617,8 +617,8 @@ export function dashInitSegmentUris(
           const init = template?.getAttribute("initialization");
           if (!init) continue;
           const path = init
-            .replace(/$RepresentationID$/g, rep.getAttribute("id") ?? "")
-            .replace(/$Bandwidth$/g, rep.getAttribute("bandwidth") ?? "");
+            .replace(/\$RepresentationID\$/g, rep.getAttribute("id") ?? "")
+            .replace(/\$Bandwidth\$/g, rep.getAttribute("bandwidth") ?? "");
           const uri = new URL(path, base(rep, setBase)).toString();
           if (seen.has(uri)) continue;
           seen.add(uri);
