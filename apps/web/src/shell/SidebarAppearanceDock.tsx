@@ -11,12 +11,13 @@ import type {
 } from "react";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
-import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
+import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { AcademyPaletteMenu } from "./AcademyPaletteMenu";
 import { getNavigationIconColor } from "./navigation";
 import { leavesClickToBrowser } from "./navigationLink";
+import { NavCountBadge } from "./NavCountBadge";
 import { themeRevealOriginFromClick } from "./themeViewTransition";
 import type { ThemeRevealOrigin } from "./themeViewTransition";
 import { academyThemes } from "../themes";
@@ -84,6 +85,10 @@ export interface SidebarAppearanceDockProps {
     mobile?: boolean,
   ) => void;
   page: string;
+  /** On the Notifications icon's corner. */
+  unreadNotificationCount: number;
+  /** Opens the Notifications page in the app. */
+  openNotifications: () => void;
   settingsControlTitle: string;
   primaryShortcutModifier: "Meta" | "Control";
   settingsQuickMenu: "desktop" | "mobile" | null;
@@ -143,6 +148,8 @@ export function SidebarAppearanceDock({
   showReadingModeMenu,
   openReadingModeMenu,
   page,
+  unreadNotificationCount,
+  openNotifications,
   settingsControlTitle,
   primaryShortcutModifier,
   settingsQuickMenu,
@@ -291,50 +298,53 @@ export function SidebarAppearanceDock({
           );
         }
 
-        if (item === "reading-mode") {
+        // Notifications took Read mode's place (Read mode is in
+        // Settings): a link, so it opens in a new tab with Ctrl/⌘ or the
+        // middle button, with the unread count on its corner.
+        if (item === "notifications") {
+          const notificationsActive = page === "notifications";
           return (
-            <button
+            <a
               key={item}
               data-dock-item={item}
-              data-reading-mode-trigger
-              type="button"
-              className={`sidebar-appearance__reading-mode${readingModeEnabled ? " is-active" : ""}`}
-              aria-label={`Reading mode. Right-click or hold for its settings`}
-              aria-pressed={readingModeEnabled}
-              aria-controls="desktop-reading-mode-quick-settings"
-              title={`Reading mode - ${readingModeEnabled ? "on" : "off"} (right-click or hold for settings)`}
-              // A click turns reading mode on and off. Its menu opens on a
-              // right-click or a long press (the click that ends a long
-              // press is swallowed, so it does not also switch it).
-              onClick={(event) => {
-                if (consumeAppearanceGestureClick(event)) return;
-                updateReadingMode({ enabled: !readingModeEnabled });
-              }}
-              onContextMenu={openReadingModeMenu}
-              onPointerDown={(event) =>
-                startDockLongPress(
-                  event,
-                  () => showReadingModeMenu(false),
-                  true,
-                )
+              href="/notifications"
+              data-control-radius-surface=""
+              className={`sidebar-appearance__notifications relative${notificationsActive ? " is-active" : ""}`}
+              style={
+                {
+                  "--nav-icon-color": getNavigationIconColor(
+                    "Notifications",
+                    sidebarPreferences,
+                  ),
+                } as CSSProperties
               }
-              onPointerMove={moveDockLongPress}
-              onPointerUp={finishDockLongPress}
-              onPointerCancel={finishDockLongPress}
+              aria-label="Notifications"
+              title="Notifications"
+              aria-current={notificationsActive ? "page" : undefined}
+              aria-describedby={
+                unreadNotificationCount > 0
+                  ? "desktop-dock-notifications-count"
+                  : undefined
+              }
+              onClick={(event) => {
+                if (leavesClickToBrowser(event)) return;
+                event.preventDefault();
+                if (consumeAppearanceGestureClick(event)) return;
+                openNotifications();
+              }}
             >
-              <Eye
-                aria-hidden="true"
-                data-reading-mode-icon="off"
+              <Bell
                 size={20}
-                weight="regular"
+                weight={notificationsActive ? "fill" : "regular"}
               />
-              <Eye
-                aria-hidden="true"
-                data-reading-mode-icon="on"
-                size={20}
-                weight="fill"
+              <NavCountBadge
+                id="desktop-dock-notifications-count"
+                count={unreadNotificationCount}
+                max={9}
+                unreadLabel="unread notifications"
+                className="absolute top-1.5 right-[calc(50%-1.375rem)]"
               />
-            </button>
+            </a>
           );
         }
 

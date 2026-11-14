@@ -452,11 +452,11 @@
     box-shadow: none;
   }
 
-  .mobile-menu-sheet__appearance > button {
+  .mobile-menu-sheet__appearance > :is(button, a) {
     min-height: 44px;
   }
 
-  .mobile-menu-sheet__appearance > button.is-active {
+  .mobile-menu-sheet__appearance > :is(button, a).is-active {
     color: var(--text);
     border-color: transparent;
     background: var(--sidebar-menu-active-background);
@@ -471,7 +471,7 @@
     box-shadow: var(--sidebar-menu-active-shadow);
   }
 
-  .mobile-menu-sheet__appearance > button > i {
+  .mobile-menu-sheet__appearance > :is(button, a) > i {
     width: 8px;
     height: 8px;
     border-radius: 50%;

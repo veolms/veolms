@@ -14,6 +14,7 @@ import {
   type NavigationItem,
 } from "./navigation";
 import { leavesClickToBrowser, navigationHref } from "./navigationLink";
+import { NavCountBadge } from "./NavCountBadge";
 import type { NavigationItemWithMetadata } from "./navigation";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 
@@ -34,6 +35,8 @@ export interface MobileBottomNavigationProps {
   shellProfileAvatarSrcSet: { url: string; width: number; height: number }[];
   isAuthenticated: boolean;
   unreadNotificationCount: number;
+  /** Unread chat messages, shown on Chats. */
+  unreadChatCount: number;
 }
 
 export function MobileBottomNavigation({
@@ -53,6 +56,7 @@ export function MobileBottomNavigation({
   shellProfileAvatarSrcSet,
   isAuthenticated,
   unreadNotificationCount,
+  unreadChatCount,
 }: MobileBottomNavigationProps) {
   // prettier-ignore
   return (
@@ -71,6 +75,8 @@ export function MobileBottomNavigation({
         const [label, Icon] = item;
         const active = isNavigationItemActive(item);
         const displayLabel = label;
+        const badgeCount = label === "Chats" ? unreadChatCount : 0;
+        const badgeId = `mobile-nav-${label.toLowerCase()}-count`;
         return (
           <Fragment key={label}>
             {/* A link, as the sidebar's items are (see SidebarNavigation). */}
@@ -89,14 +95,21 @@ export function MobileBottomNavigation({
               aria-current={active ? "page" : undefined}
               data-sidebar-swipe-ignore
               aria-label={displayLabel}
+              aria-describedby={badgeCount > 0 ? badgeId : undefined}
               onClick={(event) => {
                 if (leavesClickToBrowser(event)) return;
                 event.preventDefault();
                 selectNavigation(label, item);
               }}
             >
-              <span>
+              <span className="relative">
                 <Icon size={23} weight={active ? "fill" : "regular"} />
+                <NavCountBadge
+                  id={badgeId}
+                  count={badgeCount}
+                  unreadLabel="unread messages"
+                  className="absolute -top-1.5 left-[calc(50%+4px)]"
+                />
               </span>
               <small>{displayLabel}</small>
             </a>

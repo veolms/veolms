@@ -52,19 +52,19 @@ const SIDEBAR_GLOW_SHAPE_BASE_LENGTHS = [
   ["--sidebar-bokeh-bottom-half-size", 63],
 ] as const;
 export type SidebarDockItem =
-  "appearance" | "theme" | "fullscreen" | "reading-mode" | "settings";
+  "appearance" | "theme" | "fullscreen" | "notifications" | "settings";
 
 export const SIDEBAR_DOCK_MAX_ITEMS = 5;
 export const SIDEBAR_DOCK_DEFAULT_ORDER: readonly SidebarDockItem[] = [
   "appearance",
   "theme",
-  "reading-mode",
+  "notifications",
   "settings",
   "fullscreen",
 ];
 export const SIDEBAR_DOCK_DEFAULT_ITEMS: readonly SidebarDockItem[] = [
   "appearance",
-  "reading-mode",
+  "notifications",
   "settings",
 ];
 
@@ -272,14 +272,22 @@ const SIDEBAR_DOCK_ITEMS = new Set<SidebarDockItem>([
   "appearance",
   "theme",
   "fullscreen",
-  "reading-mode",
+  "notifications",
   "settings",
 ]);
 
+/**
+ * Notifications took Read mode's place in the dock (Read mode is in
+ * Settings): a dock saved with Read mode shows Notifications there.
+ */
+const withDockRenames = (value: unknown[]): unknown[] =>
+  value.map((item) => (item === "reading-mode" ? "notifications" : item));
+
 export const normalizeSidebarDockItems = (
-  value: unknown,
+  input: unknown,
 ): SidebarDockItem[] => {
-  if (!Array.isArray(value)) return [...SIDEBAR_DOCK_DEFAULT_ITEMS];
+  if (!Array.isArray(input)) return [...SIDEBAR_DOCK_DEFAULT_ITEMS];
+  const value = withDockRenames(input);
 
   const items = value.filter(
     (item, index): item is SidebarDockItem =>
@@ -293,7 +301,7 @@ export const normalizeSidebarDockItems = (
 export const normalizeSidebarDockOrder = (
   value: unknown,
 ): SidebarDockItem[] => {
-  const requestedOrder = Array.isArray(value) ? value : [];
+  const requestedOrder = Array.isArray(value) ? withDockRenames(value) : [];
   const validItems = requestedOrder.filter(
     (item, index): item is SidebarDockItem =>
       typeof item === "string" &&
