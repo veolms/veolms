@@ -41,14 +41,21 @@ export function SettingsReadingModeSwitch() {
   };
 
   return (
-    <div className="flex shrink-0 items-center gap-2.5 rounded-xl border border-(--border) bg-(--surface) py-1.5 pr-1.5 pl-3">
+    // A narrow screen keeps the eye and the switch only: the words would
+    // push the heading's text and the page's edge.
+    <div
+      className="flex shrink-0 items-center gap-2.5 rounded-xl border border-(--border) bg-(--surface) py-1.5 pr-1.5 pl-3 max-md:gap-2 max-md:pl-2.5"
+      title="Reading mode"
+    >
       <Eye
         size={18}
         weight={enabled ? "fill" : "regular"}
         className="text-(--accent-ink,var(--accent))"
         aria-hidden="true"
       />
-      <span className="text-sm font-medium text-(--text)">Reading mode</span>
+      <span className="text-sm font-medium text-(--text) max-md:hidden">
+        Reading mode
+      </span>
       <SettingsToggle
         checked={enabled}
         onChange={change}
