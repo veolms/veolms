@@ -21,7 +21,6 @@ export interface SidebarProfileButtonProps {
   setProfileMenu: Dispatch<SetStateAction<boolean>>;
   shellProfileAvatarUrl: string | null;
   shellProfileAvatarSrcSet: { url: string; width: number; height: number }[];
-  unreadNotificationCount: number;
   canSwitchWorkspace: boolean;
   ProfileSubtitleIcon: Icon;
   effectiveRole: CourseRole;
@@ -43,7 +42,6 @@ export function SidebarProfileButton({
   setProfileMenu,
   shellProfileAvatarUrl,
   shellProfileAvatarSrcSet,
-  unreadNotificationCount,
   canSwitchWorkspace,
   ProfileSubtitleIcon,
   effectiveRole,
@@ -90,12 +88,6 @@ export function SidebarProfileButton({
               avatarUrl={shellProfileAvatarUrl}
               avatarSrcSet={shellProfileAvatarSrcSet}
             />
-            {unreadNotificationCount > 0 ? (
-              <i
-                className="courses-profile__presence"
-                aria-label={`${unreadNotificationCount} unread notifications`}
-              />
-            ) : null}
           </span>
           <span>
             {/* A box of its own, as wide as the room there is: a
