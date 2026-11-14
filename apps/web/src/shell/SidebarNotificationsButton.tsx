@@ -1,9 +1,6 @@
 import type { CSSProperties } from "react";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
-import {
-  NAV_COUNT_BADGE_CLASS,
-  NAV_COUNT_BADGE_CORNER_CLASS,
-} from "./NavCountBadge";
+import { NAV_COUNT_BADGE_CLASS } from "./NavCountBadge";
 import { formatBadgeCount } from "./navCount";
 
 export interface SidebarNotificationsButtonProps {
@@ -49,7 +46,9 @@ export function SidebarNotificationsButton({
           buttons' spans (their labels), which took the count with them. */}
       {unreadCount > 0 ? (
         <em
-          className={`${NAV_COUNT_BADGE_CLASS} ${NAV_COUNT_BADGE_CORNER_CLASS}`}
+          // Half on the bell itself (its top-right), as a phone shows an
+          // app's count, not on the button's corner.
+          className={`${NAV_COUNT_BADGE_CLASS} absolute top-[calc(50%-8px)] left-[calc(50%+8px)] h-4.5 min-w-4.5 -translate-x-1/2 -translate-y-1/2 px-1 text-[0.625rem] shadow-[0_0_0_2px_var(--surface)]`}
           aria-hidden="true"
           data-notifications-badge=""
         >
