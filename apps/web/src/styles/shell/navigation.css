@@ -84,7 +84,26 @@
   );
 }
 
-.courses-nav button {
+/* The menu items that go to a page are links (so they open in a new tab
+   with Ctrl/⌘ or the middle button). They start from what a button
+   brings, not a link's colour and underline; every rule below sets its own
+   colours over this, which weighs nothing (`:where`). */
+:where(
+    .courses-nav,
+    .mobile-bottom-nav,
+    .mobile-menu-sheet__list,
+    .sidebar-appearance
+  )
+  > a,
+:where(.courses-nav) a {
+  color: inherit;
+  text-decoration: none;
+  line-height: normal;
+  text-align: center;
+  -webkit-user-drag: none;
+}
+
+.courses-nav :is(button, a) {
   min-height: 47px;
   border-radius: 10px;
   padding-inline: 14px;
@@ -95,7 +114,7 @@
     box-shadow 150ms ease;
 }
 
-.courses-nav button:hover {
+.courses-nav :is(button, a):hover {
   background: var(
     --sidebar-menu-hover-background,
     color-mix(in srgb, var(--surface) 72%, transparent)
@@ -156,7 +175,7 @@
   }
 }
 
-.courses-nav button.is-active {
+.courses-nav :is(button, a).is-active {
   background: var(--sidebar-menu-active-background);
   box-shadow: var(--sidebar-menu-active-shadow);
 }
@@ -164,24 +183,24 @@
 /* The More drawer is the compact presentation of this same navigation, so
    preserve the selected-surface treatment instead of substituting a second
    mobile-only effect. Layout remains mobile-specific in home.css. */
-.mobile-menu-sheet__list > button {
+.mobile-menu-sheet__list > :is(button, a) {
   transition:
     background-color 150ms ease,
     color 150ms ease,
     box-shadow 150ms ease;
 }
 
-.mobile-menu-sheet__list > button:hover {
+.mobile-menu-sheet__list > :is(button, a):hover {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
   box-shadow: none;
 }
 
-.mobile-menu-sheet__list > button.is-active {
+.mobile-menu-sheet__list > :is(button, a).is-active {
   background: var(--sidebar-menu-active-background);
   box-shadow: var(--sidebar-menu-active-shadow);
 }
 
-.courses-nav button > svg {
+.courses-nav :is(button, a) > svg {
   color: var(--nav-icon-color);
   filter: none;
 }
@@ -264,8 +283,8 @@
   font: inherit;
 }
 
-.courses-nav button:hover .courses-nav__shortcut,
-.courses-nav button:focus-visible .courses-nav__shortcut {
+.courses-nav :is(button, a):hover .courses-nav__shortcut,
+.courses-nav :is(button, a):focus-visible .courses-nav__shortcut {
   min-width: 28px;
   max-width: 96px;
   border-color: color-mix(in srgb, var(--accent) 22%, transparent);
@@ -440,7 +459,7 @@
   filter: none;
 }
 
-.sidebar-appearance > button,
+.sidebar-appearance > :is(button, a),
 .sidebar-palette-trigger {
   position: relative;
   display: inline-flex;
@@ -458,25 +477,25 @@
   box-shadow: none;
 }
 
-.sidebar-appearance > button,
+.sidebar-appearance > :is(button, a),
 .mobile-menu-sheet__appearance > button {
   /* Keep vertical sheet dismissal native while reserving horizontal travel
      for the appearance switch gesture. */
   touch-action: pan-y;
 }
 
-.sidebar-appearance > button {
+.sidebar-appearance > :is(button, a) {
   flex: 1;
 }
 
-.sidebar-appearance > button:hover:not(.is-active),
+.sidebar-appearance > :is(button, a):hover:not(.is-active),
 .sidebar-palette-trigger:hover:not([aria-pressed="true"]) {
   color: var(--text);
   background: color-mix(in srgb, var(--hover) 76%, var(--surface));
   border-color: color-mix(in srgb, var(--border-strong) 82%, var(--accent));
 }
 
-.sidebar-appearance > button.is-active,
+.sidebar-appearance > :is(button, a).is-active,
 .sidebar-palette-trigger[aria-pressed="true"] {
   color: var(--text);
   border-color: transparent;
@@ -514,7 +533,7 @@
   display: block;
 }
 
-.sidebar-appearance > button > svg,
+.sidebar-appearance > :is(button, a) > svg,
 .sidebar-palette-trigger > svg,
 .mobile-menu-sheet__appearance > button > svg {
   color: var(--accent-ink, var(--accent));
@@ -527,7 +546,7 @@
     filter 160ms ease;
 }
 
-.sidebar-appearance > button.sidebar-appearance__settings > svg,
+.sidebar-appearance > :is(button, a).sidebar-appearance__settings > svg,
 .mobile-menu-sheet__appearance > button[data-dock-item="settings"] > svg {
   color: var(--nav-icon-color, var(--accent-ink, var(--accent)));
 }
@@ -821,12 +840,12 @@
     0 8px 20px color-mix(in srgb, var(--accent-shadow) 34%, transparent);
 }
 
-:root[data-theme="light"] .courses-nav button {
+:root[data-theme="light"] .courses-nav :is(button, a) {
   color: var(--sidebar-nav-text);
   font-weight: 560;
 }
 
-:root[data-theme="light"] .courses-nav button:hover {
+:root[data-theme="light"] .courses-nav :is(button, a):hover {
   color: var(--text);
   background: color-mix(in srgb, var(--selected) 68%, var(--surface));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent);
@@ -844,18 +863,21 @@
   );
 }
 
-:root[data-theme="light"] .courses-nav button.is-active {
+:root[data-theme="light"] .courses-nav :is(button, a).is-active {
   color: var(--text);
   background: var(--sidebar-menu-active-background);
   box-shadow: var(--sidebar-menu-active-shadow);
 }
 
-:root[data-theme="light"] .courses-nav button.is-active .courses-nav__text {
+:root[data-theme="light"]
+  .courses-nav
+  :is(button, a).is-active
+  .courses-nav__text {
   font-weight: 680;
   letter-spacing: -0.01em;
 }
 
-:root[data-theme="light"] .courses-nav button > svg {
+:root[data-theme="light"] .courses-nav :is(button, a) > svg {
   /* Keep the per-item spectrum saturated on pale rails; the previous blend
      with the rail ink washed the icons out in every light palette. */
   color: color-mix(
@@ -866,7 +888,7 @@
   filter: none;
 }
 
-:root[data-theme="light"] .courses-nav button.is-active > svg {
+:root[data-theme="light"] .courses-nav :is(button, a).is-active > svg {
   color: color-mix(
     in srgb,
     var(--nav-icon-color) 94%,
@@ -893,7 +915,7 @@
   color: var(--text-secondary);
 }
 
-:root[data-theme="light"] .sidebar-appearance > button.is-active,
+:root[data-theme="light"] .sidebar-appearance > :is(button, a).is-active,
 :root[data-theme="light"] .sidebar-palette-trigger[aria-pressed="true"] {
   color: var(--text);
   background: var(--sidebar-menu-active-background);
@@ -1029,7 +1051,7 @@
   ) !important;
 }
 
-.courses-app--collapsed .courses-nav button {
+.courses-app--collapsed .courses-nav :is(button, a) {
   width: 100%;
   justify-content: flex-start;
   gap: 15px;
@@ -1037,9 +1059,9 @@
   overflow: visible;
 }
 
-.courses-app--collapsed .courses-nav button > .courses-nav__text,
-.courses-app--collapsed .courses-nav button > b,
-.courses-app--collapsed .courses-nav button > .courses-nav__shortcut {
+.courses-app--collapsed .courses-nav :is(button, a) > .courses-nav__text,
+.courses-app--collapsed .courses-nav :is(button, a) > b,
+.courses-app--collapsed .courses-nav :is(button, a) > .courses-nav__shortcut {
   display: none;
 }
 
@@ -1075,7 +1097,7 @@
   padding: 5px;
 }
 
-.courses-app--collapsed .sidebar-appearance > button {
+.courses-app--collapsed .sidebar-appearance > :is(button, a) {
   display: inline-flex;
   width: 42px;
   flex: 0 0 38px;
@@ -1096,7 +1118,7 @@
    Override the structured radius locally because its global important rule
    otherwise reduces these controls to 8px. */
 .courses-app--collapsed .courses-profile > .courses-profile__button,
-.courses-app--collapsed .sidebar-appearance > button,
+.courses-app--collapsed .sidebar-appearance > :is(button, a),
 .courses-app--collapsed .sidebar-palette-trigger,
 :root[data-sidebar-state="collapsed"]
   .courses-app:not(.courses-app--collapsed)
@@ -1123,7 +1145,9 @@
   .courses-app.courses-app--resizing:not(.courses-app--collapsed)
   .courses-profile
   > .courses-profile__button,
-.courses-app--resizing.courses-app--collapsed .sidebar-appearance > button,
+.courses-app--resizing.courses-app--collapsed
+  .sidebar-appearance
+  > :is(button, a),
 :root[data-sidebar-state="collapsed"]
   .courses-app.courses-app--resizing:not(.courses-app--collapsed)
   .sidebar-appearance
@@ -1738,7 +1762,7 @@
   }
 }
 
-:root .courses-app--hidden .courses-nav button.is-active {
+:root .courses-app--hidden .courses-nav :is(button, a).is-active {
   background: color-mix(in srgb, var(--selected) 68%, transparent);
   -webkit-backdrop-filter: blur(12px) saturate(1.15);
   backdrop-filter: blur(12px) saturate(1.15);
@@ -1752,7 +1776,7 @@
     background: color-mix(in srgb, var(--app-shell) 94%, var(--surface));
   }
 
-  :root .courses-app--hidden .courses-nav button.is-active {
+  :root .courses-app--hidden .courses-nav :is(button, a).is-active {
     background: color-mix(in srgb, var(--selected) 90%, var(--surface));
   }
 }

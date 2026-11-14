@@ -11,7 +11,12 @@ import type {
   MouseEvent as ReactMouseEvent,
 } from "react";
 import { SidebarResizeReadout } from "./SidebarResizeReadout";
-import { getNavigationIconColor, type NavigationItem } from "./navigation";
+import {
+  getNavigationDestination,
+  getNavigationIconColor,
+  type NavigationItem,
+} from "./navigation";
+import { leavesClickToBrowser, navigationHref } from "./navigationLink";
 import type { NavigationItemWithMetadata } from "./navigation";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 import { SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS } from "./academyShellClasses";
@@ -31,16 +36,14 @@ export interface SidebarNavigationProps {
   selectNavigation: (label: string, item?: NavigationItemWithMetadata) => void;
   navigationUsesCompactInteraction: boolean;
   showSidebarTooltip: (
-    event:
-      ReactMouseEvent<HTMLButtonElement> | ReactFocusEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement> | ReactFocusEvent<HTMLElement>,
     label: string,
     active: boolean,
     showWhenExpanded?: boolean,
     preferenceControlled?: boolean,
   ) => void;
   hideCollapsedNavigationTooltip: (
-    event:
-      ReactMouseEvent<HTMLButtonElement> | ReactFocusEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement> | ReactFocusEvent<HTMLElement>,
   ) => void;
   showKeyboardShortcuts: boolean;
   settingsShortcutKeys: string[];
@@ -90,7 +93,7 @@ export function SidebarNavigation({
     const menu = navigationRef.current;
     if (!hydrated || !menu) return;
     const active = new Set(activeLabels.split("|"));
-    for (const item of menu.querySelectorAll(":scope > button")) {
+    for (const item of menu.querySelectorAll(":scope > a, :scope > button")) {
       item.classList.toggle(
         "is-active",
         active.has(item.getAttribute("aria-label") ?? ""),
@@ -147,8 +150,13 @@ export function SidebarNavigation({
         const accessibleLabel = displayLabel;
         return (
           <Fragment key={label}>
-            <button
-              type="button"
+            {/* A link, so Ctrl/⌘ or middle click opens the page in a new
+                tab and right click offers the browser's link menu. A plain
+                click still goes through the app (closing what is open
+                first) without reloading. */}
+            <a
+              href={navigationHref(getNavigationDestination(item))}
+              data-control-radius-surface=""
               className={`${active ? "is-active " : ""}${SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS}`}
               style={
                 {
@@ -165,7 +173,11 @@ export function SidebarNavigation({
                   ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma`
                   : String(navigationIndex + 1)
               }
-              onClick={() => selectNavigation(label, item)}
+              onClick={(event) => {
+                if (leavesClickToBrowser(event)) return;
+                event.preventDefault();
+                selectNavigation(label, item);
+              }}
               onContextMenu={(event) => {
                 if (navigationUsesCompactInteraction)
                   event.preventDefault();
@@ -205,7 +217,7 @@ export function SidebarNavigation({
                   }
                 />
               )}
-            </button>
+            </a>
           </Fragment>
         );
       })}

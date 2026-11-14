@@ -8,7 +8,12 @@ import type { CSSProperties } from "react";
 import { GuestProfileIcon } from "../icons/GuestProfileIcon";
 import type { CourseRole } from "../courses/catalogue";
 import { ShellProfileAvatar } from "./ShellProfileAvatar";
-import { getNavigationIconColor, type NavigationItem } from "./navigation";
+import {
+  getNavigationDestination,
+  getNavigationIconColor,
+  type NavigationItem,
+} from "./navigation";
+import { leavesClickToBrowser, navigationHref } from "./navigationLink";
 import type { NavigationItemWithMetadata } from "./navigation";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 
@@ -58,7 +63,7 @@ export function MobileBottomNavigation({
       // read well as they are. When it is the active page its label,
       // which is the icon's colour, darkens with it. Both are marked
       // important: the bar's own stylesheet is not in a layer.
-      className={`mobile-bottom-nav [:root[data-theme=light]_&>button[aria-label=Discussions].is-active]:text-[color-mix(in_srgb,var(--nav-icon-color)_66%,black)]! [:root[data-theme=light]_&>button[aria-label=Discussions]_svg]:text-[color-mix(in_srgb,var(--nav-icon-color)_66%,black)]! ${mobileBottomNavHidden ? "is-scroll-hidden" : ""}`}
+      className={`mobile-bottom-nav [:root[data-theme=light]_&>a[aria-label=Discussions].is-active]:text-[color-mix(in_srgb,var(--nav-icon-color)_66%,black)]! [:root[data-theme=light]_&>a[aria-label=Discussions]_svg]:text-[color-mix(in_srgb,var(--nav-icon-color)_66%,black)]! ${mobileBottomNavHidden ? "is-scroll-hidden" : ""}`}
       aria-label={`${effectiveRole === "creator" ? "Creator" : "Student"} mobile navigation`}
       onFocusCapture={() => setMobileBottomNavHidden(false)}
     >
@@ -68,8 +73,10 @@ export function MobileBottomNavigation({
         const displayLabel = label;
         return (
           <Fragment key={label}>
-            <button
-              type="button"
+            {/* A link, as the sidebar's items are (see SidebarNavigation). */}
+            <a
+              href={navigationHref(getNavigationDestination(item))}
+              data-control-radius-surface=""
               className={active ? "is-active" : ""}
               style={
                 {
@@ -82,13 +89,17 @@ export function MobileBottomNavigation({
               aria-current={active ? "page" : undefined}
               data-sidebar-swipe-ignore
               aria-label={displayLabel}
-              onClick={() => selectNavigation(label, item)}
+              onClick={(event) => {
+                if (leavesClickToBrowser(event)) return;
+                event.preventDefault();
+                selectNavigation(label, item);
+              }}
             >
               <span>
                 <Icon size={23} weight={active ? "fill" : "regular"} />
               </span>
               <small>{displayLabel}</small>
-            </button>
+            </a>
           </Fragment>
         );
       })}
