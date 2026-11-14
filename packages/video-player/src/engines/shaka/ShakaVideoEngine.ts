@@ -1008,12 +1008,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const generation = this.#loadGeneration;
     const current = () =>
       this.#player === player && this.isCurrentOperation(generation);
-    // Fetched as the player's own requests are: the same request filter
-    // (tokens, cache keys) makes the same addresses.
-    const fetchFiltered = async (
+    // Asked for as the player's own requests are: the same request filter
+    // (the media origin, tokens, cache keys) makes the same addresses, which
+    // the browser's cache then answers.
+    const filtered = async (
       type: VideoNetworkRequest["type"],
       uri: string,
-    ): Promise<Response> => {
+    ): Promise<VideoNetworkRequest> => {
       const request: VideoNetworkRequest = {
         type,
         uris: [uri],
@@ -1023,31 +1024,45 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         allowCrossSiteCredentials: false,
       };
       await source.networking?.requestFilter?.(request);
+      return request;
+    };
+    const fetchFiltered = async (
+      type: VideoNetworkRequest["type"],
+      uri: string,
+    ): Promise<Response> => {
+      const request = await filtered(type, uri);
       return fetch(request.uris[0] ?? uri, {
         headers: request.headers,
         priority: "low",
       } as RequestInit);
     };
-    let manifestUrl: string;
-    try {
-      manifestUrl = new URL(source.src, globalThis.location?.href).toString();
-    } catch {
-      return;
-    }
-    if (!/^https?:/i.test(manifestUrl)) return;
     setTimeout(async () => {
       if (!current()) return;
       const active = player.getVariantTracks().find((track) => track.active);
+      let manifestUrl: string;
       let mpd = source.inlinedManifest ?? "";
-      if (!mpd) {
-        // Not handed over with the source: the manifest's few kilobytes
-        // once more (the init segments it lists are what saves the time).
-        try {
-          mpd = await (await fetchFiltered("manifest", manifestUrl)).text();
-        } catch {
-          markPlayback("init-warm", { count: 0, manifest: "unreadable" });
-          return;
+      try {
+        // The source's address may be relative to the media origin, which
+        // only the request filter knows.
+        const request = await filtered("manifest", source.src);
+        manifestUrl = new URL(
+          request.uris[0] ?? source.src,
+          globalThis.location?.href,
+        ).toString();
+        if (!/^https?:/i.test(manifestUrl)) return;
+        if (!mpd) {
+          // Not handed over with the source: the manifest's few kilobytes
+          // once more (the init segments it lists are what saves the time).
+          const response = await fetch(manifestUrl, {
+            headers: request.headers,
+            priority: "low",
+          } as RequestInit);
+          if (!response.ok) throw new Error(String(response.status));
+          mpd = await response.text();
         }
+      } catch {
+        markPlayback("init-warm", { count: 0, manifest: "unreadable" });
+        return;
       }
       if (!current()) return;
       const uris = dashInitSegmentUris(
