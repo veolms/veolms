@@ -439,7 +439,6 @@ export function ProfileMenu({
           ) : (
             <>
               <div className="profile-menu__group profile-menu__group--account">
-                {/* Notifications is in the sidebar's dock, with its count. */}
                 <a
                   className={`profile-menu__item ${currentPageItemClasses}${isCurrentPage("/progress") ? " is-active" : ""}`}
                   role="menuitem"

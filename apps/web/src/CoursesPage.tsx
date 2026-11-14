@@ -683,7 +683,6 @@ export function CoursesPage({
     openMobileNavigationMenu,
     dismissMobileMenuThen,
     selectNavigation,
-    toggleSettingsNavigation,
     navigateSettingsQuickMenu,
   } = useMobileMenuActions({
     onExitSettings,
@@ -784,6 +783,22 @@ export function CoursesPage({
     appearanceSwipeConsumedRef,
     dockLongPressConsumedUntilRef,
     appearanceControlsHorizontal,
+  });
+  // The bell in the sidebar's bottom row (and the phone menu's).
+  const dockUnreadNotificationCount = isAuthenticated
+    ? unreadNotificationCount
+    : 0;
+  const openNotifications = () => {
+    setSettingsQuickMenu(null);
+    setReadingModeMenu(null);
+    setEdgeSidebarOpen(false);
+    dismissMobileMenuThen(() => onNavigatePage("/notifications"));
+  };
+  // Reading mode's switch, at the top of the settings (gear) menu.
+  const settingsMenuReadingMode = (mobile: boolean) => ({
+    enabled: readingModeEnabled,
+    onToggle: () => updateReadingMode({ enabled: !readingModeEnabled }),
+    onOpenSettings: () => showReadingModeMenu(mobile),
   });
 
   const {
@@ -1257,7 +1272,6 @@ export function CoursesPage({
                 setProfileMenu={setProfileMenu}
                 shellProfileAvatarUrl={shellProfileAvatarUrl}
                 shellProfileAvatarSrcSet={shellProfileAvatarSrcSet}
-                unreadNotificationCount={unreadNotificationCount}
                 canSwitchWorkspace={canSwitchWorkspace}
                 ProfileSubtitleIcon={ProfileSubtitleIcon}
                 effectiveRole={effectiveRole}
@@ -1268,8 +1282,6 @@ export function CoursesPage({
                 onNavigatePage={onNavigatePage}
               />
               <SidebarAppearanceDock
-                unreadNotificationCount={unreadNotificationCount}
-                openNotifications={() => selectNavigation("/notifications")}
                 appearanceControlsRef={appearanceControlsRef}
                 appearanceControlsHorizontal={appearanceControlsHorizontal}
                 sidebarPreferences={sidebarPreferences}
@@ -1300,7 +1312,8 @@ export function CoursesPage({
                 settingsControlTitle={settingsControlTitle}
                 primaryShortcutModifier={primaryShortcutModifier}
                 settingsQuickMenu={settingsQuickMenu}
-                toggleSettingsNavigation={toggleSettingsNavigation}
+                unreadNotificationCount={dockUnreadNotificationCount}
+                openNotifications={openNotifications}
                 openSettingsQuickMenu={openSettingsQuickMenu}
                 showSettingsQuickMenu={showSettingsQuickMenu}
                 isFullscreen={isFullscreen}
@@ -1331,6 +1344,7 @@ export function CoursesPage({
                         : null
                     }
                     onNavigate={navigateSettingsQuickMenu}
+                    readingMode={settingsMenuReadingMode(false)}
                     showSignedInTabs={isAuthenticated}
                   />
                 </Suspense>
@@ -1474,6 +1488,7 @@ export function CoursesPage({
                             : null
                         }
                         onNavigate={navigateSettingsQuickMenu}
+                        readingMode={settingsMenuReadingMode(true)}
                         showSignedInTabs={isAuthenticated}
                       />
                     </Suspense>
@@ -1555,8 +1570,6 @@ export function CoursesPage({
                   <DiwaliMenuOffer />
                 </div>
                 <MobileSheetAppearance
-                  unreadNotificationCount={unreadNotificationCount}
-                  openNotifications={() => selectNavigation("/notifications")}
                   mobilePaletteMenu={mobilePaletteMenu}
                   sidebarDockItems={sidebarDockItems}
                   mobileAppearanceModeTriggerRef={
@@ -1589,7 +1602,8 @@ export function CoursesPage({
                   settingsControlTitle={settingsControlTitle}
                   primaryShortcutModifier={primaryShortcutModifier}
                   settingsQuickMenu={settingsQuickMenu}
-                  toggleSettingsNavigation={toggleSettingsNavigation}
+                  unreadNotificationCount={dockUnreadNotificationCount}
+                  openNotifications={openNotifications}
                   openSettingsQuickMenu={openSettingsQuickMenu}
                   showSettingsQuickMenu={showSettingsQuickMenu}
                   isFullscreen={isFullscreen}

@@ -11,13 +11,12 @@ import type {
 } from "react";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
-import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { AcademyPaletteMenu } from "./AcademyPaletteMenu";
+import { SidebarNotificationsButton } from "./SidebarNotificationsButton";
 import { getNavigationIconColor } from "./navigation";
-import { leavesClickToBrowser } from "./navigationLink";
-import { NavCountBadge } from "./NavCountBadge";
 import { themeRevealOriginFromClick } from "./themeViewTransition";
 import type { ThemeRevealOrigin } from "./themeViewTransition";
 import { academyThemes } from "../themes";
@@ -52,49 +51,44 @@ export interface SidebarAppearanceDockProps {
     source?: "appearance" | "theme",
   ) => void;
   openAppearanceThemeMenu: (
-    event: ReactMouseEvent<HTMLElement>,
+    event: ReactMouseEvent<HTMLButtonElement>,
     mobile?: boolean,
   ) => void;
   startDockLongPress: (
-    event: ReactPointerEvent<HTMLElement>,
+    event: ReactPointerEvent<HTMLButtonElement>,
     action: () => void,
     includeMouse?: boolean,
   ) => void;
-  moveDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
-  finishDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
+  moveDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  finishDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   paletteTriggerRef: RefObject<HTMLButtonElement | null>;
   setReadingModeMenu: Dispatch<SetStateAction<"desktop" | "mobile" | null>>;
   setPaletteMenuSource: Dispatch<SetStateAction<"appearance" | "theme">>;
   setPaletteMenu: Dispatch<SetStateAction<boolean>>;
   startAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLElement>,
+    event: ReactPointerEvent<HTMLButtonElement>,
     source: AppearanceSwipeSource,
   ) => void;
   finishAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLElement>,
+    event: ReactPointerEvent<HTMLButtonElement>,
     source: AppearanceSwipeSource,
     mobile?: boolean,
   ) => void;
-  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLElement>) => void;
+  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   displayedAcademyTheme: string;
   readingModeEnabled: boolean;
   readingModeMenu: "desktop" | "mobile" | null;
   showReadingModeMenu: (mobile?: boolean) => void;
   openReadingModeMenu: (
-    event: ReactMouseEvent<HTMLElement>,
+    event: ReactMouseEvent<HTMLButtonElement>,
     mobile?: boolean,
   ) => void;
   page: string;
-  /** On the Notifications icon's corner. */
-  unreadNotificationCount: number;
-  /** Opens the Notifications page in the app. */
-  openNotifications: () => void;
   settingsControlTitle: string;
   primaryShortcutModifier: "Meta" | "Control";
   settingsQuickMenu: "desktop" | "mobile" | null;
-  toggleSettingsNavigation: () => void;
   openSettingsQuickMenu: (
-    event: ReactMouseEvent<HTMLElement>,
+    event: ReactMouseEvent<HTMLButtonElement>,
     mobile?: boolean,
   ) => void;
   showSettingsQuickMenu: (mobile?: boolean) => void;
@@ -102,6 +96,9 @@ export interface SidebarAppearanceDockProps {
   fullscreenActionLabel: "Exit fullscreen" | "Fullscreen";
   toggleFullscreen: () => Promise<void>;
   sidebarCollapsed: boolean;
+  /** Unread notifications for the bell; 0 for a guest. */
+  unreadNotificationCount: number;
+  openNotifications: () => void;
   readingModePreferences: {
     enabled: boolean;
     colorTemperature: number;
@@ -148,18 +145,17 @@ export function SidebarAppearanceDock({
   showReadingModeMenu,
   openReadingModeMenu,
   page,
-  unreadNotificationCount,
-  openNotifications,
   settingsControlTitle,
   primaryShortcutModifier,
   settingsQuickMenu,
-  toggleSettingsNavigation,
   openSettingsQuickMenu,
   showSettingsQuickMenu,
   isFullscreen,
   fullscreenActionLabel,
   toggleFullscreen,
   sidebarCollapsed,
+  unreadNotificationCount,
+  openNotifications,
   readingModePreferences,
   updateReadingMode,
   changePalette,
@@ -298,68 +294,75 @@ export function SidebarAppearanceDock({
           );
         }
 
-        // Notifications took Read mode's place (Read mode is in
-        // Settings): a link, so it opens in a new tab with Ctrl/⌘ or the
-        // middle button, with the unread count on its corner.
         if (item === "notifications") {
-          const notificationsActive = page === "notifications";
           return (
-            <a
+            <SidebarNotificationsButton
+              key={item}
+              unreadCount={unreadNotificationCount}
+              active={page === "notifications"}
+              iconColor={getNavigationIconColor(
+                "Notifications",
+                sidebarPreferences,
+              )}
+              onOpen={openNotifications}
+            />
+          );
+        }
+
+        if (item === "reading-mode") {
+          return (
+            <button
               key={item}
               data-dock-item={item}
-              href="/notifications"
-              data-control-radius-surface=""
-              className={`sidebar-appearance__notifications relative${notificationsActive ? " is-active" : ""}`}
-              style={
-                {
-                  "--nav-icon-color": getNavigationIconColor(
-                    "Notifications",
-                    sidebarPreferences,
-                  ),
-                } as CSSProperties
-              }
-              aria-label="Notifications"
-              title="Notifications"
-              aria-current={notificationsActive ? "page" : undefined}
-              aria-describedby={
-                unreadNotificationCount > 0
-                  ? "desktop-dock-notifications-count"
-                  : undefined
-              }
+              data-reading-mode-trigger
+              type="button"
+              className={`sidebar-appearance__reading-mode${readingModeEnabled ? " is-active" : ""}`}
+              aria-label={`Reading mode. Right-click or hold for its settings`}
+              aria-pressed={readingModeEnabled}
+              aria-controls="desktop-reading-mode-quick-settings"
+              title={`Reading mode - ${readingModeEnabled ? "on" : "off"} (right-click or hold for settings)`}
+              // A click turns reading mode on and off. Its menu opens on a
+              // right-click or a long press (the click that ends a long
+              // press is swallowed, so it does not also switch it).
               onClick={(event) => {
-                if (leavesClickToBrowser(event)) return;
-                event.preventDefault();
                 if (consumeAppearanceGestureClick(event)) return;
-                openNotifications();
+                updateReadingMode({ enabled: !readingModeEnabled });
               }}
+              onContextMenu={openReadingModeMenu}
+              onPointerDown={(event) =>
+                startDockLongPress(
+                  event,
+                  () => showReadingModeMenu(false),
+                  true,
+                )
+              }
+              onPointerMove={moveDockLongPress}
+              onPointerUp={finishDockLongPress}
+              onPointerCancel={finishDockLongPress}
             >
-              <Bell
+              <Eye
+                aria-hidden="true"
+                data-reading-mode-icon="off"
                 size={20}
-                weight={notificationsActive ? "fill" : "regular"}
+                weight="regular"
               />
-              <NavCountBadge
-                id="desktop-dock-notifications-count"
-                count={unreadNotificationCount}
-                max={9}
-                unreadLabel="unread notifications"
-                className="absolute top-1.5 right-[calc(50%-1.375rem)]"
+              <Eye
+                aria-hidden="true"
+                data-reading-mode-icon="on"
+                size={20}
+                weight="fill"
               />
-            </a>
+            </button>
           );
         }
 
         if (item === "settings") {
           const settingsActive = page === "settings";
-          // A link to Settings, so Ctrl/⌘ or middle click opens it in a
-          // new tab. A plain click still toggles it (back to where the
-          // reader was, from Settings), and right click and a long press
-          // still open the settings quick menu.
           return (
-            <a
+            <button
               key={item}
               data-dock-item={item}
-              href="/settings"
-              data-control-radius-surface=""
+              type="button"
               className={`sidebar-appearance__settings${settingsActive ? " is-active" : ""}`}
               style={
                 {
@@ -377,11 +380,11 @@ export function SidebarAppearanceDock({
               aria-expanded={settingsQuickMenu === "desktop"}
               aria-controls="desktop-settings-quick-menu"
               data-settings-quick-trigger
+              // A click opens the settings menu: reading mode and the
+              // settings pages (Ctrl+Comma still opens the page itself).
               onClick={(event) => {
-                if (leavesClickToBrowser(event)) return;
-                event.preventDefault();
                 if (consumeAppearanceGestureClick(event)) return;
-                toggleSettingsNavigation();
+                openSettingsQuickMenu(event, false);
               }}
               onContextMenu={(event) =>
                 openSettingsQuickMenu(event, false)
@@ -401,7 +404,7 @@ export function SidebarAppearanceDock({
                 size={20}
                 weight={settingsActive ? "fill" : "regular"}
               />
-            </a>
+            </button>
           );
         }
 

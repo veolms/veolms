@@ -11,7 +11,10 @@ import {
   playbackRatesMatch,
 } from "../playback/playbackRates";
 import { usePlayerController } from "../react/context";
-import { PLAYER_FEEDBACK_DURATION_MS } from "../controls/feedbackTiming";
+import {
+  PLAYER_FEEDBACK_DURATION_MS,
+  seekFeedbackSeconds,
+} from "../controls/feedbackTiming";
 
 /** One press of Up or Down: 5% of the volume, as on YouTube. */
 const KEYBOARD_VOLUME_STEP = 0.05;
@@ -100,14 +103,17 @@ export function usePlayerKeyboard({
           const direction: -1 | 1 = delta < 0 ? -1 : 1;
           const now = performance.now();
           const run = seekRunRef.current;
+          // Only what playback really moved counts: at 0:00 a back press
+          // moves nothing and adds nothing.
+          const moved = Math.abs(controller.seekBy(delta));
           const totalSeconds =
             (run?.direction === direction &&
             now - run.at < PLAYER_FEEDBACK_DURATION_MS
               ? run.totalSeconds
-              : 0) + Math.round(Math.abs(delta));
+              : 0) + moved;
           seekRunRef.current = { direction, totalSeconds, at: now };
-          controller.seekBy(delta);
-          controller.showHud(`${direction < 0 ? "−" : "+"}${totalSeconds}`, {
+          const shown = seekFeedbackSeconds(totalSeconds, delta);
+          controller.showHud(`${direction < 0 ? "−" : "+"}${shown}`, {
             direction,
             variant: "keyboard-seek",
           });

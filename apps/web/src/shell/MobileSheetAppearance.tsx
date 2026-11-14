@@ -6,12 +6,11 @@ import type {
 } from "react";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
-import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { getNavigationIconColor } from "./navigation";
-import { leavesClickToBrowser } from "./navigationLink";
-import { NavCountBadge } from "./NavCountBadge";
+import { SidebarNotificationsButton } from "./SidebarNotificationsButton";
 import { themeRevealOriginFromClick } from "./themeViewTransition";
 import type { ThemeRevealOrigin } from "./themeViewTransition";
 import { academyThemes } from "../themes";
@@ -41,58 +40,56 @@ export interface MobileSheetAppearanceProps {
     source?: "appearance" | "theme",
   ) => void;
   openAppearanceThemeMenu: (
-    event: ReactMouseEvent<HTMLElement>,
+    event: ReactMouseEvent<HTMLButtonElement>,
     mobile?: boolean,
   ) => void;
   startDockLongPress: (
-    event: ReactPointerEvent<HTMLElement>,
+    event: ReactPointerEvent<HTMLButtonElement>,
     action: () => void,
     includeMouse?: boolean,
   ) => void;
-  moveDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
-  finishDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
+  moveDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  finishDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   mobilePaletteTriggerRef: RefObject<HTMLButtonElement | null>;
   currentAcademyThemeIndex: number;
   setReadingModeMenu: Dispatch<SetStateAction<"desktop" | "mobile" | null>>;
   setPaletteMenuSource: Dispatch<SetStateAction<"appearance" | "theme">>;
   setMobilePaletteMenu: Dispatch<SetStateAction<boolean>>;
   startAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLElement>,
+    event: ReactPointerEvent<HTMLButtonElement>,
     source: AppearanceSwipeSource,
   ) => void;
   finishAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLElement>,
+    event: ReactPointerEvent<HTMLButtonElement>,
     source: AppearanceSwipeSource,
     mobile?: boolean,
   ) => void;
-  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLElement>) => void;
+  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   displayedAcademyTheme: string;
   readingModeEnabled: boolean;
   updateReadingMode: (preferences: Partial<ReadingModePreferences>) => void;
   readingModeMenu: "desktop" | "mobile" | null;
   showReadingModeMenu: (mobile?: boolean) => void;
   openReadingModeMenu: (
-    event: ReactMouseEvent<HTMLElement>,
+    event: ReactMouseEvent<HTMLButtonElement>,
     mobile?: boolean,
   ) => void;
   page: string;
-  /** On the Notifications icon's corner. */
-  unreadNotificationCount: number;
-  /** Opens the Notifications page in the app. */
-  openNotifications: () => void;
   sidebarPreferences: SidebarPreferences;
   settingsControlTitle: string;
   primaryShortcutModifier: "Meta" | "Control";
   settingsQuickMenu: "desktop" | "mobile" | null;
-  toggleSettingsNavigation: () => void;
   openSettingsQuickMenu: (
-    event: ReactMouseEvent<HTMLElement>,
+    event: ReactMouseEvent<HTMLButtonElement>,
     mobile?: boolean,
   ) => void;
   showSettingsQuickMenu: (mobile?: boolean) => void;
   isFullscreen: boolean;
   fullscreenActionLabel: "Exit fullscreen" | "Fullscreen";
   toggleFullscreen: () => Promise<void>;
+  /** Unread notifications for the bell; 0 for a guest. */
+  unreadNotificationCount: number;
+  openNotifications: () => void;
 }
 
 export function MobileSheetAppearance({
@@ -122,18 +119,17 @@ export function MobileSheetAppearance({
   showReadingModeMenu,
   openReadingModeMenu,
   page,
-  unreadNotificationCount,
-  openNotifications,
   sidebarPreferences,
   settingsControlTitle,
   primaryShortcutModifier,
   settingsQuickMenu,
-  toggleSettingsNavigation,
   openSettingsQuickMenu,
   showSettingsQuickMenu,
   isFullscreen,
   fullscreenActionLabel,
   toggleFullscreen,
+  unreadNotificationCount,
+  openNotifications,
 }: MobileSheetAppearanceProps) {
   // The theme on screen, which is the one being previewed while the colour
   // menu is open.
@@ -263,53 +259,65 @@ export function MobileSheetAppearance({
           );
         }
 
-        // Notifications took Read mode's place (Read mode is in
-        // Settings): a link, so it opens in a new tab with Ctrl/⌘ or the
-        // middle button, with the unread count on its corner.
         if (item === "notifications") {
-          const notificationsActive = page === "notifications";
           return (
-            <a
+            <SidebarNotificationsButton
+              key={item}
+              unreadCount={unreadNotificationCount}
+              active={page === "notifications"}
+              iconColor={getNavigationIconColor(
+                "Notifications",
+                sidebarPreferences,
+              )}
+              onOpen={openNotifications}
+            />
+          );
+        }
+
+        if (item === "reading-mode") {
+          return (
+            <button
               key={item}
               data-dock-item={item}
-              href="/notifications"
-              data-control-radius-surface=""
-              className={`sidebar-appearance__notifications relative${notificationsActive ? " is-active" : ""}`}
-              style={
-                {
-                  "--nav-icon-color": getNavigationIconColor(
-                    "Notifications",
-                    sidebarPreferences,
-                  ),
-                } as CSSProperties
-              }
-              aria-label="Notifications"
-              title="Notifications"
-              aria-current={notificationsActive ? "page" : undefined}
-              aria-describedby={
-                unreadNotificationCount > 0
-                  ? "mobile-dock-notifications-count"
-                  : undefined
-              }
+              data-reading-mode-trigger
+              type="button"
+              className={`sidebar-appearance__reading-mode${readingModeEnabled ? " is-active" : ""}`}
+              aria-label={`Reading mode. Hold for its settings`}
+              aria-pressed={readingModeEnabled}
+              title={`Reading mode - ${readingModeEnabled ? "on" : "off"} (hold for settings)`}
+              aria-controls="mobile-reading-mode-quick-settings"
+              // A tap turns reading mode on and off. Its menu opens on a long
+              // press (the tap that ends a long press is swallowed, so it
+              // does not also switch it).
               onClick={(event) => {
-                if (leavesClickToBrowser(event)) return;
-                event.preventDefault();
                 if (consumeAppearanceGestureClick(event)) return;
-                openNotifications();
+                updateReadingMode({ enabled: !readingModeEnabled });
               }}
+              onContextMenu={(event) =>
+                openReadingModeMenu(event, true)
+              }
+              onPointerDown={(event) =>
+                startDockLongPress(event, () =>
+                  showReadingModeMenu(true),
+                )
+              }
+              onPointerMove={moveDockLongPress}
+              onPointerUp={finishDockLongPress}
+              onPointerCancel={finishDockLongPress}
             >
-              <Bell
+              <Eye
+                aria-hidden="true"
+                data-reading-mode-icon="off"
                 size={20}
-                weight={notificationsActive ? "fill" : "regular"}
+                weight="regular"
               />
-              <NavCountBadge
-                id="mobile-dock-notifications-count"
-                count={unreadNotificationCount}
-                max={9}
-                unreadLabel="unread notifications"
-                className="absolute top-1.5 right-[calc(50%-1.375rem)]"
+              <Eye
+                aria-hidden="true"
+                data-reading-mode-icon="on"
+                size={20}
+                weight="fill"
               />
-            </a>
+            </button>
           );
         }
 
@@ -337,9 +345,11 @@ export function MobileSheetAppearance({
               aria-expanded={settingsQuickMenu === "mobile"}
               aria-controls="mobile-settings-quick-menu"
               data-settings-quick-trigger
+              // A tap opens the settings menu: reading mode and the
+              // settings pages.
               onClick={(event) => {
                 if (consumeAppearanceGestureClick(event)) return;
-                toggleSettingsNavigation();
+                openSettingsQuickMenu(event, true);
               }}
               onContextMenu={(event) =>
                 openSettingsQuickMenu(event, true)
