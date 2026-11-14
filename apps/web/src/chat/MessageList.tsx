@@ -92,6 +92,7 @@ export function MessageList({
   outgoing,
   ctx,
   unreadAfterSeq,
+  openedAtSeq,
   focus,
   loadingOlder,
   onLoadOlder,
@@ -110,6 +111,8 @@ export function MessageList({
   ctx: BubbleContext;
   /** Your read position when the chat opened: the "unread" divider goes after it. */
   unreadAfterSeq: number;
+  /** The chat's newest message number on the server when it was opened. */
+  openedAtSeq: number;
   /** Bring this message into view and blink it. */
   focus: MessageFocus | null;
   loadingOlder: boolean;
@@ -174,8 +177,11 @@ export function MessageList({
     }
   }
   // Only messages already there when the chat opened count as unread:
-  // one arriving while you watch is read.
-  const openedAtSeqRef = useRef(lastSeq);
+  // one arriving while you watch is read. "There" is the server's count at
+  // opening: the list first drawn may be the copy kept on the device, older
+  // than the server, and taking its newest message left everything after
+  // it out of the count ("5 unread" above many more).
+  const openedAtSeqRef = useRef(Math.max(lastSeq, openedAtSeq));
   if (openedAtSeqRef.current === 0 && lastSeq > 0)
     openedAtSeqRef.current = lastSeq;
 

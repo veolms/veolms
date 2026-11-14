@@ -3,8 +3,9 @@ import { MusicNotesIcon as MusicNotes } from "@phosphor-icons/react/MusicNotes";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { CHAT_MAX_ATTACHMENTS_PER_MESSAGE } from "@veolms/contracts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
+import { FileVideoPlayer } from "../components/video";
 import { cn } from "../lib/utils";
 import type { OutgoingFile } from "../services/chat";
 import { formatBytes } from "./chatFormat";
@@ -126,11 +127,30 @@ export function MediaStage({
             className="max-h-full max-w-full rounded-lg object-contain shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
           />
         ) : active.kind === "video" && active.previewUrl ? (
-          <video
-            src={active.previewUrl}
-            controls
-            className="max-h-full max-w-full rounded-lg bg-black shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
-          />
+          // The app's player; its keys stay with the caption box below.
+          <div
+            key={active.localId}
+            className="max-h-full w-full max-w-[min(100%,calc((100dvh-16rem)*var(--chat-video-ratio)))] overflow-hidden rounded-lg shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
+            style={
+              {
+                "--chat-video-ratio":
+                  active.width && active.height
+                    ? active.width / active.height
+                    : 16 / 9,
+                aspectRatio:
+                  active.width && active.height
+                    ? `${active.width} / ${active.height}`
+                    : "16 / 9",
+              } as CSSProperties
+            }
+          >
+            <FileVideoPlayer
+              src={active.previewUrl}
+              mimeType={active.mimeType}
+              title={active.name}
+              keyboardEnabled={false}
+            />
+          </div>
         ) : (
           <div className="flex w-72 max-w-full flex-col items-center gap-3 rounded-2xl bg-(--chat-in) px-6 py-10 text-center shadow-[0_8px_30px_rgb(0_0_0/0.18)]">
             <span className="flex size-16 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-(--accent-ink)">

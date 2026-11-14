@@ -404,8 +404,54 @@ function onMessage(
   }
 }
 
+/**
+ * A stream that went quiet. The server sends `ping` every 25 s; a
+ * connection that died without closing (a phone or laptop that slept, a
+ * network change, a proxy that dropped it) brings nothing and reports no
+ * error, so the chat list and new messages stood still until a chat was
+ * opened. Once a stream has shown its pings, this long without one means it
+ * is gone: it is opened again, and its `ready` catches up what was missed.
+ */
+const STREAM_SILENT_MS = 65_000;
+const STREAM_WATCH_MS = 15_000;
+let lastStreamEventAt = 0;
+let streamPings = false;
+let watchTimer: ReturnType<typeof setInterval> | undefined;
+
+function streamSilent(): boolean {
+  return (
+    source !== null &&
+    streamPings &&
+    Date.now() - lastStreamEventAt > STREAM_SILENT_MS
+  );
+}
+
+/** Opens the stream again now (it is gone, or the network came back). */
+function reopen() {
+  if (users === 0) return;
+  close();
+  open();
+}
+
+function watchStream() {
+  if (streamSilent()) reopen();
+}
+
+function onOnline() {
+  // A new network: the old connection is likely gone, whatever it says.
+  if (source) reopen();
+  else open();
+}
+
 function attach(next: EventSource) {
+  lastStreamEventAt = Date.now();
+  streamPings = false;
+  next.addEventListener("ping", () => {
+    lastStreamEventAt = Date.now();
+    streamPings = true;
+  });
   next.addEventListener("ready", (event) => {
+    lastStreamEventAt = Date.now();
     retryDelay = REFUSED_RETRY_MIN_MS;
     setLive(true);
     const ready = parse<ChatStreamReadyEvent>(event as MessageEvent<string>);
@@ -533,6 +579,8 @@ function onVisibilityChange() {
   clearTimeout(hiddenTimer);
   if (!source) {
     open();
+  } else if (streamSilent()) {
+    reopen();
   }
 }
 
@@ -574,6 +622,8 @@ export function startChatStream(
   users += 1;
   if (users === 1) {
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("online", onOnline);
+    watchTimer = setInterval(watchStream, STREAM_WATCH_MS);
     navigator.serviceWorker?.addEventListener("message", onWorkerMessage);
     if (viewerId) syncWebPushWhenIdle(viewerId);
     // Last visit's chats first (instant), then the stream catches them up.
@@ -592,6 +642,9 @@ export function startChatStream(
       stopPersisting?.();
       stopPersisting = undefined;
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("online", onOnline);
+      clearInterval(watchTimer);
+      watchTimer = undefined;
       navigator.serviceWorker?.removeEventListener("message", onWorkerMessage);
       clearTimeout(hiddenTimer);
       close();

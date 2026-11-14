@@ -147,12 +147,23 @@ export function Conversation({
     };
   }, [dragging]);
   const [, forceRender] = useState(0);
-  const unreadAfterRef = useRef<{ roomId: string; seq: number }>({
+  // Where the unread part starts, and how far the chat reached when it was
+  // opened (the server's count: a copy kept on the device may be behind).
+  const unreadAfterRef = useRef<{
+    roomId: string;
+    seq: number;
+    openedAtSeq: number;
+  }>({
     roomId: room.id,
     seq: room.me.lastReadSeq,
+    openedAtSeq: room.lastSeq,
   });
   if (unreadAfterRef.current.roomId !== room.id) {
-    unreadAfterRef.current = { roomId: room.id, seq: room.me.lastReadSeq };
+    unreadAfterRef.current = {
+      roomId: room.id,
+      seq: room.me.lastReadSeq,
+      openedAtSeq: room.lastSeq,
+    };
   }
 
   const deleteMessage = useDeleteMessage();
@@ -716,6 +727,7 @@ export function Conversation({
             outgoing={outgoing}
             ctx={ctx}
             unreadAfterSeq={unreadAfterRef.current.seq}
+            openedAtSeq={unreadAfterRef.current.openedAtSeq}
             focus={focus}
             loadingOlder={thread.loadingOlder}
             onLoadOlder={() => void thread.loadOlder()}

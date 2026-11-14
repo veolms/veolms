@@ -8,6 +8,7 @@ import type {
   VideoAudioTrack,
   VideoEngineCapabilities,
   VideoLoadOptions,
+  VideoNetworkRequest,
   VideoQuality,
   VideoSource,
   VideoTextTrack,
@@ -556,6 +557,136 @@ function nextSegmentStart(
   }
 }
 
+/**
+ * How long after a video loads its parts' init segments are fetched in the
+ * background (see `warmInitSegments`): after the first segments, so they
+ * never compete with the start.
+ */
+const INIT_WARM_DELAY_MS = 4_000;
+/** How many of them are fetched at once. */
+const INIT_WARM_PARALLEL = 4;
+/** More than this many is not a lesson's: nothing is fetched. */
+const INIT_WARM_MAX = 400;
+
+/**
+ * Every distinct init segment of a DASH video's playing quality (the video
+ * representations `height` tall, or all when unknown) and its audio, in
+ * period order, from the manifest's text. A lesson is packaged as one
+ * period per key (about a minute each), each with its own init segment.
+ * Read from the text, not from Shaka's manifest objects: its compiled
+ * build renames the field that holds a segment's init segment.
+ */
+export function dashInitSegmentUris(
+  mpd: string,
+  manifestUrl: string,
+  height: number | null,
+): string[] {
+  const uris: string[] = [];
+  if (typeof DOMParser === "undefined" || !/<MPD[\s>]/.test(mpd)) return uris;
+  try {
+    const doc = new DOMParser().parseFromString(mpd, "application/xml");
+    const seen = new Set<string>();
+    const base = (element: Element | null, from: string): string => {
+      const own = element?.querySelector(":scope > BaseURL")?.textContent;
+      return own ? new URL(own.trim(), from).toString() : from;
+    };
+    const root = base(doc.documentElement, manifestUrl);
+    for (const period of Array.from(doc.getElementsByTagName("Period"))) {
+      const periodBase = base(period, root);
+      for (const set of Array.from(
+        period.getElementsByTagName("AdaptationSet"),
+      )) {
+        const setBase = base(set, periodBase);
+        const setTemplate = set.querySelector(":scope > SegmentTemplate");
+        for (const rep of Array.from(
+          set.getElementsByTagName("Representation"),
+        )) {
+          const mime =
+            rep.getAttribute("mimeType") ?? set.getAttribute("mimeType") ?? "";
+          const isVideo = mime.startsWith("video/");
+          if (!isVideo && !mime.startsWith("audio/")) continue;
+          if (
+            isVideo &&
+            height !== null &&
+            Number(rep.getAttribute("height")) !== height
+          ) {
+            continue;
+          }
+          const template =
+            rep.querySelector(":scope > SegmentTemplate") ?? setTemplate;
+          const init = template?.getAttribute("initialization");
+          if (!init) continue;
+          const path = init
+            .replace(/\$RepresentationID\$/g, rep.getAttribute("id") ?? "")
+            .replace(/\$Bandwidth\$/g, rep.getAttribute("bandwidth") ?? "");
+          const uri = new URL(path, base(rep, setBase)).toString();
+          if (seen.has(uri)) continue;
+          seen.add(uri);
+          uris.push(uri);
+        }
+      }
+    }
+  } catch {
+    // Only a head start: nothing is fetched.
+    return [];
+  }
+  return uris;
+}
+
+/**
+ * The buffer ahead grows with the connection, as YouTube's does, instead of
+ * staying at the source's goal (60s for a lesson). Checked this often while
+ * the video plays.
+ */
+const ADAPTIVE_BUFFER_CHECK_MS = 10_000;
+/** The connection this many times the playing bitrate: up to this far ahead. */
+const ADAPTIVE_BUFFER_FAST_RATIO = 4;
+const ADAPTIVE_BUFFER_FAST_SECONDS = 600;
+/** This many times: three minutes. Less: the source's own goal. */
+const ADAPTIVE_BUFFER_GOOD_RATIO = 2;
+const ADAPTIVE_BUFFER_GOOD_SECONDS = 180;
+/**
+ * What the buffer (ahead and behind) may hold. Chrome keeps about 150 MB of
+ * video per page before it evicts; more ahead than fits would be fetched
+ * only to be thrown away.
+ */
+const ADAPTIVE_BUFFER_MEMORY_BYTES = 110 * 1024 * 1024;
+/** A goal is changed only when the new one differs by more than this. */
+const ADAPTIVE_BUFFER_STEP_SECONDS = 20;
+
+/**
+ * How far ahead to buffer: the source's goal on a connection under twice
+ * the playing bitrate; three minutes on one at least twice as fast; up to
+ * ten on one four times as fast. A lesson shorter than that is buffered
+ * whole (Shaka stops at its end). Never more than the memory budget holds
+ * at this bitrate, the part kept behind included, and never under the
+ * source's goal.
+ */
+export function adaptiveBufferingGoal(options: {
+  baseGoal: number;
+  bufferBehind: number;
+  bandwidth: number | null;
+  bitrate: number | null;
+  remaining: number;
+}): number {
+  const { baseGoal, bufferBehind, bandwidth, bitrate, remaining } = options;
+  if (!bandwidth || !bitrate || bandwidth <= 0 || bitrate <= 0) return baseGoal;
+  const ratio = bandwidth / bitrate;
+  const wanted =
+    ratio >= ADAPTIVE_BUFFER_FAST_RATIO
+      ? ADAPTIVE_BUFFER_FAST_SECONDS
+      : ratio >= ADAPTIVE_BUFFER_GOOD_RATIO
+        ? ADAPTIVE_BUFFER_GOOD_SECONDS
+        : baseGoal;
+  const fits = (ADAPTIVE_BUFFER_MEMORY_BYTES * 8) / bitrate - bufferBehind;
+  const goal = Math.min(
+    wanted,
+    fits,
+    Number.isFinite(remaining) && remaining > 0 ? remaining + 1 : wanted,
+  );
+  return Math.max(baseGoal, Math.round(goal));
+}
+
 /** A response this big is a video segment, not a manifest or a key. */
 const MEASURED_SEGMENT_MIN_BYTES = 100_000;
 
@@ -634,6 +765,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #framesStillSince = 0;
   #waitingForKeySince = 0;
   #stopWatchingSpeculativePreloads: (() => void) | null = null;
+  /** Stops growing the buffer with the connection (see `growBufferWithConnection`). */
+  #stopAdaptiveBuffer: (() => void) | null = null;
+  /** A caller limited the buffer (`setBufferAheadLimit`): it is not grown. */
+  #bufferAheadLimited = false;
+  /** The goal the adaptive buffer set, or null while it is the source's. */
+  #adaptiveGoal: number | null = null;
   /** Drops a source's streaming settings still waiting for its first frame. */
   #cancelDeferredStreaming: (() => void) | null = null;
   /** Turns a preload's segment prefetch off now (see `lowerPrefetchLater`). */
@@ -735,6 +872,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
           interruptions,
           startClean || interruptions > 0,
         );
+        this.warmInitSegments(source);
+        this.growBufferWithConnection(source);
         return;
       } catch (error) {
         if (!(error instanceof LoadRetry)) throw error;
@@ -790,6 +929,168 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         if (!this.isCurrentOperation(generation)) return;
       }
     }
+  }
+
+  /**
+   * Grows the buffer ahead with the connection while the video plays
+   * (`adaptiveBufferingGoal`), for as long as this load lasts. A source
+   * whose goal is under a minute (a low-memory phone, a muted hero video)
+   * keeps it.
+   */
+  private growBufferWithConnection(source: VideoSource): void {
+    this.#stopAdaptiveBuffer?.();
+    this.#adaptiveGoal = null;
+    const player = this.#player;
+    const runtime = this.#runtime;
+    const media = this.mediaElement;
+    if (!player || !runtime || !media) return;
+    const streaming = createShakaConfiguration(source, runtime).streaming as
+      Record<string, unknown> | undefined;
+    const baseGoal = Number(streaming?.bufferingGoal);
+    const bufferBehind = Number(streaming?.bufferBehind);
+    if (!(baseGoal >= 60)) return;
+    const generation = this.#loadGeneration;
+    const check = (): void => {
+      if (this.#player !== player || !this.isCurrentOperation(generation)) {
+        stop();
+        return;
+      }
+      if (this.#bufferAheadLimited || media.paused) return;
+      const active = player.getVariantTracks().find((track) => track.active);
+      const bandwidth =
+        measuredSegmentBandwidth() ??
+        player.getStats?.()?.estimatedBandwidth ??
+        null;
+      const goal = adaptiveBufferingGoal({
+        baseGoal,
+        bufferBehind: Number.isFinite(bufferBehind) ? bufferBehind : 30,
+        bandwidth,
+        bitrate: active?.bandwidth ?? null,
+        remaining: media.duration - media.currentTime,
+      });
+      const current = this.#adaptiveGoal ?? baseGoal;
+      if (Math.abs(goal - current) <= ADAPTIVE_BUFFER_STEP_SECONDS) return;
+      this.#adaptiveGoal = goal === baseGoal ? null : goal;
+      player.configure({ streaming: { bufferingGoal: goal } });
+      markPlayback("buffer-goal", {
+        goal,
+        bandwidth: bandwidth === null ? null : Math.round(bandwidth),
+        bitrate: active?.bandwidth ?? null,
+      });
+    };
+    const timer = setInterval(check, ADAPTIVE_BUFFER_CHECK_MS);
+    const stop = (): void => {
+      clearInterval(timer);
+      if (this.#stopAdaptiveBuffer === stop) this.#stopAdaptiveBuffer = null;
+    };
+    this.#stopAdaptiveBuffer = stop;
+  }
+
+  /**
+   * Fetches the init segment of every part of the video in the background,
+   * a few seconds after it loads. A seek into a part not reached yet needed
+   * two downloads one after the other, that part's init segment and then
+   * its media segment, and for a part nobody watched lately both came cold
+   * from storage through the CDN (about a second each): two seconds of
+   * loader on any connection. The init segments are a kilobyte each and
+   * kept by the browser for a year (`immutable`), so after this a seek
+   * waits for its media segment only. The same request filter as the
+   * player's own requests makes the same addresses, which the browser's
+   * cache then answers. Skipped when the viewer asked to save data.
+   */
+  private warmInitSegments(source: VideoSource): void {
+    const player = this.#player;
+    if (!player || typeof fetch !== "function") return;
+    const connection = (
+      navigator as Navigator & { connection?: { saveData?: boolean } }
+    ).connection;
+    if (connection?.saveData) return;
+    const generation = this.#loadGeneration;
+    const current = () =>
+      this.#player === player && this.isCurrentOperation(generation);
+    // Asked for as the player's own requests are: the same request filter
+    // (the media origin, tokens, cache keys) makes the same addresses, which
+    // the browser's cache then answers.
+    const filtered = async (
+      type: VideoNetworkRequest["type"],
+      uri: string,
+    ): Promise<VideoNetworkRequest> => {
+      const request: VideoNetworkRequest = {
+        type,
+        uris: [uri],
+        method: "GET",
+        headers: {},
+        body: null,
+        allowCrossSiteCredentials: false,
+      };
+      await source.networking?.requestFilter?.(request);
+      return request;
+    };
+    const fetchFiltered = async (
+      type: VideoNetworkRequest["type"],
+      uri: string,
+    ): Promise<Response> => {
+      const request = await filtered(type, uri);
+      return fetch(request.uris[0] ?? uri, {
+        headers: request.headers,
+        priority: "low",
+      } as RequestInit);
+    };
+    setTimeout(async () => {
+      if (!current()) return;
+      const active = player.getVariantTracks().find((track) => track.active);
+      let manifestUrl: string;
+      let mpd = source.inlinedManifest ?? "";
+      try {
+        // The source's address may be relative to the media origin, which
+        // only the request filter knows.
+        const request = await filtered("manifest", source.src);
+        manifestUrl = new URL(
+          request.uris[0] ?? source.src,
+          globalThis.location?.href,
+        ).toString();
+        if (!/^https?:/i.test(manifestUrl)) return;
+        if (!mpd) {
+          // Not handed over with the source: the manifest's few kilobytes
+          // once more (the init segments it lists are what saves the time).
+          const response = await fetch(manifestUrl, {
+            headers: request.headers,
+            priority: "low",
+          } as RequestInit);
+          if (!response.ok) throw new Error(String(response.status));
+          mpd = await response.text();
+        }
+      } catch {
+        markPlayback("init-warm", { count: 0, manifest: "unreadable" });
+        return;
+      }
+      if (!current()) return;
+      const uris = dashInitSegmentUris(
+        mpd,
+        manifestUrl,
+        active?.height ?? null,
+      );
+      markPlayback("init-warm", {
+        count: uris.length,
+        inline: Boolean(source.inlinedManifest),
+      });
+      if (uris.length < 2 || uris.length > INIT_WARM_MAX) return;
+      let next = 0;
+      const worker = async (): Promise<void> => {
+        while (next < uris.length && current()) {
+          const uri = uris[next]!;
+          next += 1;
+          try {
+            await (await fetchFiltered("segment", uri)).arrayBuffer();
+          } catch {
+            // Only a head start: the seek fetches it as before.
+          }
+        }
+      };
+      for (let index = 0; index < INIT_WARM_PARALLEL; index += 1) {
+        void worker();
+      }
+    }, INIT_WARM_DELAY_MS);
   }
 
   /**
@@ -1275,6 +1576,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const runtime = this.#runtime;
     const source = this.getSnapshot().source;
     if (!player || !runtime || !source) return;
+    // A limit holds the adaptive buffer back; lifted, the source's goal is
+    // back and the next check grows it again.
+    this.#bufferAheadLimited = seconds !== null;
+    this.#adaptiveGoal = null;
     player.configure({
       streaming:
         seconds === null

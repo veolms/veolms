@@ -2,9 +2,10 @@ import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import { useEffect } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 
+import { FileVideoPlayer } from "../components/video";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ChatImage } from "./ChatImage";
 import type { ViewableMedia } from "./MessageAttachments";
@@ -36,13 +37,16 @@ export function MediaViewer({
         onClose();
         return;
       }
+      // On a video the arrows seek it (the player's keys), as in a lesson;
+      // the buttons either side still move between items.
+      if (items[index]?.kind === "video") return;
       if (event.key === "ArrowRight" && index < items.length - 1)
         onIndex(index + 1);
       if (event.key === "ArrowLeft" && index > 0) onIndex(index - 1);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [index, items.length, onClose, onIndex]);
+  }, [index, items, onClose, onIndex]);
 
   if (!item) return null;
   const control =
@@ -102,14 +106,30 @@ export function MediaViewer({
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <video
-            src={item.url}
-            controls
-            autoPlay
-            playsInline
-            className="max-h-full max-w-full"
+          // The app's player (download is in the bar above). As wide as the
+          // room allows at the video's own shape, never taller than it.
+          <div
+            key={item.url}
+            className="max-h-full w-full max-w-[min(100%,calc((100dvh-6rem)*var(--chat-video-ratio)))]"
+            style={
+              {
+                "--chat-video-ratio":
+                  item.width && item.height ? item.width / item.height : 16 / 9,
+                aspectRatio:
+                  item.width && item.height
+                    ? `${item.width} / ${item.height}`
+                    : "16 / 9",
+              } as CSSProperties
+            }
             onClick={(e) => e.stopPropagation()}
-          />
+          >
+            <FileVideoPlayer
+              src={item.url}
+              mimeType={item.mimeType}
+              title={item.name}
+              autoPlay
+            />
+          </div>
         )}
         {index < items.length - 1 ? (
           <button
