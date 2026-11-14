@@ -124,15 +124,43 @@ function writeInstantly(
   frame: HTMLElement,
   write: () => void,
 ) {
-  shell?.setAttribute(INSTANT_ATTRIBUTE, "");
-  frame.setAttribute(INSTANT_ATTRIBUTE, "");
+  holdInstant(shell, frame, 50);
   write();
   // Styled now, with no transition, before the mark is taken off.
   getComputedStyle(frame).getPropertyValue("--split-frame-width");
-  requestAnimationFrame(() => {
+}
+
+/**
+ * How long the frame keeps its width changes instant around a pane
+ * arriving closed: longer than the lesson player's minimize (500ms), which
+ * a page's arrival from a lesson rides on. The frame's width settles only
+ * once that motion ends, and slid then from the course content's 400px to
+ * 0: the right panel moved right and closed (measured: the slide began
+ * about 600ms after the hand-over, with nothing written in between).
+ */
+const HANDOVER_SETTLE_MS = 1000;
+
+let instantUntil = 0;
+let instantTimer: number | null = null;
+
+/** Keeps the boxes' width changes instant for `ms` (extending a longer hold). */
+function holdInstant(
+  shell: HTMLElement | null,
+  frame: HTMLElement,
+  ms: number,
+) {
+  shell?.setAttribute(INSTANT_ATTRIBUTE, "");
+  frame.setAttribute(INSTANT_ATTRIBUTE, "");
+  const until = performance.now() + ms;
+  if (until <= instantUntil) return;
+  instantUntil = until;
+  if (instantTimer !== null) window.clearTimeout(instantTimer);
+  instantTimer = window.setTimeout(() => {
+    instantTimer = null;
+    instantUntil = 0;
     shell?.removeAttribute(INSTANT_ATTRIBUTE);
     frame.removeAttribute(INSTANT_ATTRIBUTE);
-  });
+  }, ms);
 }
 
 // A sliding pane that closes leaves the frame widening for a moment. A pane
@@ -212,6 +240,10 @@ export function SplitFramePane({
   const shownAsRouteRef = useRef(false);
   // Set when this pane arrives in a frame another pane has split already.
   const arrivedInSplitFrameRef = useRef(false);
+  // The width it is given now, for the effect that places it (read, not a
+  // dependency: a new width is the next effect's to write).
+  const widthRef = useRef(width);
+  widthRef.current = width;
 
   // Opening: the shell and frame take the split shape (a sliding pane makes
   // them slide to it). Closing: they let go of it, or a sliding pane's frame
@@ -239,6 +271,9 @@ export function SplitFramePane({
     }
     const { shell, frame } = findSplitFrameBoxes(pane);
     if (!frame) return undefined;
+    // A pane arriving closed has nothing to slide: its frame's width
+    // changes stay instant until a motion it arrives with has settled.
+    if (widthRef.current === 0) holdInstant(shell, frame, HANDOVER_SETTLE_MS);
     const takingOver = pendingRelease !== null;
     arrivedInSplitFrameRef.current =
       frame.hasAttribute(SPLIT_FRAME_ATTRIBUTE) && !takingOver;
