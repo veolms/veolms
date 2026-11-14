@@ -12,6 +12,7 @@ import { ChatImage } from "./ChatImage";
 import { FilePreview, previewKind } from "./FilePreview";
 import { PdfFirstPage } from "./PdfFirstPage";
 import { VoiceMessage } from "./VoiceMessage";
+import { VideoThumb } from "./VideoThumb";
 
 export interface ViewableMedia {
   url: string;
@@ -136,13 +137,7 @@ function MediaTile({
           />
         ) : (
           <>
-            <video
-              src={url}
-              preload="metadata"
-              muted
-              playsInline
-              className="size-full object-cover"
-            />
+            <VideoThumb src={url} className="size-full object-cover" />
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="flex size-12 items-center justify-center rounded-full bg-black/55 text-white">
                 <Play size={22} weight="fill" />

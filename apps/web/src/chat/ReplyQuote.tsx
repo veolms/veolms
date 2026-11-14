@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { chatService } from "../services/chat";
 import { formatDuration } from "./chatFormat";
+import { VideoThumb } from "./VideoThumb";
 
 /** The quoted message's first file, as a quote shows it. */
 export interface QuoteMedia {
@@ -118,11 +119,8 @@ function QuoteThumb({ media }: { media: QuoteMedia }) {
           className="size-full object-cover"
         />
       ) : (
-        <video
+        <VideoThumb
           src={url}
-          preload="metadata"
-          muted
-          playsInline
           onError={() => setFailed(true)}
           className="pointer-events-none size-full object-cover"
         />

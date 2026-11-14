@@ -480,10 +480,12 @@ function Tail({ outgoing }: { outgoing: boolean }) {
       aria-hidden="true"
       viewBox="0 0 8 13"
       className={cn(
-        "absolute top-0 h-3.25 w-2",
+        // chat-tail: the blink on a message opened from a link reaches the
+        // tail too (chat.css), not only the bubble.
+        "chat-tail absolute top-0 h-3.25 w-2",
         outgoing
-          ? "-right-2 fill-(--chat-out)"
-          : "-left-2 -scale-x-100 fill-(--chat-in)",
+          ? "-right-2 fill-(--chat-out) [--tail-fill:var(--chat-out)]"
+          : "-left-2 -scale-x-100 fill-(--chat-in) [--tail-fill:var(--chat-in)]",
       )}
     >
       <path d="M0 0h8L1.5 9.5C1 10.3 0 10 0 9z" />

@@ -197,6 +197,9 @@ export function ChatList({
   const archivedCount = rooms?.filter(isArchived).length ?? 0;
   const term = search.trim();
   const visible = (rooms ?? []).filter((room) => {
+    // A private chat joins the list with its first message, as in WhatsApp:
+    // opening someone's chat from their name or profile adds nothing.
+    if (room.kind === "direct" && room.lastSeq === 0) return false;
     if (isArchived(room) !== archivedView) return false;
     // Loose, like the app's other search boxes: typos, parts of words and
     // any order ("bhupsh", "node backend") still find the chat.
