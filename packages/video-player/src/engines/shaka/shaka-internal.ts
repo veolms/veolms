@@ -124,13 +124,21 @@ export interface ShakaManifestLike {
   variants: ReadonlyArray<{
     id: number | string;
     disabledUntilTime?: number;
-    video?: {
-      segmentIndex?: {
-        find(time: number): number | null;
-        get(position: number): { startTime: number; endTime: number } | null;
-      } | null;
-    } | null;
+    video?: ShakaManifestStreamLike | null;
+    audio?: ShakaManifestStreamLike | null;
   }>;
+}
+
+/** A stream of a Shaka manifest, read for segment times and init segments. */
+export interface ShakaManifestStreamLike {
+  segmentIndex?: {
+    find(time: number): number | null;
+    get(position: number): {
+      startTime: number;
+      endTime: number;
+      initSegmentReference?: { getUris?(): string[] } | null;
+    } | null;
+  } | null;
 }
 
 export interface ShakaPlayerLike {
