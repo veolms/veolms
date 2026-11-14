@@ -569,38 +569,66 @@ const INIT_WARM_PARALLEL = 4;
 const INIT_WARM_MAX = 400;
 
 /**
- * Every distinct init segment of the playing video and audio, in playing
- * order. A lesson is packaged as one DASH period per key (about a minute
- * each), and each period has its own init segment.
+ * Every distinct init segment of a DASH video's playing quality (the video
+ * representations `height` tall, or all when unknown) and its audio, in
+ * period order, from the manifest's text. A lesson is packaged as one
+ * period per key (about a minute each), each with its own init segment.
+ * Read from the text, not from Shaka's manifest objects: its compiled
+ * build renames the field that holds a segment's init segment.
  */
-function initSegmentUris(player: ShakaPlayerLike): string[] {
+export function dashInitSegmentUris(
+  mpd: string,
+  manifestUrl: string,
+  height: number | null,
+): string[] {
   const uris: string[] = [];
+  if (typeof DOMParser === "undefined" || !/<MPD[s>]/.test(mpd)) return uris;
   try {
-    const active = player.getVariantTracks().find((track) => track.active);
-    if (!active) return uris;
-    const variant = player
-      .getManifest?.()
-      ?.variants.find(
-        (candidate) => String(candidate.id) === String(active.id),
-      );
+    const doc = new DOMParser().parseFromString(mpd, "application/xml");
     const seen = new Set<string>();
-    for (const stream of [variant?.video, variant?.audio]) {
-      const index = stream?.segmentIndex;
-      if (!index) continue;
-      let position = index.find(0);
-      if (position === null) continue;
-      for (let segment = index.get(position); segment;) {
-        for (const uri of segment.initSegmentReference?.getUris?.() ?? []) {
+    const base = (element: Element | null, from: string): string => {
+      const own = element?.querySelector(":scope > BaseURL")?.textContent;
+      return own ? new URL(own.trim(), from).toString() : from;
+    };
+    const root = base(doc.documentElement, manifestUrl);
+    for (const period of Array.from(doc.getElementsByTagName("Period"))) {
+      const periodBase = base(period, root);
+      for (const set of Array.from(
+        period.getElementsByTagName("AdaptationSet"),
+      )) {
+        const setBase = base(set, periodBase);
+        const setTemplate = set.querySelector(":scope > SegmentTemplate");
+        for (const rep of Array.from(
+          set.getElementsByTagName("Representation"),
+        )) {
+          const mime =
+            rep.getAttribute("mimeType") ?? set.getAttribute("mimeType") ?? "";
+          const isVideo = mime.startsWith("video/");
+          if (!isVideo && !mime.startsWith("audio/")) continue;
+          if (
+            isVideo &&
+            height !== null &&
+            Number(rep.getAttribute("height")) !== height
+          ) {
+            continue;
+          }
+          const template =
+            rep.querySelector(":scope > SegmentTemplate") ?? setTemplate;
+          const init = template?.getAttribute("initialization");
+          if (!init) continue;
+          const path = init
+            .replace(/$RepresentationID$/g, rep.getAttribute("id") ?? "")
+            .replace(/$Bandwidth$/g, rep.getAttribute("bandwidth") ?? "");
+          const uri = new URL(path, base(rep, setBase)).toString();
           if (seen.has(uri)) continue;
           seen.add(uri);
           uris.push(uri);
         }
-        position += 1;
-        segment = index.get(position);
       }
     }
   } catch {
-    // Manifest inspection is best-effort.
+    // Only a head start: nothing is fetched.
+    return [];
   }
   return uris;
 }
@@ -982,7 +1010,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#player === player && this.isCurrentOperation(generation);
     setTimeout(() => {
       if (!current()) return;
-      const uris = initSegmentUris(player);
+      const active = player.getVariantTracks().find((track) => track.active);
+      const mpd = source.inlinedManifest ?? "";
+      const uris = dashInitSegmentUris(mpd, source.src, active?.height ?? null);
       if (uris.length < 2 || uris.length > INIT_WARM_MAX) return;
       markPlayback("init-warm", { count: uris.length });
       let next = 0;
