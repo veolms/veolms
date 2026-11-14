@@ -116,6 +116,20 @@ export function MultiSelectFilter({
     setDraft({ ...draft, selected: orderedIds(groups, next) });
   };
 
+  const visibleOptions = visibleGroups.flatMap((group) => group.options);
+  const visibleCount = visibleOptions.length;
+  const allVisibleOn =
+    visibleCount > 0 &&
+    visibleOptions.every((option) => selected.has(option.id));
+  const setVisible = (on: boolean) => {
+    const next = new Set(selected);
+    for (const option of visibleOptions) {
+      if (on) next.add(option.id);
+      else next.delete(option.id);
+    }
+    setDraft({ ...draft, selected: orderedIds(groups, next) });
+  };
+
   const excluding = draft.mode === "exclude";
 
   return (
@@ -185,7 +199,7 @@ export function MultiSelectFilter({
 
       {/* Scrolls up and down only: long names are cut with "…", never
           pushed sideways. */}
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-h-[min(22rem,var(--available-height,22rem))]">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-h-[min(22rem,var(--available-height,22rem))]">
         {isLoading ? (
           <div
             className="space-y-2 p-4"
@@ -204,53 +218,75 @@ export function MultiSelectFilter({
             {total === 0 ? emptyText : `No ${noun} match “${query.trim()}”.`}
           </p>
         ) : (
-          visibleGroups.map((group) => {
-            const allOn = group.options.every((option) =>
-              selected.has(option.id),
-            );
-            return (
-              // A fieldset is as wide as its widest row unless told
-              // otherwise (min-width: min-content), which scrolled the
-              // list sideways for a long course name.
-              <fieldset key={group.id} className="m-0 min-w-0 border-0 p-0">
-                {group.title && (
-                  <div className="flex items-center justify-between px-4 pt-3 pb-1">
-                    <legend className="text-[0.6875rem] font-bold tracking-wider text-(--muted) uppercase">
-                      {group.title}
-                    </legend>
-                    <button
-                      type="button"
-                      onClick={() => setGroup(group, !allOn)}
-                      className="rounded px-1 text-xs font-semibold text-(--accent) hover:underline focus-visible:outline-2 focus-visible:outline-(--accent)"
-                    >
-                      {allOn ? "Clear" : "Select all"}
-                    </button>
-                  </div>
-                )}
-                {group.options.map((option) => {
-                  const checked = selected.has(option.id);
-                  return (
-                    <label
-                      key={option.id}
-                      className="flex min-h-11 min-w-0 cursor-pointer items-center gap-3 px-4 py-1.5 transition-colors hover:bg-(--hover) has-focus-visible:bg-(--hover)"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggle(option.id)}
-                        className="sr-only"
-                      />
-                      <CheckboxIndicator checked={checked} />
-                      {option.leading}
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-(--text)">
-                        {option.label}
-                      </span>
-                    </label>
-                  );
-                })}
-              </fieldset>
-            );
-          })
+          <>
+            {/* Every option in one click (those the search shows); with all
+              of them ticked it clears them. */}
+            {visibleCount > 1 && (
+              <label className="relative flex min-h-11 min-w-0 cursor-pointer items-center gap-3 border-b border-(--border) px-4 py-1.5 transition-colors hover:bg-(--hover) has-focus-visible:bg-(--hover)">
+                <input
+                  type="checkbox"
+                  checked={allVisibleOn}
+                  onChange={() => setVisible(!allVisibleOn)}
+                  className="sr-only"
+                />
+                <CheckboxIndicator checked={allVisibleOn} />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-(--text)">
+                  {allVisibleOn ? "Clear all" : "Select all"}
+                </span>
+              </label>
+            )}
+            {visibleGroups.map((group) => {
+              const allOn = group.options.every((option) =>
+                selected.has(option.id),
+              );
+              return (
+                // A fieldset is as wide as its widest row unless told
+                // otherwise (min-width: min-content), which scrolled the
+                // list sideways for a long course name.
+                <fieldset key={group.id} className="m-0 min-w-0 border-0 p-0">
+                  {group.title && (
+                    <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                      <legend className="text-[0.6875rem] font-bold tracking-wider text-(--muted) uppercase">
+                        {group.title}
+                      </legend>
+                      <button
+                        type="button"
+                        onClick={() => setGroup(group, !allOn)}
+                        className="rounded px-1 text-xs font-semibold text-(--accent) hover:underline focus-visible:outline-2 focus-visible:outline-(--accent)"
+                      >
+                        {allOn ? "Clear" : "Select all"}
+                      </button>
+                    </div>
+                  )}
+                  {group.options.map((option) => {
+                    const checked = selected.has(option.id);
+                    return (
+                      // The row holds its hidden checkbox (`relative`): placed
+                      // against the dropdown instead, focusing it scrolled the
+                      // whole dropdown up or sideways.
+                      <label
+                        key={option.id}
+                        title={option.label}
+                        className="relative flex min-h-11 min-w-0 cursor-pointer items-center gap-3 px-4 py-1.5 transition-colors hover:bg-(--hover) has-focus-visible:bg-(--hover)"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggle(option.id)}
+                          className="sr-only"
+                        />
+                        <CheckboxIndicator checked={checked} />
+                        {option.leading}
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-(--text)">
+                          {option.label}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
+              );
+            })}
+          </>
         )}
       </div>
 
