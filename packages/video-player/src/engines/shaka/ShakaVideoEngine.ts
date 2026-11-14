@@ -1028,23 +1028,38 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         priority: "low",
       } as RequestInit);
     };
+    let manifestUrl: string;
+    try {
+      manifestUrl = new URL(source.src, globalThis.location?.href).toString();
+    } catch {
+      return;
+    }
+    if (!/^https?:/i.test(manifestUrl)) return;
     setTimeout(async () => {
-      if (!current() || !/^https?:/i.test(source.src)) return;
+      if (!current()) return;
       const active = player.getVariantTracks().find((track) => track.active);
       let mpd = source.inlinedManifest ?? "";
       if (!mpd) {
         // Not handed over with the source: the manifest's few kilobytes
         // once more (the init segments it lists are what saves the time).
         try {
-          mpd = await (await fetchFiltered("manifest", source.src)).text();
+          mpd = await (await fetchFiltered("manifest", manifestUrl)).text();
         } catch {
+          markPlayback("init-warm", { count: 0, manifest: "unreadable" });
           return;
         }
       }
       if (!current()) return;
-      const uris = dashInitSegmentUris(mpd, source.src, active?.height ?? null);
+      const uris = dashInitSegmentUris(
+        mpd,
+        manifestUrl,
+        active?.height ?? null,
+      );
+      markPlayback("init-warm", {
+        count: uris.length,
+        inline: Boolean(source.inlinedManifest),
+      });
       if (uris.length < 2 || uris.length > INIT_WARM_MAX) return;
-      markPlayback("init-warm", { count: uris.length });
       let next = 0;
       const worker = async (): Promise<void> => {
         while (next < uris.length && current()) {
