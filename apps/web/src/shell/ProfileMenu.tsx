@@ -1,4 +1,3 @@
-import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
@@ -440,48 +439,6 @@ export function ProfileMenu({
           ) : (
             <>
               <div className="profile-menu__group profile-menu__group--account">
-                <a
-                  className={`profile-menu__item profile-menu__item--notifications ${currentPageItemClasses}${isCurrentPage("/notifications") ? " is-active" : ""}`}
-                  role="menuitem"
-                  href="/notifications"
-                  aria-current={
-                    isCurrentPage("/notifications") ? "page" : undefined
-                  }
-                  onClick={(event) => openDestination(event, "/notifications")}
-                >
-                  <Bell
-                    className="profile-menu__item-icon profile-menu__item-icon--notifications"
-                    size={21}
-                    weight={
-                      isCurrentPage("/notifications") ? "fill" : "regular"
-                    }
-                  />
-                  <span>Notifications</span>
-                  {unreadNotificationCount > 0 ? (
-                    <span
-                      className={
-                        unreadNotificationCount > 9
-                          ? "profile-menu__badge profile-menu__badge--overflow"
-                          : "profile-menu__badge"
-                      }
-                      aria-label={`${unreadNotificationCount} unread notifications`}
-                    >
-                      {unreadNotificationCount > 9 ? (
-                        <>
-                          <span className="profile-menu__badge-count">9</span>
-                          <span
-                            className="profile-menu__badge-plus"
-                            aria-hidden="true"
-                          >
-                            +
-                          </span>
-                        </>
-                      ) : (
-                        unreadNotificationCount
-                      )}
-                    </span>
-                  ) : null}
-                </a>
                 <a
                   className={`profile-menu__item ${currentPageItemClasses}${isCurrentPage("/progress") ? " is-active" : ""}`}
                   role="menuitem"
