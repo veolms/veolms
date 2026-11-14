@@ -276,6 +276,8 @@ export function SplitFramePane({
     query.addEventListener("change", update);
     return () => {
       query.removeEventListener("change", update);
+      // A closed pane (0 wide) leaves nothing to slide shut.
+      const leftClosed = paneWidths.get(pane) === "0px";
       activePanes.delete(pane);
       paneWidths.delete(pane);
       const wasSplit = frame.hasAttribute(SPLIT_FRAME_ATTRIBUTE);
@@ -283,7 +285,12 @@ export function SplitFramePane({
         writeRemainingWidth(shell, frame);
         return;
       }
-      if (!slide || !wasSplit) return;
+      // Not slid back for a closed pane: the Discussions page's closed
+      // panel, passing from behind a minimizing lesson to being the page,
+      // slid the frame from the course content's width to the full width,
+      // and the whole page seemed to grow to the right. A page with no
+      // pane (Home) takes the full width at once, and so does this one.
+      if (!slide || !wasSplit || leftClosed) return;
       // Still split until the frame has slid back.
       shell?.setAttribute(SPLIT_FRAME_ATTRIBUTE, "");
       frame.setAttribute(SPLIT_FRAME_ATTRIBUTE, "");

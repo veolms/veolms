@@ -554,7 +554,7 @@
     flex-direction: row;
   }
 
-  .sidebar-appearance--horizontal > button,
+  .sidebar-appearance--horizontal > :is(button, a),
   .sidebar-appearance--horizontal > .sidebar-palette-wrap {
     width: auto;
     flex: 1 1 0;
@@ -564,7 +564,7 @@
     flex-direction: row;
   }
 
-  .courses-app--resizing .sidebar-appearance--horizontal > button,
+  .courses-app--resizing .sidebar-appearance--horizontal > :is(button, a),
   .courses-app--resizing
     .sidebar-appearance--horizontal
     > .sidebar-palette-wrap {
