@@ -10,7 +10,10 @@ import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 import { classNames } from "../utils/classNames";
-import { MOBILE_SEEK_IDLE_DELAY_MS } from "./feedbackTiming";
+import {
+  MOBILE_SEEK_IDLE_DELAY_MS,
+  seekFeedbackSeconds,
+} from "./feedbackTiming";
 
 const DOUBLE_TAP_WINDOW_MS = 300;
 const LONG_PRESS_DELAY_MS = 500;
@@ -150,17 +153,20 @@ export function PlayerGestureSurface({
     (direction: SeekDirection) => {
       const seconds = Math.max(1, Math.round(seekIntervalSeconds));
       const activeSequence = mobileSeekSequenceRef.current;
-      const totalSeconds =
-        activeSequence?.direction === direction
-          ? activeSequence.totalSeconds + seconds
-          : seconds;
-
-      mobileSeekSequenceRef.current = { direction, totalSeconds };
       clearMobileSeekTimer();
       controller.setSettingsView("closed");
       controller.setControlsVisible(false);
-      controller.seekBy(direction * seconds);
-      controller.showHud(`${direction < 0 ? "−" : "+"}${totalSeconds}`, {
+      // Only what playback really moved counts: a tap back at 0:00 moves
+      // nothing and adds nothing.
+      const moved = Math.abs(controller.seekBy(direction * seconds));
+      const totalSeconds =
+        (activeSequence?.direction === direction
+          ? activeSequence.totalSeconds
+          : 0) + moved;
+
+      mobileSeekSequenceRef.current = { direction, totalSeconds };
+      const shown = seekFeedbackSeconds(totalSeconds, seconds);
+      controller.showHud(`${direction < 0 ? "−" : "+"}${shown}`, {
         direction,
         variant: "mobile-seek",
       });

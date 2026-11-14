@@ -861,10 +861,23 @@ export class PlayerController {
     this.engine.seek(time);
   }
 
-  seekBy(delta: number): void {
+  /**
+   * Seeks by `delta` seconds, held inside the video, and returns how far
+   * playback actually moved (negative for back): 0 at the start for a
+   * backward seek, or at the end for a forward one. The seek feedback
+   * counts this, not the requested step.
+   */
+  seekBy(delta: number): number {
     const currentTime =
       this.#pendingMediaProperties.seekTime ?? this.#snapshot.media.currentTime;
-    this.seekTo(currentTime + delta);
+    const { duration } = this.#snapshot.media;
+    const end = Number.isFinite(duration) && duration > 0 ? duration : null;
+    const target = Math.max(
+      0,
+      end === null ? currentTime + delta : Math.min(currentTime + delta, end),
+    );
+    this.seekTo(target);
+    return target - currentTime;
   }
 
   setVolume(volume: number): void {
