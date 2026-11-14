@@ -684,6 +684,7 @@ export function CoursesPage({
     dismissMobileMenuThen,
     selectNavigation,
     navigateSettingsQuickMenu,
+    toggleSettingsNavigation,
   } = useMobileMenuActions({
     onExitSettings,
     onNavigatePage,
@@ -1314,6 +1315,7 @@ export function CoursesPage({
                 settingsQuickMenu={settingsQuickMenu}
                 unreadNotificationCount={dockUnreadNotificationCount}
                 openNotifications={openNotifications}
+                toggleSettingsNavigation={toggleSettingsNavigation}
                 openSettingsQuickMenu={openSettingsQuickMenu}
                 showSettingsQuickMenu={showSettingsQuickMenu}
                 isFullscreen={isFullscreen}

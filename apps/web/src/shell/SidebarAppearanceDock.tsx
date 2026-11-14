@@ -92,6 +92,8 @@ export interface SidebarAppearanceDockProps {
     mobile?: boolean,
   ) => void;
   showSettingsQuickMenu: (mobile?: boolean) => void;
+  /** Opens the settings page (or leaves it, when it is the one open). */
+  toggleSettingsNavigation: () => void;
   isFullscreen: boolean;
   fullscreenActionLabel: "Exit fullscreen" | "Fullscreen";
   toggleFullscreen: () => Promise<void>;
@@ -147,7 +149,6 @@ export function SidebarAppearanceDock({
   page,
   settingsControlTitle,
   primaryShortcutModifier,
-  settingsQuickMenu,
   openSettingsQuickMenu,
   showSettingsQuickMenu,
   isFullscreen,
@@ -156,6 +157,7 @@ export function SidebarAppearanceDock({
   sidebarCollapsed,
   unreadNotificationCount,
   openNotifications,
+  toggleSettingsNavigation,
   readingModePreferences,
   updateReadingMode,
   changePalette,
@@ -376,15 +378,13 @@ export function SidebarAppearanceDock({
               title={settingsControlTitle}
               aria-current={settingsActive ? "page" : undefined}
               aria-keyshortcuts={`${primaryShortcutModifier}+Comma`}
-              aria-haspopup="menu"
-              aria-expanded={settingsQuickMenu === "desktop"}
               aria-controls="desktop-settings-quick-menu"
               data-settings-quick-trigger
-              // A click opens the settings menu: reading mode and the
-              // settings pages (Ctrl+Comma still opens the page itself).
+              // A click opens the settings page, as before; a right-click
+              // or a long press opens the quick menu of its sections.
               onClick={(event) => {
                 if (consumeAppearanceGestureClick(event)) return;
-                openSettingsQuickMenu(event, false);
+                toggleSettingsNavigation();
               }}
               onContextMenu={(event) =>
                 openSettingsQuickMenu(event, false)
