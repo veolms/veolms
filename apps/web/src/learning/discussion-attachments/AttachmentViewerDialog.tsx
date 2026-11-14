@@ -1,5 +1,6 @@
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useEffect, useRef } from "react";
+import { FileVideoPlayer } from "../../components/video";
 import {
   type AttachmentVisualItem,
   getAttachmentCategory,
@@ -72,16 +73,23 @@ export function AttachmentViewerDialog({
       {attachment && visualUrl && (
         <div className="relative flex max-h-[92dvh] max-w-[94vw] items-center justify-center">
           {isVideo ? (
-            <video
-              src={visualUrl}
-              controls
-              autoPlay
-              playsInline
-              aria-label={`Video attachment: ${attachment.fileName}`}
-              className="max-h-[88dvh] max-w-[92vw] rounded-xl bg-black object-contain shadow-2xl"
+            // The app's player, at the video's shape inside the screen.
+            <div
+              className="aspect-video w-[min(92vw,calc(88dvh*16/9))] overflow-hidden rounded-xl bg-black shadow-2xl"
+              onKeyDown={(event) => {
+                // Esc still closes the dialog; the player's own keys stay
+                // inside it.
+                if (event.key !== "Escape") event.stopPropagation();
+              }}
             >
-              Your browser does not support video playback.
-            </video>
+              <FileVideoPlayer
+                src={visualUrl}
+                mimeType={attachment.mimeType}
+                title={attachment.fileName}
+                autoPlay
+                downloadUrl={attachment.localPreviewUrl ? null : visualUrl}
+              />
+            </div>
           ) : (
             <img
               src={visualUrl}
