@@ -81,16 +81,58 @@ const paneWidths = new Map<HTMLElement, string>();
  * boxes, and the course content sits over a frame that never narrowed.
  */
 function writeRemainingWidth(shell: HTMLElement | null, frame: HTMLElement) {
-  let value: string | null = null;
+  writeInstantly(shell, frame, () => {
+    const value = sharedWidth(frame);
+    writeTargetWidth(shell, value);
+    writeTargetWidth(frame, value);
+  });
+}
+
+/**
+ * The width the shell and frame take from the panes splitting the frame:
+ * an open pane's own width first, then the page's (`null`: a pane without
+ * a width of its own, the lesson page's course content, sized by
+ * `--split-frame-page-width`), and a closed pane's 0 last. A closed pane
+ * never takes the frame from another: the Discussions page's closed panel,
+ * there under the lesson (a minimize landing on it, or the lesson just
+ * left), had the course content and its shadow drawn at no width.
+ */
+function sharedWidth(frame: HTMLElement): string | null {
+  let pageSized = false;
+  let closed = false;
   for (const pane of activePanes) {
+    if (!frame.contains(pane)) continue;
     const width = paneWidths.get(pane);
-    if (width !== undefined && frame.contains(pane)) {
-      value = width;
-      break;
-    }
+    if (width === undefined) pageSized = true;
+    else if (width === "0px") closed = true;
+    else return width;
   }
-  writeTargetWidth(shell, value);
-  writeTargetWidth(frame, value);
+  return pageSized || !closed ? null : "0px";
+}
+
+const INSTANT_ATTRIBUTE = "data-split-frame-instant";
+
+/**
+ * Changes the boxes' width at once, not over the usual slide: for a frame
+ * passed from one pane to another (the lesson page left for the Discussions
+ * page), which goes to its new shape at once, as it does when the next page
+ * has no pane at all. Without it the frame slid from the course content's
+ * width to the panel's, and the whole page seemed to grow to the right.
+ */
+function writeInstantly(
+  shell: HTMLElement | null,
+  frame: HTMLElement,
+  write: () => void,
+) {
+  shell?.setAttribute(INSTANT_ATTRIBUTE, "");
+  frame.setAttribute(INSTANT_ATTRIBUTE, "");
+  write();
+  // Styled now, with no transition, before the mark is taken off.
+  getComputedStyle(frame).getPropertyValue("--split-frame-width");
+  requestAnimationFrame(() => {
+    shell?.removeAttribute(INSTANT_ATTRIBUTE);
+    frame.removeAttribute(INSTANT_ATTRIBUTE);
+  });
 }
 
 // A sliding pane that closes leaves the frame widening for a moment. A pane
@@ -168,6 +210,8 @@ export function SplitFramePane({
   // lesson's course content sat over the video.
   const behind = useContext(SplitFrameBehindContext);
   const shownAsRouteRef = useRef(false);
+  // Set when this pane arrives in a frame another pane has split already.
+  const arrivedInSplitFrameRef = useRef(false);
 
   // Opening: the shell and frame take the split shape (a sliding pane makes
   // them slide to it). Closing: they let go of it, or a sliding pane's frame
@@ -196,6 +240,8 @@ export function SplitFramePane({
     const { shell, frame } = findSplitFrameBoxes(pane);
     if (!frame) return undefined;
     const takingOver = pendingRelease !== null;
+    arrivedInSplitFrameRef.current =
+      frame.hasAttribute(SPLIT_FRAME_ATTRIBUTE) && !takingOver;
     if (pendingRelease !== null) {
       window.clearTimeout(pendingRelease);
       pendingRelease = null;
@@ -259,8 +305,22 @@ export function SplitFramePane({
     const { shell, frame } = findSplitFrameBoxes(pane);
     const value = `${width}px`;
     paneWidths.set(pane, value);
-    for (const element of [shell, frame, pane])
-      writeTargetWidth(element, value);
+    writeTargetWidth(pane, value);
+    if (!frame) return;
+    // The shell and frame take the width the panes in the frame share (a
+    // closed pane gives way to another's), and take it at once when this
+    // pane has just arrived in a frame another pane had split.
+    const shared = activePanes.has(pane) ? sharedWidth(frame) : value;
+    const write = () => {
+      writeTargetWidth(shell, shared);
+      writeTargetWidth(frame, shared);
+    };
+    if (arrivedInSplitFrameRef.current) {
+      arrivedInSplitFrameRef.current = false;
+      writeInstantly(shell, frame, write);
+    } else {
+      write();
+    }
   });
 
   return createElement(
