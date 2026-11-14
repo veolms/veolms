@@ -134,6 +134,15 @@ export function applyToRoomList(
               createdAt: message.createdAt,
             }
           : room.lastMessage,
+        // A newer message replaces "You reacted 👍 to: …" in the list, as
+        // the server's own list does; kept, the old reaction hid it until a
+        // reload.
+        lastReaction:
+          isLatest &&
+          room.lastReaction &&
+          new Date(room.lastReaction.at) <= new Date(message.createdAt)
+            ? null
+            : room.lastReaction,
         unreadCount: unread,
         me:
           mine && options.isNew

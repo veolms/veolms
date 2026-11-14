@@ -498,7 +498,13 @@ function ChatRow({
     room.kind === "direct" &&
     room.directStatus === "requested" &&
     room.requestedByMe === false;
-  const reaction = room.lastReaction ?? null;
+  // Only while it is newer than the last message (a message that came after
+  // it takes the line back).
+  const reaction =
+    room.lastReaction &&
+    (!last || new Date(room.lastReaction.at) > new Date(last.createdAt))
+      ? room.lastReaction
+      : null;
   const reactionText = reaction
     ? `${
         reaction.byId === viewerId
