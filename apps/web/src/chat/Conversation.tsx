@@ -544,6 +544,9 @@ export function Conversation({
               {room.title}
             </span>
             <span
+              // Cut with "…" on the smallest screens; the whole line is in
+              // the tooltip (and contact info shows it too).
+              title={subtitle || undefined}
               className={cn(
                 "block truncate text-[0.8rem]",
                 typing.length > 0 || presence?.online
@@ -555,9 +558,11 @@ export function Conversation({
             </span>
           </span>
         </button>
+        {/* On a phone the name and "last seen" need the room; Search
+            messages stays in the ⋮ menu. */}
         <button
           type="button"
-          className={iconButton}
+          className={cn(iconButton, "hidden @[480px]/chat:inline-flex")}
           onClick={onOpenSearch}
           aria-label="Search messages"
           title="Search messages"
