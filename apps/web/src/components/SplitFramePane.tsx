@@ -265,9 +265,13 @@ export function SplitFramePane({
       !frame.hasAttribute(SPLIT_FRAME_ATTRIBUTE)
     ) {
       // The width goes on below; the boxes take the shape at no width first,
-      // so that they slide from it.
+      // so that they slide from it. The pane too: left to the page's own
+      // width (the lesson page's stylesheet gives every split frame its
+      // course content's), a closed panel arriving from a lesson was
+      // drawn that wide for a moment and slid off to the right.
       writeTargetWidth(shell, "0px");
       writeTargetWidth(frame, "0px");
+      writeTargetWidth(pane, "0px");
       update();
       getComputedStyle(frame).getPropertyValue("--split-frame-width");
     } else {
