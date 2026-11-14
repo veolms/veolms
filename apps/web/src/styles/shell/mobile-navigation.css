@@ -448,7 +448,7 @@
     overflow: hidden;
   }
 
-  .mobile-menu-sheet__appearance--palette-open > button.is-active {
+  .mobile-menu-sheet__appearance--palette-open > :is(button, a).is-active {
     box-shadow: none;
   }
 

@@ -1110,7 +1110,7 @@
   flex: 0 0 38px;
 }
 
-.courses-app--collapsed .sidebar-appearance--mobile-dock > button {
+.courses-app--collapsed .sidebar-appearance--mobile-dock > :is(button, a) {
   height: 44px;
   min-height: 44px;
   flex-basis: 44px;
