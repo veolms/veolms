@@ -215,7 +215,7 @@ export function SidebarNavigation({
                 id={badgeId}
                 count={badgeCount}
                 unreadLabel="unread messages"
-                className="ml-auto shrink-0 @max-[110px]:absolute @max-[110px]:top-1.5 @max-[110px]:left-[calc(50%+2px)] @max-[110px]:ml-0"
+                className="ml-auto shrink-0 @max-[110px]:absolute @max-[110px]:top-0 @max-[110px]:right-0 @max-[110px]:ml-0 @max-[110px]:h-4.5 @max-[110px]:min-w-4.5 @max-[110px]:translate-x-[40%] @max-[110px]:-translate-y-[40%] @max-[110px]:px-1 @max-[110px]:text-[0.625rem] @max-[110px]:shadow-[0_0_0_2px_var(--sidebar-background,var(--surface))]"
               />
             </a>
           </Fragment>

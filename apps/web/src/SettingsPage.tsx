@@ -35,6 +35,7 @@ import { authStore, useAuthStore } from "./store/auth.store";
 import { useCapabilities } from "./services/authorization";
 import { getSettingsTabs } from "./settings/settingsTabs";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
+import { SettingsReadingModeSwitch } from "./settings/SettingsReadingModeSwitch";
 import { useSettingsTabShortcuts } from "./settings/useSettingsTabShortcuts";
 import { definePrerenderedBody } from "./routing/prerenderedBodies";
 import "./styles/features/settings/foundation.css";
@@ -350,8 +351,11 @@ export function SettingsPage({
             onNavigateBack={showBackButton ? leaveSettings : undefined}
             copyClassName="settings-page__heading-copy"
           />
-          <div className="settings-page__icon" aria-hidden="true">
-            <GearSix size={25} weight="regular" />
+          <div className="ml-auto flex items-center gap-3">
+            <SettingsReadingModeSwitch />
+            <div className="settings-page__icon" aria-hidden="true">
+              <GearSix size={25} weight="regular" />
+            </div>
           </div>
         </div>
 

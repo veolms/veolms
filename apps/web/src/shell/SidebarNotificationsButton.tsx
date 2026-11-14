@@ -1,5 +1,10 @@
 import type { CSSProperties } from "react";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import {
+  NAV_COUNT_BADGE_CLASS,
+  NAV_COUNT_BADGE_CORNER_CLASS,
+} from "./NavCountBadge";
+import { formatBadgeCount } from "./navCount";
 
 export interface SidebarNotificationsButtonProps {
   /** Unread notifications; 0 for a guest. */
@@ -40,14 +45,16 @@ export function SidebarNotificationsButton({
       onClick={onOpen}
     >
       <Bell size={20} weight={active ? "fill" : "regular"} />
+      {/* An <em>, not a <span>: the collapsed sidebar hides its dock
+          buttons' spans (their labels), which took the count with them. */}
       {unreadCount > 0 ? (
-        <span
-          className="pointer-events-none absolute top-1.5 left-1/2 ml-1 grid h-4.5 min-w-4.5 place-items-center rounded-full bg-[#e5484d] px-1 text-[0.625rem] leading-none font-bold text-white tabular-nums shadow-[0_0_0_2px_var(--surface-strong,var(--surface))]"
+        <em
+          className={`${NAV_COUNT_BADGE_CLASS} ${NAV_COUNT_BADGE_CORNER_CLASS}`}
           aria-hidden="true"
           data-notifications-badge=""
         >
-          {unreadCount > 9 ? "9+" : unreadCount}
-        </span>
+          {formatBadgeCount(unreadCount, 9)}
+        </em>
       ) : null}
     </button>
   );
