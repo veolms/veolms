@@ -208,14 +208,16 @@ export function SidebarNavigation({
                 className="hidden! [.is-active>&]:block!"
               />
               <span className="courses-nav__text">{displayLabel}</span>
-              {/* At the row's end; half on the icon (its top-right) in a narrow rail
+              {/* At the row's end; half on the icon (its top-right) in a narrow rail,
+                  and whenever the sidebar is collapsed (its labels hidden),
+                  through the width animation too
                   (the menu is a size container). No number shortcut is
                   shown on hover: the keys still work (aria-keyshortcuts). */}
               <NavCountBadge
                 id={badgeId}
                 count={badgeCount}
                 unreadLabel="unread messages"
-                className="ml-auto shrink-0 @max-[110px]:absolute @max-[110px]:top-[calc(50%-10px)] @max-[110px]:left-[calc(50%+10px)] @max-[110px]:ml-0 @max-[110px]:h-4.5 @max-[110px]:min-w-4.5 @max-[110px]:-translate-x-1/2 @max-[110px]:-translate-y-1/2 @max-[110px]:px-1 @max-[110px]:text-[0.625rem] @max-[110px]:shadow-[0_0_0_2px_var(--surface)]"
+                className="ml-auto shrink-0 @max-[110px]:absolute @max-[110px]:top-[calc(50%-10px)] @max-[110px]:left-[39px] @max-[110px]:ml-0 @max-[110px]:h-4.5 @max-[110px]:min-w-4.5 @max-[110px]:-translate-x-1/2 @max-[110px]:-translate-y-1/2 @max-[110px]:px-1 @max-[110px]:text-[0.625rem] @max-[110px]:shadow-[0_0_0_2px_var(--surface)] [.courses-app--collapsed_&]:absolute [.courses-app--collapsed_&]:top-[calc(50%-10px)] [.courses-app--collapsed_&]:left-[39px] [.courses-app--collapsed_&]:ml-0 [.courses-app--collapsed_&]:h-4.5 [.courses-app--collapsed_&]:min-w-4.5 [.courses-app--collapsed_&]:-translate-x-1/2 [.courses-app--collapsed_&]:-translate-y-1/2 [.courses-app--collapsed_&]:px-1 [.courses-app--collapsed_&]:text-[0.625rem] [.courses-app--collapsed_&]:shadow-[0_0_0_2px_var(--surface)] [:root[data-sidebar-state=collapsed]_&]:absolute [:root[data-sidebar-state=collapsed]_&]:top-[calc(50%-10px)] [:root[data-sidebar-state=collapsed]_&]:left-[39px] [:root[data-sidebar-state=collapsed]_&]:ml-0 [:root[data-sidebar-state=collapsed]_&]:h-4.5 [:root[data-sidebar-state=collapsed]_&]:min-w-4.5 [:root[data-sidebar-state=collapsed]_&]:-translate-x-1/2 [:root[data-sidebar-state=collapsed]_&]:-translate-y-1/2 [:root[data-sidebar-state=collapsed]_&]:px-1 [:root[data-sidebar-state=collapsed]_&]:text-[0.625rem] [:root[data-sidebar-state=collapsed]_&]:shadow-[0_0_0_2px_var(--surface)]"
               />
             </a>
           </Fragment>
