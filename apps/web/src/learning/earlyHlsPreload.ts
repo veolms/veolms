@@ -4,6 +4,7 @@ import {
 } from "@veolms/video-player/shaka-preload";
 import {
   isRememberedWithoutVideo,
+  LEARNING_LESSON_NO_VIDEO_META_NAME,
   readLearningHlsBootstrapFromDocument,
   readLearningPlaybackRequestMetadataFromDocument,
   readLearningPlaybackRequestMetadataFromPath,
@@ -125,6 +126,21 @@ function startPreloadForBootstrap(
   return promise;
 }
 
+/** The page was built for this lesson and marks it as having no video. */
+function builtPageShowsNoVideo(
+  request: LearningPlaybackRequestMetadata,
+): boolean {
+  if (typeof document === "undefined") return false;
+  const built = readLearningPlaybackRequestMetadataFromDocument();
+  return (
+    built?.courseSlug === request.courseSlug &&
+    built.lessonNumber === request.lessonNumber &&
+    document
+      .querySelector(`meta[name="${LEARNING_LESSON_NO_VIDEO_META_NAME}"]`)
+      ?.getAttribute("content") === "1"
+  );
+}
+
 export async function startEarlyHlsPreload(
   bootstrap: LearningHlsBootstrap | null = readLearningHlsBootstrapFromDocument(),
   requestMetadata: LearningPlaybackRequestMetadata | null = readLearningPlaybackRequestMetadataFromDocument(),
@@ -161,9 +177,11 @@ export async function startEarlyHlsPreload(
     return null;
   }
 
-  // A lesson this browser saw without a video (a reading, a quiz): nothing
-  // to start early, and asking would only bring the API's 404.
+  // A lesson without a video (a reading, a quiz): nothing to start early,
+  // and asking would only bring the API's 404. Known from the built page
+  // (its meta, for the lesson it names) or from this browser's last visit.
   if (
+    builtPageShowsNoVideo(requestMetadata) ||
     isRememberedWithoutVideo(
       requestMetadata.courseSlug,
       requestMetadata.lessonNumber,
