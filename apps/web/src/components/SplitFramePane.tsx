@@ -264,6 +264,20 @@ export function SplitFramePane({
       query.matches &&
       !frame.hasAttribute(SPLIT_FRAME_ATTRIBUTE)
     ) {
+      // The frame may have been split until a moment ago, by a pane that
+      // left in this same commit (the lesson page's course content, as
+      // Discussions takes over from a lesson). Unless the browser styles it
+      // unsplit first, it still holds that pane's width as where to start,
+      // and the frame and this pane slid from 400px to 0: the right panel
+      // moved right and closed. Styled now, unsplit, there is nothing to
+      // slide from.
+      getComputedStyle(frame).getPropertyValue("--split-frame-width");
+      getComputedStyle(pane).getPropertyValue("--split-frame-width");
+      if (shell) {
+        getComputedStyle(shell, "::after").getPropertyValue(
+          "--split-frame-width",
+        );
+      }
       // The width goes on below; the boxes take the shape at no width first,
       // so that they slide from it. The pane too: left to the page's own
       // width (the lesson page's stylesheet gives every split frame its
