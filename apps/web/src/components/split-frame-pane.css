@@ -150,6 +150,22 @@
     transition: none;
   }
 
+  /* A frame passed from one pane to another takes its new width at once
+     (SplitFramePane's writeInstantly), as a page with no pane does.
+     Important: the rule giving these boxes their transition (above) is
+     weighed by its `:is(… :has(…))` branch and outranks any plainer
+     selector, so without it the "instant" width still slid (from the
+     course content's 400px to 0 as Discussions took over from a lesson). */
+  :root[data-content-layout="framed"]
+    .courses-app[data-split-frame-instant]::after,
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-split-frame-instant],
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-split-frame-instant]
+    :is([data-split-frame-pane], [data-split-frame-sized]) {
+    transition: none !important;
+  }
+
   /* The shell normally draws the edge highlight of the full-width frame (its
      overlay with a mouse, FrameEdge on touch devices); here the frame draws
      its own below, at whatever width it has, and the shell's is not drawn. */

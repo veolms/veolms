@@ -11,12 +11,17 @@ import type {
   MouseEvent as ReactMouseEvent,
 } from "react";
 import { SidebarResizeReadout } from "./SidebarResizeReadout";
-import { getNavigationIconColor, type NavigationItem } from "./navigation";
+import {
+  getNavigationDestination,
+  getNavigationIconColor,
+  type NavigationItem,
+} from "./navigation";
+import { leavesClickToBrowser, navigationHref } from "./navigationLink";
 import type { NavigationItemWithMetadata } from "./navigation";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 import { SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS } from "./academyShellClasses";
 import type { SidebarTooltip } from "./academyShellTypes";
-import { ShortcutKeys } from "./ShortcutKeys";
+import { NavCountBadge } from "./NavCountBadge";
 import { useHydrated } from "../courses/viewerCourseState";
 
 export interface SidebarNavigationProps {
@@ -31,19 +36,17 @@ export interface SidebarNavigationProps {
   selectNavigation: (label: string, item?: NavigationItemWithMetadata) => void;
   navigationUsesCompactInteraction: boolean;
   showSidebarTooltip: (
-    event:
-      ReactMouseEvent<HTMLButtonElement> | ReactFocusEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement> | ReactFocusEvent<HTMLElement>,
     label: string,
     active: boolean,
     showWhenExpanded?: boolean,
     preferenceControlled?: boolean,
   ) => void;
   hideCollapsedNavigationTooltip: (
-    event:
-      ReactMouseEvent<HTMLButtonElement> | ReactFocusEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement> | ReactFocusEvent<HTMLElement>,
   ) => void;
-  showKeyboardShortcuts: boolean;
-  settingsShortcutKeys: string[];
+  /** Unread chat messages, shown on Chats. */
+  unreadChatCount: number;
   sidebarResizing: boolean;
   sidebarResizePreviewWidth: number | null;
   renderedSidebarWidth: number;
@@ -68,8 +71,7 @@ export function SidebarNavigation({
   navigationUsesCompactInteraction,
   showSidebarTooltip,
   hideCollapsedNavigationTooltip,
-  showKeyboardShortcuts,
-  settingsShortcutKeys,
+  unreadChatCount,
   sidebarResizing,
   sidebarResizePreviewWidth,
   renderedSidebarWidth,
@@ -90,7 +92,7 @@ export function SidebarNavigation({
     const menu = navigationRef.current;
     if (!hydrated || !menu) return;
     const active = new Set(activeLabels.split("|"));
-    for (const item of menu.querySelectorAll(":scope > button")) {
+    for (const item of menu.querySelectorAll(":scope > a, :scope > button")) {
       item.classList.toggle(
         "is-active",
         active.has(item.getAttribute("aria-label") ?? ""),
@@ -142,13 +144,19 @@ export function SidebarNavigation({
       {navigation.map((item, navigationIndex) => {
         const [label, Icon] = item;
         const active = isNavigationItemActive(item);
-        const navigationShortcutIndex = navigationIndex + 1;
         const displayLabel = label;
         const accessibleLabel = displayLabel;
+        const badgeCount = label === "Chats" ? unreadChatCount : 0;
+        const badgeId = `sidebar-nav-${label.toLowerCase()}-count`;
         return (
           <Fragment key={label}>
-            <button
-              type="button"
+            {/* A link, so Ctrl/⌘ or middle click opens the page in a new
+                tab and right click offers the browser's link menu. A plain
+                click still goes through the app (closing what is open
+                first) without reloading. */}
+            <a
+              href={navigationHref(getNavigationDestination(item))}
+              data-control-radius-surface=""
               className={`${active ? "is-active " : ""}${SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS}`}
               style={
                 {
@@ -160,12 +168,17 @@ export function SidebarNavigation({
               }
               aria-label={accessibleLabel}
               aria-current={active ? "page" : undefined}
+              aria-describedby={badgeCount > 0 ? badgeId : undefined}
               aria-keyshortcuts={
                 label === "Settings"
                   ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma`
                   : String(navigationIndex + 1)
               }
-              onClick={() => selectNavigation(label, item)}
+              onClick={(event) => {
+                if (leavesClickToBrowser(event)) return;
+                event.preventDefault();
+                selectNavigation(label, item);
+              }}
               onContextMenu={(event) => {
                 if (navigationUsesCompactInteraction)
                   event.preventDefault();
@@ -195,17 +208,16 @@ export function SidebarNavigation({
                 className="hidden! [.is-active>&]:block!"
               />
               <span className="courses-nav__text">{displayLabel}</span>
-              {showKeyboardShortcuts && (
-                <ShortcutKeys
-                  className="courses-nav__shortcut"
-                  keys={
-                    label === "Settings"
-                      ? settingsShortcutKeys
-                      : [String(navigationShortcutIndex)]
-                  }
-                />
-              )}
-            </button>
+              {/* At the row's end; on the icon's corner in a narrow rail
+                  (the menu is a size container). No number shortcut is
+                  shown on hover: the keys still work (aria-keyshortcuts). */}
+              <NavCountBadge
+                id={badgeId}
+                count={badgeCount}
+                unreadLabel="unread messages"
+                className="ml-auto shrink-0 @max-[110px]:absolute @max-[110px]:top-1.5 @max-[110px]:left-[calc(50%+2px)] @max-[110px]:ml-0"
+              />
+            </a>
           </Fragment>
         );
       })}

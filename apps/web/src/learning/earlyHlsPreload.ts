@@ -3,6 +3,7 @@ import {
   startEarlyShakaPreload,
 } from "@veolms/video-player/shaka-preload";
 import {
+  isRememberedWithoutVideo,
   readLearningHlsBootstrapFromDocument,
   readLearningPlaybackRequestMetadataFromDocument,
   readLearningPlaybackRequestMetadataFromPath,
@@ -146,11 +147,28 @@ export async function startEarlyHlsPreload(
       typeof location === "undefined"
         ? null
         : readLearningPlaybackRequestMetadataFromPath(location.pathname);
-    if (fromAddress) {
+    if (
+      fromAddress &&
+      !isRememberedWithoutVideo(
+        fromAddress.courseSlug,
+        fromAddress.lessonNumber,
+      )
+    ) {
       void getVideoPlaybackBootstrap(fromAddress)
         .then((early) => preconnectToMediaOrigin(early.manifestUrl))
         .catch(() => undefined);
     }
+    return null;
+  }
+
+  // A lesson this browser saw without a video (a reading, a quiz): nothing
+  // to start early, and asking would only bring the API's 404.
+  if (
+    isRememberedWithoutVideo(
+      requestMetadata.courseSlug,
+      requestMetadata.lessonNumber,
+    )
+  ) {
     return null;
   }
 

@@ -230,11 +230,11 @@
       clip-path 220ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .courses-nav button > .courses-nav__text,
-  .courses-nav button > b,
+  .courses-nav :is(button, a) > .courses-nav__text,
+  .courses-nav :is(button, a) > b,
   .courses-profile__button > span:not(.courses-profile__avatar-wrap),
   .courses-profile__button > svg,
-  .sidebar-appearance > button > span {
+  .sidebar-appearance > :is(button, a) > span {
     max-width: 190px;
     opacity: 1;
     clip-path: inset(0 0 0 0);
@@ -248,11 +248,11 @@
   /* Keep the icon anchor constant while the sidebar width changes. Labels
      reveal inside the remaining row space; they never participate in the
      icon's horizontal positioning. */
-  .courses-nav button {
+  .courses-nav :is(button, a) {
     padding-left: 12.5px;
   }
 
-  .courses-nav button > svg {
+  .courses-nav :is(button, a) > svg {
     width: 26px;
     height: 26px;
     flex: 0 0 23px;
@@ -271,14 +271,14 @@
     padding: 4px 0;
   }
 
-  .courses-nav button > .courses-nav__text,
+  .courses-nav :is(button, a) > .courses-nav__text,
   .courses-profile__button > span:not(.courses-profile__avatar-wrap),
-  .sidebar-appearance > button > span {
+  .sidebar-appearance > :is(button, a) > span {
     display: block;
     overflow: hidden;
   }
 
-  .courses-nav button > b {
+  .courses-nav :is(button, a) > b {
     flex: 0 0 auto;
     overflow: hidden;
   }
@@ -331,13 +331,13 @@
     pointer-events: none;
   }
 
-  .courses-app--collapsed .courses-nav button > .courses-nav__text,
-  .courses-app--collapsed .courses-nav button > b,
+  .courses-app--collapsed .courses-nav :is(button, a) > .courses-nav__text,
+  .courses-app--collapsed .courses-nav :is(button, a) > b,
   .courses-app--collapsed
     .courses-profile__button
     > span:not(.courses-profile__avatar-wrap),
   .courses-app--collapsed .courses-profile__button > svg,
-  .courses-app--collapsed .sidebar-appearance > button > span {
+  .courses-app--collapsed .sidebar-appearance > :is(button, a) > span {
     display: block;
     max-width: 0;
     margin-left: 0;
@@ -346,7 +346,7 @@
     pointer-events: none;
   }
 
-  .courses-app--collapsed .courses-nav button > b {
+  .courses-app--collapsed .courses-nav :is(button, a) > b {
     display: inline-flex;
     min-width: 0;
     width: 0;
@@ -364,7 +364,7 @@
     width: 0;
   }
 
-  .courses-app--collapsed .sidebar-appearance > button > span {
+  .courses-app--collapsed .sidebar-appearance > :is(button, a) > span {
     display: inline-block;
   }
 
@@ -543,7 +543,7 @@
     flex-direction: column;
   }
 
-  .sidebar-appearance > button,
+  .sidebar-appearance > :is(button, a),
   .sidebar-palette-wrap {
     width: 40px;
     flex: 0 0 38px;
@@ -554,7 +554,7 @@
     flex-direction: row;
   }
 
-  .sidebar-appearance--horizontal > button,
+  .sidebar-appearance--horizontal > :is(button, a),
   .sidebar-appearance--horizontal > .sidebar-palette-wrap {
     width: auto;
     flex: 1 1 0;
@@ -564,7 +564,7 @@
     flex-direction: row;
   }
 
-  .courses-app--resizing .sidebar-appearance--horizontal > button,
+  .courses-app--resizing .sidebar-appearance--horizontal > :is(button, a),
   .courses-app--resizing
     .sidebar-appearance--horizontal
     > .sidebar-palette-wrap {

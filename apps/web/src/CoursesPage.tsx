@@ -383,6 +383,7 @@ export function CoursesPage({
     shellProfileAvatarUrl,
     shellProfileAvatarSrcSet,
     unreadNotificationCount,
+    unreadChatCount,
   } = useShellProfileSummary({
     authUserFetched,
     authIdentityHint,
@@ -473,7 +474,6 @@ export function CoursesPage({
     longPressAudioContextRef,
     sidebarTooltipTimerRef,
     primaryShortcutModifier,
-    settingsShortcutKeys,
     sidebarShortcutTitle,
     showKeyboardShortcuts,
     settingsControlTitle,
@@ -1212,6 +1212,7 @@ export function CoursesPage({
             />
 
             <SidebarNavigation
+              unreadChatCount={unreadChatCount}
               navigationScrollFade={navigationScrollFade}
               navigationRef={navigationRef}
               setSidebarTooltip={setSidebarTooltip}
@@ -1226,8 +1227,6 @@ export function CoursesPage({
               }
               showSidebarTooltip={showSidebarTooltip}
               hideCollapsedNavigationTooltip={hideCollapsedNavigationTooltip}
-              showKeyboardShortcuts={showKeyboardShortcuts}
-              settingsShortcutKeys={settingsShortcutKeys}
               sidebarResizing={sidebarResizing}
               sidebarResizePreviewWidth={sidebarResizePreviewWidth}
               renderedSidebarWidth={renderedSidebarWidth}
@@ -1408,6 +1407,7 @@ export function CoursesPage({
 
       {compactNavigation && !mobileSidebarNavigationActive && (
         <MobileBottomNavigation
+          unreadChatCount={unreadChatCount}
           mobileBottomNavRef={mobileBottomNavRef}
           mobileBottomNavHidden={mobileBottomNavHidden}
           effectiveRole={effectiveRole}

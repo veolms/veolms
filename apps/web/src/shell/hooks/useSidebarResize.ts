@@ -135,7 +135,7 @@ export function useSidebarResize({
       if (dock) {
         appearanceControlRectsRef.current = [
           ...dock.querySelectorAll<HTMLElement>(
-            ":scope > button, :scope > .sidebar-palette-wrap",
+            ":scope > button, :scope > a, :scope > .sidebar-palette-wrap",
           ),
         ].map((control) => control.getBoundingClientRect());
       }

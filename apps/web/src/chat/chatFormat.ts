@@ -112,15 +112,28 @@ export function initials(name: string): string {
   return letters.toUpperCase() || "?";
 }
 
-/** WhatsApp's "last seen today at 10:02" / "yesterday at" / a date. */
-export function lastSeenLabel(iso: string | null): string {
+const dayMonthFormat = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+  month: "short",
+});
+
+/**
+ * WhatsApp's "last seen today at 10:02" / "yesterday at" / a date. The
+ * year is left out within this year, so the line fits a phone's header.
+ */
+export function lastSeenLabel(
+  iso: string | null,
+  now: Date = new Date(),
+): string {
   if (!iso) return "";
   const date = new Date(iso);
-  const days = Math.round(
-    (startOfDay(new Date()) - startOfDay(date)) / 86_400_000,
-  );
+  const days = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
   const time = timeFormat.format(date);
   if (days <= 0) return `last seen today at ${time}`;
   if (days === 1) return `last seen yesterday at ${time}`;
-  return `last seen ${dateFormat.format(date)} at ${time}`;
+  const day =
+    date.getFullYear() === now.getFullYear()
+      ? dayMonthFormat.format(date)
+      : dateFormat.format(date);
+  return `last seen ${day} at ${time}`;
 }
