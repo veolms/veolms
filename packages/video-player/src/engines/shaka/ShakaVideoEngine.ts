@@ -1008,10 +1008,40 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const generation = this.#loadGeneration;
     const current = () =>
       this.#player === player && this.isCurrentOperation(generation);
-    setTimeout(() => {
-      if (!current()) return;
+    // Fetched as the player's own requests are: the same request filter
+    // (tokens, cache keys) makes the same addresses.
+    const fetchFiltered = async (
+      type: VideoNetworkRequest["type"],
+      uri: string,
+    ): Promise<Response> => {
+      const request: VideoNetworkRequest = {
+        type,
+        uris: [uri],
+        method: "GET",
+        headers: {},
+        body: null,
+        allowCrossSiteCredentials: false,
+      };
+      await source.networking?.requestFilter?.(request);
+      return fetch(request.uris[0] ?? uri, {
+        headers: request.headers,
+        priority: "low",
+      } as RequestInit);
+    };
+    setTimeout(async () => {
+      if (!current() || !/^https?:/i.test(source.src)) return;
       const active = player.getVariantTracks().find((track) => track.active);
-      const mpd = source.inlinedManifest ?? "";
+      let mpd = source.inlinedManifest ?? "";
+      if (!mpd) {
+        // Not handed over with the source: the manifest's few kilobytes
+        // once more (the init segments it lists are what saves the time).
+        try {
+          mpd = await (await fetchFiltered("manifest", source.src)).text();
+        } catch {
+          return;
+        }
+      }
+      if (!current()) return;
       const uris = dashInitSegmentUris(mpd, source.src, active?.height ?? null);
       if (uris.length < 2 || uris.length > INIT_WARM_MAX) return;
       markPlayback("init-warm", { count: uris.length });
@@ -1020,21 +1050,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         while (next < uris.length && current()) {
           const uri = uris[next]!;
           next += 1;
-          const request: VideoNetworkRequest = {
-            type: "segment",
-            uris: [uri],
-            method: "GET",
-            headers: {},
-            body: null,
-            allowCrossSiteCredentials: false,
-          };
           try {
-            await source.networking?.requestFilter?.(request);
-            const response = await fetch(request.uris[0] ?? uri, {
-              headers: request.headers,
-              priority: "low",
-            } as RequestInit);
-            await response.arrayBuffer();
+            await (await fetchFiltered("segment", uri)).arrayBuffer();
           } catch {
             // Only a head start: the seek fetches it as before.
           }
