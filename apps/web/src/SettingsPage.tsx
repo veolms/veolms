@@ -351,9 +351,14 @@ export function SettingsPage({
             onNavigateBack={showBackButton ? leaveSettings : undefined}
             copyClassName="settings-page__heading-copy"
           />
-          <div className="ml-auto flex items-center gap-3">
+          {/* On a phone or narrow window only the switch stays (the gear
+              is decoration), so the heading's text keeps its room. */}
+          <div className="ml-auto flex shrink-0 items-center gap-3">
             <SettingsReadingModeSwitch />
-            <div className="settings-page__icon" aria-hidden="true">
+            <div
+              className="settings-page__icon max-md:hidden!"
+              aria-hidden="true"
+            >
               <GearSix size={25} weight="regular" />
             </div>
           </div>
