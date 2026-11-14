@@ -47,6 +47,7 @@ import {
 import { ReportsView, RestrictedView } from "./ModerationViews";
 import { RestrictDialog } from "./ChatDialogs";
 import { ROLE_LABEL } from "./chatFormat";
+import { VideoThumb } from "./VideoThumb";
 
 const SLOW_MODES = [
   { label: "Off", seconds: 0 },
@@ -364,10 +365,8 @@ export function RoomInfoPanel({
                       className="size-full object-cover"
                     />
                   ) : (
-                    <video
+                    <VideoThumb
                       src={chatService.fileUrl(a)}
-                      preload="metadata"
-                      muted
                       className="size-full object-cover"
                     />
                   )}
