@@ -183,7 +183,9 @@ export function MultiSelectFilter({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-h-[min(22rem,var(--available-height,22rem))]">
+      {/* Scrolls up and down only: long names are cut with "…", never
+          pushed sideways. */}
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-h-[min(22rem,var(--available-height,22rem))]">
         {isLoading ? (
           <div
             className="space-y-2 p-4"
@@ -207,7 +209,10 @@ export function MultiSelectFilter({
               selected.has(option.id),
             );
             return (
-              <fieldset key={group.id} className="m-0 border-0 p-0">
+              // A fieldset is as wide as its widest row unless told
+              // otherwise (min-width: min-content), which scrolled the
+              // list sideways for a long course name.
+              <fieldset key={group.id} className="m-0 min-w-0 border-0 p-0">
                 {group.title && (
                   <div className="flex items-center justify-between px-4 pt-3 pb-1">
                     <legend className="text-[0.6875rem] font-bold tracking-wider text-(--muted) uppercase">
@@ -227,7 +232,7 @@ export function MultiSelectFilter({
                   return (
                     <label
                       key={option.id}
-                      className="flex min-h-11 cursor-pointer items-center gap-3 px-4 py-1.5 transition-colors hover:bg-(--hover) has-focus-visible:bg-(--hover)"
+                      className="flex min-h-11 min-w-0 cursor-pointer items-center gap-3 px-4 py-1.5 transition-colors hover:bg-(--hover) has-focus-visible:bg-(--hover)"
                     >
                       <input
                         type="checkbox"
