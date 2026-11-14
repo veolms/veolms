@@ -44,6 +44,36 @@ function readLessonsWithoutVideo(): Record<string, number[]> {
   }
 }
 
+/**
+ * The lessons without a video in the course data this page loaded, by
+ * course: fresh, unlike the stored copy, so trusted to answer a playback
+ * request without asking (`getVideoPlaybackBootstrap`).
+ */
+const lessonsWithoutVideoThisPage = new Map<string, Set<number>>();
+
+/** Notes this page's fresh course data (see the map above). */
+export function noteLessonsWithoutVideo(
+  courseSlug: string,
+  lessons: readonly { contentType?: string }[],
+): void {
+  if (!courseSlug || lessons.length === 0) return;
+  const numbers = new Set<number>();
+  lessons.forEach((lesson, index) => {
+    if (lessonKindHasNoVideo(lesson.contentType)) numbers.add(index + 1);
+  });
+  lessonsWithoutVideoThisPage.set(courseSlug, numbers);
+}
+
+/** Whether this page's course data shows the lesson without a video. */
+export function isKnownWithoutVideo(
+  courseSlug: string,
+  lessonNumber: number,
+): boolean {
+  return (
+    lessonsWithoutVideoThisPage.get(courseSlug)?.has(lessonNumber) ?? false
+  );
+}
+
 /** Keeps which of a course's lessons (in order) have no video. */
 export function rememberLessonsWithoutVideo(
   courseSlug: string,

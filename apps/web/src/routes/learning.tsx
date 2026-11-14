@@ -21,6 +21,7 @@ import {
   LEARNING_LESSON_NO_VIDEO_META_NAME,
   isRememberedWithoutVideo,
   lessonKindHasNoVideo,
+  noteLessonsWithoutVideo,
   rememberLessonsWithoutVideo,
 } from "../learning/learningHlsBootstrap";
 import { findCurriculumLesson } from "../learning/staticLessonPage";
@@ -226,7 +227,7 @@ export default function LearningRoute() {
 
   const allApiLessons = useMemo<CourseLesson[]>(() => {
     if (!courseOverview?.sections) return [];
-    return courseOverview.sections
+    const lessons = courseOverview.sections
       .slice()
       .sort((left, right) => left.position - right.position)
       .flatMap((section) =>
@@ -234,7 +235,11 @@ export default function LearningRoute() {
           .slice()
           .sort((left, right) => left.position - right.position),
       );
-  }, [courseOverview]);
+    // Noted as the lessons are read, before any playback request of the
+    // workspace's own hooks (their effects run before this route's).
+    if (courseSlug) noteLessonsWithoutVideo(courseSlug, lessons);
+    return lessons;
+  }, [courseOverview, courseSlug]);
 
   // Which lessons have no video, for the next visit's head script and the
   // early preload below (neither asks for a reading's playback).
