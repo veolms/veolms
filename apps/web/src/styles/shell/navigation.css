@@ -92,7 +92,8 @@
     .courses-nav,
     .mobile-bottom-nav,
     .mobile-menu-sheet__list,
-    .sidebar-appearance
+    .sidebar-appearance,
+    .mobile-menu-sheet__appearance
   )
   > a,
 :where(.courses-nav) a {
@@ -478,7 +479,7 @@
 }
 
 .sidebar-appearance > :is(button, a),
-.mobile-menu-sheet__appearance > button {
+.mobile-menu-sheet__appearance > :is(button, a) {
   /* Keep vertical sheet dismissal native while reserving horizontal travel
      for the appearance switch gesture. */
   touch-action: pan-y;
@@ -535,7 +536,7 @@
 
 .sidebar-appearance > :is(button, a) > svg,
 .sidebar-palette-trigger > svg,
-.mobile-menu-sheet__appearance > button > svg {
+.mobile-menu-sheet__appearance > :is(button, a) > svg {
   color: var(--accent-ink, var(--accent));
   filter: drop-shadow(
     0 2px 6px
@@ -547,7 +548,13 @@
 }
 
 .sidebar-appearance > :is(button, a).sidebar-appearance__settings > svg,
-.mobile-menu-sheet__appearance > button[data-dock-item="settings"] > svg {
+.mobile-menu-sheet__appearance
+  > :is(button, a)[data-dock-item="settings"]
+  > svg,
+.sidebar-appearance > :is(button, a)[data-dock-item="notifications"] > svg,
+.mobile-menu-sheet__appearance
+  > :is(button, a)[data-dock-item="notifications"]
+  > svg {
   color: var(--nav-icon-color, var(--accent-ink, var(--accent)));
 }
 

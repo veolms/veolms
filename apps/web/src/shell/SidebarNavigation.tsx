@@ -21,7 +21,7 @@ import type { NavigationItemWithMetadata } from "./navigation";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 import { SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS } from "./academyShellClasses";
 import type { SidebarTooltip } from "./academyShellTypes";
-import { ShortcutKeys } from "./ShortcutKeys";
+import { NavCountBadge } from "./NavCountBadge";
 import { useHydrated } from "../courses/viewerCourseState";
 
 export interface SidebarNavigationProps {
@@ -45,8 +45,8 @@ export interface SidebarNavigationProps {
   hideCollapsedNavigationTooltip: (
     event: ReactMouseEvent<HTMLElement> | ReactFocusEvent<HTMLElement>,
   ) => void;
-  showKeyboardShortcuts: boolean;
-  settingsShortcutKeys: string[];
+  /** Unread chat messages, shown on Chats. */
+  unreadChatCount: number;
   sidebarResizing: boolean;
   sidebarResizePreviewWidth: number | null;
   renderedSidebarWidth: number;
@@ -71,8 +71,7 @@ export function SidebarNavigation({
   navigationUsesCompactInteraction,
   showSidebarTooltip,
   hideCollapsedNavigationTooltip,
-  showKeyboardShortcuts,
-  settingsShortcutKeys,
+  unreadChatCount,
   sidebarResizing,
   sidebarResizePreviewWidth,
   renderedSidebarWidth,
@@ -145,9 +144,10 @@ export function SidebarNavigation({
       {navigation.map((item, navigationIndex) => {
         const [label, Icon] = item;
         const active = isNavigationItemActive(item);
-        const navigationShortcutIndex = navigationIndex + 1;
         const displayLabel = label;
         const accessibleLabel = displayLabel;
+        const badgeCount = label === "Chats" ? unreadChatCount : 0;
+        const badgeId = `sidebar-nav-${label.toLowerCase()}-count`;
         return (
           <Fragment key={label}>
             {/* A link, so Ctrl/⌘ or middle click opens the page in a new
@@ -168,6 +168,7 @@ export function SidebarNavigation({
               }
               aria-label={accessibleLabel}
               aria-current={active ? "page" : undefined}
+              aria-describedby={badgeCount > 0 ? badgeId : undefined}
               aria-keyshortcuts={
                 label === "Settings"
                   ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma`
@@ -207,16 +208,15 @@ export function SidebarNavigation({
                 className="hidden! [.is-active>&]:block!"
               />
               <span className="courses-nav__text">{displayLabel}</span>
-              {showKeyboardShortcuts && (
-                <ShortcutKeys
-                  className="courses-nav__shortcut"
-                  keys={
-                    label === "Settings"
-                      ? settingsShortcutKeys
-                      : [String(navigationShortcutIndex)]
-                  }
-                />
-              )}
+              {/* At the row's end; on the icon's corner in a narrow rail
+                  (the menu is a size container). No number shortcut is
+                  shown on hover: the keys still work (aria-keyshortcuts). */}
+              <NavCountBadge
+                id={badgeId}
+                count={badgeCount}
+                unreadLabel="unread messages"
+                className="ml-auto shrink-0 @max-[110px]:absolute @max-[110px]:top-1.5 @max-[110px]:left-[calc(50%+2px)] @max-[110px]:ml-0"
+              />
             </a>
           </Fragment>
         );
