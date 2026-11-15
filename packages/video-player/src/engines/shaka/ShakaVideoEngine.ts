@@ -13,6 +13,10 @@ import type {
   VideoSource,
   VideoTextTrack,
 } from "../../core/types";
+import {
+  BUFFERED_PLAYBACK_GRACE_SECONDS,
+  isPlaybackStalled,
+} from "../../core/playbackStall";
 import { MediaElementEngineBase } from "../base/MediaElementEngineBase";
 import {
   abandonEarlyShakaPreloadSession,
@@ -2676,12 +2680,14 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     ahead: number,
     now: number,
   ): boolean {
+    // What the loader shows as waiting (Shaka holds a "playing" video at
+    // rate 0 without a `waiting` event, so the element alone misses it).
     const waiting =
       !this.#autoQuality &&
       playRequested &&
       !media.seeking &&
-      ahead < WATCHDOG_STARVED_AHEAD_SECONDS &&
-      media.readyState < 3 &&
+      (isPlaybackStalled(this.getSnapshot()) ||
+        (ahead < BUFFERED_PLAYBACK_GRACE_SECONDS && media.readyState < 3)) &&
       !browserOffline();
     if (!waiting) {
       this.#chosenQualityWaitSince = 0;
