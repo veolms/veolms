@@ -144,7 +144,18 @@ export function SocialLoginActions({
     lastGoogleAccount?.email,
   );
 
-  useEffect(() => () => stopListeningRef.current?.(), []);
+  // Whether the buttons are still on screen. When the login dialog has gone
+  // by the time the phone's Google picker answers, its token is not sent, no
+  // browser sign-in opens and no error is shown. Set again on every mount:
+  // StrictMode runs this cleanup once before the real mount.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      stopListeningRef.current?.();
+    };
+  }, []);
 
   const reset = (options?: { keepSharedCopy?: boolean }) => {
     clearOauthHandoff(options);
@@ -308,9 +319,12 @@ export function SocialLoginActions({
 
     let clientId: string;
     try {
-      const config =
-        queryClient.getQueryData<AuthConfigResponse>(authKeys.config()) ??
-        (await authService.getAuthConfig());
+      // From the cache when the page already has it; otherwise fetched once
+      // and kept there, sharing a fetch already on its way.
+      const config = await queryClient.ensureQueryData<AuthConfigResponse>({
+        queryKey: authKeys.config(),
+        queryFn: () => authService.getAuthConfig(),
+      });
       clientId = config.googleClientId ?? "";
       if (!clientId || !(await native.isSupported(clientId))) {
         return inWindow();
@@ -336,6 +350,8 @@ export function SocialLoginActions({
       }
 
       const outcome = await native.signIn(clientId, nonce, mode);
+      // The dialog went while Google was asked: nothing more to do here.
+      if (!mountedRef.current) return;
       if (outcome.kind === "fallback") return inWindow();
       if (outcome.kind === "noAccount" && mode === "AUTO") {
         // Still "Waiting for Google…": no flicker between the two.
@@ -352,10 +368,14 @@ export function SocialLoginActions({
         const result = await oneTapLoginMutation.mutateAsync({
           credential: outcome.idToken,
         });
+        // Not checked against the dialog: signing in can close it before this
+        // runs, and the page must still go on (to the two-step step, say), as
+        // after the pop-up and One Tap.
         rememberGoogleSignIn(result.user);
         navigate(resolvePostAuthPath(result, returnTo), { replace: true });
         return;
       } catch (err: unknown) {
+        if (!mountedRef.current) return;
         const error = err as ApiError;
         if (error?.code === "ONE_TAP_NONCE_INVALID" && !nonceReplaced) {
           nonceReplaced = true;
