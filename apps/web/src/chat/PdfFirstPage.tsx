@@ -25,20 +25,34 @@ function loadPdfJs() {
 async function drawFirstPage(
   attachment: ChatAttachment,
 ): Promise<{ image: string; pages: number }> {
-  const pdfjs = await loadPdfJs();
   const data = new Uint8Array(
     await (await chatService.readFileBlob(attachment)).arrayBuffer(),
   );
+  return drawPdfFirstPage(data, { crop: true });
+}
+
+/**
+ * The first page of a PDF as a JPEG, and its page count: the top of it
+ * (`crop`, a card's picture) or all of it (the attach screen's preview).
+ */
+export async function drawPdfFirstPage(
+  data: Uint8Array,
+  { crop, width = WIDTH_PX }: { crop: boolean; width?: number },
+): Promise<{ image: string; pages: number }> {
+  const pdfjs = await loadPdfJs();
   const task = pdfjs.getDocument({ data, enableXfa: false });
   const doc = await task.promise;
   try {
     const page = await doc.getPage(1);
     const base = page.getViewport({ scale: 1 });
-    const viewport = page.getViewport({ scale: WIDTH_PX / base.width });
+    const viewport = page.getViewport({ scale: width / base.width });
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(viewport.width);
-    // The top of the page, as WhatsApp shows it (a card, not the page).
-    canvas.height = Math.round(Math.min(viewport.height, viewport.width * 0.6));
+    // A card shows the top of the page, as WhatsApp does; the attach
+    // screen the whole of it.
+    canvas.height = Math.round(
+      crop ? Math.min(viewport.height, viewport.width * 0.6) : viewport.height,
+    );
     const context = canvas.getContext("2d");
     if (!context) throw new Error("No canvas");
     context.fillStyle = "#fff";

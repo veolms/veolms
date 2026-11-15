@@ -32,6 +32,30 @@ export interface MessageFocus {
 }
 
 /** Puts a message in the middle of the list. */
+/**
+ * Where each chat was left this visit: the message at the top of the view
+ * and how far down it sat, or the bottom. Coming back to the chat (from a
+ * lesson opened out of the mini player, from another page) shows the same
+ * place; before, it jumped to the unread divider or the bottom.
+ */
+const leftAt = new Map<
+  string,
+  { seq: number; offset: number } | { atBottom: true }
+>();
+
+/** The first message row showing at the top of the list, and its offset. */
+function topRow(box: HTMLElement): { seq: number; offset: number } | null {
+  for (const row of box.querySelectorAll<HTMLElement>(
+    '[id^="chat-message-"]',
+  )) {
+    if (row.offsetTop + row.offsetHeight <= box.scrollTop) continue;
+    const seq = Number(row.id.slice("chat-message-".length));
+    if (!Number.isInteger(seq) || seq <= 0) continue;
+    return { seq, offset: row.offsetTop - box.scrollTop };
+  }
+  return null;
+}
+
 function centre(box: HTMLElement, row: HTMLElement) {
   box.scrollTop = Math.max(
     0,
@@ -88,6 +112,7 @@ function asMessage(
 }
 
 export function MessageList({
+  roomId,
   thread,
   outgoing,
   ctx,
@@ -106,6 +131,8 @@ export function MessageList({
 }: {
   /** Who is typing now: a bubble of moving dots under the last message. */
   typing?: readonly string[];
+  /** The chat shown, for where it was left (see `leftAt`). */
+  roomId: string;
   thread: ChatThread;
   outgoing: OutgoingMessage[];
   ctx: BubbleContext;
@@ -135,9 +162,9 @@ export function MessageList({
    * the list keeps growing for a moment. Until the reader scrolls, the view
    * stays at the bottom (or at the unread divider), as in WhatsApp.
    */
-  const anchorRef = useRef<"bottom" | "divider" | { seq: number } | null>(
-    "bottom",
-  );
+  const anchorRef = useRef<
+    "bottom" | "divider" | { seq: number; offset?: number } | null
+  >("bottom");
   /** Held somewhere other than the bottom until the reader scrolls. */
   const held = () =>
     anchorRef.current !== null && anchorRef.current !== "bottom";
@@ -212,8 +239,22 @@ export function MessageList({
     const box = scrollRef.current;
     if (!box || initialisedRef.current || thread.messages.length === 0) return;
     initialisedRef.current = true;
+    // The place the chat was left this visit comes first, unless a message
+    // was asked for (that one is shown instead).
+    const left = focus ? undefined : leftAt.get(roomId);
+    const leftRow =
+      left && "seq" in left
+        ? document.getElementById(`chat-message-${left.seq}`)
+        : null;
     const divider = box.querySelector<HTMLElement>("[data-unread-divider]");
-    if (divider && unreadCount > 0) {
+    if (left && "seq" in left && leftRow) {
+      anchorRef.current = { seq: left.seq, offset: left.offset };
+      atBottomRef.current = false;
+      box.scrollTop = Math.max(0, leftRow.offsetTop - left.offset);
+    } else if (left && "atBottom" in left) {
+      anchorRef.current = "bottom";
+      box.scrollTop = box.scrollHeight;
+    } else if (divider && unreadCount > 0) {
       anchorRef.current = "divider";
       atBottomRef.current = false;
       box.scrollTop = Math.max(0, divider.offsetTop - 80);
@@ -248,7 +289,9 @@ export function MessageList({
         if (divider) box.scrollTop = Math.max(0, divider.offsetTop - 80);
       } else if (anchor && typeof anchor === "object") {
         const row = document.getElementById(`chat-message-${anchor.seq}`);
-        if (row) centre(box, row);
+        if (row && anchor.offset !== undefined) {
+          box.scrollTop = Math.max(0, row.offsetTop - anchor.offset);
+        } else if (row) centre(box, row);
       } else if (atBottomRef.current) {
         box.scrollTop = box.scrollHeight;
       }
@@ -339,11 +382,44 @@ export function MessageList({
     else readIfInView();
   }, [lastSeq, onAtBottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Where the chat was left: noted at most once a frame while scrolling,
+  // and once more as it closes.
+  const placeFrameRef = useRef<number | null>(null);
+  function rememberPlace() {
+    const box = scrollRef.current;
+    if (!box || !initialisedRef.current) return;
+    if (box.scrollHeight - box.scrollTop - box.clientHeight < STICK_PX) {
+      leftAt.set(roomId, { atBottom: true });
+      return;
+    }
+    const top = topRow(box);
+    if (top) leftAt.set(roomId, top);
+  }
+  function rememberPlaceSoon() {
+    if (placeFrameRef.current !== null) return;
+    placeFrameRef.current = window.requestAnimationFrame(() => {
+      placeFrameRef.current = null;
+      rememberPlace();
+    });
+  }
+  const rememberPlaceRef = useRef(rememberPlace);
+  rememberPlaceRef.current = rememberPlace;
+  useLayoutEffect(
+    () => () => {
+      if (placeFrameRef.current !== null) {
+        window.cancelAnimationFrame(placeFrameRef.current);
+      }
+      rememberPlaceRef.current();
+    },
+    [],
+  );
+
   function onScroll() {
     const box = scrollRef.current;
     if (!box) return;
     const distance = box.scrollHeight - box.scrollTop - box.clientHeight;
     const atBottom = distance < STICK_PX;
+    rememberPlaceSoon();
     // Held at the divider or a message, a scroll the page made (not the
     // reader) leaves the bottom flag alone.
     if (!held()) atBottomRef.current = atBottom;

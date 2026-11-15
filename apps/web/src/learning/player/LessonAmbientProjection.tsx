@@ -8,7 +8,13 @@ import {
 import { createPortal } from "react-dom";
 import { usePlayerState } from "@veolms/video-player";
 
-const AMBIENT_FRAME_INTERVAL_MS = 480;
+/**
+ * How often the glow takes a new picture of the video while it plays. Each
+ * one copies a decoded frame off the graphics card and repaints a large
+ * background, so it is kept to once a second (YouTube's ambient light moves
+ * as slowly); the glow is a blur that changes slowly anyway.
+ */
+const AMBIENT_FRAME_INTERVAL_MS = 1_000;
 
 /** The video picture is drawn this small: the glow is a blur of it anyway. */
 const FRAME_WIDTH = 96;
@@ -406,19 +412,16 @@ export function LessonAmbientProjection({
       };
     }
 
-    let animationFrame = 0;
-    let lastPaint = 0;
-    const draw = (time: number) => {
-      if (time - lastPaint >= AMBIENT_FRAME_INTERVAL_MS) {
-        paintFrame();
-        lastPaint = time;
-      }
-      animationFrame = window.requestAnimationFrame(draw);
-    };
-    animationFrame = window.requestAnimationFrame(draw);
+    // A timer, not a loop on every display frame: such a loop, even one that
+    // only looked at the clock, kept the browser making frames all the time
+    // the video played, on top of the video's own. Nothing is drawn while
+    // the page is hidden.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") paintFrame();
+    }, AMBIENT_FRAME_INTERVAL_MS);
 
     return () => {
-      window.cancelAnimationFrame(animationFrame);
+      window.clearInterval(timer);
       video?.removeEventListener("loadeddata", paintFrame);
       video?.removeEventListener("seeked", paintFrame);
     };
