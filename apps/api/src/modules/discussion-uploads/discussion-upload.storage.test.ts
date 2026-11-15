@@ -7,7 +7,7 @@ import { getDiscussionAttachmentDisposition } from "./discussion-upload.storage.
 // macOS names screenshots with a narrow no-break space (U+202F) before "PM".
 const MAC_SCREENSHOT = "Screenshot 2026-11-15 at 10.50.24 PM.png";
 
-test("a file name with characters beyond ASCII still makes a valid header", () => {
+void test("a file name with characters beyond ASCII still makes a valid header", () => {
   const disposition = getDiscussionAttachmentDisposition(
     "image/png",
     MAC_SCREENSHOT,
@@ -22,7 +22,7 @@ test("a file name with characters beyond ASCII still makes a valid header", () =
   );
 });
 
-test("documents download and quotes in names cannot break the header", () => {
+void test("documents download and quotes in names cannot break the header", () => {
   const disposition = getDiscussionAttachmentDisposition(
     "application/pdf",
     'notes "final".pdf',
@@ -33,7 +33,7 @@ test("documents download and quotes in names cannot break the header", () => {
   );
 });
 
-test("a missing name falls back to a plain one", () => {
+void test("a missing name falls back to a plain one", () => {
   assert.equal(
     getDiscussionAttachmentDisposition("image/jpeg"),
     `inline; filename="attachment"; filename*=UTF-8''attachment`,
