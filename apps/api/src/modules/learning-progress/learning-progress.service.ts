@@ -493,7 +493,7 @@ export function createLearningProgressService({
       sections,
       lessons,
       canManageCourse,
-      new Map(media.map((asset) => [asset.id, asset.duration_seconds])),
+      new Map((media ?? []).map((asset) => [asset.id, asset.duration_seconds])),
     );
   }
 
