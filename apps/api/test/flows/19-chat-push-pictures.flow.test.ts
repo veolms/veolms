@@ -139,8 +139,39 @@ const reader = await signedUpLearner(flow, "picreader");
 for (const learner of [sender, reader])
   await enrollForFree(learner.client, course);
 
-let roomId = "";
+// Shared by every test, so any one of them can run on its own by name: the
+// course chat (anyone may post, private chats allowed) and the reader's phone.
+const roomId = ok<{ room: { id: string } }>(
+  await admin.post(`/v1/chat/courses/${course.id}/room`),
+).room.id;
+ok(
+  await admin.patch(`/v1/chat/rooms/${roomId}/settings`, {
+    postingPolicy: "everyone",
+    directMessagesAllowed: true,
+  }),
+);
+for (const learner of [sender, reader])
+  ok(await learner.client.get("/v1/chat/rooms"));
 const phoneFid = `flowphone${crypto.randomBytes(8).toString("hex")}`;
+ok(
+  await reader.client.put("/v1/me/push-devices", {
+    fid: phoneFid,
+    applicationId: FLOW_PHONE_APP_ID,
+    platform: "android",
+    pushAllowed: true,
+  }),
+);
+
+/** Gives the sender a finished photo upload, as the API stores it (160 px WebP). */
+async function uploadedPhoto() {
+  const photo = `https://cdn.flow.test/public/avatars/${sender.userId}--${crypto.randomUUID()}/160.webp`;
+  await flow.database
+    .updateTable("users")
+    .set({ avatar_data_url: photo })
+    .where("id", "=", sender.userId)
+    .execute();
+  return photo;
+}
 
 async function send(client: FlowClient, room: string, body: string) {
   return ok<{ message: { seq: number } }>(
@@ -162,26 +193,6 @@ async function pushedTo(room: string, seq: number) {
 }
 
 await test("a course chat push carries the sender's and the course's pictures", async () => {
-  roomId = ok<{ room: { id: string } }>(
-    await admin.post(`/v1/chat/courses/${course.id}/room`),
-  ).room.id;
-  ok(
-    await admin.patch(`/v1/chat/rooms/${roomId}/settings`, {
-      postingPolicy: "everyone",
-      directMessagesAllowed: true,
-    }),
-  );
-  for (const learner of [sender, reader])
-    ok(await learner.client.get("/v1/chat/rooms"));
-  ok(
-    await reader.client.put("/v1/me/push-devices", {
-      fid: phoneFid,
-      applicationId: FLOW_PHONE_APP_ID,
-      platform: "android",
-      pushAllowed: true,
-    }),
-  );
-
   const message = await send(sender.client, roomId, "Who has lesson 2 notes?");
   await runWorker();
   const data = await pushedTo(roomId, message.seq);
@@ -197,13 +208,7 @@ await test("a course chat push carries the sender's and the course's pictures", 
 });
 
 await test("a private chat push carries an uploaded photo and no group picture", async () => {
-  // A finished photo upload, as the API stores it (its 160 px WebP).
-  const photo = `https://cdn.flow.test/public/avatars/${sender.userId}--${crypto.randomUUID()}/160.webp`;
-  await flow.database
-    .updateTable("users")
-    .set({ avatar_data_url: photo })
-    .where("id", "=", sender.userId)
-    .execute();
+  const photo = await uploadedPhoto();
 
   // Between learners, a private chat starts as a request; once the reader
   // accepts it, their phone hears the next message.
@@ -223,6 +228,7 @@ await test("a private chat push carries an uploaded photo and no group picture",
 });
 
 await test("a reaction's push carries the picture of the person who reacted", async () => {
+  const photo = await uploadedPhoto();
   const mine = await send(reader.client, roomId, "My notes are in the doc");
   const before = fakeFcm.pushesFor(phoneFid).length;
   ok(
@@ -238,13 +244,8 @@ await test("a reaction's push carries the picture of the person who reacted", as
     .find((p) => p.data.text?.startsWith("Reacted 👍"));
   assert.ok(reaction, "the author's phone got the reaction");
 
-  const photo = await flow.database
-    .selectFrom("users")
-    .select("avatar_data_url")
-    .where("id", "=", sender.userId)
-    .executeTakeFirstOrThrow();
   assert.equal(reaction.data.senderId, sender.userId);
-  assert.equal(reaction.data.senderAvatarUrl, photo.avatar_data_url);
+  assert.equal(reaction.data.senderAvatarUrl, photo);
   assert.equal(
     reaction.data.roomIconUrl,
     `https://cdn.flow.test/public/thumbnails/${pictureId}/240.webp`,
