@@ -14,6 +14,7 @@ import type {
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
+import { siteSettings } from "@veolms/config";
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
 import {
@@ -178,7 +179,7 @@ export function createMfaService({
   async function setupTotp(user: AuthenticatedMfaUser) {
     await assertTwoFactorAvailable(user);
     const label = user.email || user.username || user.phoneNo || "user";
-    return generateTotpSecret(label, config.ACADEMY_NAME);
+    return generateTotpSecret(label, siteSettings(config).name);
   }
 
   async function disableTotp(
@@ -415,23 +416,21 @@ export function createMfaService({
   }
 
   function resolveRpIdForOrigin(requestOrigin?: string): string {
+    const { rpId, rpIds } = siteSettings(config).passkeys;
     if (requestOrigin) {
       try {
         const hostname = new URL(requestOrigin).hostname;
-        if (config.WEBAUTHN_RP_IDS.includes(hostname)) {
+        if (rpIds.includes(hostname)) {
           return hostname;
         }
-        if (
-          hostname === config.RP_ID ||
-          (config.RP_ID && hostname.endsWith(`.${config.RP_ID}`))
-        ) {
-          return config.RP_ID;
+        if (hostname === rpId || (rpId && hostname.endsWith(`.${rpId}`))) {
+          return rpId;
         }
       } catch {
         // ignore malformed URL
       }
     }
-    return config.RP_ID;
+    return rpId;
   }
 
   async function getPasskeyRegisterOptions(
@@ -445,7 +444,7 @@ export function createMfaService({
     const rpId = resolveRpIdForOrigin(requestOrigin);
     const existing = await mfaRepository.listUserPasskeys(database, user.id);
     const options = await generateRegistrationOptions({
-      rpName: config.ACADEMY_NAME,
+      rpName: siteSettings(config).name,
       rpID: rpId,
       userID: Uint8Array.from(Buffer.from(user.id)),
       userName: user.email || user.username || user.phoneNo || "user",
@@ -510,8 +509,8 @@ export function createMfaService({
       verification = await verifyRegistrationResponse({
         response,
         expectedChallenge: record.challenge,
-        expectedOrigin: config.WEBAUTHN_ORIGINS,
-        expectedRPID: config.WEBAUTHN_RP_IDS,
+        expectedOrigin: [...siteSettings(config).passkeys.origins],
+        expectedRPID: [...siteSettings(config).passkeys.rpIds],
         requireUserVerification: true,
       });
     } catch (cause) {
@@ -660,8 +659,8 @@ export function createMfaService({
       verification = await verifyAuthenticationResponse({
         response,
         expectedChallenge: record.challenge,
-        expectedOrigin: config.WEBAUTHN_ORIGINS,
-        expectedRPID: config.WEBAUTHN_RP_IDS,
+        expectedOrigin: [...siteSettings(config).passkeys.origins],
+        expectedRPID: [...siteSettings(config).passkeys.rpIds],
         credential: {
           id: passkey.credential_id,
           publicKey: Buffer.from(passkey.public_key, "base64"),

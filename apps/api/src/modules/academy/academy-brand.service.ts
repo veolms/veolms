@@ -9,6 +9,7 @@ import {
 import type { DatabaseExecutor } from "@veolms/database";
 import type { S3StorageService } from "@veolms/storage";
 
+import { siteSettings } from "@veolms/config";
 import { config } from "../../config.ts";
 import { AppError } from "../../lib/errors.ts";
 import { detectImageContentType } from "../avatars/avatar-storage.ts";
@@ -25,11 +26,11 @@ import {
  * The last brand read, for a code email when the database cannot be read:
  * the email must still go out.
  */
-let lastKnownBrand: AcademyBrandResponse | null = null;
+const lastKnownBrand = new Map<string, AcademyBrandResponse>(); // by site address
 
 /** Used before the academy has a row (an install not yet through setup). */
 function fallbackBrand(): AcademyBrandResponse {
-  return { name: config.ACADEMY_NAME, logoUrl: null };
+  return { name: siteSettings(config).name, logoUrl: null };
 }
 
 export function createAcademyBrandService({
@@ -43,7 +44,10 @@ export function createAcademyBrandService({
   async function readBrand(): Promise<AcademyBrandResponse> {
     const row = await repository.findAcademyBrand(database);
     return row
-      ? { name: row.name.trim() || config.ACADEMY_NAME, logoUrl: row.logo_url }
+      ? {
+          name: row.name.trim() || siteSettings(config).name,
+          logoUrl: row.logo_url,
+        }
       : fallbackBrand();
   }
 
@@ -56,15 +60,15 @@ export function createAcademyBrandService({
       const row = await getAcademyRow(database);
       const brand = row
         ? {
-            name: row.name.trim() || config.ACADEMY_NAME,
+            name: row.name.trim() || siteSettings(config).name,
             logoUrl: row.logo_url,
           }
         : fallbackBrand();
-      lastKnownBrand = brand;
+      lastKnownBrand.set(siteSettings(config).webUrl, brand);
       return brand;
     } catch {
       // A code email must still go out when this read fails.
-      return lastKnownBrand ?? fallbackBrand();
+      return lastKnownBrand.get(siteSettings(config).webUrl) ?? fallbackBrand();
     }
   }
 
@@ -171,7 +175,7 @@ export function createAcademyBrandService({
       );
     }
 
-    const logoUrl = academyLogoUrl(store, key, config.WEB_URL);
+    const logoUrl = academyLogoUrl(store, key, siteSettings(config).webUrl);
     if (!logoUrl) {
       return await reject("Logos cannot be stored: no public address is set.");
     }

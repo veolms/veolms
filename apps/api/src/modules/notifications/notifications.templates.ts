@@ -6,6 +6,7 @@ import {
   type EmailContent,
 } from "@veolms/services/email";
 
+import { siteSettings } from "@veolms/config";
 import { config } from "../../config.ts";
 import { clampText } from "../../lib/text.ts";
 
@@ -66,13 +67,16 @@ function optionalString(
 }
 
 function absoluteUrl(path: string | null): string | null {
-  return path ? new URL(path, config.WEB_URL).toString() : null;
+  return path ? new URL(path, siteSettings(config).webUrl).toString() : null;
 }
 
 // Every email says where its notifications are controlled; none did, so
 // the only way to stop them was to find the settings page unprompted.
 function settingsPageUrl(): string {
-  return new URL("/settings/notifications", config.WEB_URL).toString();
+  return new URL(
+    "/settings/notifications",
+    siteSettings(config).webUrl,
+  ).toString();
 }
 
 /**
@@ -179,7 +183,7 @@ export function renderNotificationTemplate(
   data: NotificationTemplateData,
   deepLink: string | null,
   brand: NotificationEmailBrand = {
-    name: config.ACADEMY_NAME,
+    name: siteSettings(config).name,
     logoUrl: null,
   },
 ): RenderedNotificationTemplate {
@@ -241,7 +245,7 @@ export function renderNotificationTemplate(
     case "auth.passkey_added":
       inApp = {
         title: "Passkey added",
-        body: `A new passkey was added to your ${config.ACADEMY_NAME} account.`,
+        body: `A new passkey was added to your ${siteSettings(config).name} account.`,
       };
       break;
     case "auth.session_revoked":
@@ -253,7 +257,7 @@ export function renderNotificationTemplate(
     case "auth.account_deactivated":
       inApp = {
         title: "Account deactivated",
-        body: `Your ${config.ACADEMY_NAME} account has been deactivated and all active sessions were signed out. If you did not request this change, contact support immediately.`,
+        body: `Your ${siteSettings(config).name} account has been deactivated and all active sessions were signed out. If you did not request this change, contact support immediately.`,
       };
       break;
     case "user.mentioned":

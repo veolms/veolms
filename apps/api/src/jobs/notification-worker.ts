@@ -1,4 +1,5 @@
 import { createDatabase } from "@veolms/database";
+import { siteSettings } from "@veolms/config";
 import Fastify from "fastify";
 
 import { config } from "../config.ts";
@@ -33,7 +34,7 @@ const email = createEmailService({
     port: config.SMTP_PORT,
     user: config.SMTP_USER,
     pass: config.SMTP_PASS,
-    from: config.EMAIL_FROM,
+    from: () => siteSettings(config).emailFrom,
   },
 });
 

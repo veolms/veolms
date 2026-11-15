@@ -1182,3 +1182,5 @@ export function loadWebConfig(environment: Record<string, string | undefined>) {
     VITE_CDN_URL: environment.VITE_CDN_URL || environment.CDN_URL,
   });
 }
+
+export * from "./site.ts";

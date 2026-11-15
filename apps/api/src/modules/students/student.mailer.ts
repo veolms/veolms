@@ -2,6 +2,7 @@ import type { Database } from "@veolms/database";
 import { studentAddedEmail, type EmailService } from "@veolms/services/email";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
+import { siteSettings } from "@veolms/config";
 import { config } from "../../config.ts";
 import { createAcademyBrandService } from "../academy/academy-brand.service.ts";
 import { listUserDisplayNamesByIds } from "../auth/authentication/authentication.repository.ts";
@@ -41,7 +42,10 @@ export function createStudentMailer({
             addedByName: sender?.display_name ?? null,
             email: input.to,
             courseTitles: input.courseTitles,
-            signInUrl: new URL("/login", config.WEB_URL).toString(),
+            signInUrl: new URL(
+              "/login",
+              siteSettings(config).webUrl,
+            ).toString(),
           }),
         );
         return result.status !== "failed";

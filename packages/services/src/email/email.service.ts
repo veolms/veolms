@@ -10,8 +10,12 @@ export interface EmailTransportConfig {
   port: number;
   user?: string | undefined;
   pass?: string | undefined;
-  /** Envelope sender; must be a verified identity with the SMTP provider. */
-  from: string;
+  /**
+   * Envelope sender; must be a verified identity with the SMTP provider.
+   * A function is asked at each send, for a sender that depends on the
+   * site the message is for.
+   */
+  from: string | (() => string);
 }
 
 export interface EmailServiceOptions {
@@ -104,7 +108,7 @@ export function createEmailService({
 
     try {
       const info = await getTransporter().sendMail({
-        from: config.from,
+        from: typeof config.from === "function" ? config.from() : config.from,
         to,
         subject: content.subject,
         text: content.text,

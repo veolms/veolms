@@ -1,4 +1,4 @@
-import type { ServerConfig } from "@veolms/config";
+import { siteSettings, type ServerConfig } from "@veolms/config";
 import type { PaymentGateways } from "@veolms/contracts";
 import { S3StorageService } from "@veolms/storage";
 import type { FastifyBaseLogger } from "fastify";
@@ -103,7 +103,7 @@ export function createServices({
     port: config.SMTP_PORT,
     user: config.SMTP_USER,
     pass: config.SMTP_PASS,
-    from: config.EMAIL_FROM,
+    from: () => siteSettings(config).emailFrom,
   };
 
   const smsConfig: SmsTransportConfig = {

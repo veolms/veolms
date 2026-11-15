@@ -393,3 +393,31 @@ await test("ending a Cashfree order asks Cashfree to terminate it", async () => 
     order_status: "TERMINATED",
   });
 });
+
+await test("a gateways provider is asked at every use, and the configured gateways fill in when it has none", async () => {
+  const { buildPaymentGateways, setPaymentGatewaysProvider } =
+    await import("@veolms/services");
+  const configured = gateways();
+  const other = buildPaymentGateways(
+    loadServerConfig({
+      ...razorpayKeys,
+      DODO_PAYMENTS_API_KEY: "dodo_test_key",
+      PAYMENT_GATEWAY_DEFAULT: "dodo",
+    }),
+  );
+  let useOther = true;
+  setPaymentGatewaysProvider(() => (useOther ? other : undefined));
+  try {
+    assert.equal(configured.primary.providerName, "dodo");
+    assert.equal(configured.get("dodo")?.providerName, "dodo");
+    assert.deepEqual(
+      configured.all.map((gateway) => gateway.providerName),
+      ["dodo", "razorpay"],
+    );
+    useOther = false;
+    assert.equal(configured.primary.providerName, "razorpay");
+    assert.equal(configured.get("dodo"), undefined);
+  } finally {
+    setPaymentGatewaysProvider(null);
+  }
+});

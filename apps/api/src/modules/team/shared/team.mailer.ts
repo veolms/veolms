@@ -9,6 +9,7 @@ import {
 } from "@veolms/services/email";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
+import { siteSettings } from "@veolms/config";
 import { config } from "../../../config.ts";
 import { createAcademyBrandService } from "../../academy/academy-brand.service.ts";
 import { findUserDisplayName } from "../members/members.repository.ts";
@@ -16,7 +17,7 @@ import { findUserDisplayName } from "../members/members.repository.ts";
 export function invitationUrl(token: string): string {
   return new URL(
     `/invite/${encodeURIComponent(token)}`,
-    config.WEB_URL,
+    siteSettings(config).webUrl,
   ).toString();
 }
 
@@ -79,7 +80,7 @@ export function createTeamMailer({
           logoUrl: brand.logoUrl,
           addedByName: brand.senderName,
           roleNames: input.roleNames,
-          openUrl: config.WEB_URL,
+          openUrl: siteSettings(config).webUrl,
         }),
       ),
 
@@ -115,7 +116,7 @@ export function createTeamMailer({
           addedByName: brand.senderName,
           roleNames: input.roleNames,
           message: input.message,
-          signInUrl: config.WEB_URL,
+          signInUrl: siteSettings(config).webUrl,
           email: input.to,
           expiresInDays: TEAM_INVITATION_TTL_DAYS,
         }),

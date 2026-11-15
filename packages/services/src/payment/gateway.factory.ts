@@ -18,11 +18,49 @@ export const paymentGatewayPlugins: readonly PaymentGatewayPlugin[] = [
  */
 const UNKNOWN_COUNTRIES = new Set(["XX", "T1"]);
 
+let gatewaysProvider: (() => PaymentGateways | undefined) | null = null;
+
+/**
+ * Sets (or with null removes) a provider asked, each time a gateway is
+ * needed, for the gateways to use instead of the configured ones: for a
+ * deployment whose gateway accounts differ by the site a request or a
+ * background item is for. When it returns undefined, the configured
+ * gateways are used. Build what it returns with `buildPaymentGateways`.
+ */
+export function setPaymentGatewaysProvider(
+  next: (() => PaymentGateways | undefined) | null,
+): void {
+  gatewaysProvider = next;
+}
+
+/**
+ * The configured gateways, asking the provider (see
+ * `setPaymentGatewaysProvider`) first at every use. What every service is
+ * given.
+ */
+export function createPaymentGateways(
+  config: ServerConfig,
+  plugins: readonly PaymentGatewayPlugin[] = paymentGatewayPlugins,
+): PaymentGateways {
+  const configured = buildPaymentGateways(config, plugins);
+  const current = () => gatewaysProvider?.() ?? configured;
+  return {
+    get primary() {
+      return current().primary;
+    },
+    get all() {
+      return current().all;
+    },
+    get: (provider) => current().get(provider),
+    forCountry: (country) => current().forCountry(country),
+  };
+}
+
 /**
  * Sets up every gateway the config turns on, and the rule a new checkout
  * picks one by (PAYMENT_GATEWAY_DEFAULT, PAYMENT_GATEWAY_BY_COUNTRY).
  */
-export function createPaymentGateways(
+export function buildPaymentGateways(
   config: ServerConfig,
   plugins: readonly PaymentGatewayPlugin[] = paymentGatewayPlugins,
 ): PaymentGateways {
