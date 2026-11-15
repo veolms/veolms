@@ -8,6 +8,8 @@
  * past 2 seconds. "No video" means the page has no player at all, and the
  * CDN was never asked for that lesson's video.
  */
+import type { Page } from "@playwright/test";
+
 import {
   expect,
   expectNoVideo,
@@ -289,3 +291,74 @@ test.describe("on a phone", () => {
     await expectVideoToPlay(page);
   });
 });
+
+test("a visitor whose video stops arriving mid-lesson sees it buffering at once, and it plays on when the video comes", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse();
+
+  // The video's third part (4-6 s) is held back, as a connection that stops
+  // sending does: playback runs out of video just before 4 s.
+  let releaseVideo = () => {};
+  const videoHeld = new Promise<void>((resolve) => {
+    releaseVideo = resolve;
+  });
+  await page.route(/\/segment_002\.m4s/u, async (route) => {
+    await videoHeld;
+    // The player may have given that request up and asked again meanwhile.
+    await route.continue().catch(() => undefined);
+  });
+
+  await openLesson(page, course, 1);
+  await expectVideoToPlay(page, 1);
+
+  // The picture stops while the player still says it is playing. The
+  // player holds it a moment before the last of the video has played, so a
+  // little is still buffered: the moment no spinner showed before.
+  await expect
+    .poll(() => videoStandsStill(page), {
+      message: "the video stops for want of its next part",
+      timeout: 15_000,
+    })
+    .toBe(true);
+  const buffering = page.getByRole("status", { name: "Buffering video" });
+  await expect(buffering).toBeVisible({ timeout: 1_000 });
+
+  releaseVideo();
+  await expect
+    .poll(() => videoSeconds(page), {
+      message: "the video plays on past 5 seconds",
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(5);
+  await expect(buffering).toHaveCount(0);
+});
+
+/** How far the lesson's video has played, in seconds. */
+function videoSeconds(page: Page) {
+  return page.evaluate(
+    () =>
+      [...document.querySelectorAll("video")].find(
+        (element) => element.currentSrc !== "",
+      )?.currentTime ?? 0,
+  );
+}
+
+/**
+ * Whether the lesson's video is meant to be playing (not paused) and its
+ * clock has not moved in half a second.
+ */
+async function videoStandsStill(page: Page) {
+  const read = () =>
+    page.evaluate(() => {
+      const video = [...document.querySelectorAll("video")].find(
+        (element) => element.currentSrc !== "",
+      );
+      return video && !video.paused && !video.ended ? video.currentTime : null;
+    });
+  const before = await read();
+  await page.waitForTimeout(500);
+  const after = await read();
+  return before !== null && after !== null && after - before < 0.01;
+}

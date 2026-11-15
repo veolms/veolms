@@ -133,6 +133,15 @@ const isExcludedTarget = (target: EventTarget | null) => {
   ) {
     return true;
   }
+  // The timeline: a drag that starts on it is a seek whichever way the
+  // finger then goes. A swipe down from it used to take the finger from the
+  // timeline, which never heard it lift: the video stayed paused for the
+  // drag, with every control hidden but the drag's time.
+  if (
+    target.closest("[data-player-timeline-wrap], [data-video-player-timeline]")
+  ) {
+    return true;
+  }
   const reading = target.closest<HTMLElement>(
     `[${LESSON_READING_SCROLL_ATTRIBUTE}]`,
   );

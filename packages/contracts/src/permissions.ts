@@ -129,6 +129,9 @@ export const permissions = [
   // Workshops: live sessions with registration, reminders and recordings.
   "workshop.read",
   "workshop.manage",
+
+  // Short links on the site's own domain (Settings > Links).
+  "link.manage",
 ] as const;
 
 /** Every key that opens a section of the Analytics page. */

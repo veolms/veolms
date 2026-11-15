@@ -15,6 +15,7 @@ import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { AcademyPaletteMenu } from "./AcademyPaletteMenu";
+import { SidebarNotificationsButton } from "./SidebarNotificationsButton";
 import { getNavigationIconColor } from "./navigation";
 import { themeRevealOriginFromClick } from "./themeViewTransition";
 import type { ThemeRevealOrigin } from "./themeViewTransition";
@@ -86,16 +87,20 @@ export interface SidebarAppearanceDockProps {
   settingsControlTitle: string;
   primaryShortcutModifier: "Meta" | "Control";
   settingsQuickMenu: "desktop" | "mobile" | null;
-  toggleSettingsNavigation: () => void;
   openSettingsQuickMenu: (
     event: ReactMouseEvent<HTMLButtonElement>,
     mobile?: boolean,
   ) => void;
   showSettingsQuickMenu: (mobile?: boolean) => void;
+  /** Opens the settings page (or leaves it, when it is the one open). */
+  toggleSettingsNavigation: () => void;
   isFullscreen: boolean;
   fullscreenActionLabel: "Exit fullscreen" | "Fullscreen";
   toggleFullscreen: () => Promise<void>;
   sidebarCollapsed: boolean;
+  /** Unread notifications for the bell; 0 for a guest. */
+  unreadNotificationCount: number;
+  openNotifications: () => void;
   readingModePreferences: {
     enabled: boolean;
     colorTemperature: number;
@@ -144,14 +149,15 @@ export function SidebarAppearanceDock({
   page,
   settingsControlTitle,
   primaryShortcutModifier,
-  settingsQuickMenu,
-  toggleSettingsNavigation,
   openSettingsQuickMenu,
   showSettingsQuickMenu,
   isFullscreen,
   fullscreenActionLabel,
   toggleFullscreen,
   sidebarCollapsed,
+  unreadNotificationCount,
+  openNotifications,
+  toggleSettingsNavigation,
   readingModePreferences,
   updateReadingMode,
   changePalette,
@@ -290,6 +296,21 @@ export function SidebarAppearanceDock({
           );
         }
 
+        if (item === "notifications") {
+          return (
+            <SidebarNotificationsButton
+              key={item}
+              unreadCount={unreadNotificationCount}
+              active={page === "notifications"}
+              iconColor={getNavigationIconColor(
+                "Notifications",
+                sidebarPreferences,
+              )}
+              onOpen={openNotifications}
+            />
+          );
+        }
+
         if (item === "reading-mode") {
           return (
             <button
@@ -357,10 +378,10 @@ export function SidebarAppearanceDock({
               title={settingsControlTitle}
               aria-current={settingsActive ? "page" : undefined}
               aria-keyshortcuts={`${primaryShortcutModifier}+Comma`}
-              aria-haspopup="menu"
-              aria-expanded={settingsQuickMenu === "desktop"}
               aria-controls="desktop-settings-quick-menu"
               data-settings-quick-trigger
+              // A click opens the settings page, as before; a right-click
+              // or a long press opens the quick menu of its sections.
               onClick={(event) => {
                 if (consumeAppearanceGestureClick(event)) return;
                 toggleSettingsNavigation();

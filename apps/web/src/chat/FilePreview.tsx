@@ -72,11 +72,15 @@ export function FilePreview({
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    // Esc closes the file, not the chat behind it.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onClose();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
   // Text is read through a short-lived link (no cookies to the store).

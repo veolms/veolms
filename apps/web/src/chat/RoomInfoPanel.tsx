@@ -31,6 +31,7 @@ import {
   storeRoomDetail,
   useStartDirect,
   useUpdateMyChatState,
+  useChatProfile,
   useUpdateRoomSettings,
   type ChatThread,
 } from "../services/chat";
@@ -46,6 +47,7 @@ import {
 import { ReportsView, RestrictedView } from "./ModerationViews";
 import { RestrictDialog } from "./ChatDialogs";
 import { ROLE_LABEL } from "./chatFormat";
+import { VideoThumb } from "./VideoThumb";
 
 const SLOW_MODES = [
   { label: "Off", seconds: 0 },
@@ -111,6 +113,7 @@ export function RoomInfoPanel({
   );
   const settings = useUpdateRoomSettings();
   const myState = useUpdateMyChatState();
+  const profile = useChatProfile();
   const setHelper = useSetHelper();
   const restrict = useRestrictMember();
   const startDirect = useStartDirect();
@@ -362,10 +365,8 @@ export function RoomInfoPanel({
                       className="size-full object-cover"
                     />
                   ) : (
-                    <video
+                    <VideoThumb
                       src={chatService.fileUrl(a)}
-                      preload="metadata"
-                      muted
                       className="size-full object-cover"
                     />
                   )}
@@ -379,9 +380,14 @@ export function RoomInfoPanel({
           <Row
             title="Notifications"
             note={
-              isGroup
-                ? "Group messages raise the unread count; @mentions also alert you."
-                : "New messages alert you."
+              room.me.mutedUntil && Date.parse(room.me.mutedUntil) > Date.now()
+                ? `Muted until ${new Date(room.me.mutedUntil).toLocaleString(
+                    undefined,
+                    { weekday: "short", hour: "numeric", minute: "2-digit" },
+                  )}.`
+                : isGroup
+                  ? "All messages, or only when someone @mentions you. Muted: no sound or notification."
+                  : "New messages alert you, on all your devices."
             }
           >
             <ChatSelect<"all" | "mentions" | "none">
@@ -400,6 +406,48 @@ export function RoomInfoPanel({
               ]}
             />
           </Row>
+          {profile.data?.readReceiptsChoice ? (
+            // Admins and instructors: whether this chat learns they read.
+            <Row
+              title="Read receipts"
+              note={
+                isGroup
+                  ? "Off: you are not counted for blue ticks here and never shown as having read a message (unless you reply or react)."
+                  : "Off: no blue ticks here, for either of you."
+              }
+            >
+              <ChatSelect<"default" | "on" | "off">
+                ariaLabel="Read receipts in this chat"
+                value={
+                  room.me.readReceipts === true
+                    ? "on"
+                    : room.me.readReceipts === false
+                      ? "off"
+                      : "default"
+                }
+                onValueChange={(choice) =>
+                  myState.mutate(
+                    {
+                      roomId: room.id,
+                      patch: {
+                        readReceipts:
+                          choice === "default" ? null : choice === "on",
+                      },
+                    },
+                    { onError: fail },
+                  )
+                }
+                options={[
+                  [
+                    "default",
+                    `Default (${profile.data.readReceipts ? "on" : "off"})`,
+                  ],
+                  ["on", "On"],
+                  ["off", "Off"],
+                ]}
+              />
+            </Row>
+          ) : null}
         </div>
 
         {admin ? (

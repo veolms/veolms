@@ -6,7 +6,10 @@ export const authKeys = {
     [...authKeys.publicProfiles(), username] as const,
   config: () => [...authKeys.all, "config"] as const,
   avatars: () => [...authKeys.all, "avatars"] as const,
-  sessions: () => [...authKeys.all, "sessions"] as const,
+  sessions: (userId?: string) =>
+    userId
+      ? ([...authKeys.all, "sessions", userId] as const)
+      : ([...authKeys.all, "sessions"] as const),
 };
 
 export const AUTH_QUERY_KEYS = {

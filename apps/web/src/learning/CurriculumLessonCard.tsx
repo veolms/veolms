@@ -2,6 +2,8 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
+import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
+import { ImageIcon as ImageGlyph } from "@phosphor-icons/react/Image";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
 import { memo } from "react";
 import type { RefObject } from "react";
@@ -40,6 +42,17 @@ function NowPlayingGlyph({
   contentType: string;
   className?: string;
 }) {
+  if (contentType === "audio" || contentType === "image") {
+    const Glyph = contentType === "audio" ? Headphones : ImageGlyph;
+    return (
+      <Glyph
+        size={15}
+        weight="fill"
+        className={`text-(--accent) ${className}`}
+        aria-hidden="true"
+      />
+    );
+  }
   if (contentType === "document") {
     return (
       <BookOpen
@@ -68,7 +81,7 @@ function NowPlayingGlyph({
       {NOW_PLAYING_BARS.map((bar) => (
         <span
           key={bar.delay}
-          className="w-[3px] origin-bottom rounded-full bg-current animate-[learning-lesson-now-playing_1.05s_ease-in-out_infinite] motion-reduce:animate-none"
+          className="w-[3px] origin-bottom rounded-full bg-current animate-[learning-lesson-now-playing_1.05s_ease-in-out_infinite] motion-reduce:animate-none [:root[data-rendering=software]_&]:animate-none"
           style={{ height: bar.height, animationDelay: bar.delay }}
         />
       ))}
@@ -134,6 +147,18 @@ const WHEN_COMPLETED = "hidden [[data-completed]_&]:block";
 const WHEN_IN_PROGRESS = "hidden [[data-in-progress]_&]:block";
 const WHEN_LOCKED = "hidden [[data-locked]_&]:block";
 const UNLESS_LOCKED = "[[data-locked]_&]:hidden [[data-unavailable]_&]:hidden";
+
+/*
+ * In a narrow panel (under 330px of the lesson list, `@container/lessons` in
+ * Curriculum.tsx) a card sets its title a size smaller in less padding, and
+ * its buttons come down with its foot. Out of that list nothing changes.
+ */
+const CARD_PADDING_NARROW_CLASS =
+  "@max-[330px]/lessons:px-2.5 @max-[330px]/lessons:pt-2 @max-[330px]/lessons:pb-1.5";
+const CARD_TITLE_NARROW_CLASS = "@max-[330px]/lessons:text-[0.8125rem]/5";
+const CARD_FACTS_NARROW_CLASS =
+  "@max-[330px]/lessons:mt-1 @max-[330px]/lessons:text-xs/4";
+const CARD_ACTIONS_NARROW_CLASS = "@max-[330px]/lessons:bottom-1.5";
 
 /**
  * One lesson in the course content list. Watch progress is the percentage
@@ -259,20 +284,22 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
         {/* The card's padding is on this, not on the button, so that a drag
             begun anywhere on the card starts in its text and selects it
             (one begun on the button's own box would not). */}
-        <span className="block px-3 pt-3 pb-2.5">
+        <span className={`block px-3 pt-3 pb-2.5 ${CARD_PADDING_NARROW_CLASS}`}>
           {/* Whole-pixel line heights here and in the meta line below: the
             cards stack, so a line box a fraction of a pixel tall would put
             every card after it on a fractional position, where a later
             paint (hydration's) snaps the text a pixel away from where the
             first paint had it. */}
           <span
-            className="line-clamp-2 text-[0.875rem]/5 font-medium text-(--text) [[data-active]_&]:font-semibold [[data-completed]:not([data-active])_&]:text-[color-mix(in_srgb,var(--text)_72%,transparent)]"
+            className={`line-clamp-2 text-[0.875rem]/5 font-medium text-(--text) ${CARD_TITLE_NARROW_CLASS} [[data-active]_&]:font-semibold [[data-completed]:not([data-active])_&]:text-[color-mix(in_srgb,var(--text)_72%,transparent)]`}
             // A title longer than two lines is cut off; hovering shows all of it.
             title={isAvailable ? title : undefined}
           >
             {displayNumber}. {title}
           </span>
-          <span className="mt-1.5 flex min-h-8 items-center gap-1.5 text-[0.8125rem]/5 font-medium tabular-nums text-(--muted)">
+          <span
+            className={`mt-1.5 flex min-h-8 items-center gap-1.5 text-[0.8125rem]/5 font-medium tabular-nums text-(--muted) ${CARD_FACTS_NARROW_CLASS}`}
+          >
             <LockSimple
               size={13}
               weight="fill"
@@ -312,11 +339,13 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
               <span
                 className={`sr-only hidden [[data-curriculum-lesson-card]:not([data-unavailable]):not([data-locked])_&]:block`}
               >
-                {contentType === "document"
+                {contentType === "document" || contentType === "image"
                   ? ", now reading"
                   : contentType === "quiz"
                     ? ", now open"
-                    : ", now playing"}
+                    : contentType === "audio"
+                      ? ", now listening"
+                      : ", now playing"}
               </span>
             ) : null}
             <span
@@ -331,7 +360,7 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
       {hasActions ? (
         <div
           data-lesson-card-actions=""
-          className="absolute right-2 bottom-2.5 flex items-center gap-1.5 [[data-unavailable]_&]:hidden"
+          className={`absolute right-2 bottom-2.5 flex items-center gap-1.5 [[data-unavailable]_&]:hidden ${CARD_ACTIONS_NARROW_CLASS}`}
         >
           {/* Not a button: the card itself opens the lesson. It lets a
               click through to the card underneath. */}

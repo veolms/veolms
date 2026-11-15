@@ -2,8 +2,9 @@ import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import { classNames } from "../utils/classNames";
+import type { VideoEngineError } from "../core/errors";
 import type { VideoSource } from "../core/types";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 export function VideoPlayerCloseButton({
   icon,
@@ -30,6 +31,8 @@ export interface VideoPlayerNoticeAction {
   icon?: ReactNode;
   /** Larger and bolder where there is room: the one thing the notice asks. */
   prominent?: boolean;
+  /** Shown but not pressable (a report on its way, or sent). */
+  disabled?: boolean;
   onSelect: () => void;
 }
 
@@ -43,6 +46,11 @@ export interface VideoPlayerNoticeProps {
    */
   smallIcon?: ReactNode;
   action?: VideoPlayerNoticeAction;
+  /**
+   * A second, lesser action beside the first (reporting the problem): an
+   * outlined button, so the first stays the one the eye goes to.
+   */
+  secondaryAction?: VideoPlayerNoticeAction;
   /** Drawn behind the message, filling the box: a picture, a wash. */
   background?: ReactNode;
   /** For the layer the background is on (its place among the host's layers). */
@@ -86,6 +94,7 @@ export function VideoPlayerNotice({
   contentClassName,
   icon,
   role,
+  secondaryAction,
   smallIcon,
   title,
 }: VideoPlayerNoticeProps) {
@@ -123,29 +132,121 @@ export function VideoPlayerNotice({
             <h2 className="text-sm leading-tight font-semibold text-balance [@container_(min-height:10.5rem)]:text-base [@container_(min-height:20rem)]:text-2xl [@container_(min-height:20rem)]:font-bold [@container_(min-height:20rem)]:tracking-[-0.01em]">
               {title}
             </h2>
-            {action ? (
-              <button
-                type="button"
-                className={classNames(
-                  "pointer-events-auto inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 py-1 text-xs font-semibold whitespace-nowrap text-black transition-colors hover:bg-white/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [@container_(min-height:10.5rem)]:min-h-10 [@container_(min-height:10.5rem)]:gap-2 [@container_(min-height:10.5rem)]:px-4 [@container_(min-height:10.5rem)]:py-2 [@container_(min-height:10.5rem)]:text-sm",
-                  action.prominent &&
-                    "[@container_(min-height:15rem)]:min-h-12 [@container_(min-height:15rem)]:px-6 [@container_(min-height:15rem)]:text-base! [@container_(min-height:15rem)]:font-bold!",
-                )}
-                onClick={action.onSelect}
-              >
-                {action.icon ? (
-                  <span className="grid size-3.5 place-items-center [@container_(min-height:10.5rem)]:size-4.5 [&>svg]:size-full">
-                    {action.icon}
-                  </span>
+            {action || secondaryAction ? (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {action ? (
+                  <NoticeButton action={action} variant="primary" />
                 ) : null}
-                {action.label}
-              </button>
+                {secondaryAction ? (
+                  <NoticeButton action={secondaryAction} variant="outline" />
+                ) : null}
+              </div>
             ) : null}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+/** One of a notice's actions: the filled one, or the outlined lesser one. */
+function NoticeButton({
+  action,
+  variant,
+}: {
+  action: VideoPlayerNoticeAction;
+  variant: "primary" | "outline";
+}) {
+  return (
+    <button
+      type="button"
+      disabled={action.disabled}
+      className={classNames(
+        "pointer-events-auto inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default [@container_(min-height:10.5rem)]:min-h-10 [@container_(min-height:10.5rem)]:gap-2 [@container_(min-height:10.5rem)]:px-4 [@container_(min-height:10.5rem)]:py-2 [@container_(min-height:10.5rem)]:text-sm",
+        variant === "primary"
+          ? "bg-white text-black hover:bg-white/85"
+          : "border border-white/50 bg-black/35 text-white backdrop-blur-sm hover:border-white/80 hover:bg-white/15 disabled:hover:border-white/50 disabled:hover:bg-black/35",
+        action.prominent &&
+          "[@container_(min-height:15rem)]:min-h-12 [@container_(min-height:15rem)]:px-6 [@container_(min-height:15rem)]:text-base! [@container_(min-height:15rem)]:font-bold!",
+      )}
+      onClick={action.onSelect}
+    >
+      {action.icon ? (
+        <span className="grid size-3.5 place-items-center [@container_(min-height:10.5rem)]:size-4.5 [&>svg]:size-full">
+          {action.icon}
+        </span>
+      ) : null}
+      {action.label}
+    </button>
+  );
+}
+
+/**
+ * Reporting the error to the host's team, from the notice. `send` gathers
+ * and sends what the team needs (the page, a screenshot, the requests) and
+ * resolves with a short reference to show (a ticket number), or rejects.
+ */
+export interface PlayerErrorReport {
+  send: (error: VideoEngineError) => Promise<string | null>;
+  icon?: ReactNode;
+  /** Shown once the report is sent. */
+  sentIcon?: ReactNode;
+}
+
+type ReportState =
+  | { kind: "idle" }
+  | { kind: "sending" }
+  | { kind: "sent"; reference: string | null }
+  | { kind: "failed" };
+
+/** The report action for `error`; a new error starts it over. */
+function useReportAction(
+  report: PlayerErrorReport | undefined,
+  error: VideoEngineError | null,
+): VideoPlayerNoticeAction | undefined {
+  // Kept with the error it is about: another error reads as not reported.
+  const [entry, setEntry] = useState<{
+    error: VideoEngineError | null;
+    state: ReportState;
+  }>({ error: null, state: { kind: "idle" } });
+  if (!report || !error) return undefined;
+  const state: ReportState =
+    entry.error === error ? entry.state : { kind: "idle" };
+  switch (state.kind) {
+    case "sending":
+      return {
+        label: "Sending report…",
+        icon: report.icon,
+        disabled: true,
+        onSelect: () => {},
+      };
+    case "sent":
+      return {
+        label: state.reference ? `Reported · ${state.reference}` : "Reported",
+        icon: report.sentIcon ?? report.icon,
+        disabled: true,
+        onSelect: () => {},
+      };
+    default:
+      return {
+        label: state.kind === "failed" ? "Not sent · Report again" : "Report",
+        icon: report.icon,
+        onSelect: () => {
+          const reported = error;
+          const settle = (next: ReportState) =>
+            setEntry((current) =>
+              current.error === reported
+                ? { error: reported, state: next }
+                : current,
+            );
+          setEntry({ error: reported, state: { kind: "sending" } });
+          report.send(reported).then(
+            (reference) => settle({ kind: "sent", reference }),
+            () => settle({ kind: "failed" }),
+          );
+        },
+      };
+  }
 }
 
 export interface PlayerErrorNoticeProps {
@@ -168,6 +269,8 @@ export interface PlayerErrorNoticeProps {
    * the failure happened before the engine had taken a source on.
    */
   source?: VideoSource;
+  /** Adds a Report button beside Try again (see `PlayerErrorReport`). */
+  report?: PlayerErrorReport;
 }
 
 /**
@@ -184,11 +287,13 @@ export function PlayerErrorNotice({
   icon,
   smallIcon,
   source,
+  report,
 }: PlayerErrorNoticeProps) {
   const controller = usePlayerController();
   const error = usePlayerState(({ media }) => media.error);
   const loadedSource = usePlayerState(({ media }) => media.source);
   const { retry: RetryIcon, warning: WarningIcon } = usePlayerTheme().icons;
+  const reportAction = useReportAction(report, error);
   if (!error) return null;
 
   return (
@@ -223,6 +328,7 @@ export function PlayerErrorNotice({
             }
           : undefined
       }
+      secondaryAction={reportAction}
     />
   );
 }

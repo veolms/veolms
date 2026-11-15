@@ -38,6 +38,17 @@ export interface EarlyShakaPreloadSession {
   /** Stops following late extensions (see `followLateExtensions`). */
   unfollowExtensions?: () => void;
   /**
+   * The engine that adopted this preload's player when it attached (see
+   * `claimEarlyShakaPreloadSession`). From then on the player is that
+   * engine's: no other engine adopts it, and nothing else destroys it or
+   * its preload. Before claims, a lesson page that swapped its player
+   * instance while loading had two engines on one Shaka player, and the
+   * old engine's teardown destroyed it under the new one's load: Shaka
+   * 7000 (LOAD_INTERRUPTED), shown as "Something went wrong", some 30
+   * times a day on production.
+   */
+  claimedBy?: object;
+  /**
    * Set when a playing engine loaded this preload into its hidden standby
    * element: `ready` settles true once the first frame is decoded there,
    * false when that did not work out.
@@ -139,11 +150,43 @@ async function destroyPreloadManager(
   }
 }
 
+/**
+ * Gives the session's player to `owner` (an engine adopting it on attach).
+ * False when another owner holds it already: that player is in use.
+ */
+export function claimEarlyShakaPreloadSession(
+  session: EarlyShakaPreloadSession,
+  owner: object,
+): boolean {
+  if (session.consumed) return false;
+  if (session.claimedBy && session.claimedBy !== owner) return false;
+  session.claimedBy = owner;
+  return true;
+}
+
+/**
+ * Takes a claimed session out of the page's preload slot without touching
+ * its player or its preload, which belong to the engine that claimed it.
+ */
+function releaseClaimedSessionSlot(session: EarlyShakaPreloadSession): void {
+  session.unfollowExtensions?.();
+  session.unfollowExtensions = undefined;
+  const store = preloadGlobal();
+  if (store[EARLY_SHAKA_PRELOAD_GLOBAL_KEY] === session) {
+    delete store[EARLY_SHAKA_PRELOAD_GLOBAL_KEY];
+  }
+  settleEarlySession();
+}
+
 export async function abandonEarlyShakaPreloadSession(
   options: { destroyPlayer?: boolean } = {},
 ): Promise<void> {
   const session = getEarlyShakaPreloadSession();
   if (!session || session.consumed) {
+    return;
+  }
+  if (session.claimedBy) {
+    releaseClaimedSessionSlot(session);
     return;
   }
 
@@ -229,7 +272,7 @@ export async function waitForEarlyShakaPreloadSession(): Promise<EarlyShakaPrelo
   }
 
   const current = getEarlyShakaPreloadSession();
-  if (!current || current.consumed || !current.player) {
+  if (!current || current.consumed || current.claimedBy || !current.player) {
     return null;
   }
   return current;
@@ -281,6 +324,7 @@ function followLateExtensions(
   return onShakaRuntimeHookAdded(() => {
     if (
       session.consumed ||
+      session.claimedBy ||
       session.standby ||
       getEarlyShakaPreloadSession() !== session
     ) {
@@ -313,6 +357,12 @@ export async function startEarlyShakaPreload(
   const store = preloadGlobal();
   let existing = getEarlyShakaPreloadSession();
   if (existing?.consumed) {
+    existing = null;
+  } else if (existing?.claimedBy) {
+    // An engine has it: a new preload takes the slot, the claimed one is
+    // left to its engine (`lastAdoptedManifestUrl` keeps the same lesson
+    // from being preloaded a second time).
+    releaseClaimedSessionSlot(existing);
     existing = null;
   }
   const existingMatches =

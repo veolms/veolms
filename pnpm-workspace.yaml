@@ -3,7 +3,9 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  "@firebase/util": false
   esbuild: true
+  protobufjs: false
   sharp: true
   workerd: true
 

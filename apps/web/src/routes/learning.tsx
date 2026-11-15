@@ -18,7 +18,13 @@ import {
   getLearningPlaybackRequestMetadata,
   LEARNING_COURSE_SLUG_META_NAME,
   LEARNING_LESSON_NUMBER_META_NAME,
+  LEARNING_LESSON_NO_VIDEO_META_NAME,
+  isRememberedWithoutVideo,
+  lessonKindHasNoVideo,
+  noteLessonsWithoutVideo,
+  rememberLessonsWithoutVideo,
 } from "../learning/learningHlsBootstrap";
+import { findCurriculumLesson } from "../learning/staticLessonPage";
 import { resolveLessonIdentifier } from "../learning/courseContent";
 import { ChunkStylesheets } from "../routing/ChunkStylesheets";
 import { LEARNING_PLAYER_HOST_CHUNK_URL_PLACEHOLDER } from "../routing/routeChunkPreloads";
@@ -85,9 +91,27 @@ export function meta({ location, matches, params }: Route.MetaArgs) {
           name: LEARNING_LESSON_NUMBER_META_NAME,
           content: String(requestMetadata.lessonNumber),
         },
+        ...(builtLessonHasNoVideo(matches, requestMetadata.lessonNumber)
+          ? [{ name: LEARNING_LESSON_NO_VIDEO_META_NAME, content: "1" }]
+          : []),
       ]
     : [];
   return [...descriptors, ...safeMetadata, ...curriculumPreload(matches)];
+}
+
+/** Whether the lesson this page was built for has no video (see the meta). */
+function builtLessonHasNoVideo(
+  matches: Route.MetaArgs["matches"],
+  lessonNumber: number,
+): boolean {
+  const seed = (
+    matches.find((match) => match?.id === "root")?.loaderData as
+      AcademyStaticPageData | null | undefined
+  )?.lessonPage;
+  if (!seed || seed.lessonNumber !== lessonNumber) return false;
+  return lessonKindHasNoVideo(
+    findCurriculumLesson(seed.curriculum, lessonNumber)?.contentType,
+  );
 }
 
 /**
@@ -203,7 +227,7 @@ export default function LearningRoute() {
 
   const allApiLessons = useMemo<CourseLesson[]>(() => {
     if (!courseOverview?.sections) return [];
-    return courseOverview.sections
+    const lessons = courseOverview.sections
       .slice()
       .sort((left, right) => left.position - right.position)
       .flatMap((section) =>
@@ -211,7 +235,19 @@ export default function LearningRoute() {
           .slice()
           .sort((left, right) => left.position - right.position),
       );
-  }, [courseOverview]);
+    // Noted as the lessons are read, before any playback request of the
+    // workspace's own hooks (their effects run before this route's).
+    if (courseSlug) noteLessonsWithoutVideo(courseSlug, lessons);
+    return lessons;
+  }, [courseOverview, courseSlug]);
+
+  // Which lessons have no video, for the next visit's head script and the
+  // early preload below (neither asks for a reading's playback).
+  useEffect(() => {
+    if (courseSlug && allApiLessons.length > 0) {
+      rememberLessonsWithoutVideo(courseSlug, allApiLessons);
+    }
+  }, [courseSlug, allApiLessons]);
 
   const resolvedFromUuid = useMemo(() => {
     if (!targetLessonUuid || allApiLessons.length === 0) return null;
@@ -268,17 +304,23 @@ export default function LearningRoute() {
 
   useLayoutEffect(() => {
     if (!courseSlug) return;
+    const request = getLearningPlaybackRequestMetadata({
+      courseSlug,
+      lectureSlug,
+    });
+    // A reading or a quiz has no playback to start early (the API says 404).
+    if (
+      request &&
+      isRememberedWithoutVideo(request.courseSlug, request.lessonNumber)
+    ) {
+      return;
+    }
 
     // Hard navigations start from the root head script. This covers SPA lesson
     // changes, where React Router updates the lesson meta tags without a new
     // document and therefore cannot execute that script again.
     void import("../learning/earlyHlsPreload")
-      .then(({ startEarlyHlsPreload }) =>
-        startEarlyHlsPreload(
-          null,
-          getLearningPlaybackRequestMetadata({ courseSlug, lectureSlug }),
-        ),
-      )
+      .then(({ startEarlyHlsPreload }) => startEarlyHlsPreload(null, request))
       .catch(() => undefined);
   }, [courseSlug, lectureSlug]);
 

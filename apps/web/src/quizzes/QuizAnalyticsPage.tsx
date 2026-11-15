@@ -53,6 +53,10 @@ import { useStudentOutcomeFilter } from "./useStudentOutcomeFilter";
 import { useCoursesWithQuizzes } from "./useCoursesWithQuizzes";
 import { ElevatedCard, elevatedCardClasses } from "../components/ElevatedCard";
 import { fuzzyMatches } from "../lib/fuzzySearch";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../searchShortcut";
 
 // A submission is opened on demand, and it brings the Markdown renderer for
 // question text, so it stays out of the page's own code. It is fetched when
@@ -768,8 +772,11 @@ function QuizLibrary({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search quizzes by title..."
-              className={`${inputClass} w-full !pl-9`}
+              className={`${inputClass} w-full !pl-9 !pr-16`}
+              aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
+              data-search-shortcut-target
             />
+            <SearchShortcutHint className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
           </label>
           <ThemedSelect
             value={status}

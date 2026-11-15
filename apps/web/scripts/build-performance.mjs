@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { inlineCriticalCss } from "./inline-critical-css.mjs";
 import { writeLegacyStylesheets } from "./legacy-stylesheets.mjs";
+import { writeAppPaths } from "./write-app-paths.mjs";
 import { writeStaticCurricula } from "./write-static-curricula.mjs";
 
 export const FIRST_SECTION_FLAG = "--first-section";
@@ -115,6 +116,8 @@ export const runPerformanceBuild = async (
               process.env.STATIC_BUILD_API_URL,
           ),
         )
+        // The app's own path segments, which short links may not take.
+        .then(() => writeAppPaths(clientBuildDirectory))
         .then(
           () => resolve(0),
           (error) => {

@@ -247,6 +247,7 @@ export function MembersTab({
             onChange={setSearch}
             placeholder="Search by name or email..."
             label="Search team members"
+            shortcut
             className="min-w-56"
           />
           <div className={`${filterControlClasses} min-w-44`}>

@@ -14,6 +14,7 @@ export const CHAT_SHORTCUTS: Array<{ keys: string[]; label: string }> = [
   { keys: ["Enter"], label: "Send" },
   { keys: ["Shift", "Enter"], label: "New line" },
   { keys: ["Esc"], label: "Close reply, panel or chat" },
+  { keys: ["Shift", "?"], label: "Keyboard shortcuts" },
 ];
 
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {

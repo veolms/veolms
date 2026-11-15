@@ -30,6 +30,11 @@ export const chatMessageSentEventSchema = z.object({
   messageId: z.uuid(),
   seq: z.number().int().positive(),
   senderId: z.uuid(),
+  /**
+   * A reaction, not a message: `senderId` reacted with `emoji` to the
+   * message, and only its author hears ("Reacted 👍 to: …", WhatsApp).
+   */
+  reaction: z.object({ emoji: z.string().min(1).max(32) }).optional(),
 });
 
 export type ChatMessageSentEvent = z.infer<typeof chatMessageSentEventSchema>;
@@ -90,22 +95,34 @@ export function createChatPushSource({
       return null;
     }
 
-    const mentionsOnly =
-      room.kind !== "direct" &&
-      (await repository.countActiveMembers(database, room.id)) >
-        groupMaxMembers;
-    const recipients = await repository.listPushRecipients(database, {
-      roomId: room.id,
-      seq: event.seq,
-      senderId: event.senderId,
-      mentionsOnly,
-    });
+    const recipients = event.reaction
+      ? await repository.reactionPushRecipient(database, {
+          roomId: room.id,
+          seq: event.seq,
+          reactorId: event.senderId,
+        })
+      : await repository.listPushRecipients(database, {
+          roomId: room.id,
+          seq: event.seq,
+          senderId: event.senderId,
+          mentionsOnly:
+            room.kind !== "direct" &&
+            (await repository.countActiveMembers(database, room.id)) >
+              groupMaxMembers,
+        });
     if (recipients.length === 0) return null;
 
-    const senderName =
+    let senderName =
       message.sender_deleted || !message.sender_name
         ? "Deleted user"
         : message.sender_name;
+    let text = messagePushText(message.body, message.attachments ?? []);
+    if (event.reaction) {
+      const [reactor] = await repository.getPeople(database, [event.senderId]);
+      if (!reactor || reactor.is_deleted) return null;
+      senderName = reactor.display_name;
+      text = `Reacted ${event.reaction.emoji} to: ${text || "your message"}`;
+    }
     const roomTitle =
       room.kind === "direct"
         ? senderName
@@ -123,8 +140,8 @@ export function createChatPushSource({
       seq: event.seq,
       senderId: event.senderId,
       senderName,
-      text: messagePushText(message.body, message.attachments ?? []),
-      sentAt: message.created_at,
+      text,
+      sentAt: event.reaction ? new Date() : message.created_at,
       isRequest: room.kind === "direct" && room.direct_status === "requested",
       recipients,
     };

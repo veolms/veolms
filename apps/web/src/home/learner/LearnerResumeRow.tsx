@@ -75,7 +75,7 @@ const enterKeyClasses = [
   // side is a slightly lighter shade of the same hue instead, so the key still reads
   // as raised. The step is 1 only when the darkened accent falls under 0.22
   // lightness, so every other palette keeps the side it has.
-  "supports-[color:oklch(from_white_l_c_h)]:[--key-side:oklch(from_color-mix(in_srgb,var(--accent)_56%,black)_calc(l_+_0.2_*_clamp(0,(0.22_-_l)_*_1000,1))_c_h)]",
+  "supports-[color:oklch(from_white_l_c_h)]:[--key-side:oklab(from_color-mix(in_srgb,var(--accent)_56%,black)_calc(l_+_0.2_*_clamp(0,(0.22_-_l)_*_1000,1))_a_b)]",
   "mb-1 rounded-[0.625rem]!",
   "shadow-[inset_0_1px_0_rgb(255_255_255/0.5),inset_0_-1px_0_rgb(0_0_0/0.14),0_4px_0_var(--key-side),0_10px_16px_-6px_rgb(0_0_0/0.65)]!",
   "transition-[background-color,box-shadow,translate]! duration-75! motion-reduce:transition-none!",

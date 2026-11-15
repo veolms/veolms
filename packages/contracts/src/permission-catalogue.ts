@@ -446,6 +446,11 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "Change what the public home page shows.",
         ["platform.settings.read"],
       ),
+      entry(
+        "link.manage",
+        "Manage links",
+        "Create, edit and remove short links on the site's own domain.",
+      ),
     ],
   },
   {

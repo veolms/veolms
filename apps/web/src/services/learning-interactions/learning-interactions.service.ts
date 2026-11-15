@@ -166,6 +166,19 @@ export const learningInteractionsService = {
     );
   },
 
+  /** Gives a reply the creator's heart, or takes it back. Course staff. */
+  heartReply(
+    courseId: string,
+    replyId: string,
+    action: "heart" | "unheart",
+  ): Promise<unknown> {
+    const serverId = requireServerEntityId(replyId);
+    return api.post(
+      `/courses/${encodeURIComponent(courseId)}/moderation/replies/${serverId}`,
+      { action },
+    );
+  },
+
   unhideReply(replyId: string): Promise<unknown> {
     const serverId = requireServerEntityId(replyId);
     return api.post(`/moderation/replies/${serverId}`, { action: "unhide" });

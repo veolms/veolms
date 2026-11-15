@@ -29,7 +29,7 @@ const streamRoutes: RoutePlugin = async (app, options) => {
           "One per tab. Events: `ready` (your chats' newest numbers), `chat.message`, " +
           "`chat.message_updated`, `chat.read`, `chat.typing`, `chat.room_updated`, " +
           "`chat.room_added` (load this chat), `chat.removed`, `resync` (catch up every open chat) " +
-          "and `notifications.changed`, with a `: ping` every 25 s. Stays open while the tab is " +
+          "and `notifications.changed`, with a `ping` event every 25 s. Stays open while the tab is " +
           "visible; ends after about 6 hours or when the session ends.",
         response: {
           401: errorResponse("Authentication required"),

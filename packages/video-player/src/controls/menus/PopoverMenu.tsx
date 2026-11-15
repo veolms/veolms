@@ -574,7 +574,7 @@ export function PopoverMenu({
         ...(panelLayout && placement === "side"
           ? { top: 0, bottom: 0, right: 0, left: "auto", maxHeight: "none" }
           : panelLayout
-            ? {
+            ? ({
                 top: panelLayout.top,
                 bottom: panelLayout.bottom,
                 left: placement === "corner" ? "auto" : panelLayout.left,
@@ -585,7 +585,10 @@ export function PopoverMenu({
                 // A panel class may lift the panel off its trigger with a
                 // margin; it names that lift so the panel still fits.
                 maxHeight: `calc(${panelLayout.maxHeight}px - var(--video-player-menu-lift, 0px))`,
-              }
+                // The same room, for a panel class that draws the panel
+                // scaled (whose cap is then this room over the scale).
+                "--video-player-menu-room": `${panelLayout.maxHeight}px`,
+              } as CSSProperties)
             : {}),
         ...(isMobileSheet ? mobileSheetStyle : undefined),
         ...(isMobileSheet && mobileSheetExpanded

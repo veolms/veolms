@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type {
   SupportAdminListResponse,
   SupportAdminStatsResponse,
+  SupportTeamResponse,
   SupportTicketDetail,
   SupportTicketListResponse,
   SupportUnreadResponse,
@@ -86,6 +87,17 @@ export function useStaffSupportTickets(
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     enabled,
     ...freshOnEveryVisit,
+  });
+}
+
+/** Who reports can be assigned to; changes rarely. */
+export function useSupportTeam(enabled = true) {
+  const account = useAccountKey();
+  return useQuery<SupportTeamResponse, ApiError>({
+    queryKey: [...supportKeys.team(), account],
+    queryFn: supportService.team,
+    enabled,
+    staleTime: 60_000,
   });
 }
 

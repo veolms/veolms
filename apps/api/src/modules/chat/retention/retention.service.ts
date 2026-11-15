@@ -77,7 +77,9 @@ export function createChatRetention(storage?: S3StorageService) {
             500,
           );
           if (rows.length === 0) break;
-          await storage.deleteObjects(rows.map((row) => row.storage_key));
+          await storage.deleteObjects(
+            rows.filter((row) => !row.shared).map((row) => row.storage_key),
+          );
           await repository.deleteUploads(
             database,
             rows.map((row) => row.id),

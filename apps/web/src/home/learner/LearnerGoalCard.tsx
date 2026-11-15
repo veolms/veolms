@@ -24,7 +24,7 @@ import { useGoalEditor } from "./useGoalEditor";
  * are in the theme's accent, kept very soft, and fainter by day.
  */
 const cornerLightClasses = [
-  "[--glow:var(--accent)] supports-[color:oklch(from_white_l_c_h)]:[--glow:oklch(from_var(--accent)_max(l,0.7)_c_h)]",
+  "[--glow:var(--accent)] supports-[color:oklch(from_white_l_c_h)]:[--glow:oklab(from_var(--accent)_max(l,0.7)_a_b)]",
   "before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-[radial-gradient(70%_90%_at_100%_0%,color-mix(in_srgb,var(--glow)_8%,transparent),transparent_70%)]",
   "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:p-px after:bg-[radial-gradient(55%_75%_at_100%_0%,color-mix(in_srgb,var(--glow)_32%,transparent),color-mix(in_srgb,var(--glow)_10%,transparent)_45%,transparent_75%)] after:[mask:linear-gradient(#000_0_0)_content-box_exclude,linear-gradient(#000_0_0)]",
   // It follows the lamp, as the glow does (see `phoneBackdropClasses`).
@@ -147,12 +147,27 @@ export function LearnerGoalCard({
             {editor.editing ? (
               <GoalEditorForm editor={editor} variant="card" />
             ) : (
-              <p className="mt-2 flex items-baseline leading-none whitespace-nowrap">
-                <strong className="text-[2.75rem] font-extrabold tracking-[-0.03em]">
+              // A goal in hours and minutes ("1h 10m / 1 hr 35 min") is set a
+              // size smaller, with the room it gives up kept above it, and
+              // goes under the time done on a card too narrow for both.
+              <p
+                className={`mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 leading-none whitespace-nowrap ${
+                  today.long ? "pt-2" : ""
+                }`}
+              >
+                <strong
+                  className={`font-extrabold tracking-[-0.03em] ${
+                    today.long ? "text-4xl" : "text-[2.75rem]"
+                  }`}
+                >
                   {today.done}
                 </strong>
-                <span className="ml-2.5 text-2xl font-semibold text-(--muted)">
-                  / {today.goal} {today.unit}
+                <span
+                  className={`font-semibold text-(--muted) ${
+                    today.long ? "text-xl" : "text-2xl"
+                  }`}
+                >
+                  / {today.goal}
                 </span>
               </p>
             )}
@@ -184,7 +199,7 @@ export function LearnerGoalCard({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.min(100, percent)}
-          aria-valuetext={`${today.done} of ${today.goal} ${today.unit}`}
+          aria-valuetext={`${today.done} of ${today.goal}`}
           className="mt-4 flex h-2.5 gap-1 overflow-hidden rounded-full bg-current/10"
         >
           <span

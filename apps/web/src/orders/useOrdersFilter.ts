@@ -1,401 +1,295 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import type {
   AdminOrder,
-  OrderStatus,
+  OrderCourseOption,
+  OrderFilterMode,
   OrderStatsResponse,
-  OrderSortOrder,
 } from "@veolms/contracts";
+import { useDebounceValue } from "../hooks/useDebounce";
 import {
-  DEFAULT_DEBOUNCE_DELAY_MS,
-  useDebounceValue,
-} from "../hooks/useDebounce";
-import { useAdminOrders, useOrderStats } from "../services/orders";
+  ordersService,
+  useAdminOrdersPage,
+  useOrder,
+  useOrderCourseOptions,
+  useOrderStats,
+} from "../services/orders";
+import {
+  DEFAULT_FILTER_STATE,
+  isFreeOnlyView,
+  parseFilterState,
+  serializeFilterState,
+  toFilterParams,
+  type CourseSelection,
+  type OrdersFilterState,
+  type StatusKey,
+} from "./ordersFilterModel";
+import type { DateRangeKey } from "./ordersDateRange";
 
-export type DateRangePreset =
-  | "all_time"
-  | "today"
-  | "last_7_days"
-  | "last_30_days"
-  | "this_month"
-  | "last_month"
-  | "custom";
-
-export interface DateRangeState {
-  preset: DateRangePreset;
-  label: string;
-  from?: Date;
-  to?: Date;
-}
-function resolveDateRange(
-  preset: DateRangePreset,
-  customFrom?: Date,
-  customTo?: Date,
-): {
-  from?: Date;
-  to?: Date;
-  label: string;
-} {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  switch (preset) {
-    case "today": {
-      const endOfToday = new Date(today);
-      endOfToday.setHours(23, 59, 59, 999);
-      return { from: today, to: endOfToday, label: "Today" };
-    }
-    case "last_7_days": {
-      const from = new Date(today);
-      from.setDate(today.getDate() - 7);
-      return { from, to: now, label: "Last 7 days" };
-    }
-    case "last_30_days": {
-      const from = new Date(today);
-      from.setDate(today.getDate() - 30);
-      const startStr = from.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-      const endStr = now.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-      return { from, to: now, label: `${startStr} – ${endStr}` };
-    }
-    case "this_month": {
-      const from = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { from, to: now, label: "This Month" };
-    }
-    case "last_month": {
-      const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const to = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        0,
-        23,
-        59,
-        59,
-        999,
-      );
-      return { from, to, label: "Last Month" };
-    }
-    case "custom": {
-      if (customFrom && customTo) {
-        const startStr = customFrom.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        });
-        const endStr = customTo.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
-        return {
-          from: customFrom,
-          to: customTo,
-          label: `${startStr} – ${endStr}`,
-        };
-      }
-      return { label: "Custom Range" };
-    }
-    case "all_time":
-    default:
-      return { label: "All Time" };
-  }
-}
+export const ORDERS_PAGE_SIZE = 10;
+const NO_COURSES: readonly OrderCourseOption[] = [];
+const NO_ORDERS: readonly AdminOrder[] = [];
 
 export interface UseOrdersFilterReturn {
-  // Query data
+  state: OrdersFilterState;
+  courses: readonly OrderCourseOption[];
+  freeOnly: boolean;
+  /** The search box's text, ahead of the URL while typing. */
+  searchText: string;
+  setSearchText: (text: string) => void;
+  setRange: (range: Exclude<DateRangeKey, "custom">) => void;
+  setCustomRange: (from: Date, to: Date) => void;
+  setStatuses: (keys: readonly StatusKey[], mode: OrderFilterMode) => void;
+  setCourses: (selection: CourseSelection, mode: OrderFilterMode) => void;
+  setCoupons: (ids: readonly string[], mode: OrderFilterMode) => void;
+  resetFilters: () => void;
+  isFiltered: boolean;
+
   orders: readonly AdminOrder[];
+  total: number;
+  pageCount: number;
+  setPage: (page: number) => void;
+  isLoading: boolean;
+  isFetching: boolean;
+  loadError: "forbidden" | "failed" | null;
+  refetch: () => void;
   stats: OrderStatsResponse | undefined;
   isLoadingStats: boolean;
-  isLoading: boolean;
-  isError: boolean;
-  /**
-   * Set when the list request failed and there are no rows to show:
-   * "forbidden" when the server refused it (no billing permission),
-   * "failed" for anything else. A failed refresh of rows already on screen
-   * leaves this null.
-   */
-  loadError: "forbidden" | "failed" | null;
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  fetchNextPage: () => void;
-  refetch: () => void;
+  exportUrl: string;
 
-  // Search
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-
-  // Filters
-  courseFilter: string | undefined;
-  setCourseFilter: (courseId: string | undefined) => void;
-  couponFilter: string | undefined;
-  setCouponFilter: (couponId: string | undefined) => void;
-  statusFilter: OrderStatus | undefined;
-  setStatusFilter: (status: OrderStatus | undefined) => void;
-
-  // Date range
-  datePreset: DateRangePreset;
-  dateLabel: string;
-  setDatePreset: (preset: DateRangePreset, from?: Date, to?: Date) => void;
-
-  // Sort
-  sortOrder: OrderSortOrder;
-  toggleSortOrder: () => void;
-
-  // Detail Drawer
-  selectedOrderId: string | null;
   selectedOrder: AdminOrder | null;
-  setSelectedOrderId: (id: string | null) => void;
+  /** 1-based place of the open order among every matching order. */
+  selectedPosition: number | null;
+  selectOrder: (id: string | null) => void;
   hasPrevOrder: boolean;
   hasNextOrder: boolean;
   selectPrevOrder: () => void;
   selectNextOrder: () => void;
 
-  // Actions / Modals
   refundTargetOrder: AdminOrder | null;
   setRefundTargetOrder: (order: AdminOrder | null) => void;
-
-  // Reset
-  isFiltered: boolean;
-  resetFilters: () => void;
 }
 
+/**
+ * The Orders screen's filters (kept in the URL), the page of orders they
+ * select, its figures, and the order open in the panel.
+ */
 export function useOrdersFilter(options?: {
   enabled?: boolean;
 }): UseOrdersFilterReturn {
   const enabled = options?.enabled ?? true;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const state = useMemo(() => parseFilterState(searchParams), [searchParams]);
 
-  // Search with debounce (150ms for responsive server-side sync)
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
-    searchQuery.trim(),
-    150,
-  );
-
-  // Filters
-  const [courseFilter, setCourseFilter] = useState<string | undefined>(
-    undefined,
-  );
-  const [couponFilter, setCouponFilter] = useState<string | undefined>(
-    undefined,
-  );
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>(
-    undefined,
-  );
-  const [sortOrder, setSortOrder] = useState<OrderSortOrder>("desc");
-
-  // Date Range (default: last_30_days matching the mockup e.g. "May 6 - Jun 4, 2025")
-  const [datePreset, setDatePresetState] =
-    useState<DateRangePreset>("last_30_days");
-  const [customFrom, setCustomFrom] = useState<Date | undefined>(undefined);
-  const [customTo, setCustomTo] = useState<Date | undefined>(undefined);
-
-  const {
-    from: filterFrom,
-    to: filterTo,
-    label: dateLabel,
-  } = useMemo(
-    () => resolveDateRange(datePreset, customFrom, customTo),
-    [datePreset, customFrom, customTo],
-  );
-
-  const setDatePreset = useCallback(
-    (preset: DateRangePreset, from?: Date, to?: Date) => {
-      setDatePresetState(preset);
-      if (preset === "custom") {
-        setCustomFrom(from);
-        setCustomTo(to);
-      } else {
-        setCustomFrom(undefined);
-        setCustomTo(undefined);
-      }
-    },
-    [],
-  );
-
-  const toggleSortOrder = useCallback(() => {
-    setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
-  }, []);
-
-  // API query params
-  const queryParams = useMemo(() => {
-    return {
-      search: debouncedSearch || undefined,
-      courseId: courseFilter,
-      couponId: couponFilter,
-      status: statusFilter,
-      from: filterFrom,
-      to: filterTo,
-      sortOrder,
-      limit: 30,
-    };
-  }, [
-    debouncedSearch,
-    courseFilter,
-    couponFilter,
-    statusFilter,
-    filterFrom,
-    filterTo,
-    sortOrder,
-  ]);
-
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-    hasNextPage = false,
-    isFetchingNextPage,
-    fetchNextPage,
-    refetch,
-  } = useAdminOrders(queryParams, { enabled });
-
-  const loadError =
-    isError && !data ? (error?.status === 403 ? "forbidden" : "failed") : null;
-
-  // Stats query
-  const statsParams = useMemo(() => {
-    return {
-      courseId: courseFilter,
-      couponId: couponFilter,
-      status: statusFilter,
-      from: filterFrom,
-      to: filterTo,
-    };
-  }, [courseFilter, couponFilter, statusFilter, filterFrom, filterTo]);
-
-  const { data: stats, isLoading: isLoadingStats } = useOrderStats(
-    statsParams,
-    { enabled },
-  );
-
-  // Server-loaded orders
-  const serverOrders = useMemo(() => {
-    return data?.pages.flatMap((page) => page.orders) || [];
-  }, [data?.pages]);
-
-  // Instant in-memory search filter (0ms response time on user input)
-  const orders = useMemo(() => {
-    if (!searchQuery.trim()) return serverOrders;
-    const term = searchQuery.trim().toLowerCase();
-    return serverOrders.filter((order) => {
-      const orderNum = (order.orderNumber || "").toLowerCase();
-      const studentName = (
-        order.admin?.student?.name ||
-        order.admin?.student?.displayName ||
-        ""
-      ).toLowerCase();
-      const studentUser = (order.admin?.student?.username || "").toLowerCase();
-      const studentEmail = (order.admin?.student?.email || "").toLowerCase();
-      const courseTitle = (order.items?.[0]?.titleSnapshot || "").toLowerCase();
-      // Part of a course is shown by the course's title: found by either.
-      const shownTitle = (
-        order.items?.[0]?.display?.courseTitle || ""
-      ).toLowerCase();
-      const couponCode = (order.admin?.coupon?.code || "").toLowerCase();
-      return (
-        orderNum.includes(term) ||
-        studentName.includes(term) ||
-        studentUser.includes(term) ||
-        studentEmail.includes(term) ||
-        courseTitle.includes(term) ||
-        shownTitle.includes(term) ||
-        couponCode.includes(term)
+  const update = useCallback(
+    (change: Partial<OrdersFilterState>, keepPage = false) => {
+      setSearchParams(
+        (current) => {
+          const previous = parseFilterState(current);
+          return serializeFilterState({
+            ...previous,
+            ...change,
+            page: keepPage ? (change.page ?? previous.page) : 1,
+          });
+        },
+        { replace: true, preventScrollReset: true },
       );
-    });
-  }, [serverOrders, searchQuery]);
+    },
+    [setSearchParams],
+  );
 
-  // Drawer Inspection
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  // Search: typed text shows at once, the URL (and the request) follow.
+  const [searchText, setSearchText] = useState(state.search);
+  const [debouncedSearch] = useDebounceValue(searchText.trim(), 300);
+  useEffect(() => {
+    if (debouncedSearch !== state.search) {
+      update({ search: debouncedSearch, orderId: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follows typing only
+  }, [debouncedSearch]);
 
-  const selectedOrderIndex = useMemo(() => {
-    if (!selectedOrderId) return -1;
-    return orders.findIndex((o) => o.id === selectedOrderId);
-  }, [orders, selectedOrderId]);
+  const courseOptions = useOrderCourseOptions({ enabled });
+  const courses = courseOptions.data?.courses ?? NO_COURSES;
 
-  const selectedOrder = useMemo(() => {
-    if (!selectedOrderId) return null;
-    return orders.find((o) => o.id === selectedOrderId) ?? null;
-  }, [orders, selectedOrderId]);
+  // Recomputed with the filters, so "today" moves on with the day.
+  const filterParams = useMemo(
+    () => toFilterParams(state, courses, new Date()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `state` minus page/order
+    [
+      state.range,
+      state.customFrom,
+      state.customTo,
+      state.statuses,
+      state.statusMode,
+      state.courses,
+      state.courseMode,
+      state.coupons,
+      state.couponMode,
+      state.search,
+      courses,
+    ],
+  );
+  // The default course filter is known without the course list; anything
+  // else waits for it, so ids are never sent as the wrong kind.
+  const ready =
+    enabled && (state.courses === "default" || courseOptions.isFetched);
 
-  const hasPrevOrder = selectedOrderIndex > 0;
+  const list = useAdminOrdersPage(
+    { ...filterParams, page: state.page, limit: ORDERS_PAGE_SIZE },
+    { enabled: ready },
+  );
+  const statsQuery = useOrderStats(filterParams, { enabled: ready });
+
+  const orders = list.data?.orders ?? NO_ORDERS;
+  const total = list.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / ORDERS_PAGE_SIZE));
+  const loadError =
+    list.isError && !list.data
+      ? list.error?.status === 403
+        ? "forbidden"
+        : "failed"
+      : null;
+
+  const setPage = useCallback(
+    (page: number) => update({ page, orderId: null }, true),
+    [update],
+  );
+
+  // The open order: from this page, or read on its own (a shared link).
+  const selectedIndex = orders.findIndex((order) => order.id === state.orderId);
+  const loose = useOrder(
+    state.orderId && selectedIndex === -1 && list.isFetched
+      ? state.orderId
+      : null,
+    "admin",
+  );
+  const looseOrder =
+    loose.data && "admin" in loose.data ? (loose.data as AdminOrder) : null;
+  const selectedOrder =
+    selectedIndex >= 0 ? orders[selectedIndex]! : looseOrder;
+  const selectedPosition =
+    selectedIndex >= 0
+      ? (state.page - 1) * ORDERS_PAGE_SIZE + selectedIndex + 1
+      : null;
+
+  const selectOrder = useCallback(
+    (id: string | null) => update({ orderId: id }, true),
+    [update],
+  );
+
+  // Stepping past either end of the page opens the next (or previous) page
+  // and its first (or last) order once it has loaded.
+  const pendingEdge = useRef<"first" | "last" | null>(null);
+  useEffect(() => {
+    if (!pendingEdge.current || list.isPlaceholderData || orders.length === 0)
+      return;
+    const target =
+      pendingEdge.current === "first" ? orders[0] : orders[orders.length - 1];
+    pendingEdge.current = null;
+    if (target) selectOrder(target.id);
+  }, [orders, list.isPlaceholderData, selectOrder]);
+
+  const hasPrevOrder =
+    selectedIndex > 0 || (selectedIndex === 0 && state.page > 1);
   const hasNextOrder =
-    selectedOrderIndex !== -1 && selectedOrderIndex < orders.length - 1;
+    selectedIndex >= 0 &&
+    (selectedIndex < orders.length - 1 || state.page < pageCount);
 
   const selectPrevOrder = useCallback(() => {
-    if (hasPrevOrder) {
-      setSelectedOrderId(orders[selectedOrderIndex - 1]!.id);
+    if (selectedIndex > 0) selectOrder(orders[selectedIndex - 1]!.id);
+    else if (selectedIndex === 0 && state.page > 1) {
+      pendingEdge.current = "last";
+      update({ page: state.page - 1, orderId: null }, true);
     }
-  }, [hasPrevOrder, orders, selectedOrderIndex]);
+  }, [selectedIndex, orders, state.page, selectOrder, update]);
 
   const selectNextOrder = useCallback(() => {
-    if (hasNextOrder) {
-      setSelectedOrderId(orders[selectedOrderIndex + 1]!.id);
+    if (selectedIndex < 0) return;
+    if (selectedIndex < orders.length - 1) {
+      selectOrder(orders[selectedIndex + 1]!.id);
+    } else if (state.page < pageCount) {
+      pendingEdge.current = "first";
+      update({ page: state.page + 1, orderId: null }, true);
     }
-  }, [hasNextOrder, orders, selectedOrderIndex]);
+  }, [selectedIndex, orders, state.page, pageCount, selectOrder, update]);
 
-  // Modal targets
   const [refundTargetOrder, setRefundTargetOrder] = useState<AdminOrder | null>(
     null,
   );
 
-  const isFiltered = Boolean(
-    searchQuery ||
-    courseFilter ||
-    couponFilter ||
-    statusFilter ||
-    datePreset !== "last_30_days",
-  );
-
   const resetFilters = useCallback(() => {
-    setSearchQuery("");
-    setDebouncedSearchImmediately("");
-    setCourseFilter(undefined);
-    setCouponFilter(undefined);
-    setStatusFilter(undefined);
-    setDatePresetState("last_30_days");
-    setCustomFrom(undefined);
-    setCustomTo(undefined);
-    setSortOrder("desc");
-  }, [setDebouncedSearchImmediately]);
+    setSearchText("");
+    setSearchParams(serializeFilterState(DEFAULT_FILTER_STATE), {
+      replace: true,
+      preventScrollReset: true,
+    });
+  }, [setSearchParams]);
+
+  const isFiltered =
+    serializeFilterState({ ...state, page: 1, orderId: null }).toString() !==
+    "";
 
   return {
+    state,
+    courses,
+    freeOnly: isFreeOnlyView(state, courses),
+    searchText,
+    setSearchText,
+    setRange: useCallback(
+      (range) =>
+        update({ range, customFrom: null, customTo: null, orderId: null }),
+      [update],
+    ),
+    setCustomRange: useCallback(
+      (from, to) =>
+        update({
+          range: "custom",
+          customFrom: from,
+          customTo: to,
+          orderId: null,
+        }),
+      [update],
+    ),
+    setStatuses: useCallback(
+      (keys, mode) =>
+        update({ statuses: keys, statusMode: mode, orderId: null }),
+      [update],
+    ),
+    setCourses: useCallback(
+      (selection, mode) =>
+        update({ courses: selection, courseMode: mode, orderId: null }),
+      [update],
+    ),
+    setCoupons: useCallback(
+      (ids, mode) => update({ coupons: ids, couponMode: mode, orderId: null }),
+      [update],
+    ),
+    resetFilters,
+    isFiltered,
     orders,
-    stats,
-    isLoadingStats,
-    isLoading,
-    isError,
+    total,
+    pageCount,
+    setPage,
+    // Loading too while the previous filters' rows stand in for the new
+    // ones (a filter, the range or the page changed): those rows are not
+    // the answer, so the skeleton shows instead of them. A refresh of the
+    // same query keeps its rows.
+    isLoading: !ready || list.isLoading || list.isPlaceholderData,
+    isFetching: list.isFetching,
     loadError,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-    refetch,
-    searchQuery,
-    setSearchQuery,
-    courseFilter,
-    setCourseFilter,
-    couponFilter,
-    setCouponFilter,
-    statusFilter,
-    setStatusFilter,
-    datePreset,
-    dateLabel,
-    setDatePreset,
-    sortOrder,
-    toggleSortOrder,
-    selectedOrderId,
+    refetch: () => void list.refetch(),
+    stats: statsQuery.data,
+    isLoadingStats:
+      !ready || statsQuery.isLoading || statsQuery.isPlaceholderData,
+    exportUrl: ordersService.getOrdersExportUrl(filterParams),
     selectedOrder,
-    setSelectedOrderId,
+    selectedPosition,
+    selectOrder,
     hasPrevOrder,
     hasNextOrder,
     selectPrevOrder,
     selectNextOrder,
     refundTargetOrder,
     setRefundTargetOrder,
-    isFiltered,
-    resetFilters,
   };
 }

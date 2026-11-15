@@ -38,7 +38,11 @@ export const chatDirectStatusSchema = z.enum([
 export const chatPostingPolicySchema = z.enum(["everyone", "staff_only"]);
 export const chatRoomStatusSchema = z.enum(["active", "locked", "archived"]);
 export const chatRoomRoleSchema = z.enum(["owner", "moderator", "member"]);
+/** all; mentions (groups: only @mentions); none (muted for good). */
 export const chatNotifyLevelSchema = z.enum(["all", "mentions", "none"]);
+/** Mute for a while (WhatsApp: 8 hours, a week), for good, or unmute. */
+export const chatMuteForSchema = z.enum(["8h", "1w", "always", "off"]);
+export type ChatMuteFor = z.infer<typeof chatMuteForSchema>;
 export const chatSenderRoleSchema = z.enum([
   "admin",
   "instructor",
@@ -169,6 +173,11 @@ export const chatReadUploadQuerySchema = z.strictObject({
   download: z.enum(["1", "0"]).optional(),
   /** "1": answer with the short-lived link as JSON (the preview reads text). */
   link: z.enum(["1"]).optional(),
+  /** A retry after a failed load: makes the address new, so not cached. */
+  r: z
+    .string()
+    .regex(/^\d{1,15}$/)
+    .optional(),
 });
 export const chatUploadLinkResponseSchema = z.object({ url: z.string() });
 export type ChatUploadLink = z.infer<typeof chatUploadLinkResponseSchema>;
@@ -198,6 +207,13 @@ export const chatMessageSchema = z.object({
   eventSeq: z.number().int(),
   kind: z.enum(["text", "system"]),
   sender: chatSenderSchema.nullable(),
+  /**
+   * The id the sending app gave it: that app swaps its "sending" copy for
+   * this message however it arrives (reply or live stream), never both.
+   */
+  clientId: z.string().nullable().optional(),
+  /** Forwarded from another chat ("Forwarded" above the text). */
+  forwarded: z.boolean().optional(),
   /** Empty when deleted. */
   body: z.string(),
   replyTo: z
@@ -206,6 +222,21 @@ export const chatMessageSchema = z.object({
       senderName: z.string().nullable(),
       preview: z.string(),
       deleted: z.boolean(),
+      /**
+       * The quoted message's first photo, video, voice message or file, so
+       * the quote shows "📷 Photo" with a thumbnail as in WhatsApp.
+       */
+      media: z
+        .object({
+          kind: chatUploadKindSchema,
+          url: z.string(),
+          name: z.string(),
+          durationMs: z.number().int().nullable(),
+          /** Files on the quoted message. */
+          count: z.number().int(),
+        })
+        .nullable()
+        .optional(),
     })
     .nullable(),
   mentions: z.array(z.uuid()),
@@ -269,6 +300,21 @@ export const chatRoomSummarySchema = z.object({
     })
     .nullable(),
   lastMessageAt: isoDate.nullable(),
+  /**
+   * WhatsApp's "Reacted 👍 to: …" in the chat list: the newest reaction by
+   * you or to your message, when newer than the last message.
+   */
+  lastReaction: z
+    .object({
+      emoji: z.string(),
+      byId: z.uuid(),
+      byName: z.string(),
+      /** The message reacted to, as one line. */
+      preview: z.string(),
+      at: isoDate,
+    })
+    .nullable()
+    .optional(),
   unreadCount: z.number().int(),
   /**
    * How far the others have received and read your messages (the ticks).
@@ -281,8 +327,15 @@ export const chatRoomSummarySchema = z.object({
   me: z.object({
     roomRole: chatRoomRoleSchema,
     notifyLevel: chatNotifyLevelSchema,
+    /**
+     * Muted until then (8 hours, a week); null when not muted for a while.
+     * Muted for good is notifyLevel "none".
+     */
+    mutedUntil: isoDate.nullable(),
     archived: z.boolean(),
     pinned: z.boolean(),
+    /** Your read receipts here (staff): null follows your setting. */
+    readReceipts: z.boolean().nullable().optional(),
     lastReadSeq: z.number().int(),
     canPost: z.boolean(),
     /** Why posting is off, for the bar that replaces the message box. */
@@ -372,9 +425,12 @@ export const chatProfileSchema = z.object({
   showPresence: z.boolean(),
   readReceipts: z.boolean(),
   enterToSend: z.boolean(),
+  /** Whether you may turn read receipts off (chat staff only). */
+  readReceiptsChoice: z.boolean().optional(),
 });
 export type ChatProfile = z.infer<typeof chatProfileSchema>;
 export const updateChatProfileRequestSchema = chatProfileSchema
+  .omit({ readReceiptsChoice: true })
   .partial()
   .strict();
 export type UpdateChatProfileRequest = z.infer<
@@ -457,6 +513,27 @@ export const chatReactionRequestSchema = z.strictObject({
   /** null removes your reaction. One reaction per person, like WhatsApp. */
   emoji: z.string().trim().min(1).max(16).nullable(),
 });
+/** WhatsApp's limits: up to 5 chats at once; we take 10 messages at a time. */
+export const CHAT_FORWARD_MAX_CHATS = 5;
+export const CHAT_FORWARD_MAX_MESSAGES = 10;
+export const chatForwardRequestSchema = z.strictObject({
+  fromRoomId: z.uuid(),
+  seqs: z.array(seqSchema).min(1).max(CHAT_FORWARD_MAX_MESSAGES),
+  toRoomIds: z.array(z.uuid()).min(1).max(CHAT_FORWARD_MAX_CHATS),
+});
+export type ChatForwardRequest = z.infer<typeof chatForwardRequestSchema>;
+export const chatForwardResponseSchema = z.object({
+  /** Per chat: how many were sent, and why it stopped if it did. */
+  results: z.array(
+    z.object({
+      roomId: z.uuid(),
+      sent: z.number().int(),
+      error: z.string().nullable(),
+    }),
+  ),
+});
+export type ChatForwardResponse = z.infer<typeof chatForwardResponseSchema>;
+
 export const chatMessageResponseSchema = z.object({
   message: chatMessageSchema,
 });
@@ -477,9 +554,16 @@ export const chatReceiptsRequestSchema = z.strictObject({
 
 export const chatMemberStateRequestSchema = z
   .strictObject({
+    /** Also ends a mute for a while. */
     notifyLevel: chatNotifyLevelSchema.optional(),
+    muteFor: chatMuteForSchema.optional(),
     archived: z.boolean().optional(),
     pinned: z.boolean().optional(),
+    /**
+     * Admins and instructors: read receipts in this chat. Null follows
+     * their setting for all chats (Settings › Privacy).
+     */
+    readReceipts: z.boolean().nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "Nothing to change");
 

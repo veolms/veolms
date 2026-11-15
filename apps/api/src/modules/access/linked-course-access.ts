@@ -30,12 +30,22 @@ import type { Executor } from "./access.repository.ts";
  *   `section_ids`. Like the end date, it is worked out at the sync: when
  *   a parent that opened more ends before the others, the grant keeps what
  *   it opened until the learner's next sync.
+ * - Staff can extend a learner's linked course (Students → Extend
+ *   validity): it then lasts at least until the extension's end, or for
+ *   life, whatever its parents do (`extended_until`, `extended_lifetime`).
  * - When no parent is left, the link's rows are marked `expired`, not
  *   `revoked`. `revoked` on a linked row means staff took it away, and a
  *   later sync does not hand it back; "Restore" does.
  */
 
 const SYNC_CHUNK_SIZE = 1000;
+
+/** A staff extension on grant `alias` that has not run out. */
+function extensionRuns(alias: "g") {
+  return sql.raw(
+    `(${alias}.extended_lifetime or coalesce(${alias}.extended_until > now(), false))`,
+  );
+}
 
 /** Live access to a course, not itself given by a link. */
 const parentGrantIsLive = sql`(
@@ -50,13 +60,16 @@ const parentGrantIsLive = sql`(
  * unchanged answer compares equal to the one stored).
  */
 function desiredLinkedAccess(userIds: string[]) {
+  // `x`: the learner's own row for the linked course, for an extension staff
+  // gave it (Students → Extend validity): the access lasts at least that long.
   return sql`
     select
       p.user_id,
       cl.linked_course_id as course_id,
       case
-        when bool_or(p.valid_until is null) then null
-        else max(p.valid_until)
+        when bool_or(p.valid_until is null)
+          or bool_or(coalesce(x.extended_lifetime, false)) then null
+        else greatest(max(p.valid_until), max(x.extended_until))
       end as valid_until,
       case
         when bool_or(cl.section_ids is null) then null
@@ -66,6 +79,8 @@ function desiredLinkedAccess(userIds: string[]) {
     from access_grants p
     join course_links cl on cl.course_id = p.course_id
     join courses lc on lc.id = cl.linked_course_id and lc.deleted_at is null
+    left join access_grants x
+      on x.user_id = p.user_id and x.course_id = cl.linked_course_id
     left join lateral unnest(cl.section_ids) as s(section_id) on true
     where p.user_id = any(${userIds}::uuid[])
       and ${parentGrantIsLive}
@@ -143,13 +158,15 @@ async function syncChunk(database: Executor, userIds: string[]) {
     )
   `.execute(database);
 
-  // Linked rows no parent backs any more.
+  // Linked rows no parent backs any more, unless staff extended them and
+  // the extension still runs.
   await sql`
     update access_grants g
       set status = 'expired', updated_at = now()
     where g.user_id = any(${userIds}::uuid[])
       and g.source = 'linked_course'
       and g.status = 'active'
+      and not ${extensionRuns("g")}
       and not exists (
         select 1
         from access_grants p
@@ -166,6 +183,11 @@ async function syncChunk(database: Executor, userIds: string[]) {
     where e.user_id = any(${userIds}::uuid[])
       and e.source = 'linked_course'
       and e.status = 'active'
+      and not exists (
+        select 1 from access_grants g
+        where g.user_id = e.user_id and g.course_id = e.course_id
+          and ${extensionRuns("g")}
+      )
       and not exists (
         select 1
         from access_grants p

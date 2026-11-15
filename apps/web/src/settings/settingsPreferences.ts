@@ -52,19 +52,25 @@ const SIDEBAR_GLOW_SHAPE_BASE_LENGTHS = [
   ["--sidebar-bokeh-bottom-half-size", 63],
 ] as const;
 export type SidebarDockItem =
-  "appearance" | "theme" | "fullscreen" | "reading-mode" | "settings";
+  | "appearance"
+  | "theme"
+  | "fullscreen"
+  | "notifications"
+  | "reading-mode"
+  | "settings";
 
 export const SIDEBAR_DOCK_MAX_ITEMS = 5;
 export const SIDEBAR_DOCK_DEFAULT_ORDER: readonly SidebarDockItem[] = [
   "appearance",
   "theme",
+  "notifications",
   "reading-mode",
   "settings",
   "fullscreen",
 ];
 export const SIDEBAR_DOCK_DEFAULT_ITEMS: readonly SidebarDockItem[] = [
   "appearance",
-  "reading-mode",
+  "notifications",
   "settings",
 ];
 
@@ -115,10 +121,14 @@ export const ELASTIC_SCROLL_HIDE_DELAY_KEY = "veolms-elastic-scroll-hide-delay";
 export const ELASTIC_SCROLL_HIDE_DELAY_MIN = 1;
 export const ELASTIC_SCROLL_HIDE_DELAY_MAX = 10;
 export const ELASTIC_SCROLL_HIDE_DELAY_DEFAULT = 2;
+/** Whether the elastic scroller shows at all while scrolling. */
+export const ELASTIC_SCROLL_ENABLED_KEY = "veolms-elastic-scroll-enabled";
+export const ELASTIC_SCROLL_ENABLED_DEFAULT = true;
 export const ELASTIC_SCROLL_PREFERENCES_EVENT =
   "veolms:elastic-scroll-preferences";
 
 export interface ElasticScrollPreferences {
+  enabled: boolean;
   appearance: ElasticScrollAppearance;
   icon: ElasticScrollIcon;
   animateIcon: boolean;
@@ -128,6 +138,7 @@ export interface ElasticScrollPreferences {
 }
 
 export const ELASTIC_SCROLL_PREFERENCES_DEFAULT: ElasticScrollPreferences = {
+  enabled: ELASTIC_SCROLL_ENABLED_DEFAULT,
   appearance: ELASTIC_SCROLL_APPEARANCE_DEFAULT,
   icon: ELASTIC_SCROLL_ICON_DEFAULT,
   animateIcon: ELASTIC_SCROLL_ICON_ANIMATION_DEFAULT,
@@ -267,6 +278,7 @@ const SIDEBAR_DOCK_ITEMS = new Set<SidebarDockItem>([
   "appearance",
   "theme",
   "fullscreen",
+  "notifications",
   "reading-mode",
   "settings",
 ]);
@@ -394,6 +406,7 @@ export const HIDEABLE_PLAYER_CONTROLS = [
   "chapters",
   "volume",
   "lesson-navigation",
+  "minimize",
 ] as const;
 export type HideablePlayerControl = (typeof HIDEABLE_PLAYER_CONTROLS)[number];
 
@@ -551,6 +564,10 @@ export const normalizeElasticScrollHideDelay = (value: unknown): number => {
 };
 
 export const readElasticScrollPreferences = (): ElasticScrollPreferences => ({
+  enabled: readStoredBoolean(
+    ELASTIC_SCROLL_ENABLED_KEY,
+    ELASTIC_SCROLL_ENABLED_DEFAULT,
+  ),
   appearance: normalizeElasticScrollAppearance(
     readStored(
       ELASTIC_SCROLL_APPEARANCE_KEY,
@@ -587,6 +604,10 @@ export const applyElasticScrollPreferences = (
   preferences: Partial<ElasticScrollPreferences>,
 ): ElasticScrollPreferences => {
   const normalizedPreferences = {
+    enabled:
+      typeof preferences.enabled === "boolean"
+        ? preferences.enabled
+        : ELASTIC_SCROLL_ENABLED_DEFAULT,
     appearance: normalizeElasticScrollAppearance(preferences.appearance),
     icon: normalizeElasticScrollIcon(preferences.icon),
     animateIcon:
@@ -627,6 +648,10 @@ export const persistElasticScrollPreferences = (
   const normalizedPreferences = applyElasticScrollPreferences(preferences);
   if (typeof window !== "undefined") {
     try {
+      window.localStorage.setItem(
+        ELASTIC_SCROLL_ENABLED_KEY,
+        String(normalizedPreferences.enabled),
+      );
       window.localStorage.setItem(
         ELASTIC_SCROLL_APPEARANCE_KEY,
         normalizedPreferences.appearance,

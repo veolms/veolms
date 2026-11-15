@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { AccountSettings } from "./AccountSettings";
 import { NotificationSettings } from "./NotificationSettings";
 import { ProfileSettings } from "./ProfileSettings";
@@ -5,7 +6,14 @@ import { SecuritySettings } from "./SecuritySettings";
 import type { SettingsPageProps } from "../SettingsPage";
 
 export type SignedInSettingsTabId =
-  "profile" | "notifications" | "security" | "account";
+  "profile" | "notifications" | "security" | "account" | "links";
+
+// Staff only, so a chunk of its own that learners never download.
+const LinksSettings = lazy(() =>
+  import("./links/LinksSettings").then((module) => ({
+    default: module.LinksSettings,
+  })),
+);
 
 /**
  * The sections that only mean something to a signed-in account. They are a
@@ -42,6 +50,12 @@ export function SignedInSettingsTab({
           isAuthenticated={pageProps.isAuthenticated}
           onNavigatePage={pageProps.onNavigatePage}
         />
+      );
+    case "links":
+      return (
+        <Suspense fallback={null}>
+          <LinksSettings isAuthenticated={pageProps.isAuthenticated} />
+        </Suspense>
       );
   }
 }

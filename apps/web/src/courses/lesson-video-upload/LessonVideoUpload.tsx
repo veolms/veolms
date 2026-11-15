@@ -208,6 +208,7 @@ export const LessonVideoUpload = forwardRef<
   const [transcodeProgress, setTranscodeProgress] = useState(0);
   const [playbackReady, setPlaybackReady] = useState(false);
   const readinessNotifiedMediaIdRef = useRef<string | null>(null);
+  const [transcodeStage, setTranscodeStage] = useState<string | null>(null);
   const [transcodeStatus, setTranscodeStatus] = useState<
     VideoJobStatus | undefined
   >();
@@ -381,6 +382,7 @@ export const LessonVideoUpload = forwardRef<
       setStreamConnectionState("connected");
       setStreamErrorCount(0);
       setTranscodeStatus(next.status);
+      setTranscodeStage(next.stage ?? null);
       setPlaybackReady(
         next.playbackReady ??
           (next.status === "ready" || next.status === "completed"),
@@ -829,6 +831,7 @@ export const LessonVideoUpload = forwardRef<
   const checkedAttachedMediaIdRef = useRef<string | null>(null);
   const adoptAttachedVideoStatus = useCallback(
     (mediaId: string, status: VideoJobProgressResponse) => {
+      setTranscodeStage(status.stage ?? null);
       setPlaybackReady(
         status.playbackReady ??
           (status.status === "ready" || status.status === "completed"),
@@ -1319,6 +1322,7 @@ export const LessonVideoUpload = forwardRef<
       videoNoun={videoNoun}
       progress={hasReceivedProgress ? transcodeProgress : null}
       status={transcodeStatus}
+      stage={transcodeStage}
       playbackReady={playbackReady}
       errorMessage={isStreamError ? null : errorMessage}
       isReplacement={isPendingReplacement}
@@ -1895,6 +1899,7 @@ interface TranscodingProgressStageProps {
   videoNoun: string;
   progress?: number | null;
   status?: string;
+  stage?: string | null;
   playbackReady?: boolean;
   errorMessage?: string | null;
   isReplacement: boolean;
@@ -1913,6 +1918,7 @@ function TranscodingProgressStage({
   videoNoun,
   progress = null,
   status,
+  stage,
   playbackReady = false,
   errorMessage,
   isReplacement,
@@ -1951,6 +1957,11 @@ function TranscodingProgressStage({
             : null
         }
       />
+      {status === "queued" && stage ? (
+        <p role="status" className="text-sm text-(--muted)">
+          {stage}
+        </p>
+      ) : null}
       {status === "ready" ? (
         <p role="status" className="text-sm text-(--muted)">
           Video ready to play and save. Other qualities are still processing

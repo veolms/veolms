@@ -44,26 +44,26 @@ export interface UseDockLongPressArgs {
 
 export interface UseDockLongPressResult {
   openAppearanceThemeMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   startDockLongPress: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     action: () => void,
     includeMouse?: boolean,
   ) => void;
-  moveDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  finishDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  moveDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
+  finishDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
   startAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     source: AppearanceSwipeSource,
   ) => void;
   finishAppearanceSwipe: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     source: AppearanceSwipeSource,
     mobile?: boolean,
   ) => void;
-  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  cancelAppearanceSwipe: (event: ReactPointerEvent<HTMLElement>) => void;
 }
 
 export function useDockLongPress({
@@ -85,7 +85,7 @@ export function useDockLongPress({
   activateAppearanceOption,
 }: UseDockLongPressArgs): UseDockLongPressResult {
   const openAppearanceThemeMenu = (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile = false,
   ) => {
     event.preventDefault();
@@ -161,7 +161,7 @@ export function useDockLongPress({
   acknowledgeLongPressRef.current = acknowledgeLongPress;
 
   const startDockLongPress = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     action: () => void,
     includeMouse = false,
   ) => {
@@ -194,7 +194,7 @@ export function useDockLongPress({
     }
   };
 
-  const moveDockLongPress = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const moveDockLongPress = (event: ReactPointerEvent<HTMLElement>) => {
     const press = dockLongPressRef.current;
     if (!press || press.pointerId !== event.pointerId) return;
     event.stopPropagation();
@@ -212,7 +212,7 @@ export function useDockLongPress({
     }
   };
 
-  const finishDockLongPress = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const finishDockLongPress = (event: ReactPointerEvent<HTMLElement>) => {
     event.stopPropagation();
     const press = dockLongPressRef.current;
     if (!press || press.pointerId !== event.pointerId) return;
@@ -226,7 +226,7 @@ export function useDockLongPress({
   };
 
   const startAppearanceSwipe = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     source: AppearanceSwipeSource,
   ) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -244,7 +244,7 @@ export function useDockLongPress({
   };
 
   const finishAppearanceSwipe = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     source: AppearanceSwipeSource,
     mobile = false,
   ) => {
@@ -283,9 +283,7 @@ export function useDockLongPress({
     }, 0);
   };
 
-  const cancelAppearanceSwipe = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ) => {
+  const cancelAppearanceSwipe = (event: ReactPointerEvent<HTMLElement>) => {
     event.stopPropagation();
     const swipe = appearanceSwipeRef.current;
     if (!swipe || swipe.pointerId !== event.pointerId) return;

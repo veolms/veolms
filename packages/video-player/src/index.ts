@@ -24,7 +24,12 @@ export type {
   VideoStreamingConfiguration,
   VideoTextTrack,
 } from "./core/types";
-export { VideoEngineError, normalizeUnknownError } from "./core/errors";
+export {
+  VideoEngineError,
+  networkFailureHttpStatus,
+  networkFailureKind,
+  normalizeUnknownError,
+} from "./core/errors";
 export type {
   VideoEngineEvent,
   VideoEngineEventMap,
@@ -135,6 +140,7 @@ export {
 export type {
   ErrorOverlayProps,
   PlayerErrorNoticeProps,
+  PlayerErrorReport,
   VideoPlayerNoticeAction,
   VideoPlayerNoticeProps,
 } from "./controls/ErrorOverlay";

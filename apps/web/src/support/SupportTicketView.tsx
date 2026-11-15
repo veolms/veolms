@@ -43,12 +43,15 @@ export function SupportTicketView({
   ticket,
   headingLevel = 1,
   staffControls,
+  activity,
   canReply = true,
 }: {
   ticket: SupportTicketDetail;
   headingLevel?: 1 | 2;
-  /** The team's status buttons, shown under the heading. */
+  /** The team's Properties (status, assignee, ...), shown under the heading. */
   staffControls?: ReactNode;
+  /** The team's Activity, shown instead of the plain conversation. */
+  activity?: ReactNode;
   canReply?: boolean;
 }) {
   const category = SUPPORT_CATEGORIES[ticket.category];
@@ -198,27 +201,29 @@ export function SupportTicketView({
         ) : null}
       </section>
 
-      <section
-        aria-labelledby={`support-conversation-${ticket.id}`}
-        className="flex flex-col gap-3"
-      >
-        <h3
-          id={`support-conversation-${ticket.id}`}
-          className="m-0 text-[0.72rem] font-bold tracking-[0.08em] text-(--muted) uppercase"
+      {activity ?? (
+        <section
+          aria-labelledby={`support-conversation-${ticket.id}`}
+          className="flex flex-col gap-3"
         >
-          Conversation
-        </h3>
-        <SupportMessageList
-          ticket={ticket}
-          emptyText={
-            staff
-              ? "No replies yet."
-              : ticket.kind === "problem"
-                ? "No reply yet. We usually answer within a day or two, and you'll get a notification when we do."
-                : "We read every message. If we have a question or an update, it will show up here."
-          }
-        />
-      </section>
+          <h3
+            id={`support-conversation-${ticket.id}`}
+            className="m-0 text-[0.72rem] font-bold tracking-[0.08em] text-(--muted) uppercase"
+          >
+            Conversation
+          </h3>
+          <SupportMessageList
+            ticket={ticket}
+            emptyText={
+              staff
+                ? "No replies yet."
+                : ticket.kind === "problem"
+                  ? "No reply yet. We usually answer within a day or two, and you'll get a notification when we do."
+                  : "We read every message. If we have a question or an update, it will show up here."
+            }
+          />
+        </section>
+      )}
 
       <SupportReplyBox ticket={ticket} canReply={canReply} />
     </div>

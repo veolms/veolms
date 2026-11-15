@@ -1,5 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CourseAccessChangeResponse } from "@veolms/contracts";
+import type {
+  CourseAccessChangeResponse,
+  CourseValidityResponse,
+  ExtendCourseAccessRequest,
+} from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { enrollmentKeys } from "../enrollments/enrollments.keys";
 import { studentKeys } from "../students/students.keys";
@@ -28,6 +32,26 @@ export function useGrantCourseAccess() {
       }
     },
     onSettled: refresh,
+  });
+}
+
+/**
+ * Staff extend one learner's access to one course. Settles once the student
+ * screens are fresh, so the card shows the new date as the drawer closes.
+ */
+export function useExtendCourseAccess() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    CourseValidityResponse,
+    ApiError,
+    CourseAccessTarget & { body: ExtendCourseAccessRequest }
+  >({
+    mutationFn: ({ userId, courseId, body }) =>
+      accessService.extendCourseAccess(userId, courseId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: enrollmentKeys.all });
+      return queryClient.invalidateQueries({ queryKey: studentKeys.all });
+    },
   });
 }
 

@@ -36,6 +36,8 @@ export interface MenuActionProps {
   Icon?: Icon;
   icon?: ReactNode;
   label: string;
+  /** A quieter second line under the label. */
+  description?: string;
   onClick: () => void;
   onIntent?: () => void;
   destructive?: boolean;
@@ -54,6 +56,7 @@ export function MenuAction({
   Icon,
   icon,
   label,
+  description,
   onClick,
   onIntent,
   destructive,
@@ -99,7 +102,14 @@ export function MenuAction({
     >
       {icon ??
         (Icon ? <Icon size={17} weight="regular" aria-hidden="true" /> : null)}
-      <span>{label}</span>
+      {description ? (
+        <span className="flex min-w-0 flex-col py-1.5">
+          <span>{label}</span>
+          <span className="text-[0.68rem] text-(--muted)">{description}</span>
+        </span>
+      ) : (
+        <span>{label}</span>
+      )}
     </button>
   );
 }

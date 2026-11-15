@@ -3,6 +3,8 @@ import {
   startEarlyShakaPreload,
 } from "@veolms/video-player/shaka-preload";
 import {
+  isRememberedWithoutVideo,
+  LEARNING_LESSON_NO_VIDEO_META_NAME,
   readLearningHlsBootstrapFromDocument,
   readLearningPlaybackRequestMetadataFromDocument,
   readLearningPlaybackRequestMetadataFromPath,
@@ -10,6 +12,7 @@ import {
   type LearningPlaybackRequestMetadata,
 } from "./learningHlsBootstrap";
 import { createLearningHlsPreloadSource } from "./player/learningHlsPreloadSource";
+import { noteVideoStartPending } from "../lib/scheduleWarmUp";
 import { toAbsoluteLearningMediaUrl } from "./player/learningHlsConstants";
 import {
   getVideoPlaybackBootstrap,
@@ -91,6 +94,9 @@ function startPreloadForBootstrap(
 ) {
   const key = `${bootstrap.mediaKey}\u0000${bootstrap.manifestUrl}`;
   if (inFlight?.key === key) return inFlight.promise;
+  // The lesson being opened: the page's warm-ups wait for its first frame
+  // (see lib/scheduleWarmUp.ts). A lesson merely hovered does not hold them.
+  if (!speculative) noteVideoStartPending();
 
   preconnectToMediaOrigin(bootstrap.manifestUrl);
   mark("learning-bootstrap-ready");
@@ -120,6 +126,21 @@ function startPreloadForBootstrap(
   return promise;
 }
 
+/** The page was built for this lesson and marks it as having no video. */
+function builtPageShowsNoVideo(
+  request: LearningPlaybackRequestMetadata,
+): boolean {
+  if (typeof document === "undefined") return false;
+  const built = readLearningPlaybackRequestMetadataFromDocument();
+  return (
+    built?.courseSlug === request.courseSlug &&
+    built.lessonNumber === request.lessonNumber &&
+    document
+      .querySelector(`meta[name="${LEARNING_LESSON_NO_VIDEO_META_NAME}"]`)
+      ?.getAttribute("content") === "1"
+  );
+}
+
 export async function startEarlyHlsPreload(
   bootstrap: LearningHlsBootstrap | null = readLearningHlsBootstrapFromDocument(),
   requestMetadata: LearningPlaybackRequestMetadata | null = readLearningPlaybackRequestMetadataFromDocument(),
@@ -142,11 +163,30 @@ export async function startEarlyHlsPreload(
       typeof location === "undefined"
         ? null
         : readLearningPlaybackRequestMetadataFromPath(location.pathname);
-    if (fromAddress) {
+    if (
+      fromAddress &&
+      !isRememberedWithoutVideo(
+        fromAddress.courseSlug,
+        fromAddress.lessonNumber,
+      )
+    ) {
       void getVideoPlaybackBootstrap(fromAddress)
         .then((early) => preconnectToMediaOrigin(early.manifestUrl))
         .catch(() => undefined);
     }
+    return null;
+  }
+
+  // A lesson without a video (a reading, a quiz): nothing to start early,
+  // and asking would only bring the API's 404. Known from the built page
+  // (its meta, for the lesson it names) or from this browser's last visit.
+  if (
+    builtPageShowsNoVideo(requestMetadata) ||
+    isRememberedWithoutVideo(
+      requestMetadata.courseSlug,
+      requestMetadata.lessonNumber,
+    )
+  ) {
     return null;
   }
 

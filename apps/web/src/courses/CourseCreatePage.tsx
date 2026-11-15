@@ -981,6 +981,7 @@ export function CourseCreatePage({
     handleCancelLessonDescriptionEdit,
     handleLessonDiscreteChange,
     handleLessonMediaAttached,
+    handleLessonContentRemoved,
     handleLessonProcessingComplete,
     saveAllDirtyLessons,
     handleToggleLessonExpand,
@@ -1020,6 +1021,7 @@ export function CourseCreatePage({
     handleLessonResourceRemoved,
     handleLessonDragStart,
     handleLessonDragOver,
+    handleLessonDragOverSection,
     handleLessonDragEnd,
   } = useLessonResourceAndDragHandlers({
     navigate,
@@ -1596,6 +1598,7 @@ export function CourseCreatePage({
                   handleDeleteLesson={handleDeleteLesson}
                   currentCourseId={currentCourseId}
                   handleLessonMediaAttached={handleLessonMediaAttached}
+                  handleLessonContentRemoved={handleLessonContentRemoved}
                   handleLessonProcessingComplete={
                     handleLessonProcessingComplete
                   }
@@ -1644,6 +1647,7 @@ export function CourseCreatePage({
                   navigateToCurriculumFocus={navigateToCurriculumFocus}
                   handleLessonDragStart={handleLessonDragStart}
                   handleLessonDragOver={handleLessonDragOver}
+                  handleLessonDragOverSection={handleLessonDragOverSection}
                   handleLessonDragEnd={handleLessonDragEnd}
                   setDragEnabledLessonId={setDragEnabledLessonId}
                   handleLessonTitleBlur={handleLessonTitleBlur}

@@ -399,6 +399,14 @@ export const routeDescriptors = {
     title: "Settings",
     description: "Manage your personal preferences and interface experience.",
   },
+  "settings-links": {
+    kind: "shell",
+    page: "settings",
+    section: "Settings",
+    settingsTab: "links",
+    title: "Links",
+    description: "Short links on this site's address.",
+  },
   logout: {
     kind: "shell",
     page: "workspace",
@@ -660,6 +668,7 @@ const canonicalPathsByRouteId = {
   "settings-learning": "/settings/learning",
   "settings-security": "/settings/security",
   "settings-account": "/settings/account",
+  "settings-links": "/settings/links",
   logout: "/logout",
 } as const;
 

@@ -590,6 +590,8 @@ export interface ContentInsightsRow {
   lessons: number;
   videoLessons: number;
   documentLessons: number;
+  audioLessons: number;
+  imageLessons: number;
   quizLessons: number;
   resources: number;
   videoSeconds: number;
@@ -609,6 +611,8 @@ export async function getContentInsights(
     lessons: number;
     video_lessons: number;
     document_lessons: number;
+    audio_lessons: number;
+    image_lessons: number;
     quiz_lessons: number;
     resources: number;
     video_seconds: number;
@@ -637,6 +641,8 @@ export async function getContentInsights(
       (select count(*)::int from scoped_lessons) as lessons,
       (select count(*)::int from scoped_lessons where content_type = 'video') as video_lessons,
       (select count(*)::int from scoped_lessons where content_type = 'document') as document_lessons,
+      (select count(*)::int from scoped_lessons where content_type = 'audio') as audio_lessons,
+      (select count(*)::int from scoped_lessons where content_type = 'image') as image_lessons,
       (select count(*)::int from scoped_lessons where content_type = 'quiz') as quiz_lessons,
       (
         select count(*)::int from lesson_resources lr
@@ -658,6 +664,8 @@ export async function getContentInsights(
     lessons: Number(row?.lessons ?? 0),
     videoLessons: Number(row?.video_lessons ?? 0),
     documentLessons: Number(row?.document_lessons ?? 0),
+    audioLessons: Number(row?.audio_lessons ?? 0),
+    imageLessons: Number(row?.image_lessons ?? 0),
     quizLessons: Number(row?.quiz_lessons ?? 0),
     resources: Number(row?.resources ?? 0),
     videoSeconds: Number(row?.video_seconds ?? 0),

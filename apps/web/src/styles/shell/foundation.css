@@ -276,6 +276,45 @@
     background: transparent;
     box-shadow: none;
   }
+
+  /* The frame's rounded top corners, painted over the page where it is drawn
+     without a graphics card (lib/software-rendering.ts). There Chrome
+     sometimes left the lesson video's corner square: the video is a layer
+     of its own, cut round only by the frame's `overflow: hidden`, and the
+     processor redrawing just the changed part of the screen (the video,
+     every frame) drew it without that cut until a full redraw (a scroll).
+     This box sits outside the frame's clip (fixed, tied to the frame with
+     an anchor), above the page, and paints the shell's own backdrop only
+     outside each round: the corners look the same however the screen is
+     redrawn. Nothing changes where a graphics card draws the page.
+     Plain CSS: a pseudo-element anchored to its own frame, with a two-part
+     mask, under three conditions, is beyond a readable Tailwind class. */
+  @supports (anchor-name: --frame) {
+    :root[data-rendering="software"][data-content-layout="framed"]
+      .courses-main-frame {
+      anchor-name: --veo-main-frame;
+    }
+
+    :root[data-rendering="software"][data-content-layout="framed"]
+      .courses-main-frame::before {
+      content: "";
+      position: fixed;
+      position-anchor: --veo-main-frame;
+      top: anchor(top);
+      left: anchor(left);
+      right: anchor(right);
+      z-index: 47;
+      height: 18px;
+      pointer-events: none;
+      background: var(--shell-backdrop);
+      background-attachment: fixed;
+      mask:
+        radial-gradient(circle at 100% 100%, transparent 17.5px, #000 18.25px)
+          left top / 18px 18px no-repeat,
+        radial-gradient(circle at 0 100%, transparent 17.5px, #000 18.25px)
+          right top / 18px 18px no-repeat;
+    }
+  }
 }
 
 .floating-scrollbar {

@@ -9,6 +9,10 @@ import {
   getInitialLearningPlayerPreferences,
 } from "../learningPlayerPreferences";
 import { LessonPlayerControls } from "./LessonPlayerControls";
+import {
+  LessonReadingPlaceholder,
+  lessonReadingShellClasses,
+} from "./LessonReadingStage";
 import type { LessonVideoPlayerProps } from "./LessonVideoPlayer";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 import { useLayoutEffect, useState } from "react";
@@ -16,6 +20,11 @@ import { useLayoutEffect, useState } from "react";
 /**
  * Paints the real lesson chrome before PersistentLearningPlayerHost mounts.
  * The ancestor is pointer-events-none; handlers are inert placeholders.
+ *
+ * Only a video lesson gets the video chrome (the loader, the controls). A
+ * reading is drawn as a reading on its way, and a quiz as an empty stage:
+ * every lesson page is built ahead of time, and a reading used to open on
+ * the video loader and its controls until the player started.
  */
 export function LessonPlayerChromePlaceholder({
   canGoNext = false,
@@ -26,6 +35,7 @@ export function LessonPlayerChromePlaceholder({
   onGoNext = () => undefined,
   onGoPrevious = () => undefined,
   onMinimize,
+  lessonStage = "video",
 }: LessonVideoPlayerProps) {
   const playerTheme = useLearningPlayerTheme();
   const [playerPreferences, setPlayerPreferences] = useState(
@@ -35,6 +45,21 @@ export function LessonPlayerChromePlaceholder({
     setPlayerPreferences(getInitialLearningPlayerPreferences());
   }, []);
   const resolvedTheme = resolvePlayerTheme(playerTheme);
+
+  // An audio lesson plays in the video player: its chrome too.
+  if (lessonStage !== "video" && lessonStage !== "audio") {
+    const reading = lessonStage !== "quiz";
+    return (
+      <div
+        className={`video-shell relative size-full overflow-hidden ${lessonReadingShellClasses}`}
+        data-learning-player-chrome-placeholder=""
+        role="status"
+        aria-label={reading ? "Loading reading" : "Loading quiz"}
+      >
+        {reading ? <LessonReadingPlaceholder /> : null}
+      </div>
+    );
+  }
 
   return (
     <div

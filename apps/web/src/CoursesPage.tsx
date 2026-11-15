@@ -387,6 +387,7 @@ export function CoursesPage({
     shellProfileAvatarUrl,
     shellProfileAvatarSrcSet,
     unreadNotificationCount,
+    unreadChatCount,
   } = useShellProfileSummary({
     authUserFetched,
     authIdentityHint,
@@ -477,7 +478,6 @@ export function CoursesPage({
     longPressAudioContextRef,
     sidebarTooltipTimerRef,
     primaryShortcutModifier,
-    settingsShortcutKeys,
     sidebarShortcutTitle,
     showKeyboardShortcuts,
     settingsControlTitle,
@@ -687,8 +687,8 @@ export function CoursesPage({
     openMobileNavigationMenu,
     dismissMobileMenuThen,
     selectNavigation,
-    toggleSettingsNavigation,
     navigateSettingsQuickMenu,
+    toggleSettingsNavigation,
   } = useMobileMenuActions({
     onExitSettings,
     onNavigatePage,
@@ -788,6 +788,22 @@ export function CoursesPage({
     appearanceSwipeConsumedRef,
     dockLongPressConsumedUntilRef,
     appearanceControlsHorizontal,
+  });
+  // The bell in the sidebar's bottom row (and the phone menu's).
+  const dockUnreadNotificationCount = isAuthenticated
+    ? unreadNotificationCount
+    : 0;
+  const openNotifications = () => {
+    setSettingsQuickMenu(null);
+    setReadingModeMenu(null);
+    setEdgeSidebarOpen(false);
+    dismissMobileMenuThen(() => onNavigatePage("/notifications"));
+  };
+  // Reading mode's switch, at the top of the settings (gear) menu.
+  const settingsMenuReadingMode = (mobile: boolean) => ({
+    enabled: readingModeEnabled,
+    onToggle: () => updateReadingMode({ enabled: !readingModeEnabled }),
+    onOpenSettings: () => showReadingModeMenu(mobile),
   });
 
   const {
@@ -1203,6 +1219,7 @@ export function CoursesPage({
             />
 
             <SidebarNavigation
+              unreadChatCount={unreadChatCount}
               navigationScrollFade={navigationScrollFade}
               navigationRef={navigationRef}
               setSidebarTooltip={setSidebarTooltip}
@@ -1217,8 +1234,6 @@ export function CoursesPage({
               }
               showSidebarTooltip={showSidebarTooltip}
               hideCollapsedNavigationTooltip={hideCollapsedNavigationTooltip}
-              showKeyboardShortcuts={showKeyboardShortcuts}
-              settingsShortcutKeys={settingsShortcutKeys}
               sidebarResizing={sidebarResizing}
               sidebarResizePreviewWidth={sidebarResizePreviewWidth}
               renderedSidebarWidth={renderedSidebarWidth}
@@ -1264,7 +1279,6 @@ export function CoursesPage({
                 setProfileMenu={setProfileMenu}
                 shellProfileAvatarUrl={shellProfileAvatarUrl}
                 shellProfileAvatarSrcSet={shellProfileAvatarSrcSet}
-                unreadNotificationCount={unreadNotificationCount}
                 canSwitchWorkspace={canSwitchWorkspace}
                 ProfileSubtitleIcon={ProfileSubtitleIcon}
                 effectiveRole={effectiveRole}
@@ -1305,6 +1319,8 @@ export function CoursesPage({
                 settingsControlTitle={settingsControlTitle}
                 primaryShortcutModifier={primaryShortcutModifier}
                 settingsQuickMenu={settingsQuickMenu}
+                unreadNotificationCount={dockUnreadNotificationCount}
+                openNotifications={openNotifications}
                 toggleSettingsNavigation={toggleSettingsNavigation}
                 openSettingsQuickMenu={openSettingsQuickMenu}
                 showSettingsQuickMenu={showSettingsQuickMenu}
@@ -1336,6 +1352,7 @@ export function CoursesPage({
                         : null
                     }
                     onNavigate={navigateSettingsQuickMenu}
+                    readingMode={settingsMenuReadingMode(false)}
                     showSignedInTabs={isAuthenticated}
                   />
                 </Suspense>
@@ -1398,6 +1415,7 @@ export function CoursesPage({
 
       {compactNavigation && !mobileSidebarNavigationActive && (
         <MobileBottomNavigation
+          unreadChatCount={unreadChatCount}
           mobileBottomNavRef={mobileBottomNavRef}
           mobileBottomNavHidden={mobileBottomNavHidden}
           effectiveRole={effectiveRole}
@@ -1478,6 +1496,7 @@ export function CoursesPage({
                             : null
                         }
                         onNavigate={navigateSettingsQuickMenu}
+                        readingMode={settingsMenuReadingMode(true)}
                         showSignedInTabs={isAuthenticated}
                       />
                     </Suspense>
@@ -1591,7 +1610,8 @@ export function CoursesPage({
                   settingsControlTitle={settingsControlTitle}
                   primaryShortcutModifier={primaryShortcutModifier}
                   settingsQuickMenu={settingsQuickMenu}
-                  toggleSettingsNavigation={toggleSettingsNavigation}
+                  unreadNotificationCount={dockUnreadNotificationCount}
+                  openNotifications={openNotifications}
                   openSettingsQuickMenu={openSettingsQuickMenu}
                   showSettingsQuickMenu={showSettingsQuickMenu}
                   isFullscreen={isFullscreen}

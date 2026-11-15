@@ -1,6 +1,7 @@
 import {
   getAnalyticsSink,
   type AnalyticsEvent,
+  type PlaybackIncident,
   type PlaybackSummary,
 } from "@veolms/web-core";
 
@@ -78,4 +79,8 @@ export function trackAnalyticsEvent(
 
 export function trackPlayback(summary: PlaybackSummary): void {
   getAnalyticsSink()?.playback(summary);
+}
+
+export function trackPlaybackIncident(incident: PlaybackIncident): void {
+  getAnalyticsSink()?.playbackIncident?.(incident);
 }

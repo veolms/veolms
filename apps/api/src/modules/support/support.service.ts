@@ -13,6 +13,7 @@ import {
   type SupportTicketDetail,
   type SupportTicketListResponse,
   type SupportTicketStatus,
+  type UpdateSupportTicketRequest,
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
@@ -30,6 +31,8 @@ import {
   isSupportedDiscussionUploadMimeType,
 } from "../discussion-uploads/index.ts";
 import * as supportRepository from "./support.repository.ts";
+import { createSupportStaffService } from "./support-staff.service.ts";
+import { iso, markdownToPlainText, snippetFrom } from "./support.text.ts";
 
 const OBJECT_PREFIX = "protected/support-uploads";
 const DAILY_UPLOAD_BYTES = 500 * 1024 * 1024;
@@ -45,19 +48,6 @@ export interface IncomingSupportFile {
   dimensions: () => { width: number | null; height: number | null };
 }
 
-/** Markdown from the comment editor, as plain text for titles and search. */
-function markdownToPlainText(markdown: string): string {
-  return markdown
-    .replace(/```[\s\S]*?```/gu, " ")
-    .replace(/!\[[^\]]*\]\([^)]*\)/gu, " ")
-    .replace(/\[([^\]]*)\]\([^)]*\)/gu, "$1")
-    .replace(/`([^`]*)`/gu, "$1")
-    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gmu, "")
-    .replace(/[*_~]{1,3}([^*_~]+)[*_~]{1,3}/gu, "$1")
-    .replace(/[ \t]+/gu, " ")
-    .trim();
-}
-
 function titleFrom(plainText: string, fallback: string): string {
   const firstLine =
     plainText
@@ -68,15 +58,6 @@ function titleFrom(plainText: string, fallback: string): string {
   return firstLine.length > 120
     ? `${firstLine.slice(0, 117).trimEnd()}…`
     : firstLine;
-}
-
-function snippetFrom(plainText: string, length: number): string {
-  const flat = plainText.replace(/\s+/gu, " ").trim();
-  return flat.length > length ? `${flat.slice(0, length - 1)}…` : flat;
-}
-
-function iso(value: Date | string): string {
-  return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
 function attachmentUrl(id: string): string {
@@ -145,6 +126,7 @@ export function createSupportService({
   services: AppServices;
 }) {
   const outbox = createOutboxService();
+  const staff = createSupportStaffService({ database });
   const uploadStore = createDiscussionUploadStore(services.storage, {
     objectPrefix: OBJECT_PREFIX,
     diskDirectory: `${process.cwd()}/.data/support-uploads`,
@@ -290,9 +272,11 @@ export function createSupportService({
         isStaff ? "staff" : "user",
       );
     }
-    const [messages, attachments] = await Promise.all([
+    const [messages, attachments, staffSection] = await Promise.all([
       supportRepository.listMessages(database, ticketId, isStaff),
       supportRepository.listTicketAttachments(database, ticketId),
+      // The assignee, priority and Activity are the team's alone.
+      isStaff ? staff.staffSection(ticket, viewerId) : null,
     ]);
 
     const visibleMessageIds = new Set(messages.map((message) => message.id));
@@ -349,6 +333,8 @@ export function createSupportService({
         internal: message.internal,
         content: message.content,
         createdAt: iso(message.created_at),
+        editedAt: message.updated_at ? iso(message.updated_at) : null,
+        pinned: message.internal && message.pinned,
         author: {
           id: message.author_id,
           name:
@@ -362,6 +348,7 @@ export function createSupportService({
         attachments: byMessage.get(message.id) ?? [],
       })),
       viewerIsStaff: isStaff,
+      staff: staffSection,
     };
   }
 
@@ -473,36 +460,47 @@ export function createSupportService({
     return await getTicket(viewerId, ticketId, asStaff);
   }
 
-  async function updateStatus(
+  /** Status, assignee, priority or category, changed by staff and logged. */
+  async function updateTicket(
     staffId: string,
     ticketId: string,
-    status: SupportTicketStatus,
+    body: UpdateSupportTicketRequest,
   ): Promise<SupportTicketDetail> {
-    const ticket = await supportRepository.findTicket(database, ticketId);
-    if (!ticket) {
-      throw httpError(
-        404,
-        "SUPPORT_TICKET_NOT_FOUND",
-        "We couldn't find this.",
-      );
-    }
-    if (!supportStatusFitsKind(ticket.kind, status)) {
-      throw httpError(
-        400,
-        "INVALID_STATUS",
-        "This status does not apply here.",
-      );
-    }
-    if (ticket.status !== status) {
-      await supportRepository.updateTicket(database, ticketId, {
-        status,
-        resolvedAt: status === "resolved" ? new Date() : null,
-      });
-    }
+    await staff.updateTicket(staffId, ticketId, body);
+    return await getTicket(staffId, ticketId, true);
+  }
+
+  async function editNote(
+    staffId: string,
+    ticketId: string,
+    messageId: string,
+    content: string,
+  ): Promise<SupportTicketDetail> {
+    await staff.editNote(staffId, ticketId, messageId, content);
+    return await getTicket(staffId, ticketId, true);
+  }
+
+  async function pinNote(
+    staffId: string,
+    ticketId: string,
+    messageId: string,
+    pinned: boolean,
+  ): Promise<SupportTicketDetail> {
+    await staff.pinNote(staffId, ticketId, messageId, pinned);
+    return await getTicket(staffId, ticketId, true);
+  }
+
+  async function deleteNote(
+    staffId: string,
+    ticketId: string,
+    messageId: string,
+  ): Promise<SupportTicketDetail> {
+    await staff.deleteNote(staffId, ticketId, messageId);
     return await getTicket(staffId, ticketId, true);
   }
 
   async function listForStaff(
+    viewerId: string,
     query: SupportAdminListQuery,
   ): Promise<SupportAdminListResponse> {
     const limit = query.limit ?? 30;
@@ -512,6 +510,15 @@ export function createSupportService({
       status: query.status,
       category: query.category,
       rating: query.rating,
+      active: query.active,
+      assigneeId:
+        query.assignee === undefined
+          ? undefined
+          : query.assignee === "none"
+            ? null
+            : query.assignee === "me"
+              ? viewerId
+              : query.assignee,
       search: query.search,
     };
     const [rows, totalCount] = await Promise.all([
@@ -548,16 +555,28 @@ export function createSupportService({
           avatarUrl: displayAvatarUrl(row.requester_avatar),
           email: row.requester_email,
         },
+        assignee: row.assignee_id
+          ? {
+              id: row.assignee_id,
+              name: row.assignee_name ?? "Former team member",
+              username: row.assignee_username,
+              avatarUrl: displayAvatarUrl(row.assignee_avatar),
+            }
+          : null,
+        priority: row.priority,
       })),
       nextCursor: rows.length > limit && last ? encodeCursor(last) : null,
       totalCount,
     };
   }
 
-  async function statsForStaff(): Promise<SupportAdminStatsResponse> {
-    const [byStatus, breakdown] = await Promise.all([
+  async function statsForStaff(
+    viewerId: string,
+  ): Promise<SupportAdminStatsResponse> {
+    const [byStatus, breakdown, mine] = await Promise.all([
       supportRepository.countByStatus(database),
       supportRepository.feedbackBreakdown(database),
+      staff.assignedToMe(viewerId),
     ]);
     const count = (kind: string, status: string) =>
       Number(
@@ -584,6 +603,7 @@ export function createSupportService({
         waiting: count("problem", "waiting"),
         resolved: count("problem", "resolved"),
         unread: unreadProblems,
+        assignedToMe: mine.problems,
       },
       feedback: {
         new: count("feedback", "new"),
@@ -600,6 +620,7 @@ export function createSupportService({
         confusing: category("confusing"),
         content: category("content"),
         contactable: Number(breakdown.totals?.contactable ?? 0),
+        assignedToMe: mine.feedback,
       },
     };
   }
@@ -722,7 +743,11 @@ export function createSupportService({
     unreadCount,
     getTicket,
     postMessage,
-    updateStatus,
+    updateTicket,
+    editNote,
+    pinNote,
+    deleteNote,
+    listTeam: staff.listTeam,
     listForStaff,
     statsForStaff,
     uploadAttachment,

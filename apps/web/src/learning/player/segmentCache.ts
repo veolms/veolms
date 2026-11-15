@@ -242,12 +242,39 @@ export async function clearSegmentCache(): Promise<void> {
   openChannel()?.postMessage("cleared");
 }
 
+/**
+ * How long a lookup in the cache may take before the segment is fetched
+ * from the network instead. IndexedDB and Cache Storage normally answer in
+ * milliseconds, but a browser whose storage is busy or wedged (a disk that
+ * is full, another tab holding the database) has been seen to answer never,
+ * and every segment then waited on it: a frozen video with no error.
+ */
+const SEGMENT_LOOKUP_LIMIT_MS = 1_500;
+
+function withinLookupLimit<T>(promise: Promise<T>): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), SEGMENT_LOOKUP_LIMIT_MS);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(null);
+      },
+    );
+  });
+}
+
 /** A kept segment's body, or null. */
 async function readSegment(key: string): Promise<ArrayBuffer | null> {
   try {
     // Without the list, what is kept could not be kept in check.
-    if (!(await openSegmentIndex())) return null;
-    const hit = await (await openCache()).match(key);
+    if (!(await withinLookupLimit(openSegmentIndex()))) return null;
+    const hit = await withinLookupLimit(
+      openCache().then((cache) => cache.match(key)),
+    );
     if (!hit) {
       stats.misses += 1;
       return null;

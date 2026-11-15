@@ -4,7 +4,7 @@ import type {
   CreateSupportTicketRequest,
   CreateSupportTicketResponse,
   SupportTicketDetail,
-  SupportTicketStatus,
+  UpdateSupportTicketRequest,
 } from "@veolms/contracts";
 
 import type { ApiError } from "../../lib/api-error";
@@ -53,10 +53,36 @@ export function usePostSupportMessage(ticketId: string, asStaff = false) {
   });
 }
 
-export function useUpdateSupportStatus(ticketId: string) {
+/** Status, assignee, priority or category. The team's counts move too. */
+export function useUpdateSupportTicket(ticketId: string) {
+  const queryClient = useQueryClient();
   const storeTicket = useStoreTicket();
-  return useMutation<SupportTicketDetail, ApiError, SupportTicketStatus>({
-    mutationFn: (status) => supportService.updateStatus(ticketId, status),
+  return useMutation<SupportTicketDetail, ApiError, UpdateSupportTicketRequest>(
+    {
+      mutationFn: (body) => supportService.updateTicket(ticketId, body),
+      onSuccess: (ticket) => {
+        storeTicket(ticket);
+        void queryClient.invalidateQueries({ queryKey: supportKeys.team() });
+      },
+    },
+  );
+}
+
+export type SupportNoteAction =
+  | { type: "edit"; messageId: string; content: string }
+  | { type: "pin"; messageId: string; pinned: boolean }
+  | { type: "delete"; messageId: string };
+
+/** Edit, pin or delete an internal note. */
+export function useSupportNoteAction(ticketId: string) {
+  const storeTicket = useStoreTicket();
+  return useMutation<SupportTicketDetail, ApiError, SupportNoteAction>({
+    mutationFn: (action) =>
+      action.type === "edit"
+        ? supportService.editNote(ticketId, action.messageId, action.content)
+        : action.type === "pin"
+          ? supportService.pinNote(ticketId, action.messageId, action.pinned)
+          : supportService.deleteNote(ticketId, action.messageId),
     onSuccess: storeTicket,
   });
 }

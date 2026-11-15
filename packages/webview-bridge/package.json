@@ -1,0 +1,11 @@
+{
+  "name": "@veolms/webview-bridge",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "version": "0.2.0",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  }
+}

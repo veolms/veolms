@@ -32,8 +32,10 @@ import type { SettingsTab } from "./routing/tabSessionState";
 import { isEditingShortcutTarget } from "./keyboardShortcuts";
 import { SwipeableTabPanel } from "./navigation/SwipeableTabPanel";
 import { authStore, useAuthStore } from "./store/auth.store";
+import { useCapabilities } from "./services/authorization";
 import { getSettingsTabs } from "./settings/settingsTabs";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
+import { SettingsReadingModeSwitch } from "./settings/SettingsReadingModeSwitch";
 import { useSettingsTabShortcuts } from "./settings/useSettingsTabShortcuts";
 import { definePrerenderedBody } from "./routing/prerenderedBodies";
 import "./styles/features/settings/foundation.css";
@@ -165,7 +167,16 @@ export function SettingsPage({
   // session hint, so neither a guest nor an account sees the tab row change
   // on a reload. Once it has answered, a guest's row has only their tabs.
   const isConfirmedGuest = isAuthReady && !isAuthenticated;
-  const visibleTabs = getSettingsTabs(!isConfirmedGuest);
+  // Staff with link.manage also get Links. Added once the page has mounted,
+  // so the first render matches the prerendered tab row.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const capabilities = useCapabilities({
+    enabled: canEditAuthenticatedSettings,
+  });
+  const showLinksTab =
+    mounted && canEditAuthenticatedSettings && capabilities.can("link.manage");
+  const visibleTabs = getSettingsTabs(!isConfirmedGuest, showLinksTab);
   const visibleTabIds = useMemo(
     () => visibleTabs.map(({ id }) => id),
     [visibleTabs],
@@ -340,8 +351,16 @@ export function SettingsPage({
             onNavigateBack={showBackButton ? leaveSettings : undefined}
             copyClassName="settings-page__heading-copy"
           />
-          <div className="settings-page__icon" aria-hidden="true">
-            <GearSix size={25} weight="regular" />
+          {/* On a phone or narrow window only the switch stays (the gear
+              is decoration), so the heading's text keeps its room. */}
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            <SettingsReadingModeSwitch />
+            <div
+              className="settings-page__icon max-md:hidden!"
+              aria-hidden="true"
+            >
+              <GearSix size={25} weight="regular" />
+            </div>
           </div>
         </div>
 

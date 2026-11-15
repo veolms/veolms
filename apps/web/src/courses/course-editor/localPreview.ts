@@ -147,11 +147,7 @@ export function buildLocalPreviewData({
         id: les.id,
         title: les.title,
         description: les.description || null,
-        contentType: (les.contentType === "audio"
-          ? "video"
-          : les.contentType === "image"
-            ? "document"
-            : les.contentType) as "video" | "document" | "quiz",
+        contentType: les.contentType,
         contentMediaId: les.contentMediaId ?? null,
         durationSeconds: les.durationSeconds,
         position: lesIdx,

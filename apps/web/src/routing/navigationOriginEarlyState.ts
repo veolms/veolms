@@ -97,7 +97,7 @@ function applyNavigationOrigin(keys: {
       // The menu's last element: every item before it has been parsed.
       if (!document.querySelector("[data-nav-end-space]")) return false;
       const items = document.querySelectorAll(
-        "#courses-sidebar-nav-scrollport > button",
+        "#courses-sidebar-nav-scrollport > a",
       );
       let match: Element | null = null;
       items.forEach((item) => {

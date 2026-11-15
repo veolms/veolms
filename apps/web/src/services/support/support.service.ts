@@ -6,9 +6,10 @@ import type {
   SupportAdminStatsResponse,
   SupportAttachment,
   SupportTicketDetail,
+  SupportTeamResponse,
   SupportTicketListResponse,
-  SupportTicketStatus,
   SupportUnreadResponse,
+  UpdateSupportTicketRequest,
 } from "@veolms/contracts";
 
 import api, { getApiRequestUrl } from "../../lib/api-client";
@@ -50,11 +51,43 @@ export const supportService = {
       { params: asStaff ? { as: "staff" } : undefined },
     ),
 
-  updateStatus: (
+  /** Status, assignee, priority or category: staff only. */
+  updateTicket: (
     ticketId: string,
-    status: SupportTicketStatus,
+    body: UpdateSupportTicketRequest,
   ): Promise<SupportTicketDetail> =>
-    api.patch<SupportTicketDetail>(`/support/tickets/${ticketId}`, { status }),
+    api.patch<SupportTicketDetail>(`/support/tickets/${ticketId}`, body),
+
+  editNote: (
+    ticketId: string,
+    messageId: string,
+    content: string,
+  ): Promise<SupportTicketDetail> =>
+    api.patch<SupportTicketDetail>(
+      `/support/tickets/${ticketId}/notes/${messageId}`,
+      { content },
+    ),
+
+  pinNote: (
+    ticketId: string,
+    messageId: string,
+    pinned: boolean,
+  ): Promise<SupportTicketDetail> =>
+    api.put<SupportTicketDetail>(
+      `/support/tickets/${ticketId}/notes/${messageId}/pin`,
+      { pinned },
+    ),
+
+  deleteNote: (
+    ticketId: string,
+    messageId: string,
+  ): Promise<SupportTicketDetail> =>
+    api.delete<SupportTicketDetail>(
+      `/support/tickets/${ticketId}/notes/${messageId}`,
+    ),
+
+  team: (): Promise<SupportTeamResponse> =>
+    api.get<SupportTeamResponse>("/support/admin/team"),
 
   listForStaff: (
     filters: SupportAdminFilters,

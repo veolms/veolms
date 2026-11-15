@@ -205,27 +205,21 @@ export function useCurriculumState({
       (section) => section.id === requestedSectionId && section.isExpanded,
     );
     if (targetIndex >= 0 && !targetAlreadyExpanded) {
-      sectionScrollDelayRef.current = currentSections.some(
-        (section, index) =>
-          index < targetIndex &&
-          section.id !== requestedSectionId &&
-          section.isExpanded,
-      )
-        ? 300
-        : 0;
+      // Nothing above it collapses, so it can scroll into view at once.
+      sectionScrollDelayRef.current = 0;
     } else if (targetIndex < 0) {
       sectionScrollDelayRef.current = 300;
     }
 
+    // Open the section the link names; sections already open stay open.
     setSections((previous) => {
       let changed = false;
       const next = previous.map((section) => {
-        const shouldExpand = section.id === requestedSectionId;
-        if (section.isExpanded === shouldExpand) {
+        if (section.id !== requestedSectionId || section.isExpanded) {
           return section;
         }
         changed = true;
-        return { ...section, isExpanded: shouldExpand };
+        return { ...section, isExpanded: true };
       });
       sectionsRef.current = changed ? next : previous;
       return changed ? next : previous;

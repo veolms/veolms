@@ -1,20 +1,26 @@
+import { PUSH_ACTION_DATA_KEYS } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
 
 import type { FcmClient, FcmOutcome } from "./fcm.client.ts";
+import type { PushActionTokenService } from "./push-action-tokens.service.ts";
 import type { PushApp, PushAppRegistry } from "./push-apps.ts";
 import * as deliveryRepository from "./push-deliveries.repository.ts";
 import * as deviceRepository from "./push-devices.repository.ts";
 import {
   buildFcmMessage,
+  buildWebPushMessage,
   pushPayloadSchema,
   type PushPayload,
   type PushTargetField,
 } from "./push-message.ts";
+import type { WebPushClient } from "./web-push.client.ts";
 
 /**
- * Sends queued pushes (push_deliveries) to each of the user's installs.
+ * Sends queued pushes (push_deliveries) to each of the user's installs:
+ * phones through Firebase, browsers through their own push service (Web
+ * Push). Browsers get chat messages only; the bell has its own stream.
  *
  * Per install, Firebase's answer decides: delivered → done; dead (app
  * removed, FID expired, other Firebase project) → the install is deleted;
@@ -45,6 +51,8 @@ export interface PushSendResult {
 }
 
 export interface PushSender {
+  /** Browsers are sent to too (web push is on and has its keys). */
+  readonly sendsToBrowsers: boolean;
   process(): Promise<PushSendResult>;
   /** Hourly upkeep: stale and signed-out installs, old queue rows. */
   maintain(
@@ -89,16 +97,22 @@ export function createPushSender({
   database,
   apps,
   fcm,
+  web = null,
   logger,
   sessions,
+  actionTokens,
   config,
   now = () => new Date(),
 }: {
   database: Kysely<Database>;
   apps: PushAppRegistry;
   fcm: FcmClient;
+  /** Browser pushes; null while web push is off or has no keys. */
+  web?: WebPushClient | null;
   logger: FastifyBaseLogger;
   sessions?: RevokedSessionLookup;
+  /** Reply / mark-as-read tokens in chat pushes to phones. */
+  actionTokens?: Pick<PushActionTokenService, "issueForChatPush" | "deleteOld">;
   config: {
     batchSize: number;
     leaseSeconds: number;
@@ -126,7 +140,7 @@ export function createPushSender({
     if (!already) {
       log.error(
         { applicationId, reason, keyProblem: app?.problem ?? null },
-        "Push paused for this app: its Firebase key was refused or is missing",
+        "Push paused for this app: its Firebase or VAPID key was refused or is missing",
       );
     }
   }
@@ -164,6 +178,85 @@ export function createPushSender({
     };
   }
 
+  /**
+   * A chat push to an Android phone carries its own push action token
+   * (reply / mark as read from the notification), issued now, for this
+   * phone and its login. Without one (no login on record, push actions
+   * off, an error) the push goes out without, and the app shows no buttons.
+   * A message request gets none: accepting a stranger from the notification
+   * shade is too easy, so it only opens the chat.
+   */
+  async function withActionToken(
+    payload: PushPayload,
+    device: DeviceRow,
+  ): Promise<PushPayload> {
+    if (
+      !actionTokens ||
+      payload.kind !== "chat_message" ||
+      payload.data.isRequest === "true" ||
+      device.platform !== "android" ||
+      !device.session_id
+    ) {
+      return payload;
+    }
+    const roomId = payload.data.roomId;
+    const seq = Number(payload.data.seq);
+    if (!roomId || !Number.isSafeInteger(seq)) return payload;
+    const issued = await actionTokens
+      .issueForChatPush({
+        userId: device.user_id,
+        deviceId: device.id,
+        sessionId: device.session_id,
+        roomId,
+        seq,
+      })
+      .catch((error: unknown) => {
+        log.warn({ err: error }, "Could not issue a push action token");
+        return null;
+      });
+    if (!issued) return payload;
+    return {
+      ...payload,
+      data: {
+        ...payload.data,
+        [PUSH_ACTION_DATA_KEYS.token]: issued.token,
+        [PUSH_ACTION_DATA_KEYS.expiresAt]: issued.expiresAt.toISOString(),
+      },
+    };
+  }
+
+  async function sendToBrowser(task: {
+    delivery: deliveryRepository.ClaimedPushDelivery;
+    payload: PushPayload;
+    device: DeviceRow;
+  }): Promise<FcmOutcome> {
+    const { device } = task;
+    if (!web || isPaused(device.application_id)) {
+      return { ok: false, kind: "auth", error: "Web push paused." };
+    }
+    if (!device.web_endpoint || !device.web_p256dh || !device.web_auth) {
+      return { ok: false, kind: "dead", error: "No subscription saved." };
+    }
+    const message = buildWebPushMessage({
+      payload: task.payload,
+      expiresAt: task.delivery.expires_at,
+      now: now(),
+    });
+    return await web.send(
+      {
+        endpoint: device.web_endpoint,
+        p256dh: device.web_p256dh,
+        auth: device.web_auth,
+      },
+      message.json,
+      {
+        ttlSeconds: message.ttlSeconds,
+        urgency: message.urgency,
+        topic: message.topic,
+      },
+    );
+  }
+
   async function process(): Promise<PushSendResult> {
     const result: PushSendResult = {
       sent: 0,
@@ -187,6 +280,7 @@ export function createPushSender({
     const loaded = await deviceRepository.listDevicesForUsers(
       database,
       claimed.map((delivery) => delivery.user_id),
+      { includeWeb: web !== null },
     );
     const { kept: devices, removed } = await dropSignedOut(loaded);
     result.devicesRemoved += removed;
@@ -238,7 +332,11 @@ export function createPushSender({
         ? new Set(delivery.pending_device_ids)
         : null;
       const targets = (devicesByUser.get(delivery.user_id) ?? []).filter(
-        (device) => pending === null || pending.has(device.id),
+        (device) =>
+          (pending === null || pending.has(device.id)) &&
+          (device.platform !== "web" || delivery.source === "chat") &&
+          // "Chat read" clears what the Android app drew itself.
+          (parsed.data.kind !== "chat_read" || device.platform === "android"),
       );
       if (targets.length === 0) {
         // Never started: the user has no install now. Started: the
@@ -267,6 +365,9 @@ export function createPushSender({
       tasks,
       config.concurrency,
       async (task): Promise<FcmOutcome> => {
+        if (task.device.platform === "web") {
+          return await sendToBrowser(task);
+        }
         const account = task.app?.serviceAccount;
         if (!account || isPaused(task.device.application_id)) {
           return {
@@ -280,7 +381,7 @@ export function createPushSender({
         return await fcm.send(
           account,
           buildFcmMessage({
-            payload: task.payload,
+            payload: await withActionToken(task.payload, task.device),
             fid: task.device.fid,
             platform: task.device.platform,
             targetField: config.targetField,
@@ -433,6 +534,12 @@ export function createPushSender({
       database,
       new Date(at.getTime() - retentionDays * 24 * 60 * 60 * 1000),
     );
+    const tokensRemoved = actionTokens
+      ? await actionTokens.deleteOld().catch((error: unknown) => {
+          log.warn({ err: error }, "Could not delete old push action tokens");
+          return 0;
+        })
+      : 0;
 
     // Installs whose login was signed out but that got no push since (the
     // send-time check catches the rest): before old sessions are purged
@@ -466,11 +573,14 @@ export function createPushSender({
       }
     }
 
-    if (devicesRemoved > 0 || deliveriesRemoved > 0) {
-      log.info({ devicesRemoved, deliveriesRemoved }, "Push upkeep done");
+    if (devicesRemoved > 0 || deliveriesRemoved > 0 || tokensRemoved > 0) {
+      log.info(
+        { devicesRemoved, deliveriesRemoved, tokensRemoved },
+        "Push upkeep done",
+      );
     }
     return { devicesRemoved, deliveriesRemoved };
   }
 
-  return { process, maintain };
+  return { sendsToBrowsers: web !== null, process, maintain };
 }

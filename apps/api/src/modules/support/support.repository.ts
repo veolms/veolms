@@ -175,11 +175,15 @@ export async function listMessages(
       "m.internal",
       "m.content",
       "m.created_at",
+      "m.updated_at",
+      "m.pinned",
       "author.display_name as author_name",
       "author.username as author_username",
       "author.avatar_data_url as author_avatar",
     ])
-    .where("m.ticket_id", "=", ticketId);
+    .where("m.ticket_id", "=", ticketId)
+    // A deleted note is kept for the record, never shown.
+    .where("m.deleted_at", "is", null);
   if (!includeInternal) query = query.where("m.internal", "=", false);
   return await query.orderBy("m.created_at").orderBy("m.id").execute();
 }
@@ -335,6 +339,7 @@ export async function lockTicketStatus(
 const replyCount = sql<string>`(
   select count(*) from support_messages m
   where m.ticket_id = t.id and m.author_role = 'staff' and not m.internal
+    and m.deleted_at is null
 )`;
 
 const attachmentCount = sql<string>`(
@@ -395,6 +400,10 @@ export interface AdminTicketFilters {
   status?: SupportTicketStatus;
   category?: SupportTicketCategory;
   rating?: number;
+  /** A person's id, or null for nobody. */
+  assigneeId?: string | null;
+  /** Leave out resolved reports. */
+  active?: boolean;
   search?: string;
 }
 
@@ -405,8 +414,15 @@ function adminTicketsQuery(
   let query = database
     .selectFrom("support_tickets as t")
     .innerJoin("users as requester", "requester.id", "t.user_id")
+    .leftJoin("users as assignee", "assignee.id", "t.assignee_id")
     .where("t.kind", "=", filters.kind);
   if (filters.status) query = query.where("t.status", "=", filters.status);
+  if (filters.active) query = query.where("t.status", "<>", "resolved");
+  if (filters.assigneeId === null) {
+    query = query.where("t.assignee_id", "is", null);
+  } else if (filters.assigneeId) {
+    query = query.where("t.assignee_id", "=", filters.assigneeId);
+  }
   if (filters.category) {
     query = query.where("t.category", "=", filters.category);
   }
@@ -452,6 +468,11 @@ export async function listAdminTickets(
     "t.created_at",
     "t.last_message_at",
     "t.staff_unread as unread",
+    "t.priority",
+    "t.assignee_id",
+    "assignee.display_name as assignee_name",
+    "assignee.username as assignee_username",
+    "assignee.avatar_data_url as assignee_avatar",
     replyCount.as("reply_count"),
     attachmentCount.as("attachment_count"),
     ...requesterColumns,
