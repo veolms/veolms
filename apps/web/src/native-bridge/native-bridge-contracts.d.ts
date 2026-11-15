@@ -4,11 +4,41 @@
  * Do not edit directly unless you know what you are doing.
  */
 
+export interface GoogleSignInSupportRequest {
+  clientId?: string | null;
+}
+
+export interface GoogleSignInSupport {
+  supported: boolean;
+  status?: GoogleSignInStatus | null;
+}
+
+export interface GoogleSignInStartRequest {
+  clientId?: string | null;
+  nonce?: string | null;
+  mode?: GoogleSignInMode | null;
+}
+
+export interface GoogleSignInResult {
+  requestId?: string | null;
+  status: GoogleSignInStatus;
+  success: boolean;
+  fallback: boolean;
+  message?: string | null;
+  data?: GoogleSignInData | null;
+}
+
+export interface GoogleSignInTakeRequest {
+  requestId?: string | null;
+}
+
 export interface NotificationLaunchData {
   deepLink?: string | null;
   notificationId?: string | null;
   type?: string | null;
 }
+
+export type NotificationPermissionState = "granted" | "denied";
 
 export interface PlatformInfo {
   name: Platform;
@@ -17,10 +47,44 @@ export interface PlatformInfo {
   applicationId: string;
 }
 
+export type GoogleSignInStatus =
+  | "PENDING"
+  | "SUCCESS"
+  | "CANCELLED"
+  | "NO_ACCOUNT"
+  | "TIMEOUT"
+  | "INTERRUPTED"
+  | "BUSY"
+  | "NOT_SUPPORTED"
+  | "NOT_CONFIGURED"
+  | "UNAVAILABLE"
+  | "INVALID_REQUEST"
+  | "FAILED";
+
+export type GoogleSignInMode = "BUTTON" | "AUTO";
+
+export interface GoogleSignInData {
+  idToken: string;
+}
+
 export type Platform = "ANDROID" | "IOS";
+
+export interface IAuthContract {
+  getGoogleSignInSupport(
+    request: GoogleSignInSupportRequest,
+  ): Promise<GoogleSignInSupport>;
+  startGoogleSignIn(
+    request: GoogleSignInStartRequest,
+  ): Promise<GoogleSignInResult>;
+  takeGoogleSignInResult(
+    request: GoogleSignInTakeRequest,
+  ): Promise<GoogleSignInResult>;
+  signedOut(): Promise<void>;
+}
 
 export interface IFirebaseContract {
   getInstallationId(): Promise<string>;
+  getPreviousInstallationId(): Promise<string | null>;
 }
 
 export interface INotificationsContract {
@@ -33,6 +97,9 @@ export interface INotificationsContract {
     roomId?: string | null,
     readSeq?: number | null,
   ): Promise<void>;
+  signedOut(): Promise<void>;
+  getPermissionState(): Promise<NotificationPermissionState>;
+  requestPermission(): Promise<NotificationPermissionState>;
 }
 
 export interface RootBridgeContract {
@@ -40,6 +107,7 @@ export interface RootBridgeContract {
 }
 
 export interface NativeBridgeContract extends RootBridgeContract {
+  readonly auth: IAuthContract;
   readonly firebase: IFirebaseContract;
   readonly notifications: INotificationsContract;
 }

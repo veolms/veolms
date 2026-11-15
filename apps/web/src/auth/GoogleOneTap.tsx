@@ -133,7 +133,7 @@ const ONE_TAP_FAILED_MESSAGE = "Google sign-in failed. Please try again.";
 
 // Token-verification failures carry internal detail ("audience is invalid"),
 // so only pass through messages the user can act on.
-function toOneTapErrorMessage(error: ApiError): string {
+export function toOneTapErrorMessage(error: ApiError): string {
   if (error.status === 429) {
     return "Too many sign-in attempts. Please wait a minute and try again.";
   }
