@@ -4,7 +4,7 @@ VeoLMS is an open-source, self-hostable learning management system for educators
 
 The project is built around the idea that educators should have control over their brand, content, users, and data.
 
-[Website](https://veolms.org/) · [Live demo](https://dev.veolms.org/) · [Development setup](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [License](LICENSE)
+[Website](https://veolms.org/) · [Live demo](https://procodrr.com/) · [Development setup](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [License](LICENSE)
 
 ## What you can build
 
