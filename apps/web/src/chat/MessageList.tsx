@@ -32,6 +32,8 @@ export interface MessageFocus {
 }
 
 /** Puts a message in the middle of the list. */
+/** A scroll this soon after the reader's touch, wheel or key is theirs. */
+const READER_SCROLL_MS = 3_000;
 /**
  * Where each chat was left this visit: the message at the top of the view
  * and how far down it sat, or the bottom. Coming back to the chat (from a
@@ -300,6 +302,7 @@ export function MessageList({
     observer.observe(content);
     // The reader taking over ends the hold at the divider or a message.
     const release = () => {
+      readerScrolledAtRef.current = Date.now();
       if (anchorRef.current !== "bottom") anchorRef.current = null;
     };
     box.addEventListener("wheel", release, { passive: true });
@@ -382,9 +385,12 @@ export function MessageList({
     else readIfInView();
   }, [lastSeq, onAtBottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Where the chat was left: noted shortly after each scroll,
-  // and once more as it closes.
+  // Where the chat was left: noted shortly after the reader scrolls (a
+  // touch, the wheel, a key or a click on the list, momentum included). A
+  // scroll the page makes is not the reader's: leaving the chat resizes
+  // the list, and the scroll that caused read as "at the bottom".
   const placeFrameRef = useRef<number | null>(null);
+  const readerScrolledAtRef = useRef(0);
   function rememberPlace() {
     const box = scrollRef.current;
     if (!box || !initialisedRef.current) return;
@@ -399,6 +405,7 @@ export function MessageList({
     if (top) leftAt.set(roomId, top);
   }
   function rememberPlaceSoon() {
+    if (Date.now() - readerScrolledAtRef.current > READER_SCROLL_MS) return;
     if (placeFrameRef.current !== null) return;
     placeFrameRef.current = window.setTimeout(() => {
       placeFrameRef.current = null;
@@ -412,7 +419,6 @@ export function MessageList({
       if (placeFrameRef.current !== null) {
         window.clearTimeout(placeFrameRef.current);
       }
-      rememberPlaceRef.current();
     },
     [],
   );
