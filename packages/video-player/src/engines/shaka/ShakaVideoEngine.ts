@@ -59,6 +59,7 @@ import type {
   ShakaPlayerLike,
   ShakaPreloadManagerLike,
   ShakaRequestContextLike,
+  ShakaRequestFilterLike,
   ShakaResponseFilterLike,
   ShakaRuntimeLike,
   ShakaRuntimeLoader,
@@ -185,6 +186,22 @@ const WATCHDOG_BUFFERED_AHEAD_SECONDS = 2;
 const WATCHDOG_FROZEN_PLAYHEAD_MS = 8_000;
 const WATCHDOG_WAITING_FOR_KEY_MS = 8_000;
 const WATCHDOG_NO_FRAMES_MS = 6_000;
+/**
+ * A playing video with nothing buffered in front of it whose streaming has
+ * gone quiet: no segment asked for or received for this long (a request
+ * still under way counts as activity for `WATCHDOG_REQUEST_ALIVE_MS`).
+ * Production showed it on fast connections (43 Mbps, the tab's network at
+ * zero): the loader stayed until the page was reloaded. First the stream
+ * is nudged (`retryStreaming` and a seek to where it stands); if it is
+ * still starved `WATCHDOG_STARVED_RELOAD_MS` later, the video is loaded
+ * again where it was, as after a decoder failure.
+ */
+const WATCHDOG_STARVED_MS = 10_000;
+const WATCHDOG_STARVED_RELOAD_MS = 8_000;
+const WATCHDOG_REQUEST_ALIVE_MS = 30_000;
+// Under what the frozen-playhead check needs (WATCHDOG_BUFFERED_AHEAD_SECONDS):
+// Shaka holds a video still with up to its rebuffering goal (1.5 s) in hand.
+const WATCHDOG_STARVED_AHEAD_SECONDS = WATCHDOG_BUFFERED_AHEAD_SECONDS;
 /**
  * How long after a learner's seek, and how many times, a forward gap jump
  * past the place they sought to is undone (see `keepLearnerSeekTarget`).
@@ -667,9 +684,16 @@ export function adaptiveBufferingGoal(options: {
   bufferBehind: number;
   bandwidth: number | null;
   bitrate: number | null;
+  /**
+   * The highest bitrate the video may switch up to: the memory budget is
+   * reckoned at it, so a switch up never overfills the browser's buffer
+   * (an overfilled one refuses segments and can hold playback still).
+   */
+  maxBitrate?: number | null;
   remaining: number;
 }): number {
   const { baseGoal, bufferBehind, bandwidth, bitrate, remaining } = options;
+  const budgetBitrate = Math.max(bitrate ?? 0, options.maxBitrate ?? 0);
   if (!bandwidth || !bitrate || bandwidth <= 0 || bitrate <= 0) return baseGoal;
   const ratio = bandwidth / bitrate;
   const wanted =
@@ -678,7 +702,8 @@ export function adaptiveBufferingGoal(options: {
       : ratio >= ADAPTIVE_BUFFER_GOOD_RATIO
         ? ADAPTIVE_BUFFER_GOOD_SECONDS
         : baseGoal;
-  const fits = (ADAPTIVE_BUFFER_MEMORY_BYTES * 8) / bitrate - bufferBehind;
+  const fits =
+    (ADAPTIVE_BUFFER_MEMORY_BYTES * 8) / budgetBitrate - bufferBehind;
   const goal = Math.min(
     wanted,
     fits,
@@ -764,6 +789,20 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #lastFrameCount = -1;
   #framesStillSince = 0;
   #waitingForKeySince = 0;
+  /** Starved with nothing ahead since (see WATCHDOG_STARVED_MS); 0 if not. */
+  #starvedSince = 0;
+  /** When the starved stream was nudged; 0 if it has not been. */
+  #starvedNudgedAt = 0;
+  /** The playhead the starved check last saw. */
+  #starvedLastTime = -1;
+  /** The newest segment request asked for, and the newest answered. */
+  #lastSegmentRequestAt = 0;
+  #lastSegmentResponseAt = 0;
+  #segmentActivityFilters: {
+    player: ShakaPlayerLike;
+    request: ShakaRequestFilterLike;
+    response: ShakaResponseFilterLike;
+  } | null = null;
   #stopWatchingSpeculativePreloads: (() => void) | null = null;
   /** Stops growing the buffer with the connection (see `growBufferWithConnection`). */
   #stopAdaptiveBuffer: (() => void) | null = null;
@@ -966,6 +1005,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         bufferBehind: Number.isFinite(bufferBehind) ? bufferBehind : 30,
         bandwidth,
         bitrate: active?.bandwidth ?? null,
+        maxBitrate: player
+          .getVariantTracks()
+          .reduce((top, track) => Math.max(top, track.bandwidth ?? 0), 0),
         remaining: media.duration - media.currentTime,
       });
       const current = this.#adaptiveGoal ?? baseGoal;
@@ -2368,6 +2410,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#lastPlayheadTime = -1;
     this.#lastFrameCount = -1;
     this.#waitingForKeySince = 0;
+    this.#starvedSince = 0;
+    this.#starvedNudgedAt = 0;
+    this.watchSegmentActivity();
     media.addEventListener("waitingforkey", this.handleWaitingForKey);
     this.#watchdog = window.setInterval(
       () => this.watchPlayback(),
@@ -2375,7 +2420,55 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     );
   }
 
+  /**
+   * Notes when segments are asked for and answered, for the starved-stream
+   * check (WATCHDOG_STARVED_MS). A failed request never reaches the
+   * response filter; the next attempt is a new request, so it still counts.
+   */
+  private watchSegmentActivity(): void {
+    this.stopWatchingSegmentActivity();
+    const player = this.#player;
+    const runtime = this.#runtime;
+    const networking = player?.getNetworkingEngine();
+    const segmentType = runtime?.net?.NetworkingEngine?.RequestType?.SEGMENT;
+    if (!player || !networking || typeof segmentType !== "number") return;
+    const now = Date.now();
+    this.#lastSegmentRequestAt = now;
+    this.#lastSegmentResponseAt = now;
+    const request: ShakaRequestFilterLike = (type) => {
+      if (type === segmentType) this.#lastSegmentRequestAt = Date.now();
+    };
+    const response: ShakaResponseFilterLike = (type) => {
+      if (type === segmentType) this.#lastSegmentResponseAt = Date.now();
+    };
+    networking.registerRequestFilter(request);
+    networking.registerResponseFilter(response);
+    this.#segmentActivityFilters = { player, request, response };
+  }
+
+  private stopWatchingSegmentActivity(): void {
+    const filters = this.#segmentActivityFilters;
+    if (!filters) return;
+    this.#segmentActivityFilters = null;
+    const networking = filters.player.getNetworkingEngine();
+    networking?.unregisterRequestFilter(filters.request);
+    networking?.unregisterResponseFilter(filters.response);
+  }
+
+  /** Whether segment streaming has gone quiet (see WATCHDOG_STARVED_MS). */
+  private segmentStreamingQuiet(now: number): boolean {
+    const requested = this.#lastSegmentRequestAt;
+    const answered = this.#lastSegmentResponseAt;
+    // A request asked for after the last answer is still under way, unless
+    // it has been a very long time.
+    if (requested > answered) {
+      return now - requested >= WATCHDOG_REQUEST_ALIVE_MS;
+    }
+    return now - Math.max(requested, answered) >= WATCHDOG_STARVED_MS;
+  }
+
   private stopWatchdog(): void {
+    this.stopWatchingSegmentActivity();
     if (this.#watchdog !== null) {
       window.clearInterval(this.#watchdog);
       this.#watchdog = null;
@@ -2410,6 +2503,45 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       return;
     }
     const now = Date.now();
+    // Nothing in front of the playhead and the stream asking for nothing:
+    // waiting would never end. Online only; offline is the network's. Shaka
+    // holds a starved video at rate 0, so play asked for is enough here.
+    const playRequested = !media.paused && !media.ended;
+    const starvedTime = media.currentTime;
+    const starvedMoved = starvedTime !== this.#starvedLastTime;
+    this.#starvedLastTime = starvedTime;
+    const starvedAhead = bufferedAheadSeconds(media);
+    if (
+      !playRequested ||
+      starvedMoved ||
+      starvedAhead >= WATCHDOG_STARVED_AHEAD_SECONDS ||
+      browserOffline() ||
+      !this.segmentStreamingQuiet(now)
+    ) {
+      this.#starvedSince = 0;
+      this.#starvedNudgedAt = 0;
+    } else if (this.#starvedSince === 0) {
+      this.#starvedSince = now;
+    } else if (
+      this.#starvedNudgedAt === 0 &&
+      now - this.#starvedSince >= WATCHDOG_STARVED_MS
+    ) {
+      this.#starvedNudgedAt = now;
+      this.nudgeStarvedStream(media, starvedAhead);
+      return;
+    } else if (
+      this.#starvedNudgedAt !== 0 &&
+      now - this.#starvedNudgedAt >= WATCHDOG_STARVED_RELOAD_MS
+    ) {
+      this.#starvedSince = 0;
+      this.#starvedNudgedAt = 0;
+      this.recoverFromFreeze("STREAM_STARVED", {
+        ahead: starvedAhead,
+        readyState: media.readyState,
+      });
+      return;
+    }
+
     const wantsToPlay = !media.paused && !media.ended && media.playbackRate > 0;
     if (!wantsToPlay) {
       this.#playheadStillSince = 0;
@@ -2479,6 +2611,26 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#framesStillSince = 0;
       this.recoverFromFreeze("NO_VIDEO_FRAMES", { frames });
     }
+  }
+
+  /**
+   * The first answer to a starved stream: ask Shaka to stream again (it
+   * may have stopped after a failure it did not report) and seek to where
+   * the playhead stands, which makes it look again at what is missing.
+   */
+  private nudgeStarvedStream(media: HTMLMediaElement, ahead: number): void {
+    markPlayback("watchdog", {
+      code: "STREAM_STARVED_NUDGE",
+      ahead,
+      readyState: media.readyState,
+    });
+    try {
+      this.#player?.retryStreaming?.(0);
+    } catch {
+      // Nothing to retry: the seek below still asks for the segments.
+    }
+    const time = media.currentTime;
+    media.currentTime = time;
   }
 
   /** A freeze the watchdog found, mended as a decoder failure is. */

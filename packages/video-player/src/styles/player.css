@@ -194,6 +194,18 @@
   visibility: hidden;
 }
 
+/*
+ * A hidden spinner does not turn. Its endless rotation kept running under
+ * `visibility: hidden` the whole time a lesson played, so the browser made
+ * a frame for it 60 times a second; without a graphics card (or with a
+ * weak one) every frame is drawn by the processor (measured 2026-11-15).
+ */
+[data-video-player-buffering-overlay][data-video-player-buffering-visible="false"]
+  .video-player-buffering-spinner__arc {
+  animation-play-state: paused;
+  will-change: auto;
+}
+
 [data-playback-feedback-surface] {
   animation-name: video-player-playback-feedback;
   animation-duration: var(--video-player-playback-feedback-duration, 850ms);
