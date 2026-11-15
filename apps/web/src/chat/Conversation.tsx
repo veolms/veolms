@@ -723,6 +723,7 @@ export function Conversation({
         <div className="chat-wallpaper" aria-hidden="true" />
         {thread.data ? (
           <MessageList
+            roomId={room.id}
             thread={thread.data}
             outgoing={outgoing}
             ctx={ctx}

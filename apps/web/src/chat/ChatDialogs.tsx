@@ -107,6 +107,35 @@ export function ClearChatDialog({
   );
 }
 
+/** WhatsApp's "Discard unsent message?", asked when Escape leaves picked files. */
+export function DiscardFilesDialog({
+  count,
+  onDiscard,
+  onClose,
+}: {
+  count: number;
+  onDiscard: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <ChatDialog title="Discard unsent message?" onClose={onClose}>
+      <p className="m-0 text-[0.9rem] leading-relaxed text-(--text-secondary)">
+        {count === 1
+          ? "The file you picked won't be sent."
+          : `The ${count} files you picked won't be sent.`}
+      </p>
+      <div className="mt-6 flex justify-end gap-2">
+        <button type="button" className={pill} onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className={dangerPill} onClick={onDiscard}>
+          Discard
+        </button>
+      </div>
+    </ChatDialog>
+  );
+}
+
 /**
  * WhatsApp's "Mute notifications": 8 hours, 1 week or always. Muted
  * chats make no sound or notification on any of your devices; the chat
