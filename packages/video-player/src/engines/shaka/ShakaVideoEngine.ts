@@ -199,7 +199,9 @@ const WATCHDOG_NO_FRAMES_MS = 6_000;
 const WATCHDOG_STARVED_MS = 10_000;
 const WATCHDOG_STARVED_RELOAD_MS = 8_000;
 const WATCHDOG_REQUEST_ALIVE_MS = 30_000;
-const WATCHDOG_STARVED_AHEAD_SECONDS = 0.5;
+// Under what the frozen-playhead check needs (WATCHDOG_BUFFERED_AHEAD_SECONDS):
+// Shaka holds a video still with up to its rebuffering goal (1.5 s) in hand.
+const WATCHDOG_STARVED_AHEAD_SECONDS = WATCHDOG_BUFFERED_AHEAD_SECONDS;
 /**
  * How long after a learner's seek, and how many times, a forward gap jump
  * past the place they sought to is undone (see `keepLearnerSeekTarget`).
