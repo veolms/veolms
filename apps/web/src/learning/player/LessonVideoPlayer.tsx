@@ -122,12 +122,22 @@ import {
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
 import { canAffordSpeculativePlayback } from "./playbackHeadroom";
+import { usePlayerBuildRefresh } from "./usePlayerBuildRefresh";
+
 import { sendVideoProblemReport } from "./videoProblemReport";
 import { useAuthStore } from "../../store/auth.store";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import type { PlayerErrorReport } from "@veolms/video-player";
 import type { LessonStagePlan } from "../lessonWithoutVideo";
+
+/** Whether the lesson's video is not playing (none on screen counts too). */
+function isLessonVideoPaused(): boolean {
+  const video = document.querySelector<HTMLVideoElement>(
+    "[data-video-player-root] video",
+  );
+  return !video || video.paused;
+}
 
 /**
  * The stream has been waiting out failures for this many retries in a row
@@ -973,16 +983,17 @@ export function LessonVideoPlayer({
   // come (see `streamingretry`); 0 once one does, or a video is loaded.
   const [streamingRetries, setStreamingRetries] = useState(0);
   const reconnecting = streamingRetries >= RECONNECTING_NOTICE_AFTER_RETRIES;
-  // A small device prepares no second video out of sight: the standby is
-  // a whole second media pipeline (see deviceTier.ts).
-  // A second, hidden player: only with room to spare (see
-  // canAffordSpeculativePlayback, which covers low-memory devices too).
+  // A second video prepared out of sight is a whole second media pipeline:
+  // only with room to spare (see canAffordSpeculativePlayback, which covers
+  // low-memory devices and slow links).
   const [withStandby] = useState(() => canAffordSpeculativePlayback());
   const effectiveLessonId = lessonId ?? playbackBootstrap?.lessonId ?? null;
   const effectiveLessonIdRef = useRef(effectiveLessonId);
   useEffect(() => {
     effectiveLessonIdRef.current = effectiveLessonId;
   }, [effectiveLessonId]);
+  // A tab open across a deploy moves onto the new player between lessons.
+  usePlayerBuildRefresh(effectiveLessonId, isLessonVideoPaused);
 
   useEffect(() => {
     const courseKey = watchTimeCourseKey;
