@@ -881,7 +881,8 @@ export default function AcademyLayout() {
           };
         }
         const sourcePath = locationPathRef.current;
-        const sourcePosition = readApplicationScrollPosition();
+        const sourcePosition =
+          options?.sourceScrollPosition ?? readApplicationScrollPosition();
         const routeChanged =
           normalizeNavigationPath(path) !==
           normalizeNavigationPath(locationPathRef.current);
@@ -1967,6 +1968,10 @@ export default function AcademyLayout() {
       lessonPath: activePlayer?.lessonPath ?? learningMiniPlayer?.lessonPath,
     });
     if (!lessonPath) return;
+    // Read before the motion below changes the page (see
+    // `sourceScrollPosition`): read after it, this one measure restyled the
+    // whole page being left, 1.7 s on a slow computer.
+    const sourceScrollPosition = readApplicationScrollPosition();
     // The video opens at its full height, not at one it had been dragged
     // down to before it was minimized.
     resetLessonPlayerHeight();
@@ -2006,7 +2011,7 @@ export default function AcademyLayout() {
     const alreadyOnLearningRoute =
       isLearningRoutePath(locationPathRef.current) ||
       isLearningRoutePath(renderedLocationPathRef.current);
-    navigateTo(lessonPath, { exact: true });
+    navigateTo(lessonPath, { exact: true, sourceScrollPosition });
     if (alreadyOnLearningRoute) {
       commitPersistentPlayerRestore();
     }
