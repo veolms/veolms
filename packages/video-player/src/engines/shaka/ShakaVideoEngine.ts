@@ -203,6 +203,16 @@ const WATCHDOG_REQUEST_ALIVE_MS = 30_000;
 // Shaka holds a video still with up to its rebuffering goal (1.5 s) in hand.
 const WATCHDOG_STARVED_AHEAD_SECONDS = WATCHDOG_BUFFERED_AHEAD_SECONDS;
 /**
+ * A chosen quality (the menu's, kept for every lesson on the device) that
+ * the link cannot carry: playback waiting for data this long at once, or
+ * this many seconds within a minute, hands the lesson to automatic quality,
+ * as YouTube does. A learner who once picked 1080p on good Wi-Fi stayed at
+ * 1080p on a link that took 15s to fetch each 5s piece (production, 14-15
+ * Nov), the loader up most of the lesson.
+ */
+const CHOSEN_QUALITY_WAIT_MS = 8_000;
+const CHOSEN_QUALITY_WAIT_SECONDS_PER_MINUTE = 12;
+/**
  * How long after a learner's seek, and how many times, a forward gap jump
  * past the place they sought to is undone (see `keepLearnerSeekTarget`).
  */
@@ -575,13 +585,21 @@ function nextSegmentStart(
 }
 
 /**
- * How long after a video loads its parts' init segments are fetched in the
- * background (see `warmInitSegments`): after the first segments, so they
- * never compete with the start.
+ * When a video's parts' init segments are fetched in the background (see
+ * `warmInitSegments`): looked at this long after it loads, and again this
+ * often up to INIT_WARM_CHECKS times, until it plays with
+ * INIT_WARM_MIN_AHEAD_SECONDS in hand on a link at least
+ * INIT_WARM_MIN_LINK_RATIO times its bitrate. On a slow or busy link they
+ * only took room from the video's own segments: production's log showed
+ * learners whose last requests were all these, with the video still
+ * waiting for its first picture (14-15 Nov).
  */
-const INIT_WARM_DELAY_MS = 4_000;
+const INIT_WARM_DELAY_MS = 15_000;
+const INIT_WARM_CHECKS = 8;
+const INIT_WARM_MIN_AHEAD_SECONDS = 10;
+const INIT_WARM_MIN_LINK_RATIO = 4;
 /** How many of them are fetched at once. */
-const INIT_WARM_PARALLEL = 4;
+const INIT_WARM_PARALLEL = 2;
 /** More than this many is not a lesson's: nothing is fetched. */
 const INIT_WARM_MAX = 400;
 
@@ -793,6 +811,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #starvedSince = 0;
   /** When the starved stream was nudged; 0 if it has not been. */
   #starvedNudgedAt = 0;
+  /** Seconds a chosen quality waited for data (see CHOSEN_QUALITY_WAIT_MS). */
+  #chosenQualityWaits: number[] = [];
+  #chosenQualityWaitSince = 0;
   /** The playhead the starved check last saw. */
   #starvedLastTime = -1;
   /** The newest segment request asked for, and the newest answered. */
@@ -1078,9 +1099,28 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         priority: "low",
       } as RequestInit);
     };
-    setTimeout(async () => {
+    let checks = 0;
+    const warmWhenRoomy = async (): Promise<void> => {
       if (!current()) return;
+      const media = this.mediaElement;
       const active = player.getVariantTracks().find((track) => track.active);
+      const bandwidth =
+        measuredSegmentBandwidth() ??
+        player.getStats?.()?.estimatedBandwidth ??
+        0;
+      const roomy =
+        media !== null &&
+        !media.paused &&
+        bufferedAheadSeconds(media) >= INIT_WARM_MIN_AHEAD_SECONDS &&
+        (active?.bandwidth ?? 0) > 0 &&
+        bandwidth >= (active?.bandwidth ?? 0) * INIT_WARM_MIN_LINK_RATIO;
+      if (!roomy) {
+        checks += 1;
+        if (checks < INIT_WARM_CHECKS) {
+          setTimeout(() => void warmWhenRoomy(), INIT_WARM_DELAY_MS);
+        }
+        return;
+      }
       let manifestUrl: string;
       let mpd = source.inlinedManifest ?? "";
       try {
@@ -1132,7 +1172,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       for (let index = 0; index < INIT_WARM_PARALLEL; index += 1) {
         void worker();
       }
-    }, INIT_WARM_DELAY_MS);
+    };
+    setTimeout(() => void warmWhenRoomy(), INIT_WARM_DELAY_MS);
   }
 
   /**
@@ -1630,7 +1671,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     });
   }
 
-  override enableAutoQuality(): void {
+  override enableAutoQuality(options: { fallback?: boolean } = {}): void {
     const player = this.requirePlayer();
     const runtime = this.#runtime;
     const source = this.getSnapshot().source;
@@ -1651,7 +1692,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       autoQuality: true,
       selectedQualityId: active?.id ?? null,
     });
-    this.emit("qualitychange", { quality: active, auto: true });
+    this.emit("qualitychange", {
+      quality: active,
+      auto: true,
+      ...(options.fallback ? { fallback: true } : {}),
+    });
   }
 
   override selectAudioTrack(id: string): void {
@@ -2412,6 +2457,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#waitingForKeySince = 0;
     this.#starvedSince = 0;
     this.#starvedNudgedAt = 0;
+    this.#chosenQualityWaits = [];
+    this.#chosenQualityWaitSince = 0;
     this.watchSegmentActivity();
     media.addEventListener("waitingforkey", this.handleWaitingForKey);
     this.#watchdog = window.setInterval(
@@ -2512,6 +2559,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#starvedLastTime = starvedTime;
     const starvedAhead = bufferedAheadSeconds(media);
     if (
+      this.chosenQualityCannotKeepUp(media, playRequested, starvedAhead, now)
+    ) {
+      return;
+    }
+    if (
       !playRequested ||
       starvedMoved ||
       starvedAhead >= WATCHDOG_STARVED_AHEAD_SECONDS ||
@@ -2611,6 +2663,54 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#framesStillSince = 0;
       this.recoverFromFreeze("NO_VIDEO_FRAMES", { frames });
     }
+  }
+
+  /**
+   * Whether a chosen quality keeps the video waiting for data (see
+   * CHOSEN_QUALITY_WAIT_MS); when it does, the lesson goes to automatic
+   * quality and this says so.
+   */
+  private chosenQualityCannotKeepUp(
+    media: HTMLMediaElement,
+    playRequested: boolean,
+    ahead: number,
+    now: number,
+  ): boolean {
+    const waiting =
+      !this.#autoQuality &&
+      playRequested &&
+      !media.seeking &&
+      ahead < WATCHDOG_STARVED_AHEAD_SECONDS &&
+      media.readyState < 3 &&
+      !browserOffline();
+    if (!waiting) {
+      this.#chosenQualityWaitSince = 0;
+      return false;
+    }
+    if (this.#chosenQualityWaitSince === 0) this.#chosenQualityWaitSince = now;
+    this.#chosenQualityWaits = this.#chosenQualityWaits.filter(
+      (at) => now - at < 60_000,
+    );
+    this.#chosenQualityWaits.push(now);
+    if (
+      now - this.#chosenQualityWaitSince < CHOSEN_QUALITY_WAIT_MS &&
+      this.#chosenQualityWaits.length < CHOSEN_QUALITY_WAIT_SECONDS_PER_MINUTE
+    ) {
+      return false;
+    }
+    this.#chosenQualityWaits = [];
+    this.#chosenQualityWaitSince = 0;
+    markPlayback("chosen-quality-fallback", {
+      height:
+        this.#player?.getVariantTracks().find((track) => track.active)
+          ?.height ?? null,
+    });
+    try {
+      this.enableAutoQuality({ fallback: true });
+    } catch {
+      return false;
+    }
+    return true;
   }
 
   /**
