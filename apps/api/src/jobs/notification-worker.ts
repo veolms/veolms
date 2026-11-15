@@ -57,6 +57,7 @@ try {
     chat: createChatPushSource({
       database,
       groupMaxMembers: config.CHAT_PUSH_GROUP_MAX_MEMBERS,
+      storage: storage,
     }),
     attachments: createInvoiceAttachmentResolver(
       createInvoiceService({ database, storage: invoiceStorage(storage) }),

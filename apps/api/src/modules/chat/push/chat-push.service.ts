@@ -1,7 +1,9 @@
 import type { Database } from "@veolms/database";
+import type { S3StorageService } from "@veolms/storage";
 import type { Kysely } from "kysely";
 import { z } from "zod";
 
+import { avatarPushUrl, pushPictureUrl } from "../../avatars/index.ts";
 import type {
   ChatMessagePush,
   ChatPushSource,
@@ -61,12 +63,53 @@ export function messagePushText(
   return text ? `${label.split(" ")[0]} ${text}` : label;
 }
 
+/**
+ * A group's picture for a phone notification: a public, static URL, or
+ * null. As `GET /chat/rooms/:id/icon` picks it (an admin's icon, else the
+ * course's picture), but only where a public copy exists:
+ *
+ * - an icon the group's admins set is a private chat upload, reachable only
+ *   through signed links, so a group with one sends no picture for now
+ *   (never the course picture instead, which would be the wrong one);
+ * - a published course's picture: its public 240 px copy on the CDN;
+ * - an unpublished course's picture is private (`protected/`): none;
+ * - an older course with only an address stored: that address.
+ */
+export function roomPushIconUrl(
+  room: { kind: string; icon_upload_id: string | null },
+  source:
+    | {
+        thumbnail_url: string | null;
+        media_id: string | null;
+        media_storage_key: string | null;
+      }
+    | undefined,
+  storage: Pick<S3StorageService, "getPublicObjectUrl" | "isCdnPublicKey">,
+): string | null {
+  if (room.kind === "direct" || room.icon_upload_id || !source) return null;
+  if (source.media_id && source.media_storage_key) {
+    if (
+      source.media_storage_key.replace(/^\/+/u, "").startsWith("protected/")
+    ) {
+      return null;
+    }
+    const key = `public/thumbnails/${source.media_id}/240.webp`;
+    return storage.isCdnPublicKey(key)
+      ? pushPictureUrl(storage.getPublicObjectUrl(key))
+      : null;
+  }
+  return pushPictureUrl(source.thumbnail_url);
+}
+
 export function createChatPushSource({
   database,
   groupMaxMembers,
+  storage,
 }: {
   database: Kysely<Database>;
   groupMaxMembers: number;
+  /** Where public pictures are served from; without it, no group picture. */
+  storage?: Pick<S3StorageService, "getPublicObjectUrl" | "isCdnPublicKey">;
 }): ChatPushSource {
   const repository = createChatRepository();
   const access = createChatAccess(repository);
@@ -117,12 +160,25 @@ export function createChatPushSource({
         ? "Deleted user"
         : message.sender_name;
     let text = messagePushText(message.body, message.attachments ?? []);
+    let senderAvatarUrl = message.sender_deleted
+      ? null
+      : avatarPushUrl(message.sender_avatar);
     if (event.reaction) {
       const [reactor] = await repository.getPeople(database, [event.senderId]);
       if (!reactor || reactor.is_deleted) return null;
       senderName = reactor.display_name;
+      senderAvatarUrl = avatarPushUrl(reactor.avatar_data_url);
       text = `Reacted ${event.reaction.emoji} to: ${text || "your message"}`;
     }
+    // A picture is a nice-to-have: if looking it up fails, the message is
+    // still pushed, without it.
+    const roomIconUrl =
+      storage && room.kind !== "direct" && !room.icon_upload_id
+        ? await repository
+            .roomIconSource(database, room.id)
+            .then((source) => roomPushIconUrl(room, source, storage))
+            .catch(() => null)
+        : null;
     const roomTitle =
       room.kind === "direct"
         ? senderName
@@ -140,6 +196,8 @@ export function createChatPushSource({
       seq: event.seq,
       senderId: event.senderId,
       senderName,
+      senderAvatarUrl,
+      roomIconUrl,
       text,
       sentAt: event.reaction ? new Date() : message.created_at,
       isRequest: room.kind === "direct" && room.direct_status === "requested",

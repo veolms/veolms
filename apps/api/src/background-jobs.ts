@@ -521,6 +521,7 @@ function startInlineNotificationLoop(
     chat: createChatPushSource({
       database,
       groupMaxMembers: config.CHAT_PUSH_GROUP_MAX_MEMBERS,
+      storage: services.storage,
     }),
     attachments: createInvoiceAttachmentResolver(
       createInvoiceService({
