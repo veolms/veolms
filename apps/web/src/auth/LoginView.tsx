@@ -141,6 +141,9 @@ export function LoginView({
   const isJoiningDiscussion =
     isReturningToDiscussions ||
     searchParams.get(LOGIN_PURPOSE_PARAM) === "discussion";
+  // Asked to log in from a workshop's page ("Join for free", say).
+  const isJoiningWorkshop =
+    searchParams.get(LOGIN_PURPOSE_PARAM) === "workshop";
   // A browser that has signed in with Google before is greeted back, and
   // its account leads the card (see SocialLoginActions).
   const { account: rememberedGoogleAccount } = useLastGoogleAccount();
@@ -593,9 +596,13 @@ export function LoginView({
       ? isReturningVisitor
         ? "Log in to join the discussion"
         : "Log in or sign up to join the discussion"
-      : isReturningVisitor
-        ? "Log in to continue"
-        : "Log in or sign up to continue";
+      : isJoiningWorkshop
+        ? isReturningVisitor
+          ? "Log in to join the workshop"
+          : "Log in or sign up to join the workshop"
+        : isReturningVisitor
+          ? "Log in to continue"
+          : "Log in or sign up to continue";
 
     return (
       <div className="flex w-full flex-col gap-6">

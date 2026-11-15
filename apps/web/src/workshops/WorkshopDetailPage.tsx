@@ -496,20 +496,31 @@ function ActionPanel({
   }
 
   if (!signedIn) {
+    // Signing in happens in the pop-up over this page, and a new visitor's
+    // account is made there too, so "Join for free" is the whole step for
+    // a free workshop open to everyone.
+    const openToAll = !workshop.courseId;
+    const free = !workshop.priceMinor;
     return frame(
       <>
         <Button
           className="w-full"
           onClick={() =>
             onNavigatePage?.(
-              buildLoginPath(`${WORKSHOPS_PATH}/${workshop.slug}`),
+              buildLoginPath(`${WORKSHOPS_PATH}/${workshop.slug}`, "workshop"),
             )
           }
         >
-          Sign in to join
+          {openToAll && free
+            ? "Join for free"
+            : openToAll
+              ? "Get your seat"
+              : "Sign in to join"}
         </Button>
         <p className="m-0 text-[13px] text-(--muted)">
-          You&apos;ll come back here after signing in.
+          {openToAll
+            ? "Your email or phone and a code. New here? Your account is made in the same step."
+            : "You'll come back here after signing in."}
         </p>
       </>,
     );

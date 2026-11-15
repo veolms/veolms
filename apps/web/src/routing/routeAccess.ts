@@ -340,12 +340,11 @@ export const LOGIN_DIALOG_PARAM = "login";
  * say so ("Log in to join the discussion").
  */
 export const LOGIN_PURPOSE_PARAM = "loginFor";
-export type LoginPurpose = "discussion";
+export type LoginPurpose = "discussion" | "workshop";
 
 export function readLoginPurpose(search: string): LoginPurpose | null {
-  return new URLSearchParams(search).get(LOGIN_PURPOSE_PARAM) === "discussion"
-    ? "discussion"
-    : null;
+  const purpose = new URLSearchParams(search).get(LOGIN_PURPOSE_PARAM);
+  return purpose === "discussion" || purpose === "workshop" ? purpose : null;
 }
 
 function canGuestStayOn(path: string): boolean {
