@@ -278,6 +278,18 @@ export const SHAKA_STREAMING_DEFAULTS = {
  * 1s; a slow but moving download is never cut, as every byte restarts the
  * wait. (An extension that hands the page a body only once complete answers
  * from the device, not over the network, so these limits never apply to it.)
+ *
+ * 4s cut working downloads, though (production's incident log, 13-15 Nov):
+ * 334 of 862 problems held two or more requests cut at exactly 4s, the
+ * failures' median was 4001ms, and a learner's piece was cut five times
+ * before an attempt that took 42s went through. On a slow or busy link the
+ * first byte of a piece waits behind the one already downloading, so it
+ * can take longer than 4s on a connection that works. Each cut started the
+ * download from nothing, and a cut download never told the quality choice
+ * how slow the link was, so it stayed at 1080p. 10s for the first byte and
+ * 8s without one later still give up on a dead connection in a few
+ * seconds more than before, and the watchdog (WATCHDOG_STARVED_MS) mends a
+ * stream that goes quiet altogether.
  */
 export const SHAKA_SEGMENT_RETRY_DEFAULTS = {
   maxAttempts: 5,
@@ -285,8 +297,8 @@ export const SHAKA_SEGMENT_RETRY_DEFAULTS = {
   backoffFactor: 1.5,
   fuzzFactor: 0.3,
   timeout: 0,
-  connectionTimeout: 4_000,
-  stallTimeout: 4_000,
+  connectionTimeout: 10_000,
+  stallTimeout: 8_000,
 } as const;
 
 /**
