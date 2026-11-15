@@ -31,7 +31,6 @@ export interface MessageFocus {
   from?: number;
 }
 
-/** Puts a message in the middle of the list. */
 /** A scroll this soon after the reader's touch, wheel or key is theirs. */
 const READER_SCROLL_MS = 3_000;
 /**
@@ -58,6 +57,7 @@ function topRow(box: HTMLElement): { seq: number; offset: number } | null {
   return null;
 }
 
+/** Puts a message in the middle of the list. */
 function centre(box: HTMLElement, row: HTMLElement) {
   box.scrollTop = Math.max(
     0,
