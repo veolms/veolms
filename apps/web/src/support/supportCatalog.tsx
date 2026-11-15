@@ -88,7 +88,7 @@ export const SUPPORT_CATEGORIES: Record<
     short: "Idea",
     icon: Lightbulb,
     color: "#fbbf24",
-    placeholder: "What would make ProCodrr better for you?",
+    placeholder: "What would make {site} better for you?",
   },
   like: {
     label: "Something I like",

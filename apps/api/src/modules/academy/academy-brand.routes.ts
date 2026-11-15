@@ -3,6 +3,7 @@ import {
   academyLogoCompleteRequestSchema,
   academyLogoPresignRequestSchema,
   academyLogoPresignResponseSchema,
+  publicAcademyBrandResponseSchema,
   updateAcademyBrandRequestSchema,
   type AcademyLogoCompleteRequest,
   type AcademyLogoPresignRequest,
@@ -14,6 +15,7 @@ import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createPermissionPreHandlers } from "../authorization/index.ts";
+import { createLegalPagesService } from "../legal-pages/legal-pages.service.ts";
 import { createAcademyBrandService } from "./academy-brand.service.ts";
 
 /**
@@ -26,6 +28,37 @@ const academyBrandRoutes: RoutePlugin = async (app, options) => {
     database: options.database,
     storage: options.services.storage,
   });
+  const legalPages = createLegalPagesService({ database: options.database });
+
+  app.get(
+    "/academy/public-brand",
+    {
+      schema: {
+        operationId: "getPublicAcademyBrand",
+        tags: ["Academy"],
+        summary: "The academy's name and logo, for every visitor",
+        description:
+          "What the site's pages show as the academy's name. Public: the pages need it before anyone signs in.",
+        response: {
+          200: jsonResponse(
+            "The academy's brand.",
+            publicAcademyBrandResponseSchema,
+          ),
+        },
+      },
+    },
+    async () => {
+      const [brand, details] = await Promise.all([
+        service.getBrand(),
+        legalPages.readValues(),
+      ]);
+      return {
+        ...brand,
+        companyName: details.companyName,
+        contactEmail: details.contactEmail,
+      };
+    },
+  );
 
   app.get(
     "/academy/brand",

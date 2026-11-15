@@ -20,8 +20,7 @@ import {
 } from "../courses/courseEditorRouting";
 import { getCatalogueRouteIdFromPath } from "../courses/catalogueRoutes";
 import { getShellPageContribution } from "../lib/web-contributions";
-
-export const productName = "ProCodrr";
+import { getSiteName, withSiteName } from "../site/siteName";
 
 export type ShellPage =
   | "home"
@@ -109,7 +108,9 @@ const notFoundRouteDescriptor = {
 } as const;
 
 /** The tab title of the not-found screen, for a page that finds out late. */
-export const notFoundDocumentTitle = `${notFoundRouteDescriptor.title} · ${productName}`;
+/** The tab title of a page that is not there. */
+export const notFoundDocumentTitle = () =>
+  `${notFoundRouteDescriptor.title} · ${getSiteName()}`;
 
 export const routeDescriptors = {
   // The home page at "/" is what web filters and search engines read to
@@ -119,78 +120,78 @@ export const routeDescriptors = {
     page: "home",
     title: "Online Programming Courses",
     description:
-      "Learn programming online with video courses in JavaScript, TypeScript, Node.js, Next.js and more. Practical lessons, projects and progress tracking on ProCodrr.",
+      "Learn programming online with video courses in JavaScript, TypeScript, Node.js, Next.js and more. Practical lessons, projects and progress tracking on {site}.",
   },
   home: {
     kind: "shell",
     page: "home",
     title: "Home",
     description:
-      "Continue learning and review recent student activity in ProCodrr.",
+      "Continue learning and review recent student activity in {site}.",
   },
   "home-alias": {
     kind: "shell",
     page: "home",
     title: "Home",
     description:
-      "Continue learning and review recent student activity in ProCodrr.",
+      "Continue learning and review recent student activity in {site}.",
   },
   dashboard: {
     kind: "shell",
     page: "home",
     title: "Home",
-    description: "Your ProCodrr home screen.",
+    description: "Your {site} home screen.",
   },
   courses: {
     kind: "shell",
     page: "courses",
     title: "Courses",
-    description: "Browse available courses and continue learning in ProCodrr.",
+    description: "Browse available courses and continue learning in {site}.",
   },
   "courses-enrolled": {
     kind: "shell",
     page: "courses",
     title: "Courses",
-    description: "Browse available courses and continue learning in ProCodrr.",
+    description: "Browse available courses and continue learning in {site}.",
   },
   "courses-not-enrolled": {
     kind: "shell",
     page: "courses",
     title: "Courses",
-    description: "Browse available courses and continue learning in ProCodrr.",
+    description: "Browse available courses and continue learning in {site}.",
   },
   "courses-free": {
     kind: "shell",
     page: "courses",
     title: "Courses",
-    description: "Browse available courses and continue learning in ProCodrr.",
+    description: "Browse available courses and continue learning in {site}.",
   },
   "courses-wishlist": {
     kind: "shell",
     page: "courses",
     title: "Courses",
-    description: "Browse available courses and continue learning in ProCodrr.",
+    description: "Browse available courses and continue learning in {site}.",
   },
   "course-create": {
     kind: "shell",
     page: "course-create",
     section: "Create Course",
     title: "Create Course",
-    description: "Create and publish a new ProCodrr course.",
+    description: "Create and publish a new {site} course.",
   },
   "course-create-tab": {
     kind: "shell",
     page: "course-create",
     section: "Create Course",
     title: "Create Course",
-    description: "Create and publish a new ProCodrr course.",
+    description: "Create and publish a new {site} course.",
   },
   "course-edit": {
     kind: "shell",
     page: "course-create",
     section: "Edit Course",
     title: "Edit Course",
-    description: "Edit and publish a ProCodrr course.",
+    description: "Edit and publish a {site} course.",
   },
   // course-overview is now handled by a dedicated RouteDescriptor kind;
   // the shell descriptor entry is kept only for routeId lookup / meta.
@@ -200,7 +201,7 @@ export const routeDescriptors = {
     page: "courses",
     section: "Courses",
     title: "Courses",
-    description: "Browse available courses and continue learning in ProCodrr.",
+    description: "Browse available courses and continue learning in {site}.",
   },
   students: {
     kind: "shell",
@@ -475,7 +476,7 @@ export const routeDescriptors = {
     kind: "shell",
     page: "extension",
     title: "Report a problem or send feedback",
-    description: "Tell the ProCodrr team what went wrong, or what you think.",
+    description: "Tell the {site} team what went wrong, or what you think.",
   },
   "support-ticket": {
     kind: "shell",
@@ -914,7 +915,7 @@ export const getAuthRouteMeta = (
   title: string,
   description: string,
 ): RouteMetadata => ({
-  title: `${title} · ${productName}`,
+  title: `${title} · ${getSiteName()}`,
   description,
 });
 
@@ -1011,8 +1012,8 @@ const getCourseOverviewDescription = (
 ): string =>
   shortDescription?.trim() ||
   (title
-    ? `Course overview for ${title} on ${productName}.`
-    : `Course overview on ${productName}.`);
+    ? `Course overview for ${title} on ${getSiteName()}.`
+    : `Course overview on ${getSiteName()}.`);
 
 const toAbsoluteUrl = (value: string, origin?: string): string | undefined => {
   try {
@@ -1098,24 +1099,24 @@ export const getRouteMeta = (
     const lesson = getRouteLesson(params, matches);
     if (title && lesson) {
       return {
-        title: [lesson.title, title, productName].join(" · "),
+        title: [lesson.title, title, getSiteName()].join(" · "),
         description:
           toMetaDescription(lesson.description) ??
-          `${lesson.title}, a lesson of ${title} on ${productName}.`,
+          `${lesson.title}, a lesson of ${title} on ${getSiteName()}.`,
       };
     }
     return {
-      title: `${title ?? "Course"} \u00B7 ${productName}`,
+      title: `${title ?? "Course"} \u00B7 ${getSiteName()}`,
       description: title
-        ? `Continue ${title} in the focused ${productName} learning workspace.`
-        : `Continue learning in the focused ${productName} learning workspace.`,
+        ? `Continue ${title} in the focused ${getSiteName()} learning workspace.`
+        : `Continue learning in the focused ${getSiteName()} learning workspace.`,
     };
   }
 
   if (effectiveRouteId === "course-overview") {
     const title = getRouteCourseTitle(params.courseSlug, matches);
     return {
-      title: `${title ?? "Course"} · ${productName}`,
+      title: `${title ?? "Course"} · ${getSiteName()}`,
       description: getCourseOverviewDescription(
         title,
         getRouteCourse(params.courseSlug, matches)?.shortDescription,
@@ -1131,8 +1132,8 @@ export const getRouteMeta = (
       ? matchedDescriptor
       : routeDescriptors.home;
   return {
-    title: `${descriptor.title} \u00B7 ${productName}`,
-    description: descriptor.description,
+    title: `${descriptor.title} \u00B7 ${getSiteName()}`,
+    description: withSiteName(descriptor.description),
   };
 };
 
@@ -1164,7 +1165,7 @@ export const getCourseDocumentTitle = (
   }
   const lessonTitle =
     routeId === "learning" ? loaded.lessonTitle?.trim() : undefined;
-  return [lessonTitle, courseTitle, productName]
+  return [lessonTitle, courseTitle, getSiteName()]
     .filter(Boolean)
     .join(" \u00B7 ");
 };

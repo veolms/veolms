@@ -12,6 +12,19 @@ export const academyBrandResponseSchema = z.object({
     .meta({ example: "https://www.procodrr.dev/static/email-logo.png" }),
 });
 
+/**
+ * What every page shows of the academy: its name and logo, and who to write
+ * to (the legal details, falling back to the invoice details).
+ */
+export const publicAcademyBrandResponseSchema =
+  academyBrandResponseSchema.extend({
+    companyName: z.string(),
+    contactEmail: z.string(),
+  });
+export type PublicAcademyBrandResponse = z.infer<
+  typeof publicAcademyBrandResponseSchema
+>;
+
 /** Changes the academy's name. The logo is uploaded or removed on its own. */
 export const updateAcademyBrandRequestSchema = z.object({
   name: z.string().trim().min(1, "Enter the academy's name").max(255),

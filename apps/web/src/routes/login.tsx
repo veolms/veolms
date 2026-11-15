@@ -1,13 +1,14 @@
 import { LoginView } from "../auth/LoginView";
 import { AppLoadingScreen } from "../bootstrap/AppLoadingScreen";
 import { useAuthStore } from "../store/auth.store";
-import { getAuthRouteMeta, productName } from "../routing/routeDescriptors";
+import { getAuthRouteMeta } from "../routing/routeDescriptors";
+import { getSiteName } from "../site/siteName";
 
 export function meta() {
   return Object.entries(
     getAuthRouteMeta(
       "Log in",
-      `Log in to ${productName} with a secure one-time code.`,
+      `Log in to ${getSiteName()} with a secure one-time code.`,
     ),
   ).map(([name, content]) =>
     name === "title" ? { title: content } : { name, content },

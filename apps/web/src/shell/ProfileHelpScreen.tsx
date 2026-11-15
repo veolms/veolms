@@ -9,6 +9,7 @@ import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldChec
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { useLocation } from "react-router";
 import type { ComponentType, MouseEvent, Ref } from "react";
+import { getSiteName, useSiteName } from "../site/siteName";
 
 interface HelpLink {
   title: string;
@@ -27,7 +28,12 @@ function withOrigin(path: string): string {
   }
   const from = `${window.location.pathname}${window.location.search}`;
   if (from.startsWith("/support")) return path;
-  const label = document.title.replace(/\s*[·|-]\s*ProCodrr\s*$/u, "").trim();
+  // The tab title minus its "· <site name>" ending.
+  const ending = ` · ${getSiteName()}`;
+  const title = document.title.trim();
+  const label = (
+    title.endsWith(ending) ? title.slice(0, -ending.length) : title
+  ).trim();
   const params = new URLSearchParams({ from });
   if (label) params.set("fromLabel", label);
   return `${path}&${params.toString()}`;
@@ -78,7 +84,7 @@ const HELP_GROUPS: readonly (readonly HelpLink[])[] = [
   ],
   [
     {
-      title: "About ProCodrr",
+      title: "About {site}",
       href: "/about",
       icon: Info,
       iconClassName: "text-[#63c8d5]",
@@ -108,6 +114,7 @@ export function ProfileHelpScreen({
   // Drawn again when the page changes, so each link names the page it is
   // opened from, a new tab or a copied link included.
   useLocation();
+  const siteName = useSiteName();
   return (
     <>
       <div className="flex items-center gap-1.5 px-1.5 pb-1.5">
@@ -150,7 +157,9 @@ export function ProfileHelpScreen({
                   className={`profile-menu__item-icon ${iconClassName}`}
                   size={21}
                 />
-                <span className="truncate">{title}</span>
+                <span className="truncate">
+                  {title.replaceAll("{site}", siteName)}
+                </span>
               </a>
             ))}
           </div>

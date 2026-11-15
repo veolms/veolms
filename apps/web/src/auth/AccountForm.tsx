@@ -6,7 +6,7 @@ import {
   registerRequestSchema,
 } from "@veolms/contracts";
 import { Icon } from "../icons/Icon.tsx";
-import { productName } from "../routing/routeDescriptors.ts";
+import { SiteName } from "../site/SiteNameText";
 import { AuthBrandMark } from "./AuthBrandPanel.tsx";
 import { AUTH_CARD_HEADING_ID, maskIdentifier } from "./authFlow.ts";
 import type { AuthIdentifier } from "./authFlow.ts";
@@ -92,7 +92,7 @@ export function AccountForm({
     <div className="auth-account-form">
       <AuthBrandMark />
       <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
-        Welcome to {productName} <span aria-hidden="true">👋</span>
+        Welcome to <SiteName /> <span aria-hidden="true">👋</span>
       </h1>
       <p className="auth-card__subheading">
         Let&apos;s finish setting up your account

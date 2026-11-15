@@ -1,13 +1,16 @@
-import { contactDocument as page } from "../../legal/documents/contact";
-import { LegalPageLayout } from "../../legal/LegalPageLayout";
+import { LegalPageRoute, legalPageMeta } from "../../legal/LegalPageRoute";
+import type { AcademyStaticPageData } from "../academyStaticPageData";
+import type { Route } from "./+types/contact";
 
-export function meta() {
-  return [
-    { title: page.title },
-    { name: "description", content: page.description },
-  ];
+export function meta({ matches }: Route.MetaArgs) {
+  const root = matches[0]?.loaderData as
+    AcademyStaticPageData | null | undefined;
+  return legalPageMeta(
+    "contact",
+    root?.legalPage?.slug === "contact" ? root.legalPage : undefined,
+  );
 }
 
 export default function LegalRoute() {
-  return <LegalPageLayout document={page} />;
+  return <LegalPageRoute slug="contact" />;
 }

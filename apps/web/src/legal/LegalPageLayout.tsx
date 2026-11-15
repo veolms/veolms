@@ -15,11 +15,15 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { procodrrLogoSvg } from "../shell/academyShellConstants";
 import type { LegalDocument } from "./legalDocument";
 import { leaveLegalPages } from "./legalReturn";
-import {
-  LEGAL_PAGES,
-  LEGAL_SUPPORT_EMAIL,
-  type LegalPagePath,
-} from "./legalPages";
+import { LEGAL_PAGES, legalPageTitle, type LegalPagePath } from "./legalPages";
+
+/** Who the pages are from: their header, footer and contact box. */
+export interface LegalPageDetails {
+  academyName: string;
+  companyName: string;
+  /** Empty when the academy has not given one yet. */
+  contactEmail: string;
+}
 
 const PAGE_ICONS: Record<
   LegalPagePath,
@@ -42,7 +46,7 @@ const GROUP_LABEL =
 
 // The document's own markup (from the ProCodrr website) carries no classes:
 // its sections, lists, tables and links are styled from here.
-const PROSE = [
+export const LEGAL_PROSE_CLASS = [
   "text-base leading-[1.75] text-(--text-secondary)",
   "[&_p]:mb-3.5",
   "[&_a]:font-semibold [&_a]:text-(--accent-ink,var(--accent)) [&_a]:underline [&_a]:underline-offset-4 [&_a:hover]:text-(--text)",
@@ -83,13 +87,13 @@ function useCurrentSection(sections: LegalDocument["sections"]) {
   return current;
 }
 
-function Logo() {
+function Logo({ academyName }: { academyName: string }) {
   return (
     <span className="inline-flex items-center gap-2.5">
       <span
         className="inline-flex h-8 w-auto text-(--text) [&_svg]:h-full [&_svg]:w-auto"
         role="img"
-        aria-label="ProCodrr"
+        aria-label={academyName}
         dangerouslySetInnerHTML={{ __html: procodrrLogoSvg }}
       />
       <span className="text-base font-medium text-(--muted)">Legal</span>
@@ -102,7 +106,7 @@ function Logo() {
  * however many legal pages they read since; opened directly (a link from
  * outside, a new tab), to the home page.
  */
-function BackButton() {
+function BackButton({ academyName }: { academyName: string }) {
   const navigate = useNavigate();
   const { key } = useLocation();
   const cameFromApp = key !== "default";
@@ -111,7 +115,7 @@ function BackButton() {
     <>
       <ArrowLeft className="size-4.5" weight="bold" />
       <span className="hidden sm:inline">
-        {cameFromApp ? "Back" : "Back to ProCodrr"}
+        {cameFromApp ? "Back" : `Back to ${academyName}`}
       </span>
     </>
   );
@@ -125,13 +129,19 @@ function BackButton() {
       {content}
     </button>
   ) : (
-    <Link to="/" aria-label="Back to ProCodrr" className={className}>
+    <Link to="/" aria-label={`Back to ${academyName}`} className={className}>
       {content}
     </Link>
   );
 }
 
-function SideNavigation({ currentPath }: { currentPath: string }) {
+function SideNavigation({
+  currentPath,
+  academyName,
+}: {
+  currentPath: string;
+  academyName: string;
+}) {
   return (
     <nav
       aria-label="Legal pages"
@@ -160,7 +170,7 @@ function SideNavigation({ currentPath }: { currentPath: string }) {
                 <Icon
                   className={`size-4.5 shrink-0 ${current ? "text-(--accent)" : "text-(--muted)"}`}
                 />
-                {page.title}
+                {legalPageTitle(page, academyName)}
               </Link>
             );
           })}
@@ -232,9 +242,12 @@ function SectionLinks({
  */
 export function LegalPageLayout({
   document: page,
+  details,
 }: {
   document: LegalDocument;
+  details: LegalPageDetails;
 }) {
+  const { academyName, companyName, contactEmail } = details;
   const current = useCurrentSection(page.sections);
   const onContactPage = page.path === "/contact";
 
@@ -246,14 +259,14 @@ export function LegalPageLayout({
             content does. */}
         <div className="mx-auto flex h-15 w-full max-w-340 items-center gap-2 px-2 sm:h-auto sm:gap-4 sm:px-8 sm:py-3.5 lg:justify-between lg:gap-14">
           <div className="flex shrink-0 items-center lg:w-55">
-            <BackButton />
+            <BackButton academyName={academyName} />
           </div>
           <span
             aria-hidden="true"
             className="hidden h-6 w-px bg-(--border) sm:block lg:hidden"
           />
           <span className="flex-1 pl-1.5 sm:pl-0 lg:max-w-180">
-            <Logo />
+            <Logo academyName={academyName} />
           </span>
           {/* The "On this page" column's room, so the logo sits over the
               text column as the page spreads its columns apart. */}
@@ -264,7 +277,7 @@ export function LegalPageLayout({
       <PageChips currentPath={page.path} />
 
       <div className="mx-auto flex w-full max-w-340 flex-1 items-start justify-between gap-14 px-5 pt-7 pb-16 sm:px-8 lg:pt-12">
-        <SideNavigation currentPath={page.path} />
+        <SideNavigation currentPath={page.path} academyName={academyName} />
 
         <main className="min-w-0 max-w-180 flex-1">
           <div className="text-[11px] font-bold tracking-[0.15em] text-(--accent-ink,var(--accent)) uppercase sm:text-xs">
@@ -311,7 +324,9 @@ export function LegalPageLayout({
             </details>
           ) : null}
 
-          <div className={`mt-7 sm:mt-10 ${PROSE}`}>{page.body}</div>
+          <div className={`mt-7 sm:mt-10 ${LEGAL_PROSE_CLASS}`}>
+            {page.body}
+          </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl border border-(--border) bg-(--surface) p-5 sm:p-6">
             <div className="hidden size-11 shrink-0 items-center justify-center rounded-xl bg-(--accent-soft) sm:flex">
@@ -322,24 +337,30 @@ export function LegalPageLayout({
                 Have a question?
               </div>
               <div className="mt-1 text-[13px] leading-[1.55] text-(--muted) sm:text-sm">
-                Write to us at{" "}
-                <a
-                  href={`mailto:${LEGAL_SUPPORT_EMAIL}`}
-                  className="font-semibold text-(--text-secondary) underline underline-offset-4 hover:text-(--text)"
-                >
-                  {LEGAL_SUPPORT_EMAIL}
-                </a>{" "}
-                and we&rsquo;ll get back to you.
+                {contactEmail ? (
+                  <>
+                    Write to us at{" "}
+                    <a
+                      href={`mailto:${contactEmail}`}
+                      className="font-semibold text-(--text-secondary) underline underline-offset-4 hover:text-(--text)"
+                    >
+                      {contactEmail}
+                    </a>{" "}
+                    and we&rsquo;ll get back to you.
+                  </>
+                ) : (
+                  <>Our contact page says how to reach us.</>
+                )}
               </div>
             </div>
-            {onContactPage ? (
+            {onContactPage && contactEmail ? (
               <a
-                href={`mailto:${LEGAL_SUPPORT_EMAIL}`}
+                href={`mailto:${contactEmail}`}
                 className={`inline-flex h-11.5 w-full items-center justify-center rounded-xl bg-(--accent) px-5 text-sm font-bold text-(--on-accent) no-underline transition-colors hover:bg-(--accent-hover,var(--accent)) sm:h-11 sm:w-auto ${FOCUS_RING}`}
               >
                 Email us
               </a>
-            ) : (
+            ) : onContactPage ? null : (
               <Link
                 replace
                 to="/contact"
@@ -376,7 +397,9 @@ export function LegalPageLayout({
 
       <footer className="border-t border-(--border) bg-(--surface)">
         <div className="mx-auto flex w-full max-w-340 flex-col-reverse gap-2.5 px-5 pt-5 pb-8 text-[13px] text-(--muted) sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:px-8 sm:py-5">
-          <span>© 2026 ProCodrr Labs LLP. All rights reserved.</span>
+          <span>
+            © {new Date().getFullYear()} {companyName}. All rights reserved.
+          </span>
           <span className="flex flex-wrap gap-x-5 gap-y-2">
             {LEGAL_PAGES.map((link) => (
               <Link

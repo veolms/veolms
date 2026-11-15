@@ -18,6 +18,7 @@ import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { supportFileUrl, usePostSupportMessage } from "../services/support";
 import { SupportComposer } from "./SupportComposer";
 import { useSupportDraft } from "./useSupportDraft";
+import { SiteName } from "../site/SiteNameText";
 
 export function toAttachmentItems(
   attachments: readonly SupportAttachment[],
@@ -102,7 +103,7 @@ function MessageItem({
           {fromTeam ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-(--accent)/14 px-2 py-0.5 text-[0.68rem] font-bold tracking-wide text-(--accent) uppercase">
               <SealCheck size={12} weight="fill" aria-hidden="true" />
-              ProCodrr team
+              <SiteName /> team
             </span>
           ) : null}
           {message.internal ? (

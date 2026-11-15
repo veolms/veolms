@@ -2,6 +2,7 @@ import { IdentificationCardIcon as IdentificationCard } from "@phosphor-icons/re
 import { LayoutIcon as Layout } from "@phosphor-icons/react/Layout";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
+import { ScalesIcon as Scales } from "@phosphor-icons/react/Scales";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import type { PlatformTab } from "../routing/tabSessionState";
 import type { PageTabDefinition } from "../settings/settingsTabs";
@@ -19,6 +20,7 @@ export const PLATFORM_TAB_DEFINITIONS: readonly PageTabDefinition<PlatformTab>[]
       tone: "violet",
     },
     { id: "invoice", label: "Invoice", Icon: Receipt, tone: "green" },
+    { id: "legal", label: "Legal pages", Icon: Scales, tone: "gold" },
   ];
 
 /** What changing each section takes; a section shows only to its holders. */
@@ -28,4 +30,5 @@ export const PLATFORM_TAB_PERMISSIONS: Readonly<Record<PlatformTab, string>> = {
   security: "platform.settings.update",
   general: "platform.branding.update",
   invoice: "platform.settings.update",
+  legal: "platform.settings.update",
 };

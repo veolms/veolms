@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { useChatPrefs } from "../../store/chatPrefs.store";
 import { readSavedWebPush, subscribeSavedWebPush } from "./webPush.state";
+import { getSiteName, useSiteName } from "../../site/siteName";
 
 /**
  * Chat notifications on this device, for every place that offers the
@@ -30,6 +31,7 @@ function loadWebPush() {
 /** `userId`: the signed-in account (subscriptions are saved for it). */
 export function useChatNotifications(userId: string | null | undefined) {
   const prefs = useChatPrefs();
+  const siteName = useSiteName();
   const [permission, setPermission] =
     useState<ChatNotificationPermission>(readPermission);
   const [support, setSupport] = useState<ChatNotificationSupport>("supported");
@@ -63,17 +65,17 @@ export function useChatNotifications(userId: string | null | undefined) {
 
   const status =
     support === "in-app"
-      ? "The ProCodrr app sends your notifications."
+      ? `The ${siteName} app sends your notifications.`
       : support === "install-first"
-        ? "On iPhone and iPad, add ProCodrr to your Home Screen first (Share, then Add to Home Screen), and turn notifications on there."
+        ? `On iPhone and iPad, add ${siteName} to your Home Screen first (Share, then Add to Home Screen), and turn notifications on there.`
         : permission === "unsupported"
           ? "This browser can’t show notifications."
           : permission === "denied"
             ? CHAT_NOTIFICATIONS_BLOCKED_HELP
             : pushing
-              ? "On. New messages show up even when ProCodrr isn’t open."
+              ? `On. New messages show up even when ${siteName} isn’t open.`
               : on
-                ? "On while a ProCodrr tab is open."
+                ? `On while a ${siteName} tab is open.`
                 : "Private messages, group messages and @mentions, as they arrive.";
 
   /** Turns them on or off; returns what to tell the visitor, if anything. */
@@ -91,7 +93,7 @@ export function useChatNotifications(userId: string | null | undefined) {
       if (result.ok) return "Chat notifications are on";
       if (result.reason === "denied") return CHAT_NOTIFICATIONS_BLOCKED_HELP;
       if (result.reason === "off" || result.reason === "failed") {
-        return "Notifications will show while a ProCodrr tab is open.";
+        return `Notifications will show while a ${getSiteName()} tab is open.`;
       }
       return null;
     } finally {

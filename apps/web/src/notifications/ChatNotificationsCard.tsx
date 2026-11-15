@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ElevatedCard } from "../components/ElevatedCard";
 import { useCurrentUser } from "../services/auth";
 import { useChatNotifications } from "../services/webPush";
+import { useSiteName } from "../site/siteName";
 
 /**
  * The notifications page's offer to turn on chat notifications for this
@@ -17,6 +18,7 @@ export function ChatNotificationsCard({
 }) {
   const me = useCurrentUser();
   const chat = useChatNotifications(me.data?.id);
+  const siteName = useSiteName();
   const [message, setMessage] = useState<string | null>(null);
   if (chat.on || chat.support === "in-app") return null;
 
@@ -47,7 +49,7 @@ export function ChatNotificationsCard({
           <p className="mt-1 text-xs leading-snug text-(--text-secondary)">
             {chat.blocked
               ? chat.status
-              : "Get new messages and @mentions on this device, even when ProCodrr isn’t open."}
+              : `Get new messages and @mentions on this device, even when ${siteName} isn’t open.`}
           </p>
           {message && !chat.blocked ? (
             <p className="mt-2 text-xs text-(--muted)" role="status">

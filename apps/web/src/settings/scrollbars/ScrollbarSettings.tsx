@@ -77,7 +77,7 @@ const SCROLLBAR_STYLES: readonly ScrollbarStyleOption[] = [
   {
     id: "theme",
     label: "Theme",
-    note: "Match the active ProCodrr color theme",
+    note: "Match the active color theme",
   },
   {
     id: "thick",

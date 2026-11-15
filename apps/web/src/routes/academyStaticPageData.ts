@@ -4,6 +4,10 @@ import {
   coursePublicCurriculumSchema,
   guestHomePageResponseSchema,
   homeDiscoveryResponseSchema,
+  LEGAL_PAGE_SLUGS,
+  legalPageResponseSchema,
+  type LegalPageResponse,
+  type LegalPageSlug,
   lessonDiscussionsListResponseSchema,
   publicPopularDiscussionsResponseSchema,
   type CourseListResponse,
@@ -50,6 +54,37 @@ export interface AcademyStaticPageData {
    * at once; only the course rows are then still to load.
    */
   guestHomeCopy?: GuestHomePageResponse;
+  /** A legal page's words as they read when the site was built. */
+  legalPage?: LegalPageResponse;
+}
+
+function readLegalPageSlug(pathname: string): LegalPageSlug | null {
+  const slug = pathname.slice(1);
+  return (LEGAL_PAGE_SLUGS as readonly string[]).includes(slug)
+    ? (slug as LegalPageSlug)
+    : null;
+}
+
+/**
+ * A legal page's words for the built file. Without them the page is built
+ * empty and fills in the browser, so a failure is not fatal to the build.
+ */
+async function loadLegalPage(
+  slug: LegalPageSlug,
+): Promise<LegalPageResponse | undefined> {
+  return await fetchStaticApiData(`/legal-pages/${slug}`, (value) => {
+    const result = legalPageResponseSchema.safeParse(value);
+    if (!result.success) {
+      throw new Error("The build API returned an invalid legal page.");
+    }
+    return result.data;
+  }).catch((error: unknown) => {
+    console.warn(
+      `The legal page "${slug}" was not available; it is built empty:`,
+      error instanceof Error ? error.message : error,
+    );
+    return undefined;
+  });
 }
 
 function toGuestHomeCopy(page: GuestHomePageResponse): GuestHomePageResponse {
@@ -549,6 +584,11 @@ async function loadStaticPageData(
   if (lessonAddress) {
     const lessonPage = await loadBuiltLessonPageSeed(lessonAddress);
     return lessonPage ? ({ lessonPage } satisfies AcademyStaticPageData) : null;
+  }
+  const legalSlug = readLegalPageSlug(pathname);
+  if (legalSlug) {
+    const legalPage = await loadLegalPage(legalSlug);
+    return legalPage ? ({ legalPage } satisfies AcademyStaticPageData) : null;
   }
   return null;
 }

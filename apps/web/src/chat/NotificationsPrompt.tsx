@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useCurrentUser } from "../services/auth";
 import { loadWebPush } from "../services/webPush";
 import { useChatPrefs } from "../store/chatPrefs.store";
+import { getSiteName } from "../site/siteName";
 
 const DISMISSED_KEY = "veolms.chat.notifyPromptDismissed";
 
@@ -64,13 +65,13 @@ export function NotificationsPrompt({
     const result = await webPush.enableWebPush(userId);
     setPermission(Notification.permission);
     if (result.ok) {
-      onToast("Notifications are on, even with ProCodrr closed");
+      onToast(`Notifications are on, even with ${getSiteName()} closed`);
     } else if (result.reason === "denied") {
       onToast(
         "Notifications are blocked for this site. Allow them in the browser’s site settings.",
       );
     } else if (result.reason === "off" || result.reason === "failed") {
-      onToast("Notifications will show while a ProCodrr tab is open.");
+      onToast(`Notifications will show while a ${getSiteName()} tab is open.`);
     }
   }
 

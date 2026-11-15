@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   AcademyBrandResponse,
+  PublicAcademyBrandResponse,
   UpdateAcademyBrandRequest,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
@@ -24,6 +25,9 @@ export function useUploadAcademyLogo() {
     mutationFn: (file) => academyService.uploadLogo(file),
     onSuccess: (saved) => {
       queryClient.setQueryData(academyKeys.brand(), saved);
+      void queryClient.invalidateQueries({
+        queryKey: academyKeys.publicBrand(),
+      });
     },
   });
 }
@@ -34,6 +38,9 @@ export function useRemoveAcademyLogo() {
     mutationFn: () => academyService.removeLogo(),
     onSuccess: (saved) => {
       queryClient.setQueryData(academyKeys.brand(), saved);
+      void queryClient.invalidateQueries({
+        queryKey: academyKeys.publicBrand(),
+      });
     },
   });
 }
@@ -45,7 +52,24 @@ export function useUpdateAcademyBrand() {
       mutationFn: (brand) => academyService.updateBrand(brand),
       onSuccess: (saved) => {
         queryClient.setQueryData(academyKeys.brand(), saved);
+        void queryClient.invalidateQueries({
+          queryKey: academyKeys.publicBrand(),
+        });
       },
     },
   );
+}
+
+/**
+ * The academy's name and who to write to, as every visitor sees them. Read
+ * once per visit: it changes rarely.
+ */
+export function usePublicAcademyBrand() {
+  return useQuery<PublicAcademyBrandResponse, ApiError>({
+    queryKey: academyKeys.publicBrand(),
+    queryFn: () => academyService.getPublicBrand(),
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
 }

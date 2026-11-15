@@ -19,6 +19,7 @@ import { SettingsTabBar } from "../settings/SettingsTabBar";
 import { useSettingsTabShortcuts } from "../settings/useSettingsTabShortcuts";
 import { PlatformAppearanceTab } from "./PlatformAppearanceTab";
 import { PlatformInvoiceTab } from "./PlatformInvoiceTab";
+import { PlatformLegalTab } from "./legal/PlatformLegalTab";
 import { PlatformSecurityTab } from "./PlatformSecurityTab";
 import { StaticSiteRebuildSection } from "./StaticSiteRebuildSection";
 import {
@@ -79,6 +80,8 @@ const PlatformTabContent = memo(function PlatformTabContent({
       );
     case "invoice":
       return <PlatformInvoiceTab setNotice={setNotice} />;
+    case "legal":
+      return <PlatformLegalTab setNotice={setNotice} />;
   }
 });
 

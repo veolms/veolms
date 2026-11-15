@@ -38,7 +38,7 @@ import {
   resolveAuthenticatedDestination,
   sanitizeReturnTo,
 } from "../routing/routeAccess";
-import { productName } from "../routing/routeDescriptors";
+import { useSiteName } from "../site/siteName";
 import { useLogin, useRegister, useSendOtp } from "../services/auth";
 import { authStore } from "../store/auth.store";
 import { GoogleOneTap } from "./GoogleOneTap.tsx";
@@ -164,6 +164,7 @@ export function LoginView({
   const sendOtpMutation = useSendOtp();
   const loginMutation = useLogin();
   const registerMutation = useRegister();
+  const siteName = useSiteName();
 
   useEffect(() => {
     if (flow.status !== "authenticated") return;
@@ -603,7 +604,7 @@ export function LoginView({
           {brand}
           <LoginHeading
             title={
-              isReturningVisitor ? "Welcome back" : `Welcome to ${productName}`
+              isReturningVisitor ? "Welcome back" : `Welcome to ${siteName}`
             }
             subtitle={welcomeSubtitle}
           />

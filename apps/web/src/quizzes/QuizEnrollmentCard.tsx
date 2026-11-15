@@ -7,7 +7,7 @@ import { Lock } from "@phosphor-icons/react/Lock";
 import { Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
-import { productName } from "../routing/routeDescriptors";
+import { getSiteName } from "../site/siteName";
 import { useCurrentUser } from "../services/auth";
 import { readCheckoutStartError } from "../services/payments/checkoutError";
 import { openGatewayCheckout } from "../services/payments/gateways/gatewayCheckout";
@@ -254,7 +254,7 @@ export function QuizEnrollmentCard({
       await openGatewayCheckout(
         {
           gateway: order.gateway,
-          name: productName,
+          name: getSiteName(),
           description: `Quiz Access - ${quizTitle || "Assessment"}`,
           prefill: {
             name: user?.displayName || user?.username || "",

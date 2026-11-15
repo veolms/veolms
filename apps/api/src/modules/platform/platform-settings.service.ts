@@ -3,10 +3,13 @@ import {
   DEFAULT_MAX_SIMULTANEOUS_STREAMS,
   DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
   DEFAULT_PLATFORM_INVOICE_SETTINGS,
+  DEFAULT_PLATFORM_LEGAL_SETTINGS,
   platformAppearanceSettingsSchema,
   platformInvoiceSettingsSchema,
+  platformLegalSettingsSchema,
   platformSecuritySettingsSchema,
   type PlatformInvoiceSettings,
+  type PlatformLegalSettings,
   type PlatformSettings,
   type PlatformSettingsResponse,
   type PublicPlatformSettings,
@@ -97,6 +100,27 @@ function resolveInvoiceSettings(
   };
 }
 
+/** Each legal-page detail as saved, or empty when it does not read. */
+function resolveLegalSettings(
+  saved: Record<string, unknown>,
+): PlatformLegalSettings {
+  const fields = platformLegalSettingsSchema.shape;
+  const read = <K extends keyof PlatformLegalSettings>(
+    key: K,
+  ): PlatformLegalSettings[K] => {
+    const parsed = fields[key].safeParse(saved[key]);
+    return parsed.success
+      ? (parsed.data as PlatformLegalSettings[K])
+      : DEFAULT_PLATFORM_LEGAL_SETTINGS[key];
+  };
+  return {
+    companyName: read("companyName"),
+    postalAddress: read("postalAddress"),
+    contactEmail: read("contactEmail"),
+    grievanceOfficer: read("grievanceOfficer"),
+  };
+}
+
 /**
  * The settings in force: each one saved by an admin, or its default. A
  * document written by another version of the contract keeps what still
@@ -133,6 +157,7 @@ function resolveSettings(document: StoredDocument): PlatformSettings {
             ).data ?? DEFAULT_MAX_SIMULTANEOUS_STREAMS),
     },
     invoice: resolveInvoiceSettings(document.invoice ?? {}),
+    legal: resolveLegalSettings(document.legal ?? {}),
   };
 }
 
@@ -154,6 +179,8 @@ export interface PlatformSettingsService {
   getPublicSettings(): Promise<PublicPlatformSettings>;
   /** What the academy prints on its invoices. */
   getInvoiceSettings(): Promise<PlatformInvoiceSettings>;
+  /** Who the academy's legal pages name (Platform > Legal pages). */
+  getLegalSettings(): Promise<PlatformLegalSettings>;
   updateSettings(
     changes: UpdatePlatformSettingsRequest,
     updatedBy: string | null,
@@ -242,6 +269,9 @@ export function createPlatformSettingsService({
       ...(changes.invoice
         ? { invoice: { ...current.document.invoice, ...changes.invoice } }
         : {}),
+      ...(changes.legal
+        ? { legal: { ...current.document.legal, ...changes.legal } }
+        : {}),
     };
 
     let row: Awaited<ReturnType<typeof savePlatformSettings>>;
@@ -282,6 +312,7 @@ export function createPlatformSettingsService({
     getPublicSettings: async () =>
       toPublicSettings((await readSettings()).settings),
     getInvoiceSettings: async () => (await readSettings()).settings.invoice,
+    getLegalSettings: async () => (await readSettings()).settings.legal,
     updateSettings,
     setInvoiceLogo: async (logoUrl, updatedBy) =>
       await updateSettings({ invoice: { logoUrl } }, updatedBy),

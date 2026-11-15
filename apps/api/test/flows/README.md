@@ -20,6 +20,7 @@ app does; nothing is mocked inside the API.
 | `15-lesson-pdf-reading.flow.test.ts`   | Who is given a reading lesson's PDF; only the lesson page's own request |
 | `16-web-push.flow.test.ts`             | Browser push for chat: subscribe, encrypted delivery, mutes, retry, 410 |
 | `18-push-actions.flow.test.ts`         | Reply / Mark as read from a phone notification: tokens, retries, stale  |
+| `19-legal-pages.flow.test.ts`          | Legal pages: read with the academy's details, rewrite, restore, who may |
 
 ## Running them
 

@@ -21,6 +21,7 @@ export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
 export * from "./chat.schema.ts";
+export * from "./legal-pages.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
@@ -147,6 +148,7 @@ import type {
 } from "./learning-goals.schema.ts";
 import type { HomePageSettingsTable } from "./home-page.schema.ts";
 import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
+import type { LegalPageTable } from "./legal-pages.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
 import type { ShortLinkTable } from "./short-links.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
@@ -287,6 +289,7 @@ export interface Database {
   user_learning_settings: UserLearningSettingsTable;
   home_page_settings: HomePageSettingsTable;
   platform_settings: PlatformSettingsTable;
+  legal_pages: LegalPageTable;
   quotes: QuoteTable;
   short_links: ShortLinkTable;
   wishlist_items: WishlistItemTable;

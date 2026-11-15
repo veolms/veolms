@@ -21,6 +21,7 @@ import { HeroDesk } from "./HeroDesk";
 import { guestHeroCopyWhenComplete, HeroCopyEnd } from "./HeroPicture";
 import { glassActionClasses, primaryActionClasses } from "./heroActionClasses";
 import { DiwaliHeroGreeting } from "../../festive/DiwaliHeroGreeting";
+import { SiteName } from "../../site/SiteNameText";
 
 /**
  * Scrolls to a section of the home page from a link to its id. The page may
@@ -341,7 +342,7 @@ export function GuestHomeHero({
                 // longest line.
                 <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
                   <span aria-hidden="true" className="h-px w-6 bg-current/60" />
-                  ProCodrr
+                  <SiteName />
                 </figcaption>
               ) : null}
             </figure>

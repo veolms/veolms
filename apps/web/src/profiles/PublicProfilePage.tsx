@@ -14,12 +14,12 @@ import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import {
   NOT_FOUND_SECTION,
   notFoundDocumentTitle,
-  productName,
   routeDescriptors,
 } from "../routing/routeDescriptors";
 import { useDocumentTitle } from "../routing/useDocumentTitle";
 import { usePublicProfile } from "../services/auth";
 import { resolvePublicProfileView } from "./publicProfileView";
+import { getSiteName } from "../site/siteName";
 import "../styles/features/profile.css";
 
 // The app's own not-found screen, the one an address no page answers to
@@ -140,8 +140,8 @@ export function PublicProfilePage({
   // here, so going on to a member who does exist titles the tab again.
   useDocumentTitle(
     view === "not-found"
-      ? notFoundDocumentTitle
-      : `${routeDescriptors["public-profile"].title} · ${productName}`,
+      ? notFoundDocumentTitle()
+      : `${routeDescriptors["public-profile"].title} · ${getSiteName()}`,
   );
 
   if (view === "not-found") {

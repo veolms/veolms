@@ -91,17 +91,43 @@ export interface PlatformInvoiceSettings {
   logoUrl: string | null;
 }
 
+/**
+ * Who the academy is in its legal pages (Terms, Privacy, Contact, ...). An
+ * empty detail falls back to the invoice details, then the academy's name.
+ */
+export interface PlatformLegalSettings {
+  /** The legal name the pages name, e.g. "Example Labs LLP". */
+  companyName: string;
+  /** The postal address, as the Contact page shows it, one line per line. */
+  postalAddress: string;
+  /** Where learners write about support, privacy or grievances. */
+  contactEmail: string;
+  /** The Grievance Officer the Contact and Privacy pages name. */
+  grievanceOfficer: string;
+}
+
 export interface PlatformSettings {
   appearance: PlatformAppearanceSettings;
   security: PlatformSecuritySettings;
   invoice: PlatformInvoiceSettings;
+  legal: PlatformLegalSettings;
 }
 
 /**
  * What every visitor's browser is sent. The invoice details are left out:
  * no page needs them, and only the invoices themselves print them.
  */
-export type PublicPlatformSettings = Omit<PlatformSettings, "invoice">;
+export type PublicPlatformSettings = Omit<
+  PlatformSettings,
+  "invoice" | "legal"
+>;
+
+export const DEFAULT_PLATFORM_LEGAL_SETTINGS: PlatformLegalSettings = {
+  companyName: "",
+  postalAddress: "",
+  contactEmail: "",
+  grievanceOfficer: "",
+};
 
 export const DEFAULT_PLATFORM_INVOICE_SETTINGS: PlatformInvoiceSettings = {
   companyName: "",

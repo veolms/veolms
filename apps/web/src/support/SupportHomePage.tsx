@@ -5,7 +5,7 @@ import { Link } from "react-router";
 
 import { ElevatedCard } from "../components/ElevatedCard";
 import { TimeAgo } from "../components/TimeAgo";
-import { LEGAL_SUPPORT_EMAIL } from "../legal/legalPages";
+import { usePublicAcademyBrand } from "../services/academy";
 import { useMySupportTickets } from "../services/support";
 import {
   CategoryBadge,
@@ -20,6 +20,7 @@ import { SupportPageHeader } from "./SupportTabs";
 /** /support, the "Your reports" tab: what the learner sent, and the replies. */
 export function SupportHomePage() {
   const tickets = useMySupportTickets();
+  const contactEmail = usePublicAcademyBrand().data?.contactEmail;
 
   return (
     <main className={supportPageClasses} aria-labelledby="support-title">
@@ -85,15 +86,17 @@ export function SupportHomePage() {
         )}
       </section>
 
-      <p className="m-0 text-center text-xs text-(--muted)">
-        Prefer email? Write to{" "}
-        <a
-          href={`mailto:${LEGAL_SUPPORT_EMAIL}`}
-          className="font-semibold text-(--text-secondary) hover:text-(--accent)"
-        >
-          {LEGAL_SUPPORT_EMAIL}
-        </a>
-      </p>
+      {contactEmail ? (
+        <p className="m-0 text-center text-xs text-(--muted)">
+          Prefer email? Write to{" "}
+          <a
+            href={`mailto:${contactEmail}`}
+            className="font-semibold text-(--text-secondary) hover:text-(--accent)"
+          >
+            {contactEmail}
+          </a>
+        </p>
+      ) : null}
     </main>
   );
 }

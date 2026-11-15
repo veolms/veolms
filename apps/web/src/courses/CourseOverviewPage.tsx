@@ -64,7 +64,7 @@ import {
 } from "../learning/lessonOpenIntent";
 import type { LessonIntentFor } from "./overview/CourseOverviewCurriculum";
 import type { NavigateTo } from "../routing/navigation";
-import { productName } from "../routing/routeDescriptors";
+import { getSiteName } from "../site/siteName";
 import { authStore, useAuthStore } from "../store/auth.store";
 import { LOGIN_DIALOG_PARAM } from "../routing/routeAccess";
 import {
@@ -857,7 +857,7 @@ function CoursePurchaseSection({
       stopGatewayCheckoutRef.current = await openGatewayCheckout(
         {
           gateway: order.gateway,
-          name: productName,
+          name: getSiteName(),
           description:
             (voluntaryContributionAmount ?? 0) > baseNumericPrice ||
             (isFree && (voluntaryContributionAmount ?? 0) > 0)

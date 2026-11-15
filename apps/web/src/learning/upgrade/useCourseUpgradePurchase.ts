@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { productName } from "../../routing/routeDescriptors";
+import { getSiteName } from "../../site/siteName";
 import { useCurrentUser } from "../../services/auth";
 import {
   openGatewayCheckout,
@@ -125,7 +125,7 @@ export function useCourseUpgradePurchase({
       const stopGateway = await openGatewayCheckout(
         {
           gateway: order.gateway,
-          name: productName,
+          name: getSiteName(),
           description: courseTitle,
           prefill: {
             name: user?.displayName || user?.username,

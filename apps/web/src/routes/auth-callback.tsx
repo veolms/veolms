@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from "react-router";
 import { AuthProgress } from "../auth/AuthProgress";
 import { AuthBrandMark } from "../auth/AuthBrandPanel";
 import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
-import { getAuthRouteMeta, productName } from "../routing/routeDescriptors";
+import { getAuthRouteMeta } from "../routing/routeDescriptors";
+import { getSiteName, useSiteName } from "../site/siteName";
 import { resolvePostAuthPath } from "../auth/postAuthNavigation";
 import {
   clearOauthHandoff,
@@ -18,7 +19,7 @@ export function meta() {
   return Object.entries(
     getAuthRouteMeta(
       "Authenticating",
-      `Completing authentication with ${productName}.`,
+      `Completing authentication with ${getSiteName()}.`,
     ),
   ).map(([name, content]) =>
     name === "title" ? { title: content } : { name, content },
@@ -29,6 +30,7 @@ export default function AuthCallbackRoute() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const oauthLoginMutation = useOauthLogin();
+  const siteName = useSiteName();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // In a sign-in window whose opener took the code over: it is closing.
   const [handedOff, setHandedOff] = useState(false);
@@ -120,7 +122,7 @@ export default function AuthCallbackRoute() {
       <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
         <AuthProgress
           detail="You can close this window if it stays open."
-          title="Continuing in ProCodrr"
+          title={`Continuing in ${siteName}`}
         />
       </section>
     );

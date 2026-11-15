@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
 /**
- * One legal or company page: its words, from the ProCodrr website's own
- * pages, and what its head and "On this page" list need.
+ * One legal or company page, in the shape the legal layout draws (built
+ * from the API's words by legalMarkdownDocument.tsx).
  */
 export interface LegalDocument {
   path: string;

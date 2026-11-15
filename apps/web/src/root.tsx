@@ -36,6 +36,8 @@ import {
   reloadOnceForNewBuild,
 } from "./lib/chunk-reload";
 import { QueryProvider } from "./providers/query-provider";
+import { SiteNameSync } from "./site/SiteNameSync";
+import { getSiteName } from "./site/siteName";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getSessionPresenceBootstrapScript } from "./store/sessionPresence";
 import { getProfileHintBootstrapScript } from "./shell/profileHintEarlyState";
@@ -399,11 +401,10 @@ export function Layout({ children }: LayoutProps) {
 }
 
 export const meta = () => [
-  { title: "ProCodrr \u00B7 Learn, build, and keep moving" },
+  { title: `${getSiteName()} \u00B7 Learn, build, and keep moving` },
   {
     name: "description",
-    content:
-      "Continue your courses, track learning progress, and explore practical developer education in ProCodrr.",
+    content: `Continue your courses, track learning progress, and explore practical developer education in ${getSiteName()}.`,
   },
 ];
 
@@ -556,6 +557,7 @@ export default function Root() {
   return (
     <QueryProvider>
       <HydrationMarker />
+      <SiteNameSync />
       <SessionInitializer>
         <GlobalGoogleOneTap />
         <AnalyticsPageViews />

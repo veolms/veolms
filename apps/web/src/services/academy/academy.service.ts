@@ -2,6 +2,7 @@ import type {
   AcademyBrandResponse,
   AcademyLogoContentType,
   AcademyLogoPresignResponse,
+  PublicAcademyBrandResponse,
   UpdateAcademyBrandRequest,
 } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
@@ -10,6 +11,10 @@ import { mediaService } from "../media/media.service";
 export const academyService = {
   getBrand(): Promise<AcademyBrandResponse> {
     return api.get<AcademyBrandResponse>("/academy/brand");
+  },
+  /** The academy's name and contact details, as every visitor sees them. */
+  getPublicBrand(): Promise<PublicAcademyBrandResponse> {
+    return api.get<PublicAcademyBrandResponse>("/academy/public-brand");
   },
   updateBrand(brand: UpdateAcademyBrandRequest): Promise<AcademyBrandResponse> {
     return api.put<AcademyBrandResponse>("/academy/brand", brand);

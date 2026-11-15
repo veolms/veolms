@@ -11,6 +11,7 @@ import {
   PLATFORM_DISPLAY_MODES,
   type PlatformAppearanceSettings,
   type PlatformInvoiceSettings,
+  type PlatformLegalSettings,
   type PlatformSecuritySettings,
   type PlatformSettings,
   type PublicPlatformSettings,
@@ -88,10 +89,22 @@ export const platformInvoiceSettingsSchema = z.strictObject({
   logoUrl: z.url().nullable(),
 }) satisfies z.ZodType<PlatformInvoiceSettings>;
 
+/** The legal pages' details, field by field; any may be empty. */
+export const platformLegalSettingsSchema = z.strictObject({
+  companyName: z.string().trim().max(160),
+  postalAddress: z.string().trim().max(500),
+  contactEmail: z.union([
+    z.literal(""),
+    z.email("Enter an email address").max(254),
+  ]),
+  grievanceOfficer: z.string().trim().max(160),
+}) satisfies z.ZodType<PlatformLegalSettings>;
+
 export const platformSettingsSchema = z.strictObject({
   appearance: platformAppearanceSettingsSchema,
   security: platformSecuritySettingsSchema,
   invoice: platformInvoiceSettingsSchema,
+  legal: platformLegalSettingsSchema,
 }) satisfies z.ZodType<PlatformSettings>;
 
 export const platformSettingsResponseSchema = z.strictObject({
@@ -128,12 +141,14 @@ export const updatePlatformSettingsRequestSchema = z
       .omit({ logoUrl: true })
       .partial()
       .optional(),
+    legal: platformLegalSettingsSchema.partial().optional(),
   })
   .refine(
     (value) =>
       Object.keys(value.appearance ?? {}).length > 0 ||
       Object.keys(value.security ?? {}).length > 0 ||
-      Object.keys(value.invoice ?? {}).length > 0,
+      Object.keys(value.invoice ?? {}).length > 0 ||
+      Object.keys(value.legal ?? {}).length > 0,
     "Nothing to change",
   );
 export type UpdatePlatformSettingsRequest = z.input<
@@ -146,7 +161,7 @@ export type UpdatePlatformSettingsRequest = z.input<
  * invoice details are not part of it.
  */
 export const publicPlatformSettingsResponseSchema = platformSettingsSchema.omit(
-  { invoice: true },
+  { invoice: true, legal: true },
 ) satisfies z.ZodType<PublicPlatformSettings>;
 export type PublicPlatformSettingsResponse = PublicPlatformSettings;
 

@@ -49,6 +49,7 @@ import {
   QUEUE_PRIORITIES,
   StatusIcon,
 } from "./supportQueueCatalog";
+import { useSiteName } from "../../site/siteName";
 
 const ALL = "all";
 /** Reports not resolved yet. */
@@ -73,6 +74,7 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("ticket");
   const stats = useStaffSupportStats();
+  const siteName = useSiteName();
   const viewerId = useAuthStore((state) => state.user?.id);
 
   const [searchInput, setSearchInput] = useState("");
@@ -157,7 +159,7 @@ function SupportInbox({ canManage }: { canManage: boolean }) {
         <PageHeading
           id="support-inbox-title"
           title="Support"
-          description="Problems reported by learners, and their feedback on ProCodrr."
+          description={`Problems reported by learners, and their feedback on ${siteName}.`}
         />
         <SearchField
           value={searchInput}

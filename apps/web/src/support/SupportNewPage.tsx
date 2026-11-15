@@ -27,6 +27,7 @@ import {
 import { supportFieldLabelClasses, supportPageClasses } from "./supportLayout";
 import { readTechnicalDetails } from "./technicalDetails";
 import { useSupportDraft } from "./useSupportDraft";
+import { useSiteName } from "../site/siteName";
 
 const NO_COURSE = "none";
 
@@ -52,6 +53,7 @@ const UUID_PATTERN =
 export function SupportNewPage() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
+  const siteName = useSiteName();
   const kind: SupportTicketKind =
     params.get("type") === "feedback" ? "feedback" : "problem";
   const origin = useMemo(() => readOrigin(params), [params]);
@@ -170,7 +172,7 @@ export function SupportNewPage() {
 
   const isProblem = kind === "problem";
   const placeholder = category
-    ? SUPPORT_CATEGORIES[category].placeholder
+    ? SUPPORT_CATEGORIES[category].placeholder.replaceAll("{site}", siteName)
     : "What happened? What did you expect to happen instead?";
 
   return (
@@ -223,7 +225,7 @@ export function SupportNewPage() {
           <>
             <fieldset className="m-0 border-0 p-0">
               <legend className={supportFieldLabelClasses}>
-                How&apos;s your experience with ProCodrr?{" "}
+                How&apos;s your experience with {siteName}?{" "}
                 <span className="font-normal text-(--muted)">(optional)</span>
               </legend>
               <div
@@ -596,6 +598,7 @@ function SentCard({
   onDone: () => void;
 }) {
   const isProblem = kind === "problem";
+  const siteName = useSiteName();
   return (
     <ElevatedCard
       padded
@@ -620,7 +623,7 @@ function SentCard({
       <p className="mt-2 mb-0 max-w-md text-sm leading-6 text-(--text-secondary)">
         {isProblem
           ? `Thanks for letting us know. We'll look into it and reply here${email ? ` and at ${email}` : ""}.`
-          : "Every message is read by the ProCodrr team and helps decide what we build and improve next."}
+          : `Every message is read by the ${siteName} team and helps decide what we build and improve next.`}
       </p>
       <div className="mt-5 inline-flex items-center gap-2 rounded-xl bg-(--surface-strong) px-4 py-2 text-sm text-(--muted)">
         Reference{" "}

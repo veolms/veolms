@@ -41,6 +41,7 @@ export function useUpdatePlatformSettings() {
               },
               security: { ...previous.settings.security, ...changes.security },
               invoice: { ...previous.settings.invoice, ...changes.invoice },
+              legal: { ...previous.settings.legal, ...changes.legal },
             },
           },
         );

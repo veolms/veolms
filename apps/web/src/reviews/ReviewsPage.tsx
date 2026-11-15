@@ -19,6 +19,7 @@ import { useReviewsFilter } from "./useReviewsFilter";
 import { WriteReviewModal } from "./WriteReviewModal";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ElevatedCard } from "../components/ElevatedCard";
+import { usePublicAcademyBrand } from "../services/academy";
 
 export interface ReviewsPageProps {
   onNavigatePage?: NavigateTo;
@@ -69,6 +70,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
 
   const [mobileSummaryExpanded, setMobileSummaryExpanded] = useState(true);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const supportEmail = usePublicAcademyBrand().data?.contactEmail;
 
   useBackDismiss({
     open: isSupportModalOpen,
@@ -322,10 +324,12 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               Have questions or feedback regarding this course&apos;s reviews?
               Our support team is here to help 24/7.
             </p>
-            <div className="mt-4 rounded-xl bg-(--card-surface-raised,var(--hover)) p-3.5 text-xs text-(--muted)">
-              <span>Support email: </span>
-              <strong className="text-(--text)">support@procodrr.com</strong>
-            </div>
+            {supportEmail ? (
+              <div className="mt-4 rounded-xl bg-(--card-surface-raised,var(--hover)) p-3.5 text-xs text-(--muted)">
+                <span>Support email: </span>
+                <strong className="text-(--text)">{supportEmail}</strong>
+              </div>
+            ) : null}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { productName } from "../routing/routeDescriptors";
+import { SiteName } from "../site/SiteNameText";
 import {
   loginCardColumnClasses,
   loginCardFrameClasses,
@@ -15,7 +15,9 @@ export function AuthPageFrame({ children }: { children: ReactNode }) {
       </div>
 
       <p className="auth-page__footer">
-        <span>&copy; 2026 {productName}. All rights reserved.</span>
+        <span>
+          &copy; 2026 <SiteName />. All rights reserved.
+        </span>
       </p>
     </div>
   );
