@@ -90,7 +90,17 @@ export interface ResumeCurriculumLesson {
   title: string;
   sectionTitle: string;
   sectionId?: string;
+  /** The video's length, when the lesson has one (see RESUME_END_MARGIN). */
+  durationSeconds?: number | null;
 }
+
+/**
+ * A finished lesson left more than this before its end is being watched
+ * again, and is where the learner carries on. Without it, a learner going
+ * through a course a second time was sent past every lesson already done,
+ * to the first one never finished (support ticket #1025).
+ */
+const RESUME_END_MARGIN_SECONDS = 15;
 
 export type ResumeProgressRow = {
   lesson_id: string;
@@ -114,6 +124,7 @@ interface ResumeCurriculumLessonRecord {
   title: string;
   position: number;
   is_published: boolean;
+  content_media_id?: string | null;
 }
 
 /**
@@ -126,6 +137,7 @@ function orderAvailableLessons(
   sections: readonly ResumeCurriculumSection[],
   lessons: readonly ResumeCurriculumLessonRecord[],
   canManageCourse: boolean,
+  durationByMediaId: ReadonlyMap<string, number | null> = new Map(),
 ): ResumeCurriculumLesson[] {
   const sectionById = new Map(sections.map((section) => [section.id, section]));
 
@@ -145,6 +157,9 @@ function orderAvailableLessons(
       title: lesson.title,
       sectionTitle: sectionById.get(lesson.section_id)!.title,
       sectionId: lesson.section_id,
+      durationSeconds: lesson.content_media_id
+        ? (durationByMediaId.get(lesson.content_media_id) ?? null)
+        : null,
     }));
 }
 
@@ -266,13 +281,27 @@ export function resolveResumeContext(
     !opensLesson(lessons[index]!) ||
     (progressByLessonId.get(lessons[index]!.id) ?? 0) >= 100;
   const lastPlayedIndex = findLastPlayedIndex(lessons, rows);
-  // The lesson played last, unless it is finished: then the next unfinished
-  // one after it (a course finished from there on goes back to the first
-  // unfinished one, below).
+  // A finished lesson left partway: watched again, and not over yet.
+  const leftPartway = (index: number) => {
+    const lesson = lessons[index]!;
+    const duration = lesson.durationSeconds;
+    const position = updatedRowsByLessonId.get(lesson.id)?.position_seconds;
+    return (
+      opensLesson(lesson) &&
+      typeof duration === "number" &&
+      duration > 0 &&
+      typeof position === "number" &&
+      position > 0 &&
+      position < duration - RESUME_END_MARGIN_SECONDS
+    );
+  };
+  // The lesson played last, unless it is finished and was watched to its
+  // end: then the next unfinished one after it (a course finished from
+  // there on goes back to the first unfinished one, below).
   const playedOnIndex =
     lastPlayedIndex < 0
       ? -1
-      : !isFinished(lastPlayedIndex)
+      : !isFinished(lastPlayedIndex) || leftPartway(lastPlayedIndex)
         ? lastPlayedIndex
         : lessons.findIndex(
             (_, index) => index > lastPlayedIndex && !isFinished(index),
@@ -458,8 +487,14 @@ export function createLearningProgressService({
     course: CourseContentKey,
     canManageCourse: boolean,
   ): Promise<ResumeCurriculumLesson[]> {
-    const { sections, lessons } = await courseService.getCourseContent(course);
-    return orderAvailableLessons(sections, lessons, canManageCourse);
+    const { sections, lessons, media } =
+      await courseService.getCourseContent(course);
+    return orderAvailableLessons(
+      sections,
+      lessons,
+      canManageCourse,
+      new Map(media.map((asset) => [asset.id, asset.duration_seconds])),
+    );
   }
 
   /**
