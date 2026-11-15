@@ -1,5 +1,6 @@
 import type {
   AcademyLogoContentType,
+  PlatformBrandAsset,
   AcademyLogoPresignResponse,
   PlatformSettingsResponse,
   PublicPlatformSettingsResponse,
@@ -42,6 +43,32 @@ export const platformService = {
   removeInvoiceLogo(): Promise<PlatformSettingsResponse> {
     return api.delete<PlatformSettingsResponse>(
       "/platform/settings/invoice-logo",
+    );
+  },
+  /**
+   * Uploads the file straight to storage, then makes it the website's logo
+   * or icon. The file's type must already be checked as PNG or JPEG.
+   */
+  async uploadBrandAsset(
+    asset: PlatformBrandAsset,
+    file: File,
+  ): Promise<PlatformSettingsResponse> {
+    const contentType = file.type as AcademyLogoContentType;
+    const { uploadId, uploadUrl } = await api.post<AcademyLogoPresignResponse>(
+      `/platform/settings/brand-assets/${asset}/presign`,
+      { contentType, fileSize: file.size },
+    );
+    await mediaService.uploadFileToPresignedUrl(uploadUrl, file);
+    return await api.post<PlatformSettingsResponse>(
+      `/platform/settings/brand-assets/${asset}/complete`,
+      { uploadId, contentType },
+    );
+  },
+  removeBrandAsset(
+    asset: PlatformBrandAsset,
+  ): Promise<PlatformSettingsResponse> {
+    return api.delete<PlatformSettingsResponse>(
+      `/platform/settings/brand-assets/${asset}`,
     );
   },
   /** The last rebuild of every public page (administrators only). */

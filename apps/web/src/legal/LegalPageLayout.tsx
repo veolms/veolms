@@ -12,7 +12,7 @@ import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { useEffect, useState, type ComponentType } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { procodrrLogoSvg } from "../shell/academyShellConstants";
+import { SiteWordmark } from "../site/SiteLogo";
 import type { LegalDocument } from "./legalDocument";
 import { leaveLegalPages } from "./legalReturn";
 import { LEGAL_PAGES, legalPageTitle, type LegalPagePath } from "./legalPages";
@@ -87,14 +87,12 @@ function useCurrentSection(sections: LegalDocument["sections"]) {
   return current;
 }
 
-function Logo({ academyName }: { academyName: string }) {
+function Logo() {
   return (
-    <span className="inline-flex items-center gap-2.5">
-      <span
-        className="inline-flex h-8 w-auto text-(--text) [&_svg]:h-full [&_svg]:w-auto"
-        role="img"
-        aria-label={academyName}
-        dangerouslySetInnerHTML={{ __html: procodrrLogoSvg }}
+    <span className="inline-flex min-w-0 items-center gap-2.5">
+      <SiteWordmark
+        className="h-8 max-w-44"
+        nameClassName="text-lg leading-none"
       />
       <span className="text-base font-medium text-(--muted)">Legal</span>
     </span>
@@ -266,7 +264,7 @@ export function LegalPageLayout({
             className="hidden h-6 w-px bg-(--border) sm:block lg:hidden"
           />
           <span className="flex-1 pl-1.5 sm:pl-0 lg:max-w-180">
-            <Logo academyName={academyName} />
+            <Logo />
           </span>
           {/* The "On this page" column's room, so the logo sits over the
               text column as the page spreads its columns apart. */}

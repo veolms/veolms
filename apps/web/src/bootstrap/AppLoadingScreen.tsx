@@ -1,4 +1,5 @@
-import procodrrLogoMark from "../assets/procodrr-logo-mark.svg";
+import { SiteIcon } from "../site/SiteLogo";
+import { useSiteName } from "../site/siteName";
 
 type AppLoadingScreenProps = {
   variant?: "page" | "embedded";
@@ -12,13 +13,7 @@ function LoadingStatus() {
       aria-live="polite"
     >
       <div className="grid size-14 place-items-center rounded-2xl bg-(--surface) shadow-(--surface-depth-shadow)">
-        <img
-          className="h-8 w-auto"
-          src={procodrrLogoMark}
-          alt=""
-          width={115}
-          height={136}
-        />
+        <SiteIcon className="size-8" />
       </div>
       <div className="space-y-1.5">
         <p className="text-sm font-semibold tracking-tight">
@@ -40,12 +35,13 @@ function LoadingStatus() {
 export function AppLoadingScreen({
   variant = "page",
 }: AppLoadingScreenProps = {}) {
+  const label = `Loading ${useSiteName()}`;
   if (variant === "embedded") {
     return (
       <div
         className="flex w-full min-h-60 flex-col items-center justify-center px-2 py-8 lg:min-h-70"
         data-app-loading
-        aria-label="Loading ProCodrr"
+        aria-label={label}
       >
         <LoadingStatus />
       </div>
@@ -56,7 +52,7 @@ export function AppLoadingScreen({
     <main
       className="fixed inset-0 z-50 grid min-h-dvh place-items-center overflow-hidden bg-(--canvas) px-6 text-(--text)"
       data-app-loading
-      aria-label="Loading ProCodrr"
+      aria-label={label}
     >
       <LoadingStatus />
     </main>

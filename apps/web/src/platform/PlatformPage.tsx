@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { PageHeading } from "../components/PageHeading";
 import { AcademyBrandSection } from "../home-page-settings/AcademyBrandSection";
+import { WebsiteBrandSection } from "./WebsiteBrandSection";
 import { HomePageSettingsEditor } from "../home-page-settings/HomePageSettingsEditor";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import type { NavigateTo } from "../routing/navigation";
@@ -71,10 +72,14 @@ const PlatformTabContent = memo(function PlatformTabContent({
           <header className="settings-detail__header">
             <div>
               <h2>General</h2>
-              <p>Who your academy is, as its emails present it.</p>
+              <p>
+                Who your academy is: its name, and the logos its website and
+                emails show.
+              </p>
             </div>
           </header>
           <AcademyBrandSection setNotice={setNotice} />
+          <WebsiteBrandSection setNotice={setNotice} />
           <StaticSiteRebuildSection />
         </div>
       );

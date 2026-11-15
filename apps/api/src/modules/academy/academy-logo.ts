@@ -153,6 +153,49 @@ function isJpeg(bytes: Buffer): boolean {
   return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8;
 }
 
+/**
+ * An image's width and height in pixels, from a PNG's header or a JPEG's
+ * frame marker; null when neither can be found.
+ */
+export function imageDimensions(
+  bytes: Buffer,
+): { width: number; height: number } | null {
+  if (bytes.length >= 24 && bytes.subarray(0, 8).equals(PNG_SIGNATURE)) {
+    if (bytes.toString("latin1", 12, 16) !== "IHDR") return null;
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  }
+  if (!isJpeg(bytes)) return null;
+  let offset = 2;
+  while (offset + 4 <= bytes.length) {
+    if (bytes[offset] !== 0xff) return null;
+    const marker = bytes[offset + 1]!;
+    // Fill bytes and markers that carry no length.
+    if (marker === 0xff) {
+      offset += 1;
+      continue;
+    }
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) {
+      offset += 2;
+      continue;
+    }
+    if (marker === 0xd9 || marker === 0xda) return null;
+    const length = bytes.readUInt16BE(offset + 2);
+    if (length < 2) return null;
+    // A start-of-frame marker: C0–CF, except C4 (tables), C8 and CC.
+    const isFrame =
+      marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker);
+    if (isFrame) {
+      if (offset + 9 > bytes.length) return null;
+      return {
+        height: bytes.readUInt16BE(offset + 5),
+        width: bytes.readUInt16BE(offset + 7),
+      };
+    }
+    offset += 2 + length;
+  }
+  return null;
+}
+
 /** A PNG or JPEG the invoice PDF can draw. */
 export function isDrawableLogo(bytes: Buffer): boolean {
   return isDrawablePng(bytes) || isJpeg(bytes);

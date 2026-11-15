@@ -17,7 +17,6 @@ import { registerSegmentCacheReclaimer } from "./learning/player/segmentCacheRec
 import { useTruncatedTextTitles } from "./shell/useTruncatedTextTitles";
 import { appBaseStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
-import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
 import { getPlayerThemeBootstrapScript } from "./learning/player/playerThemeEarlyState";
 import {
@@ -36,6 +35,7 @@ import {
   reloadOnceForNewBuild,
 } from "./lib/chunk-reload";
 import { QueryProvider } from "./providers/query-provider";
+import { SiteBrandSync, SiteIconLinks } from "./site/SiteBrandSync";
 import { SiteNameSync } from "./site/SiteNameSync";
 import { getSiteName } from "./site/siteName";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
@@ -291,7 +291,7 @@ export function Layout({ children }: LayoutProps) {
             the status bar kept and the back button left to navigate. */}
         <link rel="manifest" href="/manifest.webmanifest" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <link rel="apple-touch-icon" href="/static/app-icon-192.png" />
+        <SiteIconLinks />
         {videoPlaybackCdnOrigin ? (
           <link
             rel="preconnect"
@@ -300,7 +300,6 @@ export function Layout({ children }: LayoutProps) {
           />
         ) : null}
         {apiOrigin ? <link rel="preconnect" href={apiOrigin} /> : null}
-        <link rel="icon" type="image/svg+xml" href={procodrrLogoMark} />
         <link
           rel="preload"
           href={manropeFontUrl}
@@ -558,6 +557,7 @@ export default function Root() {
     <QueryProvider>
       <HydrationMarker />
       <SiteNameSync />
+      <SiteBrandSync />
       <SessionInitializer>
         <GlobalGoogleOneTap />
         <AnalyticsPageViews />

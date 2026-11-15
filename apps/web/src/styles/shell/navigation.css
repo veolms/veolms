@@ -1816,3 +1816,62 @@
     0 0 0 2px var(--accent),
     0 10px 24px color-mix(in srgb, var(--accent-shadow) 42%, transparent);
 }
+
+/* An academy's own artwork (SidebarBrand, data-brand="custom"). The logo
+   slot keeps every rule above and in academyShellClasses (its window, its
+   fades, the sidebar edge revealing it while dragged); only what is inside
+   it differs from the built-in wordmark. Open, or while the rail is dragged
+   wide: the academy's logo, laid out at the wordmark's full width so the
+   edge reveals it the same way. Settled in the compact rail: its square
+   icon, filling the window the P shows through, on the navigation icons'
+   axis. */
+.courses-logo-clip[data-brand="custom"] .courses-logo-clip__wordmark {
+  display: flex;
+  align-items: center;
+  width: 156px;
+  max-width: none;
+  height: 100%;
+}
+
+.courses-logo-clip[data-brand="custom"] .courses-logo-clip__wordmark img {
+  width: auto;
+  max-width: 156px;
+  height: auto;
+  max-height: 34px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.courses-logo-clip[data-brand="custom"] .courses-logo-clip__icon {
+  display: none;
+}
+
+.courses-app--collapsed:not(.courses-app--resize-content-visible)
+  .courses-logo-clip[data-brand="custom"]
+  .courses-logo-clip__wordmark,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-logo-clip[data-brand="custom"]
+  .courses-logo-clip__wordmark {
+  display: none;
+}
+
+.courses-app--collapsed:not(.courses-app--resize-content-visible)
+  .courses-logo-clip[data-brand="custom"]
+  .courses-logo-clip__icon,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-logo-clip[data-brand="custom"]
+  .courses-logo-clip__icon {
+  display: flex;
+  align-items: center;
+  width: 21px;
+  height: 100%;
+}
+
+.courses-logo-clip[data-brand="custom"] .courses-logo-clip__icon > img,
+.courses-logo-clip[data-brand="custom"] .courses-logo-clip__icon > span {
+  width: 21px;
+  max-width: none;
+  height: 21px;
+}

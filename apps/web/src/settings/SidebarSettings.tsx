@@ -252,7 +252,7 @@ export function SidebarSettings({
           <SettingRow
             icon={SidebarSimple}
             label="Show logo when collapsed"
-            note="Keep the ProCodrr P visible in the compact rail"
+            note="Keep your academy's icon visible in the compact rail"
           >
             <SettingsToggle
               checked={showCollapsedLogo}

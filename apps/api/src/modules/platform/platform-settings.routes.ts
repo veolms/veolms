@@ -2,6 +2,7 @@ import {
   academyLogoCompleteRequestSchema,
   academyLogoPresignRequestSchema,
   academyLogoPresignResponseSchema,
+  platformBrandAssetParamsSchema,
   platformSettingsResponseSchema,
   publicPlatformSettingsResponseSchema,
   staticSiteRebuildStatusSchema,
@@ -13,6 +14,7 @@ import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createSessionService } from "../auth/index.ts";
 import { createAcademyBrandService } from "../academy/academy-brand.service.ts";
 import { createPermissionPreHandlers } from "../authorization/index.ts";
+import { createPlatformBrandAssetsService } from "./platform-brand-assets.service.ts";
 import { createPlatformInvoiceLogoService } from "./platform-invoice-logo.service.ts";
 import { createPlatformSettingsController } from "./platform-settings.controller.ts";
 import { createPlatformSettingsService } from "./platform-settings.service.ts";
@@ -29,15 +31,14 @@ const platformSettingsRoutes: RoutePlugin = async (app, options) => {
     database: options.database,
     onSecuritySettingsChange: sessionService.forgetCachedAuthContexts,
   });
+  const brand = createAcademyBrandService({
+    database: options.database,
+    storage: options.services.storage,
+  });
   const controller = createPlatformSettingsController({
     service,
-    invoiceLogo: createPlatformInvoiceLogoService({
-      settings: service,
-      brand: createAcademyBrandService({
-        database: options.database,
-        storage: options.services.storage,
-      }),
-    }),
+    invoiceLogo: createPlatformInvoiceLogoService({ settings: service, brand }),
+    brandAssets: createPlatformBrandAssetsService({ settings: service, brand }),
     staticPages: options.services.courseStaticPages,
   });
 
@@ -178,6 +179,86 @@ const platformSettingsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.removeInvoiceLogo,
+  );
+
+  app.post(
+    "/platform/settings/brand-assets/:asset/presign",
+    {
+      preHandler: requires("platform.branding.update"),
+      schema: {
+        operationId: "presignBrandAssetUpload",
+        tags: ["Platform"],
+        summary: "Get an address to upload a website logo or icon to",
+        description:
+          "logo-light, logo-dark or icon. The browser PUTs the PNG or JPEG straight to the returned address, then calls /platform/settings/brand-assets/{asset}/complete.",
+        params: platformBrandAssetParamsSchema,
+        body: academyLogoPresignRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Where to upload the image.",
+            academyLogoPresignResponseSchema,
+          ),
+          400: errorResponse("Not a PNG or JPEG, or larger than 2 MB"),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          409: errorResponse("The academy has not been set up yet"),
+        },
+      },
+    },
+    controller.presignBrandAsset,
+  );
+
+  app.post(
+    "/platform/settings/brand-assets/:asset/complete",
+    {
+      preHandler: requires("platform.branding.update"),
+      schema: {
+        operationId: "completeBrandAssetUpload",
+        tags: ["Platform"],
+        summary: "Make an uploaded image the website's logo or icon",
+        description:
+          "The icon must be square and at least 96 pixels a side; the logos may be any shape.",
+        params: platformBrandAssetParamsSchema,
+        body: academyLogoCompleteRequestSchema,
+        response: {
+          200: jsonResponse(
+            "The settings in force after the change.",
+            platformSettingsResponseSchema,
+          ),
+          400: errorResponse(
+            "The upload is missing, is not a PNG or JPEG, or is not a square icon",
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          503: errorResponse("Settings storage is not available yet"),
+        },
+      },
+    },
+    controller.completeBrandAsset,
+  );
+
+  app.delete(
+    "/platform/settings/brand-assets/:asset",
+    {
+      preHandler: requires("platform.branding.update"),
+      schema: {
+        operationId: "removeBrandAsset",
+        tags: ["Platform"],
+        summary: "Show the built-in logo or icon again",
+        params: platformBrandAssetParamsSchema,
+        response: {
+          200: jsonResponse(
+            "The settings in force after the change.",
+            platformSettingsResponseSchema,
+          ),
+          400: errorResponse("Not logo-light, logo-dark or icon"),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          503: errorResponse("Settings storage is not available yet"),
+        },
+      },
+    },
+    controller.removeBrandAsset,
   );
 
   app.get(

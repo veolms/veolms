@@ -2,12 +2,17 @@ import {
   DEFAULT_MAX_DEVICES_PER_STUDENT,
   DEFAULT_MAX_SIMULTANEOUS_STREAMS,
   DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
+  DEFAULT_PLATFORM_BRANDING_SETTINGS,
   DEFAULT_PLATFORM_INVOICE_SETTINGS,
   DEFAULT_PLATFORM_LEGAL_SETTINGS,
   platformAppearanceSettingsSchema,
+  platformBrandingSettingsSchema,
   platformInvoiceSettingsSchema,
   platformLegalSettingsSchema,
   platformSecuritySettingsSchema,
+  PLATFORM_BRAND_ASSET_FIELDS,
+  type PlatformBrandAsset,
+  type PlatformBrandingSettings,
   type PlatformInvoiceSettings,
   type PlatformLegalSettings,
   type PlatformSettings,
@@ -100,6 +105,26 @@ function resolveInvoiceSettings(
   };
 }
 
+/** Each piece of the website's artwork as saved, or none when it does not read. */
+function resolveBrandingSettings(
+  saved: Record<string, unknown>,
+): PlatformBrandingSettings {
+  const fields = platformBrandingSettingsSchema.shape;
+  const read = <K extends keyof PlatformBrandingSettings>(
+    key: K,
+  ): PlatformBrandingSettings[K] => {
+    const parsed = fields[key].safeParse(saved[key]);
+    return parsed.success
+      ? parsed.data
+      : DEFAULT_PLATFORM_BRANDING_SETTINGS[key];
+  };
+  return {
+    logoLightUrl: read("logoLightUrl"),
+    logoDarkUrl: read("logoDarkUrl"),
+    iconUrl: read("iconUrl"),
+  };
+}
+
 /** Each legal-page detail as saved, or empty when it does not read. */
 function resolveLegalSettings(
   saved: Record<string, unknown>,
@@ -156,14 +181,19 @@ function resolveSettings(document: StoredDocument): PlatformSettings {
               security.maxSimultaneousStreams,
             ).data ?? DEFAULT_MAX_SIMULTANEOUS_STREAMS),
     },
+    branding: resolveBrandingSettings(document.branding ?? {}),
     invoice: resolveInvoiceSettings(document.invoice ?? {}),
     legal: resolveLegalSettings(document.legal ?? {}),
   };
 }
 
-/** What every visitor is sent: everything but the invoice details. */
+/** What every visitor is sent: everything but the invoice and legal details. */
 function toPublicSettings(settings: PlatformSettings): PublicPlatformSettings {
-  return { appearance: settings.appearance, security: settings.security };
+  return {
+    appearance: settings.appearance,
+    security: settings.security,
+    branding: settings.branding,
+  };
 }
 
 function toResponse(stored: StoredSettings): PlatformSettingsResponse {
@@ -191,6 +221,15 @@ export interface PlatformSettingsService {
    */
   setInvoiceLogo(
     logoUrl: string | null,
+    updatedBy: string | null,
+  ): Promise<PlatformSettingsResponse>;
+  /**
+   * Sets one piece of the website's artwork, or clears it (null). The
+   * address must be one the upload checked.
+   */
+  setBrandAsset(
+    asset: PlatformBrandAsset,
+    url: string | null,
     updatedBy: string | null,
   ): Promise<PlatformSettingsResponse>;
   /**
@@ -244,6 +283,7 @@ export function createPlatformSettingsService({
   async function updateSettings(
     changes: UpdatePlatformSettingsRequest & {
       invoice?: Partial<PlatformInvoiceSettings>;
+      branding?: Partial<PlatformBrandingSettings>;
     },
     updatedBy: string | null,
   ): Promise<PlatformSettingsResponse> {
@@ -271,6 +311,9 @@ export function createPlatformSettingsService({
         : {}),
       ...(changes.legal
         ? { legal: { ...current.document.legal, ...changes.legal } }
+        : {}),
+      ...(changes.branding
+        ? { branding: { ...current.document.branding, ...changes.branding } }
         : {}),
     };
 
@@ -316,6 +359,11 @@ export function createPlatformSettingsService({
     updateSettings,
     setInvoiceLogo: async (logoUrl, updatedBy) =>
       await updateSettings({ invoice: { logoUrl } }, updatedBy),
+    setBrandAsset: async (asset, url, updatedBy) =>
+      await updateSettings(
+        { branding: { [PLATFORM_BRAND_ASSET_FIELDS[asset]]: url } },
+        updatedBy,
+      ),
     maxDevicesPerStudent: async () =>
       (await readSettings()).settings.security.maxDevicesPerStudent,
     maxSimultaneousStreams: async () =>

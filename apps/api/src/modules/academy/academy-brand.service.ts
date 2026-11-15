@@ -18,6 +18,7 @@ import * as repository from "./academy-brand.repository.ts";
 import {
   academyLogoKey,
   academyLogoUrl,
+  imageDimensions,
   isDrawableLogo,
   readLogo,
 } from "./academy-logo.ts";
@@ -141,6 +142,13 @@ export function createAcademyBrandService({
    */
   async function verifyUploadedLogo(
     input: AcademyLogoCompleteRequest,
+    options: {
+      /**
+       * The image must be square (within a few pixels) and at least this
+       * many pixels a side: a website icon.
+       */
+      squareMinSide?: number;
+    } = {},
   ): Promise<string> {
     const store = requireStorage();
     const key = academyLogoKey(input.uploadId, input.contentType);
@@ -173,6 +181,26 @@ export function createAcademyBrandService({
       return await reject(
         "This image could not be read. Save it again as a standard (non-interlaced) PNG or a JPEG, and upload that.",
       );
+    }
+    if (options.squareMinSide !== undefined) {
+      const size = imageDimensions(image);
+      if (!size) {
+        return await reject(
+          "This image could not be read. Save it again as a standard PNG or a JPEG, and upload that.",
+        );
+      }
+      const { width, height } = size;
+      // A few pixels either way: exports are often a pixel off.
+      if (Math.abs(width - height) > Math.max(2, Math.round(width * 0.02))) {
+        return await reject(
+          `The icon must be square; this one is ${width} × ${height} pixels.`,
+        );
+      }
+      if (Math.min(width, height) < options.squareMinSide) {
+        return await reject(
+          `The icon must be at least ${options.squareMinSide} × ${options.squareMinSide} pixels; this one is ${width} × ${height}.`,
+        );
+      }
     }
 
     const logoUrl = academyLogoUrl(store, key, siteSettings(config).webUrl);

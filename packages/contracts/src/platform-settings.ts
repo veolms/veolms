@@ -8,8 +8,10 @@ import {
   MAX_MAX_SIMULTANEOUS_STREAMS,
   MIN_MAX_DEVICES_PER_STUDENT,
   MIN_MAX_SIMULTANEOUS_STREAMS,
+  PLATFORM_BRAND_ASSETS,
   PLATFORM_DISPLAY_MODES,
   type PlatformAppearanceSettings,
+  type PlatformBrandingSettings,
   type PlatformInvoiceSettings,
   type PlatformLegalSettings,
   type PlatformSecuritySettings,
@@ -100,9 +102,30 @@ export const platformLegalSettingsSchema = z.strictObject({
   grievanceOfficer: z.string().trim().max(160),
 }) satisfies z.ZodType<PlatformLegalSettings>;
 
+/**
+ * The website's artwork. Each address is one the server checked when it
+ * was uploaded; none is set any other way.
+ */
+export const platformBrandingSettingsSchema = z.strictObject({
+  logoLightUrl: z.url().nullable(),
+  logoDarkUrl: z.url().nullable(),
+  iconUrl: z.url().nullable(),
+}) satisfies z.ZodType<PlatformBrandingSettings>;
+
+/** Which piece of the website's artwork an upload is for. */
+export const platformBrandAssetParamsSchema = z.strictObject({
+  asset: z.enum(PLATFORM_BRAND_ASSETS, {
+    message: "Choose logo-light, logo-dark or icon",
+  }),
+});
+export type PlatformBrandAssetParams = z.infer<
+  typeof platformBrandAssetParamsSchema
+>;
+
 export const platformSettingsSchema = z.strictObject({
   appearance: platformAppearanceSettingsSchema,
   security: platformSecuritySettingsSchema,
+  branding: platformBrandingSettingsSchema,
   invoice: platformInvoiceSettingsSchema,
   legal: platformLegalSettingsSchema,
 }) satisfies z.ZodType<PlatformSettings>;
@@ -156,9 +179,9 @@ export type UpdatePlatformSettingsRequest = z.input<
 >;
 
 /**
- * What every visitor's browser needs before it shows a page: the default look
- * and the student rules the screens follow. Nothing in it is private; the
- * invoice details are not part of it.
+ * What every visitor's browser needs before it shows a page: the default look,
+ * the website's artwork and the student rules the screens follow. Nothing in
+ * it is private; the invoice details are not part of it.
  */
 export const publicPlatformSettingsResponseSchema = platformSettingsSchema.omit(
   { invoice: true, legal: true },

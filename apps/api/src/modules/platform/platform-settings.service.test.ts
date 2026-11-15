@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { clearAllCaches } from "@veolms/api-core";
 import {
+  DEFAULT_PLATFORM_BRANDING_SETTINGS,
   DEFAULT_PLATFORM_INVOICE_SETTINGS,
   DEFAULT_PLATFORM_LEGAL_SETTINGS,
 } from "@veolms/contracts";
@@ -72,6 +73,7 @@ await test("before anything is saved, the defaults apply and the phone rule foll
         maxDevicesPerStudent: 3,
         maxSimultaneousStreams: 1,
       },
+      branding: DEFAULT_PLATFORM_BRANDING_SETTINGS,
       invoice: DEFAULT_PLATFORM_INVOICE_SETTINGS,
       legal: DEFAULT_PLATFORM_LEGAL_SETTINGS,
     },
@@ -205,6 +207,7 @@ await test("visitors are not sent the invoice details", async () => {
   const publicSettings = await service.getPublicSettings();
   assert.deepEqual(Object.keys(publicSettings).sort(), [
     "appearance",
+    "branding",
     "security",
   ]);
 });
@@ -326,4 +329,38 @@ await test("a stream limit: 1 until set, null for no limit, and a stray value fa
   );
   assert.equal(await read({ security: { maxSimultaneousStreams: 0 } }), 1);
   assert.equal(await read({ security: { maxSimultaneousStreams: "many" } }), 1);
+});
+
+await test("the website's artwork is saved piece by piece and sent to every visitor", async () => {
+  const { database, writes } = fakeDatabase({
+    branding: { iconUrl: "not an address" },
+  });
+  const service = createPlatformSettingsService({ database });
+
+  // A stored value that does not read as an address is no icon at all.
+  assert.deepEqual(
+    (await service.getPublicSettings()).branding,
+    DEFAULT_PLATFORM_BRANDING_SETTINGS,
+  );
+
+  const logo = "https://cdn.example.com/public/academy/logo/light.png";
+  const icon = "https://cdn.example.com/public/academy/logo/icon.png";
+  await service.setBrandAsset("logo-light", logo, null);
+  const saved = await service.setBrandAsset("icon", icon, null);
+  assert.deepEqual(saved.settings.branding, {
+    logoLightUrl: logo,
+    logoDarkUrl: null,
+    iconUrl: icon,
+  });
+  assert.deepEqual((await service.getPublicSettings()).branding, {
+    logoLightUrl: logo,
+    logoDarkUrl: null,
+    iconUrl: icon,
+  });
+
+  // Removing one leaves the others as they were.
+  await service.setBrandAsset("logo-light", null, null);
+  assert.deepEqual(writes.at(-1), {
+    branding: { logoLightUrl: null, iconUrl: icon },
+  });
 });

@@ -18,12 +18,12 @@ interface LogoMutation<TInput> {
   error: unknown;
 }
 
-function logoFileProblem(file: File): string | null {
+function logoFileProblem(file: File, noun: string): string | null {
   if (!(ACADEMY_LOGO_CONTENT_TYPES as readonly string[]).includes(file.type)) {
     return "Choose a PNG or JPEG image.";
   }
   if (file.size > ACADEMY_LOGO_MAX_BYTES) {
-    return "The logo must be 2 MB or smaller.";
+    return `The ${noun} must be 2 MB or smaller.`;
   }
   return null;
 }
@@ -31,7 +31,8 @@ function logoFileProblem(file: File): string | null {
 /**
  * A logo shown on the background it is printed on, with buttons to upload,
  * replace or remove it. Each takes effect at once. Used for the academy's
- * logo (on the emails' navy) and the invoice-only logo (on white paper).
+ * logo (on the emails' navy), the invoice-only logo (on white paper) and
+ * the website's logos and icon (on the pages' light and dark).
  */
 export function LogoUploadField({
   label,
@@ -46,6 +47,8 @@ export function LogoUploadField({
   uploadedNotice,
   removedNotice,
   setNotice,
+  shape = "wide",
+  noun = "logo",
 }: {
   label: string;
   /** The hidden file input's accessible name. */
@@ -62,6 +65,10 @@ export function LogoUploadField({
   uploadedNotice: string;
   removedNotice: string;
   setNotice?: (message: string) => void;
+  /** A wide logo, or a square icon shown as a browser tab would. */
+  shape?: "wide" | "square";
+  /** What the image is called in the buttons and messages: logo or icon. */
+  noun?: "logo" | "icon";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileProblem, setFileProblem] = useState<string | null>(null);
@@ -72,9 +79,11 @@ export function LogoUploadField({
   const error =
     fileProblem ??
     (upload.isError
-      ? getApiError(upload.error).message || "The logo could not be uploaded."
+      ? getApiError(upload.error).message ||
+        `The ${noun} could not be uploaded.`
       : remove.isError
-        ? getApiError(remove.error).message || "The logo could not be removed."
+        ? getApiError(remove.error).message ||
+          `The ${noun} could not be removed.`
         : null);
 
   const chooseFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -84,7 +93,7 @@ export function LogoUploadField({
     if (!file) return;
     upload.reset();
     remove.reset();
-    const problem = logoFileProblem(file);
+    const problem = logoFileProblem(file, noun);
     setFileProblem(problem);
     if (problem) return;
     upload.mutate(file, {
@@ -107,7 +116,11 @@ export function LogoUploadField({
         {showLogo ? (
           <img
             alt={alt}
-            className="block h-8 w-auto max-w-60"
+            className={
+              shape === "square"
+                ? "block size-12 rounded-xl object-cover"
+                : "block h-8 w-auto max-w-60"
+            }
             onError={() => setFailedUrl(logoUrl)}
             src={logoUrl}
           />
@@ -117,7 +130,7 @@ export function LogoUploadField({
       </div>
       <p className="mt-1.5 text-xs text-(--muted)">
         {logoFailed
-          ? "The logo could not be shown here. Try uploading it again."
+          ? `The ${noun} could not be shown here. Try uploading it again.`
           : hint}
       </p>
       {error ? (
@@ -149,8 +162,8 @@ export function LogoUploadField({
           {upload.isPending
             ? "Uploading…"
             : logoUrl
-              ? "Replace logo"
-              : "Upload logo"}
+              ? `Replace ${noun}`
+              : `Upload ${noun}`}
         </Button>
         {logoUrl ? (
           <button

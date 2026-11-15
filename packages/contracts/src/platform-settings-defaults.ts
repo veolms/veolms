@@ -106,9 +106,45 @@ export interface PlatformLegalSettings {
   grievanceOfficer: string;
 }
 
+/**
+ * The academy's own artwork for its website (Platform > General). Each is
+ * an uploaded PNG or JPEG; without one the site shows the build's own
+ * artwork, or the academy's name where the build has none.
+ */
+export interface PlatformBrandingSettings {
+  /** The wide logo on light pages: the sidebar, sign-in, the legal pages. */
+  logoLightUrl: string | null;
+  /** The same logo for dark pages; without one, the light pages' logo. */
+  logoDarkUrl: string | null;
+  /** A square icon: the browser tab, the compact sidebar, loading screens. */
+  iconUrl: string | null;
+}
+
+/** The website's artwork, as its upload addresses name each one. */
+export const PLATFORM_BRAND_ASSETS = [
+  "logo-light",
+  "logo-dark",
+  "icon",
+] as const;
+export type PlatformBrandAsset = (typeof PLATFORM_BRAND_ASSETS)[number];
+
+/** Which setting each upload sets. */
+export const PLATFORM_BRAND_ASSET_FIELDS: Record<
+  PlatformBrandAsset,
+  keyof PlatformBrandingSettings
+> = {
+  "logo-light": "logoLightUrl",
+  "logo-dark": "logoDarkUrl",
+  icon: "iconUrl",
+};
+
+/** The smallest icon accepted: sharp in a browser tab and on a phone. */
+export const PLATFORM_ICON_MIN_SIDE = 96;
+
 export interface PlatformSettings {
   appearance: PlatformAppearanceSettings;
   security: PlatformSecuritySettings;
+  branding: PlatformBrandingSettings;
   invoice: PlatformInvoiceSettings;
   legal: PlatformLegalSettings;
 }
@@ -121,6 +157,12 @@ export type PublicPlatformSettings = Omit<
   PlatformSettings,
   "invoice" | "legal"
 >;
+
+export const DEFAULT_PLATFORM_BRANDING_SETTINGS: PlatformBrandingSettings = {
+  logoLightUrl: null,
+  logoDarkUrl: null,
+  iconUrl: null,
+};
 
 export const DEFAULT_PLATFORM_LEGAL_SETTINGS: PlatformLegalSettings = {
   companyName: "",

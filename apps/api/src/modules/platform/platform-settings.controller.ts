@@ -1,11 +1,13 @@
 import type {
   AcademyLogoCompleteRequest,
   AcademyLogoPresignRequest,
+  PlatformBrandAssetParams,
   StaticSiteRebuildStatus,
   UpdatePlatformSettingsRequest,
 } from "@veolms/contracts";
 import type { CourseStaticPageRefreshService } from "@veolms/services/course-static-pages";
 import type { FastifyRequest } from "fastify";
+import type { PlatformBrandAssetsService } from "./platform-brand-assets.service.ts";
 import type { PlatformInvoiceLogoService } from "./platform-invoice-logo.service.ts";
 import type { PlatformSettingsService } from "./platform-settings.service.ts";
 
@@ -19,10 +21,12 @@ const NOT_CONFIGURED: StaticSiteRebuildStatus = {
 export function createPlatformSettingsController({
   service,
   invoiceLogo,
+  brandAssets,
   staticPages,
 }: {
   service: PlatformSettingsService;
   invoiceLogo: PlatformInvoiceLogoService;
+  brandAssets: PlatformBrandAssetsService;
   staticPages?: CourseStaticPageRefreshService;
 }) {
   async function presignInvoiceLogo(
@@ -39,6 +43,37 @@ export function createPlatformSettingsController({
 
   async function removeInvoiceLogo(request: FastifyRequest) {
     return await invoiceLogo.remove(request.user?.id ?? null);
+  }
+
+  async function presignBrandAsset(
+    request: FastifyRequest<{
+      Params: PlatformBrandAssetParams;
+      Body: AcademyLogoPresignRequest;
+    }>,
+  ) {
+    return await brandAssets.presign(request.body);
+  }
+
+  async function completeBrandAsset(
+    request: FastifyRequest<{
+      Params: PlatformBrandAssetParams;
+      Body: AcademyLogoCompleteRequest;
+    }>,
+  ) {
+    return await brandAssets.complete(
+      request.params.asset,
+      request.body,
+      request.user?.id ?? null,
+    );
+  }
+
+  async function removeBrandAsset(
+    request: FastifyRequest<{ Params: PlatformBrandAssetParams }>,
+  ) {
+    return await brandAssets.remove(
+      request.params.asset,
+      request.user?.id ?? null,
+    );
   }
 
   async function getSettings() {
@@ -70,6 +105,9 @@ export function createPlatformSettingsController({
     presignInvoiceLogo,
     completeInvoiceLogo,
     removeInvoiceLogo,
+    presignBrandAsset,
+    completeBrandAsset,
+    removeBrandAsset,
     getStaticSiteRebuildStatus,
     rebuildStaticSite,
   };

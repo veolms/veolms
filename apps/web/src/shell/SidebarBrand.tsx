@@ -3,6 +3,9 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
+import { BUILD_HAS_OWN_ARTWORK, useSiteBrandAssets } from "../site/siteBrand";
+import { SiteIcon, SiteWordmark, useSiteLogoImages } from "../site/SiteLogo";
+import { useSiteName } from "../site/siteName";
 import { SidebarToggleIcon } from "./SidebarToggleIcon";
 import { procodrrLogoSvg } from "./academyShellConstants";
 import {
@@ -72,6 +75,22 @@ export function SidebarBrand({
   sidebarPresentedAsOverlay,
   sidebarDraggedToCollapsedWidth,
 }: SidebarBrandProps) {
+  const siteName = useSiteName();
+  const logoImages = useSiteLogoImages();
+  const { iconUrl } = useSiteBrandAssets();
+  // The build's own wordmark, cut to its P in the compact rail, until the
+  // academy uploads artwork of its own (or the build has none).
+  const ownArtwork =
+    logoImages !== null || iconUrl !== null || !BUILD_HAS_OWN_ARTWORK;
+  const logoProps = {
+    "data-sidebar-resize-reader": "",
+    role: "img",
+    "aria-label": siteName,
+    title: "Home. Click, then hold to float the sidebar",
+    "data-second-press-holding":
+      sidebarLogoGesture.isSecondPressHolding || undefined,
+    ...sidebarLogoGesture.handlers,
+  } as const;
   // prettier-ignore
   return (
     <div
@@ -81,18 +100,28 @@ export function SidebarBrand({
       onMouseDown={preventSidebarBrandTextSelection}
       onPointerUp={handleSidebarBrandPress}
     >
-      <span
-        className="courses-logo-clip"
-        data-sidebar-resize-reader=""
-        role="img"
-        aria-label="ProCodrr"
-        title="Home. Click, then hold to float the sidebar"
-        data-second-press-holding={
-          sidebarLogoGesture.isSecondPressHolding || undefined
-        }
-        {...sidebarLogoGesture.handlers}
-        dangerouslySetInnerHTML={{ __html: procodrrLogoSvg }}
-      />
+      {ownArtwork ? (
+        // The academy's logo while the sidebar is open, its square icon in
+        // the compact rail (navigation.css, "An academy's own artwork").
+        <span className="courses-logo-clip" data-brand="custom" {...logoProps}>
+          <span className="courses-logo-clip__wordmark">
+            <SiteWordmark
+              decorative
+              className="h-full max-w-full"
+              nameClassName="text-[1.35rem] leading-none"
+            />
+          </span>
+          <span className="courses-logo-clip__icon">
+            <SiteIcon className="size-[21px] rounded-[6px] text-[12px]" />
+          </span>
+        </span>
+      ) : (
+        <span
+          className="courses-logo-clip"
+          {...logoProps}
+          dangerouslySetInnerHTML={{ __html: procodrrLogoSvg }}
+        />
+      )}
       <button
         key={sidebarControlKey}
         type="button"
