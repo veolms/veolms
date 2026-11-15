@@ -4,6 +4,7 @@ import type {
   CreatorPaymentConfig,
   SaveCreatorPaymentConfigRequest,
   PaymentGateway,
+  PaymentGateways,
   PaymentProvider,
 } from "@veolms/contracts";
 import type { ServerConfig } from "@veolms/config";
@@ -48,12 +49,19 @@ function maskKeyId(keyId: string): string {
 export function createCreatorGatewayService({
   database,
   config,
-  fallbackGateway,
+  paymentGateways,
 }: {
   database: Executor;
   config: ServerConfig;
-  fallbackGateway: PaymentGateway;
+  /**
+   * The configured gateways. Their primary is read when a gateway is
+   * resolved, not once at startup, so it follows the gateways in force for
+   * the request (see setPaymentGatewaysProvider in @veolms/services).
+   */
+  paymentGateways: PaymentGateways;
 }): CreatorGatewayService {
+  const fallbackGateway = (): PaymentGateway => paymentGateways.primary;
+
   async function saveCreatorConfig(
     creatorId: string,
     request: SaveCreatorPaymentConfigRequest,
@@ -126,7 +134,7 @@ export function createCreatorGatewayService({
     creatorId?: string | null,
   ): Promise<PaymentGateway> {
     if (!creatorId) {
-      return fallbackGateway;
+      return fallbackGateway();
     }
 
     const row = await creatorGatewayRepo.findCreatorPaymentConfig(
@@ -136,7 +144,7 @@ export function createCreatorGatewayService({
     );
 
     if (!row || !row.is_active) {
-      return fallbackGateway;
+      return fallbackGateway();
     }
 
     try {
@@ -152,7 +160,7 @@ export function createCreatorGatewayService({
         webhookSecret,
       });
     } catch {
-      return fallbackGateway;
+      return fallbackGateway();
     }
   }
 

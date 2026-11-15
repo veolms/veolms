@@ -15,7 +15,7 @@ const creatorGatewayRoutes: RoutePlugin = async (app, options) => {
   const service = createCreatorGatewayService({
     database: options.database,
     config,
-    fallbackGateway: options.services.paymentGateways.primary,
+    paymentGateways: options.services.paymentGateways,
   });
   const controller = createCreatorGatewayController({ service });
 
