@@ -25,6 +25,26 @@
   initial-value: 1;
 }
 
+/* How far the page behind a lesson shows while the player minimizes or
+   expands, and over how long (written on the learning motion stage, see
+   applyLearningSurfaceMotion). The stage holds the whole page: inherited,
+   each change restyled every element in it, 0.2 s at a time on a slow
+   computer (2026-11-15), several times per expand and on every frame of a
+   swipe on a phone. Not inherited, a change restyles the stage and the
+   surface that reads it (with `inherit`, LearningBackgroundSurface). The
+   initial values are the `var()` fallbacks. */
+@property --learning-background-reveal {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --learning-background-reveal-duration {
+  syntax: "<time>";
+  inherits: false;
+  initial-value: 0ms;
+}
+
 @property --main-surface-inline-start {
   syntax: "<length>";
   inherits: false;
