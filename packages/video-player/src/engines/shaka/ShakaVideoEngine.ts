@@ -2073,11 +2073,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     source: VideoSource,
     abr: Record<string, unknown>,
   ): { defaultBandwidthEstimate?: number } {
-    if (
-      (shakaStartVideoHeight(source) === null &&
-        shakaHeldVideoHeight(source) === null) ||
-      abr.enabled === false
-    ) {
+    // A start height only: a held height (a replay from the device) is
+    // let go of on the first segment from the network, and from there the
+    // network's own speed decides. Floored at the held 1080p, a learner on
+    // a 1.4 Mbps evening link was sent 1.7 MB pieces that took ten seconds
+    // each until enough of them had come to measure (production, 15 Nov).
+    if (shakaStartVideoHeight(source) === null || abr.enabled === false) {
       return {};
     }
     const active = player.getVariantTracks().find((track) => track.active);
@@ -2157,7 +2158,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   /**
    * Releases a held height (see `holdVideoHeight`) the moment a video
    * segment comes from the network: the device no longer has what plays
-   * next, so ABR chooses from here on, from at least the held variant.
+   * next, so ABR chooses from here on, from what the network measures.
    */
   private watchForHoldRelease(
     player: ShakaPlayerLike,
@@ -2201,10 +2202,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#heldHeight = null;
     markPlayback("cached-height-released", { height });
     if (this.#qualityChoice !== null) return;
-    const abr = this.abrConfiguration(source, runtime);
-    player.configure({
-      abr: { ...abr, ...this.startHeightBandwidthFloor(player, source, abr) },
-    });
+    // ABR from what the network was measured at, not from the held height
+    // (see startHeightBandwidthFloor).
+    player.configure({ abr: this.abrConfiguration(source, runtime) });
   }
 
   /** The variant to play for the height chosen for `source`, if any. */
