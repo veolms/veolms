@@ -121,7 +121,7 @@ import {
   type PlaybackDeniedPlayingOn,
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
-import { canAffordSpeculativePlayback } from "./playbackHeadroom";
+import { canAffordSecondPlayer } from "./playbackHeadroom";
 import { usePlayerBuildRefresh } from "./usePlayerBuildRefresh";
 
 import { sendVideoProblemReport } from "./videoProblemReport";
@@ -984,9 +984,8 @@ export function LessonVideoPlayer({
   const [streamingRetries, setStreamingRetries] = useState(0);
   const reconnecting = streamingRetries >= RECONNECTING_NOTICE_AFTER_RETRIES;
   // A second video prepared out of sight is a whole second media pipeline:
-  // only with room to spare (see canAffordSpeculativePlayback, which covers
-  // low-memory devices and slow links).
-  const [withStandby] = useState(() => canAffordSpeculativePlayback());
+  // not on a device short of memory or cores (see canAffordSecondPlayer).
+  const [withStandby] = useState(() => canAffordSecondPlayer());
   const effectiveLessonId = lessonId ?? playbackBootstrap?.lessonId ?? null;
   const effectiveLessonIdRef = useRef(effectiveLessonId);
   useEffect(() => {

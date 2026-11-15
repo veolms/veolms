@@ -18,11 +18,26 @@ interface ConnectionInfo {
 }
 
 /**
- * Whether this device and connection have room for video work nobody is
- * watching yet: a lesson preloaded because the pointer rests on it, the
- * next lesson fetched in this one's last minute, a hidden second player
- * kept ready. Each of those downloads segments and (the second player)
- * decodes them beside the lesson on screen.
+ * Whether the device can run a second, hidden player (its own decoder and
+ * memory) beside the lesson on screen: not one short of memory, nor one with
+ * 4 cores or fewer. The link does not decide this: what the second player
+ * plays was preloaded anyway, and it makes the switch to the next lesson
+ * instant, which a slow link needs most (tested: without it a lesson
+ * change on a dipping 4G link stalled 9 s instead of 3 s).
+ */
+export function canAffordSecondPlayer(): boolean {
+  const tier = readDeviceTier();
+  if (tier.lowMemory) return false;
+  return !(tier.cpuCores !== null && tier.cpuCores <= MAX_LEAN_CPU_CORES);
+}
+
+/**
+ * Whether this device and connection have room for a guess: a lesson
+ * preloaded because the pointer rests on it in the course content list (on
+ * a computer that happens all the time, mostly for lessons never opened).
+ * It downloads segments beside the lesson on screen. (The next lesson,
+ * preloaded in this one's last minute, is not a guess and comes when this
+ * one's remainder is already buffered; it is left to Data Saver alone.)
  *
  * Learners' stalls came mostly from links under 2 Mbps and from 4-core,
  * 8 GB laptops and 4 GB phones (production's incident log, 13-15 Nov),
@@ -55,10 +70,5 @@ export function canAffordSpeculativePlayback(): boolean {
   if (measured !== null && measured < MIN_SPARE_LINK_MBPS * 1_000_000) {
     return false;
   }
-  const tier = readDeviceTier();
-  if (tier.lowMemory) return false;
-  if (tier.cpuCores !== null && tier.cpuCores <= MAX_LEAN_CPU_CORES) {
-    return false;
-  }
-  return true;
+  return canAffordSecondPlayer();
 }

@@ -13,7 +13,6 @@ import {
   getVideoPlaybackBootstrap,
 } from "../../videoPlaybackBootstrap";
 import { preloadLessonPlayback } from "../../earlyHlsPreload";
-import { canAffordSpeculativePlayback } from "../../player/playbackHeadroom";
 import type { VideoPlaybackBootstrap } from "@veolms/contracts";
 import type { CourseLesson } from "@veolms/contracts";
 import type { LessonAudioSource } from "./useLessonStagePlan";
@@ -195,9 +194,6 @@ export function useLessonPlayerProps({
     const preloadKey = `${courseSlug}:${selectedLesson}:${nextLessonId}`;
     if (preloadedNextLessonRef.current === preloadKey) return;
     preloadedNextLessonRef.current = preloadKey;
-    // On a slow link or a weak device this lesson's last minute needs it
-    // all (see canAffordSpeculativePlayback).
-    if (!canAffordSpeculativePlayback()) return;
     void preloadLessonPlayback(courseSlug, nextLessonId);
   }, [courseSlug, nextLessonId, selectedLesson, showingQuiz]);
 
