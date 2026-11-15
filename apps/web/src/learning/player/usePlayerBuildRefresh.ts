@@ -6,6 +6,8 @@ import { reloadOnceForNewBuild } from "../../lib/chunk-reload";
 const CHECK_EVERY_MS = 20 * 60_000;
 /** A tab hidden this long and come back paused is reloaded on return. */
 const AWAY_LONG_ENOUGH_MS = 10 * 60_000;
+/** How long a lesson change waits for the address to become the new lesson's. */
+const ADDRESS_WAIT_MS = 3_000;
 
 /**
  * This module's own file. After a deploy that changed it, the old hashed
@@ -88,12 +90,36 @@ export function usePlayerBuildRefresh(
     };
   }, []);
 
+  // The address the previous lesson was shown at: the player hears of the
+  // next lesson a moment before the address changes to it, and a reload
+  // then would open the lesson just left.
+  const lessonPathRef = useRef(
+    typeof window === "undefined" ? "" : window.location.pathname,
+  );
   useEffect(() => {
     const previous = lastLessonRef.current;
     lastLessonRef.current = lessonKey;
+    const leftPath = lessonPathRef.current;
     if (previous === null || lessonKey === null || previous === lessonKey) {
-      return;
+      lessonPathRef.current = window.location.pathname;
+      return undefined;
     }
-    if (stale) reloadOnceForNewBuild();
+    if (!stale) {
+      lessonPathRef.current = window.location.pathname;
+      return undefined;
+    }
+    // Reloaded once the address is the new lesson's; not at all when it
+    // does not change in time (the next lesson change tries again).
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      if (window.location.pathname !== leftPath) {
+        window.clearInterval(timer);
+        lessonPathRef.current = window.location.pathname;
+        reloadOnceForNewBuild();
+      } else if (Date.now() - startedAt > ADDRESS_WAIT_MS) {
+        window.clearInterval(timer);
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
   }, [lessonKey]);
 }
