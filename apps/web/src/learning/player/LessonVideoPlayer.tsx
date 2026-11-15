@@ -144,6 +144,10 @@ const FINISHED_LESSON_RESUME_TAIL_SECONDS = 3;
 // From here on the next lesson is preloaded, whatever the video's length: a
 // percentage would start hours early in a long lesson.
 const NEAR_LESSON_END_SECONDS = 60;
+/** While playing, progress reaches the page in steps this big (percent). */
+const PLAYING_PROGRESS_STEP = 5;
+/** From here on, every report goes through: the lesson is being finished. */
+const PLAYING_PROGRESS_END = 99;
 // ...and only once this lesson is downloaded to its end, within this much.
 // Preloaded while its last segments were still on their way, the next
 // lesson took the link from them on a slow connection: they came late or
@@ -563,6 +567,8 @@ export function LessonVideoPlayer({
   const playerRef = useRef<VideoPlayerHandle>(null);
   // Sharp drag frames from the kept segments, on a mouse or trackpad only.
   const latestPositionRef = useRef(0);
+  /** The progress step last reported while playing (see PLAYING_PROGRESS_STEP). */
+  const reportedProgressStepRef = useRef(-1);
   const lastPersistedAtRef = useRef<number | null>(null);
   const preferencesReadyRef = useRef(false);
   const captionsEnabledRef = useRef(false);
@@ -1170,16 +1176,28 @@ export function LessonVideoPlayer({
         // list. The seek where it is let go reports where it ended.
         const scrubbing = playerRef.current?.getSnapshot().ui.scrubbing;
         if (event.detail.duration > 0) {
-          if (!scrubbing) {
-            onProgressChange?.(
-              Math.max(
-                0,
-                Math.min(
-                  100,
-                  (event.detail.currentTime / event.detail.duration) * 100,
-                ),
-              ),
-            );
+          // While it plays, progress goes to the page in steps of
+          // PLAYING_PROGRESS_STEP percent (and at the end), not every percent:
+          // each report re-renders the whole lesson page (discussions, lesson
+          // list, hundreds of icons), three commits a time, which on a slow
+          // processor took the time the video needed (measured 2026-11-15:
+          // the page's main thread 88% busy at 4x CPU slowdown). Pause, seek
+          // and end report the exact value.
+          const percent = Math.max(
+            0,
+            Math.min(
+              100,
+              (event.detail.currentTime / event.detail.duration) * 100,
+            ),
+          );
+          const step = Math.floor(percent / PLAYING_PROGRESS_STEP);
+          if (
+            !scrubbing &&
+            (step !== reportedProgressStepRef.current ||
+              percent >= PLAYING_PROGRESS_END)
+          ) {
+            reportedProgressStepRef.current = step;
+            onProgressChange?.(percent);
           }
           if (
             event.detail.duration - event.detail.currentTime <=
@@ -1238,6 +1256,21 @@ export function LessonVideoPlayer({
         const snapshot = playerRef.current?.getSnapshot();
         if (snapshot) latestPositionRef.current = snapshot.media.currentTime;
         persistResumePosition(true);
+        // The exact progress where it stopped (playing reports it in steps).
+        const duration = snapshot?.media.duration ?? 0;
+        if (
+          snapshot &&
+          duration > 0 &&
+          !snapshot.ui.scrubbing &&
+          activeMediaKeyRef.current === requestedMediaKeyRef.current
+        ) {
+          onProgressChange?.(
+            Math.max(
+              0,
+              Math.min(100, (snapshot.media.currentTime / duration) * 100),
+            ),
+          );
+        }
       } else if (event.type === "ended") {
         // A finished lesson has nowhere to resume from. Storing its end as
         // the place to resume reopened it on its last second. The position
