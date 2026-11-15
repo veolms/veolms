@@ -382,12 +382,15 @@ export function MessageList({
     else readIfInView();
   }, [lastSeq, onAtBottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Where the chat was left: noted at most once a frame while scrolling,
+  // Where the chat was left: noted shortly after each scroll,
   // and once more as it closes.
   const placeFrameRef = useRef<number | null>(null);
   function rememberPlace() {
     const box = scrollRef.current;
     if (!box || !initialisedRef.current) return;
+    // A list already hidden (the page changing) has no height: it would
+    // read as "at the bottom". What scrolling noted stands.
+    if (box.clientHeight === 0) return;
     if (box.scrollHeight - box.scrollTop - box.clientHeight < STICK_PX) {
       leftAt.set(roomId, { atBottom: true });
       return;
@@ -397,17 +400,17 @@ export function MessageList({
   }
   function rememberPlaceSoon() {
     if (placeFrameRef.current !== null) return;
-    placeFrameRef.current = window.requestAnimationFrame(() => {
+    placeFrameRef.current = window.setTimeout(() => {
       placeFrameRef.current = null;
-      rememberPlace();
-    });
+      rememberPlaceRef.current();
+    }, 120);
   }
   const rememberPlaceRef = useRef(rememberPlace);
   rememberPlaceRef.current = rememberPlace;
   useLayoutEffect(
     () => () => {
       if (placeFrameRef.current !== null) {
-        window.cancelAnimationFrame(placeFrameRef.current);
+        window.clearTimeout(placeFrameRef.current);
       }
       rememberPlaceRef.current();
     },
