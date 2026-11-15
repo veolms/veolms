@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { clearAllCaches } from "@veolms/api-core";
-import { DEFAULT_PLATFORM_INVOICE_SETTINGS } from "@veolms/contracts";
+import {
+  DEFAULT_PLATFORM_INVOICE_SETTINGS,
+  DEFAULT_PLATFORM_LEGAL_SETTINGS,
+} from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely, RawBuilder } from "kysely";
 
@@ -70,6 +73,7 @@ await test("before anything is saved, the defaults apply and the phone rule foll
         maxSimultaneousStreams: 1,
       },
       invoice: DEFAULT_PLATFORM_INVOICE_SETTINGS,
+      legal: DEFAULT_PLATFORM_LEGAL_SETTINGS,
     },
     updatedAt: null,
   });
