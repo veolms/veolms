@@ -121,7 +121,7 @@ import {
   type PlaybackDeniedPlayingOn,
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
-import { isLowMemoryDevice } from "./deviceTier";
+import { canAffordSpeculativePlayback } from "./playbackHeadroom";
 import { sendVideoProblemReport } from "./videoProblemReport";
 import { useAuthStore } from "../../store/auth.store";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
@@ -975,7 +975,9 @@ export function LessonVideoPlayer({
   const reconnecting = streamingRetries >= RECONNECTING_NOTICE_AFTER_RETRIES;
   // A small device prepares no second video out of sight: the standby is
   // a whole second media pipeline (see deviceTier.ts).
-  const [withStandby] = useState(() => !isLowMemoryDevice());
+  // A second, hidden player: only with room to spare (see
+  // canAffordSpeculativePlayback, which covers low-memory devices too).
+  const [withStandby] = useState(() => canAffordSpeculativePlayback());
   const effectiveLessonId = lessonId ?? playbackBootstrap?.lessonId ?? null;
   const effectiveLessonIdRef = useRef(effectiveLessonId);
   useEffect(() => {

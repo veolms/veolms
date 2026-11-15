@@ -21,6 +21,7 @@ import {
 import { prefersReducedData } from "../lib/reduced-data";
 import { installSegmentCache } from "./player/segmentCache";
 import { prepareCachedStartHeight } from "./player/segmentCacheStart";
+import { canAffordSpeculativePlayback } from "./player/playbackHeadroom";
 
 // Before this module loads the player's runtime (see segmentCache.ts).
 installSegmentCache();
@@ -285,6 +286,8 @@ export function scheduleLessonHoverPreload(
   lessonNumber: number,
 ): () => void {
   if (typeof window === "undefined") return () => undefined;
+  // A guess: only with room to spare (see canAffordSpeculativePlayback).
+  if (!canAffordSpeculativePlayback()) return () => undefined;
   const timer = window.setTimeout(() => {
     void preloadLessonPlayback(courseIdOrSlug, lessonNumber);
   }, LESSON_HOVER_PRELOAD_DELAY_MS);

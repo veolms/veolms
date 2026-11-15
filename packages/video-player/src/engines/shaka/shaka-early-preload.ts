@@ -462,3 +462,6 @@ export async function startEarlyShakaPreload(
     return null;
   }
 }
+
+/** See `getShakaMeasuredBandwidth`: here for callers of this light entry. */
+export { getShakaMeasuredBandwidth } from "./shaka-internal";
