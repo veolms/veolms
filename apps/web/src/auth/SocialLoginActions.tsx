@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "react-router";
-import { cancelGoogleOneTap } from "./GoogleOneTap";
+import { useQueryClient } from "@tanstack/react-query";
+import type { AuthConfigResponse } from "@veolms/contracts";
+import { cancelGoogleOneTap, toOneTapErrorMessage } from "./GoogleOneTap";
 import { GitHubBrandIcon } from "./SocialBrandIcons";
 import { GoogleAccountButton, GoogleSignInButton } from "./GoogleSignInButton";
 import {
@@ -23,7 +25,19 @@ import {
   openOauthPopup,
 } from "./oauthPopup";
 import { resolvePostAuthPath } from "./postAuthNavigation";
-import { useOauthLogin, useOauthUrl } from "../services/auth";
+import {
+  authKeys,
+  authService,
+  useGoogleOneTapLogin,
+  useOauthLogin,
+  useOauthUrl,
+} from "../services/auth";
+import type { ApiError } from "../lib/api-client";
+import {
+  useNativeGoogleSignIn,
+  type GoogleSignInMode,
+  type NativeGoogleSignIn,
+} from "../native-bridge";
 import { authStore } from "../store/auth.store";
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { LoginFieldError } from "./LoginCardParts";
@@ -75,6 +89,11 @@ function withGoogleOptions(
   return address.toString();
 }
 
+interface OauthOptions {
+  /** The arrow on the account's button: Google's chooser, no hint. */
+  chooseAccount?: boolean;
+}
+
 interface SocialLoginActionsProps {
   /** A Google (or other social) sign-in failure, shown under the buttons. */
   errorMessage?: string | null;
@@ -97,14 +116,21 @@ export function SocialLoginActions({
     "google" | "github" | null
   >(redirectReturn?.provider ?? null);
   // "popup": waiting on the provider's window; "leaving": the whole tab is
-  // on its way to the provider (its window was blocked); "verifying": its
-  // code is being exchanged for a session here, inside the login pop-up.
+  // on its way to the provider (its window was blocked); "native": inside
+  // the app, waiting on the phone's own Google account picker; "verifying":
+  // its code (or Google's token) is being exchanged for a session here,
+  // inside the login pop-up.
   const [popupStage, setPopupStage] = useState<
-    "popup" | "leaving" | "verifying" | null
+    "popup" | "leaving" | "native" | "verifying" | null
   >(redirectReturn ? "verifying" : null);
   const redirectReturnStartedRef = useRef(false);
   const oauthUrlMutation = useOauthUrl();
   const oauthLoginMutation = useOauthLogin();
+  const oneTapLoginMutation = useGoogleOneTapLogin();
+  const queryClient = useQueryClient();
+  // The phone's own Google account picker, inside an app build that has it;
+  // null in every browser, where Google's button works as it always has.
+  const nativeGoogleSignIn = useNativeGoogleSignIn();
   const navigate = useNavigate();
   const stopListeningRef = useRef<(() => void) | null>(null);
   // Whether Google would sign the visitor in without asking anything; asked
@@ -118,7 +144,18 @@ export function SocialLoginActions({
     lastGoogleAccount?.email,
   );
 
-  useEffect(() => () => stopListeningRef.current?.(), []);
+  // Whether the buttons are still on screen. When the login dialog has gone
+  // by the time the phone's Google picker answers, its token is not sent, no
+  // browser sign-in opens and no error is shown. Set again on every mount:
+  // StrictMode runs this cleanup once before the real mount.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      stopListeningRef.current?.();
+    };
+  }, []);
 
   const reset = (options?: { keepSharedCopy?: boolean }) => {
     clearOauthHandoff(options);
@@ -236,12 +273,127 @@ export function SocialLoginActions({
     });
   };
 
-  const handleOauth = async (
+  const handleOauth = (
     provider: "google" | "github",
-    /** The arrow on the account's button: Google's chooser, no hint. */
-    { chooseAccount = false }: { chooseAccount?: boolean } = {},
+    options: OauthOptions = {},
   ) => {
     if (actionsLocked) return;
+    if (provider === "google" && nativeGoogleSignIn) {
+      void signInWithGoogleInApp(nativeGoogleSignIn, options);
+      return;
+    }
+    void signInInWindow(provider, options);
+  };
+
+  /**
+   * Inside an app build that has it: the phone's own Google account picker,
+   * whose token signs in as Google One Tap does. Whenever the app cannot do
+   * it, the sign-in carries on as in a browser (the app opens it for the
+   * person).
+   *
+   * "Continue as [name]" first asks with `AUTO`: with an account that signed
+   * in here before, Google signs in without a tap, or (right after a
+   * sign-out) asks with one Continue button. When AUTO has no account to
+   * offer, the full picker follows at once, with the same nonce. "Continue
+   * with Google" and the arrow (another account) open the full picker only:
+   * only it offers adding an account. The picker takes no account hint.
+   */
+  const signInWithGoogleInApp = async (
+    native: NativeGoogleSignIn,
+    options: OauthOptions,
+  ) => {
+    cancelGoogleOneTap();
+    onError?.(null);
+    stopListeningRef.current?.();
+    stopListeningRef.current = null;
+    setLoadingProvider("google");
+    setPopupStage("native");
+    const stop = () => {
+      setLoadingProvider(null);
+      setPopupStage(null);
+    };
+    const inWindow = () => {
+      stop();
+      return signInInWindow("google", options);
+    };
+
+    let clientId: string;
+    try {
+      // From the cache when the page already has it; otherwise fetched once
+      // and kept there, sharing a fetch already on its way.
+      const config = await queryClient.ensureQueryData<AuthConfigResponse>({
+        queryKey: authKeys.config(),
+        queryFn: () => authService.getAuthConfig(),
+      });
+      clientId = config.googleClientId ?? "";
+      if (!clientId || !(await native.isSupported(clientId))) {
+        return inWindow();
+      }
+    } catch {
+      return inWindow();
+    }
+
+    let mode: GoogleSignInMode =
+      lastGoogleAccount && !options.chooseAccount ? "AUTO" : "BUTTON";
+    // A nonce that has expired or was used meanwhile is replaced once, and
+    // asked for again in the same mode. The loop always ends: the nonce is
+    // replaced once at most, and AUTO steps to the full picker once at most.
+    let nonceReplaced = false;
+    for (;;) {
+      let nonce: string;
+      try {
+        // The nonce is kept until a login request uses it, so AUTO and the
+        // full picker after it share one.
+        ({ nonce } = await authService.getGoogleOneTapNonce());
+      } catch {
+        return inWindow();
+      }
+
+      const outcome = await native.signIn(clientId, nonce, mode);
+      // The dialog went while Google was asked: nothing more to do here.
+      if (!mountedRef.current) return;
+      if (outcome.kind === "fallback") return inWindow();
+      if (outcome.kind === "noAccount" && mode === "AUTO") {
+        // Still "Waiting for Google…": no flicker between the two.
+        mode = "BUTTON";
+        continue;
+      }
+      if (outcome.kind !== "token") {
+        stop();
+        return;
+      }
+
+      setPopupStage("verifying");
+      try {
+        const result = await oneTapLoginMutation.mutateAsync({
+          credential: outcome.idToken,
+        });
+        // Not checked against the dialog: signing in can close it before this
+        // runs, and the page must still go on (to the two-step step, say), as
+        // after the pop-up and One Tap.
+        rememberGoogleSignIn(result.user);
+        navigate(resolvePostAuthPath(result, returnTo), { replace: true });
+        return;
+      } catch (err: unknown) {
+        if (!mountedRef.current) return;
+        const error = err as ApiError;
+        if (error?.code === "ONE_TAP_NONCE_INVALID" && !nonceReplaced) {
+          nonceReplaced = true;
+          authService.clearGoogleOneTapNonce();
+          setPopupStage("native");
+          continue;
+        }
+        stop();
+        onError?.(toOneTapErrorMessage(error));
+        return;
+      }
+    }
+  };
+
+  const signInInWindow = async (
+    provider: "google" | "github",
+    { chooseAccount = false }: OauthOptions,
+  ) => {
     cancelGoogleOneTap();
     onError?.(null);
     stopListeningRef.current?.();
@@ -347,7 +499,7 @@ export function SocialLoginActions({
 
   const providerLabel = loadingProvider === "github" ? "GitHub" : "Google";
   const googleBusyLabel = googleBusy
-    ? popupStage === "popup"
+    ? popupStage === "popup" || popupStage === "native"
       ? "Waiting for Google…"
       : popupStage === "leaving"
         ? "Opening Google…"
@@ -357,11 +509,13 @@ export function SocialLoginActions({
     ? "Verifying your Google account…"
     : popupStage === "popup"
       ? `Finish signing in with ${providerLabel} in the window that opened.`
-      : popupStage === "leaving"
-        ? `Opening ${providerLabel}…`
-        : popupStage === "verifying"
-          ? "Signing you in…"
-          : null;
+      : popupStage === "native"
+        ? "Choose your Google account."
+        : popupStage === "leaving"
+          ? `Opening ${providerLabel}…`
+          : popupStage === "verifying"
+            ? "Signing you in…"
+            : null;
 
   return (
     // The way in the pop-up leads with; the email form follows it under an

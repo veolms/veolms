@@ -14,4 +14,13 @@ export {
   setNativeChatOnScreen,
   useNotificationTaps,
 } from "./notifications";
-export type { NotificationLaunchData } from "./native-bridge-contracts";
+export {
+  tellNativeSignedOut,
+  useNativeGoogleSignIn,
+  type NativeGoogleSignIn,
+  type NativeGoogleSignInOutcome,
+} from "./googleSignIn";
+export type {
+  GoogleSignInMode,
+  NotificationLaunchData,
+} from "./native-bridge-contracts";

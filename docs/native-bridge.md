@@ -8,8 +8,9 @@ code runs and simply gets no native answers.
 The contract today has `platform()` (with `applicationId`, the running
 app's package; missing in older builds), `firebase.getInstallationId()`,
 `notifications.getLaunchData()`, `notifications.setChatOnScreen()`,
-`notifications.closeChatNotification()` and the `notificationOpened`
-event. Other names in the code below (`media`, theme events) are examples
+`notifications.closeChatNotification()`, the `notificationOpened`
+event, and native Google sign-in (`auth.*` and the `googleSignInFinished`
+event, see [below](#native-google-sign-in)). Other names in the code below (`media`, theme events) are examples
 of the shape; check `native-bridge-contracts.d.ts` for what exists.
 
 This guide is the **project's rules**: which API to use for which job, where
@@ -264,6 +265,7 @@ native-bridge/
 ├── firebase.ts                    getInstallationId(), once per page
 ├── notifications.ts               getLaunchDataOnce(), useNotificationTaps(),
 │                                  setNativeChatOnScreen(), closeNativeChatNotification()
+├── googleSignIn.ts                useNativeGoogleSignIn(), tellNativeSignedOut()
 ├── useNativeThemeChange.ts        (example) one event
 ├── examples.tsx                   examples only, never imported
 └── index.ts                       the public exports
@@ -376,3 +378,40 @@ Before committing changes under `apps/web`, follow the commit checks in
 - **Chat read** (`closeNativeChatNotification`, from `services/webPush`
   `closeChatNotifications`): removes the chat's phone notification, up to
   `readSeq` when the read event carries it.
+
+## Native Google sign-in
+
+Inside an app build that has it, "Continue with Google" (and "Continue as
+[name]" with its arrow) opens the phone's own Google account picker instead
+of Google's page (`auth/SocialLoginActions.tsx`, over
+`useNativeGoogleSignIn` in `googleSignIn.ts`).
+
+- **Decided by `$has("auth:startGoogleSignIn")` only**, never by
+  `platform()`, the app version or the user agent: the apps already on
+  people's phones answer `platform()` but have no `auth` functions. In a
+  browser, an older app, or while the bridge connects, the hook is `null` and
+  the button works exactly as before, with no extra call or wait.
+- **Start, then take:** subscribe to `googleSignInFinished`, call
+  `startGoogleSignIn({ clientId, nonce, mode })`, and on `PENDING` wait for
+  the event with the same `requestId`, then
+  `takeGoogleSignInResult({ requestId })`. Every call answers at once; the app
+  has the only timeout (about 3 minutes) and always sends the event, so the
+  page sets no timer of its own.
+- **Modes:** "Continue as [name]" asks with `AUTO` first: Google signs in
+  without a tap with an account that signed in here before, or (right after
+  a sign-out) asks with one Continue button. AUTO's `NO_ACCOUNT` (no
+  `fallback`) opens the full picker (`BUTTON`) at once, with the same nonce,
+  and the button keeps "Waiting for Google…" throughout. "Continue with
+  Google" and the arrow (another account) use `BUTTON` only, the picker that
+  can add an account.
+- **Results:** a token goes to the One Tap login request (`/auth/oauth/google/one-tap`)
+  with the One Tap nonce, passed unchanged, and nowhere else. `fallback`,
+  `null`, a rejection or a failed nonce or config request run today's
+  browser sign-in (inside the app, the app opens it). Otherwise (cancelled,
+  timed out) the button is usable again. `ONE_TAP_NONCE_INVALID` asks once
+  more with a new nonce, in the same mode.
+- **Sign-out:** `tellNativeSignedOut()` (`auth.signedOut()`, fire and forget)
+  after a confirmed sign-out and when a sign-in is abandoned at its two-step
+  step, so `AUTO` does not sign the account in again without a tap. An app build
+  without the function is not called (the bridge answers `null` without
+  calling native).
