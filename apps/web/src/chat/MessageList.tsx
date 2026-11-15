@@ -57,6 +57,61 @@ function topRow(box: HTMLElement): { seq: number; offset: number } | null {
   return null;
 }
 
+/**
+ * Draws the rows that are about to be on screen at their real height before
+ * the list is placed. Rows skip layout off screen (content-visibility) and
+ * stand at a guessed 56px until the browser has drawn them, a frame after
+ * they first show: a chat opened at the bottom painted its last messages at
+ * the guess, then at their real size (a video message 470px, not 56), and
+ * everything above slid up by hundreds of pixels (production, 15 Nov). From
+ * `start` (the bottom when null) about two screens of rows are drawn now;
+ * two frames later they go back to being skipped when off screen, with
+ * their real size remembered.
+ */
+function drawRowsNow(box: HTMLElement, start: HTMLElement | null) {
+  const rows = [...box.querySelectorAll<HTMLElement>('[id^="chat-message-"]')];
+  if (rows.length === 0) return;
+  let index = rows.length - 1;
+  if (start) {
+    const found = rows.findIndex(
+      (row) =>
+        row === start ||
+        Boolean(
+          start.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+    );
+    if (found >= 0) index = found;
+  }
+  const drawn: HTMLElement[] = [];
+  const draw = (row: HTMLElement) => {
+    row.style.contentVisibility = "visible";
+    drawn.push(row);
+    return row.offsetHeight;
+  };
+  const screen = box.clientHeight;
+  // Below the start (or above the bottom), one and a half screens; above
+  // the start, one more screen for a place kept partway down a message.
+  let height = 0;
+  if (start) {
+    for (let i = index; i < rows.length && height < screen * 1.5; i += 1) {
+      height += draw(rows[i]!);
+    }
+    height = 0;
+    for (let i = index - 1; i >= 0 && height < screen; i -= 1) {
+      height += draw(rows[i]!);
+    }
+  } else {
+    for (let i = index; i >= 0 && height < screen * 1.5; i -= 1) {
+      height += draw(rows[i]!);
+    }
+  }
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      for (const row of drawn) row.style.contentVisibility = "";
+    }),
+  );
+}
+
 /** Puts a message in the middle of the list. */
 function centre(box: HTMLElement, row: HTMLElement) {
   box.scrollTop = Math.max(
@@ -249,6 +304,14 @@ export function MessageList({
         ? document.getElementById(`chat-message-${left.seq}`)
         : null;
     const divider = box.querySelector<HTMLElement>("[data-unread-divider]");
+    drawRowsNow(
+      box,
+      left && "seq" in left && leftRow
+        ? leftRow
+        : !left && divider && unreadCount > 0
+          ? divider
+          : null,
+    );
     if (left && "seq" in left && leftRow) {
       anchorRef.current = { seq: left.seq, offset: left.offset };
       atBottomRef.current = false;
@@ -336,6 +399,7 @@ export function MessageList({
     initialisedRef.current = true;
     anchorRef.current = { seq: focus.seq };
     atBottomRef.current = false;
+    drawRowsNow(box, row);
     centre(box, row);
     flash(row);
     setReturnSeq(focus.from ?? null);

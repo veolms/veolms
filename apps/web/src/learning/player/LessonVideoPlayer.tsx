@@ -26,7 +26,10 @@ import type {
   VideoPlaybackToken,
 } from "@veolms/contracts";
 import type { CourseVideo } from "../courseContent";
-import { readLearningPreferences } from "../../settings/settingsPreferences";
+import {
+  readLearningPreferences,
+  updateLearningPreferences,
+} from "../../settings/settingsPreferences";
 import { LessonAmbientProjection } from "./LessonAmbientProjection";
 import { LessonAudioArtwork } from "./LessonAudioArtwork";
 import { LessonTroubleIllustration } from "./LessonTroubleIllustration";
@@ -1042,6 +1045,12 @@ export function LessonVideoPlayer({
       playbackTelemetry.handle(event);
       if (event.type === "fullscreenchange") {
         setPlayerFullscreen(event.detail.active);
+      }
+      // The quality picked in the menu is kept for every lesson; one the
+      // connection could not carry is let go of for the next lessons too,
+      // so each one does not start by waiting for it.
+      if (event.type === "qualitychange" && event.detail.fallback) {
+        updateLearningPreferences({ videoQuality: "auto" });
       }
       if (event.type === "streamingretry") {
         setStreamingRetries(event.detail.attempt);
