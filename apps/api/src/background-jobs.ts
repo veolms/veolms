@@ -36,7 +36,7 @@ import {
   invoiceStorage,
 } from "./modules/commerce/invoices/invoice.service.ts";
 import { createInvoiceAttachmentResolver } from "./modules/commerce/invoices/invoice-email-attachment.ts";
-import { getCacheStats } from "@veolms/api-core";
+import { getCacheStats, runBackgroundPass } from "@veolms/api-core";
 import { getDatabasePoolMetrics } from "@veolms/database";
 import * as webhookRepo from "./modules/commerce/webhooks/webhook.repository.ts";
 import * as outboxRepo from "./events/outbox.repository.ts";
@@ -191,7 +191,9 @@ function startChatRetention(
     if (stopped || activeCycle) return;
     activeCycle = (async () => {
       try {
-        const result = await retention.run(database);
+        const result = await runBackgroundPass(CHAT_RETENTION_JOB, () =>
+          retention.run(database),
+        );
         app.log.info(
           { job: CHAT_RETENTION_JOB, ...result },
           "Chat retention complete",
@@ -279,13 +281,15 @@ function startInvoicePdfJob(
             retries.delete(orderId);
           }
         }
-        const result = await invoices.issuePendingInvoicePdfs({
-          paidSince: new Date(now - INVOICE_PDF_LOOKBACK_MS),
-          limit: INVOICE_PDF_BATCH,
-          excludeOrderIds: [...retries]
-            .filter(([, retry]) => retry.notBefore > now)
-            .map(([orderId]) => orderId),
-        });
+        const result = await runBackgroundPass(INVOICE_PDF_JOB, () =>
+          invoices.issuePendingInvoicePdfs({
+            paidSince: new Date(now - INVOICE_PDF_LOOKBACK_MS),
+            limit: INVOICE_PDF_BATCH,
+            excludeOrderIds: [...retries]
+              .filter(([, retry]) => retry.notBefore > now)
+              .map(([orderId]) => orderId),
+          }),
+        );
         if (result.issued > 0) {
           app.log.info(
             { job: INVOICE_PDF_JOB, issued: result.issued },
@@ -383,13 +387,15 @@ function startDiscussionUploadPurge(
     if (stopped || activeCycle) return;
     const cycle = (async () => {
       try {
-        const result = await attachments.purgeAbandonedUploads(database, {
-          olderThan: new Date(Date.now() - retentionDays * 24 * HOUR_MS),
-          apply: true,
-          limit: DISCUSSION_UPLOAD_PURGE_LIMIT,
-          findReferencedElsewhere: (attachmentIds) =>
-            findIdsMentionedInCourseContent(database, attachmentIds),
-        });
+        const result = await runBackgroundPass("discussion-upload-purge", () =>
+          attachments.purgeAbandonedUploads(database, {
+            olderThan: new Date(Date.now() - retentionDays * 24 * HOUR_MS),
+            apply: true,
+            limit: DISCUSSION_UPLOAD_PURGE_LIMIT,
+            findReferencedElsewhere: (attachmentIds) =>
+              findIdsMentionedInCourseContent(database, attachmentIds),
+          }),
+        );
         // `failed` uploads could not be removed; they are tried again on
         // the next run.
         app.log[result.failed > 0 ? "warn" : "info"](
@@ -449,12 +455,14 @@ function startOpsHeartbeat(
     running = true;
     try {
       const [webhookQueue, outbox, emailBacklog, pushBacklog] =
-        await Promise.all([
-          webhookRepo.getWebhookQueueDepth(database),
-          outboxRepo.getOutboxDepth(database),
-          notificationRepo.getEmailDeliveryBacklog(database),
-          getPushDeliveryBacklog(database),
-        ]);
+        await runBackgroundPass("ops-heartbeat", () =>
+          Promise.all([
+            webhookRepo.getWebhookQueueDepth(database),
+            outboxRepo.getOutboxDepth(database),
+            notificationRepo.getEmailDeliveryBacklog(database),
+            getPushDeliveryBacklog(database),
+          ]),
+        );
       app.log.info(
         {
           job: "ops-heartbeat",

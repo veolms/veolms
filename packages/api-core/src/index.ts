@@ -11,3 +11,4 @@ export * from "./site-content-changes.ts";
 export * from "./server.ts";
 export * from "./cache/index.ts";
 export * from "./capacity.ts";
+export * from "./background-work.ts";

@@ -2,11 +2,35 @@ import { LRUCache } from "lru-cache";
 
 import { ALL_CACHE_TAG } from "./tags.ts";
 import {
+  currentCacheScope,
   isCachingEnabled,
   registerCache,
+  scopedCacheTag,
   unregisterCache,
   type RegisteredCache,
 } from "./registry.ts";
+
+/** The stored key: the caller's key within the current scope. */
+function keyIn(scope: string | undefined, key: string): string {
+  return scope ? `${scope}\u001f${key}` : key;
+}
+
+/**
+ * The tags stored with an entry. Within a scope: the scoped tags (cleared
+ * by an invalidation in the same scope), the plain ones (cleared by an
+ * invalidation outside any scope), and the scope's own "everything" tag.
+ */
+function tagsIn(
+  scope: string | undefined,
+  tags: readonly string[],
+): readonly string[] {
+  if (!scope) return tags;
+  return [
+    ...tags.map((tag) => scopedCacheTag(scope, tag)),
+    ...tags,
+    scopedCacheTag(scope, ALL_CACHE_TAG),
+  ];
+}
 
 export interface CacheOptions<V> {
   /** Unique in the process; names the cache in metrics and logs. */
@@ -166,12 +190,14 @@ export function createCache<V>(options: CacheOptions<V>): Cache<V> {
   }
 
   async function fetch(
-    key: string,
+    callerKey: string,
     load: () => Promise<V>,
     entryOptions: CacheEntryOptions<V> = {},
   ): Promise<V> {
     if (!active()) return await load();
 
+    const scope = currentCacheScope();
+    const key = keyIn(scope, callerKey);
     const cached = lru.get(key);
     if (cached) {
       counters.hits += 1;
@@ -186,13 +212,16 @@ export function createCache<V>(options: CacheOptions<V>): Cache<V> {
 
     const { tags = [], tagsOf, keepIf } = entryOptions;
     const current = {
-      tags: tagsOf ? null : new Set(tags),
+      tags: tagsOf ? null : new Set(tagsIn(scope, tags)),
       stale: false,
     } as Load<V>;
     current.promise = (async () => {
       try {
         const value = await load();
-        const allTags = tagsOf ? [...tags, ...tagsOf(value)] : tags;
+        const allTags = tagsIn(
+          scope,
+          tagsOf ? [...tags, ...tagsOf(value)] : tags,
+        );
         counters.loads += 1;
         if (current.stale || !active()) counters.discardedLoads += 1;
         else if (!keepIf || keepIf(value)) store(key, value, allTags);
@@ -241,17 +270,24 @@ export function createCache<V>(options: CacheOptions<V>): Cache<V> {
   const cache: Cache<V> & RegisteredCache = {
     name,
     fetch,
-    get(key) {
+    get(callerKey) {
       if (!active()) return undefined;
-      const entry = lru.get(key);
+      const entry = lru.get(keyIn(currentCacheScope(), callerKey));
       if (entry) counters.hits += 1;
       else counters.misses += 1;
       return entry ? { value: entry.value } : undefined;
     },
-    set(key, value, setOptions = {}) {
-      if (active()) store(key, value, setOptions.tags ?? []);
+    set(callerKey, value, setOptions = {}) {
+      if (!active()) return;
+      const scope = currentCacheScope();
+      store(
+        keyIn(scope, callerKey),
+        value,
+        tagsIn(scope, setOptions.tags ?? []),
+      );
     },
-    delete(key) {
+    delete(callerKey) {
+      const key = keyIn(currentCacheScope(), callerKey);
       lru.delete(key);
       const pending = loads.get(key);
       if (pending) {

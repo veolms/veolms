@@ -1,4 +1,9 @@
-import { cacheTags, invalidateCache } from "@veolms/api-core";
+import {
+  cacheTags,
+  invalidateCache,
+  runBackgroundItem,
+  runBackgroundPass,
+} from "@veolms/api-core";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -152,10 +157,8 @@ export function startYoutubeImportWorker({
     polling = true;
     try {
       while (!stopped && running.size < config.YOUTUBE_IMPORT_CONCURRENCY) {
-        const job = await importRepo.claimNextImportJob(
-          database,
-          workerId,
-          LEASE_MS,
+        const job = await runBackgroundPass(JOB, () =>
+          importRepo.claimNextImportJob(database, workerId, LEASE_MS),
         );
         if (!job) break;
         const controller = new AbortController();
@@ -168,7 +171,11 @@ export function startYoutubeImportWorker({
           },
           done: Promise.resolve(),
         };
-        control.done = runJob(job, control)
+        control.done = runBackgroundItem(
+          JOB,
+          { table: "youtube_import_jobs", id: job.id },
+          () => runJob(job, control),
+        )
           .catch((error: unknown) =>
             log.error(
               { err: error, importJobId: job.id },

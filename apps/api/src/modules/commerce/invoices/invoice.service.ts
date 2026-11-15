@@ -1,3 +1,4 @@
+import { runBackgroundItem } from "@veolms/api-core";
 import type { Invoice, OrderScope } from "@veolms/contracts";
 import type { S3StorageService } from "@veolms/storage";
 import type { Executor } from "../shared/repository.types.ts";
@@ -339,16 +340,23 @@ export function createInvoiceService({
       excludeOrderIds,
     });
     for (const orderId of orderIds) {
-      try {
-        // An order paid without a number (by code from before invoice
-        // numbers, during a deploy) is numbered here too.
-        await storePdf(storage, await findPaidOrder(null, orderId));
-        run.issued += 1;
-      } catch (error) {
-        // Left without a PDF: the next run tries again, and a download
-        // makes it in the meantime.
-        run.failures.push({ orderId, error });
-      }
+      // Each order is its own item of background work.
+      await runBackgroundItem(
+        "invoice-pdfs",
+        { table: "orders", id: orderId },
+        async () => {
+          try {
+            // An order paid without a number (by code from before invoice
+            // numbers, during a deploy) is numbered here too.
+            await storePdf(storage, await findPaidOrder(null, orderId));
+            run.issued += 1;
+          } catch (error) {
+            // Left without a PDF: the next run tries again, and a download
+            // makes it in the meantime.
+            run.failures.push({ orderId, error });
+          }
+        },
+      );
     }
     return run;
   }

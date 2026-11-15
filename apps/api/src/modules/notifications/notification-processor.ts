@@ -2,6 +2,7 @@ import type { ServerConfig } from "@veolms/config";
 import type { Database } from "@veolms/database";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
+import { runBackgroundItem, runBackgroundPass } from "@veolms/api-core";
 import { z } from "zod";
 
 import * as outboxRepository from "../../events/outbox.repository.ts";
@@ -129,107 +130,115 @@ export function createNotificationProcessor({
     const result = { processed: 0, retried: 0, failed: 0 };
 
     for (const event of claimed) {
-      try {
-        if (event.event_version !== 1) {
-          throw new UnknownNotificationEventError(
-            `${event.event_type}@v${event.event_version}`,
-          );
-        }
-        if (event.event_type === CHAT_MESSAGE_SENT_EVENT) {
-          // Chat messages are pushed only: the chat is their in-app view.
-          const message =
-            push && chat ? await chat.resolveMessagePush(event.payload) : null;
-          const { queued } = await service.processChatMessageEvent(
-            event,
-            message,
-          );
-          result.processed += 1;
-          if (queued > 0) {
-            log.debug(
-              { eventId: event.id, pushesQueued: queued },
-              "Chat message pushes queued",
-            );
-          }
-          continue;
-        }
-        const intents = await createNotificationIntents(
-          event.event_type,
-          event.payload,
-          {
-            ...handlers,
-            courseWideEmail: config.NOTIFICATION_COURSE_WIDE_EMAIL,
-            courseWidePush: config.NOTIFICATION_COURSE_WIDE_PUSH,
-          },
-        );
-        const outcome = await service.processClaimedEvent(
-          event,
-          intents,
-          recipients,
-        );
-        result.processed += 1;
-        // The notifications are committed: tell the recipients' open
-        // streams. A failure here loses nothing (those tabs still poll), so
-        // it never fails the event.
-        if (outcome.notifiedUserIds.length > 0) {
-          await service
-            .signalUsersChanged(outcome.notifiedUserIds)
-            .catch((error: unknown) => {
-              log.warn(
-                { err: error, eventId: event.id },
-                "Could not signal notification streams",
+      await runBackgroundItem(
+        "notification-outbox",
+        { table: "outbox_events", id: event.id },
+        async () => {
+          try {
+            if (event.event_version !== 1) {
+              throw new UnknownNotificationEventError(
+                `${event.event_type}@v${event.event_version}`,
               );
-            });
-        }
-        log.info(
-          {
-            eventId: event.id,
-            eventType: event.event_type,
-            notificationsCreated: outcome.created,
-            notificationsSkipped: outcome.skipped,
-          },
-          "Notification event processed",
-        );
-      } catch (error) {
-        // attempt_count was already incremented at claim time.
-        const attemptCount = event.attempt_count;
-        const message = errorMessage(error);
-        const permanent =
-          error instanceof z.ZodError ||
-          error instanceof UnknownNotificationEventError ||
-          isDataError(error);
-        if (
-          permanent ||
-          attemptCount >= config.NOTIFICATION_OUTBOX_MAX_ATTEMPTS
-        ) {
-          await outboxRepository.markFailed(database, {
-            eventId: event.id,
-            error: message,
-            lockedUntil: leaseUntil,
-          });
-          result.failed += 1;
-          log.error(
-            { err: error, eventId: event.id, eventType: event.event_type },
-            "Notification event failed permanently",
-          );
-        } else {
-          const failureTime = new Date();
-          await outboxRepository.markRetry(database, {
-            eventId: event.id,
-            availableAt: retryAt(
-              failureTime,
-              attemptCount,
-              config.NOTIFICATION_RETRY_SECONDS,
-            ),
-            error: message,
-            lockedUntil: leaseUntil,
-          });
-          result.retried += 1;
-          log.warn(
-            { err: error, eventId: event.id, eventType: event.event_type },
-            "Notification event scheduled for retry",
-          );
-        }
-      }
+            }
+            if (event.event_type === CHAT_MESSAGE_SENT_EVENT) {
+              // Chat messages are pushed only: the chat is their in-app view.
+              const message =
+                push && chat
+                  ? await chat.resolveMessagePush(event.payload)
+                  : null;
+              const { queued } = await service.processChatMessageEvent(
+                event,
+                message,
+              );
+              result.processed += 1;
+              if (queued > 0) {
+                log.debug(
+                  { eventId: event.id, pushesQueued: queued },
+                  "Chat message pushes queued",
+                );
+              }
+              return;
+            }
+            const intents = await createNotificationIntents(
+              event.event_type,
+              event.payload,
+              {
+                ...handlers,
+                courseWideEmail: config.NOTIFICATION_COURSE_WIDE_EMAIL,
+                courseWidePush: config.NOTIFICATION_COURSE_WIDE_PUSH,
+              },
+            );
+            const outcome = await service.processClaimedEvent(
+              event,
+              intents,
+              recipients,
+            );
+            result.processed += 1;
+            // The notifications are committed: tell the recipients' open
+            // streams. A failure here loses nothing (those tabs still poll), so
+            // it never fails the event.
+            if (outcome.notifiedUserIds.length > 0) {
+              await service
+                .signalUsersChanged(outcome.notifiedUserIds)
+                .catch((error: unknown) => {
+                  log.warn(
+                    { err: error, eventId: event.id },
+                    "Could not signal notification streams",
+                  );
+                });
+            }
+            log.info(
+              {
+                eventId: event.id,
+                eventType: event.event_type,
+                notificationsCreated: outcome.created,
+                notificationsSkipped: outcome.skipped,
+              },
+              "Notification event processed",
+            );
+          } catch (error) {
+            // attempt_count was already incremented at claim time.
+            const attemptCount = event.attempt_count;
+            const message = errorMessage(error);
+            const permanent =
+              error instanceof z.ZodError ||
+              error instanceof UnknownNotificationEventError ||
+              isDataError(error);
+            if (
+              permanent ||
+              attemptCount >= config.NOTIFICATION_OUTBOX_MAX_ATTEMPTS
+            ) {
+              await outboxRepository.markFailed(database, {
+                eventId: event.id,
+                error: message,
+                lockedUntil: leaseUntil,
+              });
+              result.failed += 1;
+              log.error(
+                { err: error, eventId: event.id, eventType: event.event_type },
+                "Notification event failed permanently",
+              );
+            } else {
+              const failureTime = new Date();
+              await outboxRepository.markRetry(database, {
+                eventId: event.id,
+                availableAt: retryAt(
+                  failureTime,
+                  attemptCount,
+                  config.NOTIFICATION_RETRY_SECONDS,
+                ),
+                error: message,
+                lockedUntil: leaseUntil,
+              });
+              result.retried += 1;
+              log.warn(
+                { err: error, eventId: event.id, eventType: event.event_type },
+                "Notification event scheduled for retry",
+              );
+            }
+          }
+        },
+      );
     }
     return result;
   }
@@ -282,77 +291,89 @@ export function createNotificationProcessor({
     const result = { sent: 0, retried: 0, failed: 0 };
 
     for (const delivery of claimed) {
-      try {
-        if (!delivery.destination) {
-          throw new Error("Email delivery has no destination.");
-        }
-        const { attachments: wanted = [], ...content } =
-          emailDeliveryPayloadSchema.parse(delivery.payload);
-        const files = await resolveAttachments(
-          wanted,
-          delivery.id,
-          // The last try sends the email without a file it cannot get,
-          // rather than not at all.
-          delivery.attempt_count >= config.NOTIFICATION_EMAIL_MAX_ATTEMPTS,
-        );
-        const sendResult = await email.send(delivery.destination, content, {
-          attachments: files,
-        });
-        if (sendResult.status === "failed") throw sendResult.error;
+      await runBackgroundItem(
+        "notification-email",
+        { table: "notification_deliveries", id: delivery.id },
+        async () => {
+          try {
+            if (!delivery.destination) {
+              throw new Error("Email delivery has no destination.");
+            }
+            const { attachments: wanted = [], ...content } =
+              emailDeliveryPayloadSchema.parse(delivery.payload);
+            const files = await resolveAttachments(
+              wanted,
+              delivery.id,
+              // The last try sends the email without a file it cannot get,
+              // rather than not at all.
+              delivery.attempt_count >= config.NOTIFICATION_EMAIL_MAX_ATTEMPTS,
+            );
+            const sendResult = await email.send(delivery.destination, content, {
+              attachments: files,
+            });
+            if (sendResult.status === "failed") throw sendResult.error;
 
-        await notificationRepository.markDeliverySent(database, {
-          deliveryId: delivery.id,
-          providerMessageId:
-            sendResult.status === "sent" ? sendResult.messageId : null,
-          now: new Date(),
-          lockedUntil: leaseUntil,
-        });
-        result.sent += 1;
-      } catch (error) {
-        // attempt_count was already incremented at claim time.
-        const attemptCount = delivery.attempt_count;
-        const message = errorMessage(error);
-        const permanent = error instanceof z.ZodError;
-        const failureTime = new Date();
-        if (
-          permanent ||
-          attemptCount >= config.NOTIFICATION_EMAIL_MAX_ATTEMPTS
-        ) {
-          await notificationRepository.markDeliveryFailed(database, {
-            deliveryId: delivery.id,
-            error: message,
-            now: failureTime,
-            lockedUntil: leaseUntil,
-          });
-          result.failed += 1;
-          log.error(
-            { err: error, deliveryId: delivery.id },
-            "Notification email failed permanently",
-          );
-        } else {
-          await notificationRepository.markDeliveryRetry(database, {
-            deliveryId: delivery.id,
-            nextAttemptAt: retryAt(
-              failureTime,
-              attemptCount,
-              config.NOTIFICATION_RETRY_SECONDS,
-            ),
-            error: message,
-            now: failureTime,
-            lockedUntil: leaseUntil,
-          });
-          result.retried += 1;
-          log.warn(
-            { err: error, deliveryId: delivery.id },
-            "Notification email scheduled for retry",
-          );
-        }
-      }
+            await notificationRepository.markDeliverySent(database, {
+              deliveryId: delivery.id,
+              providerMessageId:
+                sendResult.status === "sent" ? sendResult.messageId : null,
+              now: new Date(),
+              lockedUntil: leaseUntil,
+            });
+            result.sent += 1;
+          } catch (error) {
+            // attempt_count was already incremented at claim time.
+            const attemptCount = delivery.attempt_count;
+            const message = errorMessage(error);
+            const permanent = error instanceof z.ZodError;
+            const failureTime = new Date();
+            if (
+              permanent ||
+              attemptCount >= config.NOTIFICATION_EMAIL_MAX_ATTEMPTS
+            ) {
+              await notificationRepository.markDeliveryFailed(database, {
+                deliveryId: delivery.id,
+                error: message,
+                now: failureTime,
+                lockedUntil: leaseUntil,
+              });
+              result.failed += 1;
+              log.error(
+                { err: error, deliveryId: delivery.id },
+                "Notification email failed permanently",
+              );
+            } else {
+              await notificationRepository.markDeliveryRetry(database, {
+                deliveryId: delivery.id,
+                nextAttemptAt: retryAt(
+                  failureTime,
+                  attemptCount,
+                  config.NOTIFICATION_RETRY_SECONDS,
+                ),
+                error: message,
+                now: failureTime,
+                lockedUntil: leaseUntil,
+              });
+              result.retried += 1;
+              log.warn(
+                { err: error, deliveryId: delivery.id },
+                "Notification email scheduled for retry",
+              );
+            }
+          }
+        },
+      );
     }
     return result;
   }
 
   async function process(): Promise<NotificationProcessorResult> {
+    // One pass over every queue: claims and clean-up see every row, and
+    // each claimed row is then handled as its own item.
+    return await runBackgroundPass("notifications", processAll);
+  }
+
+  async function processAll(): Promise<NotificationProcessorResult> {
     const outbox = await processOutbox();
     const emailResult = await processEmail();
     const pushResult = push ? await push.process() : null;

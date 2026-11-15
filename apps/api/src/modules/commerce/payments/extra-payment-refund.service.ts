@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { runBackgroundItem } from "@veolms/api-core";
 import type { PaymentGateway, PaymentGateways } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { FastifyBaseLogger } from "fastify";
@@ -340,7 +341,12 @@ export function createExtraPaymentRefundService({
     // One at a time: there are only ever as many as there were extra
     // payments, and each is one gateway call.
     for (const reservation of unsent) {
-      counts[await refundExtraPayment(reservation.payment_id)] += 1;
+      const outcome = await runBackgroundItem(
+        "extra-payment-refunds",
+        { table: "payments", id: reservation.payment_id },
+        () => refundExtraPayment(reservation.payment_id),
+      );
+      counts[outcome] += 1;
     }
     return counts;
   }

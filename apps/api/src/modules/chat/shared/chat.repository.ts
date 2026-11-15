@@ -227,18 +227,21 @@ export function createChatRepository() {
       },
       userId: string,
     ) {
-      return db
-        .insertInto("chat_settings")
-        .values({ id: 1, ...patch, updated_by: userId })
-        .onConflict((oc) =>
-          oc.column("id").doUpdateSet({
-            ...patch,
-            updated_by: userId,
-            updated_at: sql`now()`,
-          }),
-        )
-        .returningAll()
-        .executeTakeFirstOrThrow();
+      return (
+        db
+          .insertInto("chat_settings")
+          .values({ id: 1, ...patch, updated_by: userId })
+          // By primary key name, not column: see platform-settings.repository.ts.
+          .onConflict((oc) =>
+            oc.constraint("chat_settings_pkey").doUpdateSet({
+              ...patch,
+              updated_by: userId,
+              updated_at: sql`now()`,
+            }),
+          )
+          .returningAll()
+          .executeTakeFirstOrThrow()
+      );
     },
 
     // ------------------------------------------------------------- courses

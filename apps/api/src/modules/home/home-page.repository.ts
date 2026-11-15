@@ -43,8 +43,11 @@ export async function saveHomePageSettings(
       settings: sql`${settings}::jsonb`,
       updated_by: input.updatedBy,
     })
+    // Named by its primary key rather than its column, so a deployment that
+    // keeps one row per scope (its key widened under the same name) still
+    // updates the right row.
     .onConflict((conflict) =>
-      conflict.column("id").doUpdateSet({
+      conflict.constraint("home_page_settings_pkey").doUpdateSet({
         settings: sql`${settings}::jsonb`,
         updated_by: input.updatedBy,
         updated_at: sql`current_timestamp`,

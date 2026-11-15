@@ -1,6 +1,9 @@
 import type { FastifyBaseLogger } from "fastify";
 import { sql, type Kysely } from "kysely";
 import type { Database } from "@veolms/database";
+import { runBackgroundItem, runBackgroundPass } from "@veolms/api-core";
+
+const JOB = "learning-reminder-worker";
 
 import { createOutboxService } from "../../events/outbox.service.ts";
 import * as learningProgressRepository from "./learning-progress.repository.ts";
@@ -87,7 +90,7 @@ export class LearningReminderWorker {
   async runCycle(): Promise<void> {
     if (this.isRunning) return;
     this.isRunning = true;
-    const cycle = this.executeCycle();
+    const cycle = runBackgroundPass(JOB, () => this.executeCycle());
     this.activeCycle = cycle;
     try {
       await cycle;
@@ -182,34 +185,41 @@ export class LearningReminderWorker {
     `.execute(this.database);
 
     for (const row of due.rows) {
-      // Streak context for the copy: the streak that ends yesterday is
-      // what tonight's inactivity would break.
-      const aggregates =
-        await learningProgressRepository.getLearningSummaryAggregates(
-          this.database,
-          {
-            userId: row.user_id,
-            timeZone: row.time_zone,
-            floorDate: row.accrual_floor_date,
-          },
-        );
-
-      await this.database.transaction().execute(async (transaction) => {
-        await this.outbox.publish(transaction, {
-          type: "learning.reminder",
-          version: 1,
-          dedupeKey: `learning.reminder:${row.user_id}:${row.local_date}`,
-          occurredAt: new Date(),
-          payload: {
-            recipientUserId: row.user_id,
-            dailyGoalMinutes: row.daily_goal_minutes,
-            streakDays: aggregates.currentStreakDays,
-            localDate: row.local_date,
-          },
-        });
-      });
+      // Each learner is an item, named by their users row.
+      await runBackgroundItem(JOB, { table: "users", id: row.user_id }, () =>
+        this.publishReminder(row),
+      );
     }
 
     return due.rows.length;
+  }
+
+  private async publishReminder(row: DueReminderRow): Promise<void> {
+    // Streak context for the copy: the streak that ends yesterday is
+    // what tonight's inactivity would break.
+    const aggregates =
+      await learningProgressRepository.getLearningSummaryAggregates(
+        this.database,
+        {
+          userId: row.user_id,
+          timeZone: row.time_zone,
+          floorDate: row.accrual_floor_date,
+        },
+      );
+
+    await this.database.transaction().execute(async (transaction) => {
+      await this.outbox.publish(transaction, {
+        type: "learning.reminder",
+        version: 1,
+        dedupeKey: `learning.reminder:${row.user_id}:${row.local_date}`,
+        occurredAt: new Date(),
+        payload: {
+          recipientUserId: row.user_id,
+          dailyGoalMinutes: row.daily_goal_minutes,
+          streakDays: aggregates.currentStreakDays,
+          localDate: row.local_date,
+        },
+      });
+    });
   }
 }

@@ -5,7 +5,11 @@ import type {
 import type { Database } from "@veolms/database";
 import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
+import { runBackgroundItem, runBackgroundPass } from "@veolms/api-core";
+
 import * as webhookRepo from "./webhook.repository.ts";
+
+const JOB = "payment-events";
 
 export interface PaymentEventQueue {
   enqueue(event: NormalizedPaymentEvent): Promise<string>;
@@ -152,85 +156,92 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
     try {
       // Atomically claim due events (FOR UPDATE SKIP LOCKED + lease) — safe
       // against other replicas and against a poll tick racing an enqueue kick.
-      const pendingEvents = await webhookRepo.claimDueWebhookEvents(
-        this.database,
-        {
+      const pendingEvents = await runBackgroundPass(JOB, () =>
+        webhookRepo.claimDueWebhookEvents(this.database, {
           limit: 10,
           leaseSeconds: DurablePostgresPaymentEventQueue.CLAIM_LEASE_SECONDS,
-        },
+        }),
       );
 
       for (const eventRow of pendingEvents) {
-        const log = this.logger?.child({
-          eventId: eventRow.id,
-          providerEventId: eventRow.event_id,
-          eventType: eventRow.event_type,
-          attempt: eventRow.attempts,
-        });
-
-        try {
-          // Reconstruct normalized domain event from stored database
-          // payload, by the gateway that sent it.
-          const paymentGateway = this.paymentGateways.get(eventRow.provider);
-          if (!paymentGateway) {
-            throw new Error(
-              `Payment gateway "${eventRow.provider}" is not set up; its event is kept for when it is`,
-            );
-          }
-          const normalizedEvent = paymentGateway.normalizeWebhookEvent(
-            eventRow.payload,
-            eventRow.event_id,
-          );
-
-          // Dispatch to worker handler (which delegates to PaymentReconciliationService)
-          await this.handler({
-            ...normalizedEvent,
-            eventId: eventRow.id,
-          });
-
-          // Mark event as processed
-          await webhookRepo.markWebhookEventProcessed(
-            this.database,
-            eventRow.id,
-          );
-          log?.info("Durable webhook event processed successfully");
-        } catch (err: unknown) {
-          const message = (err as Error)?.message || "Worker error";
-          const isDead =
-            eventRow.attempts >= DurablePostgresPaymentEventQueue.MAX_ATTEMPTS;
-
-          if (isDead) {
-            log?.error(
-              { err },
-              "Durable webhook event exhausted retries — dead-lettered. " +
-                "Inspect webhook_events.error and clear dead_at to requeue.",
-            );
-          } else {
-            log?.error(
-              { err },
-              "Error processing durable webhook event; will retry with backoff",
-            );
-          }
-
-          await webhookRepo.markWebhookEventFailed(
-            this.database,
-            eventRow.id,
-            message,
-            isDead
-              ? { deadAt: new Date() }
-              : {
-                  nextAttemptAt: new Date(
-                    Date.now() +
-                      this.retryDelaySeconds(eventRow.attempts) * 1000,
-                  ),
-                },
-          );
-        }
+        await runBackgroundItem(
+          JOB,
+          { table: "webhook_events", id: eventRow.id },
+          () => this.runEvent(eventRow),
+        );
       }
     } catch (pollErr: unknown) {
       this.logger?.error(
         { err: pollErr },
         "Failed during payment queue event polling loop",
+      );
+    }
+  }
+
+  private async runEvent(
+    eventRow: Awaited<
+      ReturnType<typeof webhookRepo.claimDueWebhookEvents>
+    >[number],
+  ): Promise<void> {
+    const log = this.logger?.child({
+      eventId: eventRow.id,
+      providerEventId: eventRow.event_id,
+      eventType: eventRow.event_type,
+      attempt: eventRow.attempts,
+    });
+
+    try {
+      // Reconstruct normalized domain event from stored database
+      // payload, by the gateway that sent it.
+      const paymentGateway = this.paymentGateways.get(eventRow.provider);
+      if (!paymentGateway) {
+        throw new Error(
+          `Payment gateway "${eventRow.provider}" is not set up; its event is kept for when it is`,
+        );
+      }
+      const normalizedEvent = paymentGateway.normalizeWebhookEvent(
+        eventRow.payload,
+        eventRow.event_id,
+      );
+
+      // Dispatch to worker handler (which delegates to PaymentReconciliationService)
+      await this.handler({
+        ...normalizedEvent,
+        eventId: eventRow.id,
+      });
+
+      // Mark event as processed
+      await webhookRepo.markWebhookEventProcessed(this.database, eventRow.id);
+      log?.info("Durable webhook event processed successfully");
+    } catch (err: unknown) {
+      const message = (err as Error)?.message || "Worker error";
+      const isDead =
+        eventRow.attempts >= DurablePostgresPaymentEventQueue.MAX_ATTEMPTS;
+
+      if (isDead) {
+        log?.error(
+          { err },
+          "Durable webhook event exhausted retries — dead-lettered. " +
+            "Inspect webhook_events.error and clear dead_at to requeue.",
+        );
+      } else {
+        log?.error(
+          { err },
+          "Error processing durable webhook event; will retry with backoff",
+        );
+      }
+
+      await webhookRepo.markWebhookEventFailed(
+        this.database,
+        eventRow.id,
+        message,
+        isDead
+          ? { deadAt: new Date() }
+          : {
+              nextAttemptAt: new Date(
+                Date.now() + this.retryDelaySeconds(eventRow.attempts) * 1000,
+              ),
+            },
       );
     }
   }

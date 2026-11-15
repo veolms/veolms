@@ -11,6 +11,9 @@ import { reportDuplicatePurchases } from "../payments/duplicate-purchase.ts";
 import { createExtraPaymentRefundService } from "../payments/extra-payment-refund.service.ts";
 import { mapWithConcurrency } from "../../../lib/concurrency.ts";
 import { config } from "../../../config.ts";
+import { runBackgroundItem } from "@veolms/api-core";
+
+const JOB = "payment-recovery";
 
 export interface PaymentRecoveryWorkerOptions {
   database: Kysely<Database>;
@@ -233,31 +236,37 @@ export function createPaymentRecoveryWorker({
     // gateway calls are in flight at once instead of either processing one
     // payment at a time (tick duration scales with backlog size) or firing
     // every call at once (Promise.all — unbounded against the gateway).
-    await mapWithConcurrency(stalePayments, concurrency, async (payment) => {
-      try {
-        const outcome = await reconcile(payment);
-        if (outcome === "recovered") {
-          recovered++;
-          return;
-        }
-        skipped++;
-        if (outcome === "open") {
-          // Mark as checked so the next tick moves on to other payments.
-          await database
-            .updateTable("payments")
-            .set({ updated_at: new Date() })
-            .where("id", "=", payment.id)
-            .where("status", "in", ["initiated", "processing", "failed"])
-            .execute();
-        }
-      } catch (err: unknown) {
-        log?.error(
-          { err, paymentId: payment.id },
-          "Error recovering stale payment",
-        );
-        errors++;
-      }
-    });
+    await mapWithConcurrency(stalePayments, concurrency, (payment) =>
+      runBackgroundItem(
+        JOB,
+        { table: "payments", id: payment.id },
+        async () => {
+          try {
+            const outcome = await reconcile(payment);
+            if (outcome === "recovered") {
+              recovered++;
+              return;
+            }
+            skipped++;
+            if (outcome === "open") {
+              // Mark as checked so the next tick moves on to other payments.
+              await database
+                .updateTable("payments")
+                .set({ updated_at: new Date() })
+                .where("id", "=", payment.id)
+                .where("status", "in", ["initiated", "processing", "failed"])
+                .execute();
+            }
+          } catch (err: unknown) {
+            log?.error(
+              { err, paymentId: payment.id },
+              "Error recovering stale payment",
+            );
+            errors++;
+          }
+        },
+      ),
+    );
 
     // --- 2. Payments that have aged out of the window ----------------------
     //
@@ -277,39 +286,45 @@ export function createPaymentRecoveryWorker({
       .limit(batchSize)
       .execute();
 
-    await mapWithConcurrency(agedOut, concurrency, async (payment) => {
-      try {
-        const outcome = await reconcile(payment);
-        if (outcome === "recovered") {
-          recovered++;
-          return;
-        }
-        if (outcome === "already-final") {
-          skipped++;
-          return;
-        }
-        const closed = await paymentRepo.transitionPaymentStatus(
-          database,
-          payment.id,
-          "failed",
-          ["initiated", "processing"],
-          {
-            error_code: "ABANDONED",
-            error_description: `No captured payment after ${maxAgeHours} hours.`,
-          },
-        );
-        if (closed) failed++;
-        else skipped++;
-      } catch (err: unknown) {
-        // Left in-flight on purpose: the final check is retried next tick
-        // rather than closing a payment whose gateway state is unknown.
-        log?.error(
-          { err, paymentId: payment.id },
-          "Error on the final check of an aged-out payment",
-        );
-        errors++;
-      }
-    });
+    await mapWithConcurrency(agedOut, concurrency, (payment) =>
+      runBackgroundItem(
+        JOB,
+        { table: "payments", id: payment.id },
+        async () => {
+          try {
+            const outcome = await reconcile(payment);
+            if (outcome === "recovered") {
+              recovered++;
+              return;
+            }
+            if (outcome === "already-final") {
+              skipped++;
+              return;
+            }
+            const closed = await paymentRepo.transitionPaymentStatus(
+              database,
+              payment.id,
+              "failed",
+              ["initiated", "processing"],
+              {
+                error_code: "ABANDONED",
+                error_description: `No captured payment after ${maxAgeHours} hours.`,
+              },
+            );
+            if (closed) failed++;
+            else skipped++;
+          } catch (err: unknown) {
+            // Left in-flight on purpose: the final check is retried next tick
+            // rather than closing a payment whose gateway state is unknown.
+            log?.error(
+              { err, paymentId: payment.id },
+              "Error on the final check of an aged-out payment",
+            );
+            errors++;
+          }
+        },
+      ),
+    );
 
     log?.info(
       { recovered, failed, skipped, errors },

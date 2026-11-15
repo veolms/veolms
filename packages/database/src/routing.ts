@@ -119,9 +119,33 @@ class ReadOnlyBossError extends Error {
   code = "25006";
 }
 
+/** A connection just taken from a pool, before the caller's first statement. */
+export interface AcquiredConnection {
+  /**
+   * The same object every time this physical connection is taken, for a
+   * caller that remembers what it already set on it (a WeakMap key).
+   */
+  readonly key: object;
+  /** Whether this is the boss (writes) or this server's copy (reads). */
+  readonly role: "boss" | "copy";
+  /** Runs one statement on this very connection, never routed elsewhere. */
+  query(sql: string, values?: readonly unknown[]): Promise<unknown>;
+}
+
+/**
+ * Runs each time a connection is taken from a pool, before it is used, for
+ * a deployment that keeps per-request session settings on its connections
+ * (`set_config`). Not set by default; a failure releases the connection and
+ * fails the statement that asked for it.
+ */
+export type ConnectionAcquiredHook = (
+  connection: AcquiredConnection,
+) => Promise<void> | void;
+
 export interface RoutingPoolOptions {
   writer: Pool;
   reader?: Pool;
+  onConnectionAcquired?: ConnectionAcquiredHook;
   /** How long a connection to the boss is waited for (0: not at all). */
   holdMillis: number;
   /** How far behind the boss the copy may be and still serve reads. */
@@ -162,6 +186,31 @@ export function createRoutingPool(options: RoutingPoolOptions): RoutingPool {
   const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
   /**
+   * Hands a connection to `onConnectionAcquired`. `run` is the connection's
+   * own query (a copy client's unrouted one), so the hook's statement lands
+   * on the connection it prepares.
+   */
+  async function prepare(
+    client: PoolClient,
+    role: "boss" | "copy",
+    run: QueryFunction,
+  ): Promise<PoolClient> {
+    const hook = options.onConnectionAcquired;
+    if (!hook) return client;
+    try {
+      await hook({
+        key: client,
+        role,
+        query: (sql, values) => run.call(client, sql, values),
+      });
+      return client;
+    } catch (error) {
+      client.release(true);
+      throw error;
+    }
+  }
+
+  /**
    * A connection to the boss. While a takeover is going on (nothing
    * answers, or the node answering is no longer the boss) it waits and
    * tries again, up to holdMillis, so the request is slower but succeeds.
@@ -174,7 +223,7 @@ export function createRoutingPool(options: RoutingPoolOptions): RoutingPool {
         const client = await writer.connect();
         if (writable.has(client)) {
           bossAnswered();
-          return client;
+          return await prepare(client, "boss", client.query as QueryFunction);
         }
         const { rows } = await client.query<{ recovery: boolean }>(
           "select pg_is_in_recovery() as recovery",
@@ -187,7 +236,7 @@ export function createRoutingPool(options: RoutingPoolOptions): RoutingPool {
         }
         writable.add(client);
         bossAnswered();
-        return client;
+        return await prepare(client, "boss", client.query as QueryFunction);
       } catch (error) {
         const retryable =
           error instanceof ReadOnlyBossError || isConnectFailure(error);
@@ -356,7 +405,12 @@ export function createRoutingPool(options: RoutingPoolOptions): RoutingPool {
       if (reader && readContext.getStore() === true) {
         if (!checkTimer) await startChecks();
         // Statements are routed one by one (see the copy client above).
-        return await reader.connect();
+        const client = await reader.connect();
+        return await prepare(
+          client,
+          "copy",
+          copyQuery.get(client) ?? (client.query as QueryFunction),
+        );
       }
       return await connectWriter();
     },

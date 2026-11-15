@@ -119,8 +119,10 @@ export async function assignInvoiceNumber(
   const counter = await database
     .insertInto("invoice_number_counters")
     .values({ year, last_number: 1 })
+    // By primary key name, not column, so a deployment that numbers per
+    // seller (its key widened under the same name) keeps one counter each.
     .onConflict((conflict) =>
-      conflict.column("year").doUpdateSet({
+      conflict.constraint("invoice_number_counters_pkey").doUpdateSet({
         last_number: sql<number>`invoice_number_counters.last_number + 1`,
       }),
     )

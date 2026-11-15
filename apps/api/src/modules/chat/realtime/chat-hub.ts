@@ -1,4 +1,5 @@
 import pg from "pg";
+import { runBackgroundItem } from "@veolms/api-core";
 
 import {
   NOTIFICATION_SIGNAL_CHANNEL,
@@ -360,7 +361,13 @@ export function createChatHub({
       while (next < userIds.length) {
         const userId = userIds[next++]!;
         try {
-          const rooms = await loader(userId);
+          // Outside any request: the lookup is an item of background work,
+          // named by the person it is for.
+          const rooms = await runBackgroundItem(
+            "chat-room-join",
+            { table: "users", id: userId },
+            () => loader(userId),
+          );
           const head = rooms.find((room) => room.id === roomId);
           if (!head) continue;
           const known = heads.get(roomId);

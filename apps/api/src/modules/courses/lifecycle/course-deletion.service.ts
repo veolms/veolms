@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { runBackgroundItem, runBackgroundPass } from "@veolms/api-core";
 import { z } from "zod";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
@@ -18,6 +19,7 @@ export const COURSE_DELETION_BATCH_SIZE = 100;
 const COURSE_DELETION_RETENTION_MS =
   COURSE_DELETION_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 const COURSE_DELETION_LEASE_MS = 15 * 60 * 1000;
+const PURGE_JOB = "course-deletion";
 const COURSE_DELETION_MAX_BACKOFF_MS = 60 * 60 * 1000;
 
 const cursorSchema = z.object({
@@ -271,24 +273,33 @@ export function createCourseDeletionService({
     let failed = 0;
 
     for (const item of claimedItems) {
-      try {
-        if (item.delete_mode === "prefix") {
-          await storage.deletePrefix(item.storage_key);
-        } else {
-          await storage.deleteObject(item.storage_key);
-        }
-        await deletionRepo.deleteCourseDeletionStorageItem(database, item.id);
-        completed++;
-      } catch (error) {
-        failed++;
-        await deletionRepo.markCourseDeletionStorageItemFailed(
-          database,
-          item.id,
-          now,
-          new Date(now.getTime() + getRetryDelayMs(item.attempt_count)),
-          getPurgeError(error),
-        );
-      }
+      await runBackgroundItem(
+        PURGE_JOB,
+        { table: "course_deletion_storage_items", id: item.id },
+        async () => {
+          try {
+            if (item.delete_mode === "prefix") {
+              await storage.deletePrefix(item.storage_key);
+            } else {
+              await storage.deleteObject(item.storage_key);
+            }
+            await deletionRepo.deleteCourseDeletionStorageItem(
+              database,
+              item.id,
+            );
+            completed++;
+          } catch (error) {
+            failed++;
+            await deletionRepo.markCourseDeletionStorageItemFailed(
+              database,
+              item.id,
+              now,
+              new Date(now.getTime() + getRetryDelayMs(item.attempt_count)),
+              getPurgeError(error),
+            );
+          }
+        },
+      );
     }
 
     return {
@@ -298,13 +309,22 @@ export function createCourseDeletionService({
     };
   }
 
-  async function purgeDueCourses({
+  /** One pass: claims see every queued row; each row is its own item. */
+  async function purgeDueCourses(
+    options: { now?: Date; batchSize?: number } = {},
+  ) {
+    return await runBackgroundPass(PURGE_JOB, () =>
+      purgeDueCoursesPass(options),
+    );
+  }
+
+  async function purgeDueCoursesPass({
     now = new Date(),
     batchSize = COURSE_DELETION_BATCH_SIZE,
   }: {
     now?: Date;
     batchSize?: number;
-  } = {}) {
+  }) {
     const claimedJobs = await deletionRepo.claimDueCourseDeletionJobs(
       database,
       now,
@@ -316,24 +336,34 @@ export function createCourseDeletionService({
     let failed = 0;
 
     for (const job of claimedJobs) {
-      try {
-        const deleted = await prepareCoursePurge(job.id, job.course_id, now);
-        if (deleted) {
-          completed++;
-        }
-      } catch (error) {
-        failed++;
-        const nextAttemptAt = new Date(
-          now.getTime() + getRetryDelayMs(job.attempt_count),
-        );
-        await deletionRepo.markCourseDeletionJobFailed(
-          database,
-          job.id,
-          now,
-          nextAttemptAt,
-          getPurgeError(error),
-        );
-      }
+      await runBackgroundItem(
+        PURGE_JOB,
+        { table: "course_deletion_jobs", id: job.id },
+        async () => {
+          try {
+            const deleted = await prepareCoursePurge(
+              job.id,
+              job.course_id,
+              now,
+            );
+            if (deleted) {
+              completed++;
+            }
+          } catch (error) {
+            failed++;
+            const nextAttemptAt = new Date(
+              now.getTime() + getRetryDelayMs(job.attempt_count),
+            );
+            await deletionRepo.markCourseDeletionJobFailed(
+              database,
+              job.id,
+              now,
+              nextAttemptAt,
+              getPurgeError(error),
+            );
+          }
+        },
+      );
     }
 
     const storage = await purgeStorageItems({ now, batchSize });

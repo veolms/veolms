@@ -1,7 +1,7 @@
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool, types } from "pg";
 
-import { createRoutingPool } from "./routing.ts";
+import { createRoutingPool, type ConnectionAcquiredHook } from "./routing.ts";
 import type { Database } from "./schema.ts";
 
 // pg returns bigint (OID 20, e.g. jobs.video_size) as a string by default to
@@ -25,6 +25,11 @@ export interface DatabasePoolOptions {
    * `databaseUrl`.
    */
   readUrl?: string;
+  /**
+   * Runs each time a connection is taken from a pool, before it is used
+   * (see `ConnectionAcquiredHook` in routing.ts). Not set by default.
+   */
+  onConnectionAcquired?: ConnectionAcquiredHook;
 }
 
 function intFromEnv(name: string): number | undefined {
@@ -148,6 +153,9 @@ export function createDatabase(
     maxReadLagBytes:
       intFromEnv("DATABASE_READ_MAX_LAG_BYTES") ?? 16 * 1024 * 1024,
     log: (message) => console.warn(message),
+    ...(options.onConnectionAcquired
+      ? { onConnectionAcquired: options.onConnectionAcquired }
+      : {}),
   });
 
   return new Kysely<Database>({

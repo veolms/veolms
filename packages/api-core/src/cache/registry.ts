@@ -11,6 +11,32 @@ export interface RegisteredCache {
 const caches = new Map<string, RegisteredCache>();
 let enabled = true;
 let broadcaster: ((tags: readonly string[]) => void) | null = null;
+let scopeSource: (() => string | undefined) | null = null;
+
+/**
+ * Splits every cache by a scope the deployment chooses, read when a cache
+ * is used (for example from an AsyncLocalStorage set per request). Entries
+ * stored under one scope are never returned under another, and
+ * `invalidateCache` called within a scope clears that scope's entries only.
+ * An invalidation made outside any scope still clears every scope's
+ * entries with those tags.
+ *
+ * Not set by default: there is one scope, and nothing changes.
+ */
+export function setCacheScope(source: (() => string | undefined) | null): void {
+  scopeSource = source;
+}
+
+/** The scope caches use right now, if any. */
+export function currentCacheScope(): string | undefined {
+  const scope = scopeSource?.();
+  return scope ? scope : undefined;
+}
+
+/** A tag as stored and invalidated within `scope`. */
+export function scopedCacheTag(scope: string, tag: string): string {
+  return `${scope}|${tag}`;
+}
 
 export function registerCache(cache: RegisteredCache): void {
   if (caches.has(cache.name)) {
@@ -44,8 +70,10 @@ export function isCachingEnabled(): boolean {
  */
 export function invalidateCache(tags: readonly string[]): void {
   if (tags.length === 0) return;
-  applyCacheInvalidation(tags);
-  broadcaster?.(tags);
+  const scope = currentCacheScope();
+  const sent = scope ? tags.map((tag) => scopedCacheTag(scope, tag)) : tags;
+  applyCacheInvalidation(sent);
+  broadcaster?.(sent);
 }
 
 /** Clears in this process only: what the bus does with a received change. */

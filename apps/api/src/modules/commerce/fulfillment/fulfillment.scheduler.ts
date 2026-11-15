@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from "fastify";
 import { sql, type Kysely } from "kysely";
 import type { Database } from "@veolms/database";
+import { runBackgroundPass } from "@veolms/api-core";
 import type { PaymentGateways } from "@veolms/contracts";
 import { createOrderExpirationWorker } from "./order-expiration.worker.ts";
 import { createPaymentRecoveryWorker } from "./payment-recovery.worker.ts";
@@ -119,7 +120,11 @@ export class CommerceFulfillmentScheduler {
   async runCycle(): Promise<void> {
     if (this.isRunning) return;
     this.isRunning = true;
-    const cycle = this.executeCycle();
+    // One pass: the reconciliation queries see every row, and each row
+    // they act on is handled as its own item by the workers.
+    const cycle = runBackgroundPass("commerce-fulfillment", () =>
+      this.executeCycle(),
+    );
     this.activeCycle = cycle;
 
     try {

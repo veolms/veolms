@@ -9,9 +9,11 @@ export {
   applyCacheInvalidation,
   clearAllCaches,
   configureCaches,
+  currentCacheScope,
   getCacheStats,
   invalidateCache,
   isCachingEnabled,
+  setCacheScope,
 } from "./registry.ts";
 export { ALL_CACHE_TAG, cacheTags } from "./tags.ts";
 export {

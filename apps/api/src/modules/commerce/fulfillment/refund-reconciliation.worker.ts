@@ -6,10 +6,13 @@ import * as refundRepo from "../refunds/refund.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
+import { runBackgroundItem } from "@veolms/api-core";
 import { mapWithConcurrency } from "../../../lib/concurrency.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import { settleExtraPaymentRefund } from "../payments/extra-payment-refund.service.ts";
 import { SURPLUS_CAPTURE_ERROR_CODE } from "../payments/surplus-payment.ts";
+
+const JOB = "refund-reconciliation";
 
 export interface RefundReconciliationWorkerOptions {
   database: Kysely<Database>;
@@ -98,191 +101,213 @@ export function createRefundReconciliationWorker({
     const fetchResults = await mapWithConcurrency(
       staleRefunds,
       concurrency,
-      async (refund) => {
-        // Asked of the gateway the refunded payment was made through.
-        const paymentGateway = paymentGateways.get(refund.gateway_provider);
-        if (!refund.gateway_refund_id || !paymentGateway) {
-          return {
-            refund,
-            gatewayRefund: null as GatewayRefundDetails | null,
-            error: null as unknown,
-          };
-        }
-        try {
-          const gatewayRefund = await paymentGateway.fetchRefund(
-            refund.gateway_refund_id,
-          );
-          return { refund, gatewayRefund, error: null as unknown };
-        } catch (err) {
-          return {
-            refund,
-            gatewayRefund: null as GatewayRefundDetails | null,
-            error: err,
-          };
-        }
-      },
+      (refund) =>
+        runBackgroundItem(JOB, { table: "refunds", id: refund.id }, () =>
+          fetchGatewayRefund(refund),
+        ),
     );
+
+    async function fetchGatewayRefund(refund: (typeof staleRefunds)[number]) {
+      // Asked of the gateway the refunded payment was made through.
+      const paymentGateway = paymentGateways.get(refund.gateway_provider);
+      if (!refund.gateway_refund_id || !paymentGateway) {
+        return {
+          refund,
+          gatewayRefund: null as GatewayRefundDetails | null,
+          error: null as unknown,
+        };
+      }
+      try {
+        const gatewayRefund = await paymentGateway.fetchRefund(
+          refund.gateway_refund_id,
+        );
+        return { refund, gatewayRefund, error: null as unknown };
+      } catch (err) {
+        return {
+          refund,
+          gatewayRefund: null as GatewayRefundDetails | null,
+          error: err,
+        };
+      }
+    }
 
     // 2. Apply DB writes strictly serially, same as before parallelizing the
     //    fetch above — only the network calls were parallelized.
-    for (const { refund, gatewayRefund, error } of fetchResults) {
-      if (error) {
-        log?.error(
-          { err: error, refundId: refund.id },
-          "Error fetching stale refund from gateway",
-        );
-        errors++;
-        continue;
-      }
-
-      if (!refund.gateway_refund_id || !gatewayRefund) {
-        skipped++;
-        continue;
-      }
-
-      try {
-        if (gatewayRefund.status === refund.status) {
-          // Already in sync
-          skipped++;
-          continue;
-        }
-
-        if (gatewayRefund.status === "processed") {
-          // A refund of an extra payment (payments/extra-payment.ts) is not
-          // a refund of the order: its status and its access stay as they
-          // are. It is completed the way its own answer or the gateway's
-          // event would have completed it.
-          const refundedPayment = await paymentRepo.findPaymentById(
-            database,
-            refund.payment_id,
-          );
-          if (refundedPayment?.error_code === SURPLUS_CAPTURE_ERROR_CODE) {
-            await database.transaction().execute((trx) =>
-              settleExtraPaymentRefund(trx, {
-                paymentId: refundedPayment.id,
-                gatewayRefundId: gatewayRefund.gatewayRefundId,
-                amount: gatewayRefund.amount,
-                currency: gatewayRefund.currency,
-                now: new Date(),
-              }),
+    for (const fetched of fetchResults) {
+      await runBackgroundItem(
+        JOB,
+        { table: "refunds", id: fetched.refund.id },
+        async () => {
+          const { refund, gatewayRefund, error } = fetched;
+          if (error) {
+            log?.error(
+              { err: error, refundId: refund.id },
+              "Error fetching stale refund from gateway",
             );
-            log?.info(
-              { refundId: refund.id, paymentId: refundedPayment.id },
-              "Refund of an extra payment reconciled to processed; the order was not changed",
-            );
-            resolved++;
-            continue;
+            errors++;
+            return;
           }
 
-          const order = await orderRepo.findOrderById(
-            database,
-            refund.order_id,
-          );
-          if (!order) {
+          if (!refund.gateway_refund_id || !gatewayRefund) {
             skipped++;
-            continue;
+            return;
           }
 
-          // Cumulative check via the shared helper (see refund.repository.ts's
-          // sumOtherCountedRefunds) — previously reimplemented inline here
-          // with a filter that only counted OTHER "processed" refunds, not
-          // "pending" ones, unlike refund.service.ts / payment.worker.ts's
-          // equivalent checks. That could under-count the true refunded
-          // total whenever more than one refund for this order was in
-          // flight at once. `refund` itself isn't "processed" yet at this
-          // point (that update happens inside the transaction below), so
-          // it's excluded by id and its amount added explicitly instead.
-          const totalOtherRefundsAlready =
-            await refundRepo.sumOtherCountedRefunds(database, refund.order_id, {
-              refundId: refund.id,
-            });
-          const totalProcessed = totalOtherRefundsAlready + refund.amount;
-
-          // Compare against the captured payment's amount; fall back to the
-          // order total (also minor units) only if the payment row is missing.
-          const payment = await paymentRepo.findPaymentById(
-            database,
-            refund.payment_id,
-          );
-          const orderTotalMinorUnits = payment?.amount ?? order.total_amount;
-
-          await database.transaction().execute(async (trx) => {
-            await refundRepo.updateRefundStatus(trx, refund.id, {
-              status: "processed",
-              updated_at: new Date(),
-            });
-
-            // Determine full vs partial based on the captured amount
-            const isFullOrderRefund = totalProcessed >= orderTotalMinorUnits;
-            await orderRepo.updateOrderStatus(trx, order.id, {
-              status: isFullOrderRefund ? "refunded" : "partially_refunded",
-              updated_at: new Date(),
-            });
-
-            if (refund.preserve_access) {
-              // The admin who created this refund chose to keep the
-              // learner's access — honor that on the async path too.
-            } else if (isFullOrderRefund) {
-              // Single shared owner of the access_grants + enrollments
-              // revoke write — see course-access.service.ts.
-              await courseAccessService.revokeAccessForOrder(trx, order);
-            } else if (refund.order_item_id) {
-              const targetItem = await orderRepo.findOrderItemById(
-                trx,
-                refund.order_item_id,
-              );
-              if (targetItem) {
-                await courseAccessService.revokeAccessForOrderItem(trx, order, {
-                  id: targetItem.id,
-                  item_type: targetItem.item_type,
-                  course_id: targetItem.course_id,
-                  bundle_id: targetItem.bundle_id,
-                  quiz_pricing_id: targetItem.quiz_pricing_id,
-                });
-              }
+          try {
+            if (gatewayRefund.status === refund.status) {
+              // Already in sync
+              skipped++;
+              return;
             }
-            await outbox.publish(trx, {
-              type: "refund.completed",
-              version: 1,
-              dedupeKey: `refund.completed:${refund.id}`,
-              occurredAt: new Date(),
-              payload: {
-                refundId: refund.id,
-                orderId: order.id,
-                orderNumber: order.order_number,
-                recipientUserId: order.user_id,
-                amount: refund.amount,
-                currency: refund.currency,
-              },
-            });
-          });
 
-          log?.info(
-            { refundId: refund.id, orderId: order.id },
-            "Stale refund reconciled to processed",
-          );
-          resolved++;
-        } else if (gatewayRefund.status === "failed") {
-          await refundRepo.updateRefundStatus(database, refund.id, {
-            status: "failed",
-            updated_at: new Date(),
-          });
-          log?.warn(
-            { refundId: refund.id },
-            "Stale refund reconciled to failed",
-          );
-          resolved++;
-        } else {
-          // Still pending at gateway — skip
-          skipped++;
-        }
-      } catch (err: unknown) {
-        log?.error(
-          { err, refundId: refund.id },
-          "Error reconciling stale refund",
-        );
-        errors++;
-      }
+            if (gatewayRefund.status === "processed") {
+              // A refund of an extra payment (payments/extra-payment.ts) is not
+              // a refund of the order: its status and its access stay as they
+              // are. It is completed the way its own answer or the gateway's
+              // event would have completed it.
+              const refundedPayment = await paymentRepo.findPaymentById(
+                database,
+                refund.payment_id,
+              );
+              if (refundedPayment?.error_code === SURPLUS_CAPTURE_ERROR_CODE) {
+                await database.transaction().execute((trx) =>
+                  settleExtraPaymentRefund(trx, {
+                    paymentId: refundedPayment.id,
+                    gatewayRefundId: gatewayRefund.gatewayRefundId,
+                    amount: gatewayRefund.amount,
+                    currency: gatewayRefund.currency,
+                    now: new Date(),
+                  }),
+                );
+                log?.info(
+                  { refundId: refund.id, paymentId: refundedPayment.id },
+                  "Refund of an extra payment reconciled to processed; the order was not changed",
+                );
+                resolved++;
+                return;
+              }
+
+              const order = await orderRepo.findOrderById(
+                database,
+                refund.order_id,
+              );
+              if (!order) {
+                skipped++;
+                return;
+              }
+
+              // Cumulative check via the shared helper (see refund.repository.ts's
+              // sumOtherCountedRefunds) — previously reimplemented inline here
+              // with a filter that only counted OTHER "processed" refunds, not
+              // "pending" ones, unlike refund.service.ts / payment.worker.ts's
+              // equivalent checks. That could under-count the true refunded
+              // total whenever more than one refund for this order was in
+              // flight at once. `refund` itself isn't "processed" yet at this
+              // point (that update happens inside the transaction below), so
+              // it's excluded by id and its amount added explicitly instead.
+              const totalOtherRefundsAlready =
+                await refundRepo.sumOtherCountedRefunds(
+                  database,
+                  refund.order_id,
+                  {
+                    refundId: refund.id,
+                  },
+                );
+              const totalProcessed = totalOtherRefundsAlready + refund.amount;
+
+              // Compare against the captured payment's amount; fall back to the
+              // order total (also minor units) only if the payment row is missing.
+              const payment = await paymentRepo.findPaymentById(
+                database,
+                refund.payment_id,
+              );
+              const orderTotalMinorUnits =
+                payment?.amount ?? order.total_amount;
+
+              await database.transaction().execute(async (trx) => {
+                await refundRepo.updateRefundStatus(trx, refund.id, {
+                  status: "processed",
+                  updated_at: new Date(),
+                });
+
+                // Determine full vs partial based on the captured amount
+                const isFullOrderRefund =
+                  totalProcessed >= orderTotalMinorUnits;
+                await orderRepo.updateOrderStatus(trx, order.id, {
+                  status: isFullOrderRefund ? "refunded" : "partially_refunded",
+                  updated_at: new Date(),
+                });
+
+                if (refund.preserve_access) {
+                  // The admin who created this refund chose to keep the
+                  // learner's access — honor that on the async path too.
+                } else if (isFullOrderRefund) {
+                  // Single shared owner of the access_grants + enrollments
+                  // revoke write — see course-access.service.ts.
+                  await courseAccessService.revokeAccessForOrder(trx, order);
+                } else if (refund.order_item_id) {
+                  const targetItem = await orderRepo.findOrderItemById(
+                    trx,
+                    refund.order_item_id,
+                  );
+                  if (targetItem) {
+                    await courseAccessService.revokeAccessForOrderItem(
+                      trx,
+                      order,
+                      {
+                        id: targetItem.id,
+                        item_type: targetItem.item_type,
+                        course_id: targetItem.course_id,
+                        bundle_id: targetItem.bundle_id,
+                        quiz_pricing_id: targetItem.quiz_pricing_id,
+                      },
+                    );
+                  }
+                }
+                await outbox.publish(trx, {
+                  type: "refund.completed",
+                  version: 1,
+                  dedupeKey: `refund.completed:${refund.id}`,
+                  occurredAt: new Date(),
+                  payload: {
+                    refundId: refund.id,
+                    orderId: order.id,
+                    orderNumber: order.order_number,
+                    recipientUserId: order.user_id,
+                    amount: refund.amount,
+                    currency: refund.currency,
+                  },
+                });
+              });
+
+              log?.info(
+                { refundId: refund.id, orderId: order.id },
+                "Stale refund reconciled to processed",
+              );
+              resolved++;
+            } else if (gatewayRefund.status === "failed") {
+              await refundRepo.updateRefundStatus(database, refund.id, {
+                status: "failed",
+                updated_at: new Date(),
+              });
+              log?.warn(
+                { refundId: refund.id },
+                "Stale refund reconciled to failed",
+              );
+              resolved++;
+            } else {
+              // Still pending at gateway — skip
+              skipped++;
+            }
+          } catch (err: unknown) {
+            log?.error(
+              { err, refundId: refund.id },
+              "Error reconciling stale refund",
+            );
+            errors++;
+          }
+        },
+      );
     }
 
     log?.info(
