@@ -588,9 +588,29 @@ export function PersistentLearningPlayerHost({
   // Also covers leaving the lesson without minimizing (the player is then
   // demoted to the mini window with no gesture). Declared after the
   // presentation effect so it never measures a hand-off in progress.
+  //
+  // Measured once a frame, just before it is drawn, not inside each render:
+  // a lesson opening renders the page many times in a row, and each
+  // measure in between forced a style and layout pass of the whole page
+  // (about a second at a time on a slow computer, 2026-11-15). In the frame
+  // the browser lays the page out anyway; the measure then costs nothing.
+  // A minimize measures at once (finishRestoreBeforeMinimize); a player
+  // already in the mini window by the frame is skipped by the measure.
+  const rectFrameRef = useRef(0);
   useLayoutEffect(() => {
-    if (presentation === "full") rememberFullPlayerRect();
+    if (presentation !== "full" || rectFrameRef.current !== 0) return;
+    rectFrameRef.current = window.requestAnimationFrame(() => {
+      rectFrameRef.current = 0;
+      rememberFullPlayerRect();
+    });
   });
+  useEffect(
+    () => () => {
+      window.cancelAnimationFrame(rectFrameRef.current);
+      rectFrameRef.current = 0;
+    },
+    [],
+  );
 
   useEffect(
     () => () => {
