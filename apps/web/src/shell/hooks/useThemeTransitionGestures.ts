@@ -13,6 +13,7 @@ import {
   APPEARANCE_LONG_PRESS_MOVE_TOLERANCE,
 } from "../academyShellConstants";
 import type { AppearanceOption } from "../academyShellTypes";
+import { guardMenuTapThrough } from "../menuTapThrough";
 
 export interface UseThemeTransitionGesturesArgs {
   onNavigatePage: NavigateTo;
@@ -511,6 +512,8 @@ export function useThemeTransitionGestures({
       true,
     );
     document.addEventListener("pointerdown", onPointerDown);
+    // Before anything closes a menu (see guardMenuTapThrough).
+    document.addEventListener("pointerdown", guardMenuTapThrough, true);
     document.addEventListener("keydown", onEscape);
     return () => {
       themeTransitionObserver.disconnect();
@@ -551,6 +554,7 @@ export function useThemeTransitionGestures({
         true,
       );
       document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerdown", guardMenuTapThrough, true);
       document.removeEventListener("keydown", onEscape);
     };
   }, [
