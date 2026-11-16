@@ -445,6 +445,16 @@ export function getShakaStartupBandwidthEstimate(): number {
   );
 }
 
+/**
+ * What the player last measured the connection at (bits per second), from
+ * this page or a recent one, or null when nothing was measured: for work
+ * that should only be done with room to spare (preloading a lesson not
+ * being watched).
+ */
+export function getShakaMeasuredBandwidth(): number | null {
+  return lastEstimatedBandwidth;
+}
+
 export function resetShakaBandwidthEstimateForTests(): void {
   lastEstimatedBandwidth = null;
 }
