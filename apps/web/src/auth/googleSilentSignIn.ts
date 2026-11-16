@@ -56,7 +56,12 @@ export function useGoogleSilentSignInCheck(
   loginHint?: string,
 ): RefObject<GoogleSilentSignInCheck | null> {
   const { data: authConfig } = useAuthConfig();
-  const clientId = authConfig?.googleClientId;
+  // Not asked where Google does not answer on this site's pages: the
+  // sign-in window then always opens.
+  const clientId =
+    authConfig?.googlePromptsOnPage === false
+      ? undefined
+      : authConfig?.googleClientId;
   const checkRef = useRef<GoogleSilentSignInCheck | null>(null);
 
   useEffect(() => {

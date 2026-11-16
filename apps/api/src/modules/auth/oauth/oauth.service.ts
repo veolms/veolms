@@ -4,6 +4,7 @@ import type {
   OauthRegisterRequest,
 } from "@veolms/contracts";
 import { createCorsMatcher } from "@veolms/api-core";
+import { googleSignIn } from "@veolms/config";
 
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
@@ -36,11 +37,13 @@ const corsMatcher = createCorsMatcher(config);
 /**
  * The address the provider sends the visitor back to must be a page of this
  * platform's own web app: an http(s) URL on an origin the API already
- * accepts requests from. The provider checks the address against its own
- * list too; this stops the API handing out a sign-in link to anywhere else.
+ * accepts requests from, or one Google sign-in names as the site's own
+ * (`returnOrigins`). The provider checks the address against its own list
+ * too; this stops the API handing out a sign-in link to anywhere else.
  */
 function assertAllowedRedirectUri(
   redirectUri: string,
+  returnOrigins: readonly string[],
   logger?: AuthLogger,
 ): void {
   let url: URL | undefined;
@@ -53,7 +56,10 @@ function assertAllowedRedirectUri(
   if (
     !url ||
     (url.protocol !== "https:" && url.protocol !== "http:") ||
-    !corsMatcher.isAllowedOrigin(url.origin)
+    !(
+      corsMatcher.isAllowedOrigin(url.origin) ||
+      returnOrigins.includes(url.origin)
+    )
   ) {
     // An operator who serves the web app from an origin missing from
     // WEB_URL / CORS_ORIGINS sees why social sign-in stopped there.
@@ -90,16 +96,22 @@ export function createOauthService({
   authService,
   sessionService,
 }: OauthServiceOptions) {
-  const credentials = {
-    googleClientId: config.GOOGLE_CLIENT_ID,
-    googleClientSecret: config.GOOGLE_CLIENT_SECRET,
-    githubClientId: config.GITHUB_CLIENT_ID,
-    githubClientSecret: config.GITHUB_CLIENT_SECRET,
-  };
+  /** The providers' clients for this request (Google's may vary by site). */
+  function providerCredentials() {
+    const google = googleSignIn(config);
+    return {
+      googleClientId: google.clientId,
+      googleClientSecret: google.clientSecret,
+      githubClientId: config.GITHUB_CLIENT_ID,
+      githubClientSecret: config.GITHUB_CLIENT_SECRET,
+    };
+  }
 
   function getPublicConfig() {
+    const google = googleSignIn(config);
     return {
-      googleClientId: config.GOOGLE_CLIENT_ID || "",
+      googleClientId: google.clientId,
+      googlePromptsOnPage: google.promptsOnPage,
     };
   }
 
@@ -108,7 +120,8 @@ export function createOauthService({
     redirectUri: string,
     logger?: AuthLogger,
   ) {
-    assertAllowedRedirectUri(redirectUri, logger);
+    const google = googleSignIn(config);
+    assertAllowedRedirectUri(redirectUri, google.returnOrigins, logger);
 
     const state = generateRandomToken();
     let url: string;
@@ -117,12 +130,17 @@ export function createOauthService({
     if (provider === "google") {
       const pkce = generatePkce();
       codeVerifier = pkce.verifier;
+      // Through a relay, Google returns to the relay with the state sealed
+      // around the page to return to; the page gets the plain state back,
+      // which the cookie below is checked against as usual.
       url =
         "https://accounts.google.com/o/oauth2/v2/auth?" +
         new URLSearchParams({
-          client_id: config.GOOGLE_CLIENT_ID || "",
-          redirect_uri: redirectUri,
-          state,
+          client_id: google.clientId,
+          redirect_uri: google.relay?.redirectUri ?? redirectUri,
+          state: google.relay
+            ? google.relay.sealState(state, redirectUri)
+            : state,
           response_type: "code",
           scope: "openid profile email",
           code_challenge: pkce.challenge,
@@ -178,12 +196,16 @@ export function createOauthService({
       onStateValidated?.();
     }
 
+    // The code is exchanged with the return address it was issued for: the
+    // relay's, when Google was sent there.
+    const relay =
+      request.provider === "google" ? googleSignIn(config).relay : null;
     const profile = await fetchOauthProfile({
       provider: request.provider,
       code: oauthCode,
-      redirectUri: request.redirectUri,
+      redirectUri: relay?.redirectUri ?? request.redirectUri,
       codeVerifier,
-      credentials,
+      credentials: providerCredentials(),
       allowMockCodes: ALLOW_MOCK_OAUTH,
       logger,
     });
@@ -211,7 +233,7 @@ export function createOauthService({
       location?: SessionLocation | null;
     },
     verify: (credential: string) => Promise<OauthProfile> = (value) =>
-      verifyGoogleIdToken(value, config.GOOGLE_CLIENT_ID || ""),
+      verifyGoogleIdToken(value, googleSignIn(config).clientId),
   ) {
     const profile = await verify(credential);
 
