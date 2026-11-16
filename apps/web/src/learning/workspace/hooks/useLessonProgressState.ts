@@ -19,7 +19,10 @@ import {
 import { seedResumePositionFromProgress } from "../../player/lessonPlayerPersistence";
 import { LESSON_PROGRESS_COMPLETE_THRESHOLD } from "../workspaceConstants";
 import { isPlaceholderLesson } from "../../staticLessonPage";
-import type { useCourseOverview } from "../../../services/courses";
+import {
+  useCourseAccess,
+  type useCourseOverview,
+} from "../../../services/courses";
 
 export interface UseLessonProgressStateArgs {
   courseSlug: string | undefined;
@@ -95,6 +98,21 @@ export function useLessonProgressState({
         : undefined,
     [adaptedCurriculum],
   );
+  // Progress is kept by the server only for a learner enrolled in the
+  // course or a free course open to everyone (learning-progress.service's
+  // rule). Anyone else watching a free preview lesson of a course they do
+  // not hold had every read and every save refused (403), every few
+  // seconds and on from the mini player after they left. The access answer
+  // is the one the page already holds (no request of its own).
+  const courseAccess = useCourseAccess(courseOverview?.course.slug, {
+    enabled: Boolean(userId),
+    fromTabCopy: true,
+  }).data;
+  const progressKept =
+    courseAccess !== undefined &&
+    (courseAccess.enrolled ||
+      (courseAccess.pricing.pricingType === "free" &&
+        courseAccess.canSelfEnroll));
   const {
     lessonProgress: persistedLessonProgress,
     progressKnown,
@@ -105,6 +123,7 @@ export function useLessonProgressState({
     lessonIdsByNumber,
     enabled:
       Boolean(courseOverview?.course.slug) &&
+      progressKept &&
       !(
         courseAccessRefused &&
         (courseOverview?.pricing?.pricingType === "paid" ||
@@ -116,10 +135,10 @@ export function useLessonProgressState({
   const progressCourseKey = courseOverview?.course.slug;
   const detachedProgressTarget = useMemo(
     () =>
-      userId && progressCourseKey
+      userId && progressCourseKey && progressKept
         ? { userId, courseKey: progressCourseKey, lessonIdsByNumber }
         : undefined,
-    [lessonIdsByNumber, progressCourseKey, userId],
+    [lessonIdsByNumber, progressCourseKey, progressKept, userId],
   );
   // Lessons this account has started elsewhere resume where it left them,
   // for the player and for the hover/next-lesson preload alike (both read
