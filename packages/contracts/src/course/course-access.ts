@@ -67,6 +67,14 @@ export const courseAccessSummarySchema = z.strictObject({
   openSectionIds: z.array(z.uuid()).optional(),
   /** An active enrolment: the course is in the learner's My Courses. */
   enrolled: z.boolean(),
+  /**
+   * Whether the server keeps this viewer's progress in the course: they
+   * hold a grant to it, or it is free and open to everyone (the learning
+   * progress module's rule). Full access alone does not say so: a creator,
+   * an admin or staff who preview every course watch without one. Absent
+   * from older answers.
+   */
+  keepsProgress: z.boolean().optional(),
   /** See `courseOverviewSchema.canSelfEnroll`. */
   canSelfEnroll: z.boolean(),
   /** The price in force now, which every viewer is offered. */

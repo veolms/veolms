@@ -98,8 +98,8 @@ export function useLessonProgressState({
         : undefined,
     [adaptedCurriculum],
   );
-  // Progress is kept by the server only for a learner enrolled in the
-  // course or a free course open to everyone (learning-progress.service's
+  // Progress is kept by the server only for a learner holding a grant to
+  // the course or a free course open to everyone (learning-progress.service's
   // rule). Anyone else watching a free preview lesson of a course they do
   // not hold had every read and every save refused (403), every few
   // seconds and on from the mini player after they left. The access answer
@@ -108,11 +108,16 @@ export function useLessonProgressState({
     enabled: Boolean(userId),
     fromTabCopy: true,
   }).data;
+  // The server says so itself (`keepsProgress`): a grant, or a free course
+  // open to everyone. Full access alone is not enough (an admin, a creator
+  // or staff previewing every course keep none). An older answer without
+  // it falls back to enrolment or an open free course.
   const progressKept =
     courseAccess !== undefined &&
-    (courseAccess.enrolled ||
-      (courseAccess.pricing.pricingType === "free" &&
-        courseAccess.canSelfEnroll));
+    (courseAccess.keepsProgress ??
+      (courseAccess.enrolled ||
+        (courseAccess.pricing.pricingType === "free" &&
+          courseAccess.canSelfEnroll)));
   const {
     lessonProgress: persistedLessonProgress,
     progressKnown,
