@@ -165,7 +165,9 @@ export function GoogleOneTap({
   const navigate = useNavigate();
   const { data } = useAuthConfig();
   const login = useGoogleOneTapLogin();
-  const clientId = data?.googleClientId || "";
+  // None where Google does not answer prompts on this site's pages.
+  const clientId =
+    data?.googlePromptsOnPage === false ? "" : data?.googleClientId || "";
   const onErrorRef = useRef(onError);
   const onPendingChangeRef = useRef(onPendingChange);
   const returnToRef = useRef(returnTo);
@@ -326,7 +328,11 @@ export function GlobalGoogleOneTap() {
     setVerifyingDone(false);
   }, []);
 
-  const clientId = authConfig?.googleClientId || "";
+  // None where Google does not answer prompts on this site's pages.
+  const clientId =
+    authConfig?.googlePromptsOnPage === false
+      ? ""
+      : authConfig?.googleClientId || "";
   const normalizedPath = normalizeAppPath(location.pathname);
 
   const isUserAuthenticated = isAuthenticated || Boolean(user);

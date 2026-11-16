@@ -91,6 +91,13 @@ export const oauthRegisterRequestSchema = oauthCallbackRequestSchema.extend({
 export const authConfigResponseSchema = z.object({
   googleClientId: z.string().optional(),
   /**
+   * Whether the site's pages may ask Google directly: One Tap, and the
+   * silent check before the sign-in window. False where the site's address
+   * is not registered with the Google client (sign-in then goes through a
+   * relay); missing means true.
+   */
+  googlePromptsOnPage: z.boolean().optional(),
+  /**
    * A verified mobile number is needed before buying or enrolling: the
    * course page asks for it first (REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT).
    */
