@@ -1,5 +1,5 @@
 /**
- * A creator signs up and launches an academy (creator-features/37): the
+ * A creator signs up and launches an academy (creator-features/38): the
  * sign-up stage on the platform site, an emailed code, the academy's name
  * and address, the launch, and the hand-over that opens the new academy's
  * admin home, signed in, with its first five moves.

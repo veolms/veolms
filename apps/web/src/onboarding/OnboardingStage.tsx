@@ -77,7 +77,7 @@ import {
 } from "./StagePieces";
 
 /**
- * The sign-up stage ("First Light", creator-features/33 and 37): one dark,
+ * The sign-up stage ("First Light", creator-features/33 and 38): one dark,
  * full-screen stage where a creator signs in and names their academy while
  * thousands of points of light take each answer's shape, then launches it.
  *

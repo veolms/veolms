@@ -1,5 +1,5 @@
 /**
- * A new academy's first hour (creator-features/37-onboarding-build-plan.md):
+ * A new academy's first hour (creator-features/38-onboarding-build-plan.md):
  *
  * - the admin home's "first five moves" tick themselves from the academy's
  *   own data, and only staff read them;
