@@ -132,7 +132,8 @@ test("connecting keeps the keys encrypted, shows the webhook secret once and nev
   assert.ok(!text.includes(KEY_ID), "nor the whole key id");
   assert.equal(read.headers["cache-control"], "no-store");
 
-  // At rest: nothing readable in the database.
+  // At rest: nothing readable in the database, each value in the payment
+  // keys' own format (their own encryption key, shared with nothing else).
   const row = await flow.database
     .selectFrom("creator_payment_configs")
     .selectAll()
@@ -147,7 +148,18 @@ test("connecting keeps the keys encrypted, shows the webhook secret once and nev
         !value.includes(KEY_SECRET) &&
         !value.includes(connected.webhookSecret),
     );
+    assert.match(value, /^v1:/u, "stored in the payment keys' v1 format");
   }
+  // The payment keys' encryption key opens them; the MFA key does not.
+  const { decryptPaymentSecret, decryptPaymentSecretWith } =
+    await import("../../src/modules/commerce/payments/gateways/payment-keys-crypto.ts");
+  assert.equal(decryptPaymentSecret(row.encrypted_key_secret), KEY_SECRET);
+  assert.throws(() =>
+    decryptPaymentSecretWith(
+      row.encrypted_key_secret,
+      "flow_test_mfa_encryption_key_at_least_32_chars",
+    ),
+  );
 
   // Every admin is told.
   await new Promise((resolve) => setTimeout(resolve, 200));

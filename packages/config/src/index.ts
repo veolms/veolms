@@ -311,6 +311,16 @@ const serverConfigSchema = z.object({
     .string()
     .min(32, "MFA_ENCRYPTION_KEY must be at least 32 characters")
     .default("default_mfa_encryption_key_at_least_32_chars_long"),
+  /**
+   * Encrypts each academy's payment gateway secrets (Platform → Payments)
+   * and nothing else. No default and no fallback: unset, the server refuses
+   * to store payment keys. Make one with `openssl rand -base64 48`; change
+   * it only with `encryption-key:rotate --payment-keys`.
+   */
+  PAYMENT_KEYS_ENCRYPTION_KEY: z
+    .string()
+    .min(32, "PAYMENT_KEYS_ENCRYPTION_KEY must be at least 32 characters")
+    .optional(),
   WEB_URL: z.url().default("http://localhost:3000"),
   /**
    * Short links (docs/short-links.md). The address the website Worker reads

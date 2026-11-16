@@ -21,7 +21,11 @@ import { createAcademyBrandService } from "../../../academy/academy-brand.servic
 import { listPlatformPermissionHolderIds } from "../../../authorization/authorization.repository.ts";
 import { forgetAcademyGateways } from "./academy-gateways.ts";
 import * as repository from "./creator-gateway.repository.ts";
-import { decryptSecret, encryptSecret } from "./crypto.helper.ts";
+import {
+  decryptPaymentSecret as decryptSecret,
+  encryptPaymentSecret as encryptSecret,
+  paymentKeysEncryptionReady,
+} from "./payment-keys-crypto.ts";
 
 /**
  * The academy's own payment account (Platform → Payments,
@@ -75,23 +79,6 @@ export function setRazorpayKeyCheckForTests(
   check: ((keyId: string, keySecret: string) => Promise<KeyCheck>) | null,
 ): void {
   keyCheckOverride = check;
-}
-
-const MFA_KEY_PLACEHOLDER = "default_mfa_encryption_key_at_least_32_chars_long";
-
-/** A local install may use the placeholder key; anywhere else it is refused. */
-function encryptionKeyIsSafe(): boolean {
-  if (config.MFA_ENCRYPTION_KEY !== MFA_KEY_PLACEHOLDER) return true;
-  try {
-    const host = new URL(siteSettings(config).webUrl).hostname;
-    return (
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.endsWith(".localhost")
-    );
-  } catch {
-    return false;
-  }
 }
 
 function maskKeyId(keyId: string): string {
@@ -154,6 +141,7 @@ export function createCreatorGatewayService({
       webhookEvents: [...RAZORPAY_WEBHOOK_EVENTS],
       // With nothing connected, the gateways in force are the server's own
       // (single-academy install) or none (an academy of a shared install).
+      keysCanBeStored: paymentKeysEncryptionReady(),
       usingServerKeys:
         !row && Boolean(safeGet(() => paymentGateways.get("razorpay"))),
     };
@@ -218,11 +206,11 @@ export function createCreatorGatewayService({
     userId: string,
     request: ConnectRazorpayRequest,
   ): Promise<ConnectPaymentGatewayResponse> {
-    if (!encryptionKeyIsSafe()) {
+    if (!paymentKeysEncryptionReady()) {
       throw new AppError(
         503,
         "PAYMENT_KEYS_CANNOT_BE_STORED",
-        "Payment keys can't be stored safely on this server yet (its encryption key is not set). Ask the platform team.",
+        "Payment keys can't be stored on this server yet: its payment encryption key is not set. Ask the platform team.",
       );
     }
     const check = await checkKeys(request.keyId, request.keySecret);
@@ -261,11 +249,11 @@ export function createCreatorGatewayService({
   async function renewWebhookSecret(
     userId: string,
   ): Promise<ConnectPaymentGatewayResponse> {
-    if (!encryptionKeyIsSafe()) {
+    if (!paymentKeysEncryptionReady()) {
       throw new AppError(
         503,
         "PAYMENT_KEYS_CANNOT_BE_STORED",
-        "Payment keys can't be stored safely on this server yet (its encryption key is not set). Ask the platform team.",
+        "Payment keys can't be stored on this server yet: its payment encryption key is not set. Ask the platform team.",
       );
     }
     const webhookSecret = newWebhookSecret();

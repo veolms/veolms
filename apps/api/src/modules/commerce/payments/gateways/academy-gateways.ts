@@ -15,7 +15,7 @@ import {
 } from "@veolms/services";
 
 import * as repository from "./creator-gateway.repository.ts";
-import { decryptSecret } from "./crypto.helper.ts";
+import { decryptPaymentSecret as decryptSecret } from "./payment-keys-crypto.ts";
 
 /**
  * The academy's own gateway account (Platform → Payments), ready to use

@@ -1,15 +1,16 @@
 /**
- * One-off rotation of MFA_ENCRYPTION_KEY.
+ * One-off rotation of an encryption key: MFA_ENCRYPTION_KEY, or with
+ * --payment-keys PAYMENT_KEYS_ENCRYPTION_KEY.
  *
- * Every value the API encrypts at rest uses this key:
- *   - user_totp_credentials.secret_encrypted (authenticator-app secrets,
- *     auth.utils.ts encryptSecret/decryptSecret, "v1:iv:tag:data");
- *   - creator_payment_configs.encrypted_key_id, encrypted_key_secret and
- *     encrypted_webhook_secret (creator gateway credentials, crypto.helper.ts,
- *     "iv:tag:data"). That helper falls back to SESSION_SECRET only when
- *     MFA_ENCRYPTION_KEY is empty, which the config schema never allows, so
- *     SESSION_SECRET plays no part.
- * Both derive the AES-256-GCM key as sha256(MFA_ENCRYPTION_KEY).
+ * MFA_ENCRYPTION_KEY encrypts user_totp_credentials.secret_encrypted
+ * (authenticator-app secrets, auth.utils.ts, "v1:iv:tag:data", key
+ * sha256(MFA_ENCRYPTION_KEY)).
+ *
+ * PAYMENT_KEYS_ENCRYPTION_KEY encrypts only each academy's payment gateway
+ * secrets: creator_payment_configs.encrypted_key_id, encrypted_key_secret and
+ * encrypted_webhook_secret (payment-keys-crypto.ts, "v1:iv:tag:data"). It is
+ * shared with nothing else, so rotating one key never touches the other's
+ * values.
  *
  * Decrypts every value with the old key and re-encrypts it with the new one in
  * a single transaction. Writes nothing unless every value decrypts, and checks
@@ -21,6 +22,8 @@
  *
  *   OLD_MFA_ENCRYPTION_KEY=… NEW_MFA_ENCRYPTION_KEY=… \
  *     pnpm --filter @veolms/api encryption-key:rotate [--dry-run] [--yes]
+ *   OLD_PAYMENT_KEYS_ENCRYPTION_KEY=… NEW_PAYMENT_KEYS_ENCRYPTION_KEY=… \
+ *     pnpm --filter @veolms/api encryption-key:rotate --payment-keys [--dry-run] [--yes]
  *
  * --dry-run decrypts everything with the old key (and round-trips it through
  * the new key when one is given), reports counts, and writes nothing.
@@ -29,7 +32,6 @@
  * only for undoing a rotation away from it.
  */
 /* eslint-disable no-console -- an operator CLI: the terminal is its output */
-import crypto from "node:crypto";
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { createDatabase } from "@veolms/database";
@@ -39,6 +41,10 @@ import {
   decryptSecret as decryptTotpSecret,
   encryptSecret as encryptTotpSecret,
 } from "../modules/auth/shared/auth.utils.ts";
+import {
+  decryptPaymentSecretWith,
+  encryptPaymentSecretWith,
+} from "../modules/commerce/payments/gateways/payment-keys-crypto.ts";
 
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
 const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
@@ -49,38 +55,6 @@ const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
 const SHIPPED_DEFAULT_KEY = "default_mfa_encryption_key_at_least_32_chars_long";
 const MAX_LISTED_FAILURES = 20;
 
-// crypto.helper.ts reads its key from config, so its format is mirrored here
-// with the key passed in. Keep the two in step.
-function encryptGatewaySecret(plainText: string, keySource: string): string {
-  const key = crypto.createHash("sha256").update(keySource).digest();
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-  const encrypted = Buffer.concat([
-    cipher.update(plainText, "utf8"),
-    cipher.final(),
-  ]);
-  const tag = cipher.getAuthTag();
-  return `${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
-}
-
-function decryptGatewaySecret(payload: string, keySource: string): string {
-  const parts = payload.split(":");
-  if (parts.length !== 3) {
-    throw new Error("Invalid encrypted payload format");
-  }
-  const key = crypto.createHash("sha256").update(keySource).digest();
-  const decipher = crypto.createDecipheriv(
-    "aes-256-gcm",
-    key,
-    Buffer.from(parts[0]!, "hex"),
-  );
-  decipher.setAuthTag(Buffer.from(parts[1]!, "hex"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(parts[2]!, "hex")),
-    decipher.final(),
-  ]).toString("utf8");
-}
-
 type Cipher = {
   encrypt: (plainText: string, key: string) => string;
   decrypt: (payload: string, key: string) => string;
@@ -90,9 +64,9 @@ const totpCipher: Cipher = {
   encrypt: encryptTotpSecret,
   decrypt: decryptTotpSecret,
 };
-const gatewayCipher: Cipher = {
-  encrypt: encryptGatewaySecret,
-  decrypt: decryptGatewaySecret,
+const paymentKeysCipher: Cipher = {
+  encrypt: encryptPaymentSecretWith,
+  decrypt: decryptPaymentSecretWith,
 };
 
 type Column = {
@@ -101,26 +75,29 @@ type Column = {
   cipher: Cipher;
 };
 
-const COLUMNS: Column[] = [
+const MFA_COLUMNS: Column[] = [
   {
     table: "user_totp_credentials",
     column: "secret_encrypted",
     cipher: totpCipher,
   },
+];
+
+const PAYMENT_KEY_COLUMNS: Column[] = [
   {
     table: "creator_payment_configs",
     column: "encrypted_key_id",
-    cipher: gatewayCipher,
+    cipher: paymentKeysCipher,
   },
   {
     table: "creator_payment_configs",
     column: "encrypted_key_secret",
-    cipher: gatewayCipher,
+    cipher: paymentKeysCipher,
   },
   {
     table: "creator_payment_configs",
     column: "encrypted_webhook_secret",
-    cipher: gatewayCipher,
+    cipher: paymentKeysCipher,
   },
 ];
 
@@ -155,17 +132,22 @@ async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
   const confirmed = args.includes("--yes");
-  const oldKey = process.env["OLD_MFA_ENCRYPTION_KEY"] ?? "";
-  const newKey = process.env["NEW_MFA_ENCRYPTION_KEY"] ?? "";
+  const paymentKeys = args.includes("--payment-keys");
+  const keyName = paymentKeys
+    ? "PAYMENT_KEYS_ENCRYPTION_KEY"
+    : "MFA_ENCRYPTION_KEY";
+  const COLUMNS = paymentKeys ? PAYMENT_KEY_COLUMNS : MFA_COLUMNS;
+  const oldKey = process.env[`OLD_${keyName}`] ?? "";
+  const newKey = process.env[`NEW_${keyName}`] ?? "";
 
   if (!oldKey) {
-    console.error(`\n${red("✘ OLD_MFA_ENCRYPTION_KEY is not set.")}\n`);
+    console.error(`\n${red(`✘ OLD_${keyName} is not set.`)}\n`);
     process.exit(1);
   }
   if (!dryRun || newKey) {
     if (newKey.length < 32) {
       console.error(
-        `\n${red("✘ NEW_MFA_ENCRYPTION_KEY must be set and at least 32 characters.")}\n`,
+        `\n${red(`✘ NEW_${keyName} must be set and at least 32 characters.`)}\n`,
       );
       process.exit(1);
     }
@@ -195,9 +177,11 @@ async function main() {
   }
 
   // Which key the API would use with this environment, without showing it.
-  const configuredKey = config.MFA_ENCRYPTION_KEY;
+  const configuredKey = paymentKeys
+    ? (config.PAYMENT_KEYS_ENCRYPTION_KEY ?? "")
+    : config.MFA_ENCRYPTION_KEY;
   console.log(
-    `\n${bold("MFA_ENCRYPTION_KEY in this environment:")} ${
+    `\n${bold(`${keyName} in this environment:`)} ${
       configuredKey === oldKey
         ? "the old key"
         : configuredKey === newKey
@@ -213,7 +197,7 @@ async function main() {
       // Holds off other writers (a still-running API) until the commit, while
       // leaving reads alone. Gives up rather than queue behind a writer.
       await sql`set local lock_timeout = '10s'`.execute(trx);
-      await sql`lock table user_totp_credentials, creator_payment_configs in share row exclusive mode`.execute(
+      await sql`lock table ${sql.table(paymentKeys ? "creator_payment_configs" : "user_totp_credentials")} in share row exclusive mode`.execute(
         trx,
       );
 
@@ -349,9 +333,7 @@ async function main() {
         `\n${green("✓ Re-encrypted")} ${bold(String(values.length))} values with the new key and committed.`,
       );
       console.log(
-        dim(
-          "  Set MFA_ENCRYPTION_KEY to the new key before the API starts again.\n",
-        ),
+        dim(`  Set ${keyName} to the new key before the API starts again.\n`),
       );
     });
   } catch (error) {

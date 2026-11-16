@@ -428,15 +428,25 @@ export function PlatformPaymentsTab({
                       "Paste the Key ID and Key Secret below. We check them with Razorpay before saving.",
                     ]}
                   />
-                  <KeysForm
-                    replacing={false}
-                    onConnected={(secret) => {
-                      setFreshSecret(secret);
-                      setNotice?.(
-                        "Razorpay connected. One more step: add the webhook.",
-                      );
-                    }}
-                  />
+                  {gateway.keysCanBeStored ? (
+                    <KeysForm
+                      replacing={false}
+                      onConnected={(secret) => {
+                        setFreshSecret(secret);
+                        setNotice?.(
+                          "Razorpay connected. One more step: add the webhook.",
+                        );
+                      }}
+                    />
+                  ) : (
+                    <Notice tone="warning">
+                      <strong>
+                        Keys can&apos;t be saved on this server yet.
+                      </strong>{" "}
+                      Its payment encryption key isn&apos;t set up, so we
+                      won&apos;t store your keys. Ask the platform team.
+                    </Notice>
+                  )}
                 </>
               )}
             </div>

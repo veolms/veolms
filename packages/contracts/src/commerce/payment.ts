@@ -181,6 +181,11 @@ export const academyPaymentGatewaySchema = z.object({
   webhookUrl: z.string(),
   webhookEvents: z.array(z.string()),
   /**
+   * Whether this server can store keys: false until its payment encryption
+   * key is set, and connecting is then refused.
+   */
+  keysCanBeStored: z.boolean(),
+  /**
    * Not connected, but this install takes payments with the server's own
    * keys (a single-academy install); false where nothing would be taken.
    */

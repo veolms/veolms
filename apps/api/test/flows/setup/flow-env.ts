@@ -47,6 +47,8 @@ Object.assign(process.env, {
   SESSION_SECRET: "flow_test_session_secret_at_least_32_chars",
   CDN_SIGNING_SECRET: "flow_test_cdn_signing_secret_at_least_32_chars",
   MFA_ENCRYPTION_KEY: "flow_test_mfa_encryption_key_at_least_32_chars",
+  PAYMENT_KEYS_ENCRYPTION_KEY:
+    "flow_test_payment_keys_encryption_key_32_chars_plus",
   SETUP_TOKEN: "flow_test_setup_token_at_least_32_chars_long",
   API_DEV_PRETTY_LOGS: "false",
   API_DOCS_ENABLED: "false",
