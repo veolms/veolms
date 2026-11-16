@@ -308,6 +308,21 @@ export function useLogin() {
   });
 }
 
+/**
+ * Signs in with a one-time hand-over token: an academy's owner arriving
+ * from its launch on the platform site.
+ */
+export function useHandoffSignIn() {
+  const queryClient = useQueryClient();
+
+  return useMutation<LoginResponse, ApiError, string>({
+    mutationFn: (token) => authService.signInWithHandoff(token),
+    onSuccess: (data) => {
+      persistAuthenticatedSession(queryClient, data, "otp");
+    },
+  });
+}
+
 export function useRegister() {
   const queryClient = useQueryClient();
 

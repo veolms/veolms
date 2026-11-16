@@ -1,0 +1,55 @@
+/*
+ * The sign-up stage's motion (onboarding/, "First Light"). Plain CSS only
+ * for keyframes: Tailwind runs an animation by name (`animate-[stage-rise_…]`)
+ * but a component cannot declare the keyframes themselves. Each is prefixed
+ * `stage-` and used only by the stage's components; everything else about
+ * them is Tailwind utilities. With reduced motion the components drop these
+ * animations (`motion-reduce:animate-none`) and show their final state.
+ */
+@keyframes stage-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(6px);
+  }
+}
+
+@keyframes stage-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The launch button breathes. */
+@keyframes stage-breathe {
+  50% {
+    box-shadow:
+      0 0 0 8px color-mix(in srgb, var(--accent) 16%, transparent),
+      0 0 60px color-mix(in srgb, var(--accent) 50%, transparent);
+  }
+}
+
+/* A light passes across the launch button now and then. */
+@keyframes stage-sheen {
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* "… is live.": a light sweeps across the line once. */
+@keyframes stage-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* The live dot. */
+@keyframes stage-ping {
+  70% {
+    box-shadow: 0 0 0 9px transparent;
+  }
+}

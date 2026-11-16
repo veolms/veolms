@@ -253,6 +253,11 @@ export const authService = {
     return api.post<LoginResponse>("/auth/register", payload, SIGN_IN);
   },
 
+  /** Signs in someone handed over from another site (an academy's launch). */
+  signInWithHandoff: (token: string): Promise<LoginResponse> => {
+    return api.post<LoginResponse>("/auth/handoff", { token }, SIGN_IN);
+  },
+
   getOauthUrl: (payload: OauthUrlRequest): Promise<OauthUrlResponse> => {
     return api.post<OauthUrlResponse>("/auth/oauth/url", payload, SIGN_IN);
   },
