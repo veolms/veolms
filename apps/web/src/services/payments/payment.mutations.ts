@@ -10,6 +10,7 @@ import { courseKeys } from "../courses/courses.keys";
 import { orderKeys } from "../orders/orders.keys";
 import { ordersService } from "../orders/orders.service";
 import { quizKeys } from "../quizzes/quizzes.keys";
+import { workshopKeys } from "../workshops/workshops.keys";
 import { paymentService } from "./payment.service";
 
 export const useCheckoutPreview = () =>
@@ -21,6 +22,7 @@ function invalidateAfterPurchase(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: ["enrollments"] }),
     queryClient.invalidateQueries({ queryKey: ["orders"] }),
     queryClient.invalidateQueries({ queryKey: quizKeys.all }),
+    queryClient.invalidateQueries({ queryKey: workshopKeys.all }),
   ]);
 }
 

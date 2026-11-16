@@ -126,6 +126,9 @@ export const permissions = [
   "chat.moderate",
   "chat.manage",
   "chat.restrict_platform",
+  // Workshops: live sessions with registration, reminders and recordings.
+  "workshop.read",
+  "workshop.manage",
 
   // Short links on the site's own domain (Settings > Links).
   "link.manage",

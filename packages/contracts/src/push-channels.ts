@@ -164,6 +164,31 @@ export const PUSH_ROUTES: Readonly<Record<string, PushRoute>> = {
     ttlSeconds: 7 * DAY,
     collapse: false,
   },
+  "workshop.registered": {
+    androidChannelId: "course_updates",
+    ttlSeconds: 7 * DAY,
+    collapse: false,
+  },
+  "workshop.reminder": {
+    androidChannelId: "study_reminders",
+    ttlSeconds: 6 * HOUR,
+    collapse: true,
+  },
+  "workshop.recording_ready": {
+    androidChannelId: "course_updates",
+    ttlSeconds: 7 * DAY,
+    collapse: false,
+  },
+  "workshop.updated": {
+    androidChannelId: "course_updates",
+    ttlSeconds: 7 * DAY,
+    collapse: false,
+  },
+  "workshop.announced": {
+    androidChannelId: "course_updates",
+    ttlSeconds: 3 * DAY,
+    collapse: false,
+  },
   "quiz.assigned": {
     androidChannelId: "study_reminders",
     ttlSeconds: 3 * DAY,

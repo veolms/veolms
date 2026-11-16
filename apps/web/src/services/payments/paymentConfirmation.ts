@@ -14,7 +14,7 @@
  */
 
 /** What was bought, as the sentence names it. */
-export type ConfirmedPurchase = "course" | "quiz";
+export type ConfirmedPurchase = "course" | "quiz" | "workshop";
 
 /** Shown while the page waits for the order to be marked paid. */
 export const PAYMENT_BEING_CONFIRMED_MESSAGE =

@@ -89,6 +89,7 @@ export interface Coverage {
   /** Courses bought directly or inside a bundle. */
   courseIds: ReadonlySet<string>;
   quizPricingIds: ReadonlySet<string>;
+  workshopIds: ReadonlySet<string>;
 }
 
 /**
@@ -102,18 +103,20 @@ export function coverageOf(
   const itemKeys = new Set<string>();
   const courseIds = new Set<string>();
   const quizPricingIds = new Set<string>();
+  const workshopIds = new Set<string>();
   for (const item of items) {
     itemKeys.add(`${item.itemType}:${item.itemId ?? ""}`);
     if (!item.itemId) continue;
     if (item.itemType === "course") courseIds.add(item.itemId);
     else if (item.itemType === "quiz") quizPricingIds.add(item.itemId);
+    else if (item.itemType === "workshop") workshopIds.add(item.itemId);
     else if (item.itemType === "bundle") {
       for (const row of bundleCourses) {
         if (row.bundle_id === item.itemId) courseIds.add(row.course_id);
       }
     }
   }
-  return { itemKeys, courseIds, quizPricingIds };
+  return { itemKeys, courseIds, quizPricingIds, workshopIds };
 }
 
 function intersects(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
@@ -133,6 +136,7 @@ export function coverageOverlaps(a: Coverage, b: Coverage): boolean {
   return (
     intersects(a.courseIds, b.courseIds) ||
     intersects(a.quizPricingIds, b.quizPricingIds) ||
+    intersects(a.workshopIds, b.workshopIds) ||
     // A bundle with no courses left still is the same purchase as itself.
     intersects(a.itemKeys, b.itemKeys)
   );
@@ -151,12 +155,16 @@ function isSubset(part: ReadonlySet<string>, whole: ReadonlySet<string>) {
  * is covered by the same items and by nothing else.
  */
 export function coverageCovers(whole: Coverage, part: Coverage): boolean {
-  if (part.courseIds.size + part.quizPricingIds.size === 0) {
+  if (
+    part.courseIds.size + part.quizPricingIds.size + part.workshopIds.size ===
+    0
+  ) {
     return sameItems(whole, part);
   }
   return (
     isSubset(part.courseIds, whole.courseIds) &&
-    isSubset(part.quizPricingIds, whole.quizPricingIds)
+    isSubset(part.quizPricingIds, whole.quizPricingIds) &&
+    isSubset(part.workshopIds, whole.workshopIds)
   );
 }
 

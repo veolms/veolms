@@ -66,7 +66,12 @@ export const updateBundleRequestSchema = z.strictObject({
 });
 export type UpdateBundleRequest = z.infer<typeof updateBundleRequestSchema>;
 
-export const orderItemTypeSchema = z.enum(["course", "bundle", "quiz"]);
+export const orderItemTypeSchema = z.enum([
+  "course",
+  "bundle",
+  "quiz",
+  "workshop",
+]);
 export type OrderItemType = z.infer<typeof orderItemTypeSchema>;
 
 /** Lowest voluntary contribution, in major currency units (e.g. ₹1). */
@@ -86,6 +91,7 @@ export const cartItemInputSchema = z
     courseId: z.uuid().optional(),
     bundleId: z.uuid().optional(),
     quizPricingId: z.uuid().optional(),
+    workshopId: z.uuid().optional(),
     customAmount: z
       .number()
       .int()
@@ -100,18 +106,26 @@ export const cartItemInputSchema = z
       (data.itemType === "course" &&
         !!data.courseId &&
         !data.bundleId &&
-        !data.quizPricingId) ||
+        !data.quizPricingId &&
+        !data.workshopId) ||
       (data.itemType === "bundle" &&
         !!data.bundleId &&
         !data.courseId &&
-        !data.quizPricingId) ||
+        !data.quizPricingId &&
+        !data.workshopId) ||
       (data.itemType === "quiz" &&
         !!data.quizPricingId &&
         !data.courseId &&
-        !data.bundleId),
+        !data.bundleId &&
+        !data.workshopId) ||
+      (data.itemType === "workshop" &&
+        !!data.workshopId &&
+        !data.courseId &&
+        !data.bundleId &&
+        !data.quizPricingId),
     {
       message:
-        "Either courseId, bundleId, or quizPricingId must be provided matching itemType",
+        "Either courseId, bundleId, quizPricingId, or workshopId must be provided matching itemType",
     },
   )
   .refine(
@@ -548,6 +562,7 @@ export const purchaseItemSnapshotSchema = z.strictObject({
   courseId: z.uuid().nullable().optional(),
   bundleId: z.uuid().nullable().optional(),
   quizPricingId: z.uuid().nullable().optional(),
+  workshopId: z.uuid().nullable().optional(),
   titleSnapshot: z.string(),
   unitPrice: z.number().int().nonnegative(),
   discountAmount: z.number().int().nonnegative().default(0),

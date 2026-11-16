@@ -29,6 +29,7 @@ import {
   sameItems,
 } from "../shared/open-orders.ts";
 import * as quizPricingRepo from "../../quizzes/shared/quiz-pricing.repository.ts";
+import * as workshopOrders from "../../workshops/workshop-orders.ts";
 import * as bundleRepo from "../bundles/bundle.repository.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
@@ -305,6 +306,37 @@ export function createCheckoutService({
           if (courseSaleState(quizCourse?.status) === "archived") {
             throw CommerceErrors.COURSE_NOT_AVAILABLE();
           }
+        }
+      } else if (item.item_type === "workshop" && item.workshop_id) {
+        // The same checks pricing refuses a new order with.
+        const [workshop] = await workshopOrders.listWorkshopsForCheckout(
+          executor,
+          [item.workshop_id],
+          now,
+        );
+        const refusal = workshop
+          ? workshopOrders.workshopPurchaseRefusal(workshop, now)
+          : "not_published";
+        if (refusal === "not_published") {
+          throw CommerceErrors.WORKSHOP_NOT_FOUND(item.workshop_id);
+        }
+        if (refusal === "cancelled") {
+          throw CommerceErrors.WORKSHOP_CANCELLED(workshop!.title);
+        }
+        if (refusal === "ended") {
+          throw CommerceErrors.WORKSHOP_ENDED(workshop!.title);
+        }
+        if (
+          await workshopOrders.findActiveRegistration(
+            executor,
+            item.workshop_id,
+            order.user_id,
+          )
+        ) {
+          throw CommerceErrors.WORKSHOP_ALREADY_REGISTERED(workshop!.title);
+        }
+        if (refusal === "full") {
+          throw CommerceErrors.WORKSHOP_FULL(workshop!.title);
         }
       }
     }
@@ -587,7 +619,11 @@ export function createCheckoutService({
             .filter((it) => it.order_id === openOrder.id)
             .map((it) => ({
               itemType: it.item_type,
-              itemId: it.course_id ?? it.bundle_id ?? it.quiz_pricing_id,
+              itemId:
+                it.course_id ??
+                it.bundle_id ??
+                it.quiz_pricing_id ??
+                it.workshop_id,
             })),
           bundleCourses,
         );
@@ -881,6 +917,7 @@ export function createCheckoutService({
           course_id: it.itemType === "course" ? it.itemId : null,
           bundle_id: it.itemType === "bundle" ? it.itemId : null,
           quiz_pricing_id: it.itemType === "quiz" ? it.itemId : null,
+          workshop_id: it.itemType === "workshop" ? it.itemId : null,
           title_snapshot: it.title,
           unit_price: pricingAmountToMinorUnits(
             it.unitPrice,

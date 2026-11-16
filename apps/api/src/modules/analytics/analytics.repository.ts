@@ -125,7 +125,7 @@ export async function getDailyOrderSeries(
 
 export interface RevenueByProductRow {
   id: string;
-  type: "course" | "bundle" | "quiz";
+  type: "course" | "bundle" | "quiz" | "workshop";
   title: string;
   netRevenue: number;
   orders: number;
@@ -136,7 +136,7 @@ export async function getRevenueByProduct(
   scope: OrderScope,
   window: OrderWindow & { currency: string; limit: number },
 ): Promise<RevenueByProductRow[]> {
-  const productId = sql<string>`coalesce(oi.course_id, oi.bundle_id, oi.quiz_pricing_id, oi.id)::text`;
+  const productId = sql<string>`coalesce(oi.course_id, oi.bundle_id, oi.quiz_pricing_id, oi.workshop_id, oi.id)::text`;
   const itemRefunds = sql<number>`(
     select coalesce(sum(r.amount), 0)
     from refunds r

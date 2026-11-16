@@ -47,6 +47,7 @@ const RESERVED_PROFILE_PATHS = new Set([
   "/support",
   "/support-inbox",
   "/coupons",
+  "/workshops",
   "/home-page",
   "/platform",
   "/team",
@@ -97,6 +98,8 @@ export function isCourseAuthorPath(pathname: string): boolean {
     normalized.startsWith("/analytics/") ||
     normalized === "/coupons" ||
     normalized.startsWith("/coupons/") ||
+    normalized === "/workshops/new" ||
+    /^\/workshops\/[0-9a-f-]{36}\/edit$/.test(normalized) ||
     normalized === "/support-inbox" ||
     normalized.startsWith("/support-inbox/") ||
     normalized === "/home-page" ||
@@ -146,6 +149,15 @@ export function isCoursesPublicPath(pathname: string): boolean {
   );
 }
 
+/** The Workshops page and a workshop's page: open to signed-out visitors. */
+export function isWorkshopsPublicPath(pathname: string): boolean {
+  const path = normalizeAppPath(pathname);
+  return (
+    path === "/workshops" ||
+    /^\/workshops\/(?!new$)[a-z0-9][a-z0-9-]*$/.test(path)
+  );
+}
+
 export function isPublicProfilePath(pathname: string): boolean {
   const path = normalizeAppPath(pathname);
   const match = /^\/([^/]+)$/.exec(path);
@@ -181,6 +193,7 @@ export function isPublicAcademyPath(pathname: string): boolean {
     isInvitePath(pathname) ||
     isSettingsPath(pathname) ||
     isCoursesPublicPath(pathname) ||
+    isWorkshopsPublicPath(pathname) ||
     isPublicProfilePath(pathname) ||
     (ALLOW_GUEST_LEARNING && isLearningPath(pathname))
   );
@@ -327,12 +340,11 @@ export const LOGIN_DIALOG_PARAM = "login";
  * say so ("Log in to join the discussion").
  */
 export const LOGIN_PURPOSE_PARAM = "loginFor";
-export type LoginPurpose = "discussion";
+export type LoginPurpose = "discussion" | "workshop";
 
 export function readLoginPurpose(search: string): LoginPurpose | null {
-  return new URLSearchParams(search).get(LOGIN_PURPOSE_PARAM) === "discussion"
-    ? "discussion"
-    : null;
+  const purpose = new URLSearchParams(search).get(LOGIN_PURPOSE_PARAM);
+  return purpose === "discussion" || purpose === "workshop" ? purpose : null;
 }
 
 function canGuestStayOn(path: string): boolean {

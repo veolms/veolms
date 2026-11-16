@@ -19,6 +19,12 @@ import {
   createNotificationProcessor,
   createPushPipeline,
 } from "../modules/notifications/index.ts";
+import { createWorkshopInviteBuilder } from "../modules/workshops/workshop-invites.ts";
+import {
+  listAllLearnerUserIds,
+  listWorkshopAudienceUserIds,
+} from "../modules/workshops/workshop-audience.ts";
+import { listPlatformPermissionHolderIds } from "../modules/authorization/authorization.repository.ts";
 import { createServices } from "../services/index.ts";
 import { createEmailService } from "@veolms/services/email";
 
@@ -35,6 +41,8 @@ const email = createEmailService({
     user: config.SMTP_USER,
     pass: config.SMTP_PASS,
     from: () => siteSettings(config).emailFrom,
+    replyTo: config.EMAIL_REPLY_TO,
+    ratePerSecond: config.EMAIL_RATE_PER_SECOND,
   },
 });
 
@@ -59,12 +67,23 @@ try {
       database,
       groupMaxMembers: config.CHAT_PUSH_GROUP_MAX_MEMBERS,
     }),
+    calendarInvites: createWorkshopInviteBuilder({
+      database,
+      from: config.EMAIL_FROM,
+    }),
     attachments: createInvoiceAttachmentResolver(
       createInvoiceService({ database, storage: invoiceStorage(storage) }),
     ),
     handlers: {
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
+      listWorkshopRegistrantUserIds: (workshopId) =>
+        listWorkshopAudienceUserIds(database, workshopId, (courseId) =>
+          audience.listActiveUserIdsForCourse(courseId),
+        ),
+      listAllLearnerUserIds: () => listAllLearnerUserIds(database),
+      listPermissionHolderUserIds: (permissionKey) =>
+        listPlatformPermissionHolderIds(database, permissionKey),
     },
     recipients: {
       findRecipient: async (userId) => {

@@ -45,6 +45,7 @@ export const NAVIGATION_PERMISSIONS: Readonly<
 const ACTION_PAGE_PERMISSIONS: readonly (readonly [string, string])[] = [
   ["/courses/create", "course.create"],
   ["/coupons/", "coupon.manage"],
+  ["/workshops/new", "workshop.manage"],
 ];
 
 /** "/coupons/abc" → "/coupons". */

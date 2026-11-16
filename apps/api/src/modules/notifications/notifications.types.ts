@@ -2,6 +2,7 @@ import type {
   NotificationCategory,
   NotificationChannel,
 } from "@veolms/contracts";
+import type { NotificationDeliveryLane } from "@veolms/database";
 import type { EmailAttachment } from "@veolms/services/email";
 
 export type NotificationTemplateKey =
@@ -33,7 +34,13 @@ export type NotificationTemplateKey =
   | "quiz.assigned"
   | "learning.goal_completed"
   | "learning.streak_milestone"
-  | "learning.reminder";
+  | "learning.reminder"
+  | "workshop.registered"
+  | "workshop.reminder"
+  | "workshop.recording_ready"
+  | "workshop.updated"
+  | "workshop.announced"
+  | "email.unsubscribed";
 
 export type NotificationTemplateData = Record<
   string,
@@ -62,17 +69,37 @@ export interface NotificationIntent {
   /** Files sent with the email, if it is sent. */
   emailAttachments?: readonly NotificationEmailAttachment[];
   /**
+   * A workshop calendar invitation sent as part of the email: built for the
+   * recipient when the email goes out.
+   */
+  emailCalendar?: { workshopId: string; method: "REQUEST" | "CANCEL" };
+  /**
    * False keeps it off phones even when the type is pushed (a course-wide
    * event with NOTIFICATION_COURSE_WIDE_PUSH off). Which types are pushed at
    * all is PUSH_ROUTES in the contracts, not the handlers.
    */
   push?: boolean;
+  /**
+   * Which email queue it waits in. `bulk` for notices sent to everyone in a
+   * course or to many people at once: they go out a few at a time behind
+   * `transactional` mail, which one person's own action caused.
+   */
+  lane?: NotificationDeliveryLane;
 }
 
 /**
  * Turns an attachment reference into the file to send. Throws when the file
  * cannot be had right now; the email is then tried again later.
  */
+/** Builds a workshop's calendar invitation for one recipient. */
+export interface NotificationCalendarInviteBuilder {
+  build(input: {
+    workshopId: string;
+    method: "REQUEST" | "CANCEL";
+    attendeeEmail: string;
+  }): Promise<{ method: "REQUEST" | "CANCEL"; content: string } | null>;
+}
+
 export interface NotificationAttachmentResolver {
   resolve(attachment: NotificationEmailAttachment): Promise<EmailAttachment>;
 }
@@ -83,6 +110,12 @@ export interface NotificationHandlerDependencies {
   courseWideEmail?: boolean;
   /** False keeps course-wide notifications off phones. */
   courseWidePush?: boolean;
+  /** Everyone registered for a workshop, for its reminders. */
+  listWorkshopRegistrantUserIds?(workshopId: string): Promise<string[]>;
+  /** Every learner on the platform, for a workshop announced to everyone. */
+  listAllLearnerUserIds?(): Promise<string[]>;
+  /** Team members whose roles grant this permission across the platform. */
+  listPermissionHolderUserIds?(permissionKey: string): Promise<string[]>;
 }
 
 /** A chat message to push, with who should get it (from the chat module). */

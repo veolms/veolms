@@ -12,6 +12,7 @@ import { createCourseService } from "../courses/index.ts";
 import { createLearningProgressService } from "../learning-progress/learning-progress.service.ts";
 import { createLearnerHomeController } from "./learner-home.controller.ts";
 import { createLearnerHomeService } from "./learner-home.service.ts";
+import { learnerHomeWorkshop } from "../workshops/workshop-home.ts";
 
 const learnerHomeRoutes: RoutePlugin = async (app, options) => {
   const middleware = createAuthMiddleware(
@@ -36,6 +37,8 @@ const learnerHomeRoutes: RoutePlugin = async (app, options) => {
       database: options.database,
       services: options.services,
     }),
+    homeWorkshop: (userId, now) =>
+      learnerHomeWorkshop(options.database, userId, now),
   });
   const controller = createLearnerHomeController({ service });
 

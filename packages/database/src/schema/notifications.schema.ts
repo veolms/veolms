@@ -6,6 +6,12 @@ export type NotificationCategory =
 export type NotificationChannel = "in_app" | "email" | "push";
 export type NotificationDeliveryStatus =
   "pending" | "processing" | "sent" | "failed" | "skipped";
+/**
+ * Which queue an email waits in. `transactional` mail (caused by one
+ * person's own action) is always sent before `bulk` mail (sent to everyone
+ * in a course, or to many people at once), which goes out a few at a time.
+ */
+export type NotificationDeliveryLane = "transactional" | "bulk";
 
 export interface NotificationTable {
   id: string;
@@ -26,6 +32,7 @@ export interface NotificationDeliveryTable {
   notification_id: string;
   channel: NotificationChannel;
   status: NotificationDeliveryStatus;
+  lane: Generated<NotificationDeliveryLane>;
   destination: string | null;
   payload: Json | null;
   attempt_count: Generated<number>;
@@ -43,6 +50,18 @@ export interface NotificationPreferenceTable {
   notification_type: string;
   channel: NotificationChannel;
   enabled: boolean;
+}
+
+export type EmailSuppressionReason = "hard_bounce" | "complaint" | "manual";
+
+/** An address never to send to again (lower-cased). */
+export interface EmailSuppressionTable {
+  email: string;
+  reason: EmailSuppressionReason;
+  /** What reported it: "smtp", "webhook:<provider>", "admin". */
+  source: string;
+  detail: string | null;
+  created_at: Generated<Date>;
 }
 
 export type PushPlatform = "android" | "ios" | "web";

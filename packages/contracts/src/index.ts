@@ -36,5 +36,6 @@ export * from "./student.ts";
 export * from "./analytics.ts";
 export * from "./dashboard.ts";
 export * from "./support.ts";
+export * from "./workshop.ts";
 export * from "./chat.ts";
 export * from "./legal-pages.ts";

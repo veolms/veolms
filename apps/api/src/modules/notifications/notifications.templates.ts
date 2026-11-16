@@ -1,4 +1,4 @@
-import { formatMoney } from "@veolms/contracts";
+import { formatMoney, googleCalendarUrl } from "@veolms/contracts";
 import {
   discussionMentionEmail,
   discussionReplyEmail,
@@ -176,6 +176,133 @@ function discussionEmail(
         ? "follower"
         : "author",
   });
+}
+
+/** "Wed, 12 Nov 2026, 7:00 PM IST", in the session's own time zone. */
+function workshopWhenLabel(data: NotificationTemplateData): string | null {
+  const startsAt = optionalString(data, "startsAt");
+  const timeZone = optionalString(data, "timeZone") ?? "Asia/Kolkata";
+  if (!startsAt) return null;
+  const date = new Date(startsAt);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+      timeZoneName: "short",
+    }).format(date);
+  } catch {
+    return date.toUTCString();
+  }
+}
+
+/**
+ * The registration email: when it is, where to open it, and one-click
+ * "Add to Google Calendar". The .ics file is on the workshop page, where
+ * the download can check that the reader is the registrant.
+ */
+function workshopRegisteredEmail(
+  data: NotificationTemplateData,
+  deepLink: string | null,
+  brand: NotificationEmailBrand,
+): EmailContent {
+  const title = stringValue(data, "workshopTitle");
+  const when = workshopWhenLabel(data);
+  const startsAt = optionalString(data, "startsAt");
+  const endsAt = optionalString(data, "endsAt");
+  const sessionCount = numberValue(data, "sessionCount");
+  const pageUrl = absoluteUrl(deepLink);
+  const calendarUrl =
+    startsAt && endsAt
+      ? googleCalendarUrl({
+          title,
+          startsAt,
+          endsAt,
+          ...(pageUrl
+            ? { details: `Join from ${pageUrl}`, location: pageUrl }
+            : {}),
+        })
+      : null;
+  const subject = `You're registered: ${title}`;
+  const lines = [
+    `You're registered for ${title}.`,
+    when
+      ? sessionCount > 1
+        ? `First session: ${when} (${sessionCount} sessions in all).`
+        : `When: ${when}.`
+      : null,
+    "The Join button appears on the workshop page 15 minutes before the start. We'll remind you a day before and an hour before.",
+  ].filter((line): line is string => Boolean(line));
+  const settingsUrl = settingsPageUrl();
+  const text = [
+    ...lines,
+    pageUrl ? `\nOpen the workshop: ${pageUrl}` : null,
+    calendarUrl ? `Add to Google Calendar: ${calendarUrl}` : null,
+    `\nManage which emails you receive: ${settingsUrl}`,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+  const html = `<div style="font-family: sans-serif; line-height: 1.5; color: #222;"><h2>${escapeHtml(subject)}</h2>${lines
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join("")}${
+    pageUrl
+      ? `<p style="margin-top: 20px;"><a href="${escapeHtml(pageUrl)}">Open the workshop</a></p>`
+      : ""
+  }${
+    calendarUrl
+      ? `<p><a href="${escapeHtml(calendarUrl)}">Add to Google Calendar</a></p>`
+      : ""
+  }<p style="margin-top: 28px; font-size: 12px; color: #777;">You can choose which emails you receive in your <a href="${escapeHtml(settingsUrl)}" style="color: #777;">notification settings</a>.</p></div>`;
+  return { subject, text, html };
+}
+
+/** The three reminders: a day before, an hour before, and when it starts. */
+function workshopReminderEmail(
+  data: NotificationTemplateData,
+  deepLink: string | null,
+  brand: NotificationEmailBrand,
+): EmailContent {
+  const title = stringValue(data, "workshopTitle");
+  const sessionTitle = optionalString(data, "sessionTitle");
+  const when = workshopWhenLabel(data);
+  const window = optionalString(data, "window");
+  const pageUrl = absoluteUrl(deepLink);
+  const what = sessionTitle ? `${title} — ${sessionTitle}` : title;
+  const subject =
+    window === "now"
+      ? `Live now: ${title}`
+      : window === "hour"
+        ? `Starting in an hour: ${title}`
+        : `Tomorrow: ${title}`;
+  const lines = [
+    window === "now"
+      ? `${what} has started. Open the workshop page and press Join.`
+      : window === "hour"
+        ? `${what} starts in about an hour${when ? ` (${when})` : ""}. The Join button appears on the workshop page 15 minutes before the start.`
+        : `${what} is tomorrow${when ? `: ${when}` : ""}.`,
+  ];
+  const settingsUrl = settingsPageUrl();
+  const text = [
+    ...lines,
+    pageUrl ? `\nOpen the workshop: ${pageUrl}` : null,
+    `\nManage which emails you receive: ${settingsUrl}`,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+  const html = `<div style="font-family: sans-serif; line-height: 1.5; color: #222;"><h2>${escapeHtml(subject)}</h2>${lines
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join("")}${
+    pageUrl
+      ? `<p style="margin-top: 20px;"><a href="${escapeHtml(pageUrl)}">${window === "now" ? "Join now" : "Open the workshop"}</a></p>`
+      : ""
+  }<p style="margin-top: 28px; font-size: 12px; color: #777;">You can choose which emails you receive in your <a href="${escapeHtml(settingsUrl)}" style="color: #777;">notification settings</a>.</p></div>`;
+  void brand;
+  return { subject, text, html };
 }
 
 export function renderNotificationTemplate(
@@ -384,6 +511,108 @@ export function renderNotificationTemplate(
         body: `You hit your ${stringValue(data, "goalLabel")} learning goal today. Nice work!`,
       };
       break;
+    case "workshop.registered": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const when = workshopWhenLabel(data);
+      inApp = {
+        title: "You're registered",
+        body: when
+          ? `${workshopTitle} · ${when}. We'll remind you before it starts.`
+          : `${workshopTitle}. We'll remind you before it starts.`,
+      };
+      break;
+    }
+    case "workshop.reminder": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const when = workshopWhenLabel(data);
+      const window = optionalString(data, "window");
+      inApp =
+        window === "now"
+          ? {
+              title: "Live now",
+              body: `${workshopTitle} has started. Open the workshop page and press Join.`,
+            }
+          : window === "hour"
+            ? {
+                title: "Starting in an hour",
+                body: when
+                  ? `${workshopTitle} starts at ${when}. The Join button appears 15 minutes before.`
+                  : `${workshopTitle} starts in about an hour.`,
+              }
+            : {
+                title: "Tomorrow: your workshop",
+                body: when
+                  ? `${workshopTitle} is on ${when}.`
+                  : `${workshopTitle} is tomorrow.`,
+              };
+      break;
+    }
+    case "workshop.recording_ready": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const sessionTitle = optionalString(data, "sessionTitle");
+      inApp = {
+        title: "Recording is ready",
+        body: sessionTitle
+          ? `${workshopTitle} — ${sessionTitle}: watch the recording on the workshop page.`
+          : `${workshopTitle}: watch the recording on the workshop page.`,
+      };
+      break;
+    }
+    case "workshop.announced": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const when = workshopWhenLabel(data);
+      const viaCourse = optionalString(data, "audience") === "course";
+      const courseTitle = optionalString(data, "courseTitle");
+      inApp = {
+        title: "New workshop",
+        body: [
+          when ? `${workshopTitle} · ${when}.` : `${workshopTitle}.`,
+          viaCourse
+            ? `It is included with ${courseTitle || "your course"}; the Join button appears on its page.`
+            : optionalString(data, "free") === "yes"
+              ? "Free for you; the Join button appears on its page."
+              : "Get a seat on its page.",
+        ].join(" "),
+      };
+      break;
+    }
+    case "workshop.updated": {
+      const workshopTitle = stringValue(data, "workshopTitle");
+      const change = optionalString(data, "change");
+      if (change === "cancelled") {
+        const reason = optionalString(data, "reason");
+        const refunding = optionalString(data, "refunding") === "yes";
+        inApp = {
+          title: "Workshop cancelled",
+          body: [
+            reason
+              ? `${workshopTitle} was cancelled: ${reason}`
+              : `${workshopTitle} was cancelled.`,
+            refunding ? "Your payment is being refunded." : null,
+          ]
+            .filter(Boolean)
+            .join(" "),
+        };
+      } else {
+        const when = workshopWhenLabel(data);
+        inApp = {
+          title: "Workshop time changed",
+          body: when
+            ? `${workshopTitle} now starts ${when}. Your calendar entry may need updating.`
+            : `${workshopTitle} has a new schedule. See the workshop page.`,
+        };
+      }
+      break;
+    }
+    case "email.unsubscribed": {
+      const name = stringValue(data, "name");
+      const email = optionalString(data, "email");
+      inApp = {
+        title: "A learner unsubscribed",
+        body: `${name}${email ? ` (${email})` : ""} unsubscribed from "${stringValue(data, "groupLabel")}" emails. They will not get these emails again; in-app notices continue.`,
+      };
+      break;
+    }
     case "learning.reminder": {
       const streakDays = numberValue(data, "streakDays");
       inApp =
@@ -423,6 +652,10 @@ export function renderNotificationTemplate(
       templateKey === "user.mentioned" ||
       templateKey === "discussion.reply_created"
         ? discussionEmail(templateKey, data, deepLink, brand)
-        : emailContent(inApp.title, inApp.body, deepLink, brand),
+        : templateKey === "workshop.registered"
+          ? workshopRegisteredEmail(data, deepLink, brand)
+          : templateKey === "workshop.reminder"
+            ? workshopReminderEmail(data, deepLink, brand)
+            : emailContent(inApp.title, inApp.body, deepLink, brand),
   };
 }

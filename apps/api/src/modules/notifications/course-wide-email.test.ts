@@ -55,3 +55,27 @@ await test("with course-wide email off, a single learner's email still goes out"
   );
   assert.deepEqual(intent?.channels, ["in_app", "email"]);
 });
+
+await test("course-wide notices wait in the bulk lane; a learner's own mail does not", async () => {
+  const published = await createNotificationIntents(
+    "course.published",
+    coursePublished,
+    { listActiveCourseRecipientUserIds },
+  );
+  for (const intent of published) assert.equal(intent.lane, "bulk");
+
+  const [receipt] = await createNotificationIntents(
+    "payment.completed",
+    {
+      paymentId: "0b6d3a3c-58f3-4a8f-8d3e-3b0f6c1a2b3c",
+      orderId: "7f0c2a4e-1d1b-4c55-9f7e-2a9b3c4d5e6f",
+      orderNumber: "ORD-20261018-AB12CD",
+      recipientUserId: learners[0],
+      totalAmount: 799,
+      currency: "INR",
+      itemTitles: ["The Complete JavaScript Course"],
+    },
+    { listActiveCourseRecipientUserIds },
+  );
+  assert.equal(receipt?.lane, undefined);
+});

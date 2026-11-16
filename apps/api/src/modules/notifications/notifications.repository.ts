@@ -7,6 +7,7 @@ import type {
   NotificationCategory,
   NotificationChannel,
   NotificationDeliveryStatus,
+  NotificationDeliveryLane,
   NotificationDeliveryTable,
 } from "@veolms/database";
 import { sql, type Kysely, type Selectable } from "kysely";
@@ -331,6 +332,8 @@ export async function createDelivery(
     notificationId: string;
     channel: NotificationChannel;
     status: NotificationDeliveryStatus;
+    /** Which queue an email waits in; irrelevant for other channels. */
+    lane?: NotificationDeliveryLane;
     destination: string | null;
     payload: Json | null;
     sentAt: Date | null;
@@ -343,6 +346,7 @@ export async function createDelivery(
       notification_id: input.notificationId,
       channel: input.channel,
       status: input.status,
+      lane: input.lane ?? "transactional",
       destination: input.destination,
       payload: input.payload,
       locked_until: null,
@@ -373,62 +377,107 @@ export type ClaimedDelivery = Selectable<NotificationDeliveryTable>;
 
 export async function claimEmailDeliveries(
   database: Kysely<Database>,
-  input: { limit: number; leaseUntil: Date; now: Date; maxAttempts: number },
+  input: {
+    /** Transactional emails claimed at most. */
+    limit: number;
+    /** Bulk emails claimed at most; 0 while the bulk lane rests. */
+    bulkLimit: number;
+    /** True while the transactional lane rests (the provider throttled it). */
+    transactionalPaused?: boolean;
+    leaseUntil: Date;
+    now: Date;
+    maxAttempts: number;
+  },
 ): Promise<ClaimedDelivery[]> {
   return await database.transaction().execute(async (transaction) => {
-    const rows = await transaction
-      .selectFrom("notification_deliveries")
-      .selectAll()
-      .where("channel", "=", "email")
-      .where((expression) =>
-        expression.or([
-          expression.and([
-            expression("status", "=", "pending"),
-            expression("next_attempt_at", "<=", input.now),
+    // One lane at a time: transactional mail first, bulk mail behind it and
+    // capped, so a course-wide notice can never hold up a receipt.
+    async function claimLane(
+      lane: NotificationDeliveryLane,
+      limit: number,
+    ): Promise<ClaimedDelivery[]> {
+      if (limit <= 0) return [];
+      const rows = await transaction
+        .selectFrom("notification_deliveries")
+        .selectAll()
+        .where("channel", "=", "email")
+        .where("lane", "=", lane)
+        .where((expression) =>
+          expression.or([
+            expression.and([
+              expression("status", "=", "pending"),
+              expression("next_attempt_at", "<=", input.now),
+            ]),
+            expression.and([
+              expression("status", "=", "processing"),
+              expression("locked_until", "<", input.now),
+            ]),
           ]),
-          expression.and([
-            expression("status", "=", "processing"),
-            expression("locked_until", "<", input.now),
-          ]),
-        ]),
-      )
-      // Attempts increment at claim time (below) so a delivery that
-      // crashes the worker still burns attempts and stops being claimed.
-      .where("attempt_count", "<", input.maxAttempts)
-      .orderBy("next_attempt_at", "asc")
-      .orderBy("created_at", "asc")
-      .forUpdate()
-      .skipLocked()
-      .limit(input.limit)
-      .execute();
+        )
+        // Attempts increment at claim time (below) so a delivery that
+        // crashes the worker still burns attempts and stops being claimed.
+        .where("attempt_count", "<", input.maxAttempts)
+        .orderBy("next_attempt_at", "asc")
+        .orderBy("created_at", "asc")
+        .forUpdate()
+        .skipLocked()
+        .limit(limit)
+        .execute();
 
-    if (rows.length === 0) return [];
+      if (rows.length === 0) return [];
 
-    await transaction
-      .updateTable("notification_deliveries")
-      .set((eb) => ({
+      await transaction
+        .updateTable("notification_deliveries")
+        .set((eb) => ({
+          status: "processing" as const,
+          locked_until: input.leaseUntil,
+          last_error: null,
+          updated_at: input.now,
+          attempt_count: eb("attempt_count", "+", 1),
+        }))
+        .where(
+          "id",
+          "in",
+          rows.map((row) => row.id),
+        )
+        .execute();
+
+      return rows.map((row) => ({
+        ...row,
         status: "processing" as const,
         locked_until: input.leaseUntil,
         last_error: null,
         updated_at: input.now,
-        attempt_count: eb("attempt_count", "+", 1),
-      }))
-      .where(
-        "id",
-        "in",
-        rows.map((row) => row.id),
-      )
-      .execute();
+        attempt_count: row.attempt_count + 1,
+      }));
+    }
 
-    return rows.map((row) => ({
-      ...row,
-      status: "processing" as const,
-      locked_until: input.leaseUntil,
-      last_error: null,
-      updated_at: input.now,
-      attempt_count: row.attempt_count + 1,
-    }));
+    const transactional = await claimLane(
+      "transactional",
+      input.transactionalPaused ? 0 : input.limit,
+    );
+    const bulk = await claimLane("bulk", input.bulkLimit);
+    return [...transactional, ...bulk];
   });
+}
+
+/**
+ * Moves the lease of deliveries still being sent. The worker calls it when
+ * a batch has used half its lease, so a slow provider cannot make the batch
+ * outlive the lease and be re-claimed (and re-sent) by another worker.
+ */
+export async function extendDeliveryLeases(
+  database: DatabaseExecutor,
+  input: { deliveryIds: readonly string[]; from: Date; to: Date },
+): Promise<void> {
+  if (input.deliveryIds.length === 0) return;
+  await database
+    .updateTable("notification_deliveries")
+    .set({ locked_until: input.to })
+    .where("id", "in", [...input.deliveryIds])
+    .where("status", "=", "processing")
+    .where("locked_until", "=", input.from)
+    .execute();
 }
 
 /**
@@ -471,6 +520,12 @@ export async function markDeliveryRetry(
     error: string;
     now: Date;
     lockedUntil: Date;
+    /**
+     * Give the attempt back: the provider asked us to wait (a throttle),
+     * which says nothing about this message, so it must not count toward
+     * the message's attempts.
+     */
+    rewindAttempt?: boolean;
   },
 ): Promise<void> {
   await database
@@ -481,6 +536,9 @@ export async function markDeliveryRetry(
       locked_until: null,
       last_error: input.error,
       updated_at: input.now,
+      ...(input.rewindAttempt
+        ? { attempt_count: sql<number>`greatest(attempt_count - 1, 0)` }
+        : {}),
     })
     .where("id", "=", input.deliveryId)
     .where("status", "=", "processing")

@@ -20,6 +20,7 @@ export * from "./short-links.schema.ts";
 export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
+export * from "./workshops.schema.ts";
 export * from "./chat.schema.ts";
 export * from "./legal-pages.schema.ts";
 
@@ -125,6 +126,7 @@ import type {
   NotificationTable,
   NotificationDeliveryTable,
   NotificationPreferenceTable,
+  EmailSuppressionTable,
   PushDeviceTable,
   PushDeliveryTable,
   PushActionTokenTable,
@@ -159,6 +161,11 @@ import type {
   SupportMessageTable,
   SupportTicketTable,
 } from "./support.schema.ts";
+import type {
+  WorkshopRegistrationTable,
+  WorkshopSessionTable,
+  WorkshopTable,
+} from "./workshops.schema.ts";
 import type {
   ChatHiddenMessageTable,
   ChatMemberTable,
@@ -269,6 +276,7 @@ export interface Database {
   notifications: NotificationTable;
   notification_deliveries: NotificationDeliveryTable;
   notification_preferences: NotificationPreferenceTable;
+  email_suppressions: EmailSuppressionTable;
   push_devices: PushDeviceTable;
   push_deliveries: PushDeliveryTable;
   push_action_tokens: PushActionTokenTable;
@@ -299,6 +307,11 @@ export interface Database {
   support_messages: SupportMessageTable;
   support_attachments: SupportAttachmentTable;
   support_events: SupportEventTable;
+
+  // Workshops
+  workshops: WorkshopTable;
+  workshop_sessions: WorkshopSessionTable;
+  workshop_registrations: WorkshopRegistrationTable;
 
   // Chat
   chat_settings: ChatSettingsTable;

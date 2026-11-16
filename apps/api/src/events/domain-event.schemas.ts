@@ -270,3 +270,80 @@ export const learningReminderEventSchema = z.strictObject({
   streakDays: z.number().int().nonnegative(),
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
 });
+
+export const workshopRegisteredEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  recipientUserId: z.uuid(),
+  /** The next session; null when every session is already over. */
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
+  timeZone: z.string().nullable(),
+  sessionCount: z.number().int().nonnegative(),
+});
+
+export const workshopReminderEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  sessionId: z.uuid(),
+  sessionTitle: z.string().nullable(),
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+  timeZone: z.string().min(1),
+  /** A day before, an hour before, or at the start. */
+  window: z.enum(["day", "hour", "now"]),
+  /** Who the workshop is for; "everyone" is reminded in the app only. */
+  audience: z.enum(["everyone", "course", "paid"]).optional(),
+});
+
+export const workshopRecordingReadyEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  sessionId: z.uuid(),
+  sessionTitle: z.string().nullable(),
+  mediaId: z.uuid(),
+  /** For a course workshop: the course lesson to watch it in. */
+  lessonPath: z.string().nullable().optional(),
+});
+
+/** A change registrants must hear about: the workshop was cancelled or moved. */
+export const workshopUpdatedEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  change: z.enum(["cancelled", "rescheduled"]),
+  reason: z.string().nullable(),
+  /** Paid registrations are being refunded (cancellations only). */
+  refunding: z.boolean(),
+  /** The next session after the change, if any. */
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
+  timeZone: z.string().nullable(),
+});
+
+/** Someone turned off a group of emails from an email's unsubscribe link. */
+export const emailUnsubscribedEventSchema = z.strictObject({
+  userId: z.uuid(),
+  username: z.string().nullable(),
+  name: z.string(),
+  email: z.string().nullable(),
+  group: z.string().min(1),
+  groupLabel: z.string().min(1),
+});
+
+/** A workshop was published: tell its course's learners, or everyone. */
+export const workshopAnnouncedEventSchema = z.strictObject({
+  workshopId: z.uuid(),
+  workshopSlug: z.string().min(1),
+  workshopTitle: z.string().min(1),
+  audience: z.enum(["course", "all"]),
+  courseTitle: z.string().nullable(),
+  priceMinor: z.number().int().nonnegative().nullable(),
+  currency: z.string().length(3),
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
+  timeZone: z.string().nullable(),
+});

@@ -8,6 +8,7 @@ import {
 import { AppError } from "../../lib/errors.ts";
 import type { EnrollmentService } from "../commerce/index.ts";
 import type { LearningProgressService } from "../learning-progress/learning-progress.service.ts";
+import type { WorkshopHomeCard } from "@veolms/contracts";
 
 export interface LearnerHomeViewer {
   id: string;
@@ -27,12 +28,18 @@ export interface LearnerHomeViewer {
 export function createLearnerHomeService({
   enrollmentService,
   learningProgressService,
+  homeWorkshop,
 }: {
   enrollmentService: Pick<EnrollmentService, "listEnrolledCourses">;
   learningProgressService: Pick<
     LearningProgressService,
     "getResumeContext" | "getSummary"
   >;
+  /** The workshop the home points at; see `learnerHomeWorkshop`. */
+  homeWorkshop?: (
+    userId: string,
+    now: Date,
+  ) => Promise<WorkshopHomeCard | null>;
 }) {
   async function findResume(
     viewer: LearnerHomeViewer,
@@ -79,14 +86,15 @@ export function createLearnerHomeService({
     viewer: LearnerHomeViewer,
     pinnedCourseId?: string,
   ): Promise<LearnerHomeResponse> {
-    const [{ courses, resume }, summary] = await Promise.all([
+    const [{ courses, resume }, summary, workshop] = await Promise.all([
       listCoursesWithResume(viewer, pinnedCourseId),
       learningProgressService.getSummary({
         id: viewer.id,
         roles: viewer.roles,
       }),
+      homeWorkshop ? homeWorkshop(viewer.id, new Date()) : null,
     ]);
-    return { courses, summary, resume };
+    return { courses, summary, resume, workshop };
   }
 
   return { getLearnerHome };

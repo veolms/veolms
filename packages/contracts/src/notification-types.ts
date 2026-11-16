@@ -26,6 +26,13 @@ export const OPTIONAL_NOTIFICATION_GROUPS = {
     "moderation.report_resolved",
   ],
   reminders: ["learning.reminder", "quiz.assigned"],
+  // Live workshops: your registration, reminders, the recording.
+  workshops: [
+    "workshop.registered",
+    "workshop.reminder",
+    "workshop.recording_ready",
+    "workshop.announced",
+  ],
   achievements: [
     "certificate.generated",
     "learning.goal_completed",
@@ -68,3 +75,40 @@ export function isKnownNotificationPreferenceType(type: string): boolean {
     Object.values(LEGACY_NOTIFICATION_TYPE_ALIASES).includes(type)
   );
 }
+
+/** The group each optional type belongs to, for one-click unsubscribe. */
+export const OPTIONAL_NOTIFICATION_GROUP_OF_TYPE: Readonly<
+  Record<string, OptionalNotificationGroup>
+> = Object.fromEntries(
+  (
+    Object.entries(OPTIONAL_NOTIFICATION_GROUPS) as [
+      OptionalNotificationGroup,
+      readonly string[],
+    ][]
+  ).flatMap(([group, types]) => types.map((type) => [type, group] as const)),
+);
+
+export function optionalNotificationGroupOf(
+  type: string,
+): OptionalNotificationGroup | null {
+  return OPTIONAL_NOTIFICATION_GROUP_OF_TYPE[type] ?? null;
+}
+
+export function isOptionalNotificationGroup(
+  value: string,
+): value is OptionalNotificationGroup {
+  return Object.hasOwn(OPTIONAL_NOTIFICATION_GROUPS, value);
+}
+
+/** How the settings page and the unsubscribe page name each group. */
+export const OPTIONAL_NOTIFICATION_GROUP_LABELS: Readonly<
+  Record<OptionalNotificationGroup, string>
+> = {
+  courseUpdates: "Course updates",
+  discussions: "Discussion replies and mentions",
+  reminders: "Learning reminders",
+  achievements: "Achievements",
+  purchases: "Purchase and payment emails",
+  chat: "Chat",
+  workshops: "Workshop invitations and reminders",
+};

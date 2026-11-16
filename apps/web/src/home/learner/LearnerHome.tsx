@@ -23,6 +23,7 @@ import {
 import { GUEST_HOME_COURSES_PER_SECTION } from "../guestHomeLimits";
 import { getHomeTimeGreeting } from "../homeGreeting";
 import { LearnerCoursesSection } from "./LearnerCoursesSection";
+import { LearnerWorkshopCard } from "./LearnerWorkshopCard";
 import {
   LearnerCoursesSubtitle,
   rememberLearnerStarted,
@@ -285,6 +286,12 @@ export function LearnerHome({
       <PrefetchPageLinks
         page={heroLessonPath ?? getCoursePlayerHref(heroCourse)}
       />
+      <div className="px-4 pt-3 empty:hidden sm:px-6">
+        <LearnerWorkshopCard
+          enabled={Boolean(currentUser)}
+          onNavigatePage={onNavigatePage}
+        />
+      </div>
       <LearnerHomeHero
         timeGreeting={timeGreeting}
         firstName={firstName}

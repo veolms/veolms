@@ -110,3 +110,21 @@ export type NotificationPreferencesResponse = z.infer<
 export type UpdateNotificationPreferences = z.infer<
   typeof updateNotificationPreferencesSchema
 >;
+
+/** The signed token in an email's unsubscribe link (`/email/unsubscribe/:token`). */
+export const emailUnsubscribeParamsSchema = z.strictObject({
+  token: z.string().min(16).max(1024),
+});
+
+export const emailUnsubscribeResponseSchema = z.strictObject({
+  unsubscribed: z.literal(true),
+  /** The group of emails turned off (see OPTIONAL_NOTIFICATION_GROUPS). */
+  group: z.string().min(1).max(50),
+});
+
+export type EmailUnsubscribeParams = z.infer<
+  typeof emailUnsubscribeParamsSchema
+>;
+export type EmailUnsubscribeResponse = z.infer<
+  typeof emailUnsubscribeResponseSchema
+>;

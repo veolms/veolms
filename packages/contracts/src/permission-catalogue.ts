@@ -291,6 +291,23 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
     ],
   },
   {
+    area: "workshops",
+    label: "Workshops",
+    entries: [
+      entry(
+        "workshop.read",
+        "View workshops",
+        "Open Workshops: live sessions, who registered, and recordings.",
+      ),
+      entry(
+        "workshop.manage",
+        "Run workshops",
+        "Create, schedule, publish and cancel workshops; attach recordings.",
+        ["workshop.read"],
+      ),
+    ],
+  },
+  {
     area: "orders",
     label: "Orders and payments",
     entries: [

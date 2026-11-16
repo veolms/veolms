@@ -260,6 +260,7 @@ export function createRefundReconciliationWorker({
                         course_id: targetItem.course_id,
                         bundle_id: targetItem.bundle_id,
                         quiz_pricing_id: targetItem.quiz_pricing_id,
+                        workshop_id: targetItem.workshop_id,
                       },
                     );
                   }

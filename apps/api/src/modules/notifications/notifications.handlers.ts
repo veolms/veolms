@@ -27,6 +27,12 @@ import {
   refundCompletedEventSchema,
   userMentionedEventSchema,
   videoProcessingEventSchema,
+  workshopRegisteredEventSchema,
+  workshopReminderEventSchema,
+  workshopRecordingReadyEventSchema,
+  workshopUpdatedEventSchema,
+  workshopAnnouncedEventSchema,
+  emailUnsubscribedEventSchema,
 } from "../../events/domain-event.schemas.ts";
 import type { Json } from "@veolms/database";
 
@@ -86,6 +92,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       templateData: { courseTitle: event.courseTitle },
       channels: courseWideChannels(dependencies),
       push: dependencies.courseWidePush !== false,
+      lane: "bulk",
       mandatory: false,
       deepLink: `/courses/${event.courseSlug}`,
     }));
@@ -563,6 +570,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
       channels: courseWideChannels(dependencies),
       push: dependencies.courseWidePush !== false,
+      lane: "bulk",
       mandatory: false,
       deepLink: event.deepLink,
     }));
@@ -582,6 +590,176 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
     ];
   },
+  "workshop.registered": async (payload) => {
+    const event = workshopRegisteredEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "workshop.registered",
+        category: "learning",
+        templateKey: "workshop.registered",
+        templateData: {
+          workshopTitle: event.workshopTitle,
+          workshopSlug: event.workshopSlug,
+          startsAt: event.startsAt ?? "",
+          endsAt: event.endsAt ?? "",
+          timeZone: event.timeZone ?? "",
+          sessionCount: event.sessionCount,
+        },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: `/workshops/${event.workshopSlug}`,
+        emailCalendar: { workshopId: event.workshopId, method: "REQUEST" },
+      },
+    ];
+  },
+  "workshop.reminder": async (payload, dependencies) => {
+    const event = workshopReminderEventSchema.parse(payload);
+    const recipientUserIds =
+      (await dependencies.listWorkshopRegistrantUserIds?.(event.workshopId)) ??
+      [];
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "workshop.reminder",
+      category: "learning",
+      templateKey: "workshop.reminder",
+      templateData: {
+        workshopTitle: event.workshopTitle,
+        workshopSlug: event.workshopSlug,
+        sessionTitle: event.sessionTitle ?? "",
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        timeZone: event.timeZone,
+        window: event.window,
+      },
+      channels:
+        event.audience === "everyone" ? (["in_app"] as const) : commonChannels,
+      mandatory: false,
+      deepLink: `/workshops/${event.workshopSlug}`,
+      // One notice to many learners: after sign-in codes and receipts.
+      lane: "bulk" as const,
+    }));
+  },
+  "workshop.recording_ready": async (payload, dependencies) => {
+    const event = workshopRecordingReadyEventSchema.parse(payload);
+    const recipientUserIds =
+      (await dependencies.listWorkshopRegistrantUserIds?.(event.workshopId)) ??
+      [];
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "workshop.recording_ready",
+      category: "learning",
+      templateKey: "workshop.recording_ready",
+      templateData: {
+        workshopTitle: event.workshopTitle,
+        workshopSlug: event.workshopSlug,
+        sessionTitle: event.sessionTitle ?? "",
+      },
+      channels: commonChannels,
+      mandatory: false,
+      deepLink: event.lessonPath ?? `/workshops/${event.workshopSlug}`,
+      // One notice to many learners: after sign-in codes and receipts.
+      lane: "bulk" as const,
+    }));
+  },
+  "workshop.updated": async (payload, dependencies) => {
+    const event = workshopUpdatedEventSchema.parse(payload);
+    const recipientUserIds =
+      (await dependencies.listWorkshopRegistrantUserIds?.(event.workshopId)) ??
+      [];
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "workshop.updated",
+      category: "learning",
+      templateKey: "workshop.updated",
+      templateData: {
+        workshopTitle: event.workshopTitle,
+        workshopSlug: event.workshopSlug,
+        change: event.change,
+        reason: event.reason ?? "",
+        refunding: event.refunding ? "yes" : "",
+        startsAt: event.startsAt ?? "",
+        endsAt: event.endsAt ?? "",
+        timeZone: event.timeZone ?? "",
+      },
+      channels: commonChannels,
+      // A cancellation or a new time is about something they signed up for.
+      mandatory: true,
+      emailCalendar: {
+        workshopId: event.workshopId,
+        method: event.change === "cancelled" ? "CANCEL" : "REQUEST",
+      } as const,
+      deepLink: `/workshops/${event.workshopSlug}`,
+      // One notice to many learners: after sign-in codes and receipts.
+      lane: "bulk" as const,
+    }));
+  },
+  "workshop.announced": async (payload, dependencies) => {
+    const event = workshopAnnouncedEventSchema.parse(payload);
+    const recipientUserIds =
+      event.audience === "all"
+        ? ((await dependencies.listAllLearnerUserIds?.()) ?? [])
+        : ((await dependencies.listWorkshopRegistrantUserIds?.(
+            event.workshopId,
+          )) ?? []);
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "workshop.announced",
+      category: "learning",
+      templateKey: "workshop.announced",
+      templateData: {
+        workshopTitle: event.workshopTitle,
+        workshopSlug: event.workshopSlug,
+        audience: event.audience,
+        courseTitle: event.courseTitle ?? "",
+        free: event.priceMinor ? "" : "yes",
+        startsAt: event.startsAt ?? "",
+        endsAt: event.endsAt ?? "",
+        timeZone: event.timeZone ?? "",
+      },
+      channels: commonChannels,
+      mandatory: false,
+      ...(event.audience === "course" || !event.priceMinor
+        ? {
+            emailCalendar: {
+              workshopId: event.workshopId,
+              method: "REQUEST" as const,
+            },
+          }
+        : {}),
+      deepLink: `/workshops/${event.workshopSlug}`,
+      // One notice to many learners: after sign-in codes and receipts.
+      lane: "bulk" as const,
+    }));
+  },
+  "email.unsubscribed": async (payload, dependencies) => {
+    const event = emailUnsubscribedEventSchema.parse(payload);
+    // Workshop emails are the workshop team's to know about; any other
+    // group goes to whoever looks after learners.
+    const permission =
+      event.group === "workshops" ? "workshop.manage" : "student.read";
+    const recipientUserIds =
+      (await dependencies.listPermissionHolderUserIds?.(permission)) ?? [];
+    return recipientUserIds
+      .filter((recipientUserId) => recipientUserId !== event.userId)
+      .map((recipientUserId) => ({
+        recipientUserId,
+        type: "email.unsubscribed",
+        category: "system" as const,
+        templateKey: "email.unsubscribed" as const,
+        templateData: {
+          name: event.name,
+          email: event.email ?? "",
+          groupLabel: event.groupLabel,
+        },
+        // A note for the team, not mail: in the app only.
+        channels: ["in_app"] as const,
+        mandatory: true,
+        deepLink: event.username
+          ? `/students/${encodeURIComponent(event.username)}`
+          : "/students",
+      }));
+  },
   "learning.reminder": async (payload) => {
     const event = learningReminderEventSchema.parse(payload);
     return [
@@ -597,6 +775,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         channels: commonChannels,
         mandatory: false,
         deepLink: "/",
+        lane: "bulk",
       },
     ];
   },

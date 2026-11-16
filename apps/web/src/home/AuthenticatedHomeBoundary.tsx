@@ -7,6 +7,8 @@ import type { GuestHomeCourseCardActions } from "./guest/GuestHomeCourseSection"
 import { readHomeHint, rememberHomeHint } from "../store/homeHint";
 import { learnerHomeBody } from "../routing/prerenderedBodies";
 import { LearnerHomeShell } from "./learner/LearnerHomeSkeleton";
+import { LearnerWorkshopCard } from "./learner/LearnerWorkshopCard";
+import { guestHomeGutter } from "./guest/guestHomeSpacing";
 
 const LearnerHome = learnerHomeBody.Body;
 
@@ -136,14 +138,34 @@ export function AuthenticatedHomeBoundary({
   }
 
   if (enrollmentData?.courses.length === 0) {
-    return <>{notEnrolledContent}</>;
+    return (
+      <>
+        <div className={`${guestHomeGutter} pt-4 empty:hidden`}>
+          <LearnerWorkshopCard
+            enabled={!sessionPending}
+            onNavigatePage={onNavigatePage}
+          />
+        </div>
+        {notEnrolledContent}
+      </>
+    );
   }
 
   // A learner who had no courses last time is shown that home while the
   // session and the courses are on their way, from the same place as when
   // they have answered, so its picture is drawn once and stays where it is.
   if (enrollmentData === undefined && wasNotEnrolled) {
-    return <>{notEnrolledContent}</>;
+    return (
+      <>
+        <div className={`${guestHomeGutter} pt-4 empty:hidden`}>
+          <LearnerWorkshopCard
+            enabled={!sessionPending}
+            onNavigatePage={onNavigatePage}
+          />
+        </div>
+        {notEnrolledContent}
+      </>
+    );
   }
 
   // The learner's home is the same element from the moment the page opens

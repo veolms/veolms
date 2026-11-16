@@ -240,6 +240,9 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     // limited to learners they teach, and admins are told.
     "chat.moderate",
     "chat.restrict_platform",
+    // Workshops: run their own live sessions.
+    "workshop.read",
+    "workshop.manage",
     // Short links on the site's own domain (Settings > Links).
     "link.manage",
   ],

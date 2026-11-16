@@ -27,6 +27,10 @@ export type ShellPage =
   | "courses"
   | "coupons"
   | "coupon-builder"
+  | "workshops"
+  | "workshop-builder"
+  | "workshops-browse"
+  | "workshop-detail"
   | "home-page-settings"
   | "platform"
   | "team"
@@ -464,6 +468,36 @@ export const routeDescriptors = {
     title: "Edit Coupon",
     description: "Maintain coupon parameters, limits, and validity.",
   },
+
+  "workshop-create": {
+    kind: "shell",
+    page: "workshop-builder",
+    section: "Workshops",
+    title: "Create workshop",
+    description: "Schedule a new live workshop for your learners.",
+  },
+  "workshop-edit": {
+    kind: "shell",
+    page: "workshop-builder",
+    section: "Workshops",
+    title: "Edit workshop",
+    description: "Change a workshop's sessions, links and details.",
+  },
+  workshops: {
+    kind: "shell",
+    page: "workshops-browse",
+    section: "Workshops",
+    title: "Workshops",
+    description:
+      "Live sessions with the instructors, in your calendar, joined from here.",
+  },
+  "workshop-detail": {
+    kind: "shell",
+    page: "workshop-detail",
+    section: "Workshops",
+    title: "Workshop",
+    description: "A live workshop: sessions, host, and how to join.",
+  },
   // Help and feedback: pages that render their own route inside the shell.
   support: {
     kind: "shell",
@@ -524,6 +558,10 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   team: "/team",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
+  "workshop-create": "/workshops/new",
+  "workshop-edit": "/workshops/:workshopId/edit",
+  workshops: "/workshops",
+  "workshop-detail": "/workshops/:workshopSlug",
   "create-course": "/courses/create",
   "edit-course": "/courses/:courseId/edit/basics",
   students: "/students",
@@ -586,6 +624,10 @@ const canonicalPathsByRouteId = {
   "platform-general": "/platform/general",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
+  "workshop-create": "/workshops/new",
+  "workshop-edit": "/workshops/:workshopId/edit",
+  workshops: "/workshops",
+  "workshop-detail": "/workshops/:workshopSlug",
   "course-create": "/courses/create",
   "course-create-tab": "/courses/create/:editTab",
   "course-edit": "/courses/:courseId/edit/:editTab",
@@ -732,6 +774,18 @@ export const getEffectiveRouteId = (
 
   if (routeId === "quiz-edit") {
     return /^\/quizzes\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "workshop-detail") {
+    return /^\/workshops\/(?!new$)[a-z0-9][a-z0-9-]*$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "workshop-edit") {
+    return /^\/workshops\/[0-9a-f-]{36}\/edit$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

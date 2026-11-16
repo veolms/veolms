@@ -180,6 +180,13 @@ export function createCartService({
         "Quizzes are purchased directly, not through the cart.",
       );
     }
+    if (item.itemType === "workshop") {
+      throw new AppError(
+        400,
+        "CART_WORKSHOP_UNSUPPORTED",
+        "Workshops are paid for from their own page, not through the cart.",
+      );
+    }
     const cart = await getOrCreateCart(userId);
 
     // 1. Check for duplicate cart item in student's active cart

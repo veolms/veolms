@@ -15,6 +15,16 @@ import {
 } from "./modules/commerce/webhooks/payment-event.queue.ts";
 import { CommerceFulfillmentScheduler } from "./modules/commerce/fulfillment/fulfillment.scheduler.ts";
 import { LearningReminderWorker } from "./modules/learning-progress/learning-reminder.worker.ts";
+import { WorkshopReminderWorker } from "./modules/workshops/workshop-reminder.worker.ts";
+import { createWorkshopsService } from "./modules/workshops/workshops.service.ts";
+import { createMediaService } from "./modules/media/media.service.ts";
+import { createAuthorizationService } from "./modules/authorization/authorization.service.ts";
+import { createWorkshopInviteBuilder } from "./modules/workshops/workshop-invites.ts";
+import {
+  listAllLearnerUserIds,
+  listWorkshopAudienceUserIds,
+} from "./modules/workshops/workshop-audience.ts";
+import { listPlatformPermissionHolderIds } from "./modules/authorization/authorization.repository.ts";
 import { findIdsMentionedInCourseContent } from "./modules/courses/curriculum/course-content-reference.service.ts";
 import { createDiscussionUploadStore } from "./modules/discussion-uploads/index.ts";
 import { createAttachmentsRepository } from "./modules/learning/discussions/attachments/attachments.repository.ts";
@@ -98,6 +108,19 @@ export function registerBackgroundJobs(
   });
   learningReminderWorker.start();
 
+  const workshopsService = createWorkshopsService({
+    database,
+    mediaService: createMediaService({ database, services }),
+    authorization: createAuthorizationService(database),
+    paymentGateways: services.paymentGateways,
+  });
+  const workshopReminderWorker = new WorkshopReminderWorker({
+    database,
+    logger: app.log,
+    markReadyRecordings: (now) => workshopsService.markReadyRecordings(now),
+  });
+  workshopReminderWorker.start();
+
   const stopNotificationLoop = config.NOTIFICATION_INLINE_WORKER
     ? startInlineNotificationLoop(app, database, services)
     : null;
@@ -158,6 +181,7 @@ export function registerBackgroundJobs(
     // shared Kysely instance is destroyed right after these hooks.
     await fulfillmentScheduler.stop();
     await learningReminderWorker.stop();
+    await workshopReminderWorker.stop();
     await stopNotificationLoop?.();
     await stopDiscussionUploadPurge?.();
     await stopInvoicePdfJob?.();
@@ -530,6 +554,10 @@ function startInlineNotificationLoop(
       database,
       groupMaxMembers: config.CHAT_PUSH_GROUP_MAX_MEMBERS,
     }),
+    calendarInvites: createWorkshopInviteBuilder({
+      database,
+      from: config.EMAIL_FROM,
+    }),
     attachments: createInvoiceAttachmentResolver(
       createInvoiceService({
         database,
@@ -539,6 +567,13 @@ function startInlineNotificationLoop(
     handlers: {
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
+      listWorkshopRegistrantUserIds: (workshopId) =>
+        listWorkshopAudienceUserIds(database, workshopId, (courseId) =>
+          audience.listActiveUserIdsForCourse(courseId),
+        ),
+      listAllLearnerUserIds: () => listAllLearnerUserIds(database),
+      listPermissionHolderUserIds: (permissionKey) =>
+        listPlatformPermissionHolderIds(database, permissionKey),
     },
     recipients: {
       findRecipient: async (userId) => {

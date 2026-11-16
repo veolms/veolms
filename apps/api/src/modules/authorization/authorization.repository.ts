@@ -340,6 +340,40 @@ export async function listUserRoleHoldings(
   ];
 }
 
+/**
+ * People whose platform roles allow a permission and none deny it: who to
+ * tell about something only that permission's holders act on.
+ */
+export async function listPlatformPermissionHolderIds(
+  database: Executor,
+  permissionKey: string,
+): Promise<string[]> {
+  const rows = await sql<{ user_id: string }>`
+    with holdings as (
+      select user_id, role_id from user_roles
+      union
+      select user_id, role_id from role_assignments
+      where scope_type = 'platform'
+        and (expires_at is null or expires_at > now())
+    ),
+    rules as (
+      select h.user_id, rp.effect
+      from holdings h
+      join role_permissions rp on rp.role_id = h.role_id
+      join permissions p on p.id = rp.permission_id
+      where p.permission_key = ${permissionKey}
+    )
+    select distinct r.user_id
+    from rules r
+    join users u on u.id = r.user_id and u.is_deleted = false
+    where r.effect = 'allow'
+      and not exists (
+        select 1 from rules d where d.user_id = r.user_id and d.effect = 'deny'
+      )
+  `.execute(database);
+  return rows.rows.map((row) => row.user_id);
+}
+
 /** Every role with the permissions it allows or denies. */
 export async function listRolePermissionRules(database: Executor) {
   return await database

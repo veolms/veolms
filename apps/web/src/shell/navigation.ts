@@ -12,6 +12,7 @@ import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircl
 import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
+import { VideoConferenceIcon as VideoConference } from "@phosphor-icons/react/VideoConference";
 import type { Icon } from "@phosphor-icons/react";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 import { canOpenNavigationPath } from "./navigationPermissions";
@@ -75,6 +76,12 @@ const creatorNavigation: readonly NavigationItem[] = [
     "/analytics",
   ),
   createNavigationItem("creator-orders", "Orders", Tote, "/orders"),
+  createNavigationItem(
+    "creator-workshops",
+    "Workshops",
+    VideoConference,
+    "/workshops",
+  ),
   createNavigationItem("creator-settings", "Settings", GearSix, "/settings"),
 ];
 
@@ -100,6 +107,13 @@ const adminNavigation: readonly NavigationItem[] = [
   // The academy's quizzes: building them, who they are assigned to, and
   // their attempts and results.
   createNavigationItem("admin-quizzes", "Quizzes", Exam, "/quizzes"),
+  // Live sessions: schedule, publish, run.
+  createNavigationItem(
+    "admin-workshops",
+    "Workshops",
+    VideoConference,
+    "/workshops",
+  ),
   // Problems learners report and the feedback they send.
   createNavigationItem("admin-support", "Support", Lifebuoy, "/support-inbox"),
   // Academy-wide settings, the home page among them.
