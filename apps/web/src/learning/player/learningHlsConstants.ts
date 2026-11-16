@@ -175,6 +175,18 @@ const TOKEN_REFRESH_RETRY_MAX_MS = 30_000;
  */
 const REJECTED_REQUEST_WINDOW_MS = 60_000;
 const SUSPECT_RENEWAL_EVERY_MS = 10_000;
+/**
+ * How long a segment asked for again waits for that renewal. Nearly every
+ * repeat is a download the network cut (a timeout, a dropped connection),
+ * not a token the CDN refused: production's incident log (13-15 Nov) had
+ * 2,863 such renewals and 10 refusals (401). Waiting for the renewal's
+ * whole answer (median 0.7 s, one in ten over 7 s in the evening) held the
+ * retry of a cut download behind it every time, on top of the wait the cut
+ * itself cost. The renewal still runs; a retry gives it this long, then
+ * goes with the token it has. A token really refused fails again at once
+ * and the next try has the new one.
+ */
+const SUSPECT_RENEWAL_WAIT_MS = 1_000;
 /** Segment addresses remembered for that; older ones are let go. */
 const MAX_REMEMBERED_REQUESTS = 600;
 
@@ -360,8 +372,9 @@ function createTokenRequestFilter(options?: LearningHlsRequestOptions) {
       currentTokenExpiresAt === undefined
         ? Infinity
         : currentTokenExpiresAt - nowSeconds;
-    let waitForRenewal =
+    const waitForRenewal =
       !currentToken || secondsLeft <= TOKEN_WAIT_FOR_RENEWAL_SECONDS;
+    let suspectRejection = false;
     if (
       askedForAgain(request) &&
       Date.now() - lastSuspectRenewalAt >= SUSPECT_RENEWAL_EVERY_MS
@@ -369,15 +382,27 @@ function createTokenRequestFilter(options?: LearningHlsRequestOptions) {
       lastSuspectRenewalAt = Date.now();
       tokenRefreshStats.afterRejection += 1;
       nextRefreshAllowedAt = 0;
-      waitForRenewal = true;
+      suspectRejection = true;
       markToken("token-renewal-after-rejection");
     }
     if (
       refreshSegmentToken &&
-      (waitForRenewal || secondsLeft <= TOKEN_RENEW_AHEAD_SECONDS)
+      (waitForRenewal ||
+        suspectRejection ||
+        secondsLeft <= TOKEN_RENEW_AHEAD_SECONDS)
     ) {
       const renewal = renew();
-      if (waitForRenewal) await renewal;
+      if (waitForRenewal) {
+        await renewal;
+      } else if (suspectRejection) {
+        // A short wait only: see SUSPECT_RENEWAL_WAIT_MS.
+        await Promise.race([
+          renewal,
+          new Promise<void>((resolve) =>
+            setTimeout(resolve, SUSPECT_RENEWAL_WAIT_MS),
+          ),
+        ]);
+      }
     }
 
     if (!currentToken) {
