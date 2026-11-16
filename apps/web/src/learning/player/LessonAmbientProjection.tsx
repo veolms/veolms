@@ -34,7 +34,8 @@ let canvasFilterSupport: boolean | null = null;
 
 /**
  * Whether the canvas can blur what it draws (`context.filter`). Chromium and
- * Firefox can; Safari before 18 cannot, and keeps the stylesheet's blur.
+ * Firefox can; Safari cannot (18.4 and 27 still report none, 2026-11-16),
+ * and its glow is softened by scaling instead (`paintSoftened`).
  */
 function supportsCanvasFilter(): boolean {
   if (canvasFilterSupport === null) {
@@ -70,6 +71,31 @@ function paintPrefiltered(
   if (canvas.width !== CANVAS_WIDTH) canvas.width = CANVAS_WIDTH;
   if (canvas.height !== CANVAS_HEIGHT) canvas.height = CANVAS_HEIGHT;
 
+  const { radius, saturate } = glowInCanvas(shown);
+  context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  context.filter = `blur(${radius.toFixed(2)}px) saturate(${saturate})`;
+  context.drawImage(
+    video,
+    (CANVAS_WIDTH - FRAME_WIDTH) / 2,
+    (CANVAS_HEIGHT - FRAME_HEIGHT) / 2,
+    FRAME_WIDTH,
+    FRAME_HEIGHT,
+  );
+  context.filter = "none";
+  if (!shown.hasAttribute("data-ambient-prefiltered")) {
+    shown.setAttribute("data-ambient-prefiltered", "");
+  }
+  return true;
+}
+
+/**
+ * The blur and saturation the stylesheet gives `shown`, as the canvas must
+ * apply them: the blur's radius in canvas pixels.
+ */
+function glowInCanvas(shown: HTMLElement): {
+  radius: number;
+  saturate: number;
+} {
   const style = getComputedStyle(shown);
   const blur = Number.parseFloat(style.getPropertyValue("--ambient-blur"));
   const saturate = Number.parseFloat(
@@ -87,33 +113,106 @@ function paintPrefiltered(
   // The stylesheet's blur is in page pixels at that width, where the
   // picture is `width` wide; here the picture is FRAME_WIDTH wide.
   const radius = ((Number.isFinite(blur) ? blur : 38) * FRAME_WIDTH) / width;
+  return { radius, saturate: Number.isFinite(saturate) ? saturate : 1.55 };
+}
 
-  context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  context.filter = `blur(${radius.toFixed(2)}px) saturate(${Number.isFinite(saturate) ? saturate : 1.55})`;
-  context.drawImage(
+/** Working canvases for `paintSoftened`, kept from one picture to the next. */
+let softenSmall: HTMLCanvasElement | null = null;
+let softenMiddle: HTMLCanvasElement | null = null;
+
+function sizedCanvas(
+  canvas: HTMLCanvasElement | null,
+  width: number,
+  height: number,
+): HTMLCanvasElement {
+  const sized = canvas ?? document.createElement("canvas");
+  if (sized.width !== width) sized.width = width;
+  if (sized.height !== height) sized.height = height;
+  return sized;
+}
+
+/**
+ * The same glow as `paintPrefiltered`, for a browser whose canvas cannot
+ * blur (`context.filter`): Safari, 18.4 and 27 included. It used to leave
+ * the blur to the stylesheet, and Safari then blurred two pictures of about
+ * 1000x560 pixels again on every frame the video under them drew; with that
+ * load, it dropped whole parts of the page for a moment (the logo, the lesson
+ * list, the lesson's description: a learner's recording, 2026-11-16).
+ *
+ * Here the picture is made soft the way a blur would: drawn a few pixels
+ * across, its colours saturated there (a few dozen pixels' worth of work),
+ * then scaled back up smoothly in two steps, into the same transparent
+ * margin `paintPrefiltered` leaves. Safari then only scales a finished
+ * picture, as other browsers do.
+ */
+function paintSoftened(
+  canvas: HTMLCanvasElement,
+  video: HTMLVideoElement,
+  shown: HTMLElement = canvas,
+): boolean {
+  if (shown.clientWidth <= 0) return false;
+  const context = canvas.getContext("2d");
+  if (!context) return false;
+  if (canvas.width !== CANVAS_WIDTH) canvas.width = CANVAS_WIDTH;
+  if (canvas.height !== CANVAS_HEIGHT) canvas.height = CANVAS_HEIGHT;
+
+  const { radius, saturate } = glowInCanvas(shown);
+  // Scaling up from a picture `factor` times smaller spreads each of its
+  // pixels about as far as a blur of `radius` does (a smooth scale-up
+  // spreads a pixel over about 0.4 of the step between two).
+  const factor = Math.min(24, Math.max(2, radius * 2.4));
+  const smallWidth = Math.max(4, Math.round(CANVAS_WIDTH / factor));
+  const smallHeight = Math.max(3, Math.round(CANVAS_HEIGHT / factor));
+  softenSmall = sizedCanvas(softenSmall, smallWidth, smallHeight);
+  const small = softenSmall.getContext("2d", { willReadFrequently: true });
+  if (!small) return false;
+  small.clearRect(0, 0, smallWidth, smallHeight);
+  small.imageSmoothingEnabled = true;
+  small.imageSmoothingQuality = "high";
+  const scaleX = smallWidth / CANVAS_WIDTH;
+  const scaleY = smallHeight / CANVAS_HEIGHT;
+  small.drawImage(
     video,
-    (CANVAS_WIDTH - FRAME_WIDTH) / 2,
-    (CANVAS_HEIGHT - FRAME_HEIGHT) / 2,
-    FRAME_WIDTH,
-    FRAME_HEIGHT,
+    ((CANVAS_WIDTH - FRAME_WIDTH) / 2) * scaleX,
+    ((CANVAS_HEIGHT - FRAME_HEIGHT) / 2) * scaleY,
+    FRAME_WIDTH * scaleX,
+    FRAME_HEIGHT * scaleY,
   );
-  context.filter = "none";
+  // The stylesheet's `saturate()`, by the same formula, on the few pixels.
+  try {
+    const pixels = small.getImageData(0, 0, smallWidth, smallHeight);
+    const data = pixels.data;
+    for (let index = 0; index < data.length; index += 4) {
+      const red = data[index]!;
+      const green = data[index + 1]!;
+      const blue = data[index + 2]!;
+      const grey = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      data[index] = grey + (red - grey) * saturate;
+      data[index + 1] = grey + (green - grey) * saturate;
+      data[index + 2] = grey + (blue - grey) * saturate;
+    }
+    small.putImageData(pixels, 0, 0);
+  } catch {
+    // A picture the page may not read is shown unsaturated.
+  }
+  // Up in two steps: in one, the steps between the few pixels show.
+  const middleWidth = Math.min(CANVAS_WIDTH, smallWidth * 3);
+  const middleHeight = Math.min(CANVAS_HEIGHT, smallHeight * 3);
+  softenMiddle = sizedCanvas(softenMiddle, middleWidth, middleHeight);
+  const middle = softenMiddle.getContext("2d");
+  if (!middle) return false;
+  middle.clearRect(0, 0, middleWidth, middleHeight);
+  middle.imageSmoothingEnabled = true;
+  middle.imageSmoothingQuality = "high";
+  middle.drawImage(softenSmall, 0, 0, middleWidth, middleHeight);
+  context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(softenMiddle, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   if (!shown.hasAttribute("data-ambient-prefiltered")) {
     shown.setAttribute("data-ambient-prefiltered", "");
   }
   return true;
-}
-
-/** The video's picture as it is, for the stylesheet to blur (old Safari). */
-function paintUnfiltered(
-  canvas: HTMLCanvasElement,
-  video: HTMLVideoElement,
-): void {
-  const context = canvas.getContext("2d", { alpha: false });
-  if (!context) return;
-  if (canvas.width !== FRAME_WIDTH) canvas.width = FRAME_WIDTH;
-  if (canvas.height !== FRAME_HEIGHT) canvas.height = FRAME_HEIGHT;
-  context.drawImage(video, 0, 0, FRAME_WIDTH, FRAME_HEIGHT);
 }
 
 /**
@@ -300,15 +399,12 @@ export function LessonAmbientProjection({
     if (!enabled || !video || video.readyState < 2) return;
 
     try {
-      const prefiltered = supportsCanvasFilter();
+      // Blurred in the canvas either way (Safari's cannot blur: softened).
+      const paintGlow = supportsCanvasFilter()
+        ? paintPrefiltered
+        : paintSoftened;
       const inline = inlineCanvasRef.current;
-      if (inline) {
-        if (prefiltered) {
-          paintPrefiltered(inline, video);
-        } else {
-          paintUnfiltered(inline, video);
-        }
-      }
+      if (inline) paintGlow(inline, video);
       const shellGlow = shellGlowRef.current;
       // Not drawn where the page is drawn without a graphics card (see the
       // stylesheet rule on `[data-ambient-projection-scope="app"]`).
@@ -321,9 +417,7 @@ export function LessonAmbientProjection({
       ) {
         const buffer = (shellBufferRef.current ??=
           document.createElement("canvas"));
-        const painted = prefiltered
-          ? paintPrefiltered(buffer, video, shellGlow)
-          : (paintUnfiltered(buffer, video), true);
+        const painted = paintGlow(buffer, video, shellGlow);
         if (painted) {
           // Placed again with every picture: the video's place can change
           // with nothing here hearing of it (a banner opening above it).
