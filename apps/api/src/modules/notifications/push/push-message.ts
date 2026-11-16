@@ -98,6 +98,18 @@ function fitFcmBudget(
   return fitted;
 }
 
+/** Chat notification pictures: only the Android app draws them. */
+const ANDROID_ONLY_DATA_KEYS = ["senderAvatarUrl", "roomIconUrl"] as const;
+
+function withoutAndroidOnlyData(payload: PushPayload): PushPayload {
+  if (!ANDROID_ONLY_DATA_KEYS.some((key) => key in payload.data)) {
+    return payload;
+  }
+  const data = { ...payload.data };
+  for (const key of ANDROID_ONLY_DATA_KEYS) delete data[key];
+  return { ...payload, data };
+}
+
 /** The JSON body of one HTTP v1 send: `{ message }`. */
 export function buildFcmMessage(input: {
   payload: PushPayload;
@@ -114,7 +126,7 @@ export function buildFcmMessage(input: {
   );
   const urgent = payload.importance === "HIGH";
   const { title, body, data } = fitFcmBudget(
-    payload,
+    input.platform === "android" ? payload : withoutAndroidOnlyData(payload),
     // Shown by the system: the text travels outside `data` too.
     input.platform === "ios" || !payload.androidDataOnly,
   );
