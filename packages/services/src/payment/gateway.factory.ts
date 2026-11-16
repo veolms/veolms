@@ -19,6 +19,30 @@ export const paymentGatewayPlugins: readonly PaymentGatewayPlugin[] = [
 const UNKNOWN_COUNTRIES = new Set(["XX", "T1"]);
 
 let gatewaysProvider: (() => PaymentGateways | undefined) | null = null;
+let academyGatewaysSource: (() => PaymentGateways | undefined) | null = null;
+
+/**
+ * Sets (or with null removes) where the academy's own gateway account is
+ * found: the keys its admins connected in Platform → Payments. Asked first,
+ * before the provider and the configured gateways; undefined means the
+ * academy has connected none, and the next one answers.
+ */
+export function setAcademyGatewaysSource(
+  next: (() => PaymentGateways | undefined) | null,
+): void {
+  academyGatewaysSource = next;
+}
+
+/** One gateway as a whole set: its own primary, for every country. */
+export function singleGateway(gateway: PaymentGateway): PaymentGateways {
+  return {
+    primary: gateway,
+    all: [gateway],
+    get: (provider) =>
+      provider === gateway.providerName ? gateway : undefined,
+    forCountry: () => gateway,
+  };
+}
 
 /**
  * Sets (or with null removes) a provider asked, each time a gateway is
@@ -43,7 +67,8 @@ export function createPaymentGateways(
   plugins: readonly PaymentGatewayPlugin[] = paymentGatewayPlugins,
 ): PaymentGateways {
   const configured = buildPaymentGateways(config, plugins);
-  const current = () => gatewaysProvider?.() ?? configured;
+  const current = () =>
+    academyGatewaysSource?.() ?? gatewaysProvider?.() ?? configured;
   return {
     get primary() {
       return current().primary;

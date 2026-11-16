@@ -1,3 +1,4 @@
+import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/CreditCard";
 import { IdentificationCardIcon as IdentificationCard } from "@phosphor-icons/react/IdentificationCard";
 import { LayoutIcon as Layout } from "@phosphor-icons/react/Layout";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
@@ -19,6 +20,7 @@ export const PLATFORM_TAB_DEFINITIONS: readonly PageTabDefinition<PlatformTab>[]
       Icon: IdentificationCard,
       tone: "violet",
     },
+    { id: "payments", label: "Payments", Icon: CreditCard, tone: "rose" },
     { id: "invoice", label: "Invoice", Icon: Receipt, tone: "green" },
     { id: "legal", label: "Legal pages", Icon: Scales, tone: "gold" },
   ];
@@ -29,6 +31,7 @@ export const PLATFORM_TAB_PERMISSIONS: Readonly<Record<PlatformTab, string>> = {
   appearance: "platform.settings.update",
   security: "platform.settings.update",
   general: "platform.branding.update",
+  payments: "payment.gateway.manage",
   invoice: "platform.settings.update",
   legal: "platform.settings.update",
 };

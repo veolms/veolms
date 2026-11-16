@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
 import { checkSessionBeforeValidation } from "./middlewares/auth.middleware.ts";
+import { registerAcademyGatewaysHook } from "./modules/commerce/payments/gateways/academy-gateways.ts";
 
 /**
  * The hooks every app built on core's routes needs, added before any route
@@ -11,4 +12,6 @@ import { checkSessionBeforeValidation } from "./middlewares/auth.middleware.ts";
  */
 export function registerAppHooks(app: FastifyInstance): void {
   checkSessionBeforeValidation(app);
+  // The academy's own payment keys, ready before payment routes run.
+  registerAcademyGatewaysHook(app);
 }

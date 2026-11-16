@@ -20,6 +20,7 @@ import { SettingsTabBar } from "../settings/SettingsTabBar";
 import { useSettingsTabShortcuts } from "../settings/useSettingsTabShortcuts";
 import { PlatformAppearanceTab } from "./PlatformAppearanceTab";
 import { PlatformInvoiceTab } from "./PlatformInvoiceTab";
+import { PlatformPaymentsTab } from "./PlatformPaymentsTab";
 import { PlatformLegalTab } from "./legal/PlatformLegalTab";
 import { PlatformSecurityTab } from "./PlatformSecurityTab";
 import { StaticSiteRebuildSection } from "./StaticSiteRebuildSection";
@@ -83,6 +84,8 @@ const PlatformTabContent = memo(function PlatformTabContent({
           <StaticSiteRebuildSection />
         </div>
       );
+    case "payments":
+      return <PlatformPaymentsTab setNotice={setNotice} />;
     case "invoice":
       return <PlatformInvoiceTab setNotice={setNotice} />;
     case "legal":

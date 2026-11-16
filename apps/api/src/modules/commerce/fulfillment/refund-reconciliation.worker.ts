@@ -7,6 +7,7 @@ import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
 import { runBackgroundItem } from "@veolms/api-core";
+import { withAcademyGateways } from "../payments/gateways/academy-gateways.ts";
 import { mapWithConcurrency } from "../../../lib/concurrency.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import { settleExtraPaymentRefund } from "../payments/extra-payment-refund.service.ts";
@@ -103,7 +104,7 @@ export function createRefundReconciliationWorker({
       concurrency,
       (refund) =>
         runBackgroundItem(JOB, { table: "refunds", id: refund.id }, () =>
-          fetchGatewayRefund(refund),
+          withAcademyGateways(() => fetchGatewayRefund(refund)),
         ),
     );
 

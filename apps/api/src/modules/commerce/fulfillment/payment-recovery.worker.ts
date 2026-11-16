@@ -12,6 +12,8 @@ import { createExtraPaymentRefundService } from "../payments/extra-payment-refun
 import { mapWithConcurrency } from "../../../lib/concurrency.ts";
 import { config } from "../../../config.ts";
 import { runBackgroundItem } from "@veolms/api-core";
+import { paymentGatewayPlugins } from "@veolms/services";
+import { withAcademyGateways } from "../payments/gateways/academy-gateways.ts";
 
 const JOB = "payment-recovery";
 
@@ -72,8 +74,12 @@ export function createPaymentRecoveryWorker({
     paymentGateways,
     logger,
   });
-  /** The gateways asked about: every one that is set up. */
-  const providers = paymentGateways.all.map((gateway) => gateway.providerName);
+  /**
+   * The gateways asked about: every kind there is. Which are set up can
+   * differ by academy (each may connect its own), so a payment whose
+   * gateway its academy has not set up is left for later.
+   */
+  const providers = paymentGatewayPlugins.map((plugin) => plugin.provider);
 
   async function recoverStalePayments(): Promise<{
     recovered: number;
@@ -101,9 +107,11 @@ export function createPaymentRecoveryWorker({
      */
     async function reconcile(
       payment: StalePayment,
-    ): Promise<"recovered" | "already-final" | "open"> {
-      // Listed by provider below, so its gateway is set up.
-      const paymentGateway = paymentGateways.get(payment.gateway_provider)!;
+    ): Promise<"recovered" | "already-final" | "open" | "no-gateway"> {
+      const paymentGateway = paymentGateways.get(payment.gateway_provider);
+      // Its academy has no keys for this gateway (now): asked again later,
+      // never closed for it.
+      if (!paymentGateway) return "no-gateway";
       const capture = await findGatewayCapture(paymentGateway, payment);
       if (capture.state === "unpaid") return "open";
 
@@ -237,10 +245,8 @@ export function createPaymentRecoveryWorker({
     // payment at a time (tick duration scales with backlog size) or firing
     // every call at once (Promise.all — unbounded against the gateway).
     await mapWithConcurrency(stalePayments, concurrency, (payment) =>
-      runBackgroundItem(
-        JOB,
-        { table: "payments", id: payment.id },
-        async () => {
+      runBackgroundItem(JOB, { table: "payments", id: payment.id }, () =>
+        withAcademyGateways(async () => {
           try {
             const outcome = await reconcile(payment);
             if (outcome === "recovered") {
@@ -248,7 +254,7 @@ export function createPaymentRecoveryWorker({
               return;
             }
             skipped++;
-            if (outcome === "open") {
+            if (outcome === "open" || outcome === "no-gateway") {
               // Mark as checked so the next tick moves on to other payments.
               await database
                 .updateTable("payments")
@@ -264,7 +270,7 @@ export function createPaymentRecoveryWorker({
             );
             errors++;
           }
-        },
+        }),
       ),
     );
 
@@ -287,17 +293,15 @@ export function createPaymentRecoveryWorker({
       .execute();
 
     await mapWithConcurrency(agedOut, concurrency, (payment) =>
-      runBackgroundItem(
-        JOB,
-        { table: "payments", id: payment.id },
-        async () => {
+      runBackgroundItem(JOB, { table: "payments", id: payment.id }, () =>
+        withAcademyGateways(async () => {
           try {
             const outcome = await reconcile(payment);
             if (outcome === "recovered") {
               recovered++;
               return;
             }
-            if (outcome === "already-final") {
+            if (outcome === "already-final" || outcome === "no-gateway") {
               skipped++;
               return;
             }
@@ -322,7 +326,7 @@ export function createPaymentRecoveryWorker({
             );
             errors++;
           }
-        },
+        }),
       ),
     );
 

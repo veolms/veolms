@@ -1,172 +1,308 @@
 import crypto from "node:crypto";
-import type { DatabaseExecutor as Executor } from "@veolms/database";
-import type {
-  CreatorPaymentConfig,
-  SaveCreatorPaymentConfigRequest,
-  PaymentGateway,
-  PaymentGateways,
-  PaymentProvider,
-} from "@veolms/contracts";
-import type { ServerConfig } from "@veolms/config";
-import { RazorpayPaymentGateway } from "@veolms/services";
-import { AppError } from "../../../../lib/errors.ts";
-import * as creatorGatewayRepo from "./creator-gateway.repository.ts";
-import { encryptSecret, decryptSecret } from "./crypto.helper.ts";
 
-export interface CreatorGatewayService {
-  saveCreatorConfig(
-    creatorId: string,
-    request: SaveCreatorPaymentConfigRequest,
-  ): Promise<CreatorPaymentConfig>;
-  getCreatorConfig(
-    creatorId: string,
-    provider?: PaymentProvider,
-  ): Promise<CreatorPaymentConfig | null>;
-  resolveGatewayForCreator(creatorId?: string | null): Promise<PaymentGateway>;
+import { siteSettings } from "@veolms/config";
+import type {
+  AcademyPaymentGateway,
+  ConnectPaymentGatewayResponse,
+  ConnectRazorpayRequest,
+  PaymentGateways,
+} from "@veolms/contracts";
+import type { Database } from "@veolms/database";
+import {
+  paymentAccountChangedEmail,
+  type EmailService,
+} from "@veolms/services/email";
+import type { FastifyBaseLogger } from "fastify";
+import type { Kysely } from "kysely";
+
+import { config } from "../../../../config.ts";
+import { AppError } from "../../../../lib/errors.ts";
+import { createAcademyBrandService } from "../../../academy/academy-brand.service.ts";
+import { listPlatformPermissionHolderIds } from "../../../authorization/authorization.repository.ts";
+import { forgetAcademyGateways } from "./academy-gateways.ts";
+import * as repository from "./creator-gateway.repository.ts";
+import { decryptSecret, encryptSecret } from "./crypto.helper.ts";
+
+/**
+ * The academy's own payment account (Platform → Payments,
+ * creator-features/36-academy-payment-gateway-plan.md): connect Razorpay
+ * with its Key ID and Key Secret, checked with Razorpay first; a webhook
+ * secret made here; replace, renew or remove. Secrets are encrypted before
+ * they are stored and never sent back. Every change is emailed to all the
+ * academy's admins.
+ */
+
+/** The Razorpay events our webhook handles (razorpay.gateway.ts). */
+export const RAZORPAY_WEBHOOK_EVENTS = [
+  "payment.captured",
+  "payment.failed",
+  "order.paid",
+  "refund.created",
+  "refund.processed",
+  "refund.failed",
+] as const;
+
+export type KeyCheck = "ok" | "rejected" | "unreachable";
+
+/** Asks Razorpay whether the keys work: one read, no money moves. */
+export async function checkRazorpayKeys(
+  keyId: string,
+  keySecret: string,
+): Promise<KeyCheck> {
+  try {
+    const response = await fetch(
+      "https://api.razorpay.com/v1/payments?count=1",
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
+        },
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    if (response.ok) return "ok";
+    if (response.status === 401 || response.status === 403) return "rejected";
+    return "unreachable";
+  } catch {
+    return "unreachable";
+  }
 }
 
-/**
- * Whether new gateway keys are accepted. Off: nothing reads a stored key.
- * Checkout, refunds, webhooks and the recovery worker all use the one
- * gateway the platform is configured with (`resolveGatewayForCreator` has no
- * caller), so "connecting" a gateway stored live secrets to no effect while
- * telling the person their sales would be paid into that account.
- *
- * Turning this on is not enough to make it true. Every one of those paths
- * would have to resolve the gateway per order first.
- */
-const ACCEPTS_NEW_GATEWAY_KEYS = false;
+let keyCheckOverride:
+  ((keyId: string, keySecret: string) => Promise<KeyCheck>) | null = null;
 
-/**
- * A key id as it is shown back to the person who saved it: enough to tell
- * which key is connected (`rzp_live****1a2B`), not the key itself.
- */
+/** For tests: answers the key check instead of Razorpay (null restores it). */
+export function setRazorpayKeyCheckForTests(
+  check: ((keyId: string, keySecret: string) => Promise<KeyCheck>) | null,
+): void {
+  keyCheckOverride = check;
+}
+
+const MFA_KEY_PLACEHOLDER = "default_mfa_encryption_key_at_least_32_chars_long";
+
+/** A local install may use the placeholder key; anywhere else it is refused. */
+function encryptionKeyIsSafe(): boolean {
+  if (config.MFA_ENCRYPTION_KEY !== MFA_KEY_PLACEHOLDER) return true;
+  try {
+    const host = new URL(siteSettings(config).webUrl).hostname;
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".localhost")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function maskKeyId(keyId: string): string {
   if (keyId.length <= 12) return "****";
   return `${keyId.slice(0, 8)}****${keyId.slice(-4)}`;
 }
 
+function modeOf(keyId: string): "test" | "live" | null {
+  if (keyId.startsWith("rzp_live_")) return "live";
+  if (keyId.startsWith("rzp_test_")) return "test";
+  return null;
+}
+
+function webhookUrl(): string {
+  const base =
+    config.EMAIL_API_URL ??
+    `${siteSettings(config).webUrl.replace(/\/+$/u, "")}/api`;
+  return `${base.replace(/\/+$/u, "")}/v1/webhooks/razorpay`;
+}
+
+function newWebhookSecret(): string {
+  return crypto.randomBytes(24).toString("base64url");
+}
+
 export function createCreatorGatewayService({
   database,
-  config,
   paymentGateways,
+  email,
+  logger,
+  checkKeys = (keyId: string, keySecret: string) =>
+    (keyCheckOverride ?? checkRazorpayKeys)(keyId, keySecret),
 }: {
-  database: Executor;
-  config: ServerConfig;
-  /**
-   * The configured gateways. Their primary is read when a gateway is
-   * resolved, not once at startup, so it follows the gateways in force for
-   * the request (see setPaymentGatewaysProvider in @veolms/services).
-   */
+  database: Kysely<Database>;
+  /** To tell whether this install takes payments with its own keys. */
   paymentGateways: PaymentGateways;
-}): CreatorGatewayService {
-  const fallbackGateway = (): PaymentGateway => paymentGateways.primary;
+  email: EmailService;
+  logger: FastifyBaseLogger;
+  checkKeys?: (keyId: string, keySecret: string) => Promise<KeyCheck>;
+}) {
+  async function status(): Promise<AcademyPaymentGateway> {
+    const row = await repository.findAcademyGatewayStatus(database, "razorpay");
+    let keyId: string | null = null;
+    if (row) {
+      try {
+        keyId = decryptSecret(row.encrypted_key_id);
+      } catch {
+        keyId = null;
+      }
+    }
+    return {
+      provider: "razorpay",
+      connected: Boolean(row),
+      mode: keyId ? modeOf(keyId) : null,
+      keyId: keyId ? maskKeyId(keyId) : row ? "****" : null,
+      hasWebhookSecret: Boolean(row?.encrypted_webhook_secret),
+      connectedBy: row?.connected_by ?? null,
+      connectedAt: row ? row.created_at.toISOString() : null,
+      updatedAt: row ? row.updated_at.toISOString() : null,
+      webhookUrl: webhookUrl(),
+      webhookEvents: [...RAZORPAY_WEBHOOK_EVENTS],
+      // With nothing connected, the gateways in force are the server's own
+      // (single-academy install) or none (an academy of a shared install).
+      usingServerKeys:
+        !row && Boolean(safeGet(() => paymentGateways.get("razorpay"))),
+    };
+  }
 
-  async function saveCreatorConfig(
-    creatorId: string,
-    request: SaveCreatorPaymentConfigRequest,
-  ): Promise<CreatorPaymentConfig> {
-    if (!ACCEPTS_NEW_GATEWAY_KEYS) {
+  function safeGet<T>(read: () => T): T | undefined {
+    try {
+      return read();
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function notifyAdmins(
+    change: "connected" | "replaced" | "removed" | "webhook_secret",
+    changedById: string,
+  ) {
+    try {
+      const [brand, adminIds, changer] = await Promise.all([
+        createAcademyBrandService({ database }).getBrand(),
+        listPlatformPermissionHolderIds(database, "payment.gateway.manage"),
+        database
+          .selectFrom("users")
+          .select("display_name")
+          .where("id", "=", changedById)
+          .executeTakeFirst(),
+      ]);
+      if (adminIds.length === 0) return;
+      const admins = await database
+        .selectFrom("users")
+        .select(["email"])
+        .where("id", "in", adminIds)
+        .where("is_deleted", "=", false)
+        .where("email", "is not", null)
+        .execute();
+      const content = paymentAccountChangedEmail({
+        academyName: brand.name,
+        logoUrl: brand.logoUrl,
+        change,
+        gatewayName: "Razorpay",
+        changedBy: changer?.display_name?.trim() || "A team member",
+        when:
+          new Intl.DateTimeFormat("en-IN", {
+            dateStyle: "medium",
+            timeStyle: "short",
+            timeZone: "Asia/Kolkata",
+          }).format(new Date()) + " IST",
+        settingsUrl: `${siteSettings(config).webUrl.replace(/\/+$/u, "")}/platform/payments`,
+      });
+      for (const admin of admins) {
+        const result = await email.send(admin.email!, content);
+        if (result.status === "failed") {
+          logger.warn({ err: result.error }, "Payment account notice not sent");
+        }
+      }
+    } catch (error) {
+      logger.error({ err: error }, "Payment account notice failed");
+    }
+  }
+
+  async function connectRazorpay(
+    userId: string,
+    request: ConnectRazorpayRequest,
+  ): Promise<ConnectPaymentGatewayResponse> {
+    if (!encryptionKeyIsSafe()) {
       throw new AppError(
-        409,
-        "PAYMENT_GATEWAY_CONFIG_UNAVAILABLE",
-        "Connecting your own payment gateway is not available. Payments are taken through the platform's gateway, and the keys you sent were not stored.",
+        503,
+        "PAYMENT_KEYS_CANNOT_BE_STORED",
+        "Payment keys can't be stored safely on this server yet (its encryption key is not set). Ask the platform team.",
       );
     }
-
-    const encryptedKeyId = encryptSecret(request.keyId);
-    const encryptedKeySecret = encryptSecret(request.keySecret);
-    const encryptedWebhookSecret = request.webhookSecret
-      ? encryptSecret(request.webhookSecret)
-      : null;
-
-    const row = await creatorGatewayRepo.upsertCreatorPaymentConfig(database, {
-      id: crypto.randomUUID(),
-      creator_id: creatorId,
-      provider: request.provider,
-      encrypted_key_id: encryptedKeyId,
-      encrypted_key_secret: encryptedKeySecret,
-      encrypted_webhook_secret: encryptedWebhookSecret,
-      is_active: true,
-    });
-
-    return {
-      id: row.id,
-      provider: row.provider as PaymentProvider,
-      keyId: maskKeyId(request.keyId),
-      hasWebhookSecret: !!row.encrypted_webhook_secret,
-      isActive: row.is_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  async function getCreatorConfig(
-    creatorId: string,
-    provider: PaymentProvider = "razorpay",
-  ): Promise<CreatorPaymentConfig | null> {
-    const row = await creatorGatewayRepo.findCreatorPaymentConfig(
-      database,
-      creatorId,
-      provider,
+    const check = await checkKeys(request.keyId, request.keySecret);
+    if (check === "rejected") {
+      throw new AppError(
+        400,
+        "PAYMENT_KEYS_REJECTED",
+        "Razorpay didn't accept these keys. Copy the Key ID and Key Secret again from Razorpay → Account & Settings → API Keys.",
+      );
+    }
+    if (check === "unreachable") {
+      throw new AppError(
+        502,
+        "PAYMENT_GATEWAY_UNREACHABLE",
+        "We couldn't reach Razorpay to check the keys. Nothing was saved; try again in a minute.",
+      );
+    }
+    const replacing = Boolean(
+      await repository.findAcademyGatewayRow(database, "razorpay"),
     );
-    if (!row) return null;
-
-    let maskedKeyId = "****";
-    try {
-      maskedKeyId = maskKeyId(decryptSecret(row.encrypted_key_id));
-    } catch {
-      // safe fallback if key derivation changes
-    }
-
-    return {
-      id: row.id,
-      provider: row.provider as PaymentProvider,
-      keyId: maskedKeyId,
-      hasWebhookSecret: !!row.encrypted_webhook_secret,
-      isActive: row.is_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    const webhookSecret = newWebhookSecret();
+    await database.transaction().execute((trx) =>
+      repository.saveAcademyGateway(trx, {
+        provider: "razorpay",
+        connectedBy: userId,
+        encryptedKeyId: encryptSecret(request.keyId),
+        encryptedKeySecret: encryptSecret(request.keySecret),
+        encryptedWebhookSecret: encryptSecret(webhookSecret),
+      }),
+    );
+    forgetAcademyGateways();
+    void notifyAdmins(replacing ? "replaced" : "connected", userId);
+    return { gateway: await status(), webhookSecret };
   }
 
-  async function resolveGatewayForCreator(
-    creatorId?: string | null,
-  ): Promise<PaymentGateway> {
-    if (!creatorId) {
-      return fallbackGateway();
+  async function renewWebhookSecret(
+    userId: string,
+  ): Promise<ConnectPaymentGatewayResponse> {
+    if (!encryptionKeyIsSafe()) {
+      throw new AppError(
+        503,
+        "PAYMENT_KEYS_CANNOT_BE_STORED",
+        "Payment keys can't be stored safely on this server yet (its encryption key is not set). Ask the platform team.",
+      );
     }
-
-    const row = await creatorGatewayRepo.findCreatorPaymentConfig(
+    const webhookSecret = newWebhookSecret();
+    const updated = await repository.setAcademyWebhookSecret(
       database,
-      creatorId,
       "razorpay",
+      encryptSecret(webhookSecret),
     );
-
-    if (!row || !row.is_active) {
-      return fallbackGateway();
+    if (!updated) {
+      throw new AppError(
+        404,
+        "PAYMENT_GATEWAY_NOT_CONNECTED",
+        "Connect Razorpay first.",
+      );
     }
-
-    try {
-      const keyId = decryptSecret(row.encrypted_key_id);
-      const keySecret = decryptSecret(row.encrypted_key_secret);
-      const webhookSecret = row.encrypted_webhook_secret
-        ? decryptSecret(row.encrypted_webhook_secret)
-        : undefined;
-
-      return new RazorpayPaymentGateway({
-        keyId,
-        keySecret,
-        webhookSecret,
-      });
-    } catch {
-      return fallbackGateway();
-    }
+    forgetAcademyGateways();
+    void notifyAdmins("webhook_secret", userId);
+    return { gateway: await status(), webhookSecret };
   }
 
-  return {
-    saveCreatorConfig,
-    getCreatorConfig,
-    resolveGatewayForCreator,
-  };
+  async function disconnect(userId: string): Promise<AcademyPaymentGateway> {
+    const removed = await repository.deleteAcademyGateway(database, "razorpay");
+    if (!removed) {
+      throw new AppError(
+        404,
+        "PAYMENT_GATEWAY_NOT_CONNECTED",
+        "No Razorpay account is connected.",
+      );
+    }
+    forgetAcademyGateways();
+    void notifyAdmins("removed", userId);
+    return await status();
+  }
+
+  return { status, connectRazorpay, renewWebhookSecret, disconnect };
 }
+
+export type CreatorGatewayService = ReturnType<
+  typeof createCreatorGatewayService
+>;

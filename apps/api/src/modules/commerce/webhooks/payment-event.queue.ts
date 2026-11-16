@@ -7,6 +7,7 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
 import { runBackgroundItem, runBackgroundPass } from "@veolms/api-core";
 
+import { withAcademyGateways } from "../payments/gateways/academy-gateways.ts";
 import * as webhookRepo from "./webhook.repository.ts";
 
 const JOB = "payment-events";
@@ -167,7 +168,7 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
         await runBackgroundItem(
           JOB,
           { table: "webhook_events", id: eventRow.id },
-          () => this.runEvent(eventRow),
+          () => withAcademyGateways(() => this.runEvent(eventRow)),
         );
       }
     } catch (pollErr: unknown) {

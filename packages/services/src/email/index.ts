@@ -39,3 +39,7 @@ export {
   marketingEmail,
   type MarketingEmailInput,
 } from "./marketing-email.templates.ts";
+export {
+  paymentAccountChangedEmail,
+  type PaymentAccountChangedEmailInput,
+} from "./payment-account-email.templates.ts";

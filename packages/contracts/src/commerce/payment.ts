@@ -162,26 +162,66 @@ export const verifyPaymentResponseSchema = z.strictObject({
 });
 export type VerifyPaymentResponse = z.infer<typeof verifyPaymentResponseSchema>;
 
-export const creatorPaymentConfigSchema = z.strictObject({
-  id: z.uuid(),
+/**
+ * The academy's own gateway account (Platform → Payments): money from its
+ * sales goes straight to it. Secrets are never sent back; the key id only
+ * masked (`rzp_live****1a2B`).
+ */
+export const academyPaymentGatewaySchema = z.object({
   provider: paymentProviderSchema,
-  /** Masked for display (a short prefix and the last 4 characters). */
-  keyId: z.string(),
+  connected: z.boolean(),
+  /** From the key: test keys take no real money. */
+  mode: z.enum(["test", "live"]).nullable(),
+  keyId: z.string().nullable(),
   hasWebhookSecret: z.boolean(),
-  isActive: z.boolean(),
-  createdAt: z.string().or(z.date()),
-  updatedAt: z.string().or(z.date()),
+  connectedBy: z.string().nullable(),
+  connectedAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+  /** Where the gateway's dashboard should send payment events. */
+  webhookUrl: z.string(),
+  webhookEvents: z.array(z.string()),
+  /**
+   * Not connected, but this install takes payments with the server's own
+   * keys (a single-academy install); false where nothing would be taken.
+   */
+  usingServerKeys: z.boolean(),
 });
-export type CreatorPaymentConfig = z.infer<typeof creatorPaymentConfigSchema>;
+export type AcademyPaymentGateway = z.infer<typeof academyPaymentGatewaySchema>;
 
-export const saveCreatorPaymentConfigRequestSchema = z.strictObject({
-  provider: paymentProviderSchema.default("razorpay"),
-  keyId: z.string().min(1),
-  keySecret: z.string().min(1),
-  webhookSecret: z.string().optional(),
+export const academyPaymentGatewaysResponseSchema = z.object({
+  gateways: z.array(academyPaymentGatewaySchema),
 });
-export type SaveCreatorPaymentConfigRequest = z.infer<
-  typeof saveCreatorPaymentConfigRequestSchema
+export type AcademyPaymentGatewaysResponse = z.infer<
+  typeof academyPaymentGatewaysResponseSchema
+>;
+
+export const RAZORPAY_KEY_ID_PATTERN = /^rzp_(test|live)_[A-Za-z0-9]{8,32}$/u;
+
+export const connectRazorpayRequestSchema = z.strictObject({
+  keyId: z
+    .string()
+    .trim()
+    .regex(
+      RAZORPAY_KEY_ID_PATTERN,
+      "A Key ID starts with rzp_live_ or rzp_test_",
+    ),
+  keySecret: z
+    .string()
+    .trim()
+    .min(16, "Paste the whole Key Secret")
+    .max(128, "This doesn't look like a Key Secret"),
+});
+export type ConnectRazorpayRequest = z.infer<
+  typeof connectRazorpayRequestSchema
+>;
+
+/** After connecting or making a new webhook secret: the secret, shown once. */
+export const connectPaymentGatewayResponseSchema = z.object({
+  gateway: academyPaymentGatewaySchema,
+  webhookSecret: z.string(),
+});
+export type ConnectPaymentGatewayResponse = z.infer<
+  typeof connectPaymentGatewayResponseSchema
 >;
 
 /**

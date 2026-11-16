@@ -13,7 +13,10 @@ export {
   getCacheStats,
   invalidateCache,
   isCachingEnabled,
+  registerCache,
+  scopedCacheTag,
   setCacheScope,
+  type RegisteredCache,
 } from "./registry.ts";
 export { ALL_CACHE_TAG, cacheTags } from "./tags.ts";
 export {
