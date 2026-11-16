@@ -38,6 +38,19 @@ async function expectEnrolment(page: Page) {
   await expect(progress(page)).toContainText("Your pace");
 }
 
+/**
+ * After paying: the order page says the payment went through, and its
+ * "Start learning" opens the course.
+ */
+async function startLearningFromOrderPage(page: Page, course: TestCourse) {
+  await expect(page).toHaveURL(/\/purchase-history\/[0-9a-f-]{36}$/u);
+  await expect(
+    page.getByRole("heading", { name: "Payment successful" }),
+  ).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Start learning" }).click();
+  await expectWholeCourseOpen(page, course);
+}
+
 function paymentWindow(page: Page) {
   return page.getByRole("dialog", { name: "Payment window" });
 }
@@ -70,8 +83,9 @@ test("a learner buys a paid course: the payment window asks for its price, and a
   await expect(paymentWindow(page)).toContainText("Amount: ₹1,299");
   await paymentWindow(page).getByRole("button", { name: "Pay" }).click();
 
-  // Paid: the app takes the learner into the course, all of it open.
-  await expectWholeCourseOpen(page, course);
+  // Paid: the order page confirms it, and from there the whole course is
+  // open.
+  await startLearningFromOrderPage(page, course);
   await openLesson(page, course, 2);
   await expectVideoToPlay(page);
 });
@@ -88,7 +102,7 @@ test("after buying, the course is in the learner's courses and purchases, and is
   await openCoursePage(page, course);
   await pricing(page).getByRole("button", { name: "Pay Now" }).click();
   await paymentWindow(page).getByRole("button", { name: "Pay" }).click();
-  await expectWholeCourseOpen(page, course);
+  await startLearningFromOrderPage(page, course);
 
   // The course's page now shows their progress and their purchase, not a
   // price.
@@ -125,7 +139,7 @@ test("a learner who opens a bought course from their courses sees their progress
   await openCoursePage(page, course);
   await pricing(page).getByRole("button", { name: "Pay Now" }).click();
   await paymentWindow(page).getByRole("button", { name: "Pay" }).click();
-  await expectWholeCourseOpen(page, course);
+  await startLearningFromOrderPage(page, course);
 
   // Opened from inside the app (no reload): the page has only what the app
   // already knows, and the rest comes after.
@@ -176,7 +190,7 @@ test("closing the payment window charges nothing: the course stays locked, and t
   await openCoursePage(page, course);
   await pricing(page).getByRole("button", { name: "Pay Now" }).click();
   await paymentWindow(page).getByRole("button", { name: "Pay" }).click();
-  await expectWholeCourseOpen(page, course);
+  await startLearningFromOrderPage(page, course);
 });
 
 test("a free course: 'Enroll for Free' opens every lesson at once, with no payment window", async ({
