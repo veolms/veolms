@@ -47,7 +47,11 @@ export async function addEmailSuppression(
       source: input.source,
       detail: input.detail ?? null,
     })
-    .onConflict((conflict) => conflict.column("email").doNothing())
+    // By the key's name, not its column: a deployment may widen the key
+    // (one list per site) under the same name.
+    .onConflict((conflict) =>
+      conflict.constraint("email_suppressions_pkey").doNothing(),
+    )
     .execute();
 }
 

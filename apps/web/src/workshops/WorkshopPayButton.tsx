@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { WorkshopPublic } from "@veolms/contracts";
 import { Button } from "../components/Button";
 import { trackAnalyticsEvent } from "../lib/analytics-track";
-import { productName } from "../routing/routeDescriptors";
+import { getSiteName } from "../site/siteName";
 import { useCurrentUser } from "../services/auth";
 import { readCheckoutStartError } from "../services/payments/checkoutError";
 import { openGatewayCheckout } from "../services/payments/gateways/gatewayCheckout";
@@ -114,7 +114,7 @@ export function WorkshopPayButton({
       await openGatewayCheckout(
         {
           gateway: order.gateway,
-          name: productName,
+          name: getSiteName(),
           description: `Workshop - ${workshop.title}`,
           prefill: {
             name: user?.displayName || user?.username || "",
