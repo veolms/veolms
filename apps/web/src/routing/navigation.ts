@@ -20,6 +20,13 @@ export interface NavigationOptions {
   ) => ApplicationScrollPosition;
   scrollRestorationKey?: string;
   sourceScrollRestorationKey?: string;
+  /**
+   * Where the page being left was scrolled, read by the caller before it
+   * changed the page. Reading it after such a change forces a style and
+   * layout pass of the whole page there and then (1.7 s on a slow
+   * computer when the mini player opens its lesson, 2026-11-15).
+   */
+  sourceScrollPosition?: ApplicationScrollPosition;
   exact?: boolean;
   replace?: boolean;
 }

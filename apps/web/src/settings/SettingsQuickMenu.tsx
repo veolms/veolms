@@ -109,6 +109,8 @@ export function SettingsQuickMenu({
       inert={!isOpen ? true : undefined}
       data-open={isOpen ? "true" : "false"}
       data-settings-quick-menu
+      // Taps here never drag the phone's bottom sheet (see AcademyPaletteMenu).
+      data-base-ui-swipe-ignore
     >
       <p className="profile-menu__section">Settings</p>
       {readingMode ? (

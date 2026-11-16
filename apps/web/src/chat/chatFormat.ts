@@ -1,8 +1,12 @@
 /** Time and label helpers for chat, shaped like WhatsApp's. */
 
+// A 12-hour clock with am/pm everywhere in chat (last seen, messages, the
+// list), as WhatsApp shows it in India: left to the device, a phone set to
+// a 24-hour clock read "last seen 13 Nov at 12:15" with no am or pm.
 const timeFormat = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
   minute: "2-digit",
+  hour12: true,
 });
 const weekdayFormat = new Intl.DateTimeFormat(undefined, { weekday: "long" });
 const dateFormat = new Intl.DateTimeFormat(undefined, {
