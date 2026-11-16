@@ -103,6 +103,18 @@ void test("a finished lesson watched again and left partway is where the learner
   assert.equal(again?.positionSeconds, 240);
 });
 
+void test("a finished lesson opened again, left before it played, is where the learner carries on", () => {
+  // Starting the course over: lesson 2 is opened again and left while its
+  // video loads. The page notes it at 1 second (useLessonProgressState),
+  // after lesson 3 was last played partway.
+  const reopened = resumeTimed([
+    row(3, 80, { position: 300, playedAt: "2026-10-21T12:00:00Z" }),
+    row(2, 100, { position: 1, playedAt: "2026-10-22T12:00:00Z" }),
+    row(1, 100),
+  ]);
+  assert.equal(reopened?.lessonNumber, 2);
+});
+
 void test("a finished lesson watched again to its end still moves on", () => {
   const next = resumeTimed([
     row(2, 100, { position: 595, playedAt: "2026-10-22T12:00:00Z" }),
