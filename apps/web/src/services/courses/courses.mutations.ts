@@ -4,6 +4,9 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import type {
+  CoursePageSectionKind,
+  CoursePageSectionsResponse,
+  UpdateCoursePageSectionRequest,
   Category,
   LessonContentKind,
   LessonContentsResponse,
@@ -918,6 +921,43 @@ export function useReorderCourses() {
       // The catalogue, its pages and the course options.
       void queryClient.invalidateQueries({ queryKey: courseKeys.lists() });
       void queryClient.invalidateQueries({ queryKey: homeKeys.all });
+    },
+  });
+}
+
+/** Saves one section's switch or content (or, kind "seo", the search fields). */
+export function useUpdateCoursePageSection() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    CoursePageSectionsResponse,
+    ApiError,
+    {
+      courseId: string;
+      kind: CoursePageSectionKind | "seo";
+      payload: UpdateCoursePageSectionRequest;
+    }
+  >({
+    mutationFn: ({ courseId, kind, payload }) =>
+      coursesService.updatePageSection(courseId, kind, payload),
+    onSuccess: (data, { courseId }) => {
+      queryClient.setQueryData(courseKeys.pageSections(courseId), data);
+      invalidateCoursePublicViews(queryClient, courseId);
+    },
+  });
+}
+
+export function useReorderCoursePageSections() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    CoursePageSectionsResponse,
+    ApiError,
+    { courseId: string; kinds: CoursePageSectionKind[] }
+  >({
+    mutationFn: ({ courseId, kinds }) =>
+      coursesService.reorderPageSections(courseId, kinds),
+    onSuccess: (data, { courseId }) => {
+      queryClient.setQueryData(courseKeys.pageSections(courseId), data);
+      invalidateCoursePublicViews(queryClient, courseId);
     },
   });
 }

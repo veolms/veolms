@@ -2,6 +2,7 @@ import { LightningIcon as Lightning } from "@phosphor-icons/react/Lightning";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
 import { LockKeyIcon as LockKey } from "@phosphor-icons/react/LockKey";
 import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
+import { StorefrontIcon as Storefront } from "@phosphor-icons/react/Storefront";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import type { Permission } from "@veolms/contracts";
@@ -9,7 +10,13 @@ import type { ComponentType } from "react";
 import { CURRICULUM_PERMISSIONS } from "./curriculumPermissions";
 
 export type CourseWizardStepId =
-  "basics" | "curriculum" | "access-rules" | "pricing" | "extras" | "publish";
+  | "basics"
+  | "curriculum"
+  | "access-rules"
+  | "pricing"
+  | "sales-page"
+  | "extras"
+  | "publish";
 
 type WizardStepIcon = ComponentType<{
   size?: number;
@@ -29,6 +36,7 @@ export const WIZARD_STEPS: readonly WizardStepDefinition[] = [
   { id: "curriculum", label: "Curriculum", Icon: ListBullets, tone: "violet" },
   { id: "access-rules", label: "Access Rules", Icon: LockKey, tone: "gold" },
   { id: "pricing", label: "Pricing", Icon: Tag, tone: "green" },
+  { id: "sales-page", label: "Sales page", Icon: Storefront, tone: "cyan" },
   { id: "extras", label: "Extras", Icon: PuzzlePiece, tone: "orange" },
   { id: "publish", label: "Publish", Icon: Lightning, tone: "rose" },
 ];
@@ -45,6 +53,7 @@ export const WIZARD_STEP_PERMISSIONS: Readonly<
   curriculum: CURRICULUM_PERMISSIONS,
   "access-rules": ["course.details.update"],
   pricing: ["course.pricing.update"],
+  "sales-page": ["course.details.update"],
   extras: ["course.details.update"],
   publish: ["course.publish", "course.unpublish"],
 };

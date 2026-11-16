@@ -767,6 +767,9 @@ export function useStepSavesAndNavigation({
       return await saveAccessRulesStep();
     } else if (activeStep === "pricing") {
       return await savePricingStep();
+    } else if (activeStep === "sales-page") {
+      // Each section saves as it is typed: nothing waits for the step.
+      return true;
     } else if (activeStep === "extras") {
       return await saveExtrasStep();
     } else if (activeStep === "publish") {

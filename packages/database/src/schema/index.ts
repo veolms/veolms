@@ -66,6 +66,7 @@ import type {
   CoursePricingTable,
   CourseSettingsTable,
   CourseIncludeTable,
+  CoursePageSectionTable,
   CourseLinkTable,
   CourseDeletionJobTable,
   CourseDeletionStorageItemTable,
@@ -225,6 +226,7 @@ export interface Database {
   course_pricing: CoursePricingTable;
   course_settings: CourseSettingsTable;
   course_includes: CourseIncludeTable;
+  course_page_sections: CoursePageSectionTable;
   course_links: CourseLinkTable;
   course_deletion_jobs: CourseDeletionJobTable;
   course_deletion_storage_items: CourseDeletionStorageItemTable;

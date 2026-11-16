@@ -199,6 +199,11 @@ export function createAuthService({
     return userRepository.listUserDisplayNamesByIds(database, userIds);
   }
 
+  /** A course instructor's bio and photo, for the course page. */
+  function findInstructorDetails(userId: string) {
+    return userRepository.findInstructorDetails(database, userId);
+  }
+
   /** Bulk name and email lookup, for staff lists that search by either. */
   function listUserNamesAndEmailsByIds(userIds: readonly string[]) {
     return userRepository.listUserNamesAndEmailsByIds(database, userIds);
@@ -1770,6 +1775,7 @@ export function createAuthService({
     findUserById,
     findUserByIdForNotification,
     listUserDisplayNamesByIds,
+    findInstructorDetails,
     listUserNamesAndEmailsByIds,
     listUserCardsByIds,
     findUserCardByUsername,

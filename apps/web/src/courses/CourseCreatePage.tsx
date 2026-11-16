@@ -60,6 +60,7 @@ import { PluginCourseEditorSections } from "./course-editor/PluginCourseEditorSe
 import { PublishStepPanel } from "./course-editor/PublishStepPanel";
 import { ExtrasStepPanel } from "./course-editor/ExtrasStepPanel";
 import { CourseAfterPurchaseCard } from "./course-editor/CourseAfterPurchaseCard";
+import { SalesPageStepPanel } from "./course-editor/sales-page/SalesPageStepPanel";
 import { BasicsStepPanel } from "./course-editor/BasicsStepPanel";
 import { CurriculumStepPanel } from "./course-editor/CurriculumStepPanel";
 import { CourseEditorHeader } from "./course-editor/CourseEditorHeader";
@@ -1711,6 +1712,13 @@ export function CourseCreatePage({
                   currentCourseId={currentCourseId}
                   navigateToStep={navigateToStep}
                   onNavigatePage={onNavigatePage}
+                />
+              ) : panelStep === "sales-page" ? (
+                <SalesPageStepPanel
+                  courseId={currentCourseId}
+                  courseSlug={editorData?.course.slug}
+                  courseTitle={editorData?.course.title ?? ""}
+                  shortDescription={editorData?.course.shortDescription ?? ""}
                 />
               ) : panelStep === "extras" ? (
                 <ExtrasStepPanel

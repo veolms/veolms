@@ -112,6 +112,15 @@ import {
 } from "../links/links.service.ts";
 import { seedDefaultIncludes } from "../includes/includes.service.ts";
 import {
+  createPageSectionsService,
+  type PageSectionsService,
+} from "../page-sections/page-sections.service.ts";
+import { presentPublicSalesPage } from "../page-sections/page-sections.present.ts";
+import {
+  displayAvatarUrl,
+  isStoredAvatarUrl,
+} from "../../avatars/avatar-storage.ts";
+import {
   isLessonListedInOverview,
   resolveOverviewVisibility,
   type OverviewViewer,
@@ -420,6 +429,7 @@ export interface CourseServiceOptions {
   curriculumService?: CurriculumService;
   configurationService?: ConfigurationService;
   includesService?: IncludesService;
+  pageSectionsService?: PageSectionsService;
   mediaService?: MediaService;
   deletionService?: CourseDeletionService;
   linksService?: LinksService;
@@ -435,6 +445,7 @@ export function createCourseService({
   curriculumService = createCurriculumService({ database, services }),
   configurationService = createConfigurationService({ database }),
   includesService = createIncludesService({ database }),
+  pageSectionsService = createPageSectionsService({ database }),
   mediaService = createMediaService({ database, services }),
   linksService = createLinksService({ database }),
   deletionService = createCourseDeletionService({
@@ -450,6 +461,7 @@ export function createCourseService({
     includesService,
     mediaService,
     authService,
+    pageSectionsService,
   };
 
   async function toPublicCourseSummary(row: PublicCourseSummaryRow) {
@@ -1591,6 +1603,25 @@ export function createCourseService({
       creator: creatorRow
         ? { id: creatorRow.id, displayName: creatorRow.display_name }
         : null,
+      // The page's ready sections; the instructor's is left out when they
+      // hide their name.
+      salesPage: presentPublicSalesPage(
+        content.pageSections,
+        creatorRow
+          ? {
+              name: course.instructor_alias?.trim() || creatorRow.display_name,
+              headline: "",
+              bio: content.instructorDetails?.bio?.trim() ?? "",
+              avatarUrl: isStoredAvatarUrl(
+                content.instructorDetails?.avatar_data_url,
+              )
+                ? displayAvatarUrl(
+                    content.instructorDetails?.avatar_data_url ?? null,
+                  )
+                : null,
+            }
+          : null,
+      ),
       sections: presentCurriculum({
         sections,
         lessons,

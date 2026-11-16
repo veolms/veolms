@@ -6,6 +6,7 @@ import type { CategoryService } from "../category/category.service.ts";
 import type { ConfigurationService } from "../configuration/configuration.service.ts";
 import type { CurriculumService } from "../curriculum/curriculum.service.ts";
 import type { IncludesService } from "../includes/includes.service.ts";
+import type { PageSectionsService } from "../page-sections/page-sections.service.ts";
 import type { CourseListResponse } from "@veolms/contracts";
 import type {
   listCourseAccessFacts,
@@ -44,7 +45,11 @@ export interface CourseContentSources {
   >;
   includesService: Pick<IncludesService, "listIncludesForAuthorizedCourse">;
   mediaService: Pick<MediaService, "getMediaAssets">;
-  authService: Pick<AuthService, "listUserDisplayNamesByIds">;
+  authService: Pick<
+    AuthService,
+    "listUserDisplayNamesByIds" | "findInstructorDetails"
+  >;
+  pageSectionsService: Pick<PageSectionsService, "listRowsForCourse">;
 }
 
 type Loaded<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
@@ -81,6 +86,17 @@ export interface CourseContent {
         CourseContentSources["authService"]["listUserDisplayNamesByIds"]
       >[number]
     | null;
+  /** The course page's sections (Sales page step), as stored. */
+  pageSections: Loaded<
+    CourseContentSources["pageSectionsService"]["listRowsForCourse"]
+  >;
+  /**
+   * The instructor's bio and photo: read only when the page shows their
+   * section, so most courses skip it.
+   */
+  instructorDetails: NonNullable<
+    Loaded<CourseContentSources["authService"]["findInstructorDetails"]>
+  > | null;
 }
 
 export interface CourseContentKey {
@@ -111,6 +127,7 @@ async function loadCourseContent(
     settings,
     includes,
     creators,
+    pageSections,
   ] = await Promise.all([
     course.category_id
       ? sources.categoryService.findCategoryById(course.category_id)
@@ -125,7 +142,16 @@ async function loadCourseContent(
     course.creator_id
       ? sources.authService.listUserDisplayNamesByIds([course.creator_id])
       : [],
+    sources.pageSectionsService.listRowsForCourse(course.id),
   ]);
+
+  const showsInstructor = pageSections.some(
+    (row) => row.kind === "instructor" && row.is_visible,
+  );
+  const instructorDetails =
+    showsInstructor && course.creator_id
+      ? await sources.authService.findInstructorDetails(course.creator_id)
+      : undefined;
 
   // A reading written as text is its document's; learners are shown it
   // where a reading's text goes (its description, which older readings
@@ -171,6 +197,8 @@ async function loadCourseContent(
     includes,
     media,
     creator: creators[0] ?? null,
+    pageSections,
+    instructorDetails: instructorDetails ?? null,
   };
 }
 

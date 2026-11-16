@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
+  CoursePageSectionsResponse,
   Category,
   CourseAccessListResponse,
   CourseAccessResponse,
@@ -468,5 +469,17 @@ export function fetchCourseAccess(
     queryFn: () => coursesService.getAccess(courseKey),
     staleTime: 60 * 1000,
     retry: false,
+  });
+}
+
+/** The course page's sections and search fields, for the Sales page step. */
+export function useCoursePageSections(
+  courseId: string | null | undefined,
+  options?: { enabled?: boolean },
+) {
+  return useQuery<CoursePageSectionsResponse, ApiError>({
+    queryKey: courseKeys.pageSections(courseId ?? ""),
+    queryFn: () => coursesService.getPageSections(courseId!),
+    enabled: Boolean(courseId) && (options?.enabled ?? true),
   });
 }

@@ -415,6 +415,19 @@ async function main() {
   console.log(
     `${updatedPages} of ${previous.size} pages changed for ${courses.length} of ${requested.length} requested courses.`,
   );
+  // The sitemap follows the catalogue: a course published, renamed or
+  // taken down is listed or dropped with this refresh.
+  const { writeSiteIndexFiles } = await import("./siteIndexFiles.ts");
+  if (
+    await writeSiteIndexFiles({
+      clientDirectory: clientPath(""),
+      siteUrl: process.env.VITE_SITE_URL,
+      courseSlugs: [...publishedSlugs],
+    })
+  ) {
+    changed = true;
+    console.log("Updated sitemap.xml and robots.txt");
+  }
   if (process.env.GITHUB_OUTPUT) {
     await appendFile(process.env.GITHUB_OUTPUT, `changed=${changed}\n`);
   }

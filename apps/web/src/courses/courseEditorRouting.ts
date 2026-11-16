@@ -3,6 +3,7 @@ export const COURSE_EDITOR_STEP_IDS = [
   "curriculum",
   "access-rules",
   "pricing",
+  "sales-page",
   "extras",
   "publish",
 ] as const;

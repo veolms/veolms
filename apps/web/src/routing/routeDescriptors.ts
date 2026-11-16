@@ -3,6 +3,8 @@
 // page. username-rules is dependency-free and stays in lockstep with
 // publicProfileUsernameParamsSchema.
 import { isValidPublicProfileUsername } from "@veolms/contracts/username-rules";
+// Types only: erased from the build, so no schema code comes with them.
+import type { PublicCourseSalesPage } from "@veolms/contracts";
 import { getDemoCourseTitle } from "../learning/courseMetadata";
 import type { AcademyStaticPageData } from "../routes/academyStaticPageData";
 import {
@@ -1051,13 +1053,22 @@ export interface CourseHeadDetails {
   title: string;
   shortDescription?: string | null;
   thumbnailUrl?: string | null;
+  /** The wide picture: the better share image when there is one. */
+  bannerUrl?: string | null;
+}
+
+/** What a course's sales page adds to its head: search fields and the FAQ. */
+export interface CourseHeadSalesPage {
+  seo?: { title: string | null; description: string | null };
+  faq?: readonly { question: string; answer: string }[];
 }
 
 /** A head tag, in the shape a route's `meta` export returns. */
 export type HeadTagDescriptor =
   | { name: string; content: string }
   | { property: string; content: string }
-  | { tagName: "link"; rel: "canonical"; href: string };
+  | { tagName: "link"; rel: "canonical"; href: string }
+  | { "script:ld+json": Record<string, unknown> };
 
 /**
  * The course the data this document was built with already holds — the
@@ -1076,6 +1087,40 @@ const getRouteCourse = (
     pageData?.lessonPage?.curriculum.course,
     ...(pageData?.publishedCoursePage?.courses ?? []),
   ].find((course) => course?.slug === courseSlug || course?.id === courseSlug);
+};
+
+/**
+ * The search fields and FAQ of the course this document was built with
+ * (its sales page), when the address names it.
+ */
+const getRouteSalesPage = (
+  courseSlug: string | undefined,
+  matches: readonly (RouteMetaMatch | undefined)[] | undefined,
+): CourseHeadSalesPage | undefined => {
+  if (!courseSlug) return undefined;
+  const pageData = matches?.find((match) => match?.id === "root")
+    ?.loaderData as AcademyStaticPageData | null | undefined;
+  const curriculum = pageData?.courseCurriculum?.curriculum;
+  if (
+    !curriculum ||
+    (curriculum.course.slug !== courseSlug &&
+      curriculum.course.id !== courseSlug)
+  ) {
+    return undefined;
+  }
+  return toCourseHeadSalesPage(curriculum.salesPage);
+};
+
+/** What a course's sales page puts in the head: its search fields and FAQ. */
+export const toCourseHeadSalesPage = (
+  salesPage: PublicCourseSalesPage | undefined,
+): CourseHeadSalesPage | undefined => {
+  if (!salesPage) return undefined;
+  const faq = salesPage.sections.find((section) => section.kind === "faq");
+  return {
+    seo: salesPage.seo,
+    ...(faq && faq.kind === "faq" ? { faq: faq.items } : {}),
+  };
 };
 
 /**
@@ -1154,28 +1199,95 @@ const toAbsoluteUrl = (value: string, origin?: string): string | undefined => {
 export const getCourseHeadTags = (
   course: CourseHeadDetails,
   origin?: string,
+  salesPage?: CourseHeadSalesPage,
 ): HeadTagDescriptor[] => {
-  const title = course.title.trim();
-  const description = getCourseOverviewDescription(
-    title,
-    course.shortDescription,
-  );
+  const title = salesPage?.seo?.title?.trim() || course.title.trim();
+  const description =
+    salesPage?.seo?.description?.trim() ||
+    getCourseOverviewDescription(course.title.trim(), course.shortDescription);
+  const siteName = getSiteName();
   const tags: HeadTagDescriptor[] = [
     { name: "description", content: description },
+    { property: "og:type", content: "website" },
+    { property: "og:site_name", content: siteName },
     { property: "og:title", content: title },
     { property: "og:description", content: description },
+    { name: "twitter:title", content: title },
+    { name: "twitter:description", content: description },
   ];
-  const thumbnailUrl = course.thumbnailUrl?.trim();
-  const imageUrl = thumbnailUrl
-    ? toAbsoluteUrl(thumbnailUrl, origin)
+  // The wide banner previews best in a shared link; the thumbnail otherwise.
+  const pictureUrl = course.bannerUrl?.trim() || course.thumbnailUrl?.trim();
+  const imageUrl = pictureUrl ? toAbsoluteUrl(pictureUrl, origin) : undefined;
+  if (imageUrl) {
+    tags.push(
+      { property: "og:image", content: imageUrl },
+      { name: "twitter:image", content: imageUrl },
+    );
+  }
+  tags.push({
+    name: "twitter:card",
+    content: imageUrl ? "summary_large_image" : "summary",
+  });
+  const url = origin
+    ? `${origin}/courses/${encodeURIComponent(course.slug)}/overview`
     : undefined;
-  if (imageUrl) tags.push({ property: "og:image", content: imageUrl });
-  if (origin) {
-    const url = `${origin}/courses/${encodeURIComponent(course.slug)}/overview`;
+  if (url) {
     tags.push(
       { property: "og:url", content: url },
       { tagName: "link", rel: "canonical", href: url },
     );
+  }
+  // Structured data search engines read (schema.org): the course, where it
+  // sits, and its questions when the page has an FAQ.
+  tags.push({
+    "script:ld+json": {
+      "@context": "https://schema.org",
+      "@type": "Course",
+      name: course.title.trim(),
+      description,
+      provider: {
+        "@type": "Organization",
+        name: siteName,
+        ...(origin ? { sameAs: origin } : {}),
+      },
+      ...(url ? { url } : {}),
+      ...(imageUrl ? { image: imageUrl } : {}),
+    },
+  });
+  if (origin && url) {
+    tags.push({
+      "script:ld+json": {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Courses",
+            item: `${origin}/courses`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: course.title.trim(),
+            item: url,
+          },
+        ],
+      },
+    });
+  }
+  if (salesPage?.faq?.length) {
+    tags.push({
+      "script:ld+json": {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: salesPage.faq.map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: { "@type": "Answer", text: item.answer },
+        })),
+      },
+    });
   }
   return tags;
 };
@@ -1200,7 +1312,11 @@ export const getRouteShareTags = (
   }
   const course = getRouteCourse(params.courseSlug, matches);
   return course
-    ? getCourseHeadTags(course, origin).filter((tag) => !("name" in tag))
+    ? getCourseHeadTags(
+        course,
+        origin,
+        getRouteSalesPage(params.courseSlug, matches),
+      ).filter((tag) => !("name" in tag && tag.name === "description"))
     : [];
 };
 
@@ -1236,12 +1352,15 @@ export const getRouteMeta = (
 
   if (effectiveRouteId === "course-overview") {
     const title = getRouteCourseTitle(params.courseSlug, matches);
+    const seo = getRouteSalesPage(params.courseSlug, matches)?.seo;
     return {
-      title: `${title ?? "Course"} · ${getSiteName()}`,
-      description: getCourseOverviewDescription(
-        title,
-        getRouteCourse(params.courseSlug, matches)?.shortDescription,
-      ),
+      title: `${seo?.title?.trim() || title || "Course"} · ${getSiteName()}`,
+      description:
+        seo?.description?.trim() ||
+        getCourseOverviewDescription(
+          title,
+          getRouteCourse(params.courseSlug, matches)?.shortDescription,
+        ),
     };
   }
 

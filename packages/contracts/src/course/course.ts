@@ -4,6 +4,7 @@ import {
   afterPurchaseWelcomeSchema,
 } from "../after-purchase.ts";
 import { mediaAssetStatusSchema } from "../media.ts";
+import { publicCourseSalesPageSchema } from "./course-page-sections.ts";
 import {
   lessonContentSchema,
   lessonContentTypeSchema,
@@ -1041,6 +1042,11 @@ export const courseOverviewCourseSchema = z.object({
 
 export const courseOverviewSchema = z.object({
   course: courseOverviewCourseSchema,
+  /**
+   * The page's ready sections and search fields (Sales page step). Absent
+   * from an older API: the page then shows its fixed layout.
+   */
+  salesPage: publicCourseSalesPageSchema.optional(),
   category: z
     .object({ name: z.string().min(1).max(100) })
     .nullable()

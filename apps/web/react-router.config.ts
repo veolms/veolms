@@ -8,6 +8,7 @@ import {
   type LearningPrerenderScope,
 } from "./src/learning/prerenderLearningPaths";
 import { fetchStaticBuildApi } from "./src/routes/staticBuildApi";
+import { writeSiteIndexFiles } from "./scripts/siteIndexFiles";
 
 const staticApplicationPages = [
   "/",
@@ -164,9 +165,13 @@ async function getStaticLearningPaths(courseSlugs: readonly string[]) {
   });
 }
 
+/** The catalogue the pages were built from, for the sitemap (buildEnd). */
+let builtCourseSlugs: string[] | null = null;
+
 const prerenderConfig = {
   paths: async () => {
     const courseSlugs = await getStaticCataloguePaths();
+    builtCourseSlugs = courseSlugs;
     return [
       ...staticApplicationPages,
       ...courseSlugs.map(
@@ -196,4 +201,14 @@ export default {
     : (prerenderConfig as NonNullable<Config["prerender"]>),
   routeDiscovery: { mode: "initial" },
   ssr: false,
+  // sitemap.xml and robots.txt for the pages just built, under the site's
+  // own address (VITE_SITE_URL); without one, nothing is written.
+  buildEnd: async ({ reactRouterConfig }) => {
+    if (!builtCourseSlugs) return;
+    await writeSiteIndexFiles({
+      clientDirectory: `${reactRouterConfig.buildDirectory}/client`,
+      siteUrl: process.env.VITE_SITE_URL,
+      courseSlugs: builtCourseSlugs,
+    });
+  },
 } satisfies Config;

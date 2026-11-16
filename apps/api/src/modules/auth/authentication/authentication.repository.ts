@@ -67,6 +67,16 @@ export function listUserDisplayNamesByIds(
     .execute();
 }
 
+/** A course instructor's bio and photo, for "Your instructor" on its page. */
+export function findInstructorDetails(database: Executor, userId: string) {
+  return database
+    .selectFrom("users")
+    .select(["bio", "avatar_data_url"])
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
 /**
  * Bulk name and email lookup, for staff lists that find people by either
  * (the quiz report's student search). Same narrow shape as the name lookup.

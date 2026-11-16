@@ -3,6 +3,9 @@ import { api } from "../../lib/api-client";
 import { staticCurriculumUrl } from "../../courses/staticCurriculum";
 import type { HeroVideoPlayback, VideoPlaybackToken } from "@veolms/contracts";
 import type {
+  CoursePageSectionKind,
+  CoursePageSectionsResponse,
+  UpdateCoursePageSectionRequest,
   Category,
   CourseAccessListResponse,
   CourseAccessResponse,
@@ -555,6 +558,34 @@ export const coursesService = {
   ): Promise<PartialAccessListResponse> => {
     return api.delete<PartialAccessListResponse>(
       `/courses/${courseId}/partial-access/${partialCourseId}`,
+    );
+  },
+
+  /** The course page's sections and search fields (Sales page step). */
+  getPageSections: (courseId: string): Promise<CoursePageSectionsResponse> => {
+    return api.get<CoursePageSectionsResponse>(
+      `/courses/${courseId}/page-sections`,
+    );
+  },
+
+  updatePageSection: (
+    courseId: string,
+    kind: CoursePageSectionKind | "seo",
+    payload: UpdateCoursePageSectionRequest,
+  ): Promise<CoursePageSectionsResponse> => {
+    return api.put<CoursePageSectionsResponse>(
+      `/courses/${courseId}/page-sections/${kind}`,
+      payload,
+    );
+  },
+
+  reorderPageSections: (
+    courseId: string,
+    kinds: CoursePageSectionKind[],
+  ): Promise<CoursePageSectionsResponse> => {
+    return api.put<CoursePageSectionsResponse>(
+      `/courses/${courseId}/page-sections-order`,
+      { kinds },
     );
   },
 };

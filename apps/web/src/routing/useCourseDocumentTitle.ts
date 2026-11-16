@@ -4,11 +4,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { CourseOverviewResponse } from "@veolms/contracts";
 import { courseKeys } from "../services/courses";
 import { configuredSiteOrigin } from "./configuredSiteOrigin";
-import { getCourseDocumentTitle, getCourseHeadTags } from "./routeDescriptors";
+import {
+  getCourseDocumentTitle,
+  getCourseHeadTags,
+  toCourseHeadSalesPage,
+} from "./routeDescriptors";
 import { useDocumentHeadTags } from "./useDocumentHeadTags";
 import { useDocumentTitle } from "./useDocumentTitle";
 
-const getServerCourse = () => undefined;
+const getServerOverview = () => undefined;
 
 /**
  * On the course overview page, puts the course's own name in the tab title
@@ -33,20 +37,28 @@ export function useCourseOverviewDocumentTitle(active: boolean): void {
     (onChange: () => void) => queryClient.getQueryCache().subscribe(onChange),
     [queryClient],
   );
-  const getCourse = useCallback(
+  const getOverview = useCallback(
     () =>
       slug
         ? (queryClient.getQueryData<CourseOverviewResponse>(
             courseKeys.overview(slug),
-          )?.course ??
+          ) ??
           // Visitors' pages read the public curriculum, not the overview.
           queryClient.getQueryData<CourseOverviewResponse>(
             courseKeys.publicCurriculum(slug),
-          )?.course)
+          ))
         : undefined,
     [queryClient, slug],
   );
-  const course = useSyncExternalStore(subscribe, getCourse, getServerCourse);
+  const overview = useSyncExternalStore(
+    subscribe,
+    getOverview,
+    getServerOverview,
+  );
+  const course = overview?.course;
+  // The creator's search title and description (Sales page step), as the
+  // built page has them.
+  const salesPage = toCourseHeadSalesPage(overview?.salesPage);
 
   useDocumentTitle(
     slug
@@ -55,7 +67,7 @@ export function useCourseOverviewDocumentTitle(active: boolean): void {
           { courseSlug: slug },
           pathname,
           matches,
-          { courseTitle: course?.title },
+          { courseTitle: salesPage?.seo?.title?.trim() || course?.title },
         )
       : undefined,
   );
@@ -64,6 +76,7 @@ export function useCourseOverviewDocumentTitle(active: boolean): void {
       ? getCourseHeadTags(
           course,
           configuredSiteOrigin ?? window.location.origin,
+          salesPage,
         )
       : undefined,
   );

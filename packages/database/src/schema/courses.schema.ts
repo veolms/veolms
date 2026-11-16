@@ -1,4 +1,4 @@
-import type { Generated } from "kysely";
+import type { Generated, JSONColumnType } from "kysely";
 
 export type CourseStatus = "draft" | "published" | "archived";
 export type CourseDifficulty = "beginner" | "intermediate" | "advanced";
@@ -166,6 +166,33 @@ export interface CourseSettingsTable {
   welcome_link_label: string | null;
   /** https only. */
   welcome_link_url: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export type CoursePageSectionKind =
+  | "outcomes"
+  | "audience"
+  | "requirements"
+  | "instructor"
+  | "testimonials"
+  | "faq"
+  | "guarantee"
+  | "curriculum"
+  | "about"
+  | "seo";
+
+/**
+ * One ready section of the course page (20261116170000): its content is
+ * checked by the contracts' schema for its kind.
+ */
+export interface CoursePageSectionTable {
+  id: Generated<string>;
+  course_id: string;
+  kind: CoursePageSectionKind;
+  position: Generated<number>;
+  is_visible: Generated<boolean>;
+  content: JSONColumnType<Record<string, unknown>, string | undefined, string>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

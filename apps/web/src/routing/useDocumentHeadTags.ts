@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import type { HeadTagDescriptor } from "./routeDescriptors";
 
-const describeHeadTag = (tag: HeadTagDescriptor) => {
+type MetaOrLinkTag = Exclude<HeadTagDescriptor, { "script:ld+json": unknown }>;
+
+const describeHeadTag = (tag: MetaOrLinkTag) => {
   if ("tagName" in tag) {
     return {
       tagName: "link",
@@ -25,7 +27,12 @@ export function applyDocumentHeadTags(
   tags: readonly HeadTagDescriptor[],
   head: HTMLHeadElement = document.head,
 ): () => void {
-  const restores = tags.map((tag) => {
+  // Structured data is for search engines, which read the page as it was
+  // built; after the app takes over, only meta and link tags are kept up.
+  const metaAndLinks = tags.filter(
+    (tag): tag is MetaOrLinkTag => !("script:ld+json" in tag),
+  );
+  const restores = metaAndLinks.map((tag) => {
     const {
       tagName,
       identity: [identityName, identityValue],

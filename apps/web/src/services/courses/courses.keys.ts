@@ -31,6 +31,8 @@ export const courseKeys = {
   staticCurriculum: (courseSlug: string, version: string | null) =>
     [...courseKeys.all, "static-curriculum", courseSlug, version] as const,
   editor: (id: string) => [...courseKeys.all, "editor", id] as const,
+  pageSections: (id: string) =>
+    [...courseKeys.all, "page-sections", id] as const,
   preview: (id: string) => [...courseKeys.all, "preview", id] as const,
   validation: (id: string) => [...courseKeys.all, "validation", id] as const,
   staticPageRefresh: (id: string) =>

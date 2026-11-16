@@ -58,6 +58,8 @@ export function CourseEditorHeader({
                     ? isEditing
                       ? "Update pricing, currency, and sale discounts for this course."
                       : "Set how learners will purchase this course."
+                    : activeStep === "sales-page"
+                      ? "Turn the course page into a sales page: sections, order, and how it shows in search."
                     : activeStep === "extras"
                       ? isEditing
                         ? "Update extra course settings, inclusions, and completion certificate."

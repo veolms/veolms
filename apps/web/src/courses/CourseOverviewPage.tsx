@@ -54,6 +54,7 @@ import {
 import { readCustomAmount } from "./customAmountEntry";
 import { readPastedCouponCode } from "./pastedCouponCode";
 import { formatPlainDescription } from "./overview/formatPlainDescription";
+import { CourseSalesSections } from "./overview/CourseSalesSections";
 import { useCourseWishlisted, useToggleWishlistCourse } from "../wishlist";
 import type { CourseSection } from "../learning/courseContent";
 import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
@@ -1659,6 +1660,8 @@ export interface AdaptedOverviewData {
   includedWith?: CourseOverviewResponse["includedWith"];
   /** The overview's `includedCourses`: the courses that come free with it. */
   includedCourses?: CourseOverviewResponse["includedCourses"];
+  /** The page's ready sections (Sales page step); absent on an old page. */
+  salesPage?: CourseOverviewResponse["salesPage"];
 }
 
 /**
@@ -1788,6 +1791,7 @@ export function adaptCourseOverviewResponse(
     accessValidity: overview.accessValidity,
     includedWith: overview.includedWith,
     includedCourses: overview.includedCourses,
+    salesPage: overview.salesPage,
   };
 }
 
@@ -2723,28 +2727,44 @@ function CourseOverviewContent({
           )}
         </div>
 
-        {/* 3. Course curriculum */}
-        <CourseOverviewCurriculum
-          onEdit={managesCourse ? openEditor("curriculum") : undefined}
-          courseSections={courseSections}
-          openSections={openSections}
-          onToggleSection={toggleSection}
-          onExpandAll={expandAllSections}
-          onCollapseAll={collapseAllSections}
-          onSelectLesson={handleSelectLesson}
-          lessonIntentFor={lessonIntentFor}
-          isReadOnlyPreview={isReadOnlyPreview}
-          isPaidCourse={isPaidCourse}
-          totalSections={totalSections}
-          sectionsComplete={sectionsComplete}
-          onRequestAllSections={onRequestAllSections}
-          includedSectionIds={includedSectionIds}
-        />
-
-        {/* 4. About this course, under the curriculum */}
-        <CourseAboutCard
-          description={activeDescription}
-          onEdit={managesCourse ? openEditor("basics") : undefined}
+        {/* 3. The course's sections in the creator's order, the curriculum
+            and "About this course" among them (Sales page step). */}
+        <CourseSalesSections
+          sections={adaptedFromPreview?.salesPage?.sections}
+          courseTitle={title}
+          onNavigatePage={onNavigatePage}
+          showJoinCall={
+            !managesCourse &&
+            !isEnrolled &&
+            !isReadOnlyPreview &&
+            viewer === "known"
+          }
+          builtIn={{
+            curriculum: (
+              <CourseOverviewCurriculum
+                onEdit={managesCourse ? openEditor("curriculum") : undefined}
+                courseSections={courseSections}
+                openSections={openSections}
+                onToggleSection={toggleSection}
+                onExpandAll={expandAllSections}
+                onCollapseAll={collapseAllSections}
+                onSelectLesson={handleSelectLesson}
+                lessonIntentFor={lessonIntentFor}
+                isReadOnlyPreview={isReadOnlyPreview}
+                isPaidCourse={isPaidCourse}
+                totalSections={totalSections}
+                sectionsComplete={sectionsComplete}
+                onRequestAllSections={onRequestAllSections}
+                includedSectionIds={includedSectionIds}
+              />
+            ),
+            about: (
+              <CourseAboutCard
+                description={activeDescription}
+                onEdit={managesCourse ? openEditor("basics") : undefined}
+              />
+            ),
+          }}
         />
       </div>
     </div>
