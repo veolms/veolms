@@ -6,6 +6,7 @@ import { test } from "node:test";
 
 import {
   ANDROID_NOTIFICATION_CHANNELS,
+  OPTIONAL_NOTIFICATION_GROUPS,
   OPTIONAL_NOTIFICATION_TYPES,
   PUSH_ROUTES,
 } from "@veolms/contracts";
@@ -67,12 +68,16 @@ await test("every pushed type uses a channel the app creates", () => {
   }
 });
 
-await test("every type a user can switch off is pushed, except chat mentions", () => {
+await test("every type a user can switch off is pushed, except chat mentions and the email-only marketing emails", () => {
+  // Marketing emails (the academy's offers and announcements) are email
+  // only: they are in the list so a student can unsubscribe from them.
+  const emailOnly = new Set<string>(OPTIONAL_NOTIFICATION_GROUPS.marketing);
   for (const type of OPTIONAL_NOTIFICATION_TYPES) {
-    if (type === "chat.mentioned") continue;
+    if (type === "chat.mentioned" || emailOnly.has(type)) continue;
     assert.ok(PUSH_ROUTES[type], `${type} has no push route`);
   }
   assert.equal(PUSH_ROUTES["chat.mentioned"], undefined);
+  for (const type of emailOnly) assert.equal(PUSH_ROUTES[type], undefined);
 });
 
 await test("an Android notification names its channel and the 7.x priority", () => {
