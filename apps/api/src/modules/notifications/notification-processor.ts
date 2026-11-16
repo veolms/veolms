@@ -25,6 +25,7 @@ import {
 } from "./notifications.types.ts";
 import type { PushSender, PushSendResult } from "./push/push-sender.ts";
 import { createNotificationService } from "./notifications.service.ts";
+import type { MarketingSender } from "../marketing/marketing-sender.ts";
 
 const emailDeliveryPayloadSchema = z.strictObject({
   subject: z.string().min(1),
@@ -104,6 +105,7 @@ export function createNotificationProcessor({
   calendarInvites,
   push,
   chat,
+  marketing,
 }: {
   /** Builds workshop calendar invitations; without it they are left out. */
   calendarInvites?: NotificationCalendarInviteBuilder;
@@ -127,6 +129,7 @@ export function createNotificationProcessor({
     | "NOTIFICATION_OUTBOX_RETENTION_DAYS"
     | "NOTIFICATION_COURSE_WIDE_EMAIL"
     | "NOTIFICATION_COURSE_WIDE_PUSH"
+    | "MARKETING_EMAILS_PER_CYCLE"
   >;
   handlers: NotificationHandlerDependencies;
   recipients: NotificationRecipientDirectory;
@@ -134,6 +137,11 @@ export function createNotificationProcessor({
   push?: PushSender | null;
   /** Who gets a chat message's push (the chat module's rules). */
   chat?: ChatPushSource;
+  /**
+   * Marketing email, sent after the notices under the same lock; absent,
+   * none is sent.
+   */
+  marketing?: MarketingSender;
 }): NotificationProcessor {
   const service = createNotificationService({
     database,
@@ -341,8 +349,30 @@ export function createNotificationProcessor({
         log.debug("Another process is sending email; skipped this cycle");
         return noEmailWork;
       }
-      return await sendDueEmails();
+      const notices = await sendDueEmails();
+      if (marketing) await sendMarketing();
+      return notices;
     });
+  }
+
+  /**
+   * Never ahead of the notices, and never their problem: a failure here is
+   * logged and tried again next cycle. A throttle rests the bulk lane.
+   */
+  async function sendMarketing() {
+    try {
+      await marketing!.prepare();
+      await marketing!.send({
+        budget: config.MARKETING_EMAILS_PER_CYCLE,
+        isPaused: () => lanePauseEnd("bulk", Date.now()) !== null,
+        pause: (reason) => pauseLane("bulk", Date.now(), reason),
+      });
+    } catch (error) {
+      log.error(
+        { err: error },
+        "Marketing email cycle failed; tried again next cycle",
+      );
+    }
   }
 
   async function sendDueEmails() {
@@ -434,7 +464,7 @@ export function createNotificationProcessor({
               headers: { ...headers, "X-Entity-Ref-ID": delivery.id },
             });
             if (sendResult.status === "failed") throw sendResult.error;
-    
+
             await notificationRepository.markDeliverySent(database, {
               deliveryId: delivery.id,
               providerMessageId:
@@ -449,7 +479,7 @@ export function createNotificationProcessor({
             const message = errorMessage(error);
             const failure = classifyEmailFailure(error);
             const failureTime = new Date();
-    
+
             if (failure.pauseLane) {
               pauseLane(delivery.lane, failureTime.getTime(), failure.reason);
             }
@@ -461,7 +491,7 @@ export function createNotificationProcessor({
                 detail: message,
               });
             }
-    
+
             if (failure.kind === "throttled") {
               await notificationRepository.markDeliveryRetry(database, {
                 deliveryId: delivery.id,

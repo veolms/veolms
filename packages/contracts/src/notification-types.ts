@@ -46,6 +46,8 @@ export const OPTIONAL_NOTIFICATION_GROUPS = {
   // chat itself is the in-app view). Turning it off for `push` silences
   // chat pushes everywhere; each chat can also be muted on its own.
   chat: ["chat.mentioned", "chat.message"],
+  // The academy's own emails: offers, launches, newsletters, automations.
+  marketing: ["marketing.email"],
 } as const;
 
 export type OptionalNotificationGroup =
@@ -111,4 +113,5 @@ export const OPTIONAL_NOTIFICATION_GROUP_LABELS: Readonly<
   purchases: "Purchase and payment emails",
   chat: "Chat",
   workshops: "Workshop invitations and reminders",
+  marketing: "Offers and announcements",
 };

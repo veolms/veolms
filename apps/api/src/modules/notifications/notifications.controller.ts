@@ -17,12 +17,17 @@ import {
   unsubscribeGroupLabel,
 } from "./email-unsubscribe.ts";
 import type { NotificationService } from "./notifications.service.ts";
+import type { DatabaseExecutor } from "@veolms/database";
+import { recordUnsubscribe as recordMarketingUnsubscribeRow } from "../marketing/marketing.repository.ts";
 
 export function createNotificationController({
   service,
   stream,
+  database,
 }: {
   service: NotificationService;
+  /** For counting a marketing email's unsubscribes; absent, they are not counted. */
+  database?: DatabaseExecutor;
   stream: {
     hub: NotificationStreamHub;
     enabled: boolean;
@@ -30,6 +35,13 @@ export function createNotificationController({
   };
 }) {
   const streamHandler = createNotificationStreamHandler(stream);
+
+  async function recordMarketingUnsubscribe(
+    executor: DatabaseExecutor | undefined,
+    key: { emailId: string; userId: string },
+  ) {
+    if (executor) await recordMarketingUnsubscribeRow(executor, key);
+  }
 
   async function streamChanges(request: FastifyRequest, reply: FastifyReply) {
     await streamHandler(request, reply);
@@ -98,10 +110,23 @@ export function createNotificationController({
   }
 
   async function unsubscribe(
-    request: FastifyRequest<{ Params: EmailUnsubscribeParams }>,
+    request: FastifyRequest<{
+      Params: EmailUnsubscribeParams;
+      Querystring: { m?: string | undefined };
+    }>,
     reply: FastifyReply,
   ) {
     const result = await service.unsubscribeByToken(request.params.token);
+    // From a marketing email: its report counts the unsubscribe.
+    const claims = result ? readUnsubscribeToken(request.params.token) : null;
+    if (claims && result?.group === "marketing" && request.query.m) {
+      await recordMarketingUnsubscribe(database, {
+        emailId: request.query.m,
+        userId: claims.userId,
+      }).catch((error: unknown) =>
+        request.log.warn({ err: error }, "Marketing unsubscribe not counted"),
+      );
+    }
     if ((request.headers.accept ?? "").includes("text/html")) {
       // The page's own button: back to the page, which now confirms (or,
       // for a bad link, says so).

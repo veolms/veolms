@@ -207,6 +207,12 @@ export const WorkshopsAccessDenied = lazy(() =>
     default: module.WorkshopsAccessDenied,
   })),
 );
+export const MarketingPage = lazy(() =>
+  import("../marketing/MarketingPage").then((module) => ({
+    default: module.MarketingPage,
+  })),
+);
+
 export const WorkshopsHome = lazy(() =>
   import("../workshops/WorkshopsHome").then((module) => ({
     default: module.WorkshopsHome,

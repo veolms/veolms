@@ -36,6 +36,7 @@ export const NAVIGATION_PERMISSIONS: Readonly<
   ],
   "/team": ["team.read", "role.read"],
   "/support-inbox": ["support.read", "support.manage"],
+  "/marketing": ["marketing.manage"],
 };
 
 /**

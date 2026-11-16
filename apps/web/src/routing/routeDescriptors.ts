@@ -31,6 +31,7 @@ export type ShellPage =
   | "workshop-builder"
   | "workshops-browse"
   | "workshop-detail"
+  | "marketing"
   | "home-page-settings"
   | "platform"
   | "team"
@@ -491,6 +492,35 @@ export const routeDescriptors = {
     title: "Edit workshop",
     description: "Change a workshop's sessions, links and details.",
   },
+  marketing: {
+    kind: "shell",
+    page: "marketing",
+    section: "Marketing",
+    title: "Marketing",
+    description:
+      "Email your students: announcements, offers and automatic follow-ups.",
+  },
+  "marketing-automations": {
+    kind: "shell",
+    page: "marketing",
+    section: "Marketing",
+    title: "Automations",
+    description: "Emails that send themselves at the right moment.",
+  },
+  "marketing-email": {
+    kind: "shell",
+    page: "marketing",
+    section: "Marketing",
+    title: "Email",
+    description: "Write, send and follow one marketing email.",
+  },
+  "marketing-automation": {
+    kind: "shell",
+    page: "marketing",
+    section: "Marketing",
+    title: "Automation",
+    description: "One automatic email: its words, timing and results.",
+  },
   workshops: {
     kind: "shell",
     page: "workshops-browse",
@@ -570,6 +600,10 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "workshop-edit": "/workshops/:workshopId/edit",
   workshops: "/workshops",
   "workshop-detail": "/workshops/:workshopSlug",
+  marketing: "/marketing",
+  "marketing-automations": "/marketing/automations",
+  "marketing-email": "/marketing/emails/:emailId",
+  "marketing-automation": "/marketing/automations/:automationKey",
   "create-course": "/courses/create",
   "edit-course": "/courses/:courseId/edit/basics",
   students: "/students",
@@ -597,6 +631,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   Courses: "/courses",
   "/Courses": "/courses",
   Coupons: "/coupons",
+  Marketing: "/marketing",
   "/Coupons": "/coupons",
   "/coupons": "/coupons",
   "Home Page": "/platform/home",
@@ -637,6 +672,10 @@ const canonicalPathsByRouteId = {
   "workshop-edit": "/workshops/:workshopId/edit",
   workshops: "/workshops",
   "workshop-detail": "/workshops/:workshopSlug",
+  marketing: "/marketing",
+  "marketing-automations": "/marketing/automations",
+  "marketing-email": "/marketing/emails/:emailId",
+  "marketing-automation": "/marketing/automations/:automationKey",
   "course-create": "/courses/create",
   "course-create-tab": "/courses/create/:editTab",
   "course-edit": "/courses/:courseId/edit/:editTab",
@@ -796,6 +835,18 @@ export const getEffectiveRouteId = (
 
   if (routeId === "workshop-detail") {
     return /^\/workshops\/(?!new$)[a-z0-9][a-z0-9-]*$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "marketing-email") {
+    return /^\/marketing\/emails\/[0-9a-f-]{36}$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "marketing-automation") {
+    return /^\/marketing\/automations\/[a-z_]{3,40}$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

@@ -451,6 +451,11 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "Manage links",
         "Create, edit and remove short links on the site's own domain.",
       ),
+      entry(
+        "marketing.manage",
+        "Send marketing emails",
+        "Write and send emails to students, run automations and see their results.",
+      ),
     ],
   },
   {

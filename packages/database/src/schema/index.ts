@@ -17,6 +17,7 @@ export * from "./learning-goals.schema.ts";
 export * from "./home-page.schema.ts";
 export * from "./quotes.schema.ts";
 export * from "./short-links.schema.ts";
+export * from "./marketing.schema.ts";
 export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
@@ -153,6 +154,10 @@ import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
 import type { LegalPageTable } from "./legal-pages.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
 import type { ShortLinkTable } from "./short-links.schema.ts";
+import type {
+  MarketingEmailRecipientTable,
+  MarketingEmailTable,
+} from "./marketing.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
@@ -300,6 +305,8 @@ export interface Database {
   legal_pages: LegalPageTable;
   quotes: QuoteTable;
   short_links: ShortLinkTable;
+  marketing_emails: MarketingEmailTable;
+  marketing_email_recipients: MarketingEmailRecipientTable;
   wishlist_items: WishlistItemTable;
 
   // Support

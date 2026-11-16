@@ -45,6 +45,7 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
   });
   const controller = createNotificationController({
     service,
+    database: options.database,
     stream: {
       hub,
       enabled: config.NOTIFICATION_STREAM_ENABLED,
@@ -283,8 +284,10 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
         summary: "Turn off the emails an unsubscribe link names",
         description:
           "One-click unsubscribe: the body, if any, is ignored. A browser " +
-          "(Accept: text/html) is sent back to the page's confirmation.",
+          "(Accept: text/html) is sent back to the page's confirmation. " +
+          "`?m=` names the marketing email the link came from, for its report.",
         params: emailUnsubscribeParamsSchema,
+        querystring: z.object({ m: z.uuid().optional() }),
         response: {
           200: jsonResponse(
             "Emails of that group are turned off for the person the link names",

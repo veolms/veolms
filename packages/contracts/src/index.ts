@@ -38,5 +38,6 @@ export * from "./dashboard.ts";
 export * from "./support.ts";
 export * from "./workshop.ts";
 export * from "./after-purchase.ts";
+export * from "./marketing.ts";
 export * from "./chat.ts";
 export * from "./legal-pages.ts";

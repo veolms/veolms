@@ -1,4 +1,5 @@
 import { createDatabase } from "@veolms/database";
+import { createMarketingSender } from "../modules/marketing/marketing-sender.ts";
 import { siteSettings } from "@veolms/config";
 import Fastify from "fastify";
 
@@ -55,6 +56,12 @@ try {
   const { storage } = createServices({ config, logger: app.log });
   const processor = createNotificationProcessor({
     database,
+    marketing: createMarketingSender({
+      database,
+      email: email,
+      logger: app.log,
+      config,
+    }),
     email,
     logger: app.log,
     config,

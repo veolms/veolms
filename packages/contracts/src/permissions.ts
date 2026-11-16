@@ -132,6 +132,9 @@ export const permissions = [
 
   // Short links on the site's own domain (Settings > Links).
   "link.manage",
+
+  // Email marketing: broadcasts, automations and their reports.
+  "marketing.manage",
 ] as const;
 
 /** Every key that opens a section of the Analytics page. */

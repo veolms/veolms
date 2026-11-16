@@ -83,6 +83,7 @@ const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
   "notifications",
   "settings",
   "coupons",
+  "marketing",
   "home-page",
   "logout",
   "login",

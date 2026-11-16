@@ -94,7 +94,7 @@ function unsubscribeSecret(): string {
 }
 
 /** Where the API answers, for links that must reach the API itself. */
-function apiBaseUrl(): string {
+export function apiBaseUrl(): string {
   const base =
     config.EMAIL_API_URL ?? new URL("/api", config.WEB_URL).toString();
   return base.replace(/\/+$/, "");

@@ -7,6 +7,7 @@ import { BellRingingIcon as BellRinging } from "@phosphor-icons/react/BellRingin
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { MegaphoneIcon as Megaphone } from "@phosphor-icons/react/Megaphone";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { TrophyIcon as Trophy } from "@phosphor-icons/react/Trophy";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
@@ -31,6 +32,8 @@ const discussionTypes = OPTIONAL_NOTIFICATION_GROUPS.discussions;
 const reminderTypes = OPTIONAL_NOTIFICATION_GROUPS.reminders;
 const achievementTypes = OPTIONAL_NOTIFICATION_GROUPS.achievements;
 const purchaseTypes = OPTIONAL_NOTIFICATION_GROUPS.purchases;
+// The academy's own emails (offers, launches): email only.
+const marketingTypes = OPTIONAL_NOTIFICATION_GROUPS.marketing;
 const channels = ["in_app", "email"] as const;
 
 function preferenceKey(type: string, channel: NotificationChannel): string {
@@ -227,6 +230,18 @@ export function NotificationSettings({
               checked={isGroupEnabled(purchaseTypes)}
               onChange={(enabled) => save(purchaseTypes, channels, enabled)}
               label="Purchases and refunds"
+              disabled={!isAuthenticated || query.isPending || isSaving}
+            />
+          </SettingRow>
+          <SettingRow
+            icon={Megaphone}
+            label="Offers and announcements"
+            note="Emails from the academy about new courses, workshops and offers. Receipts and sign-in codes always arrive."
+          >
+            <SettingsToggle
+              checked={marketingTypes.every((type) => isEnabled(type, "email"))}
+              onChange={(enabled) => save(marketingTypes, ["email"], enabled)}
+              label="Offers and announcements"
               disabled={!isAuthenticated || query.isPending || isSaving}
             />
           </SettingRow>

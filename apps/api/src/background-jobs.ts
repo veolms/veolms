@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { createMarketingSender } from "./modules/marketing/marketing-sender.ts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { config } from "./config.ts";
@@ -542,6 +543,12 @@ function startInlineNotificationLoop(
   const audience = createEnrollmentAudienceService({ database });
   const processor = createNotificationProcessor({
     database,
+    marketing: createMarketingSender({
+      database,
+      email: services.email,
+      logger: app.log,
+      config,
+    }),
     email: services.email,
     logger: app.log,
     config,

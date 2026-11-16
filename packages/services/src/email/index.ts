@@ -34,3 +34,8 @@ export {
   type PurchaseConfirmedEmailInput,
   type PurchaseEmailItem,
 } from "./purchase-email.templates.ts";
+export {
+  marketingBlockLink,
+  marketingEmail,
+  type MarketingEmailInput,
+} from "./marketing-email.templates.ts";

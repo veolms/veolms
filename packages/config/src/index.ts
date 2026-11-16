@@ -534,6 +534,17 @@ const serverConfigSchema = z.object({
     .max(500)
     .default(20),
   /**
+   * Marketing emails (creator-features/34) sent per worker cycle, after the
+   * queued notices and under the same sender lock. 20 every 5 seconds is
+   * ~14,000 an hour; 0 stops marketing sends without losing the queue.
+   */
+  MARKETING_EMAILS_PER_CYCLE: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(500)
+    .default(20),
+  /**
    * How long a lane rests after the provider throttles us or refuses a
    * message for policy, before the worker tries that lane again.
    */

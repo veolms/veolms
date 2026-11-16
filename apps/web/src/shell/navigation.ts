@@ -4,6 +4,7 @@ import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { HouseIcon as House } from "@phosphor-icons/react/House";
 import { LifebuoyIcon as Lifebuoy } from "@phosphor-icons/react/Lifebuoy";
+import { MegaphoneIcon as Megaphone } from "@phosphor-icons/react/Megaphone";
 import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
@@ -114,6 +115,8 @@ const adminNavigation: readonly NavigationItem[] = [
     VideoConference,
     "/workshops",
   ),
+  // Emails to students: broadcasts, automations, their results.
+  createNavigationItem("admin-marketing", "Marketing", Megaphone, "/marketing"),
   // Problems learners report and the feedback they send.
   createNavigationItem("admin-support", "Support", Lifebuoy, "/support-inbox"),
   // Academy-wide settings, the home page among them.

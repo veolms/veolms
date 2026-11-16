@@ -178,6 +178,20 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "workshop-detail",
       caseSensitive: true,
     }),
+    // Email marketing: the lists, one email, one automation.
+    route("marketing", marker, { id: "marketing", caseSensitive: true }),
+    route("marketing/automations", marker, {
+      id: "marketing-automations",
+      caseSensitive: true,
+    }),
+    route("marketing/emails/:emailId", marker, {
+      id: "marketing-email",
+      caseSensitive: true,
+    }),
+    route("marketing/automations/:automationKey", marker, {
+      id: "marketing-automation",
+      caseSensitive: true,
+    }),
     route("logout", marker, { id: "logout", caseSensitive: true }),
     route(":username", marker, {
       id: "public-profile",
