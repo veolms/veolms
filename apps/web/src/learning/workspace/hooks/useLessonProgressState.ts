@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { NextLessonInfo } from "../../player";
 import type { Lesson } from "../../courseContent";
 import { mediaService } from "../../../services/media";
@@ -16,7 +16,11 @@ import {
   useLiveLessonProgressSource,
   type LiveLessonProgress,
 } from "../../player/liveLessonProgress";
-import { seedResumePositionFromProgress } from "../../player/lessonPlayerPersistence";
+import {
+  readResumePosition,
+  seedResumePositionFromProgress,
+} from "../../player/lessonPlayerPersistence";
+import { noteLessonPosition } from "../../lessonPositionOutbox";
 import { LESSON_PROGRESS_COMPLETE_THRESHOLD } from "../workspaceConstants";
 import { isPlaceholderLesson } from "../../staticLessonPage";
 import {
@@ -180,6 +184,42 @@ export function useLessonProgressState({
     return merged;
   }, [localLessonProgress, persistedLessonProgress]);
   const liveLessonProgress = useLiveLessonProgressSource(lessonProgress);
+  // A finished lesson opened again is where the learner carries on, even
+  // left before it played a moment (its video still loading): "Continue"
+  // took them back to the lesson they had stopped at before (a learner
+  // starting the course over, 2026-11-14). Only a lesson played counts as
+  // played last, so opening it is noted as played, at the place it opens
+  // at. At least 1 second: a position of 0 is what a lesson watched to its
+  // end leaves, and from there the server moves on to the next one. Once
+  // per lesson opened, and only for one finished when it was opened (one
+  // finishing while it plays is not opened again).
+  const notedOpenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!progressKept || !progressKnown || !progressCourseKey) return;
+    const durationSeconds =
+      adaptedCurriculum?.lessonsByNumber.get(selectedLesson)?.durationSeconds;
+    if (!durationSeconds || notedOpenRef.current === selectedLesson) return;
+    notedOpenRef.current = selectedLesson;
+    if ((lessonProgress[selectedLesson] ?? 0) < 100) return;
+    noteLessonPosition(
+      progressCourseKey,
+      selectedLesson,
+      Math.max(
+        1,
+        readResumePosition(
+          `${encodeURIComponent(progressCourseKey)}-lesson-${selectedLesson}`,
+          durationSeconds,
+        ),
+      ),
+    );
+  }, [
+    adaptedCurriculum,
+    lessonProgress,
+    progressCourseKey,
+    progressKept,
+    progressKnown,
+    selectedLesson,
+  ]);
   // Every lesson is finished, by the rule that gives a lesson its check mark
   // in the list. The end screen says the course is complete only then.
   const courseComplete = useMemo(

@@ -297,43 +297,27 @@
     box-shadow: none;
   }
 
-  /* The frame's rounded top corners, painted over the page where it is drawn
-     without a graphics card (lib/software-rendering.ts). There Chrome
-     sometimes left the lesson video's corner square: the video is a layer
-     of its own, cut round only by the frame's `overflow: hidden`, and the
-     processor redrawing just the changed part of the screen (the video,
+  /* The lesson video cuts its own top corners at the frame's radius where
+     the page is drawn without a graphics card (lib/software-rendering.ts).
+     There Chrome sometimes left the video's corner square: the video is a
+     layer of its own, cut round only by the frame's `overflow: hidden`, and
+     the processor redrawing just the changed part of the screen (the video,
      every frame) drew it without that cut until a full redraw (a scroll).
-     This box sits outside the frame's clip (fixed, tied to the frame with
-     an anchor), above the page, and paints the shell's own backdrop only
-     outside each round: the corners look the same however the screen is
-     redrawn. Nothing changes where a graphics card draws the page.
-     Plain CSS: a pseudo-element anchored to its own frame, with a two-part
-     mask, under three conditions, is beyond a readable Tailwind class. */
-  @supports (anchor-name: --frame) {
-    :root[data-rendering="software"][data-content-layout="framed"]
-      .courses-main-frame {
-      anchor-name: --veo-main-frame;
-    }
-
-    :root[data-rendering="software"][data-content-layout="framed"]
-      .courses-main-frame::before {
-      content: "";
-      position: fixed;
-      position-anchor: --veo-main-frame;
-      top: anchor(top);
-      left: anchor(left);
-      right: anchor(right);
-      z-index: 47;
-      height: 18px;
-      pointer-events: none;
-      background: var(--shell-backdrop);
-      background-attachment: fixed;
-      mask:
-        radial-gradient(circle at 100% 100%, transparent 17.5px, #000 18.25px)
-          left top / 18px 18px no-repeat,
-        radial-gradient(circle at 0 100%, transparent 17.5px, #000 18.25px)
-          right top / 18px 18px no-repeat;
-    }
+     Cut by its own corners, the video is round however the screen is
+     redrawn. It sits at the frame's top corners whenever they are in
+     sight, so the two rounds are one.
+     This replaces a box that painted the shell's backdrop over the page
+     outside each round (2026-11-14): what lies behind the frame there is
+     not that backdrop alone (the shell's glow is over it), so its colour
+     never matched and it showed as a lighter square around both corners
+     (seen at 112.5% zoom, 2026-11-16).
+     Plain CSS: it replaces the rule above, under the same conditions, and
+     the video's elements are drawn by the player, not by this page. */
+  :root[data-rendering="software"][data-content-layout="framed"]
+    .learning-persistent-player--full
+    :is(.video-shell, .youtube-player, video) {
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
   }
 }
 
