@@ -124,6 +124,25 @@ function worker(email: ScriptedEmail, bulkPerCycle: number) {
 
 const outbox = createOutboxService();
 
+/**
+ * The flow files share one database, and an earlier one can leave
+ * notifications queued (a chat message, a support reply…). They are all
+ * sent first, so a test that counts what one cycle processes counts only
+ * the mail it queued itself.
+ */
+async function sendWhatEarlierFilesQueued() {
+  const processor = worker(new ScriptedEmail(), 1000);
+  for (let cycle = 0; cycle < 50; cycle += 1) {
+    const result = await processor.process();
+    const busy =
+      result.outbox.processed +
+      (result.email?.sent ?? 0) +
+      (result.email?.retried ?? 0);
+    if (busy === 0) return;
+  }
+  assert.fail("mail queued by earlier flow files never finished sending");
+}
+
 /** A daily reminder for the learner: course-wide-style mail, bulk lane. */
 async function queueReminder(userId: string) {
   await flow.database.transaction().execute(async (trx) => {
@@ -185,6 +204,7 @@ async function deliveries(userId: string) {
 
 await test("a learner's receipt goes out before course-wide mail, which is capped per cycle", async () => {
   const { learner, userId } = await signedUpLearner(flow, "lanes");
+  await sendWhatEarlierFilesQueued();
   const email = new ScriptedEmail();
   await queueReminder(userId);
   await queueReminder(userId);
@@ -240,6 +260,7 @@ await test("a learner's receipt goes out before course-wide mail, which is cappe
 await test("a throttling provider pauses the lane; no message is lost or charged an attempt", async () => {
   const learner = await signedUpLearner(flow, "throttle");
   const buyer = await signedUpLearner(flow, "buyer");
+  await sendWhatEarlierFilesQueued();
   const email = new ScriptedEmail();
   // The provider refuses the learner's first (bulk) mail for the day.
   email.failNext(
