@@ -447,7 +447,9 @@ export const Composer = forwardRef<
   return (
     <div
       ref={rootRef}
-      className="relative border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      // One layer at the media preview's height: the info drawer and the
+      // drop overlay still cover it, and its popups sit above the preview.
+      className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
     >
       {replyTo || editing ? (
         <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
@@ -519,7 +521,7 @@ export const Composer = forwardRef<
       ) : null}
 
       {mentionQuery !== null ? (
-        <div className="absolute right-3 bottom-full left-3 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
+        <div className="absolute right-3 bottom-full left-3 z-40 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
           {room.me.canModerate &&
           "everyone".startsWith(mentionQuery.toLowerCase()) ? (
             <MentionOption
@@ -547,7 +549,7 @@ export const Composer = forwardRef<
       {emojiOpen ? (
         <EmojiPanel
           // WhatsApp: the panel spans the chat above the message box.
-          className="absolute inset-x-2 bottom-full mb-2"
+          className="absolute inset-x-2 bottom-full z-40 mb-2"
           onPick={(emoji) => {
             const area = textareaRef.current;
             const start = area?.selectionStart ?? text.length;
