@@ -59,6 +59,7 @@ import { AccessRulesStepPanel } from "./course-editor/AccessRulesStepPanel";
 import { PluginCourseEditorSections } from "./course-editor/PluginCourseEditorSections";
 import { PublishStepPanel } from "./course-editor/PublishStepPanel";
 import { ExtrasStepPanel } from "./course-editor/ExtrasStepPanel";
+import { CourseAfterPurchaseCard } from "./course-editor/CourseAfterPurchaseCard";
 import { BasicsStepPanel } from "./course-editor/BasicsStepPanel";
 import { CurriculumStepPanel } from "./course-editor/CurriculumStepPanel";
 import { CourseEditorHeader } from "./course-editor/CourseEditorHeader";
@@ -1752,6 +1753,9 @@ export function CourseCreatePage({
                   handleDeleteManualInclusion={handleDeleteManualInclusion}
                   handleAddManualInclusion={handleAddManualInclusion}
                 >
+                  {currentCourseId ? (
+                    <CourseAfterPurchaseCard courseId={currentCourseId} />
+                  ) : null}
                   <PluginCourseEditorSections
                     step="extras"
                     courseId={currentCourseId}

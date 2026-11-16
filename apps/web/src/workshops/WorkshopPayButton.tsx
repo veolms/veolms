@@ -8,45 +8,44 @@ import { useCurrentUser } from "../services/auth";
 import { readCheckoutStartError } from "../services/payments/checkoutError";
 import { openGatewayCheckout } from "../services/payments/gateways/gatewayCheckout";
 import {
-  useAwaitPaidOrder,
   useCreateCheckoutOrder,
   useReleaseCheckoutOrder,
   useVerifyPayment,
 } from "../services/payments/payment.mutations";
-import {
-  PAYMENT_BEING_CONFIRMED_MESSAGE,
-  paymentConfirmationDelayedMessage,
-} from "../services/payments/paymentConfirmation";
 import { workshopPublicKeys } from "../services/workshops/workshops.keys";
 import { formatWorkshopPrice } from "./workshopHelpers";
 
 /**
  * Pay for a workshop seat: the same checkout as a quiz pass. The order is
  * created on the server, the gateway's window opens, and once the payment
- * is confirmed the registration appears (fulfilment writes it).
+ * is confirmed the registration appears (fulfilment writes it). Paid, or
+ * taken and still being confirmed, the buyer goes to the order page
+ * (`onPaid`), which waits for the confirmation by itself.
  */
 export function WorkshopPayButton({
   workshop,
-  onRegistered,
+  onPaid,
 }: {
   workshop: WorkshopPublic;
-  onRegistered: () => void;
+  onPaid: (orderId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
   const createOrder = useCreateCheckoutOrder();
   const releaseOrder = useReleaseCheckoutOrder();
   const verify = useVerifyPayment();
-  const awaitPaidOrder = useAwaitPaidOrder();
   const checkoutIntentRef = useRef<{ intent: string; key: string } | null>(
     null,
   );
   const paymentConfirmationRef = useRef<AbortController | null>(null);
+  // An order handed to the order page as paid or being confirmed: the
+  // gateway reporting its window closed afterwards must not release it,
+  // even once this page has gone.
+  const handedOffOrderRef = useRef<string | null>(null);
   useEffect(() => () => paymentConfirmationRef.current?.abort(), []);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const finish = async (orderId: string) => {
     trackAnalyticsEvent("payment_confirmed", {
@@ -55,27 +54,20 @@ export function WorkshopPayButton({
     });
     await queryClient.invalidateQueries({ queryKey: workshopPublicKeys.all });
     setIsProcessing(false);
-    onRegistered();
+    onPaid(orderId);
   };
 
-  /** The gateway took the payment but this page could not confirm it. */
-  const confirmPaidOrder = async (orderId: string) => {
+  /**
+   * The gateway took the payment but this page could not confirm it: the
+   * order page shows it being confirmed and turns to paid by itself.
+   */
+  const confirmPaidOrder = (orderId: string) => {
     paymentConfirmationRef.current?.abort();
-    const confirmation = new AbortController();
-    paymentConfirmationRef.current = confirmation;
-    setErrorMessage(null);
-    setNotice(PAYMENT_BEING_CONFIRMED_MESSAGE);
-    setIsProcessing(true);
-    const paid = await awaitPaidOrder(orderId, confirmation.signal);
-    if (confirmation.signal.aborted) return;
     paymentConfirmationRef.current = null;
-    setNotice(null);
-    if (paid) {
-      await finish(orderId);
-      return;
-    }
+    handedOffOrderRef.current = orderId;
+    setErrorMessage(null);
     setIsProcessing(false);
-    setErrorMessage(paymentConfirmationDelayedMessage("workshop"));
+    onPaid(orderId);
   };
 
   const pay = async () => {
@@ -127,10 +119,11 @@ export function WorkshopPayButton({
               await verify.mutateAsync({ orderId: order.order.id, ...proof });
               await finish(order.order.id);
             } catch {
-              await confirmPaidOrder(order.order.id);
+              confirmPaidOrder(order.order.id);
             }
           },
           onDismissed: () => {
+            if (handedOffOrderRef.current === order.order.id) return;
             const confirmation = paymentConfirmationRef.current;
             if (confirmation && !confirmation.signal.aborted) return;
             trackAnalyticsEvent("payment_result", {
@@ -175,11 +168,6 @@ export function WorkshopPayButton({
         You get an invoice and the usual refund window. The calendar invitation,
         reminders and the Join button follow once you have paid.
       </p>
-      {notice ? (
-        <p className="text-[13px] leading-5 text-(--text)" role="status">
-          {notice}
-        </p>
-      ) : null}
       {errorMessage ? (
         <p className="text-[13px] leading-5 text-rose-500" role="alert">
           {errorMessage}

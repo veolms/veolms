@@ -65,6 +65,7 @@ import {
 import type { LessonIntentFor } from "./overview/CourseOverviewCurriculum";
 import type { NavigateTo } from "../routing/navigation";
 import { getSiteName } from "../site/siteName";
+import { orderConfirmationPath } from "../order-history/orderConfirmationPath";
 import { authStore, useAuthStore } from "../store/auth.store";
 import { LOGIN_DIALOG_PARAM } from "../routing/routeAccess";
 import {
@@ -338,6 +339,10 @@ function CoursePurchaseSection({
   const verify = useVerifyPayment();
   const awaitPaidOrder = useAwaitPaidOrder();
   const paymentConfirmationRef = useRef<AbortController | null>(null);
+  // An order handed to the order page as paid or being confirmed: the
+  // gateway reporting its window closed afterwards must not release it,
+  // even once this page has gone.
+  const handedOffOrderRef = useRef<string | null>(null);
   useEffect(() => () => paymentConfirmationRef.current?.abort(), []);
   // The watch kept on the gateway's window while it is open (see
   // `openGatewayCheckout`).
@@ -670,33 +675,16 @@ function CoursePurchaseSection({
     });
   };
 
-  const confirmPaidOrder = async (orderId: string) => {
+  // The order page shows the payment being confirmed, asks again by itself
+  // and turns to "paid" when it is: the buyer waits there, not here.
+  const confirmPaidOrder = (orderId: string) => {
     paymentConfirmationRef.current?.abort();
-    const confirmation = new AbortController();
-    paymentConfirmationRef.current = confirmation;
-
-    setPaymentError(null);
-    setPaymentNotice(
-      "Payment received. We are confirming your access — this can take a few minutes. Please do not pay again.",
-    );
-    setIsPaymentBusy(true);
-
-    const paid = await awaitPaidOrder(orderId, confirmation.signal);
-    if (confirmation.signal.aborted) return;
     paymentConfirmationRef.current = null;
-
+    handedOffOrderRef.current = orderId;
+    setPaymentError(null);
     setPaymentNotice(null);
     setIsPaymentBusy(false);
-    if (paid) {
-      trackPaidEnrollment(orderId);
-      onNavigatePage?.(
-        `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-      );
-      return;
-    }
-    setPaymentError(
-      "Your payment was received, but confirming it is taking longer than usual. Your course will unlock automatically — check Purchase History in a few minutes. Please do not pay again.",
-    );
+    onNavigatePage?.(orderConfirmationPath(orderId));
   };
 
   /**
@@ -731,9 +719,7 @@ function CoursePurchaseSection({
     if (paid) {
       trackPaidEnrollment(orderId);
       setPaymentError(null);
-      onNavigatePage?.(
-        `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-      );
+      onNavigatePage?.(orderConfirmationPath(orderId));
     }
   };
 
@@ -823,8 +809,12 @@ function CoursePurchaseSection({
           props: { kind: "free", item: "course" },
         });
         setIsPaymentBusy(false);
+        // A free course opens at once; a paid one taken for nothing (a
+        // 100% coupon) was still bought, and its order page says so.
         onNavigatePage?.(
-          `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+          isFree
+            ? `/learn/${encodeURIComponent(getCourseRouteKey(course))}`
+            : orderConfirmationPath(order.order.id),
         );
         return;
       }
@@ -833,7 +823,7 @@ function CoursePurchaseSection({
       // confirmation did not reach this page. Opening the gateway again would
       // invite a second payment for an order that is complete.
       if (order.order.status === "paid") {
-        await confirmPaidOrder(order.order.id);
+        confirmPaidOrder(order.order.id);
         return;
       }
 
@@ -879,20 +869,19 @@ function CoursePurchaseSection({
               await verify.mutateAsync({ orderId: order.order.id, ...proof });
               trackPaidEnrollment(order.order.id);
               setIsPaymentBusy(false);
-              onNavigatePage?.(
-                `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
-              );
+              onNavigatePage?.(orderConfirmationPath(order.order.id));
             } catch {
               // The gateway has taken the payment; only our confirmation
               // call failed. The server still fulfils the order from the
               // gateway webhook or its recovery cycle, so wait for that
               // rather than telling the learner to pay again.
-              await confirmPaidOrder(order.order.id);
+              confirmPaidOrder(order.order.id);
             }
           },
           onDismissed: () => {
             // A payment that went through is being confirmed; the gateway
             // closing its own window afterwards is not a cancellation.
+            if (handedOffOrderRef.current === order.order.id) return;
             const confirmation = paymentConfirmationRef.current;
             if (confirmation && !confirmation.signal.aborted) return;
             trackAnalyticsEvent("payment_result", {

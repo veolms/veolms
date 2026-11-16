@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import {
+  afterPurchaseWelcomeInputSchema,
+  afterPurchaseWelcomeSchema,
+} from "./after-purchase.ts";
+
 /**
  * Workshops: live sessions on Zoom, Google Meet, YouTube Live or any link
  * the host pastes. The platform owns the page, registration, reminders,
@@ -167,6 +172,8 @@ export const workshopAdminSchema = z.strictObject({
   capacity: z.number().int().positive().nullable(),
   resources: z.array(workshopResourceSchema),
   cancelReason: z.string().nullable(),
+  /** What a buyer reads after paying (the order page and email). */
+  welcome: afterPurchaseWelcomeSchema,
   sessions: z.array(workshopSessionAdminSchema),
   registrationCount: z.number().int().nonnegative(),
   publishedAt: z.iso.datetime().nullable(),
@@ -238,6 +245,7 @@ export const createWorkshopRequestSchema = z.strictObject({
   currency: z.string().length(3).optional(),
   capacity: z.number().int().positive().max(100_000).nullable().optional(),
   resources: z.array(workshopResourceSchema).max(20).optional(),
+  welcome: afterPurchaseWelcomeInputSchema.optional(),
   sessions: z.array(workshopSessionInputSchema).max(30).optional(),
 });
 export type CreateWorkshopRequest = z.infer<typeof createWorkshopRequestSchema>;
@@ -255,6 +263,7 @@ export const updateWorkshopRequestSchema = z.strictObject({
   currency: z.string().length(3).optional(),
   capacity: z.number().int().positive().max(100_000).nullable().optional(),
   resources: z.array(workshopResourceSchema).max(20).optional(),
+  welcome: afterPurchaseWelcomeInputSchema.optional(),
   /**
    * The whole set of sessions: ones with an `id` are updated, ones without
    * are added, and sessions missing from the list are removed.

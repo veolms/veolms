@@ -129,6 +129,10 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "purchase-history",
       caseSensitive: true,
     }),
+    route("purchase-history/:orderId", marker, {
+      id: "order-confirmation",
+      caseSensitive: true,
+    }),
     route("notifications", marker, {
       id: "notifications",
       caseSensitive: true,

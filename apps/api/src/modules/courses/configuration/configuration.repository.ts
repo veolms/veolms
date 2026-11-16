@@ -177,6 +177,10 @@ export async function upsertSettings(
     show_instructor_name: boolean;
     language: string;
     estimated_duration: number | null;
+    /** Left out (imports): an existing welcome is kept as it is. */
+    welcome_message?: string | null;
+    welcome_link_label?: string | null;
+    welcome_link_url?: string | null;
     created_at: Date;
     updated_at: Date;
   },
@@ -194,6 +198,13 @@ export async function upsertSettings(
         show_instructor_name: values.show_instructor_name,
         language: values.language,
         estimated_duration: values.estimated_duration,
+        ...(values.welcome_message !== undefined
+          ? {
+              welcome_message: values.welcome_message,
+              welcome_link_label: values.welcome_link_label ?? null,
+              welcome_link_url: values.welcome_link_url ?? null,
+            }
+          : {}),
         updated_at: values.updated_at,
       }),
     )

@@ -6,3 +6,4 @@ export * from "./order-filters.ts";
 export * from "./payment.ts";
 export * from "./pricing-region.ts";
 export * from "./refund.ts";
+export * from "./order-confirmation.ts";

@@ -41,6 +41,7 @@ export type ShellPage =
   | "quiz-attempt"
   | "orders"
   | "purchase-history"
+  | "order-confirmation"
   | "notifications"
   | "analytics"
   | "placeholder"
@@ -329,6 +330,13 @@ export const routeDescriptors = {
     title: "Purchase History",
     description: "Review your academy purchases and payment activity.",
   },
+  "order-confirmation": {
+    kind: "shell",
+    page: "order-confirmation",
+    section: "Purchase History",
+    title: "Your order",
+    description: "Your order: the payment, what it opens, and the receipt.",
+  },
   notifications: {
     kind: "shell",
     page: "notifications",
@@ -584,6 +592,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   settings: "/settings",
   notifications: "/notifications",
   "purchase-history": "/purchase-history",
+  "order-confirmation": "/purchase-history/:orderId",
   logout: "/logout",
   Courses: "/courses",
   "/Courses": "/courses",
@@ -660,6 +669,7 @@ const canonicalPathsByRouteId = {
   orders: "/orders",
   messages: "/messages",
   "purchase-history": "/purchase-history",
+  "order-confirmation": "/purchase-history/:orderId",
   notifications: "/notifications",
   settings: "/settings",
   "settings-profile": "/settings/profile",
@@ -774,6 +784,12 @@ export const getEffectiveRouteId = (
 
   if (routeId === "quiz-edit") {
     return /^\/quizzes\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "order-confirmation") {
+    return /^\/purchase-history\/[0-9a-f-]{36}$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

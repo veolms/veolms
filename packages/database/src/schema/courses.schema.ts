@@ -161,6 +161,11 @@ export interface CourseSettingsTable {
   show_instructor_name: Generated<boolean>;
   language: Generated<string>;
   estimated_duration: number | null;
+  /** Shown to a buyer after paying; `{first_name}` is filled in. */
+  welcome_message: string | null;
+  welcome_link_label: string | null;
+  /** https only. */
+  welcome_link_url: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

@@ -294,6 +294,19 @@ export function createConfigurationService({
       updates.estimatedDuration !== undefined
         ? updates.estimatedDuration
         : (existing?.estimated_duration ?? null);
+    // The welcome is saved whole (message and button together).
+    const welcome =
+      updates.welcome !== undefined
+        ? {
+            welcome_message: updates.welcome.message,
+            welcome_link_label: updates.welcome.linkLabel,
+            welcome_link_url: updates.welcome.linkUrl,
+          }
+        : {
+            welcome_message: existing?.welcome_message ?? null,
+            welcome_link_label: existing?.welcome_link_label ?? null,
+            welcome_link_url: existing?.welcome_link_url ?? null,
+          };
 
     const id = await configRepo.upsertSettings(database, {
       id: existing?.id ?? crypto.randomUUID(),
@@ -306,6 +319,7 @@ export function createConfigurationService({
       show_instructor_name: showInstructorName,
       language,
       estimated_duration: estimatedDuration,
+      ...welcome,
       created_at: existing?.created_at ?? now,
       updated_at: now,
     });
@@ -320,6 +334,7 @@ export function createConfigurationService({
       show_instructor_name: showInstructorName,
       language,
       estimated_duration: estimatedDuration,
+      ...welcome,
     });
   }
 

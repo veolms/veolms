@@ -113,6 +113,8 @@ interface CoursesPageProps {
   couponId?: string;
   workshopId?: string;
   workshopSlug?: string;
+  /** The order page (`/purchase-history/:orderId`). */
+  orderId?: string;
   miniPlayerCourseId?: string | null;
   learningBackground?: {
     courseSlug?: string;
@@ -162,6 +164,7 @@ export function CoursesPage({
   couponId,
   workshopId,
   workshopSlug,
+  orderId,
   miniPlayerCourseId = null,
   learningBackground = null,
   learningOriginSection = null,
@@ -1005,6 +1008,7 @@ export function CoursesPage({
     couponId,
     workshopId,
     workshopSlug,
+    orderId,
     courseSlug,
     discussionTab,
     initialCourseCurriculum,

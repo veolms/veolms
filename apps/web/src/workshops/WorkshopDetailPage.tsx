@@ -31,6 +31,7 @@ import { useAuthStore } from "../store/auth.store";
 import { WorkshopHostAvatar } from "./WorkshopHostAvatar";
 import { WorkshopJoinButton } from "./WorkshopJoinButton";
 import { WorkshopPayButton } from "./WorkshopPayButton";
+import { orderConfirmationPath } from "../order-history/orderConfirmationPath";
 import { WorkshopRecordingPlayer } from "./WorkshopRecordingPlayer";
 import { workshopEditPath } from "./WorkshopsAdminPage";
 import { WORKSHOPS_PATH } from "./WorkshopsPage";
@@ -542,9 +543,8 @@ function ActionPanel({
     return frame(
       <WorkshopPayButton
         workshop={workshop}
-        onRegistered={() =>
-          setNotice?.("You're in. The invitation is on its way to your email.")
-        }
+        // Paid (or being confirmed): the order page takes it from here.
+        onPaid={(orderId) => onNavigatePage?.(orderConfirmationPath(orderId))}
       />,
     );
   }

@@ -139,6 +139,9 @@ export interface NewWorkshopRow {
   currency: string;
   capacity: number | null;
   resources: WorkshopResourceJson[];
+  welcome_message?: string | null;
+  welcome_link_label?: string | null;
+  welcome_link_url?: string | null;
   created_by: string;
 }
 
@@ -167,6 +170,9 @@ export type WorkshopPatch = Partial<
     | "currency"
     | "capacity"
     | "resources"
+    | "welcome_message"
+    | "welcome_link_label"
+    | "welcome_link_url"
   >
 > & {
   status?: WorkshopStatus;

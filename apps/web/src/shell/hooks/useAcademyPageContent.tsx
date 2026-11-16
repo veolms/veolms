@@ -48,6 +48,7 @@ import {
 import {
   OrdersPageRoute,
   OrderHistoryPageRoute,
+  OrderConfirmationPage,
   CreatorDashboard,
   CourseOverviewPage,
   AnalyticsDashboardPage,
@@ -95,6 +96,7 @@ export interface UseAcademyPageContentArgs {
   couponId: string | undefined;
   workshopId: string | undefined;
   workshopSlug: string | undefined;
+  orderId: string | undefined;
   courseSlug: string | undefined;
   discussionTab: string;
   initialCourseCurriculum: CourseCurriculumPreview | undefined;
@@ -233,6 +235,7 @@ export function useAcademyPageContent({
   courseSlug,
   workshopId,
   workshopSlug,
+  orderId,
   discussionTab,
   initialCourseCurriculum,
   initialGuestHomeCopy,
@@ -755,6 +758,16 @@ export function useAcademyPageContent({
           <OrdersPageRoute
             onNavigatePage={onNavigatePage}
             setNotice={setNotice}
+          />
+        </Suspense>
+      );
+    }
+    if (surfacePage === "order-confirmation") {
+      return (
+        <Suspense fallback={<AcademyPageFallback />}>
+          <OrderConfirmationPage
+            orderId={orderId}
+            onNavigatePage={onNavigatePage}
           />
         </Suspense>
       );

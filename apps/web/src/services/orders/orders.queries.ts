@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type {
+  OrderConfirmation,
   AdminOrdersListResponse,
   LearnerOrdersListResponse,
   OrderResponse,
@@ -145,5 +146,32 @@ export function useOrderInvoice(orderId: string | null, view?: OrderView) {
     queryFn: () => ordersService.getInvoice(orderId!, view),
     enabled: Boolean(orderId),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** How often a pending order is asked again, and for how long at most. */
+const CONFIRMATION_POLL_MS = 4000;
+const CONFIRMATION_POLLS = 90; // six minutes
+
+/**
+ * The buyer's order page. While the payment is still being confirmed (a
+ * UPI payment can take a moment) it asks again every few seconds, so the
+ * page turns to "paid" by itself; after six minutes it stops asking and the
+ * page says the email will follow.
+ */
+export function useOrderConfirmation(orderId: string | undefined) {
+  return useQuery<OrderConfirmation, ApiError>({
+    queryKey: orderId
+      ? orderKeys.confirmation(orderId)
+      : ["orders", "confirmation", null],
+    queryFn: () => ordersService.getConfirmation(orderId!),
+    enabled: Boolean(orderId),
+    staleTime: 15 * 1000,
+    retry: (failureCount, error) => error.status !== 404 && failureCount < 2,
+    refetchInterval: (query) =>
+      query.state.data?.state === "pending" &&
+      query.state.dataUpdateCount < CONFIRMATION_POLLS
+        ? CONFIRMATION_POLL_MS
+        : false,
   });
 }

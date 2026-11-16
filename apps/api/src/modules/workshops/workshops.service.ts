@@ -201,6 +201,17 @@ function notFound(): AppError {
   return new AppError(404, "WORKSHOP_NOT_FOUND", "Workshop not found.");
 }
 
+/** The buyer's welcome, saved whole (message and button together). */
+function welcomeColumns(
+  welcome: NonNullable<UpdateWorkshopRequest["welcome"]>,
+) {
+  return {
+    welcome_message: welcome.message,
+    welcome_link_label: welcome.linkLabel,
+    welcome_link_url: welcome.linkUrl,
+  };
+}
+
 export function createWorkshopsService({
   database,
   mediaService,
@@ -364,6 +375,7 @@ export function createWorkshopsService({
         currency: (input.currency ?? WORKSHOP_DEFAULT_CURRENCY).toUpperCase(),
         capacity: input.capacity ?? null,
         resources: input.resources ?? [],
+        ...(input.welcome ? welcomeColumns(input.welcome) : {}),
         created_by: actorUserId,
       });
       if (input.sessions?.length) {
@@ -424,6 +436,8 @@ export function createWorkshopsService({
     }
     if (input.capacity !== undefined) patch.capacity = input.capacity;
     if (input.resources !== undefined) patch.resources = input.resources;
+    if (input.welcome !== undefined)
+      Object.assign(patch, welcomeColumns(input.welcome));
 
     await database.transaction().execute(async (trx) => {
       if (Object.keys(patch).length > 0 || input.sessions) {

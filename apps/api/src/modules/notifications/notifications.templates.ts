@@ -3,7 +3,9 @@ import {
   discussionMentionEmail,
   discussionReplyEmail,
   escapeHtml,
+  purchaseConfirmedEmail,
   type EmailContent,
+  type PurchaseEmailItem,
 } from "@veolms/services/email";
 
 import { siteSettings } from "@veolms/config";
@@ -16,6 +18,7 @@ export const NOTIFICATION_BODY_MAX = 2000;
 import type {
   NotificationTemplateData,
   NotificationTemplateKey,
+  PurchaseItemTemplateData,
 } from "./notifications.types.ts";
 
 /** The academy as its emails show it: its name, and its logo when set. */
@@ -199,6 +202,71 @@ function workshopWhenLabel(data: NotificationTemplateData): string | null {
   } catch {
     return date.toUTCString();
   }
+}
+
+/**
+ * The purchase email with what to open next for each item and the
+ * creator's welcome (`purchaseItems`, set by the payment.completed
+ * handler). Null when the order's items were not looked up: the plain
+ * receipt goes out instead.
+ */
+function purchaseEmail(
+  data: NotificationTemplateData,
+  deepLink: string | null,
+  brand: NotificationEmailBrand,
+): EmailContent | null {
+  const raw = optionalString(data, "purchaseItems");
+  if (!raw) return null;
+  let parsed: PurchaseItemTemplateData[];
+  try {
+    parsed = JSON.parse(raw) as PurchaseItemTemplateData[];
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return null;
+  const items: PurchaseEmailItem[] = parsed.map((item) => {
+    const actionPath =
+      item.kind === "course" && item.courseKey
+        ? `/learn/${encodeURIComponent(item.courseKey)}`
+        : item.kind === "workshop" && item.workshopSlug
+          ? `/workshops/${item.workshopSlug}`
+          : null;
+    return {
+      title: item.title,
+      actionLabel:
+        item.kind === "course"
+          ? "Start learning"
+          : item.kind === "workshop"
+            ? "View workshop"
+            : null,
+      actionUrl: absoluteUrl(actionPath),
+      whenLabel: item.startsAt
+        ? workshopWhenLabel({
+            startsAt: item.startsAt,
+            ...(item.timeZone ? { timeZone: item.timeZone } : {}),
+          })
+        : null,
+      welcomeMessage: item.welcomeMessage ?? null,
+      welcomeLink:
+        item.welcomeLinkLabel && item.welcomeLinkUrl
+          ? { label: item.welcomeLinkLabel, url: item.welcomeLinkUrl }
+          : null,
+    };
+  });
+  const totalAmount = numberValue(data, "totalAmount");
+  return purchaseConfirmedEmail({
+    academyName: brand.name,
+    logoUrl: brand.logoUrl,
+    firstName: optionalString(data, "firstName") ?? "",
+    orderNumber: stringValue(data, "orderNumber"),
+    totalLabel:
+      totalAmount > 0
+        ? formatMoney(totalAmount, { currency: stringValue(data, "currency") })
+        : null,
+    orderUrl: absoluteUrl(deepLink),
+    items,
+    settingsUrl: settingsPageUrl(),
+  });
 }
 
 /**
@@ -656,6 +724,9 @@ export function renderNotificationTemplate(
           ? workshopRegisteredEmail(data, deepLink, brand)
           : templateKey === "workshop.reminder"
             ? workshopReminderEmail(data, deepLink, brand)
-            : emailContent(inApp.title, inApp.body, deepLink, brand),
+            : ((templateKey === "purchase.completed"
+                ? purchaseEmail(data, deepLink, brand)
+                : null) ??
+              emailContent(inApp.title, inApp.body, deepLink, brand)),
   };
 }

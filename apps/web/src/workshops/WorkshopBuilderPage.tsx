@@ -52,11 +52,20 @@ import { WorkshopRecordingField } from "./WorkshopRecordingField";
 import { WorkshopRegistrantsSection } from "./WorkshopRegistrantsSection";
 import { WorkshopSaveStatus } from "./WorkshopSaveStatus";
 import { WorkshopStatusPanel } from "./WorkshopStatusPanel";
+import {
+  AfterPurchaseWelcomeFields,
+  EMPTY_WELCOME_DRAFT,
+  welcomeDraftFrom,
+  welcomeErrors,
+  welcomePayload,
+  type WelcomeDraft,
+} from "../after-purchase/AfterPurchaseWelcomeFields";
 import { WorkshopsAccessDenied } from "./WorkshopsAccessDenied";
 import { WORKSHOPS_ADMIN_PATH, workshopEditPath } from "./WorkshopsAdminPage";
 import {
   browserTimeZone,
   fieldClass,
+  inputClass,
   selectTriggerClass,
   surfaceClass,
 } from "./workshopHelpers";
@@ -196,6 +205,8 @@ interface FormState {
   capacity: string;
   resources: ResourceDraft[];
   sessions: SessionDraft[];
+  /** What a buyer reads after paying (order page and email). */
+  welcome: WelcomeDraft;
 }
 
 function emptyForm(timeZone: string): FormState {
@@ -216,6 +227,7 @@ function emptyForm(timeZone: string): FormState {
     capacity: "",
     resources: [],
     sessions: [newSessionDraft(timeZone)],
+    welcome: EMPTY_WELCOME_DRAFT,
   };
 }
 
@@ -244,6 +256,7 @@ function formFromWorkshop(workshop: WorkshopAdmin): FormState {
       ...resource,
     })),
     sessions: workshop.sessions.map(sessionDraftFromAdmin),
+    welcome: welcomeDraftFrom(workshop.welcome),
   };
 }
 
@@ -313,6 +326,11 @@ function buildPayload(form: FormState): CreateWorkshopRequest | string {
       return "Every link needs a title and an address starting with https://";
     }
   }
+  // A browser draft saved before this field existed has none.
+  const welcome = form.welcome ?? EMPTY_WELCOME_DRAFT;
+  if (Object.keys(welcomeErrors(welcome)).length > 0) {
+    return "After purchase: the button needs its words and a link starting with https://";
+  }
   return {
     title,
     ...(slug ? { slug } : {}),
@@ -326,6 +344,7 @@ function buildPayload(form: FormState): CreateWorkshopRequest | string {
     currency: WORKSHOP_DEFAULT_CURRENCY,
     capacity,
     resources,
+    welcome: welcomePayload(welcome),
     sessions,
   };
 }
@@ -858,6 +877,25 @@ export function WorkshopBuilderPage({
                   </div>
                 ) : null}
               </div>
+            </Section>
+          ) : null}
+
+          {editorTab === "audience" &&
+          form.isPaid &&
+          form.access !== "course" ? (
+            <Section
+              title="After purchase"
+              description="A welcome buyers read on their order page and in the confirmation email, right after paying. Add a button for your WhatsApp or Telegram group."
+            >
+              <AfterPurchaseWelcomeFields
+                idPrefix="workshop-welcome"
+                messagePlaceholder="Hi {first_name}, you have your seat! Join our WhatsApp group for updates before the session."
+                value={form.welcome ?? EMPTY_WELCOME_DRAFT}
+                onChange={(welcome) => patch({ welcome })}
+                disabled={readOnly}
+                inputClassName={`${fieldClass} w-full aria-[invalid=true]:border-rose-500`}
+                textareaClassName={`${inputClass} h-auto! min-h-[104px] w-full resize-y py-2.5 pb-7 aria-[invalid=true]:border-rose-500`}
+              />
             </Section>
           ) : null}
 

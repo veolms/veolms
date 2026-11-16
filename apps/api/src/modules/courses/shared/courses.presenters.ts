@@ -342,6 +342,9 @@ export function presentSettings(
     | "show_instructor_name"
     | "language"
     | "estimated_duration"
+    | "welcome_message"
+    | "welcome_link_label"
+    | "welcome_link_url"
   >,
 ): CourseSettings {
   return {
@@ -354,5 +357,10 @@ export function presentSettings(
     showInstructorName: settings.show_instructor_name,
     language: settings.language,
     estimatedDuration: settings.estimated_duration,
+    welcome: {
+      message: settings.welcome_message,
+      linkLabel: settings.welcome_link_label,
+      linkUrl: settings.welcome_link_url,
+    },
   };
 }

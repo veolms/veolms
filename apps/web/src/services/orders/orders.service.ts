@@ -1,5 +1,6 @@
 import { api, getApiBaseUrl } from "../../lib/api-client";
 import type {
+  OrderConfirmation,
   AdminOrdersListResponse,
   LearnerOrdersListResponse,
   OrderResponse,
@@ -83,6 +84,11 @@ export const ordersService = {
     return api.get<OrderResponse>(`/orders/${orderId}`, {
       params: view ? { view } : undefined,
     });
+  },
+
+  /** The buyer's order page: the payment's state, what each item opens. */
+  getConfirmation: (orderId: string): Promise<OrderConfirmation> => {
+    return api.get<OrderConfirmation>(`/orders/${orderId}/confirmation`);
   },
 
   getInvoice: (orderId: string, view?: OrderView): Promise<Invoice> => {

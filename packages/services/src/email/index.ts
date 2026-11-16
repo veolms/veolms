@@ -29,3 +29,8 @@ export {
   type DiscussionMentionEmailInput,
   type DiscussionReplyEmailInput,
 } from "./discussion-email.templates.ts";
+export {
+  purchaseConfirmedEmail,
+  type PurchaseConfirmedEmailInput,
+  type PurchaseEmailItem,
+} from "./purchase-email.templates.ts";

@@ -34,11 +34,13 @@ import {
   workshopAnnouncedEventSchema,
   emailUnsubscribedEventSchema,
 } from "../../events/domain-event.schemas.ts";
+import type { OrderConfirmationItem } from "@veolms/contracts";
 import type { Json } from "@veolms/database";
 
 import type {
   NotificationHandlerDependencies,
   NotificationIntent,
+  PurchaseItemTemplateData,
 } from "./notifications.types.ts";
 
 export class UnknownNotificationEventError extends Error {
@@ -54,6 +56,36 @@ type NotificationHandler = (
 ) => Promise<NotificationIntent[]>;
 
 const commonChannels = ["in_app", "email"] as const;
+
+/** What the purchase email needs of one item on the order page. */
+function purchaseEmailItem(
+  item: OrderConfirmationItem,
+): PurchaseItemTemplateData {
+  const welcome = item.welcome;
+  return {
+    title: item.title,
+    kind: item.next.kind,
+    ...(item.next.kind === "course" ? { courseKey: item.next.courseKey } : {}),
+    ...(item.next.kind === "workshop"
+      ? {
+          workshopSlug: item.next.workshopSlug,
+          ...(item.next.nextSession
+            ? {
+                startsAt: item.next.nextSession.startsAt,
+                timeZone: item.next.nextSession.timeZone,
+              }
+            : {}),
+        }
+      : {}),
+    ...(welcome?.message ? { welcomeMessage: welcome.message } : {}),
+    ...(welcome?.link
+      ? {
+          welcomeLinkLabel: welcome.link.label,
+          welcomeLinkUrl: welcome.link.url,
+        }
+      : {}),
+  };
+}
 
 // Notifications sent to everyone in a course can be kept off email
 // (NOTIFICATION_COURSE_WIDE_EMAIL), so one event cannot mail thousands at once.
@@ -97,8 +129,13 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       deepLink: `/courses/${event.courseSlug}`,
     }));
   },
-  "payment.completed": async (payload) => {
+  "payment.completed": async (payload, dependencies) => {
     const event = paymentCompletedEventSchema.parse(payload);
+    // What each item opens and the creator's welcome, for the email. A
+    // lookup that fails still sends the plain receipt.
+    const purchase = await dependencies
+      .getPurchaseConfirmation?.(event.recipientUserId, event.orderId)
+      .catch(() => null);
     return [
       {
         recipientUserId: event.recipientUserId,
@@ -110,10 +147,20 @@ const notificationHandlers: Record<string, NotificationHandler> = {
           totalAmount: event.totalAmount,
           currency: event.currency,
           itemTitles: event.itemTitles,
+          orderId: event.orderId,
+          ...(purchase
+            ? {
+                firstName: purchase.firstName,
+                purchaseItems: JSON.stringify(
+                  purchase.confirmation.items.map(purchaseEmailItem),
+                ),
+              }
+            : {}),
         },
         channels: commonChannels,
         mandatory: false,
-        deepLink: "/orders",
+        // The buyer's order page: what to open next, the receipt, invoice.
+        deepLink: `/purchase-history/${event.orderId}`,
         // The purchase email carries the order's invoice.
         emailAttachments: [{ kind: "order-invoice", orderId: event.orderId }],
       },

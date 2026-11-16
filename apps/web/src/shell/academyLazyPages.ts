@@ -212,6 +212,12 @@ export const WorkshopsHome = lazy(() =>
     default: module.WorkshopsHome,
   })),
 );
+export const OrderConfirmationPage = lazy(() =>
+  import("../order-history/OrderConfirmationPage").then((module) => ({
+    default: module.OrderConfirmationPage,
+  })),
+);
+
 export const WorkshopDetailPage = lazy(() =>
   import("../workshops/WorkshopDetailPage").then((module) => ({
     default: module.WorkshopDetailPage,

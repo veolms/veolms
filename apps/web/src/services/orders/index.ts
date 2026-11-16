@@ -9,6 +9,7 @@ export {
   useOrder,
   useFetchOrder,
   useOrderInvoice,
+  useOrderConfirmation,
 } from "./orders.queries";
 export {
   useRefundOrder,

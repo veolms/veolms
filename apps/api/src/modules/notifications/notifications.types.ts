@@ -1,4 +1,5 @@
 import type {
+  OrderConfirmation,
   NotificationCategory,
   NotificationChannel,
 } from "@veolms/contracts";
@@ -41,6 +42,22 @@ export type NotificationTemplateKey =
   | "workshop.updated"
   | "workshop.announced"
   | "email.unsubscribed";
+
+/**
+ * One bought item as the purchase email shows it (stored as JSON in the
+ * notification's `purchaseItems`).
+ */
+export interface PurchaseItemTemplateData {
+  title: string;
+  kind: "course" | "workshop" | "none";
+  courseKey?: string;
+  workshopSlug?: string;
+  startsAt?: string;
+  timeZone?: string;
+  welcomeMessage?: string;
+  welcomeLinkLabel?: string;
+  welcomeLinkUrl?: string;
+}
 
 export type NotificationTemplateData = Record<
   string,
@@ -116,6 +133,14 @@ export interface NotificationHandlerDependencies {
   listAllLearnerUserIds?(): Promise<string[]>;
   /** Team members whose roles grant this permission across the platform. */
   listPermissionHolderUserIds?(permissionKey: string): Promise<string[]>;
+  /**
+   * The buyer's order page (what each item opens, the creator's welcome),
+   * for the purchase email; see order-confirmation.service.
+   */
+  getPurchaseConfirmation?(
+    userId: string,
+    orderId: string,
+  ): Promise<{ confirmation: OrderConfirmation; firstName: string } | null>;
 }
 
 /** A chat message to push, with who should get it (from the chat module). */

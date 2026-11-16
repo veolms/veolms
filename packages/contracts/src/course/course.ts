@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  afterPurchaseWelcomeInputSchema,
+  afterPurchaseWelcomeSchema,
+} from "../after-purchase.ts";
 import { mediaAssetStatusSchema } from "../media.ts";
 import {
   lessonContentSchema,
@@ -372,6 +376,8 @@ export const courseSettingsSchema = z.object({
   showInstructorName: z.boolean().default(true),
   language: z.string(),
   estimatedDuration: z.number().int().positive().nullable().optional(),
+  /** What a buyer reads after paying (the order page and email). */
+  welcome: afterPurchaseWelcomeSchema.optional(),
 });
 
 export const updateCourseSettingsRequestSchema = z.object({
@@ -383,6 +389,7 @@ export const updateCourseSettingsRequestSchema = z.object({
   showInstructorName: z.boolean().optional(),
   language: z.string().optional(),
   estimatedDuration: z.number().int().positive().nullable().optional(),
+  welcome: afterPurchaseWelcomeInputSchema.optional(),
 });
 
 export type CourseSettings = z.infer<typeof courseSettingsSchema>;

@@ -33,6 +33,11 @@ export interface WorkshopTable {
   capacity: number | null;
   resources: JSONColumnType<WorkshopResourceJson[]>;
   cancel_reason: string | null;
+  /** Shown to a buyer after paying; `{first_name}` is filled in. */
+  welcome_message: string | null;
+  welcome_link_label: string | null;
+  /** https only. */
+  welcome_link_url: string | null;
   created_by: string;
   published_at: Date | null;
   cancelled_at: Date | null;

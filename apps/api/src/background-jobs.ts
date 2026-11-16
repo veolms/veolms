@@ -45,6 +45,7 @@ import {
   createInvoiceService,
   invoiceStorage,
 } from "./modules/commerce/invoices/invoice.service.ts";
+import { createOrderConfirmationService } from "./modules/commerce/orders/order-confirmation.service.ts";
 import { createInvoiceAttachmentResolver } from "./modules/commerce/invoices/invoice-email-attachment.ts";
 import { getCacheStats, runBackgroundPass } from "@veolms/api-core";
 import { getDatabasePoolMetrics } from "@veolms/database";
@@ -574,6 +575,11 @@ function startInlineNotificationLoop(
       listAllLearnerUserIds: () => listAllLearnerUserIds(database),
       listPermissionHolderUserIds: (permissionKey) =>
         listPlatformPermissionHolderIds(database, permissionKey),
+      getPurchaseConfirmation: (userId, orderId) =>
+        createOrderConfirmationService({ database }).getForEmail(
+          userId,
+          orderId,
+        ),
     },
     recipients: {
       findRecipient: async (userId) => {

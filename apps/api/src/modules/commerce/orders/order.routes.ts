@@ -12,9 +12,10 @@ import {
   needsRefundListResponseSchema,
   orderCourseOptionsResponseSchema,
   ordersExportQuerySchema,
+  orderConfirmationSchema,
 } from "@veolms/contracts";
 import { jsonResponse } from "../../../lib/responses.ts";
-import { errorResponse } from "../../../lib/errors.ts";
+import { errorResponse, httpError } from "../../../lib/errors.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
 import { createCommerceContext } from "../shared/commerce.context.ts";
 import { createOrderService } from "./order.service.ts";
@@ -27,6 +28,7 @@ import { createRefundService } from "../refunds/refund.service.ts";
 import { createAuthorizationService } from "../../authorization/authorization.service.ts";
 import { createCourseService } from "../../courses/index.ts";
 import { createOrderController } from "./order.controller.ts";
+import { createOrderConfirmationService } from "./order-confirmation.service.ts";
 
 const orderRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
@@ -290,6 +292,36 @@ const orderRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.refundOrder,
+  );
+  // GET /orders/:orderId/confirmation - The buyer's order page after paying
+  const confirmationService = createOrderConfirmationService({
+    database: options.database,
+  });
+  app.get(
+    "/orders/:orderId/confirmation",
+    {
+      preHandler: ctx.requireAuthenticated,
+      schema: {
+        operationId: "getOrderConfirmation",
+        tags: ["Commerce - Orders"],
+        summary: "Get the buyer's order confirmation",
+        description:
+          "What the order page shows its buyer right after paying, and whenever they come back to it: the payment's state (paid, free, pending, failed or refunded), what each item opens (a course, or a workshop with its next session), the creator's welcome with the buyer's name filled in, the receipt amounts and where the confirmation email went (partly hidden). Only the order's buyer can read it; anyone else gets 404.",
+        params: z.object({ orderId: z.string().uuid() }),
+        response: {
+          200: jsonResponse("Order confirmation", orderConfirmationSchema),
+          401: errorResponse("Unauthorized"),
+          404: errorResponse("Order not found"),
+        },
+      },
+    },
+    async (request) => {
+      const user = request.user;
+      if (!user)
+        throw httpError(401, "UNAUTHORIZED", "Authentication required");
+      const { orderId } = request.params as { orderId: string };
+      return await confirmationService.getConfirmation(user.id, orderId);
+    },
   );
 };
 

@@ -17,4 +17,5 @@ export const orderKeys = {
     [...orderKeys.all, "detail", id, view] as const,
   invoice: (id: string, view?: OrderView) =>
     [...orderKeys.all, "invoice", id, view] as const,
+  confirmation: (id: string) => [...orderKeys.all, "confirmation", id] as const,
 };

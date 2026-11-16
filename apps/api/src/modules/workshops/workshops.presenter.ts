@@ -78,6 +78,11 @@ export function presentWorkshopAdmin(
     capacity: row.capacity,
     resources: row.resources ?? [],
     cancelReason: row.cancel_reason,
+    welcome: {
+      message: row.welcome_message,
+      linkLabel: row.welcome_link_label,
+      linkUrl: row.welcome_link_url,
+    },
     sessions,
     registrationCount: Number(row.registration_count),
     publishedAt: isoOrNull(row.published_at),

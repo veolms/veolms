@@ -407,6 +407,7 @@ export default function AcademyLayout() {
     couponId,
     workshopId,
     workshopSlug,
+    orderId,
   } = useParams();
   const applicationScrollPositionsRef = useRef(
     new Map<string, ApplicationScrollRestorationEntry>(),
@@ -2081,6 +2082,7 @@ export default function AcademyLayout() {
           couponId={couponId}
           workshopId={workshopId}
           workshopSlug={workshopSlug}
+          orderId={orderId}
           miniPlayerCourseId={resolveMiniPlayerCourseId({
             presentation: playerPresentation,
             persistentCourseRouteKey: persistentPlayer?.courseRouteKey,
