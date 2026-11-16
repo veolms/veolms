@@ -109,6 +109,21 @@ export function listNotificationRecipientsByIds(
     .execute();
 }
 
+/** Which of these (lower-case) usernames belong to members. */
+export async function listExistingUsernames(
+  database: Executor,
+  usernames: readonly string[],
+): Promise<string[]> {
+  if (usernames.length === 0) return [];
+  const rows = await database
+    .selectFrom("users")
+    .select("username")
+    .where("username", "in", [...usernames])
+    .where("is_deleted", "=", false)
+    .execute();
+  return rows.flatMap((row) => (row.username ? [row.username] : []));
+}
+
 export function findPublicProfileByUsername(
   database: Executor,
   username: string,
