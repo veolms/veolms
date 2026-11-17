@@ -795,13 +795,6 @@ export function CoursesPage({
     setEdgeSidebarOpen(false);
     dismissMobileMenuThen(() => onNavigatePage("/notifications"));
   };
-  // Reading mode's switch, at the top of the settings (gear) menu.
-  const settingsMenuReadingMode = (mobile: boolean) => ({
-    enabled: readingModeEnabled,
-    onToggle: () => updateReadingMode({ enabled: !readingModeEnabled }),
-    onOpenSettings: () => showReadingModeMenu(mobile),
-  });
-
   const {
     previewAcademyTheme,
     confirmDesktopPaletteTheme,
@@ -1336,7 +1329,6 @@ export function CoursesPage({
                         : null
                     }
                     onNavigate={navigateSettingsQuickMenu}
-                    readingMode={settingsMenuReadingMode(false)}
                     showSignedInTabs={isAuthenticated}
                   />
                 </Suspense>
@@ -1480,7 +1472,6 @@ export function CoursesPage({
                             : null
                         }
                         onNavigate={navigateSettingsQuickMenu}
-                        readingMode={settingsMenuReadingMode(true)}
                         showSignedInTabs={isAuthenticated}
                       />
                     </Suspense>
