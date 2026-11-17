@@ -79,6 +79,14 @@ export function SidebarBrand({
   const logoImages = useSiteLogoImages();
   const { iconUrl } = useSiteBrandAssets();
   const buildArtwork = useBuildArtworkIsOurs();
+  // A long academy name steps down in size, then ends in "…" inside the
+  // logo's window (the full name is its accessible name and tooltip).
+  const nameSize =
+    siteName.length > 18
+      ? "text-[1rem]"
+      : siteName.length > 12
+        ? "text-[1.15rem]"
+        : "text-[1.35rem]";
   // The build's own wordmark, cut to its P in the compact rail, until the
   // academy uploads artwork of its own (or the build has none).
   const ownArtwork = logoImages !== null || iconUrl !== null || !buildArtwork;
@@ -107,8 +115,8 @@ export function SidebarBrand({
           <span className="courses-logo-clip__wordmark">
             <SiteWordmark
               decorative
-              className="h-full max-w-full"
-              nameClassName="text-[1.35rem] leading-none"
+              className="h-full max-w-37"
+              nameClassName={`${nameSize} leading-none`}
             />
           </span>
           <span className="courses-logo-clip__icon">
