@@ -1,3 +1,5 @@
+// The shared dropdown (country picker) styles; the academy layout loads them elsewhere.
+import "../styles/shell/controls.css";
 // The login card's own parts (method switch, country picker) are styled here.
 import "../auth/auth.css";
 import "../onboarding/onboarding.css";
