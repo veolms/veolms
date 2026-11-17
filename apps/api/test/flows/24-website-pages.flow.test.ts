@@ -2,13 +2,15 @@
  * Website pages (creator-features/40): an administrator adds a page from a
  * template, edits its draft (autosaved, with a guard against two tabs),
  * publishes it, changes it again, rolls back, switches the theme and takes
- * it down. Visitors read only the live page, as plain HTML with no script.
+ * it down. Visitors read only the live page, as plain HTML whose only
+ * script is the motion one, allowed by its hash.
  * Learners and visitors cannot change anything.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { grantPlatformRole } from "@veolms/database";
+import { MOTION_SCRIPT } from "@veolms/site-render";
 
 import { SYSTEM_ROLES } from "../../../../packages/database/src/seed/rbac.ts";
 import {
@@ -239,7 +241,16 @@ test("publishing makes the page live as plain HTML with its courses", async () =
     String(live.headers["content-security-policy"]),
     /default-src 'none'/u,
   );
-  assert.ok(!/<script/iu.test(live.html), "no script on the page");
+  assert.equal(
+    live.html.match(/<script/giu)?.length,
+    1,
+    "only the motion script",
+  );
+  assert.ok(live.html.includes(`<script>${MOTION_SCRIPT}</script>`));
+  assert.match(
+    String(live.headers["content-security-policy"]),
+    /script-src 'sha256-[A-Za-z0-9+/=]+'/u,
+  );
   // The creator's words are escaped, never markup.
   assert.ok(live.html.includes("Learn &lt;fast&gt; &amp; well"));
   // The published course shows with its price; the draft course doesn't.

@@ -4,17 +4,22 @@ import type {
   SiteLook,
   UpdateSitePageRequest,
 } from "@veolms/contracts";
+import { createHash } from "node:crypto";
+
+import { MOTION_SCRIPT } from "@veolms/site-render";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { SiteService } from "./site.service.ts";
 
 type PageRequest = FastifyRequest<{ Params: { pageId: string } }>;
 
 /**
- * A live page may load nothing but its own inline styles and images: no
- * script runs, no form posts, and other sites can't frame it.
+ * A live page may load nothing but its own inline styles and images, and
+ * run only our motion script (allowed by its hash, so no other script can
+ * run): no form posts, and other sites can't frame it.
  */
 export const LIVE_PAGE_CSP = [
   "default-src 'none'",
+  `script-src 'sha256-${createHash("sha256").update(MOTION_SCRIPT).digest("base64")}'`,
   "style-src 'unsafe-inline'",
   "img-src 'self' https: data:",
   "base-uri 'none'",

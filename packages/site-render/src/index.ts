@@ -86,6 +86,13 @@ export function siteCss(
     .replace(/\n{2,}/gu, "\n");
 }
 
+/**
+ * The motion script's tag, byte for byte: the live page's security policy
+ * allows it by its hash. Kept out of the `html` template so formatting can
+ * never add a space inside it.
+ */
+const MOTION_TAG = raw("<script>" + MOTION_SCRIPT + "</script>");
+
 export interface RenderedSitePage {
   html: string;
   /** Course ids the page shows, to re-render it when one changes. */
@@ -152,14 +159,7 @@ export function renderSitePage(input: {
       </head>
       <body class="vp-site" ${raw(attributes)}>
         <main>${body}</main>
-        ${footers}
-        ${
-          motionLevel(look) === "off"
-            ? null
-            : html`<script>
-                ${raw(MOTION_SCRIPT)};
-              </script>`
-        }
+        ${footers} ${motionLevel(look) === "off" ? null : MOTION_TAG}
       </body>
     </html>`;
   return { html: page.value, courseIds: [...courseIds] };
