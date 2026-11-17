@@ -4,6 +4,7 @@ import { SpeakerHighIcon as SpeakerHigh } from "@phosphor-icons/react/SpeakerHig
 import { SpeakerSlashIcon as SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import veolmsMarkSvg from "../assets/veolms-mark.svg?raw";
 import { cn } from "../lib/utils";
 import { initialsOf } from "./academyNames";
 
@@ -28,26 +29,24 @@ export const stageGhostClasses = cn(
   stageFocusClasses,
 );
 
-/** The VeoLMS mark: a placeholder "V" until the logo is designed. */
+/**
+ * The VeoLMS logo as veolms.org shows it: the mark, "Veo" in the text
+ * colour and "LMS" in the brand's neon.
+ */
 export function VeoMark() {
   return (
     <span
-      className="inline-flex items-center gap-2 text-[17px] font-extrabold tracking-[-0.03em] text-(--text)"
+      className="inline-flex items-center gap-1 text-[18px] font-bold tracking-[-0.03em] text-(--text)"
       aria-label="VeoLMS"
       role="img"
     >
-      <span className="grid size-6 place-items-center rounded-[7px] bg-(--text) text-(--canvas)">
-        <svg
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          aria-hidden="true"
-          className="size-3.25"
-        >
-          <path d="M3.2 4.5h4.1l4.7 10.6 4.7-10.6h4.1L13.9 20.2h-3.8z" />
-        </svg>
-      </span>
+      <span
+        aria-hidden="true"
+        className="block size-7 [&_svg]:size-full"
+        dangerouslySetInnerHTML={{ __html: veolmsMarkSvg }}
+      />
       <span aria-hidden="true">
-        Veo<b className="font-extrabold text-(--muted)">LMS</b>
+        Veo<b className="font-bold text-[#d9ff00]">LMS</b>
       </span>
     </span>
   );
