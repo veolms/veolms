@@ -2,7 +2,7 @@ import { useState } from "react";
 import logoDarkSvg from "../assets/procodrr-logo-dark.svg?raw";
 import builtInIconUrl from "../assets/procodrr-logo-mark.svg";
 import { cn } from "../lib/utils";
-import { BUILD_HAS_OWN_ARTWORK, useSiteBrandAssets } from "./siteBrand";
+import { useBuildArtworkIsOurs, useSiteBrandAssets } from "./siteBrand";
 import { useSiteName } from "./siteName";
 
 /** The build's own wordmark, drawn in the text colour of where it sits. */
@@ -59,6 +59,7 @@ export function SiteWordmark({
 }) {
   const name = useSiteName();
   const images = useSiteLogoImages();
+  const buildArtwork = useBuildArtworkIsOurs();
   // An address that failed to load: the fallback shows instead.
   const [failed, setFailed] = useState<string | null>(null);
   const usable =
@@ -99,7 +100,7 @@ export function SiteWordmark({
     );
   }
 
-  if (BUILD_HAS_OWN_ARTWORK) {
+  if (buildArtwork) {
     return (
       <span
         className={cn(
@@ -132,6 +133,7 @@ export function SiteWordmark({
 export function SiteIcon({ className }: { className?: string }) {
   const name = useSiteName();
   const { iconUrl } = useSiteBrandAssets();
+  const buildArtwork = useBuildArtworkIsOurs();
   const [failed, setFailed] = useState<string | null>(null);
 
   if (iconUrl && failed !== iconUrl) {
@@ -146,7 +148,7 @@ export function SiteIcon({ className }: { className?: string }) {
     );
   }
 
-  if (BUILD_HAS_OWN_ARTWORK) {
+  if (buildArtwork) {
     return (
       <img
         alt=""

@@ -11,7 +11,7 @@ import {
   useRemoveBrandAsset,
   useUploadBrandAsset,
 } from "../services/platform";
-import { BUILD_HAS_OWN_ARTWORK } from "../site/siteBrand";
+import { useBuildArtworkIsOurs } from "../site/siteBrand";
 import {
   builtInIconUrl,
   builtInWordmarkSvg,
@@ -32,13 +32,14 @@ export function WebsiteBrandSection({
 }) {
   const settingsQuery = usePlatformSettings();
   const branding = settingsQuery.data?.settings.branding;
+  const buildArtwork = useBuildArtworkIsOurs();
 
   return (
     <SettingsSection
       id="website-brand-heading"
       title="Website logo and icon"
       description={`Shown across your academy's website: the sidebar, sign-in, legal pages, loading screens and the browser tab. Without them, the site shows ${
-        BUILD_HAS_OWN_ARTWORK ? "its built-in logo" : "your academy's name"
+        buildArtwork ? "its built-in logo" : "your academy's name"
       }.`}
     >
       {settingsQuery.isLoading ? (
@@ -70,6 +71,7 @@ function WebsiteBrandFields({
   setNotice?: (message: string) => void;
 }) {
   const name = useSiteName();
+  const buildArtwork = useBuildArtworkIsOurs();
   const uploadLight = useUploadBrandAsset("logo-light");
   const removeLight = useRemoveBrandAsset("logo-light");
   const uploadDark = useUploadBrandAsset("logo-dark");
@@ -84,7 +86,7 @@ function WebsiteBrandFields({
   ) =>
     otherLogo ? (
       <img alt={name} className="block h-8 w-auto max-w-60" src={otherLogo} />
-    ) : BUILD_HAS_OWN_ARTWORK ? (
+    ) : buildArtwork ? (
       <span
         aria-hidden="true"
         className={`inline-flex h-8 [&_svg]:h-full [&_svg]:w-auto ${
@@ -153,7 +155,7 @@ function WebsiteBrandFields({
         shape="square"
         noun="icon"
         fallback={
-          BUILD_HAS_OWN_ARTWORK ? (
+          buildArtwork ? (
             <img
               alt=""
               className="block size-12 object-contain"

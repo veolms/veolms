@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import builtInIconUrl from "../assets/procodrr-logo-mark.svg";
 import { usePublicPlatformSettings } from "../services/platform";
 import {
-  BUILD_HAS_OWN_ARTWORK,
+  useBuildArtworkIsOurs,
   setSiteBrandAssets,
   useSiteBrandAssets,
 } from "./siteBrand";
@@ -61,16 +61,17 @@ function useSiteIconLinks(): {
 } {
   const { iconUrl } = useSiteBrandAssets();
   const name = useSiteName();
+  const buildArtwork = useBuildArtworkIsOurs();
   // Worked out in the browser: it reads the theme's colours.
   const [letterIcon, setLetterIcon] = useState<string | null>(null);
 
   useEffect(() => {
-    if (iconUrl || BUILD_HAS_OWN_ARTWORK) return;
+    if (iconUrl || buildArtwork) return;
     setLetterIcon(letterIconUrl(name));
-  }, [iconUrl, name]);
+  }, [iconUrl, name, buildArtwork]);
 
   if (iconUrl) return { icon: { href: iconUrl }, touchIcon: iconUrl };
-  if (!BUILD_HAS_OWN_ARTWORK && letterIcon) {
+  if (!buildArtwork && letterIcon) {
     return {
       icon: { href: letterIcon, type: "image/svg+xml" },
       touchIcon: letterIcon,

@@ -3,7 +3,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { BUILD_HAS_OWN_ARTWORK, useSiteBrandAssets } from "../site/siteBrand";
+import { useBuildArtworkIsOurs, useSiteBrandAssets } from "../site/siteBrand";
 import { SiteIcon, SiteWordmark, useSiteLogoImages } from "../site/SiteLogo";
 import { useSiteName } from "../site/siteName";
 import { SidebarToggleIcon } from "./SidebarToggleIcon";
@@ -78,10 +78,10 @@ export function SidebarBrand({
   const siteName = useSiteName();
   const logoImages = useSiteLogoImages();
   const { iconUrl } = useSiteBrandAssets();
+  const buildArtwork = useBuildArtworkIsOurs();
   // The build's own wordmark, cut to its P in the compact rail, until the
   // academy uploads artwork of its own (or the build has none).
-  const ownArtwork =
-    logoImages !== null || iconUrl !== null || !BUILD_HAS_OWN_ARTWORK;
+  const ownArtwork = logoImages !== null || iconUrl !== null || !buildArtwork;
   const logoProps = {
     "data-sidebar-resize-reader": "",
     role: "img",

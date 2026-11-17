@@ -3,7 +3,7 @@ import {
   SiteWordmark,
   useSiteLogoImages,
 } from "../site/SiteLogo";
-import { BUILD_HAS_OWN_ARTWORK } from "../site/siteBrand";
+import { useBuildArtworkIsOurs } from "../site/siteBrand";
 
 const DEFAULT_CLASS_NAME = "auth-card__brand";
 
@@ -19,8 +19,9 @@ export function AuthBrandMark({
   className = DEFAULT_CLASS_NAME,
 }: AuthBrandMarkProps) {
   const images = useSiteLogoImages();
+  const buildArtwork = useBuildArtworkIsOurs();
 
-  if (images || !BUILD_HAS_OWN_ARTWORK) {
+  if (images || !buildArtwork) {
     return (
       <SiteWordmark
         decorative

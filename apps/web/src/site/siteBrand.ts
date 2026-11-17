@@ -1,6 +1,8 @@
 import type { PlatformBrandingSettings } from "@veolms/contracts/platform-settings-defaults";
 import { useSyncExternalStore } from "react";
 
+import { DEFAULT_SITE_NAME, useSiteName } from "./siteName";
+
 /**
  * The academy's own artwork for its website (Platform > General): a logo
  * for light pages, one for dark pages, a square icon.
@@ -19,6 +21,21 @@ import { useSyncExternalStore } from "react";
 export const BUILD_HAS_OWN_ARTWORK =
   (import.meta.env.VITE_BUILT_IN_LOGO as string | undefined)?.trim() !==
   "false";
+
+/**
+ * Whether the build's own artwork belongs to this academy: the build has
+ * some, and this is the academy it was made for (its name has the build's
+ * name in it: "ProCodrr", "ProCodrr Academy").
+ * Any other academy served by the same build shows its own name and
+ * letter icon instead, so one academy never wears another's logo.
+ */
+export function useBuildArtworkIsOurs(): boolean {
+  const name = useSiteName();
+  return (
+    BUILD_HAS_OWN_ARTWORK &&
+    name.toLowerCase().includes(DEFAULT_SITE_NAME.trim().toLowerCase())
+  );
+}
 
 export type SiteBrandAssets = PlatformBrandingSettings;
 
