@@ -30,9 +30,9 @@ interface Move {
 const MOVES: readonly Move[] = [
   {
     key: "look",
-    title: "Add your logo and pick a colour",
-    help: "Your academy uses Ocean Blue until you choose. 16 colours, light and dark.",
-    action: "Choose look",
+    title: "Add your logo",
+    help: "It shows on your website, sign-in page and emails.",
+    action: "Add logo",
   },
   {
     key: "payments",
@@ -105,7 +105,7 @@ export function FirstMovesCard({
   const act = (key: FirstMoveKey) => {
     switch (key) {
       case "look":
-        void navigate("/platform/appearance");
+        void navigate("/platform/general");
         return;
       case "payments":
         void navigate("/platform/payments");

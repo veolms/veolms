@@ -1,8 +1,5 @@
 import { signInHandoffProvider } from "@veolms/config";
-import {
-  DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
-  type FirstMovesResponse,
-} from "@veolms/contracts";
+import { type FirstMovesResponse } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
@@ -48,20 +45,17 @@ export function createFirstMovesService({
         .limit(1)
         .executeTakeFirst(),
     ]);
-    const { branding, appearance } = settings.settings;
+    const { branding } = settings.settings;
     const hasLogo = Boolean(
       academy?.logo_url ||
       branding.logoLightUrl ||
       branding.logoDarkUrl ||
       branding.iconUrl,
     );
-    const pickedColour =
-      appearance.defaultColorTheme !==
-      DEFAULT_PLATFORM_APPEARANCE_SETTINGS.defaultColorTheme;
-
     return {
       moves: {
-        look: hasLogo || pickedColour,
+        // The academy's logo (its colour is for Appearance, not a first move).
+        look: hasLogo,
         payments: Boolean(gateway),
         course: Boolean(course),
         testPurchase: Boolean(paidOrder),
