@@ -11,6 +11,8 @@ export {
 } from "./marketing.queries";
 export {
   useCancelMarketingEmail,
+  useMarketingCardFill,
+  useUploadMarketingImage,
   useCreateMarketingEmail,
   useDeleteMarketingEmail,
   useDuplicateMarketingEmail,

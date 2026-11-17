@@ -1,4 +1,5 @@
 import { siteSettings } from "@veolms/config";
+import type { MarketingDesign } from "@veolms/contracts";
 import type { DatabaseExecutor } from "@veolms/database";
 import { marketingEmail, type EmailContent } from "@veolms/services/email";
 
@@ -26,6 +27,7 @@ export async function renderMarketingEmail(
     subject: string;
     preheader: string;
     blocks: readonly unknown[];
+    design?: MarketingDesign;
     person: { displayName: string | null };
     course: { title: string; slug: string } | null;
     /** A real send: links and the open are tracked, with an unsubscribe link. */
@@ -45,6 +47,7 @@ export async function renderMarketingEmail(
     subject: input.subject,
     preheader: input.preheader,
     blocks: input.blocks,
+    ...(input.design ? { design: input.design } : {}),
     recipient: {
       firstName:
         firstNameOf({ display_name: fullName, username: null }) || null,
@@ -55,8 +58,8 @@ export async function renderMarketingEmail(
       : null,
     ...(tracking
       ? {
-          linkFor: (index: number) =>
-            clickUrl(tracking.emailId, tracking.userId, index),
+          linkFor: (linkNumber: number) =>
+            clickUrl(tracking.emailId, tracking.userId, linkNumber),
           openPixelUrl: openPixelUrl(tracking.emailId, tracking.userId),
           unsubscribeUrl: tracking.unsubscribeUrl,
         }

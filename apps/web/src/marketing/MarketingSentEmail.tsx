@@ -148,6 +148,7 @@ export function MarketingSentEmail({
             subject={email.subject}
             preheader={email.preheader}
             blocks={email.blocks}
+            design={email.design}
           />
         </div>
       </div>

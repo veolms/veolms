@@ -1,4 +1,5 @@
 import {
+  readMarketingDesign,
   DEFAULT_MARKETING_AUDIENCE,
   MARKETING_AUTOMATION_KEYS,
   MARKETING_AUTOMATIONS,
@@ -94,6 +95,7 @@ function toEmail(
     ...toSummary(row, stats),
     preheader: row.preheader,
     blocks: blocks.success ? blocks.data : [],
+    design: readMarketingDesign(row.design),
     audience:
       row.kind === "broadcast"
         ? audience.success
@@ -246,6 +248,7 @@ export function createMarketingService({
             ? { preheader: patch.preheader }
             : {}),
           ...(patch.blocks !== undefined ? { blocks: patch.blocks } : {}),
+          ...(patch.design !== undefined ? { design: patch.design } : {}),
           ...(patch.audience !== undefined && current.kind === "broadcast"
             ? { audience: patch.audience }
             : {}),
@@ -296,6 +299,7 @@ export function createMarketingService({
         subject: source.subject,
         preheader: source.preheader,
         blocks: source.blocks,
+        design: source.design,
         // A copy of a resend goes to the whole audience again.
         audience:
           audience.success && audience.data.segment.type !== "not_opened"
@@ -428,6 +432,7 @@ export function createMarketingService({
         subject,
         preheader: source.preheader,
         blocks: source.blocks,
+        design: source.design,
         audience,
         settings: null,
         status: "draft",
@@ -443,6 +448,7 @@ export function createMarketingService({
         subject: input.subject,
         preheader: input.preheader,
         blocks: input.blocks,
+        design: input.design,
         person: viewer,
         course:
           input.automationKey &&
@@ -479,6 +485,7 @@ export function createMarketingService({
         subject: `[Test] ${row.subject || row.name}`,
         preheader: row.preheader,
         blocks: row.blocks,
+        design: readMarketingDesign(row.design),
         person: { displayName: viewer.displayName },
         course:
           key.success && MARKETING_AUTOMATIONS[key.data].aboutCourse

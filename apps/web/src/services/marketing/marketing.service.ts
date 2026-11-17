@@ -4,7 +4,10 @@ import type {
   MarketingAudienceOptionsResponse,
   MarketingAutomationKey,
   MarketingAutomationListResponse,
+  MarketingCardFill,
   MarketingEmail,
+  MarketingImageContentType,
+  MarketingImagePresignResponse,
   MarketingEmailListResponse,
   MarketingPreviewRequest,
   MarketingPreviewResponse,
@@ -15,6 +18,7 @@ import type {
   UpdateMarketingEmailRequest,
 } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
+import { mediaService } from "../media/media.service";
 
 const emailPath = (id: string) => `/marketing/emails/${encodeURIComponent(id)}`;
 
@@ -52,6 +56,32 @@ export const marketingService = {
   },
   sendTest(id: string): Promise<{ sentTo: string }> {
     return api.post<{ sentTo: string }>(`${emailPath(id)}/test`, {});
+  },
+  /**
+   * Uploads an image for an email straight to storage, then checks it;
+   * answers its public address. The type must already be an image's.
+   */
+  async uploadImage(file: File): Promise<{ url: string }> {
+    const contentType = file.type as MarketingImageContentType;
+    const { uploadId, uploadUrl } =
+      await api.post<MarketingImagePresignResponse>(
+        "/marketing/images/presign",
+        { contentType, fileSize: file.size },
+      );
+    await mediaService.uploadFileToPresignedUrl(uploadUrl, file);
+    return await api.post<{ url: string }>("/marketing/images/complete", {
+      uploadId,
+      contentType,
+    });
+  },
+  /** A course's or workshop's words, to fill an email card with. */
+  cardFill(
+    source: "course" | "workshop",
+    id: string,
+  ): Promise<MarketingCardFill> {
+    return api.get<MarketingCardFill>(
+      `/marketing/cards/${source}/${encodeURIComponent(id)}`,
+    );
   },
   preview(body: MarketingPreviewRequest): Promise<MarketingPreviewResponse> {
     return api.post<MarketingPreviewResponse>("/marketing/preview", body);

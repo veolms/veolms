@@ -20,6 +20,7 @@ export interface MarketingEmailRow {
   subject: string;
   preheader: string;
   blocks: unknown[];
+  design: Record<string, unknown>;
   audience: Record<string, unknown> | null;
   settings: Record<string, unknown> | null;
   status: MarketingEmailStatus;
@@ -40,6 +41,7 @@ const emailColumns = [
   "subject",
   "preheader",
   "blocks",
+  "design",
   "audience",
   "settings",
   "status",
@@ -110,6 +112,7 @@ export interface NewMarketingEmail {
   subject: string;
   preheader: string;
   blocks: unknown[];
+  design?: Record<string, unknown>;
   audience: MarketingAudience | null;
   settings: Record<string, unknown> | null;
   status: MarketingEmailStatus;
@@ -130,6 +133,7 @@ export async function insertEmail(
       subject: input.subject,
       preheader: input.preheader,
       blocks: JSON.stringify(input.blocks),
+      design: JSON.stringify(input.design ?? {}),
       audience: input.audience ? JSON.stringify(input.audience) : null,
       settings: input.settings ? JSON.stringify(input.settings) : null,
       status: input.status,
@@ -164,6 +168,7 @@ export interface MarketingEmailPatch {
   subject?: string;
   preheader?: string;
   blocks?: unknown[];
+  design?: Record<string, unknown>;
   audience?: MarketingAudience;
   settings?: Record<string, unknown>;
 }
@@ -186,6 +191,9 @@ export async function updateEmail(
       ...(patch.preheader !== undefined ? { preheader: patch.preheader } : {}),
       ...(patch.blocks !== undefined
         ? { blocks: JSON.stringify(patch.blocks) }
+        : {}),
+      ...(patch.design !== undefined
+        ? { design: JSON.stringify(patch.design) }
         : {}),
       ...(patch.audience !== undefined
         ? { audience: JSON.stringify(patch.audience) }

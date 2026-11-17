@@ -7,6 +7,7 @@ import type {
   MarketingEmailStatus,
   MarketingSegmentType,
   MarketingTemplateKey,
+  MarketingTheme,
 } from "@veolms/contracts";
 
 export const MARKETING_PATH = "/marketing";
@@ -103,30 +104,42 @@ export const TEMPLATE_CHOICES: readonly {
   key: MarketingTemplateKey;
   title: string;
   description: string;
+  /** The look it starts with (the API's template sets the same). */
+  theme: MarketingTheme;
 }[] = [
-  { key: "blank", title: "Blank", description: "Start from an empty email." },
+  {
+    key: "blank",
+    title: "Blank",
+    description: "Start from an empty email.",
+    theme: "midnight",
+  },
   {
     key: "welcome",
+    theme: "clean",
     title: "Welcome",
     description: "Greet new students and show them where to start.",
   },
   {
     key: "launch",
+    theme: "ocean",
     title: "New course launch",
     description: "Announce a course with what students will learn.",
   },
   {
     key: "workshop",
+    theme: "warm",
     title: "Workshop invite",
     description: "Invite students to a live session.",
   },
   {
     key: "offer",
+    theme: "ember",
     title: "Limited-time offer",
     description: "Share a coupon with a clear end date.",
   },
   {
     key: "newsletter",
+    theme: "forest",
     title: "Newsletter",
     description: "A short round-up: what's new and one tip.",
   },
@@ -203,17 +216,46 @@ export function audienceIsComplete(audience: MarketingAudience): boolean {
   return true;
 }
 
-export const BLOCK_CHOICES: readonly {
-  type: MarketingBlockType;
-  label: string;
+/** What "Add" offers. Course and workshop are cards filled from your own. */
+export type MarketingBlockChoice = MarketingBlockType | "course" | "workshop";
+
+export const BLOCK_GROUPS: readonly {
+  title: string;
+  choices: readonly {
+    type: MarketingBlockChoice;
+    label: string;
+    hint: string;
+  }[];
 }[] = [
-  { type: "heading", label: "Heading" },
-  { type: "text", label: "Text" },
-  { type: "button", label: "Button" },
-  { type: "image", label: "Image" },
-  { type: "divider", label: "Divider" },
-  { type: "spacer", label: "Space" },
+  {
+    title: "Write",
+    choices: [
+      { type: "heading", label: "Heading", hint: "A big title" },
+      { type: "text", label: "Text", hint: "Paragraphs, bold and links" },
+      { type: "quote", label: "Quote", hint: "A student's words" },
+    ],
+  },
+  {
+    title: "Sell",
+    choices: [
+      { type: "button", label: "Button", hint: "One clear action" },
+      { type: "coupon", label: "Coupon", hint: "A code to copy" },
+      { type: "course", label: "Course", hint: "A card for one course" },
+      { type: "workshop", label: "Workshop", hint: "Date, time and seat" },
+      { type: "card", label: "Card", hint: "Picture, words, button" },
+    ],
+  },
+  {
+    title: "Layout",
+    choices: [
+      { type: "image", label: "Image", hint: "Upload or link one" },
+      { type: "divider", label: "Divider", hint: "A thin line" },
+      { type: "spacer", label: "Space", hint: "Room to breathe" },
+    ],
+  },
 ];
+
+export const BLOCK_CHOICES = BLOCK_GROUPS.flatMap((group) => group.choices);
 
 let blockCounter = 0;
 
@@ -222,29 +264,118 @@ export function newBlockId(): string {
   return `b${Date.now().toString(36)}${blockCounter.toString(36)}`;
 }
 
-export function newBlock(type: MarketingBlockType): MarketingBlock {
+/** A page of this academy's site, so a new button or card already works. */
+function sitePage(path: string): string {
+  const origin =
+    typeof window === "undefined"
+      ? "https://example.com"
+      : window.location.origin;
+  return `${origin}${path}`;
+}
+
+export function newBlock(type: MarketingBlockChoice): MarketingBlock {
   const id = newBlockId();
   switch (type) {
     case "heading":
-      return { id, type, text: "A clear headline" };
+      return {
+        id,
+        type,
+        text: "A clear headline",
+        size: "large",
+        align: "left",
+      };
     case "text":
-      return { id, type, text: "Hi {first_name},\n\nWrite your message here." };
+      return {
+        id,
+        type,
+        text: "Hi {first_name},\n\nWrite your message here.",
+        align: "left",
+      };
     case "button":
-      return { id, type, label: "Learn more", url: "https://" };
+      return {
+        id,
+        type,
+        label: "Learn more",
+        url: sitePage("/courses"),
+        align: "left",
+        style: "filled",
+        color: null,
+        fullWidth: false,
+      };
     case "image":
-      return { id, type, url: "https://", alt: "", link: null };
+      return {
+        id,
+        type,
+        url: "https://",
+        alt: "",
+        link: null,
+        size: "full",
+        align: "center",
+      };
     case "divider":
       return { id, type };
     case "spacer":
       return { id, type, size: "medium" };
+    case "coupon":
+      return { id, type, code: "SAVE20", title: "Your code", note: "" };
+    case "quote":
+      return { id, type, text: "What a student said about you.", name: "" };
+    case "card":
+    case "course":
+    case "workshop":
+      return {
+        id,
+        type: "card",
+        source: type === "card" ? "custom" : type,
+        sourceId: null,
+        title:
+          type === "course"
+            ? "Pick a course"
+            : type === "workshop"
+              ? "Pick a workshop"
+              : "Card title",
+        meta: "",
+        text: "",
+        imageUrl: null,
+        url: sitePage(type === "workshop" ? "/workshops" : "/courses"),
+        buttonLabel: type === "workshop" ? "Save my seat" : "Learn more",
+      };
   }
 }
 
 export function blockLabel(block: MarketingBlock): string {
+  if (block.type === "card") {
+    return block.source === "course"
+      ? "Course"
+      : block.source === "workshop"
+        ? "Workshop"
+        : "Card";
+  }
   return (
     BLOCK_CHOICES.find((choice) => choice.type === block.type)?.label ?? "Block"
   );
 }
+
+/** Where a block's choice icon comes from: a card shows its source. */
+export function blockChoiceOf(block: MarketingBlock): MarketingBlockChoice {
+  if (block.type === "card" && block.source !== "custom") return block.source;
+  return block.type;
+}
+
+/** Accent colours offered next to the theme's own. */
+export const ACCENT_CHOICES = [
+  "#6E7CFF",
+  "#4F46E5",
+  "#7C3AED",
+  "#DB2777",
+  "#E11D48",
+  "#EA580C",
+  "#D97706",
+  "#16A34A",
+  "#0D9488",
+  "#0284C7",
+  "#111827",
+] as const;
 
 export function isWebAddress(value: string): boolean {
   try {

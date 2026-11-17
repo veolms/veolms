@@ -1,5 +1,6 @@
 import { runBackgroundItem } from "@veolms/api-core";
 import {
+  readMarketingDesign,
   marketingAudienceSchema,
   marketingAutomationKeySchema,
   marketingAutomationSettingsSchema,
@@ -271,6 +272,7 @@ export function createMarketingSender({
               subject: message.subject,
               preheader: message.preheader,
               blocks: message.blocks,
+              design: readMarketingDesign(message.design),
               person: { displayName: person.display_name },
               course,
               tracking: {

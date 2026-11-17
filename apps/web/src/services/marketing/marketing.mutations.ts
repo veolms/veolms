@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   MarketingAutomationKey,
+  MarketingCardFill,
   MarketingEmail,
   MarketingTemplateKey,
   UpdateMarketingEmailRequest,
@@ -111,5 +112,21 @@ export function useSetMarketingAutomationActive() {
     mutationFn: ({ key, active }) =>
       marketingService.setAutomationActive(key, active),
     onSuccess: refresh,
+  });
+}
+
+export function useUploadMarketingImage() {
+  return useMutation<{ url: string }, ApiError, File>({
+    mutationFn: (file) => marketingService.uploadImage(file),
+  });
+}
+
+export function useMarketingCardFill() {
+  return useMutation<
+    MarketingCardFill,
+    ApiError,
+    { source: "course" | "workshop"; id: string }
+  >({
+    mutationFn: ({ source, id }) => marketingService.cardFill(source, id),
   });
 }

@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import type { MarketingAutomationKey, MarketingBlock } from "@veolms/contracts";
+import {
+  MARKETING_THEME_COLORS,
+  type MarketingAutomationKey,
+  type MarketingBlock,
+  type MarketingDesign,
+} from "@veolms/contracts";
 import { DesktopIcon as Desktop } from "@phosphor-icons/react/Desktop";
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
@@ -17,6 +22,7 @@ export function MarketingPreview({
   subject,
   preheader,
   blocks,
+  design,
   automationKey = null,
   onSendTest,
   testPending = false,
@@ -26,6 +32,7 @@ export function MarketingPreview({
   subject: string;
   preheader: string;
   blocks: readonly MarketingBlock[];
+  design: MarketingDesign;
   automationKey?: MarketingAutomationKey | null;
   onSendTest?: () => void;
   testPending?: boolean;
@@ -37,15 +44,16 @@ export function MarketingPreview({
     subject,
     preheader,
     blocks,
+    design,
     automationKey,
   });
   useEffect(() => {
     const timer = window.setTimeout(
-      () => setInput({ subject, preheader, blocks, automationKey }),
+      () => setInput({ subject, preheader, blocks, design, automationKey }),
       450,
     );
     return () => window.clearTimeout(timer);
-  }, [subject, preheader, blocks, automationKey]);
+  }, [subject, preheader, blocks, design, automationKey]);
 
   const preview = useQuery({
     queryKey: [...marketingKeys.all, "preview", JSON.stringify(input)],
@@ -54,6 +62,7 @@ export function MarketingPreview({
         subject: input.subject,
         preheader: input.preheader,
         blocks: [...input.blocks],
+        design: input.design,
         automationKey: input.automationKey,
       }),
     placeholderData: keepPreviousData,
@@ -117,7 +126,8 @@ export function MarketingPreview({
 
       <div className="flex justify-center bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] p-3">
         <div
-          className={`overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[#0B0D12] transition-[width] duration-200 ${
+          style={{ backgroundColor: MARKETING_THEME_COLORS[design.theme].page }}
+          className={`overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-[width,background-color] duration-200 ${
             device === "phone" ? "w-[375px] max-w-full" : "w-full"
           }`}
         >

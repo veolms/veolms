@@ -27,6 +27,7 @@ export interface MarketingEmailTable {
   subject: Generated<string>;
   preheader: Generated<string>;
   blocks: JSONColumnType<unknown[], string | undefined, string>;
+  design: JSONColumnType<Record<string, unknown>, string | undefined, string>;
   audience: JSONColumnType<
     Record<string, unknown> | null,
     string | null,

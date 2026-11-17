@@ -41,6 +41,19 @@ export const colors = {
   divider: "#232733",
 };
 
+/** The colours a layout is drawn with; the app's own by default. */
+export interface EmailPalette {
+  page: string;
+  card: string;
+  cardBorder: string;
+  text: string;
+  muted: string;
+  faint: string;
+  accent: string;
+  mark: string;
+  divider: string;
+}
+
 /** The wordmark's typeface, with close system fallbacks where it cannot load. */
 const wordmarkFontStack =
   "'Nunito Variable',Nunito,'Segoe UI Rounded','SF Pro Rounded',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif";
@@ -57,10 +70,14 @@ const PREVIEW_PADDING = "&#847;&zwnj;&nbsp;".repeat(60);
  * the first letter in the accent, the rest in the text colour. The logo is
  * shown 32px tall; the file is best at twice that, for sharp phone screens.
  */
-export function brandMark(academyName: string, logoUrl: string | null): string {
+export function brandMark(
+  academyName: string,
+  logoUrl: string | null,
+  palette: EmailPalette = colors,
+): string {
   const name = academyName.trim() || "VeoLMS";
   if (logoUrl) {
-    return `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(name)}" height="32" style="display:block;height:32px;width:auto;max-width:240px;border:0;outline:none;text-decoration:none;font-size:24px;line-height:32px;font-weight:700;color:${colors.text}">`;
+    return `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(name)}" height="32" style="display:block;height:32px;width:auto;max-width:240px;border:0;outline:none;text-decoration:none;font-size:24px;line-height:32px;font-weight:700;color:${palette.text}">`;
   }
   // Without a logo: the name in the wordmark's own font (Nunito), its first
   // letter in the mark's purple. Drawn as text, not an inline SVG of the
@@ -68,7 +85,7 @@ export function brandMark(academyName: string, logoUrl: string | null): string {
   // be missing there; a hosted logo is how the mark itself is shown.
   const first = escapeHtml(name.charAt(0));
   const rest = escapeHtml(name.slice(1));
-  return `<span style="font-family:${wordmarkFontStack};font-size:26px;line-height:32px;font-weight:800;letter-spacing:-0.3px;color:${colors.text}"><span style="color:${colors.mark}">${first}</span>${rest}</span>`;
+  return `<span style="font-family:${wordmarkFontStack};font-size:26px;line-height:32px;font-weight:800;letter-spacing:-0.3px;color:${palette.text}"><span style="color:${palette.mark}">${first}</span>${rest}</span>`;
 }
 
 /**
@@ -85,6 +102,10 @@ export function layout({
   preheader,
   bodyHtml,
   footer,
+  palette = colors,
+  fontFamily = fontStack,
+  headerAlign = "left",
+  scheme = "dark",
 }: {
   academyName: string;
   logoUrl: string | null;
@@ -93,27 +114,40 @@ export function layout({
   preheader: string;
   bodyHtml: string;
   footer: string;
+  /** A marketing email's theme; every other email keeps the app's. */
+  palette?: EmailPalette;
+  fontFamily?: string;
+  headerAlign?: "left" | "center";
+  scheme?: "dark" | "light";
 }): string {
+  const brandStyle =
+    headerAlign === "center"
+      ? "padding:0 4px 20px;text-align:center"
+      : "padding:0 4px 20px";
+  const brand =
+    headerAlign === "center"
+      ? `<div style="display:inline-block">${brandMark(academyName, logoUrl, palette)}</div>`
+      : brandMark(academyName, logoUrl, palette);
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
+<meta name="color-scheme" content="${scheme}">
+<meta name="supported-color-schemes" content="${scheme}">
 <title>${escapeHtml(title)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Nunito:wght@800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Nunito:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
 </head>
-<body style="margin:0;padding:0;background-color:${colors.page};-webkit-text-size-adjust:100%">
+<body style="margin:0;padding:0;background-color:${palette.page};-webkit-text-size-adjust:100%">
 <div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all">${escapeHtml(preheader)}${PREVIEW_PADDING}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${colors.page}" style="background-color:${colors.page};border-radius:16px;border-collapse:separate">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${palette.page}" style="background-color:${palette.page};border-radius:16px;border-collapse:separate">
 <tr><td align="center" style="padding:40px 16px;border-radius:16px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;font-family:${fontStack}">
-<tr><td style="padding:0 4px 20px">${brandMark(academyName, logoUrl)}</td></tr>
-<tr><td bgcolor="${colors.card}" style="background-color:${colors.card};border:1px solid ${colors.cardBorder};border-radius:20px;padding:36px 32px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;font-family:${fontFamily}">
+<tr><td style="${brandStyle}">${brand}</td></tr>
+<tr><td bgcolor="${palette.card}" style="background-color:${palette.card};border:1px solid ${palette.cardBorder};border-radius:20px;padding:36px 32px">
 ${bodyHtml}
 </td></tr>
-<tr><td style="padding:20px 8px 0;font-size:12px;line-height:18px;color:${colors.faint};text-align:center">${footer}</td></tr>
+<tr><td style="padding:20px 8px 0;font-size:12px;line-height:18px;color:${palette.faint};text-align:center">${footer}</td></tr>
 </table>
 </td></tr>
 </table>

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import {
   MARKETING_AUTOMATIONS,
+  MARKETING_THEME_COLORS,
+  type MarketingTheme,
   marketingAutomationKeySchema,
   type MarketingAutomation,
   type MarketingAutomationKey,
@@ -58,6 +60,40 @@ export interface MarketingPageProps {
 }
 
 const dividerClass = "border-[color-mix(in_srgb,var(--text)_8%,transparent)]";
+
+/** A template's look in miniature: its page, card, lines and button. */
+function TemplateThumb({ theme }: { theme: MarketingTheme }) {
+  const colors = MARKETING_THEME_COLORS[theme];
+  return (
+    <span
+      aria-hidden="true"
+      className="grid h-14 w-12 shrink-0 place-items-center rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+      style={{ backgroundColor: colors.page }}
+    >
+      <span
+        className="grid w-9 gap-1 rounded-[5px] border p-1.5"
+        style={{ backgroundColor: colors.card, borderColor: colors.cardBorder }}
+      >
+        <span
+          className="block h-1 w-5 rounded-full"
+          style={{ backgroundColor: colors.text }}
+        />
+        <span
+          className="block h-0.5 w-full rounded-full opacity-70"
+          style={{ backgroundColor: colors.muted }}
+        />
+        <span
+          className="block h-0.5 w-4/5 rounded-full opacity-70"
+          style={{ backgroundColor: colors.muted }}
+        />
+        <span
+          className="mt-0.5 block h-1.5 w-4 rounded-sm"
+          style={{ backgroundColor: colors.accent }}
+        />
+      </span>
+    </span>
+  );
+}
 
 function AccessDenied({ onNavigatePage }: { onNavigatePage?: NavigateTo }) {
   return (
@@ -328,17 +364,20 @@ function EmailsTab({ onNavigatePage, setNotice }: MarketingPageProps) {
               role="radio"
               aria-checked={template === choice.key}
               onClick={() => setTemplate(choice.key)}
-              className={`cursor-pointer rounded-xl border px-3.5 py-3 text-left transition-colors ${
+              className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
                 template === choice.key
                   ? "border-(--accent) bg-(--accent)/8"
                   : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-transparent hover:border-(--accent)/40"
               }`}
             >
-              <span className="block text-[13px] font-semibold text-(--text)">
-                {choice.title}
-              </span>
-              <span className="mt-0.5 block text-[12px] leading-snug text-(--muted)">
-                {choice.description}
+              <TemplateThumb theme={choice.theme} />
+              <span className="min-w-0">
+                <span className="block text-[13px] font-semibold text-(--text)">
+                  {choice.title}
+                </span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-(--muted)">
+                  {choice.description}
+                </span>
               </span>
             </button>
           ))}

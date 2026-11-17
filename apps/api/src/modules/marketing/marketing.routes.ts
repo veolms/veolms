@@ -7,6 +7,13 @@ import {
   marketingAutomationListResponseSchema,
   marketingEmailListResponseSchema,
   marketingEmailSchema,
+  marketingCardFillSchema,
+  marketingImageCompleteRequestSchema,
+  marketingImageCompleteResponseSchema,
+  marketingImagePresignRequestSchema,
+  marketingImagePresignResponseSchema,
+  type MarketingImageCompleteRequest,
+  type MarketingImagePresignRequest,
   marketingPreviewRequestSchema,
   marketingPreviewResponseSchema,
   marketingRecipientsQuerySchema,
@@ -24,8 +31,9 @@ import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createPermissionPreHandlers } from "../authorization/index.ts";
 import { createMarketingService } from "./marketing.service.ts";
+import { createMarketingMedia } from "./marketing-media.ts";
 import { readTrackingToken, TRACKING_PIXEL } from "./marketing-tracking.ts";
-import { marketingBlockLink } from "@veolms/services/email";
+import { marketingLinkAt } from "@veolms/services/email";
 import { marketingBlocksSchema } from "@veolms/contracts";
 import { courseUrl, siteUrl } from "./marketing-render.ts";
 import * as repository from "./marketing.repository.ts";
@@ -43,6 +51,10 @@ const marketingRoutes: RoutePlugin = async (app, options) => {
   const service = createMarketingService({
     database: options.database,
     email: options.services.email,
+  });
+  const media = createMarketingMedia({
+    database: options.database,
+    services: options.services,
   });
   // Every student of the academy: only academy-wide roles count.
   const manage = requires("marketing.manage", "academy");
@@ -442,6 +454,96 @@ const marketingRoutes: RoutePlugin = async (app, options) => {
 
   const tokenParams = z.object({ token: z.string().min(10).max(400) });
 
+  app.post(
+    "/marketing/images/presign",
+    {
+      preHandler: manage,
+      schema: {
+        operationId: "presignMarketingImageUpload",
+        tags,
+        summary: "Get an address to upload an email image to",
+        description:
+          "The browser PUTs the image straight to the returned address, then calls /marketing/images/complete.",
+        body: marketingImagePresignRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Where to upload the image.",
+            marketingImagePresignResponseSchema,
+          ),
+          400: errorResponse("Not an image, or larger than 5 MB"),
+          ...denied,
+        },
+      },
+    },
+    async (request) =>
+      await media.presignImage(request.body as MarketingImagePresignRequest),
+  );
+
+  app.post(
+    "/marketing/images/complete",
+    {
+      preHandler: manage,
+      schema: {
+        operationId: "completeMarketingImageUpload",
+        tags,
+        summary: "Check an uploaded email image and get its public address",
+        body: marketingImageCompleteRequestSchema,
+        response: {
+          200: jsonResponse(
+            "The image's public address.",
+            marketingImageCompleteResponseSchema,
+          ),
+          400: errorResponse("The upload is missing or is not an image"),
+          ...denied,
+        },
+      },
+    },
+    async (request) =>
+      await media.completeImage(request.body as MarketingImageCompleteRequest),
+  );
+
+  const cardParams = z.object({ id: z.uuid() });
+
+  app.get(
+    "/marketing/cards/course/:id",
+    {
+      preHandler: manage,
+      schema: {
+        operationId: "getMarketingCourseCard",
+        tags,
+        summary: "A course's title, picture and link, to fill an email card",
+        params: cardParams,
+        response: {
+          200: jsonResponse("The card's words.", marketingCardFillSchema),
+          404: errorResponse("No such course"),
+          ...denied,
+        },
+      },
+    },
+    async (request) =>
+      await media.courseCard((request.params as { id: string }).id),
+  );
+
+  app.get(
+    "/marketing/cards/workshop/:id",
+    {
+      preHandler: manage,
+      schema: {
+        operationId: "getMarketingWorkshopCard",
+        tags,
+        summary: "A workshop's title, date and link, to fill an email card",
+        params: cardParams,
+        response: {
+          200: jsonResponse("The card's words.", marketingCardFillSchema),
+          404: errorResponse("No such workshop"),
+          ...denied,
+        },
+      },
+    },
+    async (request) =>
+      await media.workshopCard((request.params as { id: string }).id),
+  );
+
   app.get(
     "/email/o/:token",
     {
@@ -486,10 +588,11 @@ const marketingRoutes: RoutePlugin = async (app, options) => {
       if (claims?.kind !== "click") return reply.redirect(home, 302);
       const target = await repository.findClickTarget(options.database, claims);
       const blocks = marketingBlocksSchema.safeParse(target?.blocks);
-      const block = blocks.success ? blocks.data[claims.blockIndex] : undefined;
-      const url = block
-        ? marketingBlockLink(
-            block,
+      // The number names a block's own link, or a link in a text block.
+      const url = blocks.success
+        ? marketingLinkAt(
+            blocks.data,
+            claims.blockIndex,
             target?.course_slug ? courseUrl(target.course_slug) : home,
           )
         : null;

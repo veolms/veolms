@@ -37,6 +37,7 @@ export {
 export {
   marketingBlockLink,
   marketingEmail,
+  marketingLinkAt,
   type MarketingEmailInput,
 } from "./marketing-email.templates.ts";
 export {

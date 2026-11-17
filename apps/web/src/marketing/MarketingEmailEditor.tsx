@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import {
   DEFAULT_MARKETING_AUDIENCE,
+  MARKETING_THEME_COLORS,
+  type MarketingDesign,
   MARKETING_AUTOMATIONS,
   MARKETING_NAME_MAX,
   MARKETING_PREHEADER_MAX,
@@ -16,6 +18,7 @@ import {
 } from "@veolms/contracts";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { CalendarBlankIcon as CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { PaperPlaneRightIcon as PaperPlaneRight } from "@phosphor-icons/react/PaperPlaneRight";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { Button } from "../components/Button";
@@ -44,6 +47,7 @@ import {
 } from "../workshops/workshopHelpers";
 import { MarketingAudiencePicker } from "./MarketingAudiencePicker";
 import { MarketingBlockEditor } from "./MarketingBlockEditor";
+import { MarketingDesignPanel } from "./MarketingDesignPanel";
 import { MarketingPreview } from "./MarketingPreview";
 import { MarketingReport } from "./MarketingReport";
 import {
@@ -62,6 +66,7 @@ interface FormState {
   subject: string;
   preheader: string;
   blocks: MarketingBlock[];
+  design: MarketingDesign;
   audience: MarketingAudience;
   settings: MarketingAutomationSettings | null;
 }
@@ -72,6 +77,7 @@ function formFrom(email: MarketingEmail): FormState {
     subject: email.subject,
     preheader: email.preheader,
     blocks: email.blocks,
+    design: email.design,
     audience: email.audience ?? DEFAULT_MARKETING_AUDIENCE,
     settings: email.settings,
   };
@@ -186,6 +192,7 @@ export function MarketingEmailEditor({
         subject: draft.subject,
         preheader: draft.preheader,
         blocks: draft.blocks,
+        design: draft.design,
         ...(!isAutomation && audienceIsComplete(draft.audience)
           ? { audience: draft.audience }
           : {}),
@@ -307,6 +314,18 @@ export function MarketingEmailEditor({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+          <Button
+            variant="quiet"
+            className="xl:hidden"
+            onClick={() =>
+              document
+                .getElementById("marketing-preview")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          >
+            <Eye size={16} />
+            Preview
+          </Button>
           {isAutomation ? (
             <label className="inline-flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) px-4 py-2.5">
               <span className="text-sm font-semibold text-(--text)">
@@ -489,16 +508,34 @@ export function MarketingEmailEditor({
 
           <section
             className={`${surfaceClass} grid gap-4 p-5 sm:p-6`}
+            aria-label="Design"
+          >
+            <SectionTitle
+              title="Design"
+              description="Pick a look. Colours, font and logo apply to the whole email."
+            />
+            <MarketingDesignPanel
+              design={form.design}
+              onChange={(design) => patch({ design })}
+            />
+          </section>
+
+          <section
+            className={`${surfaceClass} grid gap-4 p-5 sm:p-6`}
             aria-label="Content"
           >
             <SectionTitle
               title="Content"
-              description="Build the email from blocks. Drag the handle to reorder."
+              description="Build the email from blocks. Use + to add one anywhere; drag or use the arrows to reorder."
             />
             <MarketingBlockEditor
               blocks={form.blocks}
               onChange={(blocks) => patch({ blocks })}
               aboutCourse={Boolean(meta?.aboutCourse)}
+              accentColor={
+                form.design.accent ??
+                MARKETING_THEME_COLORS[form.design.theme].accent
+              }
             />
           </section>
 
@@ -627,11 +664,15 @@ export function MarketingEmailEditor({
           {isAutomation ? <MarketingReport email={email} compact /> : null}
         </div>
 
-        <div className="min-w-0 xl:sticky xl:top-4">
+        <div
+          id="marketing-preview"
+          className="min-w-0 scroll-mt-4 xl:sticky xl:top-4"
+        >
           <MarketingPreview
             subject={form.subject}
             preheader={form.preheader}
             blocks={form.blocks}
+            design={form.design}
             automationKey={automationKey}
             onSendTest={() => void runTest()}
             testPending={sendTest.isPending}

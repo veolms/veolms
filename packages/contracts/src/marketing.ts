@@ -55,28 +55,68 @@ const imageUrl = z
   .trim()
   .max(MARKETING_URL_MAX)
   .refine(
-    (value) => value.startsWith("https://") && isSafeMarketingUrl(value),
+    (value) =>
+      (value.startsWith("https://") || isLocalImageUrl(value)) &&
+      isSafeMarketingUrl(value),
     {
       message: "Use an image address starting with https://",
     },
   );
+
+/**
+ * An image on this computer's own storage (a local test stack serves it
+ * over http). Allowed so uploads can be tried locally; no mail app can
+ * load it, so it never matters in a real send.
+ */
+function isLocalImageUrl(value: string): boolean {
+  return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//u.test(value);
+}
+
+/** A colour as `#RRGGBB`. */
+export const marketingColorSchema = z
+  .string()
+  .trim()
+  .regex(/^#[0-9A-Fa-f]{6}$/u, "Use a colour like #6E7CFF");
+
+export const MARKETING_ALIGNS = ["left", "center", "right"] as const;
+const align = z.enum(MARKETING_ALIGNS);
+export type MarketingAlign = (typeof MARKETING_ALIGNS)[number];
+
+export const MARKETING_COUPON_CODE_MAX = 50;
+export const MARKETING_CARD_TITLE_MAX = 160;
+export const MARKETING_CARD_TEXT_MAX = 600;
+export const MARKETING_QUOTE_MAX = 800;
+/** Links written into one text block as [words](https://...). */
+export const MARKETING_TEXT_LINKS_MAX = 20;
+
+/** Where a card's words came from; "custom" is written by hand. */
+export const MARKETING_CARD_SOURCES = ["course", "workshop", "custom"] as const;
+export type MarketingCardSource = (typeof MARKETING_CARD_SOURCES)[number];
 
 export const marketingBlockSchema = z.discriminatedUnion("type", [
   z.object({
     id: blockId,
     type: z.literal("heading"),
     text: trimmed(MARKETING_HEADING_MAX).min(1, "Write a heading"),
+    size: z.enum(["large", "medium", "small"]).default("large"),
+    align: align.default("left"),
   }),
   z.object({
     id: blockId,
     type: z.literal("text"),
     text: trimmed(MARKETING_TEXT_MAX).min(1, "Write some text"),
+    align: align.default("left"),
   }),
   z.object({
     id: blockId,
     type: z.literal("button"),
     label: trimmed(MARKETING_BUTTON_LABEL_MAX).min(1, "Name the button"),
     url: linkUrl,
+    align: align.default("left"),
+    style: z.enum(["filled", "outline"]).default("filled"),
+    /** Null: the email's accent colour. */
+    color: marketingColorSchema.nullable().default(null),
+    fullWidth: z.boolean().default(false),
   }),
   z.object({
     id: blockId,
@@ -84,12 +124,47 @@ export const marketingBlockSchema = z.discriminatedUnion("type", [
     url: imageUrl,
     alt: trimmed(200).default(""),
     link: linkUrl.nullable().default(null),
+    size: z.enum(["full", "medium", "small"]).default("full"),
+    align: align.default("center"),
   }),
   z.object({ id: blockId, type: z.literal("divider") }),
   z.object({
     id: blockId,
     type: z.literal("spacer"),
     size: z.enum(["small", "medium", "large"]).default("medium"),
+  }),
+  z.object({
+    id: blockId,
+    type: z.literal("coupon"),
+    code: z
+      .string()
+      .trim()
+      .min(1, "Write the coupon code")
+      .max(MARKETING_COUPON_CODE_MAX)
+      .regex(/^[A-Za-z0-9_-]+$/u, "A code is letters, numbers, - and _ only"),
+    title: trimmed(120).default("Your code"),
+    /** "Ends 30 November", "20% off any course". */
+    note: trimmed(200).default(""),
+  }),
+  z.object({
+    id: blockId,
+    type: z.literal("card"),
+    source: z.enum(MARKETING_CARD_SOURCES).default("custom"),
+    /** The course or workshop it was filled from, for the editor only. */
+    sourceId: z.uuid().nullable().default(null),
+    title: trimmed(MARKETING_CARD_TITLE_MAX).min(1, "Give the card a title"),
+    /** A small line above the title: a date, a price. */
+    meta: trimmed(120).default(""),
+    text: trimmed(MARKETING_CARD_TEXT_MAX).default(""),
+    imageUrl: imageUrl.nullable().default(null),
+    url: linkUrl,
+    buttonLabel: trimmed(MARKETING_BUTTON_LABEL_MAX).min(1, "Name the button"),
+  }),
+  z.object({
+    id: blockId,
+    type: z.literal("quote"),
+    text: trimmed(MARKETING_QUOTE_MAX).min(1, "Write the quote"),
+    name: trimmed(120).default(""),
   }),
 ]);
 export type MarketingBlock = z.infer<typeof marketingBlockSchema>;
@@ -101,6 +176,251 @@ export const marketingBlocksSchema = z
     MARKETING_BLOCKS_MAX,
     `An email can have up to ${MARKETING_BLOCKS_MAX} blocks`,
   );
+
+/** `[words](https://...)` in a text block: a link. */
+export const MARKETING_TEXT_LINK_PATTERN =
+  /\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]{1,2000})\)/gu;
+
+/** The addresses a text block links to, in order (at most the limit). */
+export function marketingTextLinks(text: string): string[] {
+  return [...text.matchAll(MARKETING_TEXT_LINK_PATTERN)]
+    .map((match) => match[2]!)
+    .filter(isSafeMarketingUrl)
+    .slice(0, MARKETING_TEXT_LINKS_MAX);
+}
+
+/**
+ * A tracked link's number in an email: the block's place for its own link
+ * (a button, an image, a card), and past the blocks for the links written
+ * in a text block, so each can be found again from the number alone.
+ */
+export function marketingLinkNumber(
+  blockIndex: number,
+  textLink: number | null = null,
+): number {
+  return textLink === null
+    ? blockIndex
+    : MARKETING_BLOCKS_MAX * (textLink + 1) + blockIndex;
+}
+
+export function readMarketingLinkNumber(number: number): {
+  blockIndex: number;
+  textLink: number | null;
+} {
+  if (number < MARKETING_BLOCKS_MAX)
+    return { blockIndex: number, textLink: null };
+  return {
+    blockIndex: number % MARKETING_BLOCKS_MAX,
+    textLink: Math.floor(number / MARKETING_BLOCKS_MAX) - 1,
+  };
+}
+
+// --- Design ---
+
+/** The email's look: a theme, with its accent and font changeable. */
+export const MARKETING_THEMES = [
+  "midnight",
+  "clean",
+  "warm",
+  "ocean",
+  "forest",
+  "ember",
+] as const;
+export type MarketingTheme = (typeof MARKETING_THEMES)[number];
+
+export const MARKETING_FONTS = ["modern", "classic", "rounded"] as const;
+export type MarketingFont = (typeof MARKETING_FONTS)[number];
+
+/** Every colour a theme draws an email with (inline styles only). */
+export interface MarketingThemeColors {
+  page: string;
+  card: string;
+  cardBorder: string;
+  text: string;
+  muted: string;
+  faint: string;
+  accent: string;
+  /** The wordmark's first letter. */
+  mark: string;
+  divider: string;
+  /** A soft panel inside the card: the coupon, the quote. */
+  soft: string;
+  scheme: "dark" | "light";
+}
+
+export const MARKETING_THEME_LABELS: Readonly<Record<MarketingTheme, string>> =
+  {
+    midnight: "Midnight",
+    clean: "Clean",
+    warm: "Warm",
+    ocean: "Ocean",
+    forest: "Forest",
+    ember: "Ember",
+  };
+
+export const MARKETING_THEME_COLORS: Readonly<
+  Record<MarketingTheme, MarketingThemeColors>
+> = {
+  midnight: {
+    page: "#0B0D12",
+    card: "#151821",
+    cardBorder: "#242936",
+    text: "#F3F4F6",
+    muted: "#9CA3AF",
+    faint: "#6B7280",
+    accent: "#6E7CFF",
+    mark: "#795CED",
+    divider: "#232733",
+    soft: "#1C2030",
+    scheme: "dark",
+  },
+  clean: {
+    page: "#F3F4F6",
+    card: "#FFFFFF",
+    cardBorder: "#E5E7EB",
+    text: "#111827",
+    muted: "#4B5563",
+    faint: "#6B7280",
+    accent: "#4F46E5",
+    mark: "#4F46E5",
+    divider: "#E5E7EB",
+    soft: "#F5F5FF",
+    scheme: "light",
+  },
+  warm: {
+    page: "#F6F1EA",
+    card: "#FFFDF9",
+    cardBorder: "#EADFD2",
+    text: "#2B211A",
+    muted: "#5C4D41",
+    faint: "#8A7A6C",
+    accent: "#D9480F",
+    mark: "#D9480F",
+    divider: "#EADFD2",
+    soft: "#FBF3EA",
+    scheme: "light",
+  },
+  ocean: {
+    page: "#E8F2FA",
+    card: "#FFFFFF",
+    cardBorder: "#D3E5F2",
+    text: "#0F2537",
+    muted: "#3E5568",
+    faint: "#6A8095",
+    accent: "#0B72B9",
+    mark: "#0B72B9",
+    divider: "#D3E5F2",
+    soft: "#EFF7FD",
+    scheme: "light",
+  },
+  forest: {
+    page: "#EAF2EC",
+    card: "#FFFFFF",
+    cardBorder: "#D5E4DA",
+    text: "#12261A",
+    muted: "#3F5747",
+    faint: "#6B8274",
+    accent: "#15803D",
+    mark: "#15803D",
+    divider: "#D5E4DA",
+    soft: "#F0F7F2",
+    scheme: "light",
+  },
+  ember: {
+    page: "#120E0B",
+    card: "#1C1714",
+    cardBorder: "#2E2620",
+    text: "#FAF5EF",
+    muted: "#BFB2A5",
+    faint: "#8C7F72",
+    accent: "#F97316",
+    mark: "#F97316",
+    divider: "#2E2620",
+    soft: "#251E19",
+    scheme: "dark",
+  },
+};
+
+export const marketingDesignSchema = z.object({
+  theme: z.enum(MARKETING_THEMES).default("midnight"),
+  /** Null: the theme's own accent. */
+  accent: marketingColorSchema.nullable().default(null),
+  font: z.enum(MARKETING_FONTS).default("modern"),
+  /** Where the logo and the footer sit. */
+  headerAlign: z.enum(["left", "center"]).default("left"),
+});
+export type MarketingDesign = z.infer<typeof marketingDesignSchema>;
+export const DEFAULT_MARKETING_DESIGN: MarketingDesign = {
+  theme: "midnight",
+  accent: null,
+  font: "modern",
+  headerAlign: "left",
+};
+
+/** A stored design, or the default when it is missing or broken. */
+export function readMarketingDesign(value: unknown): MarketingDesign {
+  const parsed = marketingDesignSchema.safeParse(value ?? {});
+  return parsed.success ? parsed.data : DEFAULT_MARKETING_DESIGN;
+}
+
+// --- Images and cards ---
+
+export const MARKETING_IMAGE_CONTENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+] as const;
+export type MarketingImageContentType =
+  (typeof MARKETING_IMAGE_CONTENT_TYPES)[number];
+export const MARKETING_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+export const marketingImagePresignRequestSchema = z.strictObject({
+  contentType: z.enum(MARKETING_IMAGE_CONTENT_TYPES, {
+    message: "Upload a PNG, JPEG, GIF or WebP image",
+  }),
+  fileSize: z
+    .number()
+    .int()
+    .positive()
+    .max(MARKETING_IMAGE_MAX_BYTES, "The image must be 5 MB or smaller"),
+});
+export type MarketingImagePresignRequest = z.infer<
+  typeof marketingImagePresignRequestSchema
+>;
+export const marketingImagePresignResponseSchema = z.strictObject({
+  uploadId: z.uuid(),
+  uploadUrl: z.string(),
+});
+export type MarketingImagePresignResponse = z.infer<
+  typeof marketingImagePresignResponseSchema
+>;
+export const marketingImageCompleteRequestSchema = z.strictObject({
+  uploadId: z.uuid(),
+  contentType: z.enum(MARKETING_IMAGE_CONTENT_TYPES),
+});
+export type MarketingImageCompleteRequest = z.infer<
+  typeof marketingImageCompleteRequestSchema
+>;
+export const marketingImageCompleteResponseSchema = z.strictObject({
+  url: z.string(),
+});
+export type MarketingImageCompleteResponse = z.infer<
+  typeof marketingImageCompleteResponseSchema
+>;
+
+/** A course's or workshop's words, to fill a card block with. */
+export const marketingCardFillSchema = z.object({
+  source: z.enum(["course", "workshop"]),
+  sourceId: z.uuid(),
+  title: z.string(),
+  meta: z.string(),
+  text: z.string(),
+  imageUrl: z.string().nullable(),
+  url: z.string(),
+  buttonLabel: z.string(),
+});
+export type MarketingCardFill = z.infer<typeof marketingCardFillSchema>;
 
 // --- Audiences ---
 
@@ -319,6 +639,7 @@ export type MarketingEmailSummary = z.infer<typeof marketingEmailSummarySchema>;
 export const marketingEmailSchema = marketingEmailSummarySchema.extend({
   preheader: z.string(),
   blocks: marketingBlocksSchema,
+  design: marketingDesignSchema,
   audience: marketingAudienceSchema.nullable(),
   settings: marketingAutomationSettingsSchema.nullable(),
   enabledAt: z.iso.datetime({ offset: true }).nullable(),
@@ -356,6 +677,7 @@ export const updateMarketingEmailRequestSchema = z.object({
   subject: trimmed(MARKETING_SUBJECT_MAX).optional(),
   preheader: trimmed(MARKETING_PREHEADER_MAX).optional(),
   blocks: marketingBlocksSchema.optional(),
+  design: marketingDesignSchema.optional(),
   audience: marketingAudienceSchema.optional(),
   settings: marketingAutomationSettingsSchema.optional(),
 });
@@ -383,6 +705,7 @@ export const marketingPreviewRequestSchema = z.object({
   preheader: trimmed(MARKETING_PREHEADER_MAX),
   /** Unchecked here: a half-written block still previews. */
   blocks: z.array(z.unknown()).max(MARKETING_BLOCKS_MAX),
+  design: marketingDesignSchema.default(DEFAULT_MARKETING_DESIGN),
   automationKey: marketingAutomationKeySchema.nullable().default(null),
 });
 export type MarketingPreviewRequest = z.infer<
