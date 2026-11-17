@@ -37,6 +37,28 @@ export async function findBundleBySlug(database: Executor, slug: string) {
     .executeTakeFirst();
 }
 
+/** Published bundles holding a course, oldest first: the order they are offered in. */
+export async function listPublishedBundlesForCourse(
+  database: Executor,
+  courseId: string,
+) {
+  return await database
+    .selectFrom("course_bundles")
+    .selectAll("course_bundles")
+    .where("course_bundles.status", "=", "published")
+    .where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom("course_bundle_items")
+          .select("course_bundle_items.id")
+          .whereRef("course_bundle_items.bundle_id", "=", "course_bundles.id")
+          .where("course_bundle_items.course_id", "=", courseId),
+      ),
+    )
+    .orderBy("course_bundles.created_at", "asc")
+    .execute();
+}
+
 export async function listPublishedBundles(database: Executor) {
   return await database
     .selectFrom("course_bundles")

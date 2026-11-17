@@ -134,6 +134,11 @@ import {
   type RegionalPriceView,
 } from "./overview/CoursePriceBar";
 import {
+  bundlePricingView,
+  CourseBundleChoice,
+} from "./overview/CourseBundleChoice";
+import { useCourseBundleOffers } from "../services/bundles";
+import {
   bandHeaderClasses,
   bandLinkClasses,
   bandTitleClasses,
@@ -321,7 +326,7 @@ function CoursePurchaseSection({
   // there. Until the region is known the price box shows a shimmer for a
   // course that has both (`regionalPrices` below), never one of the two.
   const priceRegion = usePriceRegion();
-  const pricing =
+  const regionPricing =
     priceRegion === "international" && pricingForAllRegions?.international
       ? pricingForAllRegions.international
       : pricingForAllRegions;
@@ -350,6 +355,30 @@ function CoursePurchaseSection({
   const stopGatewayCheckoutRef = useRef<StopGatewayCheckout | null>(null);
   useEffect(() => () => stopGatewayCheckoutRef.current?.(), []);
   const isEnrolled = Boolean(user && course.enrolled);
+
+  // Bundles with this course, priced for this visitor
+  // (creator-features/bundles-in-checkout). Picking one makes it what the
+  // card sells: its price, its saving and its Pay button, in rupees, with
+  // the same coupon and checkout as the course.
+  const bundleOffersQuery = useCourseBundleOffers(
+    buyCourseId,
+    user?.id ?? null,
+    {
+      enabled:
+        !isReadOnlyPreview &&
+        !isCreator &&
+        !isEnrolled &&
+        !pendingPrice &&
+        !purchaseCourseId,
+    },
+  );
+  const bundleOffers = bundleOffersQuery.data?.bundles ?? [];
+  const [bundleChoiceId, setBundleChoiceId] = useState<string | null>(null);
+  const chosenBundle =
+    bundleOffers.find((offer) => offer.id === bundleChoiceId) ?? null;
+  const pricing = chosenBundle
+    ? bundlePricingView(chosenBundle)
+    : regionPricing;
 
   const [isPaymentBusy, setIsPaymentBusy] = useState(false);
   // "Pay Now" pressed by a signed-in buyer before the price is known (a
@@ -410,14 +439,17 @@ function CoursePurchaseSection({
   // (with a coupon, if there is one).
   const includingCourse = isInvitationOnly ? includedWith?.[0] : undefined;
 
+  const chosenBundleId = chosenBundle?.id ?? null;
   const checkoutItem = useMemo(
     () =>
-      checkoutCourseItem(buyCourseId, {
-        isFree,
-        amount: voluntaryAmount,
-        catalogPrice: baseNumericPrice,
-      }),
-    [buyCourseId, isFree, voluntaryAmount, baseNumericPrice],
+      chosenBundleId
+        ? { itemType: "bundle" as const, bundleId: chosenBundleId }
+        : checkoutCourseItem(buyCourseId, {
+            isFree,
+            amount: voluntaryAmount,
+            catalogPrice: baseNumericPrice,
+          }),
+    [chosenBundleId, buyCourseId, isFree, voluntaryAmount, baseNumericPrice],
   );
 
   // What a payment would charge before the coupon, and whether the coupon
@@ -759,6 +791,7 @@ function CoursePurchaseSection({
       if (onNavigatePage) {
         rememberPendingPurchase({
           courseId: buyCourseId,
+          ...(chosenBundle ? { bundleId: chosenBundle.id } : {}),
           ...(voluntaryContributionAmount !== undefined
             ? { amount: voluntaryContributionAmount }
             : {}),
@@ -774,11 +807,13 @@ function CoursePurchaseSection({
     setPaymentError(null);
 
     try {
-      const item = checkoutCourseItem(buyCourseId, {
-        isFree,
-        amount: voluntaryContributionAmount ?? 0,
-        catalogPrice: baseNumericPrice,
-      });
+      const item = chosenBundle
+        ? { itemType: "bundle" as const, bundleId: chosenBundle.id }
+        : checkoutCourseItem(buyCourseId, {
+            isFree,
+            amount: voluntaryContributionAmount ?? 0,
+            catalogPrice: baseNumericPrice,
+          });
       const coupon = (couponOverride ?? appliedCoupon?.code)?.trim();
       const couponCode = !isFree && coupon ? coupon.toUpperCase() : undefined;
       // The key identifies this purchase, not this click: a second click on
@@ -853,7 +888,7 @@ function CoursePurchaseSection({
             (voluntaryContributionAmount ?? 0) > baseNumericPrice ||
             (isFree && (voluntaryContributionAmount ?? 0) > 0)
               ? `Support Creator - ${course.title}`
-              : (purchaseTitle ?? course.title),
+              : (chosenBundle?.title ?? purchaseTitle ?? course.title),
           prefill: {
             name: user.displayName || user.username,
             email: user.email,
@@ -967,6 +1002,12 @@ function CoursePurchaseSection({
       courseId: course.id,
       step: "resumed_after_sign_in",
     });
+    // A bundle the guest picked is picked again; they press Pay once they
+    // see its price for them (owning part of it may have changed it).
+    if (pending.bundleId) {
+      setBundleChoiceId(pending.bundleId);
+      return;
+    }
     // The guest's coupon goes back on the card as well; the order is made
     // with it either way.
     if (pending.couponCode && !appliedCoupon) {
@@ -1292,6 +1333,7 @@ function CoursePurchaseSection({
   // two prices alone, so the prerendered page is the same for everyone.
   const regionalPrices =
     pricingForAllRegions?.international &&
+    !chosenBundle &&
     !isFree &&
     !appliedCoupon &&
     !isPayingAbovePrice &&
@@ -1305,6 +1347,27 @@ function CoursePurchaseSection({
 
   return (
     <CoursePriceBar
+      choice={
+        bundleOffers.length > 0 && !isCreatorNormal && !includingCourse ? (
+          <CourseBundleChoice
+            courseTitle={course.title}
+            coursePrice={regionPricing?.price ?? ""}
+            offers={bundleOffers}
+            chosenId={chosenBundle?.id ?? null}
+            onChoose={(id) => {
+              setBundleChoiceId(id);
+              // A bundle is sold at its price: no amount of the buyer's own.
+              setVoluntaryAmount(0);
+              setSelectedPreset("0");
+              trackAnalyticsEvent("checkout_step", {
+                courseId: course.id,
+                step: id ? "bundle_chosen" : "course_chosen",
+              });
+            }}
+            disabled={isPaymentBusy}
+          />
+        ) : undefined
+      }
       regional={pendingPrice ? undefined : regionalPrices}
       pendingPrice={
         pendingPrice
@@ -1408,7 +1471,8 @@ function CoursePurchaseSection({
         ) : undefined
       }
       checkoutNote={
-        !isPaidPurchase ? undefined : pricingForAllRegions?.international ||
+        !isPaidPurchase ? undefined : (pricingForAllRegions?.international &&
+            !chosenBundle) ||
           pendingPrice ? (
           // How a buyer can pay depends on where they are: rupees by UPI,
           // cards and net banking in India, dollars by card elsewhere.
@@ -1425,6 +1489,7 @@ function CoursePurchaseSection({
       guarantee={isPaidPurchase ? coursePurchaseGuarantee : undefined}
     >
       {SUPPORT_AMOUNTS_OFFERED &&
+      !chosenBundle &&
       !isCreatorNormal &&
       !isEnrolled &&
       !isInvitationOnly ? (

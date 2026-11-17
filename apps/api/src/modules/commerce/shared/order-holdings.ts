@@ -19,14 +19,25 @@ import type { Executor } from "./repository.types.ts";
  */
 export async function listHeldItemTitles(
   executor: Executor,
-  order: { id: string; user_id: string },
+  order: { id: string; user_id: string; created_at?: Date },
   now: Date,
 ): Promise<string[]> {
-  const [items, ownedCourseIds] = await Promise.all([
+  const [items, ownedCourseIds, ownedWhenOrdered] = await Promise.all([
     orderRepo.listOrderItems(executor, order.id),
     enrollmentRepo.listUserEnrolledCourseIds(executor, order.user_id),
+    order.created_at
+      ? enrollmentRepo.listUserCourseIdsEnrolledBefore(
+          executor,
+          order.user_id,
+          order.created_at,
+        )
+      : Promise.resolve([] as string[]),
   ]);
   const owned = new Set(ownedCourseIds);
+  // A bundle bought by someone who owned part of it was priced for the rest
+  // only, so a course they had when ordering does not make it "held"; one
+  // they got since (the same order paid twice) still does.
+  const ownedBefore = new Set(ownedWhenOrdered);
 
   const bundleIds = items.flatMap((item) =>
     item.item_type === "bundle" && item.bundle_id ? [item.bundle_id] : [],
@@ -34,7 +45,9 @@ export async function listHeldItemTitles(
   const bundleCourses =
     owned.size === 0
       ? []
-      : await bundleRepo.listBundleCoursesForBundleIds(executor, bundleIds);
+      : (
+          await bundleRepo.listBundleCoursesForBundleIds(executor, bundleIds)
+        ).filter((row) => !ownedBefore.has(row.course_id));
 
   const heldWorkshopIds = new Set<string>();
   for (const item of items) {

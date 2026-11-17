@@ -42,6 +42,44 @@ export const courseBundleSchema = z.strictObject({
 });
 export type CourseBundle = z.infer<typeof courseBundleSchema>;
 
+/** At most this many bundles are offered on one course's price card. */
+export const BUNDLE_OFFERS_PER_COURSE = 2;
+
+/**
+ * A bundle as a course's price card offers it, priced for whoever asks:
+ * `apart` is today's prices of its courses added up, `charge` what this
+ * buyer pays (less each course they own, its share of the bundle price),
+ * and `saving` what they save on the courses they don't own. All in
+ * rupees.
+ */
+export const courseBundleOfferSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  price: z.number().int().nonnegative(),
+  apart: z.number().int().nonnegative(),
+  charge: z.number().int().nonnegative(),
+  saving: z.number().int().nonnegative(),
+  currency: z.string(),
+  courses: z.array(
+    z.object({
+      id: z.uuid(),
+      title: z.string(),
+      slug: z.string(),
+      price: z.number().int().nonnegative(),
+      owned: z.boolean(),
+    }),
+  ),
+});
+export type CourseBundleOffer = z.infer<typeof courseBundleOfferSchema>;
+
+export const courseBundleOffersResponseSchema = z.object({
+  bundles: z.array(courseBundleOfferSchema),
+});
+export type CourseBundleOffersResponse = z.infer<
+  typeof courseBundleOffersResponseSchema
+>;
+
 export const createBundleRequestSchema = z.strictObject({
   slug: z.string().min(1).max(160),
   title: z.string().min(1).max(255),

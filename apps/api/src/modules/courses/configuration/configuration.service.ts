@@ -350,7 +350,29 @@ export function createConfigurationService({
     return await configRepo.findSettingsByCourseId(database, courseId);
   }
 
+  /**
+   * Today's price of each course in whole rupees: its sale price when it is
+   * sold, 0 when it is free (one query for the lot).
+   */
+  async function listCurrentPrices(
+    courseIds: readonly string[],
+  ): Promise<Map<string, number>> {
+    if (courseIds.length === 0) return new Map();
+    const rows = await configRepo.findPricingByCourseIds(database, [
+      ...courseIds,
+    ]);
+    return new Map(
+      rows.map((row) => [
+        row.course_id,
+        row.pricing_type === "paid"
+          ? Math.max(0, row.sale_price ?? row.price)
+          : 0,
+      ]),
+    );
+  }
+
   return {
+    listCurrentPrices,
     upsertCourseAccessRules,
     upsertCoursePricing,
     upsertCourseSettings,

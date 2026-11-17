@@ -245,6 +245,25 @@ export async function listUserEnrolledCourseIds(
   return rows.map((r) => r.course_id);
 }
 
+/**
+ * Courses a learner was enrolled in before a moment, still active: what a
+ * bundle order placed then was already priced around (bundle-pricing.ts).
+ */
+export async function listUserCourseIdsEnrolledBefore(
+  database: Executor,
+  userId: string,
+  before: Date,
+): Promise<string[]> {
+  const rows = await database
+    .selectFrom("enrollments")
+    .select("course_id")
+    .where("user_id", "=", userId)
+    .where("status", "=", "active")
+    .where("created_at", "<", before)
+    .execute();
+  return rows.map((row) => row.course_id);
+}
+
 export async function listActiveUserIdsByCourseId(
   database: Executor,
   courseId: string,

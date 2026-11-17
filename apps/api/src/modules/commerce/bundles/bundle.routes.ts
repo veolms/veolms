@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  courseBundleOffersResponseSchema,
   courseBundleSchema,
   createBundleRequestSchema,
   updateBundleRequestSchema,
@@ -35,6 +36,42 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.listPublishedBundles,
+  );
+
+  // A course's bundles, as its price card offers them, priced for the
+  // visitor: less what any course they own takes off (bundle-pricing.ts).
+  app.get(
+    "/bundles/for-course/:courseId",
+    {
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
+      schema: {
+        operationId: "listCourseBundleOffers",
+        tags: ["Commerce - Bundles"],
+        summary: "The bundles a course's price card offers",
+        description:
+          "Published bundles holding the course, at most two, each with today's prices of its courses and what the visitor would pay. Bundles that save nothing, hold a course not on sale, or are fully owned are left out.",
+        params: z.object({ courseId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "The bundles to offer",
+            courseBundleOffersResponseSchema,
+          ),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { courseId } = request.params as { courseId: string };
+      const bundles = await service.listOffersForCourse(
+        courseId,
+        request.user?.id ?? null,
+      );
+      // Priced for this visitor: never kept by a shared cache.
+      reply.header("Cache-Control", "private, no-store");
+      return { bundles };
+    },
   );
 
   // 2. GET /bundles/:slug - Public get bundle by slug

@@ -270,15 +270,11 @@ export function createCheckoutService({
         ) {
           throw CommerceErrors.BUNDLE_COURSE_NOT_AVAILABLE(item.title_snapshot);
         }
+        // Owning part of a bundle is fine: it was priced for the rest
+        // (bundle-pricing.ts). Owning all of it leaves nothing to sell.
         const ownedCourses = courses.filter((row) => owned.has(row.course_id));
         if (courses.length > 0 && ownedCourses.length === courses.length) {
           throw CommerceErrors.BUNDLE_ALL_COURSES_OWNED(item.title_snapshot);
-        }
-        if (ownedCourses.length > 0) {
-          throw CommerceErrors.BUNDLE_CONTAINS_OWNED_COURSE(
-            item.title_snapshot,
-            ownedCourses.map((row) => row.course_title),
-          );
         }
       } else if (item.item_type === "quiz" && item.quiz_pricing_id) {
         // The same lookup pricing refuses a new order with.

@@ -800,6 +800,8 @@ export const managedCourseSummarySchema = z.object({
   totalDurationSeconds: z.number().int().nonnegative(),
   /** Its place in the order an admin set (0 first); null when not placed. */
   sortPosition: z.number().int().nonnegative().nullable().optional(),
+  /** Today's price in whole rupees; 0 when free. */
+  price: z.number().int().nonnegative().optional(),
 });
 
 /** The most courses one reorder may name. */

@@ -939,6 +939,9 @@ export function createCourseService({
       database,
       isAdmin ? undefined : creatorId,
     );
+    const prices = await configurationService.listCurrentPrices(
+      rows.map((row) => row.id),
+    );
     const courses = await Promise.all(
       rows.map(async (c) => {
         // The thumbnail's media row came with the course, so the usual case
@@ -980,6 +983,7 @@ export function createCourseService({
             c.estimated_duration,
           ),
           sortPosition: c.sort_position,
+          price: prices.get(c.id) ?? 0,
         } satisfies ManagedCourseSummary;
       }),
     );

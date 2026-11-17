@@ -22,6 +22,8 @@ export interface PendingPurchase {
   amount?: number;
   /** The coupon applied when the button was pressed. */
   couponCode?: string;
+  /** The bundle chosen on the card, when one was. */
+  bundleId?: string;
 }
 
 interface StoredPurchase extends PendingPurchase {
@@ -46,6 +48,9 @@ function read(): StoredPurchase | null {
       ...(typeof stored.amount === "number" ? { amount: stored.amount } : {}),
       ...(typeof stored.couponCode === "string"
         ? { couponCode: stored.couponCode }
+        : {}),
+      ...(typeof stored.bundleId === "string"
+        ? { bundleId: stored.bundleId }
         : {}),
     };
   } catch {

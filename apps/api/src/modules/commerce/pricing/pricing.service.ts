@@ -22,6 +22,7 @@ import * as quizPricingRepo from "../../quizzes/shared/quiz-pricing.repository.t
 import * as courseRepo from "../../courses/course/course.repository.ts";
 import * as courseConfigRepo from "../../courses/configuration/configuration.repository.ts";
 import * as bundleRepo from "../bundles/bundle.repository.ts";
+import { bundleCharge } from "../bundles/bundle-pricing.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
 import { raiseToMinimumCharge, resolveCourseCharge } from "./pricing.amount.ts";
@@ -286,6 +287,15 @@ export function createPricingService({
       list.push(bc);
       bundleCoursesByBundleId.set(bc.bundle_id, list);
     }
+    // Today's prices of the bundles' courses: what an owned course takes
+    // off a bundle is its share of the bundle price (bundle-pricing.ts).
+    const bundleCoursePricing = new Map(
+      (
+        await courseConfigRepo.findPricingByCourseIds(database, [
+          ...new Set(bundleCourseRows.map((row) => row.course_id)),
+        ])
+      ).map((row) => [row.course_id, row]),
+    );
     const quizzesByPricingId = new Map(quizRows.map((q) => [q.pricing_id, q]));
     const workshopsById = new Map(workshopRows.map((w) => [w.id, w]));
 
@@ -477,19 +487,24 @@ export function createPricingService({
           throw CommerceErrors.BUNDLE_ALL_COURSES_OWNED(bundle.title);
         }
 
-        // A bundle is one price for all its courses, so buying it with one
-        // of them already owned paid for that course a second time.
+        // A buyer who owns part of the bundle pays for the rest only: each
+        // owned course takes its share of the bundle price off, so the rest
+        // keeps the bundle's discount. The line is priced at what this
+        // buyer pays, and names what they own.
         const ownedCourses = bundleCourses.filter((c) =>
           enrolledCourseIds.has(c.course_id),
         );
-        if (ownedCourses.length > 0) {
-          throw CommerceErrors.BUNDLE_CONTAINS_OWNED_COURSE(
-            bundle.title,
-            ownedCourses.map((c) => c.course_title),
-          );
-        }
+        const { charge } = bundleCharge({
+          bundlePrice: bundle.price,
+          courses: bundleCourses.map((c) => ({
+            courseId: c.course_id,
+            price: resolveCoursePricing(bundleCoursePricing.get(c.course_id))
+              .catalogPrice,
+          })),
+          ownedCourseIds: enrolledCourseIds,
+        });
 
-        const unitPrice = bundle.price;
+        const unitPrice = charge;
         const itemCurrency = bundle.currency ?? "INR";
         if (!currencyInitialized) {
           detectedCurrency = itemCurrency;
@@ -503,7 +518,10 @@ export function createPricingService({
         calculatedItems.push({
           itemType: "bundle",
           itemId: bundleId,
-          title: bundle.title,
+          title:
+            ownedCourses.length > 0
+              ? `${bundle.title} (you own ${ownedCourses.map((c) => c.course_title).join(", ")})`
+              : bundle.title,
           unitPrice,
           couponBase: unitPrice,
           domesticCouponBase: unitPrice,
@@ -512,7 +530,12 @@ export function createPricingService({
           finalAmount: unitPrice,
         });
         subtotalAmount += unitPrice;
-        itemCourseMap.set(bundleId, bundleCourseIds);
+        // Access for the courses bought now; the owned ones are kept as they
+        // are, so a refund of the bundle never takes those away.
+        itemCourseMap.set(
+          bundleId,
+          bundleCourseIds.filter((id) => !enrolledCourseIds.has(id)),
+        );
       } else if (item.itemType === "quiz") {
         const quizPricingId = item.quizPricingId!;
         const offering = quizzesByPricingId.get(quizPricingId);

@@ -1,4 +1,8 @@
 import crypto from "node:crypto";
+import {
+  BUNDLE_OFFERS_PER_COURSE,
+  type CourseBundleOffer,
+} from "@veolms/contracts";
 import type {
   CourseBundle,
   BundleItem,
@@ -13,6 +17,10 @@ import { CommerceErrors } from "../shared/commerce.errors.ts";
 import { isUniqueViolation } from "../shared/db-errors.ts";
 import * as bundleRepo from "./bundle.repository.ts";
 import * as courseRepo from "../../courses/course/course.repository.ts";
+import * as courseConfigRepo from "../../courses/configuration/configuration.repository.ts";
+import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
+import { resolveCoursePricing } from "../pricing/purchasable.ts";
+import { bundleCharge, bundleSaves } from "./bundle-pricing.ts";
 
 /**
  * Published bundles as every visitor sees them (the list, and each by its
@@ -42,6 +50,10 @@ export interface BundleService {
   createBundle(request: CreateBundleRequest): Promise<CourseBundle>;
   updateBundle(id: string, request: UpdateBundleRequest): Promise<CourseBundle>;
   deleteBundle(id: string): Promise<void>;
+  listOffersForCourse(
+    courseId: string,
+    viewerId: string | null,
+  ): Promise<CourseBundleOffer[]>;
 }
 
 type BundleRow = NonNullable<
@@ -163,12 +175,130 @@ export function createBundleService({
     );
   }
 
+  /** Today's price of each course, in whole rupees (0 for a free one). */
+  async function coursePrices(courseIds: readonly string[]) {
+    const rows = await courseConfigRepo.findPricingByCourseIds(database, [
+      ...courseIds,
+    ]);
+    const byId = new Map(rows.map((row) => [row.course_id, row]));
+    return new Map(
+      courseIds.map((id) => [
+        id,
+        resolveCoursePricing(byId.get(id)).catalogPrice,
+      ]),
+    );
+  }
+
+  /**
+   * A bundle must hold two courses or more and cost less than they do
+   * apart, at today's prices: the "You save" a buyer is shown comes from
+   * the same numbers.
+   */
+  async function assertSaves(courseIds: readonly string[], price: number) {
+    if (courseIds.length < 2) {
+      throw new AppError(
+        400,
+        "BUNDLE_TOO_SMALL",
+        "A bundle needs at least two courses.",
+      );
+    }
+    const prices = await coursePrices(courseIds);
+    const courses = courseIds.map((courseId) => ({
+      courseId,
+      price: prices.get(courseId) ?? 0,
+    }));
+    if (!bundleSaves({ bundlePrice: price, courses })) {
+      const apart = courses.reduce((sum, course) => sum + course.price, 0);
+      throw new AppError(
+        400,
+        "BUNDLE_NO_SAVING",
+        `The bundle must cost less than its courses bought apart (₹${apart.toLocaleString("en-IN")}).`,
+      );
+    }
+  }
+
+  async function listOffersForCourse(
+    courseId: string,
+    viewerId: string | null,
+  ): Promise<CourseBundleOffer[]> {
+    const bundles = await bundleRepo.listPublishedBundlesForCourse(
+      database,
+      courseId,
+    );
+    if (bundles.length === 0) return [];
+    const [items, owned] = await Promise.all([
+      bundleRepo.listBundleCoursesForBundleIds(
+        database,
+        bundles.map((bundle) => bundle.id),
+      ),
+      viewerId
+        ? enrollmentRepo
+            .listUserEnrolledCourseIds(database, viewerId)
+            .then((ids) => new Set(ids))
+        : Promise.resolve(new Set<string>()),
+    ]);
+    const prices = await coursePrices([
+      ...new Set(items.map((item) => item.course_id)),
+    ]);
+
+    const offers: CourseBundleOffer[] = [];
+    for (const bundle of bundles) {
+      const courses = items.filter((item) => item.bundle_id === bundle.id);
+      // Offered only while every course in it is on sale for a price, and
+      // it still saves money at today's prices.
+      if (
+        courses.length < 2 ||
+        courses.some(
+          (course) =>
+            course.course_status !== "published" ||
+            (prices.get(course.course_id) ?? 0) <= 0,
+        )
+      ) {
+        continue;
+      }
+      const atPrice = courses.map((course) => ({
+        courseId: course.course_id,
+        price: prices.get(course.course_id) ?? 0,
+      }));
+      if (!bundleSaves({ bundlePrice: bundle.price, courses: atPrice })) {
+        continue;
+      }
+      const charge = bundleCharge({
+        bundlePrice: bundle.price,
+        courses: atPrice,
+        ownedCourseIds: owned,
+      });
+      // Nothing left to buy, or nothing saved on what is left.
+      if (charge.ownsAll || charge.saving <= 0) continue;
+      offers.push({
+        id: bundle.id,
+        slug: bundle.slug,
+        title: bundle.title,
+        price: bundle.price,
+        apart: charge.apart,
+        charge: charge.charge,
+        saving: charge.saving,
+        currency: bundle.currency ?? "INR",
+        courses: courses.map((course) => ({
+          id: course.course_id,
+          title: course.course_title,
+          slug: course.course_slug,
+          price: prices.get(course.course_id) ?? 0,
+          owned: owned.has(course.course_id),
+        })),
+      });
+      if (offers.length === BUNDLE_OFFERS_PER_COURSE) break;
+    }
+    return offers;
+  }
+
   async function createBundle(
     request: CreateBundleRequest,
   ): Promise<CourseBundle> {
     const normalizedSlug = request.slug.toLowerCase().trim();
     // A course named twice is still one course in the bundle.
     const courseIds = [...new Set(request.courseIds)];
+    await assertSaves(courseIds, request.price);
     const existing = await bundleRepo.findBundleBySlug(
       database,
       normalizedSlug,
@@ -264,6 +394,15 @@ export function createBundleService({
         }
       }
     }
+    if (courseIds || request.price !== undefined) {
+      await assertSaves(
+        courseIds ??
+          (await bundleRepo.listBundleCourses(database, id)).map(
+            (row) => row.course_id,
+          ),
+        request.price ?? existing.price,
+      );
+    }
 
     const now = new Date();
 
@@ -325,5 +464,6 @@ export function createBundleService({
     createBundle,
     updateBundle,
     deleteBundle,
+    listOffersForCourse,
   };
 }

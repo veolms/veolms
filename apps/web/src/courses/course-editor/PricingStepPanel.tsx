@@ -1,5 +1,6 @@
 import { Checkbox } from "../../components/Checkbox";
 import { CourseQuizPricingCard } from "../CourseQuizPricingCard";
+import { CourseBundlesCard } from "../CourseBundlesCard";
 import { CourseLinkedCoursesCard } from "../CourseLinkedCoursesCard";
 import { CoursePartialAccessCard } from "../CoursePartialAccessCard";
 import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
@@ -409,6 +410,9 @@ export function PricingStepPanel({
 
       {/* Parts of this course sold on their own */}
       <CoursePartialAccessCard courseId={currentCourseId} />
+
+      {/* Bundles: this course sold with others, for less */}
+      <CourseBundlesCard courseId={currentCourseId} />
 
       {/* Card 3: Quiz Pricing */}
       {setsQuizPricing && (

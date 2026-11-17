@@ -104,6 +104,8 @@ export interface CoursePriceBarProps {
   guarantee?: CoursePurchaseGuarantee;
   /** A further row under the price, above the perks. */
   children?: ReactNode;
+  /** At the top of the bar: this course alone, or a bundle with it. */
+  choice?: ReactNode;
 }
 
 /** The price part of the bar for one region (see `CoursePriceBarProps.regional`). */
@@ -370,6 +372,7 @@ export function CoursePriceBar({
   checkoutNote,
   guarantee,
   children,
+  choice,
 }: CoursePriceBarProps) {
   const receipt = pendingPrice
     ? pendingPrice.receipt
@@ -384,6 +387,7 @@ export function CoursePriceBar({
       data-fixed-radius
     >
       <div className={`${priceBarPaddingClasses} flex flex-col gap-3.5`}>
+        {choice}
         {/* One row once the bar is wide enough for the price and what the
           coupon and the button ask for (`controlsReserveClasses`); if not,
           those two take the next line, whatever the coupon's state. */}
