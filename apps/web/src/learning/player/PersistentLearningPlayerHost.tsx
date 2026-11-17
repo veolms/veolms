@@ -7,7 +7,10 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { useAnchorPositionFallback } from "./useAnchorPositionFallback";
+import {
+  useAnchorPositionFallback,
+  useAnchorRevealRelayout,
+} from "./useAnchorPositionFallback";
 import "../learning-feature.css";
 import { createPortal } from "react-dom";
 import { getPageFullscreenElement } from "@veolms/video-player";
@@ -182,6 +185,12 @@ export function PersistentLearningPlayerHost({
   // Over its slot by measurement where the stylesheet's anchor positioning
   // is not understood (Safari before 26); nothing elsewhere.
   useAnchorPositionFallback(
+    hostRef,
+    presentation === "mini" ? null : player.anchor,
+  );
+  // On a phone, laid out again when its slot scrolls back into view, so the
+  // video does not stay blank after a long scroll through the comments.
+  useAnchorRevealRelayout(
     hostRef,
     presentation === "mini" ? null : player.anchor,
   );

@@ -202,6 +202,18 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   height: anchor-size(height);
 }
 
+/* On a phone the lesson column scrolls by itself and the player, outside it,
+   follows its slot. Chrome's default (`anchors-visible`) hides the player
+   while the slot is scrolled out of view, and on Android it could keep it
+   hidden once the slot was back: after a long scroll through the comments
+   the video area stayed blank until it was tapped. The player is never
+   hidden for that; it is off screen with its slot anyway. */
+@media (max-width: 640px) {
+  .learning-persistent-player--full {
+    position-visibility: always;
+  }
+}
+
 .learning-persistent-player--full .video-shell {
   anchor-name: --learning-ambient-video-shell;
 }
