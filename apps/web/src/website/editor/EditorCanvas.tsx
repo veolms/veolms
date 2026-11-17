@@ -40,6 +40,8 @@ a{cursor:default}
 .ed-empty{min-height:60vh;display:grid;place-items:center;font:500 15px/1.5 system-ui,sans-serif;color:#64748b;text-align:center;padding:24px}
 .ed-empty button{margin-top:12px;font:600 14px/1 system-ui,sans-serif;color:#fff;background:#6366f1;border:0;border-radius:10px;padding:12px 16px;cursor:pointer}
 .ed-hidden-note{position:absolute;top:8px;right:8px;z-index:3;font:600 11px/1 system-ui,sans-serif;color:#0f172a;background:#fde68a;border-radius:6px;padding:5px 7px}
+.vp-buybar{position:relative!important}
+.vp-buybar-space{display:none}
 @media (max-width:719px){.vp-hide-phone{display:block!important;opacity:.45}}
 @media (min-width:720px){.vp-hide-desktop{display:block!important;opacity:.45}}
 `;

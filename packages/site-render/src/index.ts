@@ -8,11 +8,15 @@ import {
 import type { SiteRenderContext } from "./context.ts";
 import { html, raw, type Html } from "./html.ts";
 import { about } from "./sections/about.ts";
+import { buybar } from "./sections/buybar.ts";
+import { countdown } from "./sections/countdown.ts";
 import { courses } from "./sections/courses.ts";
 import { cta } from "./sections/cta.ts";
 import { faq } from "./sections/faq.ts";
 import { features } from "./sections/features.ts";
 import { footer } from "./sections/footer.ts";
+import { gallery } from "./sections/gallery.ts";
+import { guarantee } from "./sections/guarantee.ts";
 import type { SectionRenderer } from "./sections/frame.ts";
 import { header } from "./sections/header.ts";
 import { hero } from "./sections/hero.ts";
@@ -21,6 +25,8 @@ import { logos } from "./sections/logos.ts";
 import { pricing } from "./sections/pricing.ts";
 import { stats } from "./sections/stats.ts";
 import { testimonials } from "./sections/testimonials.ts";
+import { text } from "./sections/text.ts";
+import { video } from "./sections/video.ts";
 import {
   BASE_CSS,
   MOTION_SCRIPT,
@@ -61,6 +67,12 @@ const RENDERERS: { [Type in SiteSectionType]: SectionRenderer<Type> } = {
   stats,
   pricing,
   about,
+  countdown,
+  guarantee,
+  video,
+  gallery,
+  text,
+  buybar,
 };
 
 function renderSection(
@@ -172,7 +184,8 @@ export function renderSitePage(input: {
       <body class="vp-site" ${raw(attributes)}>
         ${headers}
         <main>${body}</main>
-        ${footers} ${motionLevel(look) === "off" ? null : MOTION_TAG}
+        ${footers}
+        ${motionLevel(look) === "off" && !types.has("countdown") ? null : MOTION_TAG}
       </body>
     </html>`;
   return { html: page.value, courseIds: [...courseIds] };

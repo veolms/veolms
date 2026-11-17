@@ -120,6 +120,12 @@ export const SITE_SECTION_LAYOUTS = {
   stats: ["inline", "cards", "band"],
   pricing: ["cards", "single"],
   about: ["left", "right", "centered"],
+  countdown: ["banner", "boxes"],
+  guarantee: ["badge", "row"],
+  video: ["wide", "split"],
+  gallery: ["grid", "masonry", "row"],
+  text: ["narrow", "columns"],
+  buybar: ["bar"],
 } as const;
 
 export type SiteSectionType = keyof typeof SITE_SECTION_LAYOUTS;
@@ -296,6 +302,77 @@ const aboutSettings = z.strictObject({
   button: siteButtonSchema,
 });
 
+const countdownSettings = z.strictObject({
+  ...look,
+  heading: text(140),
+  text: text(400),
+  /**
+   * "date": everyone counts down to `endsAt`; "evergreen": each visitor gets
+   * `hours` from their first visit (kept in their browser).
+   */
+  mode: z.enum(["date", "evergreen"]),
+  endsAt: z.union([z.literal(""), z.iso.datetime({ offset: true })]),
+  hours: z.number().int().min(1).max(720),
+  button: siteButtonSchema,
+  /** Shown instead of the clock once it reaches zero. */
+  endedText: text(200),
+});
+
+const guaranteeSettings = z.strictObject({
+  ...look,
+  /** The seal's words: "30-day money-back guarantee". */
+  badge: requiredText(60),
+  heading: text(140),
+  text: text(600),
+  items: z
+    .array(
+      z.strictObject({
+        mark: text(8),
+        text: requiredText(80),
+      }),
+    )
+    .max(6),
+});
+
+const videoSettings = z.strictObject({
+  ...look,
+  heading: text(140),
+  text: text(600),
+  /** Where the video plays: YouTube, Vimeo, a free lesson. */
+  url: z.union([z.literal(""), siteHrefSchema]),
+  poster: siteImageSchema,
+  button: siteButtonSchema,
+});
+
+const gallerySettings = z.strictObject({
+  ...look,
+  heading: text(140),
+  items: z
+    .array(
+      z.strictObject({
+        image: siteImageSchema,
+        caption: text(140),
+      }),
+    )
+    .max(24),
+});
+
+const textSettings = z.strictObject({
+  ...look,
+  heading: text(140),
+  /** Paragraphs split by an empty line. */
+  body: text(6000),
+});
+
+const buybarSettings = z.strictObject({
+  ...look,
+  /** What is for sale: "React from zero". */
+  title: requiredText(80),
+  price: text(24),
+  compareAt: text(24),
+  button: siteButtonSchema,
+});
+
 function section<Type extends SiteSectionType, Settings extends z.ZodType>(
   type: Type,
   settings: Settings,
@@ -322,6 +399,12 @@ export const siteSectionSchema = z.discriminatedUnion("type", [
   section("stats", statsSettings),
   section("pricing", pricingSettings),
   section("about", aboutSettings),
+  section("countdown", countdownSettings),
+  section("guarantee", guaranteeSettings),
+  section("video", videoSettings),
+  section("gallery", gallerySettings),
+  section("text", textSettings),
+  section("buybar", buybarSettings),
 ]);
 export type SiteSection = z.infer<typeof siteSectionSchema>;
 export type SiteSectionOf<Type extends SiteSectionType> = Extract<

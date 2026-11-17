@@ -36,6 +36,26 @@ export interface FieldChoices {
 
 type Values = Record<string, unknown>;
 
+/** An ISO date as the browser's date-time field shows it, in local time. */
+function toLocalInput(iso: string): string {
+  const time = Date.parse(iso);
+  if (!Number.isFinite(time)) return "";
+  const local = new Date(time - new Date(time).getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+/** The field's local date-time as ISO with the browser's offset, or "". */
+function fromLocalInput(value: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? "+" : "-";
+  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0");
+  const minutes = String(Math.abs(offset) % 60).padStart(2, "0");
+  return `${value.length === 16 ? value + ":00" : value}${sign}${hours}:${minutes}`;
+}
+
 /**
  * One field of a section's Content tab, drawn from its description in the
  * section catalogue. `onChange` receives the field's new value; typing
@@ -114,6 +134,19 @@ export function FieldControl({
             onChange={(next) => onChange(next)}
           />
         </div>
+      );
+    case "datetime":
+      return (
+        <label className="block" htmlFor={id}>
+          <span className={fieldLabelClasses}>{field.label}</span>
+          <input
+            id={id}
+            type="datetime-local"
+            className={textInputClasses}
+            value={toLocalInput(String(value ?? ""))}
+            onChange={(event) => onChange(fromLocalInput(event.target.value))}
+          />
+        </label>
       );
     case "number":
       return (

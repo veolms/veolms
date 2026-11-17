@@ -187,6 +187,15 @@ void describe("site page rendering", () => {
       context: context(),
     });
     assert.ok(!/<script/iu.test(still.html), "no script when motion is off");
+    const ticking = renderSitePage({
+      document: page([newSection("countdown", "tech")]),
+      look: { themeId: "tech", colourMode: "system", motion: "off" },
+      context: context(),
+    });
+    assert.ok(
+      ticking.html.includes(MOTION_SCRIPT),
+      "an offer clock keeps ticking with motion off",
+    );
     assert.ok(html.includes(".vp-hero"));
     assert.ok(!html.includes(".vp-faq"), "FAQ styles are not sent");
     assert.ok(html.includes('data-mode="system"'));

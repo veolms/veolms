@@ -12,6 +12,12 @@ import { NavigationArrowIcon } from "@phosphor-icons/react/NavigationArrow";
 import { SealCheckIcon } from "@phosphor-icons/react/SealCheck";
 import { TagIcon } from "@phosphor-icons/react/Tag";
 import { UserCircleIcon } from "@phosphor-icons/react/UserCircle";
+import { ImagesIcon } from "@phosphor-icons/react/Images";
+import { PlayCircleIcon } from "@phosphor-icons/react/PlayCircle";
+import { ShieldCheckIcon } from "@phosphor-icons/react/ShieldCheck";
+import { ShoppingCartIcon } from "@phosphor-icons/react/ShoppingCart";
+import { TextAlignLeftIcon } from "@phosphor-icons/react/TextAlignLeft";
+import { TimerIcon } from "@phosphor-icons/react/Timer";
 import type { SiteSectionType } from "@veolms/contracts";
 
 /**
@@ -46,6 +52,8 @@ export type FieldSpec =
       options: ReadonlyArray<{ value: string; label: string }>;
     }
   | { kind: "number"; key: string; label: string; min: number; max: number }
+  /** A date and time, stored as an ISO string with the browser's offset. */
+  | { kind: "datetime"; key: string; label: string }
   | { kind: "image"; key: string; label: string }
   | { kind: "button"; key: string; label: string }
   | { kind: "link"; key: string; label: string }
@@ -469,6 +477,145 @@ export const SECTION_CATALOG: Record<SiteSectionType, SectionMeta> = {
       button("button", "Button"),
     ],
   },
+  countdown: {
+    label: "Countdown",
+    description: "An offer clock: to a date, or 48 hours for each visitor.",
+    group: "selling",
+    Icon: TimerIcon,
+    fields: [
+      { kind: "text", key: "heading", label: "Heading", max: 140 },
+      { kind: "textarea", key: "text", label: "Text", max: 400 },
+      {
+        kind: "choice",
+        key: "mode",
+        label: "Counts down",
+        options: [
+          { value: "evergreen", label: "For each visitor" },
+          { value: "date", label: "To a date" },
+        ],
+      },
+      {
+        kind: "number",
+        key: "hours",
+        label: "Hours from their first visit",
+        min: 1,
+        max: 720,
+        showIf: (settings) => settings.mode === "evergreen",
+      },
+      {
+        kind: "datetime",
+        key: "endsAt",
+        label: "Ends at",
+        showIf: (settings) => settings.mode === "date",
+      },
+      button("button", "Button"),
+      { kind: "text", key: "endedText", label: "Shown when it ends", max: 200 },
+    ],
+  },
+  guarantee: {
+    label: "Guarantee",
+    description: "Your refund promise in a seal, with trust points.",
+    group: "proof",
+    Icon: ShieldCheckIcon,
+    fields: [
+      { kind: "text", key: "badge", label: "The promise", max: 60 },
+      { kind: "text", key: "heading", label: "Heading", max: 140 },
+      { kind: "textarea", key: "text", label: "Text", max: 600 },
+      {
+        kind: "list",
+        key: "items",
+        label: "Trust points",
+        itemLabel: "Point",
+        titleKey: "text",
+        max: 6,
+        newItem: () => ({ mark: "✅", text: "A reason to trust you" }),
+        fields: [
+          { kind: "text", key: "mark", label: "Emoji", max: 8 },
+          { kind: "text", key: "text", label: "Text", max: 80 },
+        ],
+      },
+    ],
+  },
+  video: {
+    label: "Video",
+    description: "A picture with a play button that opens your video.",
+    group: "content",
+    Icon: PlayCircleIcon,
+    fields: [
+      { kind: "text", key: "heading", label: "Heading", max: 140 },
+      { kind: "textarea", key: "text", label: "Text", max: 600 },
+      {
+        kind: "text",
+        key: "url",
+        label: "Video address (YouTube, Vimeo…)",
+        placeholder: "https://",
+      },
+      { kind: "image", key: "poster", label: "Picture shown before it plays" },
+      button("button", "Button"),
+    ],
+  },
+  gallery: {
+    label: "Gallery",
+    description: "Pictures in a grid, a masonry wall or a swipe row.",
+    group: "content",
+    Icon: ImagesIcon,
+    fields: [
+      { kind: "text", key: "heading", label: "Heading", max: 140 },
+      {
+        kind: "list",
+        key: "items",
+        label: "Pictures",
+        itemLabel: "Picture",
+        titleKey: "caption",
+        max: 24,
+        newItem: () => ({ image: { src: "", alt: "" }, caption: "" }),
+        fields: [
+          { kind: "image", key: "image", label: "Picture" },
+          { kind: "text", key: "caption", label: "Caption", max: 140 },
+        ],
+      },
+    ],
+  },
+  text: {
+    label: "Text",
+    description: "Paragraphs of your own words.",
+    group: "content",
+    Icon: TextAlignLeftIcon,
+    fields: [
+      { kind: "text", key: "heading", label: "Heading", max: 140 },
+      {
+        kind: "textarea",
+        key: "body",
+        label: "Text (empty line between paragraphs)",
+        rows: 10,
+        max: 6000,
+      },
+    ],
+  },
+  buybar: {
+    label: "Buy bar",
+    description:
+      "Stays at the bottom of the screen with your price and button.",
+    group: "selling",
+    Icon: ShoppingCartIcon,
+    fields: [
+      { kind: "text", key: "title", label: "What is for sale", max: 80 },
+      {
+        kind: "text",
+        key: "price",
+        label: "Price",
+        max: 24,
+        placeholder: "₹1,999",
+      },
+      {
+        kind: "text",
+        key: "compareAt",
+        label: "Old price (struck out)",
+        max: 24,
+      },
+      button("button", "Button"),
+    ],
+  },
 };
 
 /** What each layout is called in the Design tab. */
@@ -500,6 +647,12 @@ export const LAYOUT_LABELS: Record<string, string> = {
   single: "One offer",
   left: "Photo on the left",
   right: "Photo on the right",
+  boxes: "Big boxes",
+  badge: "Seal",
+  wide: "Wide",
+  masonry: "Masonry",
+  narrow: "Narrow",
+  bar: "Bar",
 };
 
 /** A section's colour schemes, with the swatch the Design tab shows. */
