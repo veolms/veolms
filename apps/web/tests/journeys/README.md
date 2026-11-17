@@ -14,6 +14,7 @@ watching the video, paying, and checking what is saved.
 | `06-active-sessions.spec.ts`    | Active sessions locked state and identity verification before viewing or revoking devices                                                                                      |
 | `11-playback-speed.spec.ts`     | A speed changed from outside the player (a browser extension) is announced and not saved over the learner's own                                                                |
 | `13-academy-onboarding.spec.ts` | A creator signs up, names and launches an academy, and lands signed in on its admin home (needs a VeoLMS Cloud stack: `ONBOARDING_URL`, see the file)                          |
+| `14-buying-a-bundle.spec.ts`    | Making a bundle in a course's Pricing step; buying it from the price card; paying only the rest when you own part                                                              |
 
 ## Running them
 
