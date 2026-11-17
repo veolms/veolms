@@ -1,4 +1,6 @@
 import type {
+  SiteAnimation,
+  SiteHideOn,
   SiteImage,
   SiteSectionOf,
   SiteSectionType,
@@ -18,16 +20,28 @@ export interface SectionRenderer<Type extends SiteSectionType> {
   ) => Html | null;
 }
 
-/** The outer `<section>` every section shares: tone, spacing and layout. */
+/**
+ * The outer `<section>` every section shares: tone, spacing, layout, where
+ * it is hidden, and how it comes into view ("auto" follows the theme).
+ */
 export function frame(
   section: { id: string; type: string; layout: string },
-  look: { tone: SiteTone; spacing: SiteSpacing },
+  look: {
+    tone: SiteTone;
+    spacing: SiteSpacing;
+    animation?: SiteAnimation | undefined;
+    hideOn?: SiteHideOn | undefined;
+  },
   inner: Html,
   label?: string,
 ): Html {
+  const animation = look.animation ?? "auto";
+  const hidden =
+    look.hideOn && look.hideOn !== "none" ? ` vp-hide-${look.hideOn}` : "";
   return html`<section
     id="${section.id}"
-    class="vp-s vp-tone-${look.tone} vp-sp-${look.spacing} vp-${section.type} vp-${section.type}--${section.layout}"
+    class="vp-s vp-tone-${look.tone} vp-sp-${look.spacing} vp-${section.type} vp-${section.type}--${section.layout}${hidden}"
+    ${animation === "none" ? null : html` data-anim="${animation}"`}
     ${label ? html` aria-label="${label}"` : null}
   >
     <div class="vp-wrap">${inner}</div>

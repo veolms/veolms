@@ -9,7 +9,7 @@ export const cta: SectionRenderer<"cta"> = {
 .vp-cta .vp-actions{margin-top:24px}
 .vp-cta--banner .vp-cta-box{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:20px}
 .vp-cta--banner .vp-actions{margin:0}
-.vp-cta--card .vp-cta-box{background:var(--s-card);border:1px solid var(--s-border);border-radius:var(--radius);padding:clamp(28px,6vw,56px);text-align:center;display:flex;flex-direction:column;align-items:center}
+.vp-cta--card .vp-cta-box{padding:clamp(28px,6vw,56px);text-align:center;display:flex;flex-direction:column;align-items:center}
 .vp-cta--card .vp-cta-text{margin-inline:auto}
 .vp-cta--card .vp-actions{justify-content:center}
 .vp-cta--split .vp-cta-box{display:grid;gap:20px;align-items:end}
@@ -34,7 +34,11 @@ export const cta: SectionRenderer<"cta"> = {
     return frame(
       section,
       settings,
-      html`<div class="vp-cta-box">${words}${side}</div>`,
+      html`<div
+        class="vp-cta-box${section.layout === "card" ? " vp-card" : ""}"
+      >
+        ${words}${side}
+      </div>`,
     );
   },
 };

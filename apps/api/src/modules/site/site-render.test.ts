@@ -15,6 +15,7 @@ import {
   type SiteSection,
 } from "@veolms/contracts";
 import {
+  MOTION_SCRIPT,
   newSection,
   pageTemplate,
   renderSectionHtml,
@@ -166,7 +167,7 @@ void describe("site page rendering", () => {
     assert.ok(output.includes('alt="&quot; onerror=&quot;alert(1)"'));
   });
 
-  void test("a live page has no script and only the CSS of its sections", () => {
+  void test("a live page's only script is the motion one, and only the CSS of its sections", () => {
     const { html } = renderSitePage({
       document: page([
         newSection("hero", "tech"),
@@ -176,7 +177,14 @@ void describe("site page rendering", () => {
       context: context(),
     });
     assert.ok(html.startsWith("<!doctype html>"));
-    assert.ok(!/<script/iu.test(html));
+    assert.equal(html.match(/<script/giu)?.length, 1);
+    assert.ok(html.includes(MOTION_SCRIPT));
+    const still = renderSitePage({
+      document: page([newSection("hero", "tech")]),
+      look: { themeId: "tech", colourMode: "system", motion: "off" },
+      context: context(),
+    });
+    assert.ok(!/<script/iu.test(still.html), "no script when motion is off");
     assert.ok(html.includes(".vp-hero"));
     assert.ok(!html.includes(".vp-faq"), "FAQ styles are not sent");
     assert.ok(html.includes('data-mode="system"'));

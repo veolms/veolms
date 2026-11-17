@@ -10,7 +10,7 @@ export const features: SectionRenderer<"features"> = {
 .vp-feat-list p{margin:8px 0 0;color:var(--s-muted)}
 @media (min-width:700px){.vp-features--grid .vp-feat-list,.vp-features--cards .vp-feat-list{grid-template-columns:repeat(2,1fr)}}
 @media (min-width:1000px){.vp-features--grid .vp-feat-list,.vp-features--cards .vp-feat-list{grid-template-columns:repeat(3,1fr)}}
-.vp-features--cards .vp-feat-list li{background:var(--s-card);border:1px solid var(--s-border);border-radius:var(--radius);padding:24px}
+.vp-features--cards .vp-feat-list li{padding:24px}
 .vp-features--list .vp-feat-list{gap:0;max-width:760px}
 .vp-features--list .vp-feat-list li{display:grid;grid-template-columns:auto 1fr;column-gap:16px;padding:20px 0;border-top:1px solid var(--s-border)}
 .vp-features--list .vp-feat-mark{grid-row:span 2;margin:0}
@@ -23,7 +23,7 @@ export const features: SectionRenderer<"features"> = {
     }
     const items = settings.items.map(
       (item) =>
-        html`<li>
+        html`<li class="${section.layout === "cards" ? "vp-card" : ""}">
           ${item.mark ? html`<span class="vp-feat-mark" aria-hidden="true">${item.mark}</span>` : null}
           <h3>${item.title}</h3>
           ${item.text ? html`<p>${item.text}</p>` : null}

@@ -38,7 +38,7 @@ function card(
       aria-hidden="true"
     ></span>`;
   return html`<li class="vp-course">
-    <a class="vp-course-link" href="${context.urls.course(course.slug)}"
+    <a class="vp-course-link vp-card" href="${context.urls.course(course.slug)}"
       >${thumb}<span class="vp-course-body"
         ><span class="vp-course-title">${course.title}</span
         >${course.summary ? html`<span class="vp-course-summary">${course.summary}</span>` : null}${course.lessons > 0 ? html`<span class="vp-course-meta">${course.lessons} ${course.lessons === 1 ? "lesson" : "lessons"}</span>` : null}${price}</span
@@ -50,7 +50,7 @@ function card(
 export const courses: SectionRenderer<"courses"> = {
   css: `
 .vp-course-list{list-style:none;margin:0;padding:0;display:grid;gap:20px}
-.vp-course-link{display:flex;flex-direction:column;height:100%;color:inherit;text-decoration:none;background:var(--s-card);border:1px solid var(--s-border);border-radius:var(--radius);overflow:hidden}
+.vp-course-link{display:flex;flex-direction:column;height:100%;color:inherit;text-decoration:none;overflow:hidden}
 .vp-course-link:hover .vp-course-title{text-decoration:underline}
 .vp-course-link:focus-visible{outline:3px solid var(--s-accent);outline-offset:2px}
 .vp-course-img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;background:var(--s-border)}

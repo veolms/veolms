@@ -5,13 +5,13 @@ import { frame, header, type SectionRenderer } from "./frame.ts";
 export const testimonials: SectionRenderer<"testimonials"> = {
   css: `
 .vp-quotes{list-style:none;margin:0;padding:0;display:grid;gap:20px}
-.vp-quote{margin:0;background:var(--s-card);border:1px solid var(--s-border);border-radius:var(--radius);padding:24px;display:flex;flex-direction:column;gap:16px}
+.vp-quote{margin:0;padding:24px;display:flex;flex-direction:column;gap:16px}
 .vp-quote blockquote{margin:0;font-size:1.02rem}
 .vp-quote figcaption{color:var(--s-muted);font-size:.92rem}
 .vp-quote figcaption strong{color:var(--s-text);display:block}
 @media (min-width:760px){.vp-testimonials--grid .vp-quotes{grid-template-columns:repeat(2,1fr)}}
 @media (min-width:1080px){.vp-testimonials--grid .vp-quotes{grid-template-columns:repeat(3,1fr)}}
-.vp-testimonials--spotlight .vp-quotes>li:first-child .vp-quote{background:none;border:0;padding:0 0 12px;text-align:center;align-items:center}
+.vp-site .vp-testimonials--spotlight .vp-quotes>li:first-child .vp-quote{background:none;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;transform:none;padding:0 0 12px;text-align:center;align-items:center}
 .vp-testimonials--spotlight .vp-quotes>li:first-child blockquote{font-family:var(--font-heading);font-size:clamp(1.3rem,3.4vw,2rem);line-height:1.35;max-width:46rem;text-wrap:balance}
 @media (min-width:760px){.vp-testimonials--spotlight .vp-quotes{grid-template-columns:repeat(2,1fr)}.vp-testimonials--spotlight .vp-quotes>li:first-child{grid-column:1/-1}}
 `,
@@ -31,7 +31,7 @@ export const testimonials: SectionRenderer<"testimonials"> = {
     const items = settings.items.map(
       (item) =>
         html`<li>
-          <figure class="vp-quote">
+          <figure class="vp-quote vp-card">
             <blockquote>${lines(item.quote)}</blockquote>
             <figcaption><strong>${item.name}</strong>${item.detail}</figcaption>
           </figure>

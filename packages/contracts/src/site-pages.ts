@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SITE_THEME_IDS } from "./site-themes.ts";
+import { SITE_MOTION_LEVELS, SITE_THEME_IDS } from "./site-themes.ts";
 
 /**
  * The website builder (creator-features/40-page-builder-and-themes-plan.md).
@@ -17,7 +17,17 @@ export const SITE_PAGE_MAX_SECTIONS = 25;
 
 // --- Shared pieces --------------------------------------------------------
 
-export const SITE_TONES = ["default", "muted", "accent", "inverse"] as const;
+/**
+ * A section's colour scheme: the page, a soft surface, a tint of the
+ * accent, the full brand colour, or dark.
+ */
+export const SITE_TONES = [
+  "default",
+  "muted",
+  "accent",
+  "brand",
+  "inverse",
+] as const;
 export type SiteTone = (typeof SITE_TONES)[number];
 export const SITE_SPACINGS = ["sm", "md", "lg"] as const;
 export type SiteSpacing = (typeof SITE_SPACINGS)[number];
@@ -70,9 +80,28 @@ const sectionBase = {
     .regex(/^[A-Za-z0-9_-]+$/u),
 };
 
+/** How a section comes into view as the visitor scrolls to it. */
+export const SITE_ANIMATIONS = [
+  "none",
+  "fade",
+  "fade-up",
+  "zoom",
+  "slide-left",
+  "slide-right",
+  "blur",
+] as const;
+export type SiteAnimation = (typeof SITE_ANIMATIONS)[number];
+
+/** Where a section is left out. */
+export const SITE_HIDE_ON = ["none", "phone", "desktop"] as const;
+export type SiteHideOn = (typeof SITE_HIDE_ON)[number];
+
 const look = {
   tone: z.enum(SITE_TONES),
   spacing: z.enum(SITE_SPACINGS),
+  /** Left out: the theme's motion level decides. */
+  animation: z.enum(SITE_ANIMATIONS).optional(),
+  hideOn: z.enum(SITE_HIDE_ON).optional(),
 };
 
 // --- Sections -------------------------------------------------------------
@@ -273,6 +302,8 @@ export const siteLookSchema = z.strictObject({
   themeId: z.enum(SITE_THEME_IDS),
   /** "system" follows the visitor's phone or computer setting. */
   colourMode: z.enum(SITE_COLOUR_MODES),
+  /** Left out: the theme's own motion level. */
+  motion: z.enum(SITE_MOTION_LEVELS).optional(),
 });
 export type SiteLook = z.infer<typeof siteLookSchema>;
 

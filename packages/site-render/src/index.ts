@@ -16,7 +16,15 @@ import type { SectionRenderer } from "./sections/frame.ts";
 import { hero } from "./sections/hero.ts";
 import { links } from "./sections/links.ts";
 import { testimonials } from "./sections/testimonials.ts";
-import { BASE_CSS, themeCss } from "./theme-css.ts";
+import {
+  BASE_CSS,
+  MOTION_SCRIPT,
+  motionLevel,
+  siteAttributes,
+  themeCss,
+} from "./theme-css.ts";
+
+export { MOTION_SCRIPT, motionLevel, siteAttributes } from "./theme-css.ts";
 
 export type { SiteRenderContext } from "./context.ts";
 export { resolveLink } from "./context.ts";
@@ -118,6 +126,10 @@ export function renderSitePage(input: {
   const description = document.seo.description;
   const themeColour =
     look.colourMode === "dark" ? theme.dark.bg : theme.light.bg;
+  // Our own fixed values only (enum members), so they need no escaping.
+  const attributes = Object.entries(siteAttributes(look))
+    .map(([name, value]) => `${name}="${value}"`)
+    .join(" ");
   const page = html`<!doctype html>
     <html lang="en">
       <head>
@@ -138,9 +150,16 @@ export function renderSitePage(input: {
           ${raw(siteCss(look, types))}
         </style>
       </head>
-      <body class="vp-site" data-mode="${look.colourMode}">
+      <body class="vp-site" ${raw(attributes)}>
         <main>${body}</main>
         ${footers}
+        ${
+          motionLevel(look) === "off"
+            ? null
+            : html`<script>
+                ${raw(MOTION_SCRIPT)};
+              </script>`
+        }
       </body>
     </html>`;
   return { html: page.value, courseIds: [...courseIds] };

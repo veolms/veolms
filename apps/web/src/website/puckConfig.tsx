@@ -11,6 +11,7 @@ import {
 import {
   SECTION_DEFAULTS,
   renderSectionHtml,
+  siteAttributes,
   siteCss,
 } from "@veolms/site-render";
 import type { MouseEvent } from "react";
@@ -130,7 +131,7 @@ export function createWebsitePuckConfig(themeId: SiteThemeId): Config {
         return (
           <div
             className="vp-site"
-            data-mode={look.colourMode}
+            {...siteAttributes(look)}
             style={{ minHeight: "100vh" }}
           >
             {/* The page's own styles, inside the preview frame only. */}
