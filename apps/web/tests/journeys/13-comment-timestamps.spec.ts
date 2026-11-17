@@ -36,9 +36,9 @@ test("a comment timestamp seeks the video, and one past the end stays plain", as
   await seek.click();
   await expect
     .poll(() => videoPosition(page), {
-      message: "the video seeks to the timestamp",
+      message: "the video seeks to 5 seconds (±0.5 s)",
     })
-    .toBeGreaterThanOrEqual(4);
+    .toBeCloseTo(5, 0);
 
   // The test course's video is 12 seconds long.
   await page.getByRole("button", { name: "Open discussion composer" }).click();
