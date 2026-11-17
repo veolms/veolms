@@ -906,9 +906,12 @@ export function OnboardingStage({
     setLiveShown(true);
     engine.trails = false;
     await wait(900);
-    // The light falls gently as confetti.
+    // The light falls gently as confetti, then settles into the quiet
+    // star field, so the academy's preview stays the thing to look at.
     engine.rain();
     dashboardButtonRef.current?.focus({ preventScroll: true });
+    await wait(2400);
+    if (aliveRef.current) engine.field(0);
   };
 
   const launch = async () => {

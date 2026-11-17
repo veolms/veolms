@@ -17,7 +17,7 @@ import { StackIcon as Stack } from "@phosphor-icons/react/Stack";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { WhatsappLogoIcon as WhatsappLogo } from "@phosphor-icons/react/WhatsappLogo";
-import type { ReactNode, Ref } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { Button } from "../components/Button";
 import { cn } from "../lib/utils";
 import { AcademyInitials, StageDock, StageQuestion } from "./StagePieces";
@@ -97,8 +97,24 @@ function PreviewThumb({
   );
 }
 
-const tileClasses =
-  "rounded-[10px] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_6%,transparent)]";
+const tileClasses = "rounded-[10px] bg-(--card-surface)";
+
+/**
+ * A new academy's app opens in Ocean Blue, dark (the app's own palette,
+ * styles/themes/dark/ocean.css), so the preview wears exactly those
+ * colours, whatever the sign-up stage around it uses.
+ */
+const ACADEMY_APP_COLOURS = {
+  "--canvas": "#12151a",
+  "--header": "#161a20",
+  "--surface": "#1e242d",
+  "--card-surface": "#282f39",
+  "--selected": "#293b58",
+  "--text": "#f4f8ff",
+  "--muted": "#a6b9d4",
+  "--accent": "#7193ff",
+  "--on-accent": "#07102a",
+} as CSSProperties;
 
 /**
  * The academy as its students will see it: the VeoLMS app with its
@@ -111,6 +127,7 @@ function Storefront({ name, host }: { name: string; host: string }) {
     <div
       data-stage-browser
       className="relative flex min-h-0 w-full max-w-330 flex-col overflow-hidden rounded-[18px] bg-(--canvas) shadow-[0_50px_120px_-40px_color-mix(in_srgb,var(--accent)_35%,#000),0_0_0_1px_color-mix(in_srgb,var(--text)_11%,transparent),inset_0_1px_0_rgb(255_255_255/.06)]"
+      style={ACADEMY_APP_COLOURS}
     >
       <div
         data-stage-bar
@@ -160,7 +177,7 @@ function Storefront({ name, host }: { name: string; host: string }) {
                   "flex h-9.5 items-center gap-2.5 px-3 text-[13px] font-semibold",
                   tileClasses,
                   index === 0 &&
-                    "bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_30%,transparent)]",
+                    "bg-(--selected) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_28%,transparent)]",
                 )}
               >
                 <Icon
@@ -191,12 +208,18 @@ function Storefront({ name, host }: { name: string; host: string }) {
                 </span>
               </span>
               <span className="grid grid-cols-3 gap-1.5" aria-hidden="true">
-                {[Palette, Bell, Gear].map((Icon, index) => (
+                {(
+                  [
+                    [Palette, "text-orange-400"],
+                    [Bell, "text-amber-400"],
+                    [Gear, "text-violet-400"],
+                  ] as const
+                ).map(([Icon, tone], index) => (
                   <span
                     key={index}
                     className={cn("grid h-8 place-items-center", tileClasses)}
                   >
-                    <Icon size={15} className="text-(--muted)" />
+                    <Icon size={15} className={tone} />
                   </span>
                 ))}
               </span>
@@ -246,7 +269,7 @@ function Storefront({ name, host }: { name: string; host: string }) {
                     key={course.title}
                     data-stage-course
                     className={cn(
-                      "overflow-hidden rounded-xl bg-(--canvas) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)]",
+                      "overflow-hidden rounded-xl bg-(--card-surface)",
                       index === 2 && "@max-[640px]/sf:hidden",
                     )}
                   >
