@@ -76,6 +76,7 @@ import {
   WorkshopsAccessDenied,
   WorkshopsHome,
   MarketingPage,
+  WebsitePage,
   WorkshopDetailPage,
 } from "../academyLazyPages";
 import {
@@ -745,6 +746,14 @@ export function useAcademyPageContent({
             onNavigatePage={onNavigatePage}
             setNotice={setNotice}
           />
+        </Suspense>
+      );
+    }
+    if (surfacePage === "website" || isSectionPage("Website")) {
+      if (!isAuthReady) return <AcademyPageFallback />;
+      return (
+        <Suspense fallback={<AcademyPageFallback />}>
+          <WebsitePage onNavigatePage={onNavigatePage} setNotice={setNotice} />
         </Suspense>
       );
     }

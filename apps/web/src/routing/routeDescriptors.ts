@@ -34,6 +34,7 @@ export type ShellPage =
   | "workshops-browse"
   | "workshop-detail"
   | "marketing"
+  | "website"
   | "home-page-settings"
   | "platform"
   | "team"
@@ -523,6 +524,20 @@ export const routeDescriptors = {
     title: "Automation",
     description: "One automatic email: its words, timing and results.",
   },
+  website: {
+    kind: "shell",
+    page: "website",
+    section: "Website",
+    title: "Website",
+    description: "Your site's pages and theme.",
+  },
+  "website-page": {
+    kind: "shell",
+    page: "website",
+    section: "Website",
+    title: "Edit page",
+    description: "Change a page's sections, then publish it.",
+  },
   workshops: {
     kind: "shell",
     page: "workshops-browse",
@@ -606,6 +621,8 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "marketing-automations": "/marketing/automations",
   "marketing-email": "/marketing/emails/:emailId",
   "marketing-automation": "/marketing/automations/:automationKey",
+  website: "/website",
+  "website-page": "/website/pages/:pageId",
   "create-course": "/courses/create",
   "edit-course": "/courses/:courseId/edit/basics",
   students: "/students",
@@ -634,6 +651,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "/Courses": "/courses",
   Coupons: "/coupons",
   Marketing: "/marketing",
+  Website: "/website",
   "/Coupons": "/coupons",
   "/coupons": "/coupons",
   "Home Page": "/platform/home",
@@ -678,6 +696,8 @@ const canonicalPathsByRouteId = {
   "marketing-automations": "/marketing/automations",
   "marketing-email": "/marketing/emails/:emailId",
   "marketing-automation": "/marketing/automations/:automationKey",
+  website: "/website",
+  "website-page": "/website/pages/:pageId",
   "course-create": "/courses/create",
   "course-create-tab": "/courses/create/:editTab",
   "course-edit": "/courses/:courseId/edit/:editTab",
@@ -837,6 +857,12 @@ export const getEffectiveRouteId = (
 
   if (routeId === "workshop-detail") {
     return /^\/workshops\/(?!new$)[a-z0-9][a-z0-9-]*$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "website-page") {
+    return /^\/website\/pages\/[0-9a-f-]{36}$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

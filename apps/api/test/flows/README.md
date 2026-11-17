@@ -25,6 +25,7 @@ app does; nothing is mocked inside the API.
 | `20-order-confirmation.flow.test.ts`   | The order page after paying: who may read it, each state, what items open, the welcome, the email                                                                                                                                      |
 | `22-payment-gateway.flow.test.ts`      | The academy's own Razorpay account: who may connect it, keys checked before they are kept, stored encrypted with their own key and never sent back, admins told of every change                                                        |
 | `23-course-sales-page.flow.test.ts`    | The course page's ready sections: who may edit them, what reaches the public page and in what order, testimonials waiting for "these are real", the instructor shown with their bio only when switched on, refused text, search fields |
+| `24-website-pages.flow.test.ts`        | Website pages: who may build them, templates, autosave with a two-tab guard, refused script links, publish to plain HTML with real courses, versions and rollback, a theme switch restyling live pages, links between pages, take down |
 | `21-marketing.flow.test.ts`            | Email marketing: who may use it, audiences and counts, sending, open and click tracking, unsubscribe, resend to non-openers, scheduling, the nudge-to-start automation                                                                 |
 
 ## Running them

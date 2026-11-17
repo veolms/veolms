@@ -212,6 +212,11 @@ export const MarketingPage = lazy(() =>
     default: module.MarketingPage,
   })),
 );
+export const WebsitePage = lazy(() =>
+  import("../website/WebsitePage").then((module) => ({
+    default: module.WebsitePage,
+  })),
+);
 
 export const WorkshopsHome = lazy(() =>
   import("../workshops/WorkshopsHome").then((module) => ({
