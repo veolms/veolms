@@ -17,7 +17,6 @@ export interface MobileSheetProfileMenuProps {
   effectiveRole: CourseRole;
   allowedWorkspaceRoles: CourseRole[];
   userRoles: readonly string[] | undefined;
-  unreadNotificationCount: number;
   mobileMoreNavigation: NavigationItem[];
   isNavigationItemActive: (item: NavigationItemWithMetadata) => boolean;
   sidebarPreferences: SidebarPreferences;
@@ -37,7 +36,6 @@ export function MobileSheetProfileMenu({
   effectiveRole,
   allowedWorkspaceRoles,
   userRoles,
-  unreadNotificationCount,
   mobileMoreNavigation,
   isNavigationItemActive,
   sidebarPreferences,
@@ -63,7 +61,6 @@ export function MobileSheetProfileMenu({
             allowedRoles={isAuthenticated ? allowedWorkspaceRoles : []}
             guest={!isAuthenticated}
             userRoles={userRoles}
-            unreadNotificationCount={unreadNotificationCount}
             includeSidebarControl={false}
             beforeAccountContent={
               <div

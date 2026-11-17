@@ -17,6 +17,7 @@ import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { AcademyPaletteMenu } from "./AcademyPaletteMenu";
 import { SidebarNotificationsButton } from "./SidebarNotificationsButton";
 import { getNavigationIconColor } from "./navigation";
+import { leavesClickToBrowser } from "./navigationLink";
 import { themeRevealOriginFromClick } from "./themeViewTransition";
 import type { ThemeRevealOrigin } from "./themeViewTransition";
 import { academyThemes } from "../themes";
@@ -55,12 +56,12 @@ export interface SidebarAppearanceDockProps {
     mobile?: boolean,
   ) => void;
   startDockLongPress: (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     action: () => void,
     includeMouse?: boolean,
   ) => void;
-  moveDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  finishDockLongPress: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  moveDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
+  finishDockLongPress: (event: ReactPointerEvent<HTMLElement>) => void;
   paletteTriggerRef: RefObject<HTMLButtonElement | null>;
   setReadingModeMenu: Dispatch<SetStateAction<"desktop" | "mobile" | null>>;
   setPaletteMenuSource: Dispatch<SetStateAction<"appearance" | "theme">>;
@@ -88,7 +89,7 @@ export interface SidebarAppearanceDockProps {
   primaryShortcutModifier: "Meta" | "Control";
   settingsQuickMenu: "desktop" | "mobile" | null;
   openSettingsQuickMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLElement>,
     mobile?: boolean,
   ) => void;
   showSettingsQuickMenu: (mobile?: boolean) => void;
@@ -361,11 +362,15 @@ export function SidebarAppearanceDock({
         if (item === "settings") {
           const settingsActive = page === "settings";
           return (
-            <button
+            // A link, as the sidebar's own items are: Ctrl/⌘ or middle
+            // click opens the settings in a new tab. Right click keeps
+            // opening the quick menu of its sections.
+            <a
               key={item}
+              href="/settings"
               data-dock-item={item}
-              type="button"
-              className={`sidebar-appearance__settings${settingsActive ? " is-active" : ""}`}
+              draggable={false}
+              className={`sidebar-appearance__settings no-underline [-webkit-touch-callout:none]${settingsActive ? " is-active" : ""}`}
               style={
                 {
                   "--nav-icon-color": getNavigationIconColor(
@@ -383,6 +388,8 @@ export function SidebarAppearanceDock({
               // A click opens the settings page, as before; a right-click
               // or a long press opens the quick menu of its sections.
               onClick={(event) => {
+                if (leavesClickToBrowser(event)) return;
+                event.preventDefault();
                 if (consumeAppearanceGestureClick(event)) return;
                 toggleSettingsNavigation();
               }}
@@ -404,7 +411,7 @@ export function SidebarAppearanceDock({
                 size={20}
                 weight={settingsActive ? "fill" : "regular"}
               />
-            </button>
+            </a>
           );
         }
 
