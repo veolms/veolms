@@ -133,7 +133,7 @@ export function ContactScreen({
         {showMethodSwitch ? (
           // The sign-in card's switch, sized as there, with the chosen
           // method raised a step rather than filled with the neon.
-          <div className="[--auth-h-switch:42px] [--auth-radius-switch:12px] [&_[aria-selected=true]]:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] [&_[aria-selected=true]]:text-(--text)">
+          <div className="[--auth-h-switch:42px] [--auth-radius-switch:12px] [&_[aria-selected=true]]:bg-[color-mix(in_srgb,var(--text)_13%,transparent)]! [&_[aria-selected=true]]:text-(--text)!">
             <IdentifierMethodSwitch
               method={method}
               onMethodChange={onMethodChange}
