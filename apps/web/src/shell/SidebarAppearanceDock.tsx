@@ -51,10 +51,6 @@ export interface SidebarAppearanceDockProps {
     mobile?: boolean,
     source?: "appearance" | "theme",
   ) => void;
-  openAppearanceThemeMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
-    mobile?: boolean,
-  ) => void;
   startDockLongPress: (
     event: ReactPointerEvent<HTMLElement>,
     action: () => void,
@@ -131,7 +127,6 @@ export function SidebarAppearanceDock({
   consumeAppearanceGestureClick,
   cancelDesktopPalettePreview,
   activateAppearanceOption,
-  openAppearanceThemeMenu,
   startDockLongPress,
   moveDockLongPress,
   finishDockLongPress,
@@ -209,8 +204,8 @@ export function SidebarAppearanceDock({
                 paletteMenu && paletteMenuSource === "appearance"
               }
               aria-controls="desktop-theme-menu"
-              aria-label={`Choose color theme and light or dark mode. Current theme: ${displayedThemeName}`}
-              title={`Color theme - ${displayedThemeName}`}
+              aria-label={`Choose color theme and light or dark mode. Current theme: ${displayedThemeName}. Right-click or hold for reading mode`}
+              title={`Color theme - ${displayedThemeName} (right-click or hold for reading mode)`}
               onClick={(event) => {
                 if (consumeAppearanceGestureClick(event)) return;
                 if (paletteMenu && paletteMenuSource === "appearance")
@@ -224,14 +219,14 @@ export function SidebarAppearanceDock({
                     "appearance",
                   );
               }}
-              onContextMenu={openAppearanceThemeMenu}
+              // A right-click or a long press opens reading mode's menu
+              // (the default dock has no reading mode button of its own).
+              onContextMenu={(event) => openReadingModeMenu(event, false)}
               onPointerDown={(event) =>
-                startDockLongPress(event, () =>
-                  activateAppearanceOption(
-                    "theme",
-                    false,
-                    "appearance",
-                  ),
+                startDockLongPress(
+                  event,
+                  () => showReadingModeMenu(false),
+                  true,
                 )
               }
               onPointerMove={moveDockLongPress}
