@@ -24,6 +24,7 @@ export * from "./support.schema.ts";
 export * from "./workshops.schema.ts";
 export * from "./chat.schema.ts";
 export * from "./legal-pages.schema.ts";
+export * from "./site-pages.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
@@ -153,6 +154,11 @@ import type {
 import type { HomePageSettingsTable } from "./home-page.schema.ts";
 import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
 import type { LegalPageTable } from "./legal-pages.schema.ts";
+import type {
+  SiteTable,
+  SitePageTable,
+  SitePageVersionTable,
+} from "./site-pages.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
 import type { ShortLinkTable } from "./short-links.schema.ts";
 import type {
@@ -305,6 +311,9 @@ export interface Database {
   home_page_settings: HomePageSettingsTable;
   platform_settings: PlatformSettingsTable;
   legal_pages: LegalPageTable;
+  sites: SiteTable;
+  site_pages: SitePageTable;
+  site_page_versions: SitePageVersionTable;
   quotes: QuoteTable;
   short_links: ShortLinkTable;
   marketing_emails: MarketingEmailTable;
