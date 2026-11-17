@@ -19,6 +19,9 @@ const staticApplicationPages = [
   "/mfa-setup",
   "/register",
   "/auth/callback",
+  // Creator sign-up and the hand-over to an academy (onboarding/).
+  "/start",
+  "/start/continue",
   "/courses",
   "/home",
   "/settings",

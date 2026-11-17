@@ -19,6 +19,17 @@ export function getPublicRoutes(): RouteConfigEntry[] {
       id: "public-course-overview",
       caseSensitive: true,
     }),
+    // Creator sign-up on the platform site, and where an academy's owner
+    // lands from it (creator-features/38). A site that takes no sign-ups
+    // says so on the first screen.
+    route("start", "routes/start.tsx", {
+      id: "academy-onboarding",
+      caseSensitive: true,
+    }),
+    route("start/continue", "routes/start-continue.tsx", {
+      id: "academy-onboarding-continue",
+      caseSensitive: true,
+    }),
     // The legal and company pages, a route module each (prerendered).
     ...[
       "terms",

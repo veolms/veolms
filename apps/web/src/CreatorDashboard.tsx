@@ -9,6 +9,7 @@ import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyIn
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { PulseIcon as Pulse } from "@phosphor-icons/react/Pulse";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
+import { FirstMovesCard } from "./home/creator/FirstMovesCard";
 import { RevenuePanel } from "./home/creator/RevenuePanel";
 import { getCreatorDashboardRefreshQueryKeys } from "./home/creator/dashboardQueryKeys";
 import { EnrollmentsPanel } from "./home/creator/EnrollmentsPanel";
@@ -22,6 +23,7 @@ import {
   formatDashboardCurrency,
   formatDashboardNumber,
 } from "./home/creator/dashboardFormat";
+import { usePublicAcademyBrand } from "./services/academy";
 import { useDashboard } from "./services/analytics";
 import { useAuthStore } from "./store/auth.store";
 import { useCapabilities } from "./services/authorization/authorization.queries";
@@ -41,6 +43,9 @@ export const CreatorDashboard = memo(function CreatorDashboard({
 }: CreatorDashboardProps) {
   const capabilities = useCapabilities();
   const canCreateCourse = capabilities.can("course.create");
+  // A new academy's first five moves, for whoever runs its settings.
+  const showFirstMoves = capabilities.can("platform.settings.read");
+  const academyName = usePublicAcademyBrand().data?.name ?? "Your academy";
   // Home is every team member's; each part shows with the permission behind
   // its numbers (held for every course: the numbers are academy-wide).
   const seesAcademy = (key: Permission) => capabilities.canOnCourse(key, null);
@@ -249,6 +254,13 @@ export const CreatorDashboard = memo(function CreatorDashboard({
           ) : null}
         </div>
       </header>
+
+      {showFirstMoves ? (
+        <FirstMovesCard
+          academyName={academyName}
+          onNavigatePage={onNavigatePage}
+        />
+      ) : null}
 
       {metricCards.length > 0 ? (
         <section className="creator-kpi-grid" aria-label="Academy overview">

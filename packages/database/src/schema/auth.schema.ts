@@ -40,6 +40,8 @@ export interface AcademyTable {
   logo_url: string | null;
   custom_domain: string | null;
   setup_completed: Generated<boolean>;
+  /** When the academy's link was first shared from its first moves. */
+  link_shared_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

@@ -1243,3 +1243,4 @@ export function loadWebConfig(environment: Record<string, string | undefined>) {
 
 export * from "./google-sign-in.ts";
 export * from "./site.ts";
+export * from "./sign-in-handoff.ts";

@@ -43,3 +43,4 @@ export * from "./chat.ts";
 export * from "./legal-pages.ts";
 export * from "./site-pages.ts";
 export * from "./site-themes.ts";
+export * from "./onboarding.ts";
