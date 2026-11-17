@@ -494,8 +494,17 @@ export function MessageList({
     const atBottom = distance < STICK_PX;
     rememberPlaceSoon();
     // Held at the divider or a message, a scroll the page made (not the
-    // reader) leaves the bottom flag alone.
-    if (!held()) atBottomRef.current = atBottom;
+    // reader) leaves the bottom flag alone. The reader's own scroll leaves
+    // the bottom as soon as it moves up at all, and comes back to it only
+    // at the very bottom: a scroll up of one wheel notch (about 110px, less
+    // than STICK_PX) still counted as "at the bottom", and the next row to
+    // reach its real height put the list straight back down (the chat
+    // "moved a little" and would not scroll up, 2026-11-17).
+    const readerScrolling =
+      Date.now() - readerScrolledAtRef.current < READER_SCROLL_MS;
+    if (!held()) {
+      atBottomRef.current = readerScrolling ? distance < 2 : atBottom;
+    }
     setShowJump(distance > 400);
     if (atBottom && !held()) {
       lastSeenSeqRef.current = lastSeq;

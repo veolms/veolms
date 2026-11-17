@@ -477,8 +477,13 @@ function attach(next: EventSource) {
         }
       }
     }
-    if (readyBefore)
+    if (readyBefore) {
       void client.invalidateQueries({ queryKey: chatKeys.rooms() });
+      // Read receipts and presence sent while the stream was away are not
+      // sent again: the chats' details (ticks, "last seen", online) are
+      // asked for afresh. Only the open ones reload now.
+      void client.invalidateQueries({ queryKey: [...chatKeys.all, "room"] });
+    }
     readyBefore = true;
   });
   next.addEventListener("chat.message", (event) => {
