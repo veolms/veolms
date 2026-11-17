@@ -92,10 +92,17 @@ function modeOf(keyId: string): "test" | "live" | null {
   return null;
 }
 
+/**
+ * Where Razorpay sends this academy's events. On a multi-academy install
+ * each academy has its own address (the site settings give it per request),
+ * and its events must arrive there: the shared API address cannot tell
+ * which academy they are for, so it refuses them.
+ */
 function webhookUrl(): string {
+  const site = siteSettings(config).webUrl.replace(/\/+$/u, "");
+  const academyOwnAddress = site !== config.WEB_URL.replace(/\/+$/u, "");
   const base =
-    config.EMAIL_API_URL ??
-    `${siteSettings(config).webUrl.replace(/\/+$/u, "")}/api`;
+    (academyOwnAddress ? undefined : config.EMAIL_API_URL) ?? `${site}/api`;
   return `${base.replace(/\/+$/u, "")}/v1/webhooks/razorpay`;
 }
 
