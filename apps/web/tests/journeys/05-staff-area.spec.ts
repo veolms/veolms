@@ -33,6 +33,7 @@ const STAFF_MENU = [
   "Team",
 ];
 
+/** The sidebar; its menu items are links. */
 function sidebar(page: Page) {
   return page.getByRole("complementary", { name: /navigation$/u });
 }
@@ -47,7 +48,7 @@ test("a learner has no staff menu, and staff pages send them home or say access 
   await expect(sidebar(page)).toHaveAccessibleName("Student navigation");
   for (const item of STAFF_MENU) {
     await expect(
-      sidebar(page).getByRole("button", { name: item, exact: true }),
+      sidebar(page).getByRole("link", { name: item, exact: true }),
     ).toHaveCount(0);
   }
 
@@ -111,7 +112,7 @@ test("the administrator has the staff menu, and every staff page opens", async (
   await expect(sidebar(page)).toHaveAccessibleName("Creator navigation");
   for (const item of STAFF_MENU) {
     await expect(
-      sidebar(page).getByRole("button", { name: item, exact: true }),
+      sidebar(page).getByRole("link", { name: item, exact: true }),
     ).toBeVisible();
   }
 
@@ -140,7 +141,11 @@ test("a learner's purchase shows in the administrator's Orders, and the learner 
   await page.getByRole("button", { name: "Pay Now" }).click();
   const paymentWindow = page.getByRole("dialog", { name: "Payment window" });
   await paymentWindow.getByRole("button", { name: "Pay" }).click();
-  await expect(page).toHaveURL(new RegExp(`/learn/${course.slug}/`, "u"));
+  // After paying, the learner lands on their order page.
+  await expect(page).toHaveURL(/\/purchase-history\/[0-9a-f-]{36}$/u);
+  await expect(
+    page.getByRole("heading", { name: "Payment successful" }),
+  ).toBeVisible({ timeout: 15_000 });
 
   // The administrator, in their own browser.
   const admin = await openSecondBrowser(browser, await academy.adminSession());
