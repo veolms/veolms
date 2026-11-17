@@ -832,7 +832,6 @@ export function CoursesPage({
   });
 
   const {
-    openAppearanceThemeMenu,
     startDockLongPress,
     moveDockLongPress,
     finishDockLongPress,
@@ -841,14 +840,7 @@ export function CoursesPage({
     cancelAppearanceSwipe,
   } = useDockLongPress({
     theme,
-    paletteMenu,
-    setPaletteMenu,
-    paletteMenuSource,
-    setReadingModeMenu,
-    mobilePaletteMenu,
-    setMobilePaletteMenu,
     themeRevealOriginRef,
-    revertPalettePreviewRef,
     acknowledgeLongPressRef,
     appearanceSwipeRef,
     appearanceSwipeConsumedRef,
@@ -1292,7 +1284,6 @@ export function CoursesPage({
                 consumeAppearanceGestureClick={consumeAppearanceGestureClick}
                 cancelDesktopPalettePreview={cancelDesktopPalettePreview}
                 activateAppearanceOption={activateAppearanceOption}
-                openAppearanceThemeMenu={openAppearanceThemeMenu}
                 startDockLongPress={startDockLongPress}
                 moveDockLongPress={moveDockLongPress}
                 finishDockLongPress={finishDockLongPress}
@@ -1578,7 +1569,6 @@ export function CoursesPage({
                   consumeAppearanceGestureClick={consumeAppearanceGestureClick}
                   cancelMobilePalettePreview={cancelMobilePalettePreview}
                   activateAppearanceOption={activateAppearanceOption}
-                  openAppearanceThemeMenu={openAppearanceThemeMenu}
                   startDockLongPress={startDockLongPress}
                   moveDockLongPress={moveDockLongPress}
                   finishDockLongPress={finishDockLongPress}

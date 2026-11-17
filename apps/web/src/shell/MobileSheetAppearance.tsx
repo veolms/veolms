@@ -39,10 +39,6 @@ export interface MobileSheetAppearanceProps {
     mobile?: boolean,
     source?: "appearance" | "theme",
   ) => void;
-  openAppearanceThemeMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
-    mobile?: boolean,
-  ) => void;
   startDockLongPress: (
     event: ReactPointerEvent<HTMLButtonElement>,
     action: () => void,
@@ -100,7 +96,6 @@ export function MobileSheetAppearance({
   consumeAppearanceGestureClick,
   cancelMobilePalettePreview,
   activateAppearanceOption,
-  openAppearanceThemeMenu,
   startDockLongPress,
   moveDockLongPress,
   finishDockLongPress,
@@ -172,7 +167,7 @@ export function MobileSheetAppearance({
                 paletteMenuSource === "appearance"
               }
               aria-controls="mobile-theme-menu"
-              aria-label={`Choose color theme and light or dark mode. Current theme: ${displayedThemeName}`}
+              aria-label={`Choose color theme and light or dark mode. Current theme: ${displayedThemeName}. Hold for reading mode`}
               title={`Color theme - ${displayedThemeName}`}
               onClick={(event) => {
                 if (consumeAppearanceGestureClick(event)) return;
@@ -190,16 +185,13 @@ export function MobileSheetAppearance({
                     "appearance",
                   );
               }}
-              onContextMenu={(event) =>
-                openAppearanceThemeMenu(event, true)
-              }
+              // A right-click or a long press opens reading mode's menu.
+              onContextMenu={(event) => openReadingModeMenu(event, true)}
               onPointerDown={(event) =>
-                startDockLongPress(event, () =>
-                  activateAppearanceOption(
-                    "theme",
-                    true,
-                    "appearance",
-                  ),
+                startDockLongPress(
+                  event,
+                  () => showReadingModeMenu(true),
+                  true,
                 )
               }
               onPointerMove={moveDockLongPress}

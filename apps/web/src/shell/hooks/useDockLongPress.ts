@@ -1,8 +1,5 @@
-import type { Dispatch, SetStateAction, RefObject } from "react";
-import type {
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-} from "react";
+import type { RefObject } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { themeRevealOriginFromClick } from "../themeViewTransition";
 import type { ThemeRevealOrigin } from "../themeViewTransition";
 import {
@@ -19,16 +16,7 @@ import type {
 
 export interface UseDockLongPressArgs {
   theme: ThemePreference;
-  paletteMenu: boolean;
-  setPaletteMenu: Dispatch<SetStateAction<boolean>>;
-  paletteMenuSource: "appearance" | "theme";
-  setReadingModeMenu: Dispatch<SetStateAction<"desktop" | "mobile" | null>>;
-  mobilePaletteMenu: boolean;
-  setMobilePaletteMenu: Dispatch<SetStateAction<boolean>>;
   themeRevealOriginRef: RefObject<ThemeRevealOrigin | null>;
-  revertPalettePreviewRef: RefObject<
-    ((origin?: ThemeRevealOrigin) => void) | null
-  >;
   acknowledgeLongPressRef: RefObject<(() => void) | null>;
   appearanceSwipeRef: RefObject<AppearanceSwipe | null>;
   appearanceSwipeConsumedRef: RefObject<boolean>;
@@ -43,10 +31,6 @@ export interface UseDockLongPressArgs {
 }
 
 export interface UseDockLongPressResult {
-  openAppearanceThemeMenu: (
-    event: ReactMouseEvent<HTMLElement>,
-    mobile?: boolean,
-  ) => void;
   startDockLongPress: (
     event: ReactPointerEvent<HTMLElement>,
     action: () => void,
@@ -68,14 +52,7 @@ export interface UseDockLongPressResult {
 
 export function useDockLongPress({
   theme,
-  paletteMenu,
-  setPaletteMenu,
-  paletteMenuSource,
-  setReadingModeMenu,
-  mobilePaletteMenu,
-  setMobilePaletteMenu,
   themeRevealOriginRef,
-  revertPalettePreviewRef,
   acknowledgeLongPressRef,
   appearanceSwipeRef,
   appearanceSwipeConsumedRef,
@@ -84,25 +61,6 @@ export function useDockLongPress({
   longPressAudioContextRef,
   activateAppearanceOption,
 }: UseDockLongPressArgs): UseDockLongPressResult {
-  const openAppearanceThemeMenu = (
-    event: ReactMouseEvent<HTMLElement>,
-    mobile = false,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const isOpen = mobile
-      ? mobilePaletteMenu && paletteMenuSource === "appearance"
-      : paletteMenu && paletteMenuSource === "appearance";
-    if (isOpen) {
-      revertPalettePreviewRef.current?.();
-      if (mobile) setMobilePaletteMenu(false);
-      else setPaletteMenu(false);
-      return;
-    }
-    setReadingModeMenu(null);
-    activateAppearanceOption("theme", mobile, "appearance");
-  };
-
   const getLongPressAudioContext = () => {
     if (longPressAudioContextRef.current) {
       return longPressAudioContextRef.current;
@@ -296,7 +254,6 @@ export function useDockLongPress({
     }
   };
   return {
-    openAppearanceThemeMenu,
     startDockLongPress,
     moveDockLongPress,
     finishDockLongPress,

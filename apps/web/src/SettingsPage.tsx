@@ -35,7 +35,6 @@ import { authStore, useAuthStore } from "./store/auth.store";
 import { useCapabilities } from "./services/authorization";
 import { getSettingsTabs } from "./settings/settingsTabs";
 import { SettingsTabBar } from "./settings/SettingsTabBar";
-import { SettingsReadingModeSwitch } from "./settings/SettingsReadingModeSwitch";
 import { useSettingsTabShortcuts } from "./settings/useSettingsTabShortcuts";
 import { definePrerenderedBody } from "./routing/prerenderedBodies";
 import "./styles/features/settings/foundation.css";
@@ -351,10 +350,10 @@ export function SettingsPage({
             onNavigateBack={showBackButton ? leaveSettings : undefined}
             copyClassName="settings-page__heading-copy"
           />
-          {/* On a phone or narrow window only the switch stays (the gear
-              is decoration), so the heading's text keeps its room. */}
+          {/* Reading mode is switched in the Appearance tab (and from the
+              dock's palette), not here. On a phone or narrow window the gear,
+              decoration only, is hidden so the heading's text keeps its room. */}
           <div className="ml-auto flex shrink-0 items-center gap-3">
-            <SettingsReadingModeSwitch />
             <div
               className="settings-page__icon max-md:hidden!"
               aria-hidden="true"
