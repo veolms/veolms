@@ -1249,7 +1249,6 @@ export function CoursesPage({
                 shellProfileDisplayName={shellProfileDisplayName}
                 shellProfileAvatarUrl={shellProfileAvatarUrl}
                 shellProfileAvatarSrcSet={shellProfileAvatarSrcSet}
-                unreadNotificationCount={unreadNotificationCount}
                 sidebarPresentedAsOverlay={sidebarPresentedAsOverlay}
                 compactNavigation={compactNavigation}
                 setProfileMenu={setProfileMenu}
@@ -1538,7 +1537,6 @@ export function CoursesPage({
                   shellProfileDisplayName={shellProfileDisplayName}
                   shellProfileAvatarUrl={shellProfileAvatarUrl}
                   shellProfileAvatarSrcSet={shellProfileAvatarSrcSet}
-                  unreadNotificationCount={unreadNotificationCount}
                   setProfileMenu={setProfileMenu}
                   setEdgeSidebarOpen={setEdgeSidebarOpen}
                   dismissProfileMenuThen={dismissProfileMenuThen}
@@ -1553,7 +1551,6 @@ export function CoursesPage({
                   effectiveRole={effectiveRole}
                   allowedWorkspaceRoles={allowedWorkspaceRoles}
                   userRoles={userRoles}
-                  unreadNotificationCount={unreadNotificationCount}
                   mobileMoreNavigation={mobileMoreNavigation}
                   isNavigationItemActive={isNavigationItemActive}
                   sidebarPreferences={sidebarPreferences}

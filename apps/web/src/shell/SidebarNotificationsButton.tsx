@@ -2,6 +2,9 @@ import type { CSSProperties } from "react";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { NAV_COUNT_BADGE_CLASS } from "./NavCountBadge";
 import { formatBadgeCount } from "./navCount";
+import { leavesClickToBrowser } from "./navigationLink";
+
+const NOTIFICATIONS_PATH = "/notifications";
 
 export interface SidebarNotificationsButtonProps {
   /** Unread notifications; 0 for a guest. */
@@ -25,12 +28,15 @@ export function SidebarNotificationsButton({
   const label =
     unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications";
   return (
-    <button
+    // A link, as the sidebar's own items are: Ctrl/⌘ or middle click opens
+    // the notifications in a new tab and right click offers the browser's
+    // link menu. A plain click still goes through the app without a reload.
+    <a
+      href={NOTIFICATIONS_PATH}
       data-dock-item="notifications"
-      type="button"
       // The dock colours its icons with the accent; the bell takes its own
       // navigation colour, as the gear does.
-      className={`sidebar-appearance__notifications relative [&>svg]:text-(--nav-icon-color,var(--accent-ink,var(--accent)))!${active ? " is-active" : ""}`}
+      className={`sidebar-appearance__notifications relative no-underline [&>svg]:text-(--nav-icon-color,var(--accent-ink,var(--accent)))!${active ? " is-active" : ""}`}
       style={
         iconColor
           ? ({ "--nav-icon-color": iconColor } as CSSProperties)
@@ -39,7 +45,11 @@ export function SidebarNotificationsButton({
       aria-label={label}
       title="Notifications"
       aria-current={active ? "page" : undefined}
-      onClick={onOpen}
+      onClick={(event) => {
+        if (leavesClickToBrowser(event)) return;
+        event.preventDefault();
+        onOpen();
+      }}
     >
       <Bell size={20} weight={active ? "fill" : "regular"} />
       {/* An <em>, not a <span>: the collapsed sidebar hides its dock
@@ -55,6 +65,6 @@ export function SidebarNotificationsButton({
           {formatBadgeCount(unreadCount, 9)}
         </em>
       ) : null}
-    </button>
+    </a>
   );
 }
