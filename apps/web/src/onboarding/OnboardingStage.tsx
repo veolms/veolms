@@ -267,6 +267,20 @@ export function OnboardingStage({
     };
   }, []);
 
+  // Signing up happens on veolms.org (/start), which is always dark: the
+  // stage is too, while it is on screen.
+  useEffect(() => {
+    if (mode !== "signup") return;
+    const root = document.documentElement;
+    const previous = root.dataset.theme;
+    root.dataset.theme = "dark";
+    engineRef.current?.readTokens();
+    return () => {
+      if (previous === undefined) delete root.dataset.theme;
+      else root.dataset.theme = previous;
+    };
+  }, [mode]);
+
   useLayoutEffect(() => {
     document.documentElement.dataset.palette = palette;
     void ensureAcademyPaletteStylesheets(palette).then(() => {
@@ -1297,6 +1311,11 @@ export function OnboardingStage({
       ref={stageRef}
       className={cn(
         "@container relative h-dvh w-full overflow-hidden text-(--text) [--stage-ease:cubic-bezier(.16,1,.3,1)]",
+        // veolms.org's own colours (its near-black and neon) until the
+        // launch, when the new academy's colour arrives.
+        mode === "signup" &&
+          palette === STAGE_PALETTE &&
+          "[--accent-border:rgba(217,255,0,0.4)] [--accent-hover:#e5ff33] [--accent-soft:rgba(217,255,0,0.14)] [--accent:#d9ff00] [--canvas:#080809] [--on-accent:#080809]",
         "bg-[radial-gradient(120%_90%_at_50%_38%,color-mix(in_srgb,var(--accent)_9%,var(--canvas))_0%,var(--canvas)_55%,color-mix(in_srgb,#000_35%,var(--canvas))_100%)]",
         "[:root[data-theme=light]_&]:bg-[radial-gradient(120%_90%_at_50%_38%,color-mix(in_srgb,var(--accent)_7%,var(--surface))_0%,var(--canvas)_70%)]",
       )}
