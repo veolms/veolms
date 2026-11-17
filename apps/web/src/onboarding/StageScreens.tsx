@@ -17,7 +17,6 @@ import {
   LoginFieldLabel,
   LoginSubmitButton,
   loginButtonClasses,
-  loginFieldBoxClasses,
   loginInputClasses,
   loginLabelClasses,
 } from "../auth/LoginCardParts";
@@ -31,6 +30,7 @@ import {
   LaunchButton,
   StageDock,
   StageQuestion,
+  stageFieldBoxClasses,
   stageFocusClasses,
 } from "./StagePieces";
 
@@ -144,7 +144,7 @@ export function ContactScreen({
               htmlFor="stage-email"
               label="Email"
             />
-            <div className={loginFieldBoxClasses}>
+            <div className={stageFieldBoxClasses}>
               <input
                 id="stage-email"
                 className={loginInputClasses}
@@ -173,11 +173,11 @@ export function ContactScreen({
               <CountryCodeSelect
                 contentClassName="auth-form__country-menu"
                 onCountryChange={onCountryChange}
-                triggerClassName="auth-form__country h-11.5! min-h-11.5! rounded-[10px]! border-[color-mix(in_srgb,var(--text)_12%,transparent)]! bg-[color-mix(in_srgb,var(--canvas)_45%,var(--surface))]!"
+                triggerClassName="auth-form__country h-11.5! min-h-11.5! rounded-[10px]! border-[color-mix(in_srgb,var(--text)_10%,transparent)]! bg-[color-mix(in_srgb,var(--canvas)_45%,var(--surface))]!"
                 value={country.id}
                 disabled={sending}
               />
-              <div className={cn(loginFieldBoxClasses, "flex-1")}>
+              <div className={cn(stageFieldBoxClasses, "flex-1")}>
                 <input
                   id="stage-mobile"
                   className={loginInputClasses}
@@ -507,7 +507,7 @@ export function DetailsScreen({
           <label className={loginLabelClasses} htmlFor="stage-academy-name">
             Academy name
           </label>
-          <div className={cn(loginFieldBoxClasses, "h-14.5")}>
+          <div className={cn(stageFieldBoxClasses, "h-14.5")}>
             <input
               id="stage-academy-name"
               className={cn(
@@ -553,7 +553,7 @@ export function DetailsScreen({
               ) : null}
             </span>
           </div>
-          <div className={loginFieldBoxClasses}>
+          <div className={stageFieldBoxClasses}>
             <input
               id="stage-address"
               className={loginInputClasses}

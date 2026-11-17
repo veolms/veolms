@@ -1,10 +1,8 @@
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
-import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
-import { SpeakerHighIcon as SpeakerHigh } from "@phosphor-icons/react/SpeakerHigh";
-import { SpeakerSlashIcon as SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import veolmsMarkSvg from "../assets/veolms-mark.svg?raw";
+import { loginFieldBoxClasses } from "../auth/LoginCardParts";
 import { cn } from "../lib/utils";
 import { initialsOf } from "./academyNames";
 
@@ -35,37 +33,47 @@ export const stageGhostClasses = cn(
  */
 export function VeoMark() {
   return (
-    <span
-      className="inline-flex items-center gap-1 text-[18px] font-bold tracking-[-0.03em] text-(--text)"
-      aria-label="VeoLMS"
-      role="img"
+    <a
+      href="/"
+      className={cn(
+        "group inline-flex items-center gap-0.5 rounded-lg text-(--text) no-underline",
+        stageFocusClasses,
+      )}
+      aria-label="VeoLMS home"
     >
       <span
         aria-hidden="true"
-        className="block size-7 [&_svg]:size-full"
+        className="block size-9 transition-transform duration-300 group-hover:-rotate-6 @max-[700px]:size-8 [&_svg]:size-full"
         dangerouslySetInnerHTML={{ __html: veolmsMarkSvg }}
       />
-      <span aria-hidden="true">
-        Veo<b className="font-bold text-[#d9ff00]">LMS</b>
+      <span
+        aria-hidden="true"
+        className="text-[24px] leading-none font-extrabold tracking-[-0.045em] @max-[700px]:text-[21px]"
+      >
+        Veo
+        <span className="bg-[linear-gradient(135deg,#d9ff00_0%,#a3e635_100%)] bg-clip-text text-transparent">
+          LMS
+        </span>
       </span>
-    </span>
+    </a>
   );
 }
 
+/**
+ * The stage's text fields: the app's sign-in field, with a quiet focus
+ * (a lighter edge) instead of the accent's glow, which on the neon is loud.
+ */
+export const stageFieldBoxClasses = cn(
+  loginFieldBoxClasses,
+  "border-[color-mix(in_srgb,var(--text)_10%,transparent)] focus-within:border-[color-mix(in_srgb,var(--text)_34%,transparent)] focus-within:shadow-none",
+);
+
 export function StageTopBar({
   progress,
-  soundOn,
-  onToggleSound,
-  onSaveAndExit,
-  saving = false,
   hidden = false,
 }: {
   /** How far along, 0 to 100. */
   progress: number;
-  soundOn: boolean;
-  onToggleSound: () => void;
-  onSaveAndExit?: (() => void) | undefined;
-  saving?: boolean;
   hidden?: boolean;
 }) {
   return (
@@ -82,32 +90,6 @@ export function StageTopBar({
         )}
       >
         <VeoMark />
-        <span className="flex-1" />
-        <button
-          type="button"
-          className={stageGhostClasses}
-          aria-pressed={soundOn}
-          aria-label="Sound"
-          onClick={onToggleSound}
-        >
-          {soundOn ? (
-            <SpeakerHigh size={16} aria-hidden="true" />
-          ) : (
-            <SpeakerSlash size={16} aria-hidden="true" />
-          )}
-          <span className="@max-[700px]:hidden">Sound</span>
-        </button>
-        {onSaveAndExit ? (
-          <button
-            type="button"
-            className={stageGhostClasses}
-            onClick={onSaveAndExit}
-            disabled={saving}
-          >
-            <SignOut size={16} aria-hidden="true" />
-            <span className="@max-[700px]:hidden">Save and exit</span>
-          </button>
-        ) : null}
       </header>
     </>
   );
@@ -181,24 +163,32 @@ export function StageQuestion({
   );
 }
 
-/** The frosted glass panel at the foot of each screen. */
+/**
+ * The frosted panel at the foot of each screen: no outline, only its glass.
+ * `bare` drops the glass too, for a screen whose only part is its button.
+ */
 export function StageDock({
   children,
   className,
   hidden = false,
+  bare = false,
   as: Element = "div",
   ...rest
 }: {
   children: ReactNode;
   className?: string;
   hidden?: boolean;
+  bare?: boolean;
   as?: "div" | "form";
 } & Record<string, unknown>) {
   return (
     <Element
       {...rest}
       className={cn(
-        "relative z-2 mx-auto mb-[max(22px,env(safe-area-inset-bottom,0px))] grid w-[min(560px,calc(100%-32px))] gap-3.5 rounded-[22px] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] p-5 shadow-[inset_0_1px_0_rgb(255_255_255/.07),0_0_0_1px_color-mix(in_srgb,var(--text)_9%,transparent),0_30px_70px_-30px_rgb(0_0_0/.7)] backdrop-blur-[22px] backdrop-saturate-[1.3] [:root[data-theme=light]_&]:shadow-[inset_0_1px_0_rgb(255_255_255/.8),0_0_0_1px_color-mix(in_srgb,var(--text)_8%,transparent),0_30px_60px_-30px_rgb(15_23_42/.35)]",
+        "relative z-2 mx-auto mb-[max(22px,env(safe-area-inset-bottom,0px))] grid w-[min(560px,calc(100%-32px))] gap-3.5 rounded-[22px] p-5",
+        bare
+          ? "w-[min(460px,calc(100%-32px))] p-0"
+          : "bg-[color-mix(in_srgb,var(--surface)_62%,transparent)] shadow-[0_30px_70px_-30px_rgb(0_0_0/.7)] backdrop-blur-[22px] backdrop-saturate-[1.3] [:root[data-theme=light]_&]:shadow-[0_30px_60px_-30px_rgb(15_23_42/.35)]",
         "animate-[stage-rise_1s_.18s_var(--stage-ease)_both] motion-reduce:animate-none",
         "@max-[700px]:mb-[max(10px,env(safe-area-inset-bottom,0px))] @max-[700px]:w-[calc(100%-20px)] @max-[700px]:rounded-[20px] @max-[700px]:p-4",
         hidden && stageLeaveClasses,
@@ -224,7 +214,7 @@ export function LaunchButton({
       {...props}
       className={cn(
         "relative inline-flex h-16 w-full items-center justify-center gap-3 overflow-hidden rounded-[14px] border-0 bg-(--accent) text-lg! font-extrabold! tracking-[-0.01em] text-(--on-accent) transition-colors hover:bg-(--accent-hover) disabled:animate-none disabled:opacity-50 @max-[700px]:h-14.5 @max-[700px]:text-base!",
-        "animate-[stage-breathe_2.4s_ease-in-out_infinite] motion-reduce:animate-none",
+        "shadow-[0_16px_44px_-16px_color-mix(in_srgb,var(--accent)_70%,transparent)]",
         "before:absolute before:inset-0 before:-translate-x-full before:animate-[stage-sheen_3s_1s_ease-in-out_infinite] before:bg-[linear-gradient(100deg,transparent_30%,rgb(255_255_255/.35)_50%,transparent_70%)] before:content-[''] motion-reduce:before:hidden",
         stageFocusClasses,
         className,

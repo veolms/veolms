@@ -20,15 +20,6 @@
   }
 }
 
-/* The launch button breathes. */
-@keyframes stage-breathe {
-  50% {
-    box-shadow:
-      0 0 0 8px color-mix(in srgb, var(--accent) 16%, transparent),
-      0 0 60px color-mix(in srgb, var(--accent) 50%, transparent);
-  }
-}
-
 /* A light passes across the launch button now and then. */
 @keyframes stage-sheen {
   60%,

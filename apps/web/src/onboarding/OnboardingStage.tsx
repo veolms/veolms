@@ -14,10 +14,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "react-router";
-import {
-  getDefaultLoginMethod,
-  isMethodSwitchVisible,
-} from "../auth/authConfig";
+import { getDefaultLoginMethod } from "../auth/authConfig";
 import { getDefaultCountry } from "../auth/CountryCodeSelect";
 import {
   formatNationalPhoneNumber,
@@ -177,7 +174,6 @@ export function OnboardingStage({
   const [screen, setScreen] = useState<Screen>("intro");
   const [introLine, setIntroLine] = useState(false);
   const [palette, setPalette] = useState(STAGE_PALETTE);
-  const [soundOn, setSoundOn] = useState(true);
   const [toast, setToast] = useState<{
     text: string;
     tone: "ok" | "error";
@@ -242,8 +238,12 @@ export function OnboardingStage({
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  // The stage plays quietly on veolms.org: no sound, so no switch for it.
+  // The visitor's own setting comes back when they leave.
   useEffect(() => {
-    setSoundOn(isStageSoundOn());
+    const before = isStageSoundOn();
+    setStageSoundOn(false);
+    return () => setStageSoundOn(before);
   }, []);
 
   const wait = useCallback(
@@ -816,19 +816,6 @@ export function OnboardingStage({
     }
   };
 
-  const saveAndExit = async () => {
-    setSavingDraft(true);
-    try {
-      if (name.trim() || slug) await saveDraft();
-      setScreen("home");
-      showToast("Saved. Sign in again to pick up where you left off.");
-    } catch (error) {
-      showToast(getApiError(error).message, "error");
-    } finally {
-      setSavingDraft(false);
-    }
-  };
-
   // ─── Step 3: the launch ─────────────────────────────────────────────────
 
   const launchingRef = useRef(false);
@@ -1036,13 +1023,6 @@ export function OnboardingStage({
     else setScreen("contact");
   };
 
-  const toggleSound = () => {
-    const next = !soundOn;
-    setStageSoundOn(next);
-    setSoundOn(next);
-    if (next) stageSound.tick(660);
-  };
-
   // Each screen's heading takes focus, so a screen reader says where we are.
   useEffect(() => {
     if (
@@ -1070,12 +1050,6 @@ export function OnboardingStage({
     { weekday: "long", day: "numeric", month: "long", year: "numeric" },
   );
   const googleEnabled = Boolean(authConfig?.googleClientId);
-  const savingExit =
-    screen === "details" || screen === "launch"
-      ? mode === "signup" && !launching && !leaving
-        ? () => void saveAndExit()
-        : undefined
-      : undefined;
 
   const screenBody = (() => {
     switch (screen) {
@@ -1117,7 +1091,7 @@ export function OnboardingStage({
               14 days, no card needed.
             </StageQuestion>
             <StageArt ref={artRef} />
-            <StageDock>
+            <StageDock bare>
               <LaunchButton onClick={start} disabled={available === false}>
                 <Sparkle size={22} weight="fill" aria-hidden="true" />
                 Start your academy
@@ -1180,7 +1154,9 @@ export function OnboardingStage({
             questionRef={questionRef}
             artRef={artRef}
             method={method}
-            showMethodSwitch={isMethodSwitchVisible()}
+            // Creators sign up with an email or a mobile number, whichever
+            // they use, whatever the academies' own sign-in allows.
+            showMethodSwitch
             onMethodChange={(next) => {
               setMethod(next);
               setContactError(null);
@@ -1331,14 +1307,7 @@ export function OnboardingStage({
         aria-live="off"
       >
         {screen !== "intro" ? (
-          <StageTopBar
-            progress={PROGRESS[screen]}
-            soundOn={soundOn}
-            onToggleSound={toggleSound}
-            onSaveAndExit={savingExit}
-            saving={savingDraft}
-            hidden={leaving}
-          />
+          <StageTopBar progress={PROGRESS[screen]} hidden={leaving} />
         ) : null}
         {screenBody}
       </main>
