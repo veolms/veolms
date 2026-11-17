@@ -4,7 +4,18 @@ import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotc
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
+import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircle";
+import { CodeIcon as Code } from "@phosphor-icons/react/Code";
+import { GearIcon as Gear } from "@phosphor-icons/react/Gear";
+import { HouseIcon as House } from "@phosphor-icons/react/House";
+import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { StackIcon as Stack } from "@phosphor-icons/react/Stack";
+import { TargetIcon as Target } from "@phosphor-icons/react/Target";
+import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { WhatsappLogoIcon as WhatsappLogo } from "@phosphor-icons/react/WhatsappLogo";
 import type { ReactNode, Ref } from "react";
 import { Button } from "../components/Button";
@@ -19,34 +30,64 @@ import { AcademyInitials, StageDock, StageQuestion } from "./StagePieces";
 
 /** What the preview shows until the academy has courses of its own. */
 const PREVIEW_COURSES = [
-  {
-    kind: "Course",
-    title: "Your first course",
-    meta: "12 lessons",
-    price: "₹499",
-  },
-  {
-    kind: "Workshop",
-    title: "Weekend workshop",
-    meta: "Live, 2 hours",
-    price: "₹1,299",
-  },
-  { kind: "Guide", title: "Starter guide", meta: "6 lessons", price: "Free" },
+  { title: "Your first course", meta: "12 lessons", price: "₹499" },
+  { title: "Weekend workshop", meta: "Live, 2 hours", price: "₹1,299" },
+  { title: "Starter guide", meta: "6 lessons", price: "Free" },
 ] as const;
 
-const NAV = ["Courses", "Workshops", "Live classes"] as const;
+/** The academy app's own navigation, with its own icon colours. */
+const NAV = [
+  { label: "Home", Icon: House, tone: "text-sky-400" },
+  { label: "Courses", Icon: BookOpen, tone: "text-pink-400" },
+  { label: "Discussions", Icon: ChatCircleDots, tone: "text-emerald-400" },
+  { label: "Chats", Icon: ChatsCircle, tone: "text-teal-400" },
+] as const;
+
+/** The four promises under a new academy's courses. */
+const PROMISES = [
+  {
+    title: "In-depth",
+    line: "Go beyond the basics.",
+    Icon: BookOpen,
+    tone: "bg-sky-500/15 text-sky-400",
+  },
+  {
+    title: "Practical",
+    line: "Hands-on exercises.",
+    Icon: Code,
+    tone: "bg-violet-500/15 text-violet-400",
+  },
+  {
+    title: "Foundations",
+    line: "Build solid concepts.",
+    Icon: Stack,
+    tone: "bg-emerald-500/15 text-emerald-400",
+  },
+  {
+    title: "Confidence",
+    line: "Build real projects.",
+    Icon: Target,
+    tone: "bg-amber-500/15 text-amber-400",
+  },
+] as const;
 
 /** A course's picture in the preview: the accent, kept quiet, over a dot grid. */
 function PreviewThumb({
   tone,
+  wide = false,
   children,
 }: {
   tone: number;
+  /** A shorter picture, for the course cards. */
+  wide?: boolean;
   children?: ReactNode;
 }) {
   return (
     <div
-      className="relative grid aspect-video place-items-center overflow-hidden"
+      className={cn(
+        "relative grid place-items-center overflow-hidden",
+        wide ? "aspect-[3/1]" : "aspect-video",
+      )}
       style={{
         background: `radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--text) 14%, transparent) 1px, transparent 0) 0 0 / 14px 14px, linear-gradient(${135 + tone * 40}deg, color-mix(in srgb, var(--accent) ${34 - tone * 8}%, var(--surface)), color-mix(in srgb, var(--accent) 6%, var(--canvas)))`,
       }}
@@ -56,13 +97,20 @@ function PreviewThumb({
   );
 }
 
+const tileClasses =
+  "rounded-[10px] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_6%,transparent)]";
+
+/**
+ * The academy as its students will see it: the VeoLMS app with its
+ * sidebar (a tab bar on a phone), the home page's welcome, its courses
+ * and its four promises.
+ */
 function Storefront({ name, host }: { name: string; host: string }) {
   const [subdomain, ...rest] = host.split(".");
-  const [featured] = PREVIEW_COURSES;
   return (
     <div
       data-stage-browser
-      className="relative flex min-h-0 w-full max-w-300 flex-col overflow-hidden rounded-[18px] bg-(--surface) shadow-[0_50px_120px_-40px_color-mix(in_srgb,var(--accent)_35%,#000),0_0_0_1px_color-mix(in_srgb,var(--text)_11%,transparent),inset_0_1px_0_rgb(255_255_255/.06)]"
+      className="relative flex min-h-0 w-full max-w-330 flex-col overflow-hidden rounded-[18px] bg-(--canvas) shadow-[0_50px_120px_-40px_color-mix(in_srgb,var(--accent)_35%,#000),0_0_0_1px_color-mix(in_srgb,var(--text)_11%,transparent),inset_0_1px_0_rgb(255_255_255/.06)]"
     >
       <div
         data-stage-bar
@@ -90,118 +138,183 @@ function Storefront({ name, host }: { name: string; host: string }) {
         </div>
         <span className="w-12" aria-hidden="true" />
       </div>
-      <div className="@container/sf min-h-0 flex-1 overflow-hidden bg-(--canvas) text-(--text)">
-        <div
-          data-stage-head
-          className="flex items-center gap-6 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] px-7 py-3.5 @max-[640px]/sf:px-4"
-        >
-          <div
-            data-stage-brand
-            className="flex min-w-0 items-center gap-2.5 text-[15px] font-extrabold tracking-[-0.02em]"
-          >
-            <AcademyInitials name={name} size={30} />
-            <span className="truncate">{name}</span>
-          </div>
-          <nav className="flex gap-5 text-[13px] font-semibold text-(--muted) @max-[640px]/sf:hidden">
-            {NAV.map((item) => (
-              <span key={item}>{item}</span>
-            ))}
-          </nav>
-          <span
-            data-stage-signin
-            className="ml-auto inline-flex h-8.5 items-center rounded-lg bg-(--accent) px-3.5 text-[12.5px] font-bold text-(--on-accent)"
-          >
-            Sign in
-          </span>
-        </div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,380px)] items-center gap-10 px-7 pt-7 pb-6 @max-[640px]/sf:grid-cols-1 @max-[640px]/sf:gap-5 @max-[640px]/sf:px-4 @max-[640px]/sf:pt-5">
-          <div className="grid justify-items-start gap-3">
-            <span className="inline-flex h-6.5 items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-2.5 text-[11.5px] font-bold text-(--accent)">
-              <i
-                className="size-1.5 rounded-full bg-(--accent)"
-                aria-hidden="true"
-              />
-              Admissions open
-            </span>
-            <h3
-              data-stage-hero
-              className="m-0 max-w-[16ch] text-[clamp(24px,5cqw,44px)] leading-[1.04] font-extrabold tracking-[-0.04em]"
+      <div className="@container/sf min-h-0 flex-1 overflow-hidden">
+        <div className="flex h-full min-h-0 gap-3 overflow-hidden p-3 text-(--text) @max-[640px]/sf:flex-col @max-[640px]/sf:gap-0 @max-[640px]/sf:p-0">
+          {/* Sidebar */}
+          <aside
+            data-stage-head
+            className="flex w-46 shrink-0 flex-col gap-1.5 @max-[640px]/sf:hidden"
+          >
+            <div
+              data-stage-brand
+              className="flex items-center gap-2 px-2 pt-1.5 pb-3 text-[15px] font-extrabold tracking-[-0.02em]"
             >
-              Learn with {name}
-            </h3>
-            <p className="m-0 max-w-[40ch] text-[13.5px] leading-relaxed text-(--muted)">
-              Courses, workshops and live classes, with lifetime access and a
-              certificate when you finish.
-            </p>
-            <div className="mt-1 flex flex-wrap gap-2">
-              <span className="inline-flex h-9 items-center rounded-lg bg-(--accent) px-4 text-[13px] font-bold text-(--on-accent)">
-                Browse courses
-              </span>
-              <span className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_14%,transparent)]">
-                <Play size={12} weight="fill" aria-hidden="true" />
-                Free lesson
-              </span>
+              <AcademyInitials name={name} size={26} />
+              <span className="truncate">{name}</span>
             </div>
-          </div>
-          <div
-            data-stage-course
-            className="overflow-hidden rounded-[14px] bg-(--surface) shadow-[0_0_0_1px_color-mix(in_srgb,var(--text)_8%,transparent),0_24px_50px_-28px_rgb(0_0_0/.8)] @max-[640px]/sf:hidden"
-          >
-            <PreviewThumb tone={0}>
-              <span className="grid size-12 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_30px_color-mix(in_srgb,var(--accent)_45%,transparent)]">
-                <Play size={18} weight="fill" aria-hidden="true" />
-              </span>
-            </PreviewThumb>
-            <div className="flex items-center gap-3 px-4 py-3">
-              <div className="grid min-w-0 gap-0.5">
-                <b className="truncate text-[13.5px]">{featured.title}</b>
-                <span className="truncate text-xs text-(--muted)">
-                  {featured.meta}, by {name}
-                </span>
-              </div>
-              <span className="ml-auto text-[13.5px] font-extrabold">
-                {featured.price}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-7 pb-7 @max-[640px]/sf:px-4">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h4 className="m-0 text-sm font-extrabold">Popular right now</h4>
-            <span className="text-xs font-semibold text-(--muted)">
-              See all
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-3.5 @max-[640px]/sf:grid-cols-1 @max-[640px]/sf:gap-2.5">
-            {PREVIEW_COURSES.map((course, index) => (
-              <div
-                key={course.title}
-                data-stage-course
+            {NAV.map(({ label, Icon, tone }, index) => (
+              <span
+                key={label}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl bg-(--surface) p-2.5 shadow-[0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)]",
-                  index === 2 && "@max-[640px]/sf:hidden",
+                  "flex h-9.5 items-center gap-2.5 px-3 text-[13px] font-semibold",
+                  tileClasses,
+                  index === 0 &&
+                    "bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_30%,transparent)]",
                 )}
               >
-                <div className="w-18 shrink-0 overflow-hidden rounded-lg">
-                  <PreviewThumb tone={index} />
-                </div>
-                <div className="grid min-w-0 gap-0.5 text-xs text-(--muted)">
-                  <span className="text-[10.5px] font-bold tracking-[0.06em] text-(--accent) uppercase">
-                    {course.kind}
-                  </span>
-                  <b className="truncate text-[12.5px] text-(--text)">
-                    {course.title}
-                  </b>
-                  <span>
-                    {course.meta},{" "}
-                    <b className="text-(--text)">{course.price}</b>
-                  </span>
-                </div>
-              </div>
+                <Icon
+                  size={17}
+                  weight={index === 0 ? "fill" : "regular"}
+                  className={tone}
+                  aria-hidden="true"
+                />
+                {label}
+              </span>
             ))}
+            <div className="mt-auto grid gap-1.5">
+              <span
+                data-stage-signin
+                className={cn(
+                  "flex items-center gap-2 px-2.5 py-2",
+                  tileClasses,
+                )}
+              >
+                <UserCircle
+                  size={24}
+                  className="text-(--muted)"
+                  aria-hidden="true"
+                />
+                <span className="grid text-[12px] leading-tight">
+                  <b>Sign in</b>
+                  <span className="text-(--muted)">Help and more</span>
+                </span>
+              </span>
+              <span className="grid grid-cols-3 gap-1.5" aria-hidden="true">
+                {[Palette, Bell, Gear].map((Icon, index) => (
+                  <span
+                    key={index}
+                    className={cn("grid h-8 place-items-center", tileClasses)}
+                  >
+                    <Icon size={15} className="text-(--muted)" />
+                  </span>
+                ))}
+              </span>
+            </div>
+          </aside>
+
+          {/* Home page */}
+          <div className="min-w-0 flex-1 overflow-hidden rounded-[14px] bg-(--surface) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)] @max-[640px]/sf:rounded-none">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,300px)] items-center gap-6 bg-[radial-gradient(90%_120%_at_85%_0%,color-mix(in_srgb,var(--accent)_14%,transparent),transparent_60%)] px-6 pt-6 pb-5 @max-[640px]/sf:grid-cols-1 @max-[640px]/sf:gap-4 @max-[640px]/sf:px-4 @max-[640px]/sf:pt-5">
+              <div className="grid justify-items-start gap-2.5">
+                <span className="text-[10.5px] font-bold tracking-[0.2em] text-(--muted) uppercase">
+                  Welcome to {name}
+                </span>
+                <h3
+                  data-stage-hero
+                  className="m-0 text-[clamp(22px,4.2cqw,38px)] leading-[1.05] font-extrabold tracking-[-0.035em]"
+                >
+                  Learn in depth.
+                  <span className="block text-(--accent)">
+                    Build with confidence.
+                  </span>
+                </h3>
+                <span className="mt-1.5 inline-flex h-8.5 items-center gap-1.5 rounded-lg bg-(--accent) px-3.5 text-[12.5px] font-bold text-(--on-accent)">
+                  Explore courses
+                  <ArrowRight size={13} weight="bold" aria-hidden="true" />
+                </span>
+              </div>
+              <div className="overflow-hidden rounded-xl shadow-[0_0_0_1px_color-mix(in_srgb,var(--text)_8%,transparent),0_20px_40px_-24px_rgb(0_0_0/.8)]">
+                <PreviewThumb tone={0}>
+                  <span className="grid size-11 place-items-center rounded-full bg-[color-mix(in_srgb,var(--canvas)_70%,transparent)] text-(--text) backdrop-blur-sm">
+                    <Play size={16} weight="fill" aria-hidden="true" />
+                  </span>
+                </PreviewThumb>
+              </div>
+            </div>
+
+            <div className="px-6 pb-5 @max-[640px]/sf:px-4">
+              <h4 className="m-0 text-[15px] font-extrabold">
+                Popular courses
+              </h4>
+              <p className="m-0 mb-3 text-xs text-(--muted)">
+                Most loved by our learners.
+              </p>
+              <div className="grid grid-cols-3 gap-3 @max-[640px]/sf:grid-cols-2">
+                {PREVIEW_COURSES.map((course, index) => (
+                  <div
+                    key={course.title}
+                    data-stage-course
+                    className={cn(
+                      "overflow-hidden rounded-xl bg-(--canvas) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)]",
+                      index === 2 && "@max-[640px]/sf:hidden",
+                    )}
+                  >
+                    <PreviewThumb tone={index} wide />
+                    <div className="grid gap-0.5 px-3 pt-2 pb-2.5 text-[11.5px] text-(--muted)">
+                      <b className="truncate text-[12.5px] text-(--text)">
+                        {course.title}
+                      </b>
+                      <span className="flex justify-between gap-2">
+                        {course.meta}
+                        <b className="text-(--text)">{course.price}</b>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 grid grid-cols-4 gap-2.5 @max-[820px]/sf:grid-cols-2 @max-[640px]/sf:hidden">
+                {PROMISES.map(({ title, line, Icon, tone }) => (
+                  <div
+                    key={title}
+                    className={cn(
+                      "flex items-center gap-2.5 p-2.5",
+                      tileClasses,
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid size-8 shrink-0 place-items-center rounded-lg",
+                        tone,
+                      )}
+                    >
+                      <Icon size={16} aria-hidden="true" />
+                    </span>
+                    <span className="grid min-w-0 text-[11px] leading-tight text-(--muted)">
+                      <b className="text-[12px] text-(--text)">{title}</b>
+                      <span className="truncate">{line}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
+
+          {/* The phone's tab bar */}
+          <nav
+            aria-hidden="true"
+            className="hidden shrink-0 grid-cols-5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--header) py-1.5 @max-[640px]/sf:grid"
+          >
+            {[
+              ...NAV,
+              { label: "You", Icon: UserCircle, tone: "text-(--muted)" },
+            ].map(({ label, Icon, tone }, index) => (
+              <span
+                key={label}
+                className={cn(
+                  "grid justify-items-center gap-0.5 text-[10px] font-semibold",
+                  index === 0 ? "text-(--accent)" : "text-(--muted)",
+                )}
+              >
+                <Icon
+                  size={18}
+                  weight={index === 0 ? "fill" : "regular"}
+                  className={index === 0 ? "" : tone}
+                />
+                {label}
+              </span>
+            ))}
+          </nav>
         </div>
       </div>
     </div>
@@ -264,7 +377,7 @@ export function LiveScreen({
           aria-label={`A preview of ${name}'s storefront`}
           role="img"
           className={cn(
-            "absolute inset-x-[clamp(12px,4cqw,64px)] inset-y-1.5 flex justify-center transition-[opacity,transform] duration-1100 ease-(--stage-ease) @max-[700px]:inset-x-2.5 @max-[700px]:inset-y-1",
+            "absolute inset-x-[clamp(10px,2.5cqw,40px)] inset-y-1.5 flex justify-center transition-[opacity,transform] duration-1100 ease-(--stage-ease) @max-[700px]:inset-x-2.5 @max-[700px]:inset-y-1",
             shown ? "scale-100 opacity-100" : "scale-[.97] opacity-0",
           )}
         >
