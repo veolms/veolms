@@ -14,6 +14,18 @@ export const testimonials: SectionRenderer<"testimonials"> = {
 .vp-site .vp-testimonials--spotlight .vp-quotes>li:first-child .vp-quote{background:none;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;transform:none;padding:0 0 12px;text-align:center;align-items:center}
 .vp-testimonials--spotlight .vp-quotes>li:first-child blockquote{font-family:var(--font-heading);font-size:clamp(1.3rem,3.4vw,2rem);line-height:1.35;max-width:46rem;text-wrap:balance}
 @media (min-width:760px){.vp-testimonials--spotlight .vp-quotes{grid-template-columns:repeat(2,1fr)}.vp-testimonials--spotlight .vp-quotes>li:first-child{grid-column:1/-1}}
+.vp-testimonials--wall .vp-quotes{display:block;columns:1;column-gap:20px}
+@media (min-width:700px){.vp-testimonials--wall .vp-quotes{columns:2}}
+@media (min-width:1040px){.vp-testimonials--wall .vp-quotes{columns:3}}
+.vp-testimonials--wall .vp-quotes>li{break-inside:avoid;margin-bottom:20px}
+.vp-testimonials--marquee .vp-wrap{max-width:none;padding-inline:0}
+.vp-testimonials--marquee .vp-head{max-width:var(--width);margin-inline:auto;padding-inline:clamp(16px,4vw,32px)}
+.vp-quote-marquee{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.vp-quote-track{display:flex;width:max-content;animation:vp-quotes-glide 48s linear infinite}
+.vp-quote-marquee:hover .vp-quote-track{animation-play-state:paused}
+.vp-quote-track .vp-quotes{display:flex;gap:20px;padding-right:20px}
+.vp-quote-track .vp-quotes>li{width:min(360px,80vw);flex:none}
+@keyframes vp-quotes-glide{to{transform:translateX(-50%)}}
 `,
   render(section, context) {
     const { settings } = section;
@@ -40,10 +52,22 @@ export const testimonials: SectionRenderer<"testimonials"> = {
     return frame(
       section,
       settings,
-      html`${header(settings.heading)}
-        <ul class="vp-quotes">
-          ${items}
-        </ul>`,
+      section.layout === "marquee"
+        ? html`${header(settings.heading)}
+            <div class="vp-quote-marquee">
+              <div class="vp-quote-track">
+                <ul class="vp-quotes">
+                  ${items}
+                </ul>
+                <ul class="vp-quotes" aria-hidden="true">
+                  ${items}
+                </ul>
+              </div>
+            </div>`
+        : html`${header(settings.heading)}
+            <ul class="vp-quotes">
+              ${items}
+            </ul>`,
     );
   },
 };

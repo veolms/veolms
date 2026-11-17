@@ -107,14 +107,19 @@ const look = {
 // --- Sections -------------------------------------------------------------
 
 export const SITE_SECTION_LAYOUTS = {
-  hero: ["centered", "split", "banner"],
-  features: ["grid", "list", "cards"],
+  hero: ["centered", "split", "banner", "gradient"],
+  features: ["grid", "list", "cards", "bento", "steps", "checklist"],
   courses: ["grid", "list", "row"],
-  testimonials: ["grid", "spotlight"],
+  testimonials: ["grid", "spotlight", "wall", "marquee"],
   faq: ["accordion", "columns"],
-  cta: ["banner", "card", "split"],
+  cta: ["banner", "card", "split", "gradient"],
   links: ["stack", "pills"],
   footer: ["simple", "columns"],
+  header: ["classic", "centered", "minimal"],
+  logos: ["grid", "marquee"],
+  stats: ["inline", "cards", "band"],
+  pricing: ["cards", "single"],
+  about: ["left", "right", "centered"],
 } as const;
 
 export type SiteSectionType = keyof typeof SITE_SECTION_LAYOUTS;
@@ -216,6 +221,81 @@ const footerSettings = z.strictObject({
   showLegal: z.boolean(),
 });
 
+const headerSettings = z.strictObject({
+  ...look,
+  /** Shown beside the academy's name; the name itself comes from Platform. */
+  links: z.array(siteButtonSchema).max(6),
+  button: siteButtonSchema,
+  /** Stays at the top of the screen while the visitor scrolls. */
+  sticky: z.boolean(),
+});
+
+const logosSettings = z.strictObject({
+  ...look,
+  heading: text(140),
+  items: z
+    .array(
+      z.strictObject({
+        /** Shown as words when there is no picture. */
+        name: requiredText(60),
+        image: siteImageSchema,
+      }),
+    )
+    .max(16),
+});
+
+const statsSettings = z.strictObject({
+  ...look,
+  heading: text(140),
+  intro: text(400),
+  items: z
+    .array(
+      z.strictObject({
+        /** "12,000+", "4.9★", "98%": counts up when it starts with a number. */
+        value: requiredText(16),
+        label: requiredText(80),
+      }),
+    )
+    .max(6),
+});
+
+const pricingSettings = z.strictObject({
+  ...look,
+  heading: text(140),
+  intro: text(400),
+  plans: z
+    .array(
+      z.strictObject({
+        name: requiredText(60),
+        price: requiredText(24),
+        /** The struck-through price, when on offer. */
+        compareAt: text(24),
+        /** "one-time", "per month", "incl. GST". */
+        period: text(40),
+        /** One point per line. */
+        features: text(1200),
+        button: siteButtonSchema,
+        /** Drawn bigger, with its badge. */
+        highlight: z.boolean(),
+        badge: text(30),
+      }),
+    )
+    .max(4),
+  /** Under the plans: "30-day refund", "EMI available". */
+  note: text(200),
+});
+
+const aboutSettings = z.strictObject({
+  ...look,
+  eyebrow: text(80),
+  heading: requiredText(140),
+  text: text(1500),
+  image: siteImageSchema,
+  /** Short facts shown as chips: "10 years teaching", "IIT Delhi". */
+  facts: z.array(z.strictObject({ text: requiredText(60) })).max(6),
+  button: siteButtonSchema,
+});
+
 function section<Type extends SiteSectionType, Settings extends z.ZodType>(
   type: Type,
   settings: Settings,
@@ -237,6 +317,11 @@ export const siteSectionSchema = z.discriminatedUnion("type", [
   section("cta", ctaSettings),
   section("links", linksSettings),
   section("footer", footerSettings),
+  section("header", headerSettings),
+  section("logos", logosSettings),
+  section("stats", statsSettings),
+  section("pricing", pricingSettings),
+  section("about", aboutSettings),
 ]);
 export type SiteSection = z.infer<typeof siteSectionSchema>;
 export type SiteSectionOf<Type extends SiteSectionType> = Extract<

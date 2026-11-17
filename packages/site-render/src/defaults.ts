@@ -1,5 +1,6 @@
 import {
   SITE_PAGE_SCHEMA_VERSION,
+  SITE_SECTION_LAYOUTS,
   SITE_THEMES,
   type SitePageDocument,
   type SitePageType,
@@ -104,6 +105,79 @@ export const SECTION_DEFAULTS: {
     links: [],
     showLegal: true,
   },
+  header: {
+    tone: "default",
+    spacing: "sm",
+    animation: "none",
+    links: [{ label: "Courses", link: { kind: "courses" } }],
+    button: { label: "Start learning", link: { kind: "courses" } },
+    sticky: true,
+  },
+  logos: {
+    tone: "default",
+    spacing: "sm",
+    heading: "Our students work at",
+    items: [
+      { name: "Infosys", image: NO_IMAGE },
+      { name: "TCS", image: NO_IMAGE },
+      { name: "Flipkart", image: NO_IMAGE },
+      { name: "Zomato", image: NO_IMAGE },
+      { name: "Razorpay", image: NO_IMAGE },
+    ],
+  },
+  stats: {
+    tone: "default",
+    spacing: "md",
+    heading: "",
+    intro: "",
+    items: [
+      { value: "12,000+", label: "Students taught" },
+      { value: "4.8★", label: "Average rating" },
+      { value: "150+", label: "Lessons" },
+      { value: "92%", label: "Finish their course" },
+    ],
+  },
+  pricing: {
+    tone: "muted",
+    spacing: "lg",
+    heading: "Choose how you learn",
+    intro: "Pay once, learn for life. Prices include GST.",
+    plans: [
+      {
+        name: "Course",
+        price: "₹1,999",
+        compareAt: "₹3,999",
+        period: "one-time",
+        features:
+          "Every lesson\nPractice exercises\nCertificate when you finish",
+        button: { label: "Buy the course", link: { kind: "courses" } },
+        highlight: false,
+        badge: "",
+      },
+      {
+        name: "Course + mentoring",
+        price: "₹4,999",
+        compareAt: "",
+        period: "one-time",
+        features:
+          "Everything in Course\nWeekly live doubt classes\nResume and interview review",
+        button: { label: "Join with mentoring", link: { kind: "courses" } },
+        highlight: true,
+        badge: "Most popular",
+      },
+    ],
+    note: "30-day refund if it isn't for you.",
+  },
+  about: {
+    tone: "default",
+    spacing: "lg",
+    eyebrow: "Your teacher",
+    heading: "Hi, I'm your instructor",
+    text: "I've spent years doing this work and teaching it. Here you learn what actually matters, in the order that makes it click.",
+    image: NO_IMAGE,
+    facts: [{ text: "10+ years experience" }, { text: "5,000+ students" }],
+    button: { label: "", link: NO_LINK },
+  },
 };
 
 let idCounter = 0;
@@ -123,7 +197,9 @@ export function newSection<Type extends SiteSectionType>(
   return {
     id: newSectionId(),
     type,
-    layout: SITE_THEMES[themeId].defaultLayouts[type],
+    layout:
+      SITE_THEMES[themeId].defaultLayouts[type] ??
+      SITE_SECTION_LAYOUTS[type][0],
     settings: structuredClone({ ...SECTION_DEFAULTS[type], ...overrides }),
   } as unknown as SiteSection;
 }

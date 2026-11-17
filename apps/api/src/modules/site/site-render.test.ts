@@ -79,10 +79,12 @@ void describe("site themes", () => {
     }
   }
 
-  void test("every theme's default layouts exist", () => {
+  void test("every default layout a theme names exists", () => {
     for (const id of SITE_THEME_IDS) {
       for (const type of SITE_SECTION_TYPES) {
         const layout = SITE_THEMES[id].defaultLayouts[type];
+        // Left out: the section starts with its first layout.
+        if (layout === undefined) continue;
         assert.ok(
           (SITE_SECTION_LAYOUTS[type] as readonly string[]).includes(layout),
           `${id} ${type} ${layout}`,

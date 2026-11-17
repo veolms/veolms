@@ -7,14 +7,19 @@ import {
 } from "@veolms/contracts";
 import type { SiteRenderContext } from "./context.ts";
 import { html, raw, type Html } from "./html.ts";
+import { about } from "./sections/about.ts";
 import { courses } from "./sections/courses.ts";
 import { cta } from "./sections/cta.ts";
 import { faq } from "./sections/faq.ts";
 import { features } from "./sections/features.ts";
 import { footer } from "./sections/footer.ts";
 import type { SectionRenderer } from "./sections/frame.ts";
+import { header } from "./sections/header.ts";
 import { hero } from "./sections/hero.ts";
 import { links } from "./sections/links.ts";
+import { logos } from "./sections/logos.ts";
+import { pricing } from "./sections/pricing.ts";
+import { stats } from "./sections/stats.ts";
 import { testimonials } from "./sections/testimonials.ts";
 import {
   BASE_CSS,
@@ -51,6 +56,11 @@ const RENDERERS: { [Type in SiteSectionType]: SectionRenderer<Type> } = {
   cta,
   links,
   footer,
+  header,
+  logos,
+  stats,
+  pricing,
+  about,
 };
 
 function renderSection(
@@ -111,6 +121,7 @@ export function renderSitePage(input: {
   const theme = SITE_THEMES[look.themeId];
   const body: Html[] = [];
   const footers: Html[] = [];
+  const headers: Html[] = [];
   const types = new Set<SiteSectionType>();
   const courseIds = new Set<string>();
   for (const section of document.sections) {
@@ -118,6 +129,7 @@ export function renderSitePage(input: {
     if (!rendered) continue;
     types.add(section.type);
     if (section.type === "footer") footers.push(rendered);
+    else if (section.type === "header") headers.push(rendered);
     else body.push(rendered);
     if (section.type === "courses") {
       const shown =
@@ -158,6 +170,7 @@ export function renderSitePage(input: {
         </style>
       </head>
       <body class="vp-site" ${raw(attributes)}>
+        ${headers}
         <main>${body}</main>
         ${footers} ${motionLevel(look) === "off" ? null : MOTION_TAG}
       </body>

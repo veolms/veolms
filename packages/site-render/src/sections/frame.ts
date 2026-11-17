@@ -34,13 +34,16 @@ export function frame(
   },
   inner: Html,
   label?: string,
+  /** More classes of our own (never creator text), as `vp-header--sticky`. */
+  extraClass = "",
 ): Html {
   const animation = look.animation ?? "auto";
   const hidden =
     look.hideOn && look.hideOn !== "none" ? ` vp-hide-${look.hideOn}` : "";
+  const extra = extraClass ? ` ${extraClass}` : "";
   return html`<section
     id="${section.id}"
-    class="vp-s vp-tone-${look.tone} vp-sp-${look.spacing} vp-${section.type} vp-${section.type}--${section.layout}${hidden}"
+    class="vp-s vp-tone-${look.tone} vp-sp-${look.spacing} vp-${section.type} vp-${section.type}--${section.layout}${hidden}${extra}"
     ${animation === "none" ? null : html` data-anim="${animation}"`}
     ${label ? html` aria-label="${label}"` : null}
   >

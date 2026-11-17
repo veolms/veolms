@@ -95,8 +95,11 @@ export interface SiteTheme {
   /** Content width in px. */
   width: number;
   motion: SiteMotionLevel;
-  /** The layout a newly added section starts with. */
-  defaultLayouts: { [Type in SiteSectionType]: SiteSectionLayout<Type> };
+  /**
+   * The layout a newly added section starts with; a section left out
+   * starts with its first layout.
+   */
+  defaultLayouts: { [Type in SiteSectionType]?: SiteSectionLayout<Type> };
 }
 
 const SYSTEM_SANS =

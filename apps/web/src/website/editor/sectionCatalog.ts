@@ -7,6 +7,11 @@ import { QuestionIcon } from "@phosphor-icons/react/Question";
 import { RowsIcon } from "@phosphor-icons/react/Rows";
 import { SparkleIcon } from "@phosphor-icons/react/Sparkle";
 import { BooksIcon } from "@phosphor-icons/react/Books";
+import { ChartLineUpIcon } from "@phosphor-icons/react/ChartLineUp";
+import { NavigationArrowIcon } from "@phosphor-icons/react/NavigationArrow";
+import { SealCheckIcon } from "@phosphor-icons/react/SealCheck";
+import { TagIcon } from "@phosphor-icons/react/Tag";
+import { UserCircleIcon } from "@phosphor-icons/react/UserCircle";
 import type { SiteSectionType } from "@veolms/contracts";
 
 /**
@@ -289,6 +294,181 @@ export const SECTION_CATALOG: Record<SiteSectionType, SectionMeta> = {
       },
     ],
   },
+  header: {
+    label: "Header",
+    description: "Your name, a few links and a button, at the top.",
+    group: "top",
+    Icon: NavigationArrowIcon,
+    fields: [
+      {
+        kind: "toggle",
+        key: "sticky",
+        label: "Stay at the top while scrolling",
+      },
+      {
+        kind: "list",
+        key: "links",
+        label: "Links",
+        itemLabel: "Link",
+        titleKey: "label",
+        max: 6,
+        newItem: () => ({ label: "New link", link: NO_LINK }),
+        fields: [
+          { kind: "text", key: "label", label: "Text", max: 60 },
+          { kind: "link", key: "link", label: "Goes to" },
+        ],
+      },
+      button("button", "Button"),
+    ],
+  },
+  logos: {
+    label: "Logo strip",
+    description: "Where your students work, or where you were featured.",
+    group: "proof",
+    Icon: SealCheckIcon,
+    fields: [
+      { kind: "text", key: "heading", label: "Line above", max: 140 },
+      {
+        kind: "list",
+        key: "items",
+        label: "Logos",
+        itemLabel: "Logo",
+        titleKey: "name",
+        max: 16,
+        newItem: () => ({ name: "Company", image: { src: "", alt: "" } }),
+        fields: [
+          { kind: "text", key: "name", label: "Name", max: 60 },
+          { kind: "image", key: "image", label: "Logo (optional)" },
+        ],
+      },
+    ],
+  },
+  stats: {
+    label: "Numbers",
+    description: "Big numbers that count up: students, rating, lessons.",
+    group: "proof",
+    Icon: ChartLineUpIcon,
+    fields: [
+      { kind: "text", key: "heading", label: "Heading", max: 140 },
+      { kind: "textarea", key: "intro", label: "Introduction", max: 400 },
+      {
+        kind: "list",
+        key: "items",
+        label: "Numbers",
+        itemLabel: "Number",
+        titleKey: "label",
+        max: 6,
+        newItem: () => ({ value: "100+", label: "Something to count" }),
+        fields: [
+          {
+            kind: "text",
+            key: "value",
+            label: "Number",
+            max: 16,
+            placeholder: "12,000+",
+          },
+          { kind: "text", key: "label", label: "What it counts", max: 80 },
+        ],
+      },
+    ],
+  },
+  pricing: {
+    label: "Pricing",
+    description: "Plans with prices, what's included and a button each.",
+    group: "selling",
+    Icon: TagIcon,
+    fields: [
+      { kind: "text", key: "heading", label: "Heading", max: 140 },
+      { kind: "textarea", key: "intro", label: "Introduction", max: 400 },
+      {
+        kind: "list",
+        key: "plans",
+        label: "Plans",
+        itemLabel: "Plan",
+        titleKey: "name",
+        max: 4,
+        newItem: () => ({
+          name: "New plan",
+          price: "₹999",
+          compareAt: "",
+          period: "one-time",
+          features: "",
+          button: { label: "Buy now", link: { kind: "courses" } },
+          highlight: false,
+          badge: "",
+        }),
+        fields: [
+          { kind: "text", key: "name", label: "Plan name", max: 60 },
+          {
+            kind: "text",
+            key: "price",
+            label: "Price",
+            max: 24,
+            placeholder: "₹1,999",
+          },
+          {
+            kind: "text",
+            key: "compareAt",
+            label: "Old price (struck out)",
+            max: 24,
+          },
+          {
+            kind: "text",
+            key: "period",
+            label: "Below the price",
+            max: 40,
+            placeholder: "one-time",
+          },
+          {
+            kind: "textarea",
+            key: "features",
+            label: "What's included (one per line)",
+            rows: 4,
+            max: 1200,
+          },
+          { kind: "button", key: "button", label: "Button" },
+          { kind: "toggle", key: "highlight", label: "Make it stand out" },
+          {
+            kind: "text",
+            key: "badge",
+            label: "Badge on top",
+            max: 30,
+            placeholder: "Most popular",
+          },
+        ],
+      },
+      { kind: "text", key: "note", label: "Line under the plans", max: 200 },
+    ],
+  },
+  about: {
+    label: "About you",
+    description: "Your photo, your story and a few facts about you.",
+    group: "content",
+    Icon: UserCircleIcon,
+    fields: [
+      { kind: "text", key: "eyebrow", label: "Small line above", max: 80 },
+      { kind: "text", key: "heading", label: "Heading", max: 140 },
+      {
+        kind: "textarea",
+        key: "text",
+        label: "Your story",
+        rows: 5,
+        max: 1500,
+      },
+      { kind: "image", key: "image", label: "Photo" },
+      {
+        kind: "list",
+        key: "facts",
+        label: "Facts",
+        itemLabel: "Fact",
+        titleKey: "text",
+        max: 6,
+        newItem: () => ({ text: "A fact about you" }),
+        fields: [{ kind: "text", key: "text", label: "Fact", max: 60 }],
+      },
+      button("button", "Button"),
+    ],
+  },
 };
 
 /** What each layout is called in the Design tab. */
@@ -296,17 +476,30 @@ export const LAYOUT_LABELS: Record<string, string> = {
   centered: "Centred",
   split: "Text and picture",
   banner: "Big banner",
+  gradient: "Glowing gradient",
   grid: "Grid",
   list: "List",
   cards: "Cards",
+  bento: "Bento grid",
+  steps: "Numbered steps",
+  checklist: "Checklist",
   row: "Swipe row",
   spotlight: "One big quote",
+  wall: "Wall of love",
+  marquee: "Gliding row",
   accordion: "Open one at a time",
   columns: "Two columns",
   card: "Card",
   stack: "Stacked buttons",
   pills: "Pills",
   simple: "Simple",
+  classic: "Links on the right",
+  minimal: "Name and button",
+  inline: "In a row",
+  band: "Band with dividers",
+  single: "One offer",
+  left: "Photo on the left",
+  right: "Photo on the right",
 };
 
 /** A section's colour schemes, with the swatch the Design tab shows. */
