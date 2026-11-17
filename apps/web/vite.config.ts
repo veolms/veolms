@@ -802,8 +802,6 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
         "recharts",
         "@veolms/analytics-ui > recharts",
         "@veolms/video-player > shaka-player",
-        // The website editor (Puck) reaches CommonJS packages such as `flat`.
-        "@puckeditor/core",
       ],
       holdUntilCrawlEnd: false,
     },

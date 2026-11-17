@@ -1,38 +1,43 @@
-import { createUsePuck } from "@puckeditor/core";
 import type { SitePageSummary } from "@veolms/contracts";
 import { ArrowArcLeftIcon as ArrowArcLeft } from "@phosphor-icons/react/ArrowArcLeft";
 import { ArrowArcRightIcon as ArrowArcRight } from "@phosphor-icons/react/ArrowArcRight";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ArrowSquareOutIcon as ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
 import { ClockCounterClockwiseIcon as ClockCounterClockwise } from "@phosphor-icons/react/ClockCounterClockwise";
+import { DesktopIcon as Desktop } from "@phosphor-icons/react/Desktop";
+import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
+import { DeviceTabletIcon as DeviceTablet } from "@phosphor-icons/react/DeviceTablet";
 import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
-import { createContext, useContext, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Button } from "../components/Button";
+import { cn } from "../lib/utils";
+import type { EditorDevice } from "./editor/EditorCanvas";
 import { pageStatusClass, pageStatusLabel } from "./websiteHelpers";
 
-/** What the bar shows and does; provided by the editor around Puck. */
+/** What the bar shows and does. */
 export interface WebsiteEditorBarState {
   title: string;
   slug: string;
   status: SitePageSummary["status"];
   saveLabel: string;
   previewMode: "light" | "dark";
+  device: EditorDevice;
+  canUndo: boolean;
+  canRedo: boolean;
   liveUrl: string | null;
   publishLabel: string;
   publishDisabled: boolean;
   /** A problem to show under the bar: unsaved fields, a conflict. */
   notice: ReactNode;
   onBack: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onDevice: (device: EditorDevice) => void;
   onTogglePreviewMode: () => void;
   onOpenVersions: () => void;
   onPublish: () => void;
 }
-
-export const WebsiteEditorBarContext =
-  createContext<WebsiteEditorBarState | null>(null);
-
-const usePuck = createUsePuck();
 
 const iconButtonClass =
   "inline-flex size-9 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-(--muted) hover:bg-(--hover) hover:text-(--text) disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent";
@@ -41,11 +46,13 @@ function IconButton({
   label,
   onClick,
   disabled,
+  pressed,
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  pressed?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -54,24 +61,33 @@ function IconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
+      aria-pressed={pressed}
       title={label}
-      className={iconButtonClass}
+      className={cn(
+        iconButtonClass,
+        pressed &&
+          "bg-(--accent)/12 text-(--accent) hover:bg-(--accent)/16 hover:text-(--accent)",
+      )}
     >
       {children}
     </button>
   );
 }
 
-/**
- * The editor's top bar, rendered as Puck's header so it can reach Puck's
- * undo history. A stable component: its state comes from context.
- */
-export function WebsiteEditorBar() {
-  const bar = useContext(WebsiteEditorBarContext);
-  const history = usePuck((state) => state.history);
-  if (!bar) return <></>;
+const DEVICES: ReadonlyArray<{
+  device: EditorDevice;
+  label: string;
+  Icon: typeof Desktop;
+}> = [
+  { device: "phone", label: "Phone", Icon: DeviceMobile },
+  { device: "tablet", label: "Tablet", Icon: DeviceTablet },
+  { device: "desktop", label: "Computer", Icon: Desktop },
+];
+
+/** The editor's top bar: the page, its save state, the preview controls and Publish. */
+export function WebsiteEditorBar({ bar }: { bar: WebsiteEditorBarState }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) px-2 py-2 sm:px-4">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) px-2 py-2 sm:px-3">
       <IconButton label="Back to Website" onClick={bar.onBack}>
         <ArrowLeft size={18} />
       </IconButton>
@@ -94,18 +110,34 @@ export function WebsiteEditorBar() {
           /{bar.slug} · {bar.saveLabel}
         </p>
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
+      <div
+        role="group"
+        aria-label="Preview size"
+        className="hidden items-center gap-0.5 rounded-[10px] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] p-0.5 md:flex"
+      >
+        {DEVICES.map(({ device, label, Icon }) => (
+          <IconButton
+            key={device}
+            label={label}
+            pressed={bar.device === device}
+            onClick={() => bar.onDevice(device)}
+          >
+            <Icon size={17} />
+          </IconButton>
+        ))}
+      </div>
+      <div className="flex items-center justify-end gap-0.5 sm:gap-1">
         <IconButton
-          label="Undo"
-          onClick={history.back}
-          disabled={!history.hasPast}
+          label="Undo (Ctrl+Z)"
+          onClick={bar.onUndo}
+          disabled={!bar.canUndo}
         >
           <ArrowArcLeft size={18} />
         </IconButton>
         <IconButton
-          label="Redo"
-          onClick={history.forward}
-          disabled={!history.hasFuture}
+          label="Redo (Ctrl+Shift+Z)"
+          onClick={bar.onRedo}
+          disabled={!bar.canRedo}
         >
           <ArrowArcRight size={18} />
         </IconButton>
@@ -137,7 +169,11 @@ export function WebsiteEditorBar() {
             <ArrowSquareOut size={18} />
           </a>
         ) : null}
-        <Button onClick={bar.onPublish} disabled={bar.publishDisabled}>
+        <Button
+          onClick={bar.onPublish}
+          disabled={bar.publishDisabled}
+          className="ml-1"
+        >
           {bar.publishLabel}
         </Button>
       </div>

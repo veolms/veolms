@@ -1,72 +1,40 @@
-import "@puckeditor/core/puck.css";
-import "./website-editor.css";
-
-import { Puck, type Data } from "@puckeditor/core";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { StackIcon as Stack } from "@phosphor-icons/react/Stack";
+import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import {
   DEFAULT_SITE_LOOK,
   type SiteLook,
   type SitePageResponse,
+  type SiteSectionType,
 } from "@veolms/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { getApiError } from "../lib/api-error";
+import { cn } from "../lib/utils";
 import type { NavigateTo } from "../routing/navigation";
 import { useAcademyBrand } from "../services/academy";
 import {
-  usePublishWebsitePage,
-  useSaveWebsiteDraft,
+  useSaveWebsiteLook,
   useWebsiteCourseCards,
   useWebsiteOverview,
   useWebsitePage,
 } from "../services/website";
-import { checkPage, toPuckData } from "./puckAdapter";
-import {
-  createWebsitePuckConfig,
-  type WebsiteEditorMetadata,
-} from "./puckConfig";
-import { WebsiteEditorChoicesContext } from "./WebsiteFieldControls";
+import { EditorCanvas, type EditorDevice } from "./editor/EditorCanvas";
+import { EditorInspector } from "./editor/EditorInspector";
+import { EditorSidePanel, type SidePanelTab } from "./editor/EditorSidePanel";
+import { SECTION_CATALOG } from "./editor/sectionCatalog";
+import { saveStateLabel, useWebsiteEditor } from "./editor/useWebsiteEditor";
 import {
   WebsiteEditorBar,
-  WebsiteEditorBarContext,
   type WebsiteEditorBarState,
 } from "./WebsiteEditorBar";
 import { WebsiteVersionsPanel } from "./WebsiteVersionsPanel";
-import { WEBSITE_PATH, livePageUrl } from "./websiteHelpers";
-
-const AUTOSAVE_DELAY_MS = 1200;
-
-/** Our bar replaces Puck's header (a stable component; see WebsiteEditorBar). */
-const PUCK_OVERRIDES = { header: WebsiteEditorBar };
-
-const VIEWPORTS = [
-  {
-    width: 375,
-    height: "auto" as const,
-    label: "Phone",
-    icon: "Smartphone" as const,
-  },
-  {
-    width: 768,
-    height: "auto" as const,
-    label: "Tablet",
-    icon: "Tablet" as const,
-  },
-  {
-    width: 1280,
-    height: "auto" as const,
-    label: "Desktop",
-    icon: "Monitor" as const,
-  },
-];
-
-type SaveState =
-  | { kind: "saved" }
-  | { kind: "pending" }
-  | { kind: "saving" }
-  | { kind: "invalid"; problems: string[] }
-  | { kind: "conflict" }
-  | { kind: "error"; message: string };
+import {
+  WEBSITE_PATH,
+  editorRenderContext,
+  livePageUrl,
+} from "./websiteHelpers";
 
 export interface WebsiteEditorProps {
   pageId: string;
@@ -74,25 +42,10 @@ export interface WebsiteEditorProps {
   setNotice?: (message: string) => void;
 }
 
-function saveStateLabel(state: SaveState): string {
-  switch (state.kind) {
-    case "saved":
-      return "All changes saved";
-    case "pending":
-    case "saving":
-      return "Saving…";
-    case "invalid":
-      return "Not saved: fix the marked field";
-    case "conflict":
-      return "Changed in another tab";
-    case "error":
-      return "Not saved";
-  }
-}
-
 /**
- * The page editor: Puck as the editing shell over our own sections. Every
- * change autosaves as a draft; Publish freezes it and puts it live.
+ * The page editor (builder-research/PLAN.md §3.1): sections on the left,
+ * the real page in the middle, the selected section's settings on the
+ * right. Every change autosaves as a draft; Publish puts it live.
  */
 export function WebsiteEditor({
   pageId,
@@ -130,6 +83,16 @@ export function WebsiteEditor({
   );
 }
 
+/** Typing in a field must not trigger the editor's shortcuts. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  return Boolean(
+    element &&
+    (element.isContentEditable ||
+      ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName)),
+  );
+}
+
 function LoadedEditor({
   initial,
   onNavigatePage,
@@ -143,25 +106,30 @@ function LoadedEditor({
   const overview = useWebsiteOverview();
   const courseCards = useWebsiteCourseCards();
   const brand = useAcademyBrand();
-  const saveDraft = useSaveWebsiteDraft();
-  const publish = usePublishWebsitePage();
+  const saveLook = useSaveWebsiteLook();
+  const editor = useWebsiteEditor(initial);
+  const { page, edit, undo, redo } = editor;
 
-  const [current, setCurrent] = useState<SitePageResponse>(initial);
-  const [saveState, setSaveState] = useState<SaveState>({ kind: "saved" });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [panelTab, setPanelTab] = useState<SidePanelTab>("add");
+  const [insertAt, setInsertAt] = useState<number | null>(null);
+  const [selectIndexAfterAdd, setSelectIndexAfterAdd] = useState<number | null>(
+    null,
+  );
+  const [device, setDevice] = useState<EditorDevice>("desktop");
   const [previewMode, setPreviewMode] = useState<"light" | "dark">("light");
   const [showVersions, setShowVersions] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [lookDraft, setLookDraft] = useState<SiteLook | null>(null);
+  // On a narrow screen the panels slide over the page, one at a time.
+  const [mobilePanel, setMobilePanel] = useState<"side" | "inspector" | null>(
+    null,
+  );
 
-  const initialData = useMemo(() => toPuckData(initial.document), [initial]);
-  const latestData = useRef<Data>(initialData);
-  const baseUpdatedAt = useRef<string>(initial.draftUpdatedAt);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inFlight = useRef<Promise<boolean> | null>(null);
-
-  const look: SiteLook = overview.data?.look ?? DEFAULT_SITE_LOOK;
-  const config = useMemo(
-    () => createWebsitePuckConfig(look.themeId),
-    [look.themeId],
+  const look: SiteLook = lookDraft ?? overview.data?.look ?? DEFAULT_SITE_LOOK;
+  const previewLook = useMemo(
+    (): SiteLook => ({ ...look, colourMode: previewMode }),
+    [look, previewMode],
   );
 
   const otherPages = useMemo(
@@ -173,101 +141,120 @@ function LoadedEditor({
     () => ({ courses: courses ?? [], pages: otherPages }),
     [courses, otherPages],
   );
-  const metadata = useMemo(
-    (): WebsiteEditorMetadata => ({
-      academyName: brand.data?.name ?? "Your academy",
-      courses: [...(courses ?? [])],
-      pages: (overview.data?.pages ?? []).map(({ id, slug }) => ({ id, slug })),
-      look: { ...look, colourMode: previewMode },
-    }),
-    [brand.data?.name, courses, overview.data?.pages, look, previewMode],
+  const renderContext = useMemo(
+    () =>
+      editorRenderContext({
+        academyName: brand.data?.name ?? "Your academy",
+        courses: courses ?? [],
+        pages: (overview.data?.pages ?? []).map(({ id, slug }) => ({
+          id,
+          slug,
+        })),
+      }),
+    [brand.data?.name, courses, overview.data?.pages],
   );
 
-  /** Saves what is on screen now. True when the server has it. */
-  const saveNow = useCallback(async (): Promise<boolean> => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
+  const selectedIndex = page.sections.findIndex(
+    (entry) => entry.id === selectedId,
+  );
+  const selected = selectedIndex >= 0 ? page.sections[selectedIndex]! : null;
+  const problemIds = useMemo(
+    () =>
+      new Set(
+        editor.saveState.kind === "invalid" ? editor.saveState.sectionIds : [],
+      ),
+    [editor.saveState],
+  );
+
+  // A section that was just added becomes the selected one.
+  useEffect(() => {
+    if (selectIndexAfterAdd === null) return;
+    const added = page.sections[selectIndexAfterAdd];
+    if (added) {
+      setSelectedId(added.id);
+      setMobilePanel((panel) => (panel ? "inspector" : panel));
     }
-    if (inFlight.current) await inFlight.current;
-    const checked = checkPage(latestData.current);
-    if (!checked.ok) {
-      setSaveState({ kind: "invalid", problems: checked.problems });
-      return false;
-    }
-    setSaveState({ kind: "saving" });
-    const run = (async () => {
-      try {
-        const saved = await saveDraft.mutateAsync({
-          id: pageId,
-          body: {
-            document: checked.document,
-            baseUpdatedAt: baseUpdatedAt.current,
-          },
-        });
-        baseUpdatedAt.current = saved.draftUpdatedAt;
-        setCurrent(saved);
-        // A newer change may have arrived while this one was saving.
-        setSaveState(timer.current ? { kind: "pending" } : { kind: "saved" });
-        return true;
-      } catch (failure) {
-        const error = getApiError(failure);
-        setSaveState(
-          error.status === 409
-            ? { kind: "conflict" }
-            : { kind: "error", message: error.message },
-        );
-        return false;
-      } finally {
-        inFlight.current = null;
+    setSelectIndexAfterAdd(null);
+  }, [page.sections, selectIndexAfterAdd]);
+
+  // A deleted (or undone) section can't stay selected.
+  useEffect(() => {
+    if (selectedId && selectedIndex < 0) setSelectedId(null);
+  }, [selectedId, selectedIndex]);
+
+  // Undo, redo, delete and Escape from the keyboard.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const modifier = event.ctrlKey || event.metaKey;
+      if (
+        modifier &&
+        event.key.toLowerCase() === "z" &&
+        !isTypingTarget(event.target)
+      ) {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      } else if (
+        modifier &&
+        event.key.toLowerCase() === "y" &&
+        !isTypingTarget(event.target)
+      ) {
+        event.preventDefault();
+        redo();
+      } else if (event.key === "Escape") {
+        setSelectedId(null);
+      } else if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        selectedId &&
+        !isTypingTarget(event.target)
+      ) {
+        event.preventDefault();
+        edit({ type: "remove", sectionId: selectedId });
       }
-    })();
-    inFlight.current = run;
-    return await run;
-  }, [pageId, saveDraft]);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [edit, redo, selectedId, undo]);
 
-  const onChange = useCallback(
-    (data: Data) => {
-      latestData.current = data;
-      if (timer.current) clearTimeout(timer.current);
-      setSaveState((state) =>
-        state.kind === "conflict" ? state : { kind: "pending" },
-      );
-      timer.current = setTimeout(() => {
-        timer.current = null;
-        void saveNow();
-      }, AUTOSAVE_DELAY_MS);
-    },
-    [saveNow],
-  );
+  const insertIndex =
+    insertAt ?? (selectedIndex >= 0 ? selectedIndex + 1 : page.sections.length);
+  const insertLabel =
+    insertIndex >= page.sections.length
+      ? "at the end of the page"
+      : insertIndex === 0
+        ? "at the top of the page"
+        : `after ${SECTION_CATALOG[page.sections[insertIndex - 1]!.type].label}`;
 
-  // Save what's left when leaving the editor.
-  useEffect(
-    () => () => {
-      if (timer.current) void saveNow();
-    },
-    [saveNow],
-  );
+  function addSection(type: SiteSectionType) {
+    edit({
+      type: "add",
+      sectionType: type,
+      themeId: look.themeId,
+      index: insertIndex,
+    });
+    setSelectIndexAfterAdd(insertIndex);
+    setInsertAt(null);
+  }
 
-  async function publishPage() {
-    setPublishError(null);
-    if (saveState.kind !== "saved" && !(await saveNow())) {
-      setPublishError("Fix what isn’t saved, then publish.");
-      return;
-    }
+  async function changeLook(next: SiteLook) {
+    setLookDraft(next);
     try {
-      const published = await publish.mutateAsync(pageId);
-      setCurrent(published);
-      baseUpdatedAt.current = published.draftUpdatedAt;
-      setNotice?.("Your page is live.");
+      await saveLook.mutateAsync(next);
     } catch (failure) {
-      setPublishError(getApiError(failure).message);
+      setLookDraft(null);
+      setNotice?.(getApiError(failure).message);
     }
   }
 
-  const liveUrl = livePageUrl(current.page);
-  const status = current.page.status;
+  async function publishPage() {
+    setPublishError(null);
+    const problem = await editor.publish();
+    if (problem) setPublishError(problem);
+    else setNotice?.("Your page is live.");
+  }
 
+  const status = editor.current.page.status;
+  const { saveState } = editor;
   const notice =
     saveState.kind === "invalid" ? (
       <ul className="m-0 list-disc pl-5">
@@ -293,13 +280,16 @@ function LoadedEditor({
     ) : null;
 
   const bar: WebsiteEditorBarState = {
-    title: current.page.title,
-    slug: current.page.slug,
+    title: editor.current.page.title,
+    slug: editor.current.page.slug,
     status,
     saveLabel: saveStateLabel(saveState),
     previewMode,
-    liveUrl,
-    publishLabel: publish.isPending
+    device,
+    canUndo: editor.canUndo,
+    canRedo: editor.canRedo,
+    liveUrl: livePageUrl(editor.current.page),
+    publishLabel: editor.publishing
       ? "Publishing…"
       : status === "draft"
         ? "Publish"
@@ -307,43 +297,163 @@ function LoadedEditor({
           ? "Publish changes"
           : "Published",
     publishDisabled:
-      publish.isPending ||
+      editor.publishing ||
       saveState.kind === "conflict" ||
       (status === "published" && saveState.kind === "saved"),
     notice,
     onBack: () => onNavigatePage?.(WEBSITE_PATH),
+    onUndo: undo,
+    onRedo: redo,
+    onDevice: setDevice,
     onTogglePreviewMode: () =>
       setPreviewMode((mode) => (mode === "light" ? "dark" : "light")),
     onOpenVersions: () => setShowVersions(true),
     onPublish: () => void publishPage(),
   };
 
+  const sidePanel = (
+    <EditorSidePanel
+      tab={panelTab}
+      onTab={setPanelTab}
+      page={page}
+      look={look}
+      selectedId={selectedId}
+      insertLabel={insertLabel}
+      savingLook={saveLook.isPending}
+      onAdd={addSection}
+      onSelect={(id) => {
+        setSelectedId(id);
+        setMobilePanel((panel) => (panel ? "inspector" : panel));
+      }}
+      onEdit={edit}
+      onLook={(next) => void changeLook(next)}
+    />
+  );
+  const inspector = selected ? (
+    <EditorInspector
+      key={selected.id}
+      section={selected}
+      index={selectedIndex}
+      count={page.sections.length}
+      look={previewLook}
+      choices={choices}
+      onEdit={edit}
+      onClose={() => {
+        setSelectedId(null);
+        setMobilePanel(null);
+      }}
+    />
+  ) : null;
+
+  const panelBorder = "border-[color-mix(in_srgb,var(--text)_8%,transparent)]";
+
   return (
-    <WebsiteEditorChoicesContext.Provider value={choices}>
-      <WebsiteEditorBarContext.Provider value={bar}>
-        <div className="website-editor h-full min-h-130 overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface)">
-          <Puck
-            config={config}
-            data={initialData}
-            onChange={onChange}
-            metadata={metadata}
-            viewports={VIEWPORTS}
-            iframe={{ enabled: true, syncHostStyles: false }}
-            headerTitle={current.page.title}
-            height="100%"
-            overrides={PUCK_OVERRIDES}
+    <>
+      <div className="flex h-full min-h-130 flex-col overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface)">
+        <WebsiteEditorBar bar={bar} />
+        <div className="relative flex min-h-0 flex-1">
+          <aside
+            className={cn(
+              "hidden w-76 shrink-0 border-r bg-(--surface) lg:block",
+              panelBorder,
+            )}
+          >
+            {sidePanel}
+          </aside>
+          <EditorCanvas
+            page={page}
+            look={previewLook}
+            context={renderContext}
+            device={device}
+            selectedId={selectedId}
+            problemIds={problemIds}
+            onSelect={(id) => {
+              setSelectedId(id);
+              setInsertAt(null);
+              if (id)
+                setMobilePanel((panel) =>
+                  panel === null ? panel : "inspector",
+                );
+            }}
+            onInsertAt={(index) => {
+              setInsertAt(index);
+              setPanelTab("add");
+              setMobilePanel("side");
+            }}
           />
+          {inspector ? (
+            <aside
+              className={cn(
+                "hidden w-84 shrink-0 border-l bg-(--surface) lg:block",
+                panelBorder,
+              )}
+            >
+              {inspector}
+            </aside>
+          ) : null}
+
+          {/* Narrow screens: one panel at a time, over the page. */}
+          {mobilePanel ? (
+            <div className="absolute inset-0 z-10 flex lg:hidden">
+              <button
+                type="button"
+                aria-label="Close the panel"
+                className="absolute inset-0 cursor-default border-none bg-black/35"
+                onClick={() => setMobilePanel(null)}
+              />
+              <div className="relative ml-auto h-full w-[min(380px,100%)] bg-(--surface) shadow-[-12px_0_40px_-20px_rgb(0_0_0/.5)]">
+                {mobilePanel === "inspector" && inspector
+                  ? inspector
+                  : sidePanel}
+              </div>
+            </div>
+          ) : null}
         </div>
-      </WebsiteEditorBarContext.Provider>
+        <div
+          className={cn(
+            "flex items-center justify-around gap-1 border-t p-1.5 lg:hidden",
+            panelBorder,
+          )}
+        >
+          {[
+            { tab: "add" as const, label: "Add", Icon: Plus },
+            { tab: "layers" as const, label: "Layers", Icon: Stack },
+            { tab: "theme" as const, label: "Theme", Icon: Palette },
+          ].map(({ tab, label, Icon }) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => {
+                setPanelTab(tab);
+                setMobilePanel("side");
+              }}
+              className="flex h-11 flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border-none bg-transparent text-[11px] font-semibold text-(--muted) hover:bg-(--hover) hover:text-(--text)"
+            >
+              <Icon size={18} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+          {selected ? (
+            <button
+              type="button"
+              onClick={() => setMobilePanel("inspector")}
+              className="flex h-11 flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border-none bg-(--accent)/12 text-[11px] font-semibold text-(--accent)"
+            >
+              <span className="text-[13px] leading-none font-bold">Edit</span>
+              {SECTION_CATALOG[selected.type].label}
+            </button>
+          ) : null}
+        </div>
+      </div>
       <WebsiteVersionsPanel
         isOpen={showVersions}
         onClose={() => setShowVersions(false)}
-        page={current}
+        page={editor.current}
         onChanged={(next) => {
-          setCurrent(next);
+          editor.setCurrent(next);
           setNotice?.("The live page changed.");
         }}
       />
-    </WebsiteEditorChoicesContext.Provider>
+    </>
   );
 }

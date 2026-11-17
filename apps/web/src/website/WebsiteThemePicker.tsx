@@ -13,7 +13,7 @@ const MODE_LABELS: Record<SiteLook["colourMode"], string> = {
 };
 
 /** A small picture of a theme: its page, a heading, text and a button. */
-function ThemeSwatch({
+export function ThemeSwatch({
   themeId,
   dark,
 }: {
@@ -22,12 +22,13 @@ function ThemeSwatch({
 }) {
   const theme = SITE_THEMES[themeId];
   const colours = dark ? theme.dark : theme.light;
-  const radius =
-    theme.buttonStyle === "pill" ? 999 : theme.buttonStyle === "square" ? 4 : 2;
+  const radius = { pill: 999, square: 5, outline: 3, soft: 8, gradient: 999 }[
+    theme.buttonStyle
+  ];
   return (
     <span
       aria-hidden="true"
-      className="flex h-24 flex-col justify-center gap-1.5 overflow-hidden rounded-lg border px-3"
+      className="flex h-24 min-w-0 flex-col justify-center gap-1.5 overflow-hidden rounded-lg border px-3"
       // Theme colours are data, not our app's tokens, so they are set inline.
       style={{
         background: colours.bg,
@@ -36,7 +37,7 @@ function ThemeSwatch({
       }}
     >
       <span
-        className="block text-[15px] leading-tight"
+        className="block truncate text-[14px] leading-tight"
         style={{
           fontFamily: theme.fonts.heading,
           fontWeight: theme.headingWeight,
