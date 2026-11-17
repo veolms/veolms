@@ -20,6 +20,7 @@ import {
   formatInlineTimestampAriaLabel,
   tokenizeInlineTimestamps,
 } from "./inlineTimestamp";
+import { useLessonVideoDuration } from "./LessonVideoDurationContext";
 import type { DiscussionAttachmentItem } from "../discussion-attachments";
 import { normalizePreviewUrl } from "@veolms/contracts";
 
@@ -99,6 +100,13 @@ function InlineTimestampButton({
   onSeekToTimestamp,
   className,
 }: InlineTimestampButtonProps) {
+  const videoDuration = useLessonVideoDuration();
+  const beyondVideoDuration =
+    videoDuration !== null &&
+    Number.isFinite(videoDuration) &&
+    videoDuration > 0 &&
+    seconds >= videoDuration;
+
   if (!onSeekToTimestamp) {
     return (
       <span
@@ -108,6 +116,10 @@ function InlineTimestampButton({
         {value}
       </span>
     );
+  }
+
+  if (beyondVideoDuration) {
+    return <span data-inline-timestamp={value}>{value}</span>;
   }
 
   return (
