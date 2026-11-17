@@ -255,8 +255,8 @@ export function OnboardingStage({
   );
 
   // ─── The stage's colours ────────────────────────────────────────────────
-  // Black and white (Veo Onyx) until the launch; the academy's colour
-  // (Ocean Blue) arrives with it. The visitor's own palette comes back when
+  // veolms.org's colours throughout a sign-up; replayed from an academy,
+  // its colour (Ocean Blue) arrives with the launch. The visitor's own palette comes back when
   // they leave the stage.
   useEffect(() => {
     const root = document.documentElement;
@@ -826,10 +826,14 @@ export function OnboardingStage({
     const stage = stageRef.current;
     if (!engine || !stage) return;
     setLeaving(true);
-    // Colour arrives: a wave ripples out from the launch button.
+    // A wave ripples out from the launch button. On veolms.org (sign-up)
+    // the stage keeps the website's own colours; replayed from an
+    // academy, the academy's colour arrives with it.
     const button = rectOf(launchButtonRef.current);
-    setPalette(DEFAULT_ACADEMY_THEME);
-    await ensureAcademyPaletteStylesheets(DEFAULT_ACADEMY_THEME);
+    if (mode !== "signup") {
+      setPalette(DEFAULT_ACADEMY_THEME);
+      await ensureAcademyPaletteStylesheets(DEFAULT_ACADEMY_THEME);
+    }
     engine.readTokens();
     if (button) engine.ripple(button.x + button.w / 2, button.y + button.h / 2);
     const big = {
