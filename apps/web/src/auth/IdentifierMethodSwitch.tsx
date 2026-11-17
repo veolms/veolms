@@ -7,6 +7,8 @@ import { isIdentifierMethodEnabled } from "./authConfig";
 export interface IdentifierMethodSwitchProps {
   method: IdentifierMethod;
   onMethodChange: (method: IdentifierMethod) => void;
+  /** The methods to offer; the sign-in's enabled ones when left out. */
+  methods?: readonly IdentifierMethod[];
 }
 
 const ALL_METHOD_TABS: readonly (readonly [
@@ -21,9 +23,10 @@ const ALL_METHOD_TABS: readonly (readonly [
 export function IdentifierMethodSwitch({
   method,
   onMethodChange,
+  methods,
 }: IdentifierMethodSwitchProps) {
   const visibleTabs = ALL_METHOD_TABS.filter(([value]) =>
-    isIdentifierMethodEnabled(value),
+    methods ? methods.includes(value) : isIdentifierMethodEnabled(value),
   );
 
   return (

@@ -43,7 +43,7 @@ export function VeoMark() {
     >
       <span
         aria-hidden="true"
-        className="block size-9 transition-transform duration-300 group-hover:-rotate-6 @max-[700px]:size-8 [&_svg]:size-full"
+        className="-my-1 -ml-1.5 block size-11 transition-transform duration-300 group-hover:-rotate-6 @max-[700px]:size-10 [&_svg]:size-full"
         dangerouslySetInnerHTML={{ __html: veolmsMarkSvg }}
       />
       <span
