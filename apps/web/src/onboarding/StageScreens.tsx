@@ -177,8 +177,9 @@ export function ContactScreen({
             <div className="flex min-w-0 items-stretch gap-2.5">
               <CountryCodeSelect
                 contentClassName="auth-form__country-menu"
+                menuAlign="start"
                 onCountryChange={onCountryChange}
-                triggerClassName="auth-form__country h-11.5! min-h-11.5! rounded-[10px]! border-[color-mix(in_srgb,var(--text)_10%,transparent)]! bg-[color-mix(in_srgb,var(--canvas)_45%,var(--surface))]!"
+                triggerClassName="auth-form__country h-11.5! min-h-11.5! shrink-0! gap-1.5! px-3! whitespace-nowrap! rounded-[10px]! border! border-solid! border-[color-mix(in_srgb,var(--text)_10%,transparent)]! bg-[color-mix(in_srgb,var(--canvas)_45%,var(--surface))]! shadow-none! hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)]!"
                 value={country.id}
                 disabled={sending}
               />

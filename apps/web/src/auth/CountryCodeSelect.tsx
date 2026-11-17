@@ -36,6 +36,7 @@ interface CountryCodeSelectProps {
   id?: string;
   triggerClassName?: string;
   contentClassName?: string;
+  menuAlign?: "start" | "end";
 }
 
 export function CountryCodeSelect({
@@ -45,6 +46,7 @@ export function CountryCodeSelect({
   id,
   triggerClassName = "",
   contentClassName = "",
+  menuAlign,
 }: CountryCodeSelectProps) {
   const selectedCountry = findCountry(value) ?? getDefaultCountry();
 
@@ -62,6 +64,7 @@ export function CountryCodeSelect({
       searchable
       searchPlaceholder="Search country or code..."
       menuMinWidth={260}
+      menuAlign={menuAlign}
       triggerClassName={`country-code-select__trigger ${triggerClassName}`.trim()}
       value={selectedCountry.id}
     />

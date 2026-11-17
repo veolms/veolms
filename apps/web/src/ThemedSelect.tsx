@@ -60,6 +60,8 @@ export interface ThemedSelectProps<Value extends string = string> {
   searchDebounceMs?: number;
   menuMinWidth?: number;
   menuMaxWidth?: number;
+  /** Where a menu wider than its control lines up: its end (default) or its start. */
+  menuAlign?: "start" | "end";
   defaultLimit?: number;
   action?: ThemedSelectAction;
   compactOnMobile?: boolean;
@@ -117,6 +119,7 @@ export function ThemedSelect<Value extends string>({
   searchPlaceholder = "Search...",
   searchDebounceMs = DEFAULT_DEBOUNCE_DELAY_MS,
   menuMinWidth,
+  menuAlign = "end",
   menuMaxWidth = THEMED_SELECT_MENU_MAX_WIDTH,
   defaultLimit,
   action,
@@ -267,12 +270,13 @@ export function ThemedSelect<Value extends string>({
     // In a pop-up the list starts where the control starts instead, so it
     // stays over the pop-up rather than hanging off its side.
     const inDialog = Boolean(trigger.closest(OPEN_DIALOG_SELECTOR));
-    const left = inDialog
-      ? Math.max(
-          viewportPadding,
-          Math.min(rect.left, window.innerWidth - viewportPadding - width),
-        )
-      : Math.max(viewportPadding, rect.right - width);
+    const left =
+      inDialog || menuAlign === "start"
+        ? Math.max(
+            viewportPadding,
+            Math.min(rect.left, window.innerWidth - viewportPadding - width),
+          )
+        : Math.max(viewportPadding, rect.right - width);
     return {
       left,
       top: useAbove ? undefined : rect.bottom + gap,
@@ -286,6 +290,7 @@ export function ThemedSelect<Value extends string>({
     filteredOptions.length,
     measureNaturalMenuWidth,
     matchMenuToContainer,
+    menuAlign,
     menuMaxWidth,
     menuMinWidth,
     searchable,

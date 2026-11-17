@@ -164,7 +164,7 @@ export function StageQuestion({
 }
 
 /**
- * The frosted panel at the foot of each screen: no outline, only its glass.
+ * The frosted panel at the foot of each screen: its glass with a hairline edge.
  * `bare` drops the glass too, for a screen whose only part is its button.
  */
 export function StageDock({
@@ -188,7 +188,7 @@ export function StageDock({
         "relative z-2 mx-auto mb-[max(22px,env(safe-area-inset-bottom,0px))] grid w-[min(560px,calc(100%-32px))] gap-3.5 rounded-[22px] p-5",
         bare
           ? "w-[min(460px,calc(100%-32px))] p-0"
-          : "bg-[color-mix(in_srgb,var(--surface)_62%,transparent)] shadow-[0_30px_70px_-30px_rgb(0_0_0/.7)] backdrop-blur-[22px] backdrop-saturate-[1.3] [:root[data-theme=light]_&]:shadow-[0_30px_60px_-30px_rgb(15_23_42/.35)]",
+          : "bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_1px_0_rgb(255_255_255/.07),0_0_0_1px_color-mix(in_srgb,var(--text)_9%,transparent),0_30px_70px_-30px_rgb(0_0_0/.7)] backdrop-blur-[22px] backdrop-saturate-[1.3] [:root[data-theme=light]_&]:shadow-[inset_0_1px_0_rgb(255_255_255/.8),0_0_0_1px_color-mix(in_srgb,var(--text)_8%,transparent),0_30px_60px_-30px_rgb(15_23_42/.35)]",
         "animate-[stage-rise_1s_.18s_var(--stage-ease)_both] motion-reduce:animate-none",
         "@max-[700px]:mb-[max(10px,env(safe-area-inset-bottom,0px))] @max-[700px]:w-[calc(100%-20px)] @max-[700px]:rounded-[20px] @max-[700px]:p-4",
         hidden && stageLeaveClasses,
