@@ -192,6 +192,12 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "marketing-automation",
       caseSensitive: true,
     }),
+    // Website builder: the theme and pages, and one page's editor.
+    route("website", marker, { id: "website", caseSensitive: true }),
+    route("website/pages/:pageId", marker, {
+      id: "website-page",
+      caseSensitive: true,
+    }),
     route("logout", marker, { id: "logout", caseSensitive: true }),
     route(":username", marker, {
       id: "public-profile",

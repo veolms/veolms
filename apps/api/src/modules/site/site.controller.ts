@@ -16,7 +16,7 @@ type PageRequest = FastifyRequest<{ Params: { pageId: string } }>;
 export const LIVE_PAGE_CSP = [
   "default-src 'none'",
   "style-src 'unsafe-inline'",
-  "img-src https: data:",
+  "img-src 'self' https: data:",
   "base-uri 'none'",
   "form-action 'none'",
   "frame-ancestors 'self'",
@@ -95,7 +95,9 @@ export function createSiteController({ service }: { service: SiteService }) {
       return reply
         .header(
           "Cache-Control",
-          "public, max-age=60, stale-while-revalidate=300",
+          // Always revalidated, so a publish shows at once. A CDN in front
+          // can cache and purge by URL instead (creator-features/40 §8).
+          "public, no-cache",
         )
         .send(html);
     },
