@@ -23,6 +23,7 @@ import {
   claimEarlyShakaPreloadSession,
   consumeEarlyShakaPreloadSession,
   discardEarlyShakaPreloadManager,
+  earlyShakaPreloadMatches,
   getEarlyShakaPreloadSession,
   noteEarlyShakaPreloadAdopted,
   noteShakaSourceLoading,
@@ -423,14 +424,11 @@ function preloadSessionMatchesSource(
   session: EarlyShakaPreloadSession,
   source: VideoSource,
 ): boolean {
-  const manifestMatches = session.manifestUrl === source.src;
-  const mediaKeyMatches = Boolean(
-    session.mediaKey && source.id && session.mediaKey === source.id,
-  );
   // The paid bootstrap can resolve after the player source was created. A
   // stable media key is sufficient to adopt that session; its manifest URL
   // may be the protected API HLS path rather than the local fallback URL.
-  return manifestMatches || mediaKeyMatches;
+  // Judged by what the preload's player holds (see the function).
+  return earlyShakaPreloadMatches(session, source);
 }
 
 function visualQualityKey(track: ShakaVariantTrackLike): string {
