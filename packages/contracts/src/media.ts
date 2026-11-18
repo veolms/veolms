@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 // --- Media Assets ---
-export const mediaAssetTypeSchema = z.enum(["image", "video", "document"]);
+export const mediaAssetTypeSchema = z.enum([
+  "image",
+  "video",
+  "audio",
+  "document",
+]);
 export const mediaAssetStatusSchema = z.enum([
   "uploading",
   "uploaded",
@@ -13,6 +18,7 @@ export const mediaAssetStatusSchema = z.enum([
 export const MEDIA_MAX_SIZES = {
   image: 10 * 1024 * 1024, // 10MB
   video: 5 * 1024 * 1024 * 1024, // 5GB
+  audio: 500 * 1024 * 1024, // 500MB
   document: 100 * 1024 * 1024, // 100MB
 } as const;
 

@@ -14,7 +14,9 @@ import {
   learningStreakMilestoneEventSchema,
   moderationContentModeratedEventSchema,
   moderationReportResolvedEventSchema,
+  supportAssignedEventSchema,
   supportReplyPostedEventSchema,
+  accessValidityExtendedEventSchema,
   moderationUserSuspendedEventSchema,
   moderationUserUnsuspendedEventSchema,
   paymentCompletedEventSchema,
@@ -452,6 +454,57 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         // An answer to something the learner asked us; not a preference.
         mandatory: true,
         deepLink: `/support/${event.ticketId}`,
+      },
+    ];
+  },
+  "access.validity_extended": async (payload) => {
+    const event = accessValidityExtendedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "access.validity_extended",
+        category: "transactional",
+        templateKey: "access.validity_extended",
+        templateData: {
+          courseTitle: event.courseTitle,
+          // Written out here: the email has no other way to show a date.
+          validUntil: event.validUntil
+            ? new Intl.DateTimeFormat("en-IN", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+                timeZone: "Asia/Kolkata",
+              }).format(new Date(event.validUntil))
+            : "",
+        },
+        channels: commonChannels,
+        // About the learner's own purchase; not a preference.
+        mandatory: true,
+        deepLink: `/courses/${event.courseSlug}/overview`,
+      },
+    ];
+  },
+  "support.assigned": async (payload) => {
+    const event = supportAssignedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "support.assigned",
+        category: "transactional",
+        templateKey: "support.assigned",
+        templateData: {
+          ticketNumber: String(event.ticketNumber),
+          ticketKind: event.ticketKind,
+          ticketTitle: event.ticketTitle,
+          assignedByName: event.assignedByName,
+        },
+        channels: commonChannels,
+        // Work handed to a team member; not a preference.
+        mandatory: true,
+        deepLink:
+          event.ticketKind === "feedback"
+            ? `/support-inbox/feedback?ticket=${event.ticketId}`
+            : `/support-inbox?ticket=${event.ticketId}`,
       },
     ];
   },

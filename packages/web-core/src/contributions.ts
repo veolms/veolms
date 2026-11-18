@@ -299,6 +299,77 @@ export interface AnalyticsEvent {
   props?: Record<string, string | number | boolean>;
 }
 
+/** A request of the video's, as shown beside an incident. */
+export interface PlaybackIncidentRequest {
+  /** The last two parts of its path, without the query (the token). */
+  path: string;
+  /** HTTP status; 0 when no answer came (network failure, cancelled). */
+  status: number;
+  /** How long it took, milliseconds. */
+  ms: number;
+  /** Kilobytes transferred; 0 for one answered from a cache. */
+  kb: number;
+  /** How long before the incident it ended, milliseconds. */
+  agoMs: number;
+}
+
+/**
+ * One thing that went wrong, or nearly did, while a lesson video played,
+ * reported the moment it happens (a summary comes only when the playback
+ * ends, and says what, not where or why):
+ *
+ * - `error_shown`: the player showed its error ("Something went wrong").
+ * - `stuck_start`: play was asked for and no picture came for 10 s.
+ * - `long_buffering`: the video waited for data for 8 s or more after it
+ *   had started (`waitedMs` says how long; `code` "ONGOING" while it
+ *   still waits at 30 s).
+ * - `connection_lost`: segments failed in a row and the player waited
+ *   them out (`attempts`, `waitedMs`), whether or not it got them.
+ * - `recovered`: a failure the player mended by itself (a decoder that
+ *   stopped, a frozen picture, a load cut off): the learner saw at most a
+ *   moment's loading.
+ * - `page_error`: the lesson's video could not be prepared at all (its
+ *   playback bootstrap failed), shown in place of the player.
+ */
+export interface PlaybackIncident {
+  /** The playback it belongs to (the summary's `playbackId`), or a new id. */
+  playbackId: string;
+  courseKey: string;
+  lessonNumber: number | null;
+  mediaKey: string;
+  kind:
+    | "error_shown"
+    | "stuck_start"
+    | "long_buffering"
+    | "connection_lost"
+    | "recovered"
+    | "page_error";
+  /** ISO instant. */
+  at: string;
+  /** The error or failure code, when there is one. */
+  code?: string;
+  httpStatus?: number;
+  /** The video had shown its first frame. */
+  started: boolean;
+  positionSeconds: number | null;
+  durationSeconds: number | null;
+  waitedMs?: number;
+  attempts?: number;
+  qualityHeight?: number;
+  bufferAheadSeconds?: number;
+  online: boolean;
+  pageVisible: boolean;
+  /** `navigator.connection.effectiveType` ("4g", "3g"), where known. */
+  connectionType?: string;
+  downlinkMbps?: number;
+  deviceMemoryGb?: number;
+  cpuCores?: number;
+  /** The video's last requests before the incident, oldest first. */
+  requests: PlaybackIncidentRequest[];
+  /** The player's last `veo:` performance marks, oldest first. */
+  marks: string[];
+}
+
 /** One playback of a lesson video, summarised when it ends. */
 export interface PlaybackSummary {
   /** Random id for this playback. */
@@ -376,6 +447,11 @@ export interface AnalyticsVisitor {
 export interface AnalyticsSink {
   track(event: AnalyticsEvent): void;
   playback(summary: PlaybackSummary): void;
+  /**
+   * One playback incident as it happens (see `PlaybackIncident`). Optional:
+   * a sink without it is simply not told.
+   */
+  playbackIncident?(incident: PlaybackIncident): void;
   /**
    * Called once the session is known and again on every sign-in or
    * sign-out. A sink registered later gets the current visitor at once.

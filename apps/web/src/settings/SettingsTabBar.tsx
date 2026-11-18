@@ -47,7 +47,7 @@ export function SettingsTabBar<Id extends string>({
       aria-label={label}
       role="tablist"
     >
-      {tabs.map(({ id, label: tabLabel, Icon, tone }, index) => {
+      {tabs.map(({ id, label: tabLabel, Icon, tone, activeWeight }, index) => {
         const isActive = activeTab === id;
         const extraClassName = getTabClassName?.(id);
         return (
@@ -75,7 +75,10 @@ export function SettingsTabBar<Id extends string>({
             }}
           >
             <span className="settings-tab__press-content inline-flex origin-bottom items-center gap-2 transition-transform duration-150 ease-out group-active:scale-[0.985] motion-reduce:duration-[0.01ms]">
-              <Icon size={17} weight={isActive ? "fill" : "regular"} />
+              <Icon
+                size={17}
+                weight={isActive ? (activeWeight ?? "fill") : "regular"}
+              />
               <span>{tabLabel}</span>
             </span>
           </button>

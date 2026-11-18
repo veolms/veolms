@@ -50,7 +50,8 @@ export interface VideoPlayerHandle {
   /** Stops the video outright; see `PlayerController.stop`. */
   stop(): Promise<void>;
   seekTo(time: number): void;
-  seekBy(delta: number): void;
+  /** Returns how far playback moved; see `PlayerController.seekBy`. */
+  seekBy(delta: number): number;
   setVolume(volume: number): void;
   setMuted(muted: boolean): void;
   toggleMuted(): void;

@@ -9,11 +9,13 @@
  * page. Page navigations get the route-neutral application shell that the
  * build writes for exactly this purpose instead.
  */
+import { handleShortLink } from "./short-links.js";
+
 const SPA_SHELL_PATH = "/__spa-fallback.html";
 const HOME_DOCUMENT_PATH = "/index.html";
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     // A missing build asset is a real 404. Answering it with HTML only turns
@@ -29,6 +31,11 @@ export default {
     if (url.pathname.startsWith("/.well-known/")) {
       return new Response("Not found", { status: 404 });
     }
+
+    // A short link at this address (docs/short-links.md). Never for the
+    // app's own pages; see short-links.js.
+    const shortLink = await handleShortLink(request, env, ctx);
+    if (shortLink) return shortLink;
 
     // Other file-like requests keep the previous behavior.
     const isPageNavigation = !/\.[A-Za-z0-9]{1,8}$/u.test(url.pathname);

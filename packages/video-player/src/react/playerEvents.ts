@@ -6,7 +6,18 @@ export type PlayerPresentationEvent =
   | { type: "theaterchange"; detail: { active: boolean } }
   | { type: "controlsvisibilitychange"; detail: { visible: boolean } };
 
-export type VideoPlayerEvent = VideoEngineEvent | PlayerPresentationEvent;
+/**
+ * The video's speed was changed from outside the player (a browser
+ * extension, say) to `playbackRate`, away from the `requestedRate` it was
+ * asked for. Sent instead of `ratechange`: the speed is not the learner's.
+ */
+export type PlayerOutsideRateChangeEvent = {
+  type: "outsideratechange";
+  detail: { playbackRate: number; requestedRate: number };
+};
+
+export type VideoPlayerEvent =
+  VideoEngineEvent | PlayerPresentationEvent | PlayerOutsideRateChangeEvent;
 
 export type VideoPlayerEventListener = (event: VideoPlayerEvent) => void;
 

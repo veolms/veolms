@@ -13,16 +13,21 @@ export class NativeBridgeSession {
   public readonly endpointName: string;
   public readonly transport: NativeTransport;
   public readonly metadata: MetadataRegistry;
+  /** Receives failures of fire-and-forget property assignments (`bridge.ns.prop = value`). */
+  public readonly onAssignmentError:
+    ((error: unknown, path: string) => void) | undefined;
   private rootProxy: unknown = null;
 
   constructor(
     endpointName: string,
     transport: NativeTransport,
     metadata: MetadataRegistry,
+    onAssignmentError?: (error: unknown, path: string) => void,
   ) {
     this.endpointName = endpointName;
     this.transport = transport;
     this.metadata = metadata;
+    this.onAssignmentError = onAssignmentError;
   }
 
   /**

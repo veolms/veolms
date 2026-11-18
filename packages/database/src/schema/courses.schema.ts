@@ -2,7 +2,10 @@ import type { Generated } from "kysely";
 
 export type CourseStatus = "draft" | "published" | "archived";
 export type CourseDifficulty = "beginner" | "intermediate" | "advanced";
-export type LessonContentType = "video" | "document" | "quiz";
+export type LessonContentType =
+  "video" | "audio" | "image" | "document" | "quiz";
+/** The kinds of content a lesson can hold one of each of. */
+export type LessonContentKind = Exclude<LessonContentType, "quiz">;
 export type AccessType = "everyone" | "restricted";
 export type AccessDurationType =
   "lifetime" | "fixed_duration" | "custom_expiration";
@@ -77,6 +80,21 @@ export interface CourseLessonTable {
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   deleted_at: Date | null;
+}
+
+/**
+ * The content one kind of a lesson holds (see the lesson-contents
+ * migration). The lesson's `content_type` names the kind learners are
+ * shown, and its `content_media_id` is that row's media.
+ */
+export interface CourseLessonContentTable {
+  lesson_id: string;
+  content_type: LessonContentKind;
+  media_id: string | null;
+  /** A document's text, in Markdown; null for every other kind. */
+  body: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface LessonResourceTable {

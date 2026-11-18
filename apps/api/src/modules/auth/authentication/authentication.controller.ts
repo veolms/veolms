@@ -20,6 +20,7 @@ import type {
   AvatarUploadPresignRequest,
   LoginRequest,
   ProfileUpdateRequest,
+  ExistingUsernamesQuery,
   PublicProfileUsernameParams,
   RegisterRequest,
   SelectAvatarRequest,
@@ -211,11 +212,21 @@ export function createAuthController(context: AuthContext) {
     return presentUpdatedProfile(request, updated);
   }
 
+  async function existingUsernames(
+    request: FastifyRequest<{ Querystring: ExistingUsernamesQuery }>,
+  ) {
+    const usernames = await authService.listExistingUsernames(
+      request.query.names.split(","),
+    );
+    return { usernames };
+  }
+
   return {
     login,
     register,
     getConfig,
     publicProfile,
+    existingUsernames,
     logout,
     me,
     updateProfile,

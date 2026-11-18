@@ -14,11 +14,13 @@ import React, {
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ClickToPlayVideo } from "../../components/video/ClickToPlayVideo";
 import type { DiscussionContent } from "./types";
 import {
   formatInlineTimestampAriaLabel,
   tokenizeInlineTimestamps,
 } from "./inlineTimestamp";
+import { useLessonVideoDuration } from "./LessonVideoDurationContext";
 import type { DiscussionAttachmentItem } from "../discussion-attachments";
 import { normalizePreviewUrl } from "@veolms/contracts";
 
@@ -98,6 +100,13 @@ function InlineTimestampButton({
   onSeekToTimestamp,
   className,
 }: InlineTimestampButtonProps) {
+  const videoDuration = useLessonVideoDuration();
+  const beyondVideoDuration =
+    videoDuration !== null &&
+    Number.isFinite(videoDuration) &&
+    videoDuration > 0 &&
+    seconds >= videoDuration;
+
   if (!onSeekToTimestamp) {
     return (
       <span
@@ -107,6 +116,10 @@ function InlineTimestampButton({
         {value}
       </span>
     );
+  }
+
+  if (beyondVideoDuration) {
+    return <span data-inline-timestamp={value}>{value}</span>;
   }
 
   return (
@@ -617,13 +630,11 @@ function MarkdownImage({ src, alt }: React.ComponentProps<"img">) {
   }
   if (alt?.toLowerCase().startsWith("video:")) {
     return (
-      <video
+      <ClickToPlayVideo
+        className="my-3 max-h-96"
         src={src}
         title={alt.slice(6).trim() || "Attached video"}
-        controls
-        playsInline
-        preload="metadata"
-        className="my-3 max-h-96 w-full rounded-xl bg-black object-contain"
+        downloadUrl={src}
       />
     );
   }

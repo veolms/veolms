@@ -124,13 +124,21 @@ export interface ShakaManifestLike {
   variants: ReadonlyArray<{
     id: number | string;
     disabledUntilTime?: number;
-    video?: {
-      segmentIndex?: {
-        find(time: number): number | null;
-        get(position: number): { startTime: number; endTime: number } | null;
-      } | null;
-    } | null;
+    video?: ShakaManifestStreamLike | null;
+    audio?: ShakaManifestStreamLike | null;
   }>;
+}
+
+/** A stream of a Shaka manifest, read for segment times and init segments. */
+export interface ShakaManifestStreamLike {
+  segmentIndex?: {
+    find(time: number): number | null;
+    get(position: number): {
+      startTime: number;
+      endTime: number;
+      initSegmentReference?: { getUris?(): string[] } | null;
+    } | null;
+  } | null;
 }
 
 export interface ShakaPlayerLike {
@@ -166,7 +174,10 @@ export interface ShakaPlayerLike {
   destroy(): Promise<void>;
   configure(configuration: unknown): boolean;
   resetConfiguration?(): void;
-  getConfiguration?(): { drm?: { servers?: Record<string, string> } };
+  getConfiguration?(): {
+    drm?: { servers?: Record<string, string> };
+    streaming?: { segmentPrefetchLimit?: number };
+  };
   getNetworkingEngine(): ShakaNetworkingEngineLike | null;
   getStats?(): { estimatedBandwidth?: number; maxSegmentDuration?: number };
   /** Resumes streams stopped by a failure, after `retryDelaySeconds`. */
@@ -257,13 +268,28 @@ export const SHAKA_STREAMING_DEFAULTS = {
  * apart. No limit on a request's total time: on 3G (~50KB/s) a 1080p
  * segment (~1.6MB) needs over 30s, and a retry starts again from its first
  * byte, so a total limit made it fail forever. A request is given up when
- * no byte has arrived for 8s (connecting, or mid-body): a connection that
- * quiet is dead, and the 20s given before, four times over, was a minute
- * and a half of loader for one dead connection. Production's playback log
- * showed buffering stretches averaging 100s on lessons whose segments
- * come from the CDN cache in under a second. (An extension that hands the
- * page a body only once complete answers from the device, not over the
- * network, so these limits never apply to it.)
+ * no byte has arrived for 4s (connecting, or mid-body): a connection that
+ * quiet is dead. The 20s given before, four times over, was a minute and a
+ * half of loader for one dead connection (production's playback log showed
+ * buffering stretches averaging 100s on lessons whose segments come from the
+ * CDN cache in under a second), and the 8s after it still held a seek back
+ * on a still picture for 10s, 20s when the retry hung too (a learner's
+ * recording, 12 Nov). A segment the CDN has to fetch cold answers in about
+ * 1s; a slow but moving download is never cut, as every byte restarts the
+ * wait. (An extension that hands the page a body only once complete answers
+ * from the device, not over the network, so these limits never apply to it.)
+ *
+ * 4s cut working downloads, though (production's incident log, 13-15 Nov):
+ * 334 of 862 problems held two or more requests cut at exactly 4s, the
+ * failures' median was 4001ms, and a learner's piece was cut five times
+ * before an attempt that took 42s went through. On a slow or busy link the
+ * first byte of a piece waits behind the one already downloading, so it
+ * can take longer than 4s on a connection that works. Each cut started the
+ * download from nothing, and a cut download never told the quality choice
+ * how slow the link was, so it stayed at 1080p. 10s for the first byte and
+ * 8s without one later still give up on a dead connection in a few
+ * seconds more than before, and the watchdog (WATCHDOG_STARVED_MS) mends a
+ * stream that goes quiet altogether.
  */
 export const SHAKA_SEGMENT_RETRY_DEFAULTS = {
   maxAttempts: 5,
@@ -271,7 +297,7 @@ export const SHAKA_SEGMENT_RETRY_DEFAULTS = {
   backoffFactor: 1.5,
   fuzzFactor: 0.3,
   timeout: 0,
-  connectionTimeout: 8_000,
+  connectionTimeout: 10_000,
   stallTimeout: 8_000,
 } as const;
 
@@ -417,6 +443,16 @@ export function getShakaStartupBandwidthEstimate(): number {
       MAX_WARM_START_BANDWIDTH,
     ),
   );
+}
+
+/**
+ * What the player last measured the connection at (bits per second), from
+ * this page or a recent one, or null when nothing was measured: for work
+ * that should only be done with room to spare (preloading a lesson not
+ * being watched).
+ */
+export function getShakaMeasuredBandwidth(): number | null {
+  return lastEstimatedBandwidth;
 }
 
 export function resetShakaBandwidthEstimateForTests(): void {
@@ -777,11 +813,15 @@ export function createShakaConfiguration(
       streaming?.abrDroppedFrames ?? SHAKA_ABR_DEFAULTS.droppedFrames,
   };
 
-  if (networking?.manifestRetry) {
-    result.manifest = {
-      retryParameters: retryConfiguration(networking.manifestRetry),
-    };
-  }
+  result.manifest = {
+    // See `VideoStreamingConfiguration.detectEmbeddedCaptions`.
+    hls: {
+      disableClosedCaptionsDetection: !streaming?.detectEmbeddedCaptions,
+    },
+    ...(networking?.manifestRetry
+      ? { retryParameters: retryConfiguration(networking.manifestRetry) }
+      : {}),
+  };
 
   if (streaming?.transmuxWorkerUrl) {
     result.mediaSource = {

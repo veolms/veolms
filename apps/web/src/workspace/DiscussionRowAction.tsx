@@ -8,6 +8,7 @@ export function DiscussionRowAction({
   onClick,
   ariaLabel,
   plain = false,
+  likeTarget = false,
 }: {
   icon: ReactNode;
   label: ReactNode;
@@ -17,12 +18,15 @@ export function DiscussionRowAction({
   /** No box: the pressed state is the colour alone (Like, as under a
    * lesson video). */
   plain?: boolean;
+  /** The like button a double tap on the post presses (useCommentTapGestures). */
+  likeTarget?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-pressed={pressed}
       aria-label={ariaLabel}
+      data-comment-like={likeTarget || undefined}
       onClick={(event) => {
         event.stopPropagation();
         // A double click counts once (it would otherwise like and unlike).

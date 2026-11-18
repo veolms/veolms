@@ -7,6 +7,7 @@ export {
   SHAKA_STREAMING_DEFAULTS,
   configureShakaPlayer,
   createShakaConfiguration,
+  getShakaMeasuredBandwidth,
   getShakaStartupBandwidthEstimate,
 } from "./shaka-internal";
 export {
@@ -16,6 +17,7 @@ export {
 } from "./hls-inline-manifest";
 export {
   abandonEarlyShakaPreloadSession,
+  claimEarlyShakaPreloadSession,
   consumeEarlyShakaPreloadSession,
   getEarlyShakaPreloadSession,
   setEarlyShakaPreloadSessionForTests,

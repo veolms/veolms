@@ -3,6 +3,7 @@ import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/reac
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { FilePlusIcon as FilePlus } from "@phosphor-icons/react/FilePlus";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { useQueryClient } from "@tanstack/react-query";
@@ -44,12 +45,15 @@ import {
   useTypingNames,
   useClearChat,
   useUpdateMyChatState,
+  isRoomMuted,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { copyImage } from "./copyImage";
 import { roomAvatarUrl } from "./chatIcon";
 import {
   ClearChatDialog,
   DeleteMessageDialog,
+  MuteChatDialog,
   ReportDialog,
   RestrictDialog,
 } from "./ChatDialogs";
@@ -62,6 +66,8 @@ import type { ViewableMedia } from "./MessageAttachments";
 import type { BubbleContext } from "./MessageBubble";
 import { MessageList, type MessageFocus } from "./MessageList";
 import { PersonCard, type CardPerson } from "./PersonCard";
+import { ForwardDialog } from "./ForwardDialog";
+import { SelectionBar } from "./SelectionBar";
 import type { MessageAction } from "./MessageMenu";
 import { ChatThreadSkeleton } from "./ChatSkeletons";
 
@@ -74,6 +80,7 @@ type DialogState =
   | { kind: "restrict"; message: ChatMessage; mode: "mute" | "ban" }
   | { kind: "react"; message: ChatMessage }
   | { kind: "clear-chat"; mode: "clear" | "delete" }
+  | { kind: "mute" }
   | null;
 
 export function Conversation({
@@ -113,19 +120,50 @@ export function Conversation({
     index: number;
   } | null>(null);
   const [focus, setFocus] = useState<MessageFocus | null>(null);
+  /** Messages ticked for Forward (WhatsApp's Select); null when not choosing. */
+  const [selected, setSelected] = useState<ReadonlySet<number> | null>(null);
+  const [forwarding, setForwarding] = useState<number[] | null>(null);
   const [person, setPerson] = useState<{
     person: CardPerson;
     anchor: HTMLElement | null;
   } | null>(null);
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
+  // A drag that ends elsewhere (dropped outside, Esc, left the window)
+  // takes the drop area away.
+  useEffect(() => {
+    if (!dragging) return;
+    const end = () => setDragging(false);
+    const leftWindow = (event: DragEvent) => {
+      if (!event.relatedTarget) setDragging(false);
+    };
+    window.addEventListener("dragend", end);
+    window.addEventListener("drop", end);
+    document.addEventListener("dragleave", leftWindow);
+    return () => {
+      window.removeEventListener("dragend", end);
+      window.removeEventListener("drop", end);
+      document.removeEventListener("dragleave", leftWindow);
+    };
+  }, [dragging]);
   const [, forceRender] = useState(0);
-  const unreadAfterRef = useRef<{ roomId: string; seq: number }>({
+  // Where the unread part starts, and how far the chat reached when it was
+  // opened (the server's count: a copy kept on the device may be behind).
+  const unreadAfterRef = useRef<{
+    roomId: string;
+    seq: number;
+    openedAtSeq: number;
+  }>({
     roomId: room.id,
     seq: room.me.lastReadSeq,
+    openedAtSeq: room.lastSeq,
   });
   if (unreadAfterRef.current.roomId !== room.id) {
-    unreadAfterRef.current = { roomId: room.id, seq: room.me.lastReadSeq };
+    unreadAfterRef.current = {
+      roomId: room.id,
+      seq: room.me.lastReadSeq,
+      openedAtSeq: room.lastSeq,
+    };
   }
 
   const deleteMessage = useDeleteMessage();
@@ -148,6 +186,8 @@ export function Conversation({
     setEditing(null);
     setPinnedIndex(0);
     setPerson(null);
+    setSelected(null);
+    setForwarding(null);
     return () => setChatOnScreen(room.id, false);
   }, [room.id]);
 
@@ -231,6 +271,14 @@ export function Conversation({
     starred: starredIds,
     myReactions,
     onOpenPerson: (who, anchor) => setPerson({ person: who, anchor }),
+    selected,
+    onToggleSelect: (seq) =>
+      setSelected((current) => {
+        const next = new Set(current ?? []);
+        if (next.has(seq)) next.delete(seq);
+        else next.add(seq);
+        return next.size > 0 ? next : null;
+      }),
     resolveMention,
   };
 
@@ -282,6 +330,12 @@ export function Conversation({
       return;
     }
     switch (action) {
+      case "forward":
+        setForwarding([message.seq]);
+        return;
+      case "select":
+        setSelected(new Set([message.seq]));
+        return;
       case "reply":
         setEditing(null);
         setReplyTo(message);
@@ -294,6 +348,30 @@ export function Conversation({
           ?.writeText(message.body)
           .then(() => onToast("Message copied"));
         return;
+      case "download":
+        // Each file in turn (browsers allow several from one click).
+        message.attachments.forEach((attachment, i) => {
+          setTimeout(() => {
+            const link = document.createElement("a");
+            link.href = chatService.fileUrl(attachment, true);
+            link.download = attachment.name;
+            link.rel = "noopener";
+            document.body.append(link);
+            link.click();
+            link.remove();
+          }, i * 400);
+        });
+        return;
+      case "copy-image": {
+        const photo = message.attachments.find((a) => a.kind === "image");
+        if (!photo) return;
+        copyImage(photo, message.body)
+          .then(() => onToast("Image copied"))
+          .catch(() =>
+            onToast("Couldn't copy this image. Use Download instead."),
+          );
+        return;
+      }
       case "copy-link":
         // Opens this chat at this message, blinking (for the people in it).
         void navigator.clipboard
@@ -387,8 +465,71 @@ export function Conversation({
         if (event.dataTransfer.types.includes("Files") && room.me.canPost)
           setDragging(true);
       }}
+      onDragOver={(event) => {
+        // Over the message box too: the drop is ours, not the browser's.
+        if (event.dataTransfer.types.includes("Files")) {
+          event.preventDefault();
+          if (room.me.canPost && !dragging) setDragging(true);
+        }
+      }}
     >
-      <header className="z-10 flex h-16 shrink-0 items-center gap-1 border-b border-solid border-(--chat-line) bg-(--chat-panel) pr-2 pl-2 @[720px]/chat:pl-4">
+      {dragging ? (
+        // WhatsApp Web: the whole chat under the header, message box
+        // included, becomes the place to drop.
+        <div
+          className="absolute inset-x-0 top-16 bottom-0 z-40 flex flex-col items-center justify-center gap-3 bg-[color-mix(in_srgb,var(--chat-bg)_92%,transparent)] p-6 text-center"
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }}
+          onDragLeave={(event) => {
+            const to = event.relatedTarget as Node | null;
+            if (!to || !event.currentTarget.contains(to)) setDragging(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            const files = [...event.dataTransfer.files];
+            if (files.length > 0) composerRef.current?.addFiles(files);
+          }}
+        >
+          <span className="pointer-events-none flex size-20 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-(--accent-ink)">
+            <FilePlus size={38} aria-hidden="true" />
+          </span>
+          <span className="pointer-events-none text-[1.05rem] font-semibold text-(--text)">
+            Drop files here to send
+          </span>
+          <span className="pointer-events-none text-[0.85rem] text-(--muted)">
+            Photos, videos, voice notes and documents · to {room.title}
+          </span>
+        </div>
+      ) : null}
+      {selected ? (
+        <SelectionBar
+          count={selected.size}
+          onCancel={() => setSelected(null)}
+          onCopy={() => {
+            const text = (thread.data?.messages ?? [])
+              .filter((m) => selected.has(m.seq) && m.body)
+              .map((m) => m.body)
+              .join("\n\n");
+            if (!text) {
+              onToast("Only text can be copied.");
+              return;
+            }
+            void navigator.clipboard
+              ?.writeText(text)
+              .then(() => onToast("Messages copied"));
+          }}
+          onForward={() => setForwarding([...selected].sort((a, b) => a - b))}
+        />
+      ) : null}
+      <header
+        className={cn(
+          "z-10 flex h-16 shrink-0 items-center gap-1 border-b border-solid border-(--chat-line) bg-(--chat-panel) pr-2 pl-2 @[720px]/chat:pl-4",
+          selected && "hidden",
+        )}
+      >
         <button
           type="button"
           className={cn(iconButton, "@[720px]/chat:hidden")}
@@ -414,6 +555,9 @@ export function Conversation({
               {room.title}
             </span>
             <span
+              // Cut with "…" on the smallest screens; the whole line is in
+              // the tooltip (and contact info shows it too).
+              title={subtitle || undefined}
               className={cn(
                 "block truncate text-[0.8rem]",
                 typing.length > 0 || presence?.online
@@ -425,9 +569,11 @@ export function Conversation({
             </span>
           </span>
         </button>
+        {/* On a phone the name and "last seen" need the room; Search
+            messages stays in the ⋮ menu. */}
         <button
           type="button"
-          className={iconButton}
+          className={cn(iconButton, "hidden @[480px]/chat:inline-flex")}
           onClick={onOpenSearch}
           aria-label="Search messages"
           title="Search messages"
@@ -448,19 +594,15 @@ export function Conversation({
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() =>
-                  myState.mutate(
-                    {
-                      roomId: room.id,
-                      patch: {
-                        notifyLevel:
-                          room.me.notifyLevel === "none" ? "all" : "none",
-                      },
-                    },
-                    { onError: fail },
-                  )
+                  isRoomMuted(room.me)
+                    ? myState.mutate(
+                        { roomId: room.id, patch: { muteFor: "off" } },
+                        { onError: fail },
+                      )
+                    : setDialog({ kind: "mute" })
                 }
               >
-                {room.me.notifyLevel === "none"
+                {isRoomMuted(room.me)
                   ? "Unmute notifications"
                   : "Mute notifications"}
               </DropdownMenuItem>
@@ -581,10 +723,12 @@ export function Conversation({
         <div className="chat-wallpaper" aria-hidden="true" />
         {thread.data ? (
           <MessageList
+            roomId={room.id}
             thread={thread.data}
             outgoing={outgoing}
             ctx={ctx}
             unreadAfterSeq={unreadAfterRef.current.seq}
+            openedAtSeq={unreadAfterRef.current.openedAtSeq}
             focus={focus}
             loadingOlder={thread.loadingOlder}
             onLoadOlder={() => void thread.loadOlder()}
@@ -596,6 +740,7 @@ export function Conversation({
               retryMessage(client, viewerId, room.id, clientId)
             }
             onDiscard={(clientId) => discardMessage(room.id, clientId)}
+            typing={typing}
           />
         ) : thread.isError ? (
           <div className="relative flex flex-1 items-center justify-center p-6 text-center text-(--muted)">
@@ -604,21 +749,6 @@ export function Conversation({
         ) : (
           <ChatThreadSkeleton />
         )}
-
-        {dragging ? (
-          <div
-            className="absolute inset-3 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-(--accent) bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] text-[0.95rem] font-semibold text-(--text)"
-            onDragOver={(event) => event.preventDefault()}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragging(false);
-              composerRef.current?.addFiles([...event.dataTransfer.files]);
-            }}
-          >
-            Drop files to send
-          </div>
-        ) : null}
       </div>
 
       {isRequestForMe ? (
@@ -680,6 +810,18 @@ export function Conversation({
         />
       )}
 
+      {dialog?.kind === "mute" ? (
+        <MuteChatDialog
+          onClose={() => setDialog(null)}
+          onMute={(muteFor) => {
+            setDialog(null);
+            myState.mutate(
+              { roomId: room.id, patch: { muteFor } },
+              { onError: fail },
+            );
+          }}
+        />
+      ) : null}
       {dialog?.kind === "clear-chat" ? (
         <ClearChatDialog
           mode={dialog.mode}
@@ -772,6 +914,22 @@ export function Conversation({
             />
           </div>
         </div>
+      ) : null}
+      {forwarding ? (
+        <ForwardDialog
+          fromRoomId={room.id}
+          seqs={forwarding}
+          onClose={() => setForwarding(null)}
+          onToast={onToast}
+          onDone={(roomIds) => {
+            setForwarding(null);
+            setSelected(null);
+            // One chat: open it, as WhatsApp does.
+            if (roomIds.length === 1 && roomIds[0] !== room.id) {
+              onOpenChat(roomIds[0]!);
+            }
+          }}
+        />
       ) : null}
       {person ? (
         <PersonCard

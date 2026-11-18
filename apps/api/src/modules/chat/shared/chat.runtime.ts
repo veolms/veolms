@@ -3,6 +3,11 @@ import type { FastifyInstance } from "fastify";
 import type { Kysely } from "kysely";
 
 import { config } from "../../../config.ts";
+import {
+  createPushActionTokenService,
+  isPushConfigured,
+  type PushActionTokenService,
+} from "../../notifications/index.ts";
 import { createChatHub, type ChatHub } from "../realtime/chat-hub.ts";
 import {
   createPresenceTracker,
@@ -36,6 +41,8 @@ export interface ChatRuntime {
   receipts: ReceiptsBatcher;
   updates: UpdateCoalescer;
   presence: PresenceTracker;
+  /** Reply / mark-as-read tokens from chat pushes to phones. */
+  actionTokens: PushActionTokenService;
 }
 
 const runtimes = new WeakMap<Kysely<Database>, ChatRuntime>();
@@ -54,12 +61,25 @@ export function getChatRuntime(
     connectionString: config.DATABASE_URL,
     logger: app.log,
   });
+  const actionTokens = createPushActionTokenService({
+    database,
+    enabled: config.PUSH_ACTIONS_ENABLED,
+    ttlHours: config.PUSH_ACTION_TOKEN_TTL_HOURS,
+    pushEnabled: isPushConfigured(config),
+  });
   const runtime: ChatRuntime = {
     database,
     repository,
     access: createChatAccess(repository),
     hub,
-    receipts: createReceiptsBatcher({ database, repository, logger: app.log }),
+    receipts: createReceiptsBatcher({
+      database,
+      repository,
+      receiptsOff: (db, profiles) => runtime.access.receiptsOff(db, profiles),
+      receiptsOffIn: (db, pairs) => runtime.access.receiptsOffIn(db, pairs),
+      onReadAdvanced: (reads) => actionTokens.onChatRead(reads),
+      logger: app.log,
+    }),
     updates: createUpdateCoalescer(app.log),
     presence: createPresenceTracker({
       database,
@@ -67,6 +87,7 @@ export function getChatRuntime(
       hub,
       logger: app.log,
     }),
+    actionTokens,
   };
   // A new message pushed to someone's open app counts as delivered.
   hub.setDeliveryHook((roomId, userId, seq) =>

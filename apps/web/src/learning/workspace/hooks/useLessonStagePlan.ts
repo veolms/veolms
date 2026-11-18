@@ -1,6 +1,8 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
+  useState,
   type Dispatch,
   type SetStateAction,
   type RefObject,
@@ -34,6 +36,19 @@ import type {
 import type { VideoPlaybackBootstrap } from "@veolms/contracts";
 import type { CourseLesson } from "@veolms/contracts";
 import type { OctopusKind } from "../../../components/OctopusIllustration";
+import { reportPlaybackIncident } from "../../player/playbackIncidents";
+import { coursesService } from "../../../services/courses/courses.service";
+
+/**
+ * Bootstrap failures that are not a fault: the learner must sign in or get
+ * the course, or the lesson has no video. Everything else that stops a
+ * video from being prepared is reported as a `page_error` incident.
+ */
+const EXPECTED_BOOTSTRAP_REFUSALS = new Set([
+  "UNAUTHORIZED",
+  "MFA_REQUIRED",
+  "MEDIA_NOT_FOUND",
+]);
 
 export interface UseLessonStagePlanArgs {
   courseSlug: string | undefined;
@@ -83,6 +98,12 @@ export interface UseLessonStagePlanResult {
     | undefined;
   lessonTextPending: boolean;
   playbackBootstrapPending: boolean;
+  /** An audio lesson's file address is on its way (the player's loader). */
+  audioSourcePending: boolean;
+  /** An audio lesson's file, once its address is known. */
+  audioSource: LessonAudioSource | null;
+  /** Asks for a new address (the last one expired, or failed). */
+  retryAudioSource: () => void;
 }
 
 export function useLessonStagePlan({
@@ -150,6 +171,11 @@ export function useLessonStagePlan({
     showingQuiz,
   ]);
   const requestsLessonPlayback = lessonStagePlan.requestsPlayback;
+  const requestsLessonAudio = lessonStagePlan.requestsAudio;
+  const audioLink = useLessonAudioLink(
+    requestsLessonAudio ? courseOverview?.course.id : undefined,
+    requestsLessonAudio ? stageLesson?.id : undefined,
+  );
 
   useEffect(() => {
     setPlaybackBootstrapError(null);
@@ -297,8 +323,28 @@ export function useLessonStagePlan({
       onAction: onUnlockCourse,
     } as const;
 
+    // An audio lesson plays in the player from its file; asked for it, the
+    // server says, as for a video, that the viewer must sign in or get the
+    // course.
+    if (!courseNotFound && requestsLessonAudio) {
+      if (!audioLink.failure) return null;
+      if (audioLink.failure.status === 401) return loginPrompt;
+      if (audioLink.failure.status === 403) return accessPrompt;
+      return {
+        kind: "retry",
+        title: "Couldn't load this audio",
+        message: "Check your connection and try again.",
+        actionLabel: "Try again",
+        onAction: audioLink.retry,
+      };
+    }
+
     if (!courseNotFound && !requestsLessonPlayback) {
-      const stage = noVideoStageFor(stageLesson, lessonDescriptionState);
+      const stage = noVideoStageFor(
+        stageLesson,
+        lessonDescriptionState,
+        courseOverview?.course.id,
+      );
       // The loader stands in meanwhile; see `lessonTextPending`.
       if (stage.kind === "pending") return null;
       if (stage.kind === "locked") {
@@ -343,7 +389,7 @@ export function useLessonStagePlan({
     // The same statement as when the course itself says the lesson has no
     // video: it is asked for only while the course is still loading.
     if (playbackBootstrapError.code === "MEDIA_NOT_FOUND") {
-      return noVideoNoticeFor(stageLesson);
+      return noVideoNoticeFor(stageLesson, courseOverview?.course.id);
     }
 
     return {
@@ -352,6 +398,7 @@ export function useLessonStagePlan({
     };
   }, [
     courseAccessQuery.data?.openSectionIds,
+    courseOverview?.course.id,
     courseUnavailable,
     lessonDescriptionState,
     onUnlockCourse,
@@ -362,6 +409,9 @@ export function useLessonStagePlan({
     retryLessonDescription,
     retryPlaybackBootstrap,
     stageLesson,
+    requestsLessonAudio,
+    audioLink.failure,
+    audioLink.retry,
   ]);
   // A lesson with no video whose description is still on its way shows the
   // player's loader. Kept apart from `playbackBootstrapPending`, whose time
@@ -369,7 +419,14 @@ export function useLessonStagePlan({
   const lessonTextPending =
     !courseUnavailable &&
     !requestsLessonPlayback &&
+    !requestsLessonAudio &&
     lessonDescriptionState === "loading";
+  // The player's loader while an audio lesson's file address is on its way.
+  const audioLinkPending =
+    !courseUnavailable &&
+    requestsLessonAudio &&
+    !audioLink.source &&
+    !audioLink.failure;
   const playbackBootstrapPending = Boolean(
     protectedPlayback &&
     requestsLessonPlayback &&
@@ -400,10 +457,151 @@ export function useLessonStagePlan({
     playbackRequestKeyRef,
     setPlaybackBootstrapError,
   ]);
+  // A video that could not be prepared is an incident too: the learner
+  // sees "Something went wrong" (or "This is taking a while") where the
+  // player would be, and the playback summary never starts.
+  useEffect(() => {
+    const error = playbackBootstrapError;
+    if (!error || !courseSlug) return;
+    if (EXPECTED_BOOTSTRAP_REFUSALS.has(error.code)) return;
+    if (error.status === 401 || error.status === 403) return;
+    reportPlaybackIncident(
+      "page_error",
+      {
+        playbackId: crypto.randomUUID(),
+        courseKey: courseSlug,
+        lessonNumber: selectedLesson,
+        mediaKey: `${courseSlug}-lesson-${selectedLesson}`,
+        started: false,
+        positionSeconds: null,
+        durationSeconds: null,
+        qualityHeight: null,
+        bufferAheadSeconds: null,
+      },
+      {
+        code: error.code,
+        httpStatus: error.status > 0 ? error.status : null,
+      },
+    );
+  }, [courseSlug, playbackBootstrapError, selectedLesson]);
+
   return {
     lessonStagePlan,
     playbackAccessError,
     lessonTextPending,
+    audioSourcePending: audioLinkPending,
     playbackBootstrapPending,
+    audioSource: requestsLessonAudio ? audioLink.source : null,
+    retryAudioSource: audioLink.retry,
   };
+}
+
+/** An audio lesson's file, as the player plays it. */
+export interface LessonAudioSource {
+  /** Changes when a new address is given: the player loads it afresh. */
+  key: string;
+  url: string;
+  mimeType: string;
+  /**
+   * Whether the file may be read across origins (storage's CORS allows
+   * it), so the player can load it so and draw its live waveform. When
+   * not, it is loaded as any file is and the waveform only moves.
+   */
+  analysable: boolean;
+}
+
+/** iPhone and iPad Safari stop audio sent through Web Audio when locked. */
+function webAudioKeepsPlayingWhenLocked(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const appleTouch =
+    /iP(hone|ad|od)/u.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return !appleTouch;
+}
+
+/**
+ * Asks storage for one byte of the file across origins: whether it may be
+ * read so (and analysed). Never long: a slow answer is taken as no.
+ */
+/**
+ * Storage hosts that have let a file be read across origins. Kept for the
+ * page's life: once a player element is routed through Web Audio it must
+ * keep loading files so (one loaded otherwise plays in silence), so a
+ * later check that is merely slow must not turn it back.
+ */
+const corsReadableHosts = new Set<string>();
+
+async function canReadAcrossOrigins(url: string): Promise<boolean> {
+  if (!webAudioKeepsPlayingWhenLocked() || typeof fetch !== "function") {
+    return false;
+  }
+  let host: string;
+  try {
+    host = new URL(url).host;
+  } catch {
+    return false;
+  }
+  if (corsReadableHosts.has(host)) return true;
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 3000);
+  try {
+    const response = await fetch(url, {
+      headers: { Range: "bytes=0-0" },
+      mode: "cors",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (response.ok) corsReadableHosts.add(host);
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+/**
+ * An audio lesson's file address: asked for when the lesson opens, and
+ * again on `retry` (it works for a short while, so an expired one is
+ * replaced). `failure.status` is the server's answer when it refused:
+ * 401 to sign in, 403 to get the course.
+ */
+function useLessonAudioLink(
+  courseId: string | undefined,
+  lessonId: string | undefined,
+) {
+  const [source, setSource] = useState<LessonAudioSource | null>(null);
+  const [failure, setFailure] = useState<{ status: number } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setSource(null);
+    setFailure(null);
+    if (!courseId || !lessonId) return undefined;
+    let active = true;
+    coursesService
+      .getLessonMediaLink(courseId, lessonId)
+      .then(async (link) => {
+        const analysable = await canReadAcrossOrigins(link.url);
+        if (!active) return;
+        setSource({
+          key: `${lessonId}:${attempt}`,
+          url: link.url,
+          mimeType: link.mimeType,
+          analysable,
+        });
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setFailure({
+          status: (error as { status?: number } | null)?.status ?? 0,
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [courseId, lessonId, attempt]);
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  return { source, failure, retry };
 }

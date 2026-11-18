@@ -156,9 +156,71 @@ export function usePublicProfile(username?: string) {
   });
 }
 
-export function useSessions(options?: { enabled?: boolean }) {
+/**
+ * Names asked about in the same moment go in one request (see
+ * `useMemberUsername`), 25 at most per request.
+ */
+const MEMBER_LOOKUP_BATCH = 25;
+let pendingMemberLookups = new Map<
+  string,
+  { resolve: (member: boolean) => void; reject: (error: unknown) => void }[]
+>();
+let memberLookupTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushMemberLookups() {
+  const batch = pendingMemberLookups;
+  pendingMemberLookups = new Map();
+  memberLookupTimer = null;
+  const names = [...batch.keys()];
+  for (let start = 0; start < names.length; start += MEMBER_LOOKUP_BATCH) {
+    const chunk = names.slice(start, start + MEMBER_LOOKUP_BATCH);
+    authService.listExistingUsernames(chunk).then(
+      (members) => {
+        const found = new Set(members.map((name) => name.toLowerCase()));
+        for (const name of chunk) {
+          for (const waiter of batch.get(name) ?? []) {
+            waiter.resolve(found.has(name));
+          }
+        }
+      },
+      (error: unknown) => {
+        for (const name of chunk) {
+          for (const waiter of batch.get(name) ?? []) waiter.reject(error);
+        }
+      },
+    );
+  }
+}
+
+function isMemberUsername(username: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const waiters = pendingMemberLookups.get(username) ?? [];
+    waiters.push({ resolve, reject });
+    pendingMemberLookups.set(username, waiters);
+    memberLookupTimer ??= setTimeout(flushMemberLookups, 30);
+  });
+}
+
+/**
+ * Whether a word after "@" in a post is a member's username. Every
+ * mention on screen is checked in one request that answers 200 whatever it
+ * finds: looked up one profile at a time, each word that was not a member
+ * came back 404, and a busy page ran into the profile lookup's rate limit.
+ */
+export function useMemberUsername(username?: string) {
+  const name = username?.toLowerCase() ?? "";
+  return useQuery<boolean, ApiError>({
+    queryKey: authKeys.memberUsername(name),
+    queryFn: () => isMemberUsername(name),
+    enabled: Boolean(name),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
+export function useSessions(options?: { enabled?: boolean; userId?: string }) {
   return useQuery<SessionResponse[], ApiError>({
-    queryKey: authKeys.sessions(),
+    queryKey: authKeys.sessions(options?.userId),
     queryFn: () => authService.getSessions(),
     enabled: options?.enabled ?? true,
     staleTime: 30 * 1000,

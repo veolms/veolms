@@ -483,6 +483,17 @@ await test("private chats: only where allowed, as a request first; blocks stop t
   // Replying accepts, as in WhatsApp.
   ok(await send(b.client, dm, "Sure, here they are"), 201);
   ok(await send(a.client, dm, "Thanks!"), 201);
+  // Both are full members now: the one who replied too, so they get its
+  // pushes and show in Message info (they stayed "pending" before).
+  const members = await flow.database
+    .selectFrom("chat_members")
+    .select(["user_id", "state"])
+    .where("room_id", "=", dm)
+    .execute();
+  assert.deepEqual(
+    members.map((m) => m.state),
+    ["active", "active"],
+  );
   const again = ok<{ room: Room; created: boolean }>(
     await b.client.post("/v1/chat/direct", { userId: a.userId }),
   );
@@ -910,8 +921,24 @@ await test("group ticks: two once everyone received it, blue once all read it; M
     info.readBy.map((p) => p.id),
     [b.userId],
   );
-  assert.equal(info.deliveredTo.length, 1, "the admin received it");
+  // The admin received it too (two ticks above), but staff read along
+  // quietly: Message info lists them only once they answer the message.
+  assert.equal(info.deliveredTo.length, 0, "staff are not listed");
   assert.equal(info.waiting, 0);
+  ok(
+    await admin.put(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/reaction`, {
+      emoji: "👍",
+    }),
+  );
+  const answered = ok<{
+    readBy: Array<{ id: string }>;
+    deliveredTo: Array<{ id: string }>;
+  }>(await a.client.get(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/info`));
+  assert.equal(
+    answered.readBy.length + answered.deliveredTo.length,
+    2,
+    "a reaction brings the admin into the list",
+  );
   refused(
     await b.client.get(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/info`),
     403,
@@ -940,18 +967,31 @@ await test("chat privacy: last seen and read receipts are saved per person", asy
     showPresence: true,
     readReceipts: true,
     enterToSend: true,
+    readReceiptsChoice: false,
   });
+  // A learner can't turn read receipts off (staff only); the rest saves.
   const after = ok<{ showPresence: boolean; readReceipts: boolean }>(
-    await a.client.patch("/v1/chat/me/profile", { readReceipts: false }),
+    await a.client.patch("/v1/chat/me/profile", {
+      readReceipts: false,
+      showPresence: false,
+    }),
   );
-  assert.equal(after.readReceipts, false);
-  assert.equal(after.showPresence, true);
+  assert.equal(after.readReceipts, true);
+  assert.equal(after.showPresence, false);
+  ok(await a.client.patch("/v1/chat/me/profile", { showPresence: true }));
+
+  // Staff can, and it is kept.
+  const staff = ok<{ readReceipts: boolean; readReceiptsChoice: boolean }>(
+    await admin.patch("/v1/chat/me/profile", { readReceipts: false }),
+  );
+  assert.equal(staff.readReceiptsChoice, true);
+  assert.equal(staff.readReceipts, false);
   assert.equal(
-    ok<{ readReceipts: boolean }>(await a.client.get("/v1/chat/me/profile"))
+    ok<{ readReceipts: boolean }>(await admin.get("/v1/chat/me/profile"))
       .readReceipts,
     false,
   );
-  ok(await a.client.patch("/v1/chat/me/profile", { readReceipts: true }));
+  ok(await admin.patch("/v1/chat/me/profile", { readReceipts: true }));
 });
 
 await test("a message reaching someone's open app is delivered at once; search and Message info times", async () => {
@@ -997,7 +1037,8 @@ await test("a message reaching someone's open app is delivered at once; search a
   const info = ok<{ deliveredTo: Array<{ at: string | null }> }>(
     await a.client.get(`/v1/chat/rooms/${room.id}/messages/${sent.seq}/info`),
   );
-  assert.equal(info.deliveredTo.length, 2);
+  // B and the admin both got it; staff are not listed (see above).
+  assert.equal(info.deliveredTo.length, 1);
   assert.ok(
     info.deliveredTo.every((p) => p.at !== null),
     "Message info says when it reached each of them",
@@ -1190,6 +1231,129 @@ await test("a person’s card: groups in common, your chat, blocks, and nothing 
     404,
     "CHAT_USER_NOT_FOUND",
   );
+});
+
+await test("forward: copies arrive in order, marked Forwarded, with the sender's id; unknown chats are refused", async () => {
+  const one = ok<{ message: Message }>(
+    await send(admin, roomId, "Forward me first"),
+    201,
+  ).message;
+  const two = ok<{ message: Message }>(
+    await send(admin, roomId, "Forward me second"),
+    201,
+  ).message;
+  assert.ok(
+    (one as Message & { clientId?: string }).clientId,
+    "the sending app's id comes back (it swaps its copy for this one)",
+  );
+  const dm = ok<{ room: Room }>(
+    await admin.post("/v1/chat/direct", { userId: c.userId }),
+  ).room;
+  const result = ok<{
+    results: Array<{ roomId: string; sent: number; error: string | null }>;
+  }>(
+    await admin.post("/v1/chat/forward", {
+      fromRoomId: roomId,
+      seqs: [two.seq, one.seq],
+      toRoomIds: [dm.id],
+    }),
+  );
+  assert.deepEqual(result.results, [{ roomId: dm.id, sent: 2, error: null }]);
+  const arrived = (await messages(c.client, dm.id)).slice(-2) as Array<
+    Message & { forwarded?: boolean }
+  >;
+  assert.deepEqual(
+    arrived.map((m) => m.body),
+    ["Forward me first", "Forward me second"],
+  );
+  assert.ok(arrived.every((m) => m.forwarded === true));
+  refused(
+    await admin.post("/v1/chat/forward", {
+      fromRoomId: crypto.randomUUID(),
+      seqs: [1],
+      toRoomIds: [dm.id],
+    }),
+    404,
+    "CHAT_ROOM_NOT_FOUND",
+  );
+});
+
+await test('the chat list shows a newer reaction to your message, as WhatsApp\'s "Reacted 👍 to: …"', async () => {
+  const mine = ok<{ message: Message }>(
+    await send(admin, roomId, "React to this one"),
+    201,
+  ).message;
+  ok(
+    await a.client.put(
+      `/v1/chat/rooms/${roomId}/messages/${mine.seq}/reaction`,
+      { emoji: "🔥" },
+    ),
+  );
+  type Listed = Room & {
+    lastReaction?: {
+      emoji: string;
+      byId: string;
+      preview: string;
+    } | null;
+  };
+  const listed = ok<{ rooms: Listed[] }>(
+    await admin.get("/v1/chat/rooms"),
+  ).rooms.find((r) => r.id === roomId);
+  assert.equal(listed?.lastReaction?.emoji, "🔥");
+  assert.equal(listed?.lastReaction?.byId, a.userId);
+  assert.equal(listed?.lastReaction?.preview, "React to this one");
+  // A newer message takes its place again.
+  ok(await send(admin, roomId, "And a new message"), 201);
+  const after = ok<{ rooms: Listed[] }>(
+    await admin.get("/v1/chat/rooms"),
+  ).rooms.find((r) => r.id === roomId);
+  assert.equal(after?.lastReaction ?? null, null);
+});
+
+await test("read receipts per chat: staff can turn them off in one chat, learners can't", async () => {
+  type Ticked = Room & {
+    peerReadSeq: number | null;
+    me: Room["me"] & { readReceipts?: boolean | null };
+  };
+  const dm = ok<{ room: Room }>(
+    await admin.post("/v1/chat/direct", { userId: c.userId }),
+  ).room;
+  const sent = ok<{ message: Message }>(
+    await send(admin, dm.id, "Did you read this?"),
+    201,
+  ).message;
+  ok(
+    await c.client.post("/v1/chat/receipts", {
+      receipts: [{ roomId: dm.id, readSeq: sent.seq }],
+    }),
+  );
+  const seen = async () =>
+    ok<{ rooms: Ticked[] }>(await admin.get("/v1/chat/rooms")).rooms.find(
+      (r) => r.id === dm.id,
+    )!;
+  let view = await seen();
+  for (let i = 0; i < 30 && (view.peerReadSeq ?? 0) < sent.seq; i += 1) {
+    await sleep(200);
+    view = await seen();
+  }
+  assert.ok((view.peerReadSeq ?? 0) >= sent.seq, "blue: C read it");
+
+  // A learner can't switch them off for a chat.
+  refused(
+    await c.client.patch(`/v1/chat/rooms/${dm.id}/me`, { readReceipts: false }),
+    403,
+    "CHAT_NOT_ADMIN",
+  );
+  // Staff can, in this chat only: no blue ticks either way here.
+  ok(await admin.patch(`/v1/chat/rooms/${dm.id}/me`, { readReceipts: false }));
+  view = await seen();
+  assert.equal(view.me.readReceipts, false);
+  assert.equal(view.peerReadSeq, null);
+  // Back to their setting for all chats.
+  ok(await admin.patch(`/v1/chat/rooms/${dm.id}/me`, { readReceipts: null }));
+  view = await seen();
+  assert.equal(view.me.readReceipts ?? null, null);
+  assert.ok((view.peerReadSeq ?? 0) >= sent.seq);
 });
 
 await flow.close();

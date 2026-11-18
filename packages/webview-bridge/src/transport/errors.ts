@@ -8,6 +8,9 @@ export abstract class BridgeError extends Error {
 
   constructor(message: string, code: string = "BRIDGE_ERROR") {
     super(message);
+    // Default: the class name, so subclasses outside this library keep their own name. Library
+    // classes then set a literal `name` (only when constructed as exactly that class), because
+    // `constructor.name` is mangled by minifiers (e.g. "he" instead of "BridgeTimeoutError").
     this.name = this.constructor.name;
     this.code = code;
     Object.setPrototypeOf(this, new.target.prototype);
@@ -20,6 +23,8 @@ export abstract class BridgeError extends Error {
 export class BridgeInitializationError extends BridgeError {
   constructor(message: string, code: string = "INIT_ERROR") {
     super(message, code);
+    if (new.target === BridgeInitializationError)
+      this.name = "BridgeInitializationError";
   }
 }
 
@@ -29,6 +34,7 @@ export class BridgeInitializationError extends BridgeError {
 export class BridgeTransportError extends BridgeError {
   constructor(message: string, code: string = "TRANSPORT_ERROR") {
     super(message, code);
+    if (new.target === BridgeTransportError) this.name = "BridgeTransportError";
   }
 }
 
@@ -43,6 +49,7 @@ export class BridgeTimeoutError extends BridgeError {
       `Bridge request "${requestId}" timed out after ${timeoutMs}ms`,
       "TIMEOUT_ERROR",
     );
+    if (new.target === BridgeTimeoutError) this.name = "BridgeTimeoutError";
     this.requestId = requestId;
   }
 }
@@ -53,6 +60,7 @@ export class BridgeTimeoutError extends BridgeError {
 export class BridgeProtocolError extends BridgeError {
   constructor(message: string, code: string = "PROTOCOL_ERROR") {
     super(message, code);
+    if (new.target === BridgeProtocolError) this.name = "BridgeProtocolError";
   }
 }
 
@@ -68,6 +76,7 @@ export class BridgeNativeError extends BridgeError {
     details?: BridgeValue,
   ) {
     super(message, code);
+    if (new.target === BridgeNativeError) this.name = "BridgeNativeError";
     this.details = details;
   }
 }
@@ -78,11 +87,33 @@ export class BridgeNativeError extends BridgeError {
 export class BridgeUnsupportedError extends BridgeError {
   public readonly path: string;
 
+  constructor(
+    path: string,
+    message?: string,
+    code: string = "UNSUPPORTED_ERROR",
+  ) {
+    super(
+      message ??
+        `Native capability "${path}" is unsupported on the current platform`,
+      code,
+    );
+    if (new.target === BridgeUnsupportedError)
+      this.name = "BridgeUnsupportedError";
+    this.path = path;
+  }
+}
+
+/**
+ * Error thrown when writing a property that native exposes as read-only.
+ * Extends `BridgeUnsupportedError` so existing `instanceof` checks keep working.
+ */
+export class BridgeReadOnlyError extends BridgeUnsupportedError {
   constructor(path: string) {
     super(
-      `Native capability "${path}" is unsupported on the current platform`,
-      "UNSUPPORTED_ERROR",
+      path,
+      `Property "${path}" is read-only on native.`,
+      "READ_ONLY_PROPERTY",
     );
-    this.path = path;
+    if (new.target === BridgeReadOnlyError) this.name = "BridgeReadOnlyError";
   }
 }

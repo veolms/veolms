@@ -5,6 +5,10 @@ import {
   outsideRefundSchema,
   refundSchema,
 } from "./refund.ts";
+import {
+  freeOrderStatsSchema,
+  orderFilterFieldsShape,
+} from "./order-filters.ts";
 
 export const bundleStatusSchema = z.enum(["draft", "published", "archived"]);
 export type BundleStatus = z.infer<typeof bundleStatusSchema>;
@@ -696,6 +700,8 @@ export const adminOrderSchema = z.strictObject({
             vpa: z.string().nullable(),
           })
           .nullable(),
+        /** What the gateway said when the payment failed; null otherwise. */
+        failureReason: z.string().nullable().optional(),
       })
       .nullable(),
   }),
@@ -842,6 +848,13 @@ export const ordersListQuerySchema = z.object({
   to: z.coerce.date().optional(),
   sortOrder: orderSortOrderSchema.default("desc"),
   view: orderViewSchema.optional(),
+  // The Orders screen's filters (admin view). See order-filters.ts.
+  ...orderFilterFieldsShape,
+  /**
+   * 1-based page number. When sent, the list is paged by number instead of
+   * by cursor (`cursor` is ignored) and the response carries `total`.
+   */
+  page: z.coerce.number().int().min(1).max(10_000).optional(),
 });
 export type OrdersListQueryInput = z.input<typeof ordersListQuerySchema>;
 export type OrdersListQueryOutput = z.output<typeof ordersListQuerySchema>;
@@ -860,6 +873,8 @@ export type LearnerOrdersListResponse = z.infer<
 export const adminOrdersListResponseSchema = z.strictObject({
   orders: z.array(adminOrderSchema),
   nextCursor: z.string().nullable(),
+  /** Every order matching the filters; sent when paged by number. */
+  total: z.number().int().nonnegative().optional(),
 });
 export type AdminOrdersListResponse = z.infer<
   typeof adminOrdersListResponseSchema
@@ -878,12 +893,25 @@ export const orderStatsQuerySchema = z.object({
   courseId: z.string().uuid().optional(),
   couponId: z.string().uuid().optional(),
   status: orderStatusSchema.optional(),
+  /** Several statuses, separated by commas (as on the orders list). */
+  statuses: ordersListQuerySchema.shape.statuses,
+  search: z.string().max(100).optional(),
+  ...orderFilterFieldsShape,
   // ISO 4217 code. Amounts in different currencies can't be summed, so the
   // figures always describe one currency; omit to get the one with the most
   // orders (the response's `currency` says which one that was).
   currency: z.string().length(3).optional(),
 });
 export type OrderStatsQuery = z.infer<typeof orderStatsQuerySchema>;
+/** What a client may send (defaults not yet applied). */
+export type OrderStatsQueryInput = z.input<typeof orderStatsQuerySchema>;
+
+/** `GET /orders/export.csv`: the same filters as the statistics. */
+export const ordersExportQuerySchema = orderStatsQuerySchema.omit({
+  currency: true,
+});
+export type OrdersExportQuery = z.infer<typeof ordersExportQuerySchema>;
+export type OrdersExportQueryInput = z.input<typeof ordersExportQuerySchema>;
 
 /** Every amount here (netRevenue, totalEarnings, refundedAmount) is in minor units. */
 export const orderStatsResponseSchema = z.strictObject({
@@ -900,6 +928,21 @@ export const orderStatsResponseSchema = z.strictObject({
   uniqueBuyers: z.number().int().nonnegative(),
   refundedAmount: z.number().int().nonnegative(),
   currency: z.string().length(3).default("INR"),
+  /**
+   * Orders that reached an outcome (paid, refunded, failed, cancelled or
+   * expired) under every filter but status, and how many of them were paid.
+   * The success rate is one over the other.
+   */
+  attempts: z.number().int().nonnegative().default(0),
+  successfulAttempts: z.number().int().nonnegative().default(0),
+  /** What coupons took off the successful orders, minor units. */
+  discountTotal: z.number().int().nonnegative().default(0),
+  /** Buyers with more than one successful order among these. */
+  repeatBuyers: z.number().int().nonnegative().default(0),
+  /** Orders refunded in full or in part. */
+  refundedOrders: z.number().int().nonnegative().default(0),
+  /** Sent when the filters ask for free enrollments (`kind=free`). */
+  free: freeOrderStatsSchema.optional(),
 });
 export type OrderStatsResponse = z.infer<typeof orderStatsResponseSchema>;
 

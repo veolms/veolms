@@ -28,6 +28,7 @@ export class AndroidLegacyEndpoint implements NativeEndpoint {
   private readonly listeners = new Set<NativeMessageHandler>();
   private targetObject: AndroidJavascriptInterfaceObject | null = null;
   private readonly callbackName: string;
+  private installedReceiver: LegacyReceiverFunction | null = null;
   private isDisposed = false;
 
   constructor(name: string) {
@@ -78,6 +79,7 @@ export class AndroidLegacyEndpoint implements NativeEndpoint {
       };
 
       windowRecord[this.callbackName] = receiver;
+      this.installedReceiver = receiver;
     }
   }
 
@@ -125,13 +127,14 @@ export class AndroidLegacyEndpoint implements NativeEndpoint {
     }
     this.isDisposed = true;
 
-    // Remove legacy callback from window
+    // Remove legacy callback from window, unless a newer endpoint with the same name replaced it
     if (typeof window !== "undefined") {
       const windowRecord = window as unknown as Record<string, unknown>;
-      if (this.callbackName in windowRecord) {
+      if (windowRecord[this.callbackName] === this.installedReceiver) {
         delete windowRecord[this.callbackName];
       }
     }
+    this.installedReceiver = null;
 
     this.listeners.clear();
     this.targetObject = null;

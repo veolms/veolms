@@ -3,7 +3,10 @@ import { usePlayerController } from "../react/context";
 import { useAwaitingFirstFrame } from "../react/useAwaitingFirstFrame";
 import { usePlayerState } from "../react/usePlayerState";
 import { classNames } from "../utils/classNames";
-import { isCurrentPositionBuffered } from "../core/playbackStall";
+import {
+  isCurrentPositionBuffered,
+  isPlaybackStalled,
+} from "../core/playbackStall";
 
 export interface BufferingIndicatorProps {
   delay?: number;
@@ -47,8 +50,15 @@ function isInitialLoadingLifecycle(lifecycle: string): boolean {
   );
 }
 
+/**
+ * How long a mid-play wait lasts before the spinner shows: as soon as a
+ * freeze is noticeable (YouTube shows its own after about 0.5 s), while a
+ * blip shorter than that does not flash it.
+ */
+const BUFFERING_SPINNER_DELAY_MS = 500;
+
 export function BufferingIndicator({
-  delay = 1_000,
+  delay = BUFFERING_SPINNER_DELAY_MS,
   immediatePlayWaits = true,
 }: BufferingIndicatorProps) {
   const controller = usePlayerController();
@@ -61,12 +71,9 @@ export function BufferingIndicator({
     waitingForMedia,
   } = usePlayerState(
     (snapshot) => {
-      const { buffered, buffering, currentTime, lifecycle } = snapshot.media;
+      const { lifecycle } = snapshot.media;
       const initialLoading = isInitialLoadingLifecycle(lifecycle);
-      const currentPositionBuffered = isCurrentPositionBuffered({
-        buffered,
-        currentTime,
-      });
+      const currentPositionBuffered = isCurrentPositionBuffered(snapshot.media);
       const playbackHasBegun = snapshot.media.playing || snapshot.media.ended;
       const playInFlight = !playbackHasBegun && !snapshot.media.paused;
       // Play has been asked for and nothing is buffered to play from.
@@ -88,9 +95,7 @@ export function BufferingIndicator({
         waitingForMedia:
           snapshot.media.error === null &&
           !snapshot.ui.scrubbing &&
-          (initialLoading ||
-            playInFlight ||
-            (buffering && !currentPositionBuffered)),
+          (initialLoading || playInFlight || isPlaybackStalled(snapshot.media)),
       };
     },
     (left, right) =>

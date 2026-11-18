@@ -1,7 +1,8 @@
 import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import type { SupportTicketDetail } from "@veolms/contracts/support";
 import { useEffect, useRef, useState } from "react";
 
 import { SlideOverFrame } from "../../components/SlideOverPanel";
@@ -12,17 +13,12 @@ import {
 } from "../../components/SplitFramePane";
 import { Drawer, DrawerContent } from "../../components/ui/drawer";
 import { useSidePanelVariant } from "../../components/useSidePanelVariant";
+import { copyTextToClipboard } from "../../lib/clipboard";
 import { useBackDismiss } from "../../navigation/useBackDismiss";
-import {
-  useSupportTicket,
-  useUpdateSupportStatus,
-} from "../../services/support";
-import {
-  FEEDBACK_STATUS_ORDER,
-  PROBLEM_STATUS_ORDER,
-  SUPPORT_STATUSES,
-} from "../supportCatalog";
+import { useSupportTicket } from "../../services/support";
 import { SupportTicketView, useRefreshAfterRead } from "../SupportTicketView";
+import { TicketActivity } from "./TicketActivity";
+import { TicketProperties, type TicketField } from "./TicketProperties";
 
 export interface StaffTicketPanelProps {
   /** The report or feedback shown; none while nothing is open. */
@@ -231,11 +227,23 @@ function PanelContent({
   const ticket = useSupportTicket(ticketId, { asStaff: true });
   useRefreshAfterRead(ticket.data);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // The next one starts at its top.
+  const [openField, setOpenField] = useState<TicketField | null>(null);
+  const [copied, setCopied] = useState(false);
+  // The next one starts at its top, with no picker open.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
+    setOpenField(null);
   }, [ticketId]);
   const number = ticket.data?.number ?? ticketNumber;
+  const copyLink = async () => {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.searchParams.set("ticket", ticketId);
+    if (await copyTextToClipboard(url.toString())) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -286,10 +294,27 @@ function PanelContent({
           </>
         )}
         {number ? (
-          <span className="ml-auto truncate px-1.5 font-mono text-xs font-semibold text-(--muted)">
-            #{number}
+          <span className="ml-1.5 min-w-0 truncate text-xs text-(--muted)">
+            {ticket.data?.kind === "feedback" ? "Feedback" : "Reports"}
+            <span aria-hidden="true"> / </span>
+            <span className="font-mono font-semibold text-(--text-secondary)">
+              #{number}
+            </span>
           </span>
         ) : null}
+        <button
+          type="button"
+          onClick={() => void copyLink()}
+          aria-label="Copy link"
+          title={copied ? "Link copied" : "Copy link"}
+          className={`${ghostIconButtonClasses} ml-auto`}
+        >
+          {copied ? (
+            <Check size={16} weight="bold" aria-hidden="true" />
+          ) : (
+            <LinkSimple size={16} aria-hidden="true" />
+          )}
+        </button>
       </div>
 
       <div
@@ -312,61 +337,23 @@ function PanelContent({
             headingLevel={2}
             canReply={canManage}
             staffControls={
-              <StatusControl ticket={ticket.data} disabled={!canManage} />
+              <TicketProperties
+                ticket={ticket.data}
+                canManage={canManage}
+                openField={openField}
+                onOpenFieldChange={setOpenField}
+              />
+            }
+            activity={
+              <TicketActivity
+                ticket={ticket.data}
+                canManage={canManage}
+                onHandOff={() => setOpenField("assignee")}
+              />
             }
           />
         )}
       </div>
-    </div>
-  );
-}
-
-function StatusControl({
-  ticket,
-  disabled,
-}: {
-  ticket: SupportTicketDetail;
-  disabled: boolean;
-}) {
-  const update = useUpdateSupportStatus(ticket.id);
-  const order =
-    ticket.kind === "problem" ? PROBLEM_STATUS_ORDER : FEEDBACK_STATUS_ORDER;
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div
-        role="radiogroup"
-        aria-label="Status"
-        className="flex flex-wrap gap-1 rounded-xl bg-(--surface-strong) p-1"
-      >
-        {order.map((status) => {
-          const info = SUPPORT_STATUSES[status];
-          const selected = ticket.status === status;
-          return (
-            <button
-              key={status}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              disabled={disabled || update.isPending}
-              onClick={() => {
-                if (!selected) update.mutate(status);
-              }}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.8rem] font-semibold text-(--text-secondary) transition-colors hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-60 aria-checked:bg-(--surface) aria-checked:text-(--text) aria-checked:shadow-sm"
-            >
-              <span
-                className={`size-1.5 rounded-full ${info.dot}`}
-                aria-hidden="true"
-              />
-              {info.staffLabel}
-            </button>
-          );
-        })}
-      </div>
-      {update.error ? (
-        <span role="alert" className="text-xs font-medium text-rose-500">
-          {update.error.message}
-        </span>
-      ) : null}
     </div>
   );
 }

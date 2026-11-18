@@ -6,6 +6,7 @@ import {
   CHAT_MAX_PINNED_MESSAGES,
   CHAT_PAGE_SIZE,
   CHAT_RESTORE_DAYS,
+  type ChatForwardRequest,
   type ChatMessage,
   type ChatSendMessageRequest,
 } from "@veolms/contracts";
@@ -225,6 +226,21 @@ export function createMessagesService(runtime: ChatRuntime) {
     });
   }
 
+  /** A reaction's push to the message's author (same pipeline as messages). */
+  async function queueReactionPush(event: ChatMessageSentEvent) {
+    if (!isPushConfigured(config)) return;
+    await database.transaction().execute(async (trx) => {
+      await outbox.publish(trx, {
+        type: CHAT_MESSAGE_SENT_EVENT,
+        version: 1,
+        // One push per person, message and emoji: toggling does not spam.
+        dedupeKey: `${CHAT_MESSAGE_SENT_EVENT}:reaction:${event.messageId}:${event.senderId}:${event.reaction?.emoji ?? ""}`,
+        occurredAt: new Date(),
+        payload: event,
+      });
+    });
+  }
+
   /** One page of a chat as everyone sees it (cached above). */
   async function readPage(
     roomId: string,
@@ -307,15 +323,37 @@ export function createMessagesService(runtime: ChatRuntime) {
       );
       let receiptsHidden = false;
       if (ctx.room.kind === "direct") {
-        const profiles = await repository.getProfiles(database, [
-          userId,
-          ...reached.map((r) => r.id),
-        ]);
-        receiptsHidden = profiles.some((p) => !p.read_receipts);
+        // This chat's choice for each of you, else your settings.
+        receiptsHidden =
+          (
+            await access.receiptsOffIn(
+              database,
+              [userId, ...reached.map((r) => r.id)].map((id) => ({
+                roomId,
+                userId: id,
+              })),
+            )
+          ).size > 0;
+      }
+      // Admins, moderators and instructors read along quietly: they are
+      // listed only when they answered the message (a reply or a reaction).
+      const [repliers, reactors] = await Promise.all([
+        repository.listRepliers(database, roomId, seq),
+        repository.listReactions(database, roomId, seq, MESSAGE_INFO_LIMIT),
+      ]);
+      const answered = new Set([...repliers, ...reactors.map((r) => r.id)]);
+      const shown = [];
+      for (const person of reached) {
+        if (
+          answered.has(person.id) ||
+          !(await access.isChatStaff(database, person.id))
+        ) {
+          shown.push(person);
+        }
       }
       const readBy = receiptsHidden
         ? []
-        : reached.filter((r) => Number(r.last_read_seq) >= seq);
+        : shown.filter((r) => Number(r.last_read_seq) >= seq);
       const read = new Set(readBy.map((r) => r.id));
       const withTime = (row: (typeof reached)[number], at: Date | null) => ({
         ...presentPerson(row),
@@ -323,7 +361,7 @@ export function createMessagesService(runtime: ChatRuntime) {
       });
       return {
         readBy: readBy.map((r) => withTime(r, r.read_at)),
-        deliveredTo: reached
+        deliveredTo: shown
           .filter((r) => !read.has(r.id))
           .map((r) => withTime(r, r.delivered_at)),
         waiting,
@@ -454,7 +492,75 @@ export function createMessagesService(runtime: ChatRuntime) {
       };
     },
 
-    async send(userId: string, roomId: string, input: ChatSendMessageRequest) {
+    /**
+     * Forwards messages to up to 5 chats, in order, as the person forwarding
+     * (each chat's own rules apply: who may post, slow mode, requests). Files
+     * go along without uploading again; the text loses its @mentions.
+     */
+    async forward(userId: string, input: ChatForwardRequest) {
+      await views.assertCanRead(database, userId, input.fromRoomId);
+      const rows = [];
+      for (const seq of [...new Set(input.seqs)].sort((a, b) => a - b)) {
+        const row = await repository.findMessage(
+          database,
+          input.fromRoomId,
+          seq,
+        );
+        if (
+          row &&
+          row.kind === "text" &&
+          !row.deleted_at &&
+          (row.body || (row.attachments ?? []).length > 0)
+        ) {
+          rows.push(row);
+        }
+      }
+      if (rows.length === 0) throw ChatErrors.messageNotFound();
+      const results = [];
+      for (const roomId of [...new Set(input.toRoomIds)]) {
+        let sent = 0;
+        let error: string | null = null;
+        for (const row of rows) {
+          try {
+            const attachmentIds = await repository.copyUploadsForForward(
+              database,
+              {
+                sourceRoomId: input.fromRoomId,
+                sourceIds: (row.attachments ?? []).map((a) => a.id),
+                ownerId: userId,
+                roomId,
+              },
+            );
+            await this.send(
+              userId,
+              roomId,
+              {
+                clientId: crypto.randomUUID(),
+                body: row.body,
+                ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+              },
+              { forwarded: true },
+            );
+            sent += 1;
+          } catch (caught) {
+            error =
+              caught instanceof AppError
+                ? caught.message
+                : "This message couldn't be forwarded.";
+            break;
+          }
+        }
+        results.push({ roomId, sent, error });
+      }
+      return { results };
+    },
+
+    async send(
+      userId: string,
+      roomId: string,
+      input: ChatSendMessageRequest,
+      options: { forwarded?: boolean } = {},
+    ) {
       if (Buffer.byteLength(input.body) > CHAT_BODY_MAX_BYTES) {
         throw new AppError(
           400,
@@ -573,6 +679,9 @@ export function createMessagesService(runtime: ChatRuntime) {
       }
 
       const seq = Number(result.message_seq);
+      if (result.outcome === "sent" && options.forwarded) {
+        await repository.markForwarded(database, roomId, seq);
+      }
       const message = presentMessage(await loadMessage(roomId, seq));
       if (result.outcome === "sent") {
         await publishMessage("message", message);
@@ -587,7 +696,7 @@ export function createMessagesService(runtime: ChatRuntime) {
         });
         // Replying to a request accepts it, as in WhatsApp.
         if (recipientOfRequest) {
-          await acceptRequest(room.id);
+          await acceptRequest(room.id, userId);
         }
         if (room.kind !== "direct") {
           await notifyMentions(
@@ -756,6 +865,20 @@ export function createMessagesService(runtime: ChatRuntime) {
         kind: "recount_reactions",
       });
       const message = presentMessage(await loadMessage(roomId, seq));
+      // The author hears about it (phone and web push), as in WhatsApp.
+      if (emoji !== null && row.sender_id && row.sender_id !== userId) {
+        try {
+          await queueReactionPush({
+            roomId,
+            messageId: row.id,
+            seq,
+            senderId: userId,
+            reaction: { emoji },
+          });
+        } catch {
+          // The reaction is saved; a lost push is not fatal.
+        }
+      }
       updates.submit(`${roomId}:${seq}`, version ?? 0, async () => {
         // The newest state when the window ends.
         const latest = presentMessage(await loadMessage(roomId, seq));
@@ -846,9 +969,13 @@ export function createMessagesService(runtime: ChatRuntime) {
     }
   }
 
-  async function acceptRequest(roomId: string) {
+  /** As the Accept button (direct.service accept): the chat and the replier. */
+  async function acceptRequest(roomId: string, userId: string) {
     const updated = await repository.updateRoom(database, roomId, {
       direct_status: "accepted",
+    });
+    await repository.updateMember(database, roomId, userId, {
+      state: "active",
     });
     if (updated) {
       await repository.publish(

@@ -3,11 +3,14 @@ import { MusicNotesIcon as MusicNotes } from "@phosphor-icons/react/MusicNotes";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { CHAT_MAX_ATTACHMENTS_PER_MESSAGE } from "@veolms/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
+import { FileVideoPlayer } from "../components/video";
 import { cn } from "../lib/utils";
 import type { OutgoingFile } from "../services/chat";
 import { formatBytes } from "./chatFormat";
+import { DiscardFilesDialog } from "./ChatDialogs";
+import { LocalPdfPreview } from "./LocalPdfPreview";
 
 /**
  * WhatsApp's media preview before sending: the picked file large, a strip
@@ -19,22 +22,91 @@ export function MediaStage({
   files,
   composerHeight,
   onRemove,
+  onReorder,
   onClear,
   onAddMore,
 }: {
   files: OutgoingFile[];
   composerHeight: number;
   onRemove: (localId: string) => void;
+  /** Move a file in the order they are sent (drag a thumbnail). */
+  onReorder: (from: number, to: number) => void;
   onClear: () => void;
   onAddMore: () => void;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = files.find((f) => f.localId === activeId) ?? files.at(-1);
 
+  // Escape asks before the files go, as WhatsApp does ("Discard unsent
+  // message?"). Caught before anything else hears it, so it never closes
+  // the chat with the files in it; once the question is up, its own dialog
+  // takes the key (Escape there means Cancel).
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const confirmOpenRef = useRef(false);
+  confirmOpenRef.current = confirmDiscard;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || confirmOpenRef.current) return;
+      if (event.defaultPrevented || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setConfirmDiscard(true);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
   // A newly added file becomes the one shown.
   useEffect(() => {
     setActiveId(files.at(-1)?.localId ?? null);
   }, [files.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Drag a thumbnail to change the order they are sent in: at once with a
+  // mouse, after a short hold on a touch screen (a swipe still scrolls).
+  const stripRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{
+    id: string;
+    x: number;
+    pointerId: number;
+    started: boolean;
+    timer: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
+  const [dragging, setDragging] = useState<{ id: string; dx: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    // Held on a phone: the finger moves the thumbnail, not the page.
+    const stopScroll = (event: TouchEvent) => {
+      if (drag.current?.started) event.preventDefault();
+    };
+    strip.addEventListener("touchmove", stopScroll, { passive: false });
+    return () => strip.removeEventListener("touchmove", stopScroll);
+  }, []);
+
+  /** Where a dragged file lands: after every other file it passed. */
+  function targetIndex(clientX: number, draggedId: string): number {
+    const others = [
+      ...(stripRef.current?.querySelectorAll<HTMLElement>("[data-thumb]") ??
+        []),
+    ].filter((thumb) => thumb.dataset.thumb !== draggedId);
+    return others.filter((thumb) => {
+      const box = thumb.getBoundingClientRect();
+      return box.left + box.width / 2 < clientX;
+    }).length;
+  }
+
+  function endDrag(clientX: number | null) {
+    const current = drag.current;
+    drag.current = null;
+    if (current?.timer) clearTimeout(current.timer);
+    setDragging(null);
+    if (!current?.started || clientX === null) return;
+    const from = files.findIndex((f) => f.localId === current.id);
+    const to = targetIndex(clientX, current.id);
+    if (from >= 0 && to !== from) onReorder(from, to);
+  }
 
   if (!active) return null;
   const totalBytes = files.reduce((sum, f) => sum + f.file.size, 0);
@@ -76,41 +148,131 @@ export function MediaStage({
             className="max-h-full max-w-full rounded-lg object-contain shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
           />
         ) : active.kind === "video" && active.previewUrl ? (
-          <video
-            src={active.previewUrl}
-            controls
-            className="max-h-full max-w-full rounded-lg bg-black shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
+          // The app's player; its keys stay with the caption box below.
+          <div
+            key={active.localId}
+            className="max-h-full w-full max-w-[min(100%,calc((100dvh-16rem)*var(--chat-video-ratio)))] overflow-hidden rounded-lg shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
+            style={
+              {
+                "--chat-video-ratio":
+                  active.width && active.height
+                    ? active.width / active.height
+                    : 16 / 9,
+                aspectRatio:
+                  active.width && active.height
+                    ? `${active.width} / ${active.height}`
+                    : "16 / 9",
+              } as CSSProperties
+            }
+          >
+            <FileVideoPlayer
+              src={active.previewUrl}
+              mimeType={active.mimeType}
+              title={active.name}
+              keyboardEnabled={false}
+            />
+          </div>
+        ) : isPdf(active) ? (
+          // WhatsApp shows a PDF's first page before it is sent.
+          <LocalPdfPreview
+            key={active.localId}
+            file={active.file}
+            fallback={<DocumentCard file={active} />}
           />
         ) : (
-          <div className="flex w-72 max-w-full flex-col items-center gap-3 rounded-2xl bg-(--chat-in) px-6 py-10 text-center shadow-[0_8px_30px_rgb(0_0_0/0.18)]">
-            <span className="flex size-16 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-(--accent-ink)">
-              {active.kind === "audio" ? (
-                <MusicNotes size={32} />
-              ) : (
-                <FileText size={32} />
-              )}
-            </span>
-            <span className="line-clamp-2 text-[0.95rem] font-medium break-all text-(--text)">
-              {active.name}
-            </span>
-            <span className="text-[0.8rem] text-(--muted)">
-              {formatBytes(active.file.size)} ·{" "}
-              {(active.name.split(".").pop() ?? "file").toUpperCase()}
-            </span>
-            <span className="text-[0.78rem] text-(--muted)">
-              No preview available
-            </span>
-          </div>
+          <DocumentCard file={active} />
         )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-center gap-2 overflow-x-auto border-t border-solid border-(--chat-line) px-4 py-3">
-        {files.map((file) => (
-          <div key={file.localId} className="group/thumb relative shrink-0">
+      <div
+        ref={stripRef}
+        className="flex shrink-0 items-center justify-center gap-2 overflow-x-auto border-t border-solid border-(--chat-line) px-4 py-3"
+      >
+        {files.map((file, index) => (
+          <div
+            key={file.localId}
+            data-thumb={file.localId}
+            className={cn(
+              "group/thumb relative shrink-0 select-none",
+              dragging?.id === file.localId &&
+                "z-10 scale-110 opacity-90 shadow-lg",
+            )}
+            style={
+              dragging?.id === file.localId
+                ? { transform: `translateX(${dragging.dx}px) scale(1.1)` }
+                : undefined
+            }
+            onPointerDown={(event) => {
+              if (files.length < 2 || event.button !== 0) return;
+              const start = {
+                id: file.localId,
+                x: event.clientX,
+                pointerId: event.pointerId,
+                started: false,
+                timer: null as ReturnType<typeof setTimeout> | null,
+              };
+              if (event.pointerType === "touch") {
+                start.timer = setTimeout(() => {
+                  start.started = true;
+                  navigator.vibrate?.(10);
+                  setDragging({ id: file.localId, dx: 0 });
+                }, 260);
+              }
+              drag.current = start;
+            }}
+            onPointerMove={(event) => {
+              const current = drag.current;
+              if (!current || current.pointerId !== event.pointerId) return;
+              const dx = event.clientX - current.x;
+              if (!current.started) {
+                if (event.pointerType === "touch") {
+                  // Moved before the hold ended: it's a scroll.
+                  if (Math.abs(dx) > 8) endDrag(null);
+                  return;
+                }
+                if (Math.abs(dx) < 6) return;
+                current.started = true;
+                try {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                } catch {
+                  // Pointer already gone: the move still counts.
+                }
+              }
+              setDragging({ id: current.id, dx });
+            }}
+            onPointerUp={(event) => endDrag(event.clientX)}
+            onPointerCancel={() => endDrag(null)}
+            // The browser would drag the picture itself (and cancel ours).
+            onDragStart={(event) => event.preventDefault()}
+            onKeyDown={(event) => {
+              // Alt + ← / → moves the file, for the keyboard.
+              if (!event.altKey) return;
+              if (event.key === "ArrowLeft" && index > 0) {
+                event.preventDefault();
+                onReorder(index, index - 1);
+              } else if (
+                event.key === "ArrowRight" &&
+                index < files.length - 1
+              ) {
+                event.preventDefault();
+                onReorder(index, index + 1);
+              }
+            }}
+          >
+            {files.length > 1 ? (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-0.5 left-1 z-10 text-[0.65rem] font-bold text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.7)]"
+              >
+                {index + 1}
+              </span>
+            ) : null}
             <button
               type="button"
-              onClick={() => setActiveId(file.localId)}
-              aria-label={`Show ${file.name}`}
+              onClick={() => {
+                if (!dragging) setActiveId(file.localId);
+              }}
+              aria-label={`Show ${file.name}, ${index + 1} of ${files.length}${files.length > 1 ? ". Drag, or Alt + arrow keys, to reorder" : ""}`}
               aria-current={
                 file.localId === active.localId ? "true" : undefined
               }
@@ -125,13 +287,14 @@ export function MediaStage({
                 <img
                   src={file.previewUrl}
                   alt=""
-                  className="size-full object-cover"
+                  draggable={false}
+                  className="pointer-events-none size-full object-cover"
                 />
               ) : file.kind === "video" && file.previewUrl ? (
                 <video
                   src={file.previewUrl}
                   muted
-                  className="size-full object-cover"
+                  className="pointer-events-none size-full object-cover"
                 />
               ) : file.kind === "audio" ? (
                 <MusicNotes size={22} />
@@ -143,7 +306,7 @@ export function MediaStage({
               type="button"
               onClick={() => onRemove(file.localId)}
               aria-label={`Remove ${file.name}`}
-              className="absolute -top-1.5 -right-1.5 inline-flex size-5 cursor-pointer items-center justify-center rounded-full border-0 bg-(--text) text-(--chat-bg) opacity-0 shadow transition-opacity group-hover/thumb:opacity-100 focus-visible:opacity-100"
+              className="absolute -top-1.5 -right-1.5 inline-flex size-5 cursor-pointer items-center justify-center rounded-full border-0 bg-(--text) text-(--chat-bg) opacity-0 shadow transition-opacity group-hover/thumb:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
             >
               <X size={11} weight="bold" />
             </button>
@@ -160,6 +323,45 @@ export function MediaStage({
           </button>
         ) : null}
       </div>
+      {confirmDiscard ? (
+        <DiscardFilesDialog
+          count={files.length}
+          onDiscard={() => {
+            setConfirmDiscard(false);
+            onClear();
+          }}
+          onClose={() => setConfirmDiscard(false)}
+        />
+      ) : null}
     </div>
   );
+}
+
+/** A file the screen can't draw: its kind, name and size on a card. */
+function DocumentCard({ file: active }: { file: OutgoingFile }) {
+  return (
+    <div className="flex w-72 max-w-full flex-col items-center gap-3 rounded-2xl bg-(--chat-in) px-6 py-10 text-center shadow-[0_8px_30px_rgb(0_0_0/0.18)]">
+      <span className="flex size-16 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-(--accent-ink)">
+        {active.kind === "audio" ? (
+          <MusicNotes size={32} />
+        ) : (
+          <FileText size={32} />
+        )}
+      </span>
+      <span className="line-clamp-2 text-[0.95rem] font-medium break-all text-(--text)">
+        {active.name}
+      </span>
+      <span className="text-[0.8rem] text-(--muted)">
+        {formatBytes(active.file.size)} ·{" "}
+        {(active.name.split(".").pop() ?? "file").toUpperCase()}
+      </span>
+      <span className="text-[0.78rem] text-(--muted)">
+        No preview available
+      </span>
+    </div>
+  );
+}
+
+function isPdf(file: OutgoingFile): boolean {
+  return file.mimeType === "application/pdf" || /\.pdf$/i.test(file.name);
 }

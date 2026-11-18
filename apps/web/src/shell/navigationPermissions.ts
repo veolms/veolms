@@ -13,6 +13,8 @@ export const NAVIGATION_PERMISSIONS: Readonly<
   // their permissions allow (see CreatorDashboard).
   "/orders": ["billing.read"],
   "/coupons": ["coupon.read"],
+  // Building quizzes and reading their results; the API asks the same.
+  "/quizzes": ["quiz.read"],
   "/students": ["student.read"],
   // Any one tab opens the page (the list is contracts' analyticsPermissions).
   "/analytics": [

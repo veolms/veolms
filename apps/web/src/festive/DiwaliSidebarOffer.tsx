@@ -137,7 +137,7 @@ export function DiwaliSidebarOffer() {
             <span
               key={`${left}${top}`}
               style={{ left, top, animationDelay: delay }}
-              className="absolute size-0.5 animate-[diwali-twinkle_2.8s_ease-in-out_infinite] rounded-full bg-[#fff3d6] motion-reduce:animate-none [:root[data-theme=light]_&]:bg-[#d79a3a]"
+              className="absolute size-0.5 animate-[diwali-twinkle_2.8s_ease-in-out_infinite] rounded-full bg-[#fff3d6] motion-reduce:animate-none [:root[data-rendering=software]_&]:animate-none [:root[data-theme=light]_&]:bg-[#d79a3a]"
             />
           ))}
           <Firework

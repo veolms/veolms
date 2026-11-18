@@ -131,8 +131,7 @@ export function ChatHome({
       </div>
       <p className="absolute right-6 bottom-8 left-6 m-0 flex items-center justify-center gap-1.5 text-[0.8rem] text-(--muted)">
         <LockSimple size={14} aria-hidden="true" />
-        Only people in a chat can read it. Admins see a private message only if
-        it’s reported.
+        Your messages are private. Only people in a chat can read them.
       </p>
     </div>
   );

@@ -1,4 +1,4 @@
-import type { Generated } from "kysely";
+import type { ColumnType, Generated } from "kysely";
 import type { Json } from "./json.schema.ts";
 
 export type NotificationCategory =
@@ -45,10 +45,13 @@ export interface NotificationPreferenceTable {
   enabled: boolean;
 }
 
-export type PushPlatform = "android" | "ios";
+export type PushPlatform = "android" | "ios" | "web";
 export type PushDeliverySource = "notification" | "chat";
 
-/** One app install that can receive pushes, keyed by its Firebase Installation ID. */
+/**
+ * One app install that can receive pushes, keyed by its Firebase
+ * Installation ID, or one browser (platform web, fid "web:" + endpoint hash).
+ */
 export interface PushDeviceTable {
   id: string;
   user_id: string;
@@ -65,6 +68,39 @@ export interface PushDeviceTable {
   created_at: Generated<Date>;
   last_seen_at: Generated<Date>;
   last_success_at: Date | null;
+  /** Browsers only: the push subscription (endpoint and its keys). */
+  web_endpoint: string | null;
+  web_p256dh: string | null;
+  web_auth: string | null;
+}
+
+export type PushActionScope = "chat.reply" | "chat.read";
+export type PushActionRevokedReason = "superseded" | "read" | "rotated";
+
+/**
+ * A single-use token in one chat push to one phone: lets the app's native
+ * code reply or mark that chat read without the session. Only its hash is
+ * stored.
+ */
+export interface PushActionTokenTable {
+  id: Generated<string>;
+  /** SHA-256 of the token, hex. */
+  token_hash: string;
+  user_id: string;
+  push_device_id: string;
+  session_id: string;
+  room_id: string;
+  /** The message it was issued for. */
+  seq: ColumnType<string, number | string, number | string>;
+  /** Stale once the user's chat is read up to this seq. */
+  stale_from_seq: ColumnType<string, number | string, number | string>;
+  scopes: PushActionScope[];
+  created_at: Generated<Date>;
+  expires_at: Date;
+  used_at: Date | null;
+  used_client_id: string | null;
+  revoked_at: Date | null;
+  revoked_reason: PushActionRevokedReason | null;
 }
 
 /** The push queue: one row per message per user. */

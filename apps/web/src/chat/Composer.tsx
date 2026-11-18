@@ -2,6 +2,8 @@ import { CameraIcon as Camera } from "@phosphor-icons/react/Camera";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { ImagesIcon as Images } from "@phosphor-icons/react/Images";
 import { MicrophoneIcon as Microphone } from "@phosphor-icons/react/Microphone";
+import { StopIcon as Stop } from "@phosphor-icons/react/Stop";
+import { WaveformIcon as Waveform } from "@phosphor-icons/react/Waveform";
 import { MusicNotesIcon as MusicNotes } from "@phosphor-icons/react/MusicNotes";
 import { PaperPlaneRightIcon as PaperPlaneRight } from "@phosphor-icons/react/PaperPlaneRight";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
@@ -41,11 +43,26 @@ import {
   type OutgoingFile,
 } from "../services/chat";
 import { getApiError } from "../lib/api-error";
-import { chatDrafts as drafts } from "../store/chatDrafts.store";
+import {
+  chatDraftFiles,
+  chatDrafts as drafts,
+} from "../store/chatDrafts.store";
+import { isTouchOnlyDevice, useChatPrefs } from "../store/chatPrefs.store";
 import { ChatFileError, prepareFile } from "./chatMedia";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
+import {
+  continueList,
+  shortcutFor,
+  toggleInline,
+  toggleLines,
+  type InlineMark,
+  type LineMark,
+} from "./composerFormat";
+import { FormatBar } from "./FormatBar";
 import { MediaStage } from "./MediaStage";
+import { tidyDictation, useDictation } from "./useDictation";
+import { quoteMediaOf, ReplyQuoteBody } from "./ReplyQuote";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 
 export interface ComposerHandle {
@@ -105,7 +122,16 @@ export const Composer = forwardRef<
 ) {
   const client = useQueryClient();
   const [text, setText] = useState(() => drafts.get(room.id) ?? "");
-  const [files, setFiles] = useState<OutgoingFile[]>([]);
+  const [files, setFiles] = useState<OutgoingFile[]>(() =>
+    chatDraftFiles.get<OutgoingFile>(room.id),
+  );
+  /** The draft that was in the box before Edit, put back afterwards. */
+  const draftBeforeEditRef = useRef("");
+  /** The chat the files on screen belong to (kept as its draft). */
+  const filesRoomRef = useRef(room.id);
+  const prefs = useChatPrefs();
+  /** Text selected in the box: the formatting bar shows. */
+  const [hasSelection, setHasSelection] = useState(false);
   const [mentions, setMentions] = useState<Map<string, string>>(new Map());
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -130,20 +156,59 @@ export const Composer = forwardRef<
   }, []);
   const lastTypingRef = useRef(0);
   const recorder = useVoiceRecorder();
+  // Voice typing: what was in the box when it started; the words heard go
+  // after it, live, as in Claude's and ChatGPT's message box.
+  const dictationBaseRef = useRef("");
+  const dictation = useDictation({
+    lang: prefs.dictationLang,
+    onText: (said) => {
+      const base = dictationBaseRef.current;
+      const startsSentence = base.trim() === "" || /[.?!]\s*$/.test(base);
+      const words = tidyDictation(said, startsSentence);
+      const gap = base && words && !/\s$/.test(base) ? " " : "";
+      updateText((base + gap + words).slice(0, CHAT_BODY_MAX_CHARS));
+      requestAnimationFrame(() => {
+        const area = textareaRef.current;
+        if (area) area.scrollTop = area.scrollHeight;
+      });
+    },
+    onError,
+  });
+  const listening = dictation.state !== "idle";
+  function toggleDictation() {
+    if (listening) {
+      dictation.stop();
+      return;
+    }
+    dictationBaseRef.current = text;
+    dictation.start();
+    textareaRef.current?.focus({ preventScroll: true });
+  }
   const editMessage = useEditMessage();
   const isGroup = room.kind !== "direct";
   // Settings › Chats › Enter is send (off: Enter starts a new line and
-  // Ctrl/⌘ + Enter sends).
-  const enterToSend = useChatProfile().data?.enterToSend ?? true;
+  // Ctrl/⌘ + Enter sends). On a phone Enter starts a new line unless
+  // turned on there, as in WhatsApp.
+  const accountEnterToSend = useChatProfile().data?.enterToSend ?? true;
+  const enterToSend = isTouchOnlyDevice()
+    ? prefs.phoneEnterToSend
+    : accountEnterToSend;
   const members = useChatMembers(
     isGroup && mentionQuery !== null ? room.id : null,
     mentionQuery ?? "",
   );
 
+  // Picked files stay with their chat's draft (declared before the switch
+  // below, so a chat's files are never saved under the next chat).
+  useEffect(() => {
+    if (filesRoomRef.current === room.id) chatDraftFiles.set(room.id, files);
+  }, [files, room.id]);
+
   // Each chat keeps its own draft; on desktop the box is ready to type in.
   useEffect(() => {
+    filesRoomRef.current = room.id;
     setText(drafts.get(room.id) ?? "");
-    setFiles([]);
+    setFiles(chatDraftFiles.get<OutgoingFile>(room.id));
     setMentions(new Map());
     if (window.matchMedia("(pointer: fine)").matches) {
       textareaRef.current?.focus({ preventScroll: true });
@@ -152,6 +217,7 @@ export const Composer = forwardRef<
 
   useEffect(() => {
     if (editing) {
+      draftBeforeEditRef.current = drafts.get(room.id) ?? "";
       setText(editing.body);
       requestAnimationFrame(() => {
         const area = textareaRef.current;
@@ -159,7 +225,8 @@ export const Composer = forwardRef<
         area?.setSelectionRange(area.value.length, area.value.length);
       });
     }
-  }, [editing]);
+    // Only when Edit starts; the chat is the same while editing.
+  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (replyTo) textareaRef.current?.focus({ preventScroll: true });
@@ -222,7 +289,8 @@ export const Composer = forwardRef<
 
   function updateText(value: string) {
     setText(value);
-    drafts.set(room.id, value);
+    // The text of a message being edited is not this chat's draft.
+    if (!editing) drafts.set(room.id, value);
     // "@na…" at the caret opens the member picker.
     const caret = textareaRef.current?.selectionStart ?? value.length;
     const match = /(^|\s)@([\p{L}\p{N}_.-]{0,30})$/u.exec(
@@ -255,12 +323,30 @@ export const Composer = forwardRef<
     });
   }
 
+  /** Applies a WhatsApp format to the selection (or at the caret). */
+  function applyFormat(mark: InlineMark | LineMark) {
+    const area = textareaRef.current;
+    if (!area) return;
+    const start = area.selectionStart;
+    const end = area.selectionEnd;
+    const edited =
+      mark === "bullet" || mark === "number" || mark === "quote"
+        ? toggleLines(text, start, end, mark)
+        : toggleInline(text, start, end, mark);
+    updateText(edited.text);
+    requestAnimationFrame(() => {
+      area.focus({ preventScroll: true });
+      area.setSelectionRange(edited.start, edited.end);
+    });
+  }
+
   function send() {
+    if (listening) dictation.stop();
     const body = text.trim();
     if (editing) {
       if (!body || body === editing.body) {
         onDoneEditing();
-        setText(drafts.get(room.id) ?? "");
+        setText(draftBeforeEditRef.current);
         return;
       }
       editMessage.mutate(
@@ -268,7 +354,7 @@ export const Composer = forwardRef<
         { onError: (error) => onError(getApiError(error).message) },
       );
       onDoneEditing();
-      setText(drafts.get(room.id) ?? "");
+      setText(draftBeforeEditRef.current);
       return;
     }
     if (!body && files.length === 0) return;
@@ -287,6 +373,8 @@ export const Composer = forwardRef<
             seq: replyTo.seq,
             senderName: replyTo.sender?.name ?? null,
             preview: replyTo.body.slice(0, 120),
+            media: quoteMediaOf(replyTo.attachments),
+            ...(replyTo.seq === 0 ? { clientId: replyTo.id } : {}),
           }
         : null,
       mentions: mentioned,
@@ -315,6 +403,8 @@ export const Composer = forwardRef<
             seq: replyTo.seq,
             senderName: replyTo.sender?.name ?? null,
             preview: replyTo.body.slice(0, 120),
+            media: quoteMediaOf(replyTo.attachments),
+            ...(replyTo.seq === 0 ? { clientId: replyTo.id } : {}),
           }
         : null,
       mentions: [],
@@ -357,7 +447,9 @@ export const Composer = forwardRef<
   return (
     <div
       ref={rootRef}
-      className="relative border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      // One layer at the media preview's height: the info drawer and the
+      // drop overlay still cover it, and its popups sit above the preview.
+      className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
     >
       {replyTo || editing ? (
         <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
@@ -369,16 +461,17 @@ export const Composer = forwardRef<
             />
           ) : null}
           <div className="min-w-0 flex-1">
-            <div className="text-[0.78rem] font-semibold text-(--accent-ink)">
-              {editing
-                ? "Edit message"
-                : replyTo?.sender?.id === viewerId
-                  ? "You"
-                  : replyTo?.sender?.name}
-            </div>
-            <div className="truncate text-[0.82rem] text-(--text-secondary)">
-              {(editing ?? replyTo)?.body || "Media"}
-            </div>
+            <ReplyQuoteBody
+              title={
+                editing
+                  ? "Edit message"
+                  : replyTo?.sender?.id === viewerId
+                    ? "You"
+                    : (replyTo?.sender?.name ?? "Message")
+              }
+              text={(editing ?? replyTo)?.body ?? ""}
+              media={quoteMediaOf((editing ?? replyTo)?.attachments ?? [])}
+            />
           </div>
           <button
             type="button"
@@ -387,7 +480,7 @@ export const Composer = forwardRef<
             onClick={() => {
               if (editing) {
                 onDoneEditing();
-                setText(drafts.get(room.id) ?? "");
+                setText(draftBeforeEditRef.current);
               } else onCancelReply();
             }}
           >
@@ -409,6 +502,14 @@ export const Composer = forwardRef<
               return [];
             })
           }
+          onReorder={(from, to) =>
+            setFiles((current) => {
+              const next = [...current];
+              const [moved] = next.splice(from, 1);
+              if (moved) next.splice(to, 0, moved);
+              return next;
+            })
+          }
           onRemove={(localId) =>
             setFiles((current) => {
               const gone = current.find((f) => f.localId === localId);
@@ -420,7 +521,7 @@ export const Composer = forwardRef<
       ) : null}
 
       {mentionQuery !== null ? (
-        <div className="absolute right-3 bottom-full left-3 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
+        <div className="absolute right-3 bottom-full left-3 z-40 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
           {room.me.canModerate &&
           "everyone".startsWith(mentionQuery.toLowerCase()) ? (
             <MentionOption
@@ -443,10 +544,12 @@ export const Composer = forwardRef<
         </div>
       ) : null}
 
+      {hasSelection && !emojiOpen ? <FormatBar onFormat={applyFormat} /> : null}
+
       {emojiOpen ? (
         <EmojiPanel
           // WhatsApp: the panel spans the chat above the message box.
-          className="absolute inset-x-2 bottom-full mb-2"
+          className="absolute inset-x-2 bottom-full z-40 mb-2"
           onPick={(emoji) => {
             const area = textareaRef.current;
             const start = area?.selectionStart ?? text.length;
@@ -517,8 +620,8 @@ export const Composer = forwardRef<
             >
               {(
                 [
-                  ["Document", FileText, "bg-[#7f66ff]", documentInputRef],
                   ["Photos & videos", Images, "bg-[#007bfc]", mediaInputRef],
+                  ["Document", FileText, "bg-[#7f66ff]", documentInputRef],
                   ["Camera", Camera, "bg-[#ff2e74]", cameraInputRef],
                   ["Audio", MusicNotes, "bg-[#ff7a1a]", audioInputRef],
                 ] as const
@@ -560,7 +663,11 @@ export const Composer = forwardRef<
               value={text}
               maxLength={CHAT_BODY_MAX_CHARS}
               placeholder={
-                files.length > 0 ? "Add a caption" : "Type a message"
+                listening
+                  ? "Listening… speak now"
+                  : files.length > 0
+                    ? "Add a caption"
+                    : "Type a message"
               }
               onChange={(event) => updateText(event.target.value)}
               onPaste={(event) => {
@@ -570,7 +677,49 @@ export const Composer = forwardRef<
                   void addFiles(pasted);
                 }
               }}
+              onDrop={(event) => {
+                if (event.dataTransfer.files.length === 0) return;
+                event.preventDefault();
+                void addFiles([...event.dataTransfer.files]);
+              }}
+              onSelect={(event) => {
+                const area = event.currentTarget;
+                setHasSelection(area.selectionStart !== area.selectionEnd);
+              }}
+              onBlur={() => setHasSelection(false)}
               onKeyDown={(event) => {
+                // WhatsApp's formatting keys: Ctrl/⌘+B, I, Shift+X, Shift+M…
+                const format = shortcutFor(event);
+                if (format) {
+                  event.preventDefault();
+                  applyFormat(format);
+                  return;
+                }
+                const sending =
+                  event.key === "Enter" &&
+                  (enterToSend
+                    ? !event.shiftKey
+                    : event.ctrlKey || event.metaKey);
+                // A new line in a list or quote carries it on.
+                if (
+                  event.key === "Enter" &&
+                  !sending &&
+                  !event.nativeEvent.isComposing &&
+                  mentionQuery === null
+                ) {
+                  const area = event.currentTarget;
+                  if (area.selectionStart === area.selectionEnd) {
+                    const next = continueList(text, area.selectionStart);
+                    if (next) {
+                      event.preventDefault();
+                      updateText(next.text);
+                      requestAnimationFrame(() =>
+                        area.setSelectionRange(next.caret, next.caret),
+                      );
+                      return;
+                    }
+                  }
+                }
                 if (
                   event.key === "Enter" &&
                   !event.shiftKey &&
@@ -594,7 +743,7 @@ export const Composer = forwardRef<
                   else if (emojiOpen) setEmojiOpen(false);
                   else if (editing) {
                     onDoneEditing();
-                    setText(drafts.get(room.id) ?? "");
+                    setText(draftBeforeEditRef.current);
                   } else if (replyTo) onCancelReply();
                   else return;
                   event.stopPropagation();
@@ -609,6 +758,39 @@ export const Composer = forwardRef<
               }}
               className="max-h-38 min-h-6 w-full resize-none border-0 bg-transparent py-2 text-[0.94rem] leading-6 text-(--text) outline-none placeholder:text-(--muted)"
             />
+            {dictation.supported ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  toggleDictation();
+                }}
+                aria-pressed={listening}
+                aria-label={listening ? "Stop voice typing" : "Voice typing"}
+                title={
+                  listening
+                    ? "Stop voice typing"
+                    : "Voice typing: speak, and your words are typed here"
+                }
+                className={cn(
+                  "relative -mr-1.5 ml-1 inline-flex size-8 shrink-0 cursor-pointer items-center justify-center self-end rounded-full border-0 bg-transparent text-(--muted) hover:text-(--text)",
+                  "mb-1",
+                  listening && "bg-red-500 text-white hover:text-white",
+                )}
+              >
+                {listening ? (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 animate-ping rounded-full bg-red-500/40 motion-reduce:animate-none"
+                    />
+                    <Stop size={14} weight="fill" className="relative" />
+                  </>
+                ) : (
+                  <Waveform size={19} />
+                )}
+              </button>
+            ) : null}
           </label>
           {canSend || editing || slowLeft > 0 || files.length > 0 ? (
             <button

@@ -33,6 +33,8 @@ export interface DiscussionEditorCommands {
   toggleOrderedList(): void;
   toggleTaskList(): void;
   toggleBlockquote(): void;
+  /** Makes the lines a heading of this level, or plain text if they are one. */
+  toggleHeading(level: 2 | 3): void;
   applyLink(href: string): void;
   removeLink(): void;
   getSelection(): DiscussionEditorSelection | null;
@@ -84,6 +86,7 @@ export function createDiscussionEditorCommands(
       withView((view) => toggleLinePrefix(view, "- [ ] ", TASK_PREFIX)),
     toggleBlockquote: () =>
       withView((view) => toggleLinePrefix(view, "> ", BLOCKQUOTE_PREFIX)),
+    toggleHeading: (level) => withView((view) => toggleHeading(view, level)),
     applyLink: (href) => withView((view) => applyLink(view, href)),
     removeLink: () => withView(removeLink),
     getSelection: () => {
@@ -286,7 +289,34 @@ function toggleLinePrefix(view: EditorView, prefix: string, matcher: RegExp) {
         }
       : { from: line.from, insert: prefix },
   );
-  view.dispatch({ changes });
+  dispatchLineChanges(view, changes);
+}
+
+const HEADING_PREFIX = /^\s*#{1,6}\s+/;
+
+/**
+ * Lines already a heading of `level` become plain text; any other line
+ * (a heading of another level too) becomes one.
+ */
+function toggleHeading(view: EditorView, level: 2 | 3) {
+  const { from, to } = view.state.selection.main;
+  const startLine = view.state.doc.lineAt(from);
+  const endLine = view.state.doc.lineAt(to);
+  const lines = [];
+  for (let number = startLine.number; number <= endLine.number; number += 1) {
+    lines.push(view.state.doc.line(number));
+  }
+  const prefix = `${"#".repeat(level)} `;
+  const remove = lines.every((line) => line.text.startsWith(prefix));
+  const changes = lines.map((line) => {
+    const existing = line.text.match(HEADING_PREFIX)?.[0].length ?? 0;
+    return {
+      from: line.from,
+      to: line.from + existing,
+      insert: remove ? "" : prefix,
+    };
+  });
+  dispatchLineChanges(view, changes);
 }
 
 function toggleOrderedList(view: EditorView) {
@@ -307,7 +337,7 @@ function toggleOrderedList(view: EditorView) {
         }
       : { from: line.from, insert: `${index + 1}. ` },
   );
-  view.dispatch({ changes });
+  dispatchLineChanges(view, changes);
 }
 
 const BULLET_PREFIX = /^\s*[-+*]\s+/;
@@ -409,3 +439,19 @@ const EMPTY_FORMATTING_STATE: DiscussionFormattingState = {
   canRedo: false,
   linkUrl: "",
 };
+
+/**
+ * Applies a change at the start of lines (a list marker, a heading's "##")
+ * with the cursor carried past what was put in: on an empty line the cursor
+ * sits where the marker goes, and text typed next belongs after it.
+ */
+function dispatchLineChanges(
+  view: EditorView,
+  changes: readonly { from: number; to?: number; insert: string }[],
+) {
+  const changeSet = view.state.changes(changes);
+  view.dispatch({
+    changes: changeSet,
+    selection: view.state.selection.map(changeSet, 1),
+  });
+}

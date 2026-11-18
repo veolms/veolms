@@ -64,7 +64,7 @@ export function createLearningLessonVideoSource(options: {
       ? LEARNING_HLS_MIME_TYPE
       : dash
         ? "application/dash+xml"
-        : "video/mp4",
+        : (options.media.mimeType ?? "video/mp4"),
     kind: hls ? "hls" : dash ? "dash" : "file",
     // The catalog duration can be stale after an asset replacement. Shaka
     // receives the stored position and the loaded event clamps it against

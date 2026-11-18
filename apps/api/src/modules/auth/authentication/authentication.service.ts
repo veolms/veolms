@@ -10,6 +10,8 @@ import {
   buildDicebearSvgUrl,
   DEFAULT_AVATAR_STYLE,
   DICEBEAR_BASE_URL,
+  EXISTING_USERNAMES_MAX,
+  isValidPublicProfileUsername,
   PUBLIC_PROFILE_USERNAME_MAX_LENGTH,
   PUBLIC_PROFILE_USERNAME_MIN_LENGTH,
 } from "@veolms/contracts";
@@ -52,6 +54,7 @@ import {
 } from "../../avatars/index.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import { type SessionLocation } from "../shared/request-location.ts";
+import { isShortLinkPath } from "../../links/index.ts";
 
 const AVATAR_VALIDATION_RANGE = "bytes=0-31";
 const USER_AVATAR_RETENTION_LIMIT = 2;
@@ -139,6 +142,20 @@ export interface AuthServiceOptions {
   storage?: S3StorageService;
 }
 
+/**
+ * The names worth looking up for `listExistingUsernames`: lower-case, each
+ * once, only those that can be usernames, at most EXISTING_USERNAMES_MAX.
+ */
+export function usernamesToLookUp(names: readonly string[]): string[] {
+  return [
+    ...new Set(
+      names
+        .map((name) => name.trim().toLowerCase())
+        .filter((name) => isValidPublicProfileUsername(name)),
+    ),
+  ].slice(0, EXISTING_USERNAMES_MAX);
+}
+
 export function createAuthService({
   database,
   otpService,
@@ -218,6 +235,19 @@ export function createAuthService({
   /** Bulk notification-recipient lookup (includes soft-deleted users). */
   function listNotificationRecipientsByIds(userIds: readonly string[]) {
     return userRepository.listNotificationRecipientsByIds(database, userIds);
+  }
+
+  /**
+   * Which of the words are members' usernames: one query for every
+   * "@name" on a page, answered whether or not any exists. Asked one at a
+   * time through getPublicProfile, every word that was not a member came
+   * back 404 (and a busy page met its rate limit).
+   */
+  async function listExistingUsernames(names: readonly string[]) {
+    return userRepository.listExistingUsernames(
+      database,
+      usernamesToLookUp(names),
+    );
   }
 
   async function getPublicProfile(username: string) {
@@ -394,7 +424,9 @@ export function createAuthService({
       if (
         username &&
         username !== currentUser.username.toLowerCase() &&
-        isReservedUsername(username)
+        (isReservedUsername(username) ||
+          // A short link at /<name> would hide the profile.
+          (await isShortLinkPath(executor, username)))
       ) {
         throw new AppError(
           400,
@@ -1141,7 +1173,10 @@ export function createAuthService({
       );
     }
 
-    if (isReservedUsername(input.username)) {
+    if (
+      isReservedUsername(input.username) ||
+      (await isShortLinkPath(database, input.username))
+    ) {
       throw new AppError(
         400,
         "USERNAME_TAKEN",
@@ -1228,6 +1263,7 @@ export function createAuthService({
     if (
       normalised.length >= PUBLIC_PROFILE_USERNAME_MIN_LENGTH &&
       !isReservedUsername(normalised) &&
+      !(await isShortLinkPath(database, normalised)) &&
       !(await userRepository.usernameExists(database, normalised))
     ) {
       return normalised;
@@ -1767,6 +1803,7 @@ export function createAuthService({
     findUserCardByUsername,
     listNotificationRecipientsByIds,
     getPublicProfile,
+    listExistingUsernames,
     findUserByIdentifierIncludingDeleted,
     findVerifiedUserByEmail,
     findUserByOauthAccountIncludingDeleted,

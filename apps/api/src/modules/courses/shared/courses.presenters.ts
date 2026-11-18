@@ -6,7 +6,9 @@ import type {
   CoursePricing,
   CourseSection,
   CourseSettings,
+  LessonContent,
 } from "@veolms/contracts";
+import type { LessonContentRow } from "../curriculum/lesson-contents.repository.ts";
 import {
   presentInternationalPrice,
   type StoredInternationalPrice,
@@ -147,6 +149,7 @@ export function presentCurriculum({
   withheldResourceIds,
   omitLessonDescriptions = false,
   withheldDescriptionLessonIds,
+  contents,
 }: {
   sections: readonly SectionRow[];
   lessons: readonly LessonRow[];
@@ -166,7 +169,15 @@ export function presentCurriculum({
    * read them: see `createLessonContentAccess`.
    */
   withheldDescriptionLessonIds?: ReadonlySet<string>;
+  /**
+   * Every kind's content of the lessons, for the editor. Left out, the
+   * lessons carry no `contents` (a learner is shown only the selected kind).
+   */
+  contents?: readonly LessonContentRow[];
 }): CourseSection[] {
+  const contentsByLesson = contents
+    ? Map.groupBy(contents, (row) => row.lesson_id)
+    : null;
   return sections.map((section) => ({
     id: section.id,
     title: section.title,
@@ -207,8 +218,77 @@ export function presentCurriculum({
                 : undefined,
             };
           }),
+        ...(contentsByLesson
+          ? {
+              contents: presentLessonContents(
+                lesson,
+                contentsByLesson.get(lesson.id) ?? [],
+                mediaById,
+              ),
+            }
+          : {}),
       })),
   }));
+}
+
+/**
+ * Every kind's content of a lesson. A lesson's file attached before kinds
+ * existed (or by an import) is on the lesson only: it is listed as its
+ * selected kind's, as the API keeps it when the kind is switched away from.
+ */
+function presentLessonContents(
+  lesson: Pick<LessonRow, "id" | "content_type" | "content_media_id">,
+  rows: readonly LessonContentRow[],
+  mediaById: ReadonlyMap<string, MediaRow>,
+): LessonContent[] {
+  const contents = rows.map(presentLessonContent);
+  if (
+    lesson.content_type === "quiz" ||
+    !lesson.content_media_id ||
+    rows.some((row) => row.content_type === lesson.content_type)
+  ) {
+    return contents;
+  }
+  const media = mediaById.get(lesson.content_media_id);
+  return [
+    ...contents,
+    presentLessonContent({
+      lesson_id: lesson.id,
+      content_type: lesson.content_type,
+      media_id: lesson.content_media_id,
+      body: null,
+      original_filename: media?.original_filename ?? null,
+      mime_type: media?.mime_type ?? null,
+      size_bytes: media?.size_bytes ?? null,
+      status: media?.status ?? null,
+      duration_seconds: media?.duration_seconds ?? null,
+    }),
+  ];
+}
+
+/** One kind's content of a lesson, as the editor shows it. */
+export function presentLessonContent(row: LessonContentRow): LessonContent {
+  return {
+    contentType: row.content_type,
+    mediaId: row.media_id,
+    body: row.body,
+    media:
+      row.media_id && row.original_filename !== null
+        ? {
+            originalFilename: row.original_filename,
+            mimeType: row.mime_type ?? "application/octet-stream",
+            sizeBytes: Number(row.size_bytes ?? 0),
+            status: (row.status ?? "failed") as NonNullable<
+              LessonContent["media"]
+            >["status"],
+            durationSeconds:
+              row.duration_seconds === null ||
+              row.duration_seconds === undefined
+                ? null
+                : Number(row.duration_seconds),
+          }
+        : null,
+  };
 }
 
 export function presentAccessRule(

@@ -36,6 +36,8 @@ export interface ListOrdersOptions {
   from?: Date;
   to?: Date;
   sortOrder?: OrderSortOrder;
+  /** Any further condition on `o` (the Orders screen's filters). */
+  where?: RawBuilder<boolean>;
 }
 
 export interface OrderStatsFilters {
@@ -46,6 +48,8 @@ export interface OrderStatsFilters {
   to?: Date;
   /** Optional half-open upper bound used by dashboard period comparisons. */
   toExclusive?: Date;
+  /** Any further condition on `o` (the Orders screen's filters). */
+  where?: RawBuilder<boolean>;
 }
 
 export interface OrderStatsRow {
@@ -199,6 +203,7 @@ export async function listOrders(
     from,
     to,
     sortOrder = "desc",
+    where,
   } = options;
 
   // `created_at` is timestamptz (microseconds) but the driver hands it back
@@ -265,6 +270,9 @@ export async function listOrders(
   // 5. Coupon ID filter
   if (couponId) {
     query = query.where("o.coupon_id", "=", couponId);
+  }
+  if (where) {
+    query = query.where(where);
   }
 
   // 6. Search filter. A learner's own list: order number, the invoice number
@@ -471,6 +479,9 @@ export async function getOrderStatsByCurrency(
   }
   if (filters.couponId) {
     query = query.where("o.coupon_id", "=", filters.couponId);
+  }
+  if (filters.where) {
+    query = query.where(filters.where);
   }
 
   const rows = await query.execute();
@@ -1167,6 +1178,7 @@ export async function listPaymentsForOrders(
       "gateway_provider",
       "gateway_payment_id",
       "payment_method",
+      "error_description",
     ])
     .where("order_id", "in", orderIds)
     .orderBy("order_id")

@@ -140,6 +140,7 @@ export {
 export type {
   ErrorOverlayProps,
   PlayerErrorNoticeProps,
+  PlayerErrorReport,
   VideoPlayerNoticeAction,
   VideoPlayerNoticeProps,
 } from "./controls/ErrorOverlay";

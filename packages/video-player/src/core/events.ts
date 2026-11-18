@@ -23,7 +23,15 @@ export interface VideoEngineEventMap {
   bufferingchange: { buffering: boolean };
   volumechange: { volume: number; muted: boolean };
   ratechange: { playbackRate: number };
-  qualitychange: { quality: VideoQuality | null; auto: boolean };
+  qualitychange: {
+    quality: VideoQuality | null;
+    auto: boolean;
+    /**
+     * The player itself left a chosen quality the connection could not
+     * carry and went to automatic quality.
+     */
+    fallback?: boolean;
+  };
   qualitieschange: { qualities: readonly VideoQuality[]; auto: boolean };
   audiotrackchange: { track: VideoAudioTrack | null };
   texttrackchange: { track: VideoTextTrack | null };

@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   chatMessageSentEventSchema,
   messagePushText,
+  roomPushIconUrl,
 } from "./chat-push.service.ts";
 
 await test("a chat push line says what was sent", () => {
@@ -30,4 +31,89 @@ await test("the chat.message_sent event is validated", () => {
   };
   assert.deepEqual(chatMessageSentEventSchema.parse(event), event);
   assert.throws(() => chatMessageSentEventSchema.parse({ ...event, seq: 0 }));
+});
+
+await test("a group's notification picture: only a public copy, never a private icon", () => {
+  const storage = {
+    getPublicObjectUrl: (key: string) => `https://cdn.example.com/${key}`,
+    isCdnPublicKey: (key: string) => key.startsWith("public/"),
+  };
+  const published = {
+    thumbnail_url: null,
+    media_id: "m1",
+    media_storage_key: "public/thumbnails/m1/original.png",
+  };
+  const group = { kind: "course", icon_upload_id: null };
+
+  assert.equal(
+    roomPushIconUrl(group, published, storage),
+    "https://cdn.example.com/public/thumbnails/m1/240.webp",
+    "a published course's picture, at 240 px",
+  );
+  assert.equal(
+    roomPushIconUrl(
+      { kind: "course", icon_upload_id: "up1" },
+      published,
+      storage,
+    ),
+    null,
+    "an admin's icon is private: no picture, not the course's",
+  );
+  assert.equal(
+    roomPushIconUrl(
+      { kind: "direct", icon_upload_id: null },
+      published,
+      storage,
+    ),
+    null,
+  );
+  assert.equal(
+    roomPushIconUrl(
+      group,
+      {
+        ...published,
+        media_storage_key: "protected/thumbnails/m1/original.png",
+      },
+      storage,
+    ),
+    null,
+    "an unpublished course's picture is private",
+  );
+  assert.equal(
+    roomPushIconUrl(group, published, {
+      ...storage,
+      isCdnPublicKey: () => false,
+    }),
+    null,
+    "not served publicly by the CDN",
+  );
+  assert.equal(
+    roomPushIconUrl(
+      group,
+      {
+        thumbnail_url: "https://cdn.example.com/old/course.jpg",
+        media_id: null,
+        media_storage_key: null,
+      },
+      storage,
+    ),
+    "https://cdn.example.com/old/course.jpg",
+    "an older course with only an address",
+  );
+  assert.equal(
+    roomPushIconUrl(
+      group,
+      {
+        thumbnail_url: "/static/course.png",
+        media_id: null,
+        media_storage_key: null,
+      },
+      storage,
+    ),
+    null,
+  );
+  assert.equal(
+    roomPushIconUrl({ kind: "team", icon_upload_id: null }, undefined, storage),
+    null,
+  );
 });

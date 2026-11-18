@@ -11,7 +11,10 @@ import type {
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { useCurrentUser } from "../auth/auth.queries";
-import { updateDiscussionsWorkspaceItem } from "./cache-updaters";
+import {
+  updateDiscussionsWorkspaceItem,
+  updateReplyHeartInCache,
+} from "./cache-updaters";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 import { learningInteractionsService } from "./learning-interactions.service";
 
@@ -61,6 +64,68 @@ function patchThreadMarks(
     { itemType: "thread", id: threadId },
     (item) => ({ ...item, ...marks }),
   );
+}
+
+/**
+ * Give a reply the creator's heart, or take it back, as on a comment. The
+ * change shows at once and is put back if the server refuses it.
+ */
+export function useReplyHeartMutation(options?: {
+  onError?: (error: ApiError) => void;
+}) {
+  const queryClient = useQueryClient();
+  const { data: currentUser } = useCurrentUser();
+
+  return useMutation<
+    unknown,
+    ApiError,
+    {
+      reply: {
+        id: string;
+        threadId: string;
+        courseId: string;
+        creatorHeart?: CreatorHeart | null;
+      };
+      give: boolean;
+    },
+    { previous: CreatorHeart | null }
+  >({
+    mutationFn: ({ reply, give }) =>
+      learningInteractionsService.heartReply(
+        reply.courseId,
+        reply.id,
+        give ? "heart" : "unheart",
+      ),
+    onMutate: ({ reply, give }) => {
+      const previous = reply.creatorHeart ?? null;
+      updateReplyHeartInCache(
+        queryClient,
+        reply.threadId,
+        reply.id,
+        give
+          ? {
+              displayName:
+                currentUser?.displayName?.trim() ||
+                currentUser?.username ||
+                "Creator",
+              avatarUrl: currentUser?.avatarDataUrl ?? null,
+            }
+          : null,
+      );
+      return { previous };
+    },
+    onError: (error, { reply }, context) => {
+      if (context) {
+        updateReplyHeartInCache(
+          queryClient,
+          reply.threadId,
+          reply.id,
+          context.previous,
+        );
+      }
+      options?.onError?.(error);
+    },
+  });
 }
 
 /**

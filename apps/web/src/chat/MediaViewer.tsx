@@ -2,15 +2,19 @@ import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import { useEffect } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 
+import { FileVideoPlayer } from "../components/video";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { ChatImage } from "./ChatImage";
 import type { ViewableMedia } from "./MessageAttachments";
+import { usePhotoZoom } from "./usePhotoZoom";
 
 /**
  * Full-screen photos and videos (WhatsApp's media viewer): ← / → between
- * items, Esc or Back to close, download in the corner.
+ * items, Esc or Back to close, download in the corner. A photo zooms with a
+ * pinch, Ctrl + wheel or a double tap (see usePhotoZoom).
  */
 export function MediaViewer({
   items,
@@ -25,17 +29,33 @@ export function MediaViewer({
 }) {
   useBackDismiss({ open: true, onDismiss: onClose });
   const item = items[index];
+  const stageRef = useRef<HTMLDivElement>(null);
+  const photoRef = useRef<HTMLDivElement>(null);
+  usePhotoZoom(
+    stageRef,
+    photoRef,
+    `${index}:${item?.kind === "image" ? item.url : ""}`,
+  );
 
   useEffect(() => {
+    // First, and only: Esc closes the photo, not the chat behind it.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onClose();
+        return;
+      }
+      // On a video the arrows seek it (the player's keys), as in a lesson;
+      // the buttons either side still move between items.
+      if (items[index]?.kind === "video") return;
       if (event.key === "ArrowRight" && index < items.length - 1)
         onIndex(index + 1);
       if (event.key === "ArrowLeft" && index > 0) onIndex(index - 1);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [index, items.length, onClose, onIndex]);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [index, items, onClose, onIndex]);
 
   if (!item) return null;
   const control =
@@ -73,7 +93,12 @@ export function MediaViewer({
           <X size={20} />
         </button>
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center p-4">
+      <div
+        ref={stageRef}
+        // The photo takes pinches and drags itself: the browser must not
+        // zoom or scroll the page under it.
+        className="relative flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden p-4"
+      >
         {index > 0 ? (
           <button
             type="button"
@@ -88,21 +113,48 @@ export function MediaViewer({
           </button>
         ) : null}
         {item.kind === "image" ? (
-          <img
-            src={item.url}
-            alt={item.name}
-            className="max-h-full max-w-full object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          <div
+            ref={photoRef}
+            key={item.url}
+            className="flex size-full items-center justify-center"
+            // The photo's own clicks stay here; one on the space around it
+            // closes the viewer, as before.
+            onClick={(e) => {
+              if (e.target !== e.currentTarget) e.stopPropagation();
+            }}
+          >
+            <ChatImage
+              src={item.url}
+              alt={item.name}
+              className="max-h-full max-w-full object-contain select-none"
+              draggable={false}
+            />
+          </div>
         ) : (
-          <video
-            src={item.url}
-            controls
-            autoPlay
-            playsInline
-            className="max-h-full max-w-full"
+          // The app's player (download is in the bar above). As wide as the
+          // room allows at the video's own shape, never taller than it.
+          <div
+            key={item.url}
+            className="max-h-full w-full max-w-[min(100%,calc((100dvh-6rem)*var(--chat-video-ratio)))]"
+            style={
+              {
+                "--chat-video-ratio":
+                  item.width && item.height ? item.width / item.height : 16 / 9,
+                aspectRatio:
+                  item.width && item.height
+                    ? `${item.width} / ${item.height}`
+                    : "16 / 9",
+              } as CSSProperties
+            }
             onClick={(e) => e.stopPropagation()}
-          />
+          >
+            <FileVideoPlayer
+              src={item.url}
+              mimeType={item.mimeType}
+              title={item.name}
+              autoPlay
+            />
+          </div>
         )}
         {index < items.length - 1 ? (
           <button

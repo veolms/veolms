@@ -167,6 +167,72 @@ export function getOrderStatusStyle(status: OrderStatus | string): StatusStyle {
   }
 }
 
+export interface StatusTone {
+  label: string;
+  /** Background of the status dot. */
+  dot: string;
+  /** Border, fill and text of the status pill. */
+  pill: string;
+}
+
+const TONES = {
+  success: {
+    dot: "bg-emerald-500",
+    pill: "border-emerald-500/30 bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
+  },
+  warning: {
+    dot: "bg-amber-500",
+    pill: "border-amber-500/30 bg-amber-500/12 text-amber-700 dark:text-amber-400",
+  },
+  danger: {
+    dot: "bg-rose-500",
+    pill: "border-rose-500/30 bg-rose-500/12 text-rose-600 dark:text-rose-400",
+  },
+  info: {
+    dot: "bg-sky-500",
+    pill: "border-sky-500/30 bg-sky-500/12 text-sky-700 dark:text-sky-400",
+  },
+  neutral: {
+    dot: "bg-zinc-400",
+    pill: "border-zinc-500/30 bg-zinc-500/12 text-(--muted)",
+  },
+} as const;
+
+/**
+ * How the academy Orders screen names and colours an order's status. A
+ * partially refunded order says so (it is neither a plain success nor a
+ * refund).
+ */
+export function getStatusTone(status: OrderStatus | string): StatusTone {
+  switch (status) {
+    case "paid":
+      return { label: "Success", ...TONES.success };
+    case "partially_refunded":
+      return { label: "Partially refunded", ...TONES.warning };
+    case "refunded":
+      return { label: "Refunded", ...TONES.neutral };
+    case "payment_failed":
+    case "cancelled":
+      return { label: "Failed", ...TONES.danger };
+    case "expired":
+      return { label: "Expired", ...TONES.neutral };
+    case "payment_processing":
+      return { label: "Processing", ...TONES.info };
+    case "pending":
+      return { label: "Pending", ...TONES.info };
+    default:
+      return { label: String(status), ...TONES.neutral };
+  }
+}
+
+/** "UPI", "Card", "Netbanking", "Free" for a payment method. */
+export function formatMethodName(method: string | null | undefined): string {
+  if (!method) return "—";
+  const lower = method.toLowerCase();
+  if (lower === "upi" || lower === "emi") return lower.toUpperCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
 export interface BrandBadge {
   label: string;
   bgColor: string;

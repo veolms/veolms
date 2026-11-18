@@ -34,6 +34,7 @@ export interface CourseContentSources {
     | "findSectionsByCourseId"
     | "findLessonsByCourseId"
     | "listResourcesByCourseId"
+    | "listLessonContents"
   >;
   configurationService: Pick<
     ConfigurationService,
@@ -125,6 +126,27 @@ async function loadCourseContent(
       ? sources.authService.listUserDisplayNamesByIds([course.creator_id])
       : [],
   ]);
+
+  // A reading written as text is its document's; learners are shown it
+  // where a reading's text goes (its description, which older readings
+  // held). One that has a PDF is read as the PDF.
+  const textReadingIds = lessons
+    .filter(
+      (lesson) =>
+        lesson.content_type === "document" && !lesson.content_media_id,
+    )
+    .map((lesson) => lesson.id);
+  if (textReadingIds.length > 0) {
+    const bodies = new Map(
+      (await sources.curriculumService.listLessonContents(textReadingIds))
+        .filter((row) => row.content_type === "document" && row.body?.trim())
+        .map((row) => [row.lesson_id, row.body]),
+    );
+    for (const lesson of lessons) {
+      const body = bodies.get(lesson.id);
+      if (body) lesson.description = body;
+    }
+  }
 
   const mediaIds = new Set<string>();
   for (const lesson of lessons) {

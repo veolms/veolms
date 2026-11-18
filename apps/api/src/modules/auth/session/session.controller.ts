@@ -1,6 +1,11 @@
-import type { SessionParams } from "@veolms/contracts";
+import type {
+  ActiveSessionsVerificationRequest,
+  SendActiveSessionsVerificationRequest,
+  SessionParams,
+} from "@veolms/contracts";
 import type { FastifyRequest } from "fastify";
 
+import { config } from "../../../config.ts";
 import {
   SESSION_IP_ADDRESS_MAX_LENGTH,
   SESSION_USER_AGENT_MAX_LENGTH,
@@ -31,12 +36,55 @@ export function createSessionController(context: AuthContext) {
 
   async function list(request: FastifyRequest) {
     const currentSessionId = request.session!.id;
-    const sessions = await sessionService.listSessions(request.user!.id);
+    const sessions = await sessionService.listSessions(
+      request.user!.id,
+      currentSessionId,
+    );
     return sessions.map((session) => presentSession(session, currentSessionId));
   }
 
+  async function sendActiveSessionsVerificationCode(
+    request: FastifyRequest<{
+      Body?: SendActiveSessionsVerificationRequest;
+    }>,
+  ) {
+    const { channel, maskedDestination } =
+      await sessionService.sendActiveSessionsVerificationCode(
+        request.user!,
+        request.ip,
+        request.body?.channel,
+      );
+    return {
+      message: "Active-session verification code sent.",
+      codeExpiresInSeconds: config.OTP_TTL_MINUTES * 60,
+      channel,
+      maskedDestination,
+    };
+  }
+
+  async function verifyActiveSessionsCode(
+    request: FastifyRequest<{
+      Body: ActiveSessionsVerificationRequest;
+    }>,
+  ) {
+    const { verifiedUntil } = await sessionService.verifyActiveSessionsCode(
+      request.user!,
+      request.session!.id,
+      request.body.code,
+      request.body.channel,
+    );
+    return {
+      message: "Identity verified for active sessions.",
+      verifiedUntil,
+    };
+  }
+
   async function revoke(request: FastifyRequest<{ Params: SessionParams }>) {
-    await sessionService.revokeSession(request.user!.id, request.params.id);
+    await sessionService.revokeSession(
+      request.user!.id,
+      request.params.id,
+      request.session!.id,
+    );
     return { message: "Session revoked" };
   }
 
@@ -48,7 +96,13 @@ export function createSessionController(context: AuthContext) {
     return { message: "All other sessions revoked" };
   }
 
-  return { list, revoke, revokeAll };
+  return {
+    list,
+    sendActiveSessionsVerificationCode,
+    verifyActiveSessionsCode,
+    revoke,
+    revokeAll,
+  };
 }
 
 export type SessionController = ReturnType<typeof createSessionController>;

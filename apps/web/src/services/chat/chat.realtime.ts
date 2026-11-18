@@ -10,20 +10,28 @@ import type {
 } from "@veolms/contracts";
 
 import { setChatStreamCarriesNotifications } from "../../lib/tabLiveStream";
-import { getChatPrefs } from "../../store/chatPrefs.store";
+import { getChatPrefs, inQuietHours } from "../../store/chatPrefs.store";
+import { setNativeChatOnScreen } from "../../native-bridge";
 import { notificationKeys } from "../notifications";
+import {
+  closeChatNotifications,
+  isWebPushActive,
+  loadWebPush,
+} from "../webPush";
 import {
   applyGroupRead,
   applyMessages,
   applyPresence,
   applyReceipt,
   applyToRoomList,
+  isRoomMuted,
   type ChatThread,
 } from "./chat.cache";
 import { chatKeys } from "./chat.keys";
 import { restoreChatCache, startChatCachePersistence } from "./chat.persist";
 import { queueReceipt } from "./chat.receipts";
 import { chatService } from "./chat.service";
+import { chime } from "./chat.sounds";
 
 /**
  * Live chat over Server-Sent Events (GET /chat/stream), one per tab while a
@@ -33,8 +41,9 @@ import { chatService } from "./chat.service";
  * a gap, a reconnect (`ready`) or `resync` fetches what was missed with
  * GET .../changes?since=. The stream closes 2 minutes after the tab is
  * hidden and reopens when it is shown (CHAT_ROOM_PLAN §14.3), except while
- * desktop notifications are on: then it stays open so they keep coming, as
- * on WhatsApp Web.
+ * desktop notifications are on without web push: then it stays open so
+ * they keep coming. With web push the service worker shows them, tab
+ * closed or not (services/webPush), and the stream closes as usual.
  */
 
 const HIDDEN_GRACE_MS = 2 * 60_000;
@@ -82,8 +91,13 @@ function desktopAlertsOn() {
 const visibleRooms = new Set<string>();
 
 export function setChatOnScreen(roomId: string, onScreen: boolean) {
-  if (onScreen) visibleRooms.add(roomId);
-  else visibleRooms.delete(roomId);
+  // The phone app does not draw pushes for the chat on screen.
+  setNativeChatOnScreen(roomId, onScreen);
+  if (onScreen) {
+    visibleRooms.add(roomId);
+    // Opened here: its notification has been seen.
+    void closeChatNotifications(roomId);
+  } else visibleRooms.delete(roomId);
 }
 
 function setLive(next: boolean) {
@@ -221,33 +235,6 @@ async function catchUp(roomId: string) {
 }
 
 // ------------------------------------------------------------------ alerts
-const SOUND_GAP_MS = 2_000;
-let lastSoundAt = 0;
-let audio: AudioContext | null = null;
-
-/** A soft two-note chime, made on the spot (no sound file to load). */
-function chime() {
-  if (Date.now() - lastSoundAt < SOUND_GAP_MS) return;
-  lastSoundAt = Date.now();
-  try {
-    audio ??= new AudioContext();
-    const now = audio.currentTime;
-    for (const [i, freq] of [880, 1320].entries()) {
-      const osc = audio.createOscillator();
-      const gain = audio.createGain();
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, now + i * 0.09);
-      gain.gain.exponentialRampToValueAtTime(0.08, now + i * 0.09 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.09 + 0.22);
-      osc.connect(gain).connect(audio.destination);
-      osc.start(now + i * 0.09);
-      osc.stop(now + i * 0.09 + 0.25);
-    }
-  } catch {
-    // No sound before the page has been interacted with, or no audio.
-  }
-}
-
 /**
  * Settings › Notifications: a sound and (in the background) a desktop
  * alert for a private message, or an @mention in a group, unless the chat
@@ -261,7 +248,7 @@ function alertFor(message: ChatMessage) {
     chatKeys.rooms(),
   );
   const room = list?.rooms.find((r) => r.id === message.roomId);
-  if (!room || room.me.notifyLevel === "none") return;
+  if (!room || isRoomMuted(room.me)) return;
   const mentioned = Boolean(
     viewer && (message.mentions.includes(viewer) || message.mentionAll),
   );
@@ -272,8 +259,10 @@ function alertFor(message: ChatMessage) {
   const away = document.visibilityState === "hidden" || !document.hasFocus();
   if (!away && visibleRooms.has(message.roomId)) return;
   const prefs = getChatPrefs();
-  if (prefs.sounds) chime();
-  if (away && desktopAlertsOn()) {
+  const quiet = inQuietHours(prefs.quietHours);
+  if (prefs.messageSound && !quiet) chime();
+  // With web push the service worker shows it (once for every tab).
+  if (away && desktopAlertsOn() && !isWebPushActive()) {
     const who = message.sender?.name ?? "Someone";
     const body = prefs.previews
       ? message.body ||
@@ -286,6 +275,7 @@ function alertFor(message: ChatMessage) {
         body,
         // One per chat: a newer message replaces the last one's alert.
         tag: message.roomId,
+        silent: quiet,
         ...(icon && /^https?:\/\//.test(icon) ? { icon } : {}),
       },
     );
@@ -298,6 +288,70 @@ function alertFor(message: ChatMessage) {
       alert.close();
     };
   }
+}
+
+/**
+ * Someone reacted to your message (WhatsApp: "Reacted 👍 to: …"): a sound,
+ * and while you're away a notification, unless the chat is muted. With web
+ * push the service worker shows it (the server pushes reactions too).
+ */
+function reactionAlertFor(before: ChatMessage, after: ChatMessage) {
+  if (!client || !viewer || after.sender?.id !== viewer || after.deleted) {
+    return;
+  }
+  const added = Object.entries(after.reactions).find(
+    ([emoji, count]) => count > (before.reactions[emoji] ?? 0),
+  );
+  if (!added) return;
+  const list = client.getQueryData<{ rooms: ChatRoomSummary[] }>(
+    chatKeys.rooms(),
+  );
+  const room = list?.rooms.find((r) => r.id === after.roomId);
+  if (!room || isRoomMuted(room.me) || room.me.notifyLevel === "none") return;
+  const away = document.visibilityState === "hidden" || !document.hasFocus();
+  if (!away && visibleRooms.has(after.roomId)) return;
+  const [emoji] = added;
+  // Who reacted (the newest first); your own reaction alerts no one.
+  void chatService
+    .messageReactions(after.roomId, after.seq)
+    .then(({ reactions }) => reactions.find((r) => r.id !== viewer))
+    .catch(() => undefined)
+    .then((person) => {
+      if (!person) return;
+      const prefs = getChatPrefs();
+      const quiet = inQuietHours(prefs.quietHours);
+      if (prefs.messageSound && !quiet) chime();
+      if (!away || !desktopAlertsOn() || isWebPushActive()) return;
+      const who = person.name;
+      const what = prefs.previews
+        ? after.body ||
+          (after.attachments[0]?.kind === "audio" ? "Voice message" : "Media")
+        : "your message";
+      const alert = new Notification(
+        room.kind === "direct" ? who : `${who} @ ${room.title}`,
+        {
+          body: `Reacted ${person?.emoji ?? emoji} to: ${what}`,
+          tag: `${after.roomId}:reaction`,
+          silent: quiet,
+        },
+      );
+      alert.onclick = () => {
+        window.focus();
+        const path = `/chat/${after.roomId}?seq=${after.seq}`;
+        if (openLink) openLink(path);
+        else window.location.assign(path);
+        alert.close();
+      };
+    });
+}
+
+let roomListTimer: ReturnType<typeof setTimeout> | undefined;
+/** One chat list refresh for a burst of changes. */
+function refreshRoomListSoon() {
+  clearTimeout(roomListTimer);
+  roomListTimer = setTimeout(() => {
+    void client?.invalidateQueries({ queryKey: chatKeys.rooms() });
+  }, 800);
 }
 
 function onMessage(
@@ -315,6 +369,17 @@ function onMessage(
   // A gap: something was missed; fetch it rather than show holes.
   if (thread && isNew && message.seq > thread.lastSeq + 1) {
     void catchUp(message.roomId);
+  }
+  if (!isNew) {
+    const before = thread?.messages.find((m) => m.seq === message.seq);
+    if (before) reactionAlertFor(before, message);
+    // A reaction changed: the chat list's "Reacted 👍 to: …" catches up.
+    if (
+      !before ||
+      JSON.stringify(before.reactions) !== JSON.stringify(message.reactions)
+    ) {
+      refreshRoomListSoon();
+    }
   }
   applyMessages(client, message.roomId, [message]);
   const open =
@@ -339,8 +404,54 @@ function onMessage(
   }
 }
 
+/**
+ * A stream that went quiet. The server sends `ping` every 25 s; a
+ * connection that died without closing (a phone or laptop that slept, a
+ * network change, a proxy that dropped it) brings nothing and reports no
+ * error, so the chat list and new messages stood still until a chat was
+ * opened. Once a stream has shown its pings, this long without one means it
+ * is gone: it is opened again, and its `ready` catches up what was missed.
+ */
+const STREAM_SILENT_MS = 65_000;
+const STREAM_WATCH_MS = 15_000;
+let lastStreamEventAt = 0;
+let streamPings = false;
+let watchTimer: ReturnType<typeof setInterval> | undefined;
+
+function streamSilent(): boolean {
+  return (
+    source !== null &&
+    streamPings &&
+    Date.now() - lastStreamEventAt > STREAM_SILENT_MS
+  );
+}
+
+/** Opens the stream again now (it is gone, or the network came back). */
+function reopen() {
+  if (users === 0) return;
+  close();
+  open();
+}
+
+function watchStream() {
+  if (streamSilent()) reopen();
+}
+
+function onOnline() {
+  // A new network: the old connection is likely gone, whatever it says.
+  if (source) reopen();
+  else open();
+}
+
 function attach(next: EventSource) {
+  lastStreamEventAt = Date.now();
+  streamPings = false;
+  next.addEventListener("ping", () => {
+    lastStreamEventAt = Date.now();
+    streamPings = true;
+  });
   next.addEventListener("ready", (event) => {
+    lastStreamEventAt = Date.now();
     retryDelay = REFUSED_RETRY_MIN_MS;
     setLive(true);
     const ready = parse<ChatStreamReadyEvent>(event as MessageEvent<string>);
@@ -366,8 +477,13 @@ function attach(next: EventSource) {
         }
       }
     }
-    if (readyBefore)
+    if (readyBefore) {
       void client.invalidateQueries({ queryKey: chatKeys.rooms() });
+      // Read receipts and presence sent while the stream was away are not
+      // sent again: the chats' details (ticks, "last seen", online) are
+      // asked for afresh. Only the open ones reload now.
+      void client.invalidateQueries({ queryKey: [...chatKeys.all, "room"] });
+    }
     readyBefore = true;
   });
   next.addEventListener("chat.message", (event) => {
@@ -381,6 +497,9 @@ function attach(next: EventSource) {
   next.addEventListener("chat.read", (event) => {
     const data = parse<ChatStreamReadEvent>(event as MessageEvent<string>);
     if (data && client) applyReceipt(client, data, viewer);
+    // Read on another device or tab: its notification here can go.
+    if (data && data.userId === viewer)
+      void closeChatNotifications(data.roomId, data.readSeq);
   });
   next.addEventListener("chat.group_read", (event) => {
     const data = parse<ChatStreamGroupReadEvent>(event as MessageEvent<string>);
@@ -458,14 +577,38 @@ function onVisibilityChange() {
   if (document.visibilityState === "hidden") {
     clearTimeout(hiddenTimer);
     hiddenTimer = setTimeout(() => {
-      if (!desktopAlertsOn()) close();
+      if (!desktopAlertsOn() || isWebPushActive()) close();
     }, HIDDEN_GRACE_MS);
     return;
   }
   clearTimeout(hiddenTimer);
   if (!source) {
     open();
+  } else if (streamSilent()) {
+    reopen();
   }
+}
+
+/** A notification was clicked: open its chat in this tab, no reload. */
+function onWorkerMessage(event: MessageEvent) {
+  const data = event.data as { type?: string; path?: string } | null;
+  if (data?.type !== "veolms:open" || typeof data.path !== "string") return;
+  if (!data.path.startsWith("/")) return;
+  if (openLink) openLink(data.path);
+  else window.location.assign(data.path);
+}
+
+/** Keeps this browser's push subscription saved, once the page is quiet. */
+function syncWebPushWhenIdle(viewerId: string) {
+  const run = () =>
+    void loadWebPush()
+      .then((webPush) => webPush.syncWebPush(viewerId))
+      .catch(() => {
+        // Tried again on the next visit.
+      });
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 10_000 });
+  } else setTimeout(run, 3_000);
 }
 
 /** Joins the tab's chat stream; returns the function that leaves it. */
@@ -484,6 +627,10 @@ export function startChatStream(
   users += 1;
   if (users === 1) {
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("online", onOnline);
+    watchTimer = setInterval(watchStream, STREAM_WATCH_MS);
+    navigator.serviceWorker?.addEventListener("message", onWorkerMessage);
+    if (viewerId) syncWebPushWhenIdle(viewerId);
     // Last visit's chats first (instant), then the stream catches them up.
     if (viewerId) {
       void restoreChatCache(queryClient, viewerId);
@@ -500,6 +647,10 @@ export function startChatStream(
       stopPersisting?.();
       stopPersisting = undefined;
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("online", onOnline);
+      clearInterval(watchTimer);
+      watchTimer = undefined;
+      navigator.serviceWorker?.removeEventListener("message", onWorkerMessage);
       clearTimeout(hiddenTimer);
       close();
       readyBefore = false;

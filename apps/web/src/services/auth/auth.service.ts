@@ -4,6 +4,10 @@ import type {
   AvatarUploadPresignRequest,
   AvatarUploadPresignResponse,
   AuthMessageResponse,
+  ActiveSessionsVerificationRequest,
+  ActiveSessionsVerificationResponse,
+  SendActiveSessionsVerificationRequest,
+  SendActiveSessionsVerificationResponse,
   BackupCodesResponse,
   CurrentUserResponse,
   EmailVerificationSendRequest,
@@ -207,6 +211,28 @@ export const authService = {
     return api.post<AuthMessageResponse>("/auth/me/email/otp/send", payload);
   },
 
+  sendActiveSessionsVerificationCode: async (
+    payload?: SendActiveSessionsVerificationRequest,
+  ): Promise<SendActiveSessionsVerificationResponse> => {
+    const [response, { sendActiveSessionsVerificationResponseSchema }] =
+      await Promise.all([
+        api.post<unknown>("/auth/sessions/verification/send", payload),
+        import("@veolms/contracts/auth/session"),
+      ]);
+    return sendActiveSessionsVerificationResponseSchema.parse(response);
+  },
+
+  verifyActiveSessionsCode: async (
+    payload: ActiveSessionsVerificationRequest,
+  ): Promise<ActiveSessionsVerificationResponse> => {
+    const [response, { activeSessionsVerificationResponseSchema }] =
+      await Promise.all([
+        api.post<unknown>("/auth/sessions/verification/verify", payload),
+        import("@veolms/contracts/auth/session"),
+      ]);
+    return activeSessionsVerificationResponseSchema.parse(response);
+  },
+
   verifyPhoneNumber: (
     payload: PhoneVerificationVerifyRequest,
   ): Promise<AuthMessageResponse> => {
@@ -373,6 +399,16 @@ export const authService = {
   getMe: async (): Promise<CurrentUserResponse> => {
     const response = await api.get<CurrentUserResponse>("/auth/me");
     return response;
+  },
+
+  /** Which of these names (up to 25) are members' usernames. */
+  listExistingUsernames: async (
+    names: readonly string[],
+  ): Promise<string[]> => {
+    const response = await api.get<{ usernames: string[] }>(
+      `/auth/usernames/existing?names=${encodeURIComponent(names.join(","))}`,
+    );
+    return response.usernames;
   },
 
   getPublicProfile: async (

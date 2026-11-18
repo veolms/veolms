@@ -94,13 +94,25 @@ export function getDiscussionAttachmentDisposition(
   mimeType: string,
   originalFileName?: string,
 ): string {
-  const safeName = (originalFileName || "attachment")
-    .replace(/["\r\n\\]/g, "_")
-    .trim();
+  const fileName = originalFileName || "attachment";
+  // A header may carry ASCII only: a name with anything else (macOS puts a
+  // narrow no-break space, U+202F, before "PM" in screenshot names) made
+  // Node refuse the header and drop the connection, which Cloudflare showed
+  // as a 520 (support ticket #1029). The quoted name is an ASCII fallback;
+  // `filename*` carries the real one (RFC 6266), as in media.service.ts.
+  const asciiName =
+    fileName
+      .replace(/[^\x20-\x7e]/g, "_")
+      .replace(/["\\]/g, "_")
+      .trim() || "attachment";
+  const encodedName = encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
   const isInlineMedia =
     mimeType.startsWith("image/") || mimeType.startsWith("video/");
   const dispositionType = isInlineMedia ? "inline" : "attachment";
-  return `${dispositionType}; filename="${safeName}"`;
+  return `${dispositionType}; filename="${asciiName}"; filename*=UTF-8''${encodedName}`;
 }
 
 const SAFE_FILE_NAME = /^[0-9a-f-]{36}\.[A-Za-z0-9]{1,16}$/i;

@@ -5,6 +5,7 @@ import type { Kysely } from "kysely";
 import { AppError } from "../../../lib/errors.ts";
 import type { PushAppRegistry } from "./push-apps.ts";
 import * as deviceRepository from "./push-devices.repository.ts";
+import { isWebPushFid } from "./web-push.service.ts";
 
 /** A refresh that changes nothing is written at most this often. */
 const SEEN_REFRESH_MS = 24 * 60 * 60 * 1000;
@@ -37,7 +38,8 @@ export function createPushDeviceService({
     input: RegisterPushDevice,
   ) {
     const app = apps.get(input.applicationId);
-    if (!app) {
+    // "web:" ids are browsers (web-push.service.ts), never an app install.
+    if (!app || isWebPushFid(input.fid)) {
       throw new AppError(
         400,
         "PUSH_APP_UNKNOWN",

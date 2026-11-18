@@ -261,6 +261,16 @@ export interface AccessGrantTable {
    * section. Ignored on a grant of any other source.
    */
   section_ids: string[] | null;
+  /**
+   * Staff extended this access (Students → Extend validity): it lasts at
+   * least until `extended_until`, or for life. Kept apart from
+   * `valid_until` so a linked course's sync, which works the end out from
+   * the courses linking it, does not undo the extension.
+   */
+  extended_until: Date | null;
+  extended_lifetime: Generated<boolean>;
+  extended_at: Date | null;
+  extended_by: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

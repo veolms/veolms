@@ -116,6 +116,23 @@ function useDiscussionRangeExtractor(
   );
 }
 
+/**
+ * The rows' ref, the same function from one render to the next. A new one
+ * each render (an inline arrow) made React detach and attach it again on
+ * every row of every render, and each attach had the virtualizer measure
+ * that row there and then: a style and layout pass of the whole lesson page
+ * per row, a second and a half at a time on a slow computer when a lesson
+ * was opened (2026-11-15).
+ */
+function useMeasureElement(virtualizer: {
+  measureElement: (element: HTMLDivElement | null) => void;
+}) {
+  return useCallback(
+    (element: HTMLDivElement | null) => virtualizer.measureElement(element),
+    [virtualizer],
+  );
+}
+
 function DiscussionVirtualFeedRows({
   feedRef,
   entries,
@@ -198,16 +215,14 @@ function DiscussionViewportVirtualFeed({
     scrollMargin: phoneScrollMargin,
   });
   keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
+  const measureElement = useMeasureElement(virtualizer);
 
   return (
     <>
       <DiscussionVirtualFeedRows
         {...props}
         feedRef={feedRef}
-        virtualizer={{
-          ...virtualizer,
-          measureElement: (element) => virtualizer.measureElement(element),
-        }}
+        virtualizer={{ ...virtualizer, measureElement }}
         scrollMargin={phoneScrollMargin}
       />
     </>
@@ -376,6 +391,7 @@ function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
     scrollMargin,
   });
   keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
+  const measureElement = useMeasureElement(virtualizer);
 
   useEffect(() => {
     virtualizer.measure();
@@ -386,10 +402,7 @@ function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
       {...props}
       feedRef={feedRef}
       scrollMargin={scrollMargin}
-      virtualizer={{
-        ...virtualizer,
-        measureElement: (element) => virtualizer.measureElement(element),
-      }}
+      virtualizer={{ ...virtualizer, measureElement }}
     />
   );
 }
@@ -422,6 +435,7 @@ function DiscussionScrollportVirtualFeed(props: DiscussionVirtualFeedProps) {
     scrollMargin,
   });
   keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
+  const measureElement = useMeasureElement(virtualizer);
 
   useEffect(() => {
     virtualizer.measure();
@@ -432,10 +446,7 @@ function DiscussionScrollportVirtualFeed(props: DiscussionVirtualFeedProps) {
       {...props}
       feedRef={feedRef}
       scrollMargin={scrollMargin}
-      virtualizer={{
-        ...virtualizer,
-        measureElement: (element) => virtualizer.measureElement(element),
-      }}
+      virtualizer={{ ...virtualizer, measureElement }}
     />
   );
 }

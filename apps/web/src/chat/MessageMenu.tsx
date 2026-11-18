@@ -1,7 +1,11 @@
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { ChatCircleIcon as ChatCircle } from "@phosphor-icons/react/ChatCircle";
+import { CheckSquareIcon as CheckSquare } from "@phosphor-icons/react/CheckSquare";
+import { ShareFatIcon as ShareFat } from "@phosphor-icons/react/ShareFat";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
+import { ImageSquareIcon as ImageSquare } from "@phosphor-icons/react/ImageSquare";
+import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
@@ -23,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import { cn } from "../lib/utils";
+import { canCopyImages } from "./copyImage";
 import type { BubbleContext } from "./MessageBubble";
 
 export const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
@@ -32,6 +37,10 @@ export type MessageAction =
   | "info"
   | "copy"
   | "copy-link"
+  | "forward"
+  | "select"
+  | "copy-image"
+  | "download"
   | "edit"
   | "pin"
   | "unpin"
@@ -134,9 +143,34 @@ export function MessageMenu({
           <DropdownMenuItem onClick={() => onAction("reply")}>
             <ArrowBendUpLeft size={16} aria-hidden="true" /> Reply
           </DropdownMenuItem>
+          {message.seq > 0 ? (
+            <DropdownMenuItem onClick={() => onAction("forward")}>
+              <ShareFat size={16} aria-hidden="true" /> Forward
+            </DropdownMenuItem>
+          ) : null}
+          {message.seq > 0 ? (
+            <DropdownMenuItem onClick={() => onAction("select")}>
+              <CheckSquare size={16} aria-hidden="true" /> Select
+            </DropdownMenuItem>
+          ) : null}
+          {message.seq > 0 &&
+          canCopyImages() &&
+          message.attachments.filter((a) => a.kind === "image").length === 1 ? (
+            <DropdownMenuItem onClick={() => onAction("copy-image")}>
+              <ImageSquare size={16} aria-hidden="true" /> Copy image
+            </DropdownMenuItem>
+          ) : null}
           {message.body ? (
             <DropdownMenuItem onClick={() => onAction("copy")}>
               <Copy size={16} aria-hidden="true" /> Copy
+            </DropdownMenuItem>
+          ) : null}
+          {message.seq > 0 && message.attachments.length > 0 ? (
+            <DropdownMenuItem onClick={() => onAction("download")}>
+              <DownloadSimple size={16} aria-hidden="true" /> Download
+              {message.attachments.length > 1
+                ? ` all (${message.attachments.length})`
+                : ""}
             </DropdownMenuItem>
           ) : null}
           {message.seq > 0 ? (

@@ -17,11 +17,13 @@ import {
   LEARNER_VIEW_HEADER_VALUE,
 } from "@veolms/contracts/learner-view";
 import { authStore } from "../store/auth.store";
+import { afterSignOut } from "../store/signOutInFlight";
 import {
   keepPlaybackBootstrap,
   readKeptPlaybackBootstrap,
   takeHeadStartedPlaybackBootstrap,
 } from "./playbackBootstrapHeadStart";
+import { isKnownWithoutVideo } from "./learningHlsBootstrap";
 import { adoptAccountResumePosition } from "./player/lessonPlayerPersistence";
 import { prepareCachedStartHeight } from "./player/segmentCacheStart";
 
@@ -314,6 +316,9 @@ function keepAnswer(
 async function requestBootstrap(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackBootstrap> {
+  // Asked as the visitor a sign-out has just made: sent once the server has
+  // ended the session, or it is answered for the account (signOutInFlight.ts).
+  await afterSignOut();
   const bootstrap = await answerBootstrap(options);
   // The quality kept on this device, for the player to start at (a few ms).
   await prepareCachedStartHeight(bootstrap.manifestUrl);
@@ -517,6 +522,20 @@ function withinPlaybackBootstrapLimit<T>(request: Promise<T>): Promise<T> {
 export function getVideoPlaybackBootstrap(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackBootstrap> {
+  // A lesson this page's course data shows without a video (a reading, a
+  // quiz): the API's own answer, without the request and its console 404.
+  if (
+    !options.mediaId &&
+    isKnownWithoutVideo(options.courseSlug, options.lessonNumber)
+  ) {
+    return Promise.reject(
+      new VideoPlaybackBootstrapError(
+        404,
+        "MEDIA_NOT_FOUND",
+        "This lesson does not have a playable video.",
+      ),
+    );
+  }
   const key = requestKey(options);
   dropExpiringBootstrap(key);
   const existing = bootstrapRequests.get(key);

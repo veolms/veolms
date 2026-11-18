@@ -93,7 +93,15 @@ interface OrderPaymentRowLike {
   gateway_provider: string;
   gateway_payment_id: string | null;
   payment_method: unknown;
+  error_description?: string | null;
 }
+
+/** Statuses of an order whose payment did not go through. */
+const UNPAID_OUTCOMES: ReadonlySet<OrderStatus> = new Set([
+  "payment_failed",
+  "cancelled",
+  "expired",
+]);
 
 function toOrderItemSummary(row: OrderItemRowLike): OrderItemSummary {
   const display = toOrderItemDisplay(row);
@@ -200,6 +208,11 @@ export function toAdminOrder(
             gatewayPaymentId: payment.gateway_payment_id,
             paymentMethod: paymentMethod
               ? { method: paymentMethod.method, vpa: paymentMethod.vpa ?? null }
+              : null,
+            // Only for an order that was not paid: a paid order's payment
+            // may carry an old error from a retried attempt.
+            failureReason: UNPAID_OUTCOMES.has(row.status)
+              ? payment.error_description?.trim() || null
               : null,
           }
         : null,

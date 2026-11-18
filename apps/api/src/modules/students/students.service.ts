@@ -547,6 +547,10 @@ export function createStudentsService({
           c.access_expires_at <= now
             ? "expired"
             : c.enrollment_status,
+        accessStartsAt: new Date(c.access_starts_at).toISOString(),
+        accessExpiresAt: c.access_expires_at
+          ? new Date(c.access_expires_at).toISOString()
+          : null,
         // Refunds are an admin's job; an instructor is not told which order
         // paid for a place in their course.
         orderId: creatorId ? null : order.order_id,

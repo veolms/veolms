@@ -149,7 +149,14 @@ export function createChatStreamHandler({
       close: () => end(),
     };
 
-    const heartbeat = setInterval(() => write(": ping\n\n"), HEARTBEAT_MS);
+    // A named event, not a comment: the page sees it, and reconnects a
+    // stream that stopped bringing it (a connection that died without
+    // closing, as after a phone or laptop slept). Proxies keep the stream
+    // open for it as they did for the comment.
+    const heartbeat = setInterval(
+      () => write("event: ping\ndata: \n\n"),
+      HEARTBEAT_MS,
+    );
     const lifetime = setTimeout(
       () => end(),
       MAX_STREAM_MS + Math.floor(Math.random() * MAX_STREAM_JITTER_MS),

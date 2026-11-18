@@ -5,7 +5,8 @@ export type SettingsTab =
   | "learning"
   | "notifications"
   | "security"
-  | "account";
+  | "account"
+  | "links";
 
 /** The admin's Platform page (academy-wide settings). */
 export type PlatformTab =
@@ -29,6 +30,7 @@ const settingsTabs = new Set<SettingsTab>([
   "notifications",
   "security",
   "account",
+  "links",
 ]);
 
 // Profile, notifications, privacy and the account only mean something to a
@@ -38,6 +40,8 @@ const signedInSettingsTabs = new Set<SettingsTab>([
   "security",
   "profile",
   "account",
+  // Staff only (link.manage); see getSettingsTabs.
+  "links",
 ]);
 
 export const isSignedInSettingsTab = (tab: SettingsTab) =>

@@ -3,6 +3,7 @@ import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-ic
 import { ArrowSquareOutIcon as ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
 import { ArrowUUpLeftIcon as ArrowUUpLeft } from "@phosphor-icons/react/ArrowUUpLeft";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CalendarPlusIcon as CalendarPlus } from "@phosphor-icons/react/CalendarPlus";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import type { StudentCourseDetail } from "@veolms/contracts";
@@ -13,6 +14,13 @@ import {
 } from "../courses/CourseActionMenu";
 
 import { ElevatedCard } from "../components/ElevatedCard";
+import {
+  calendarSpan,
+  daysUntil,
+  formatAccessDate,
+  spanLabel,
+  VALIDITY_SOON_DAYS,
+} from "./accessValidity";
 const ACCESS_STATUS_LABEL: Record<
   Exclude<StudentCourseDetail["accessStatus"], "active">,
   string
@@ -32,7 +40,36 @@ export interface StudentCourseCardProps {
   onRefund: (course: StudentCourseDetail) => void;
   onRevokeAccess: (course: StudentCourseDetail) => void;
   onRestoreAccess: (course: StudentCourseDetail) => void;
+  onExtendValidity: (course: StudentCourseDetail) => void;
   setNotice?: (message: string) => void;
+}
+
+/** "1y 11m left", "23 days left", or "expired". */
+function timeLeft(expiresAt: string): string {
+  const days = daysUntil(expiresAt);
+  if (days <= 0) return "expired";
+  if (days <= VALIDITY_SOON_DAYS)
+    return `${days} ${days === 1 ? "day" : "days"} left`;
+  return `${spanLabel(calendarSpan(new Date(), new Date(expiresAt)), false)} left`;
+}
+
+/** "Valid till Oct 28, 2028", amber with the days left when under a month. */
+function ValidityLabel({ expiresAt }: { expiresAt: string | null }) {
+  if (!expiresAt) return <span>Lifetime access</span>;
+  const days = daysUntil(expiresAt);
+  const soon = days <= VALIDITY_SOON_DAYS;
+  return (
+    <span
+      className={
+        soon
+          ? "font-semibold text-amber-600 [:root[data-theme=dark]_&]:text-amber-300"
+          : undefined
+      }
+    >
+      Valid till {formatAccessDate(expiresAt)}
+      {soon ? ` · ${days} ${days === 1 ? "day" : "days"} left` : ""}
+    </span>
+  );
 }
 
 export function StudentCourseCard({
@@ -43,6 +80,7 @@ export function StudentCourseCard({
   onRefund,
   onRevokeAccess,
   onRestoreAccess,
+  onExtendValidity,
   setNotice,
 }: StudentCourseCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -51,6 +89,9 @@ export function StudentCourseCard({
   const canRefund = canIssueRefunds && course.refundable;
   const canRevoke = canManageAccess && hasAccess;
   const canRestore = canManageAccess && course.accessStatus === "revoked";
+  // Active access can be extended; so can access that ran out on its date.
+  const canExtend =
+    canManageAccess && (hasAccess || course.accessStatus === "expired");
 
   const copyCourseLink = () => {
     const link = `${window.location.origin}/courses/${course.courseSlug}`;
@@ -140,6 +181,12 @@ export function StudentCourseCard({
                   </span>
                 </>
               )}
+              {hasAccess ? (
+                <>
+                  <span>•</span>
+                  <ValidityLabel expiresAt={course.accessExpiresAt} />
+                </>
+              ) : null}
             </div>
           </div>
         </div>
@@ -191,6 +238,20 @@ export function StudentCourseCard({
               onClick={copyCourseLink}
               stayOpenMs={0}
             />
+
+            {canExtend && (
+              <MenuAction
+                Icon={CalendarPlus}
+                label="Extend validity"
+                description={
+                  course.accessExpiresAt
+                    ? `Expires ${formatAccessDate(course.accessExpiresAt)} · ${timeLeft(course.accessExpiresAt)}`
+                    : "Lifetime access"
+                }
+                disabled={!course.accessExpiresAt}
+                onClick={() => onExtendValidity(course)}
+              />
+            )}
 
             {(canRefund || canRevoke || canRestore) && <MenuDivider />}
 

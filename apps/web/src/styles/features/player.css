@@ -247,8 +247,13 @@ html[data-phone-video-leaving] [data-phone-video-leaving-surface] video {
      frame and its shadow) into a separate layer the size of the screen. It
      is hidden only once the fade-out has finished. */
   visibility: hidden;
-  filter: blur(38px) saturate(1.55);
-  transform: scale(1.065);
+  /* Read by LessonAmbientProjection, which blurs the picture itself where
+     the browser can (see .ambient-canvas[data-ambient-prefiltered]). */
+  --ambient-blur: 38px;
+  --ambient-saturate: 1.55;
+  --ambient-scale: 1.065;
+  filter: blur(var(--ambient-blur)) saturate(var(--ambient-saturate));
+  transform: scale(var(--ambient-scale));
   transition:
     opacity 320ms ease,
     visibility 0s linear 320ms;
@@ -268,8 +273,12 @@ html[data-phone-video-leaving] [data-phone-video-leaving-surface] video {
   z-index: 0;
   width: 0;
   height: 0;
-  filter: blur(46px) saturate(1.55);
-  transform: scale(1.085);
+  --ambient-blur: 46px;
+  --ambient-scale: 1.085;
+  /* An element painted with the glow as its background picture, not a
+     canvas (see showAsBackground in LessonAmbientProjection). */
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 
 :root[data-theme="light"] .ambient-canvas--visible {
@@ -277,12 +286,24 @@ html[data-phone-video-leaving] [data-phone-video-leaving-surface] video {
 }
 
 .video-shell--theater .ambient-canvas {
-  filter: blur(52px) saturate(1.5);
-  transform: scale(1.045);
+  --ambient-blur: 52px;
+  --ambient-saturate: 1.5;
+  --ambient-scale: 1.045;
 }
 
 .video-shell--theater .ambient-canvas--visible {
   opacity: 0.64;
+}
+
+/* Blurred already, by the canvas itself, with a transparent margin around
+   the picture for the blur to spread into: no filter here, and 1.5 times
+   the scale, so the picture covers what it did. A filter over a large area
+   is applied again whenever the video under it draws a frame, which a
+   computer without a working graphics card could not keep up with (see
+   paintPrefiltered in LessonAmbientProjection). */
+.ambient-canvas[data-ambient-prefiltered] {
+  filter: none;
+  transform: scale(calc(var(--ambient-scale) * 1.5));
 }
 
 @media (max-width: 820px) {

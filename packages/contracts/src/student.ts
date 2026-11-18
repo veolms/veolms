@@ -104,6 +104,9 @@ export const studentCourseDetailSchema = z.strictObject({
    * period has run out reads "expired" even while its row still says active.
    */
   accessStatus: enrollmentStatusSchema,
+  /** When access began, and until when it lasts (null: lifetime). */
+  accessStartsAt: z.string(),
+  accessExpiresAt: z.string().nullable(),
   /**
    * The order this enrollment came from, and whether that order can still be
    * refunded. Sent to admins only; null and false for everyone else and for

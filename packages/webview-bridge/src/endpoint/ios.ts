@@ -21,6 +21,7 @@ export class IOSEndpoint implements NativeEndpoint {
   private readonly listeners = new Set<NativeMessageHandler>();
   private targetHandler: WKScriptMessageHandlerObject | null = null;
   private readonly callbackName: string;
+  private installedReceiver: ((rawMessage: unknown) => void) | null = null;
   private isDisposed = false;
 
   constructor(name: string) {
@@ -61,14 +62,26 @@ export class IOSEndpoint implements NativeEndpoint {
     // Install scoped global receiver on window for native events / standard handlers
     if (typeof window !== "undefined") {
       const windowRecord = window as unknown as Record<string, unknown>;
-      windowRecord[this.callbackName] = (rawMessage: unknown) => {
-        if (this.isDisposed) {
+      const receiver = (rawMessage: unknown) => {
+        if (
+          this.isDisposed ||
+          rawMessage === undefined ||
+          rawMessage === null
+        ) {
           return;
         }
+        // Same normalization as the reply path: an object literal passed by native is JSON-encoded
+        // instead of becoming "[object Object]".
         const stringMessage =
-          typeof rawMessage === "string" ? rawMessage : String(rawMessage);
-        safelyDispatchHandlers(this.listeners, stringMessage);
+          typeof rawMessage === "string"
+            ? rawMessage
+            : JSON.stringify(rawMessage);
+        if (typeof stringMessage === "string") {
+          safelyDispatchHandlers(this.listeners, stringMessage);
+        }
       };
+      windowRecord[this.callbackName] = receiver;
+      this.installedReceiver = receiver;
     }
   }
 
@@ -166,13 +179,14 @@ export class IOSEndpoint implements NativeEndpoint {
     }
     this.isDisposed = true;
 
-    // Clean up window receiver callback
+    // Clean up window receiver callback, unless a newer endpoint with the same name replaced it
     if (typeof window !== "undefined") {
       const windowRecord = window as unknown as Record<string, unknown>;
-      if (this.callbackName in windowRecord) {
+      if (windowRecord[this.callbackName] === this.installedReceiver) {
         delete windowRecord[this.callbackName];
       }
     }
+    this.installedReceiver = null;
 
     this.listeners.clear();
     this.targetHandler = null;

@@ -30,6 +30,13 @@ export const MOBILE_NAV_SHOW_SCROLL_THRESHOLD = 18;
 export const MOBILE_NAV_USER_SCROLL_GLIDE_MS = 1200;
 export const MOBILE_NAV_USER_SCROLL_STEP_MS = 250;
 export const MOBILE_NAV_PLAYER_SELECTOR = "[data-learning-persistent-player]";
+/**
+ * Marks a screen that is laid out around the bottom menu (it stops at the
+ * menu's top edge, or covers it), so its scrolling never hides the menu:
+ * hidden, the menu would leave an empty band under the screen with nothing
+ * to bring it back (the chat page, whose lists rarely scroll back up).
+ */
+export const MOBILE_NAV_KEEP_ATTRIBUTE = "data-mobile-nav-keep";
 export const MOBILE_NAV_TOP_GUARD = 12;
 export const MOBILE_DRAWER_INITIAL_SNAP_POINT = 0.82;
 

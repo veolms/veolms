@@ -51,6 +51,8 @@ export interface MessageRow {
   id: string;
   version_seq: string;
   sender_id: string | null;
+  client_id?: string | null;
+  forwarded?: boolean;
   sender_role: string;
   kind: string;
   body: string;
@@ -70,6 +72,7 @@ export interface MessageRow {
   sender_deleted: boolean | null;
   deleted_by_name: string | null;
   reply_body: string | null;
+  reply_attachments: ChatAttachmentRef[] | null;
   reply_deleted_at: Date | null;
   reply_sender_name: string | null;
 }
@@ -80,10 +83,12 @@ export interface RoomListRow extends ChatRoomRow {
   last_read_seq: string | null;
   last_delivered_seq: string | null;
   notify_level: string | null;
+  muted_until: Date | null;
   archived_at: Date | null;
   member_pinned_at: Date | null;
   cleared_seq: string | null;
   member_deleted_at: Date | null;
+  member_read_receipts?: boolean | null;
   course_title: string | null;
   course_thumbnail: string | null;
   course_thumbnail_media_id: string | null;
@@ -147,6 +152,8 @@ export function createChatRepository() {
         "m.room_id",
         "m.seq",
         "m.id",
+        "m.client_id",
+        "m.forwarded",
         "m.version_seq",
         "m.sender_id",
         "m.sender_role",
@@ -169,6 +176,7 @@ export function createChatRepository() {
         "su.is_deleted as sender_deleted",
         "du.display_name as deleted_by_name",
         "rm.body as reply_body",
+        "rm.attachments as reply_attachments",
         "rm.deleted_at as reply_deleted_at",
         "ru.display_name as reply_sender_name",
       ]);
@@ -429,7 +437,9 @@ export function createChatRepository() {
           "m.last_read_seq",
           "m.last_delivered_seq",
           "m.notify_level",
+          "m.muted_until",
           "m.archived_at",
+          "m.read_receipts as member_read_receipts",
           "m.pinned_at as member_pinned_at",
           "m.cleared_seq",
           "m.deleted_at as member_deleted_at",
@@ -447,6 +457,44 @@ export function createChatRepository() {
         ])
         .where("r.id", "in", roomIds)
         .execute()) as RoomListRow[];
+    },
+
+    /**
+     * Each chat's newest reaction that concerns `userId` (theirs, or to their
+     * message), on a message still there and not cleared for them.
+     */
+    async latestReactions(
+      db: Executor,
+      userId: string,
+      roomIds: readonly string[],
+    ) {
+      if (roomIds.length === 0) return [];
+      const result = await sql<{
+        room_id: string;
+        emoji: string;
+        created_at: Date;
+        user_id: string;
+        user_name: string;
+        user_deleted: boolean;
+        body: string;
+        attachments: Array<{ kind: string; name: string }> | null;
+      }>`
+        select distinct on (r.room_id)
+          r.room_id, r.emoji, r.created_at, r.user_id,
+          u.display_name as user_name, u.is_deleted as user_deleted,
+          m.body, m.attachments
+        from chat_reactions r
+        join chat_messages m on m.room_id = r.room_id and m.seq = r.seq
+        join users u on u.id = r.user_id
+        left join chat_members cm
+          on cm.room_id = r.room_id and cm.user_id = ${userId}::uuid
+        where r.room_id in (${sql.join(roomIds.map((id) => sql`${id}::uuid`))})
+          and m.deleted_at is null
+          and m.seq > coalesce(cm.cleared_seq, 0)
+          and (r.user_id = ${userId}::uuid or m.sender_id = ${userId}::uuid)
+        order by r.room_id, r.created_at desc
+      `.execute(db);
+      return result.rows;
     },
 
     async listDirectPeers(
@@ -487,17 +535,45 @@ export function createChatRepository() {
      */
     async groupPositions(db: Executor, roomIds: readonly string[]) {
       if (roomIds.length === 0) return [];
+      // Members whose read receipts are off here (staff only) don't count
+      // for "read by everyone": nobody can tell whether they read it.
       return db
-        .selectFrom("chat_members")
+        .selectFrom("chat_members as cm")
+        .leftJoin("chat_profiles as p", "p.user_id", "cm.user_id")
         .select([
-          "room_id",
-          sql<string>`min(last_delivered_seq)`.as("delivered"),
-          sql<string>`min(last_read_seq)`.as("read"),
+          "cm.room_id",
+          sql<string>`min(cm.last_delivered_seq)`.as("delivered"),
+          sql<string>`min(cm.last_read_seq) filter (
+            where coalesce(cm.read_receipts, p.read_receipts, true)
+          )`.as("read"),
           sql<string>`count(*)`.as("members"),
         ])
-        .where("room_id", "in", roomIds)
-        .where("state", "=", "active")
-        .groupBy("room_id")
+        .where("cm.room_id", "in", roomIds)
+        .where("cm.state", "=", "active")
+        .groupBy("cm.room_id")
+        .execute();
+    },
+
+    /** Per-chat read receipt choices (staff) for these members. */
+    async memberReceiptOverrides(
+      db: Executor,
+      pairs: ReadonlyArray<{ roomId: string; userId: string }>,
+    ) {
+      if (pairs.length === 0) return [];
+      return db
+        .selectFrom("chat_members")
+        .select(["room_id", "user_id", "read_receipts"])
+        .where((eb) =>
+          eb.or(
+            pairs.map((p) =>
+              eb.and([
+                eb("room_id", "=", p.roomId),
+                eb("user_id", "=", p.userId),
+              ]),
+            ),
+          ),
+        )
+        .where("read_receipts", "is not", null)
         .execute();
     },
 
@@ -959,6 +1035,7 @@ export function createChatRepository() {
         room_role: "owner" | "moderator" | "member";
         state: "active" | "left" | "pending" | "hidden";
         notify_level: "all" | "mentions" | "none";
+        muted_until: Date | null;
         archived_at: Date | null;
         pinned_at: Date | null;
         deleted_at: Date | null;
@@ -987,6 +1064,12 @@ export function createChatRepository() {
         .where("user_id", "in", userIds)
         .where("state", "=", "active")
         .where("notify_level", "<>", "none")
+        .where((eb) =>
+          eb.or([
+            eb("muted_until", "is", null),
+            eb("muted_until", "<=", sql<Date>`now()`),
+          ]),
+        )
         .execute();
       return rows.map((row) => row.user_id);
     },
@@ -998,6 +1081,58 @@ export function createChatRepository() {
      * have not blocked the sender. `mentionsOnly` limits it to the people
      * mentioned (large groups). Each with their unread count, capped at 99.
      */
+    /**
+     * Who hears about a reaction: the message's author, unless they reacted
+     * themselves, muted the chat or turned it off, left, or blocked the
+     * person reacting. With their unread count in the chat.
+     */
+    async reactionPushRecipient(
+      db: Executor,
+      input: { roomId: string; seq: number; reactorId: string },
+    ) {
+      const result = await sql<{ user_id: string; unread: string }>`
+        select
+          cm.user_id,
+          (
+            select count(*) from (
+              select 1 from chat_messages um
+              where um.room_id = cm.room_id
+                and um.seq > cm.last_read_seq
+                and um.kind = 'text'
+                and um.deleted_at is null
+                and um.sender_id is distinct from cm.user_id
+              limit 99
+            ) unread_rows
+          ) as unread
+        from chat_messages m
+        join chat_members cm
+          on cm.room_id = m.room_id and cm.user_id = m.sender_id
+        join users u on u.id = cm.user_id
+        where m.room_id = ${input.roomId}
+          and m.seq = ${String(input.seq)}
+          and m.deleted_at is null
+          and cm.user_id <> ${input.reactorId}
+          and cm.state = 'active'
+          and u.is_deleted = false
+          and (cm.muted_until is null or cm.muted_until <= now())
+          and cm.notify_level <> 'none'
+          and exists (
+            select 1 from chat_reactions r
+            where r.room_id = m.room_id and r.seq = m.seq
+              and r.user_id = ${input.reactorId}
+          )
+          and not exists (
+            select 1 from chat_user_blocks b
+            where b.blocker_id = cm.user_id and b.blocked_id = ${input.reactorId}
+          )
+      `.execute(db);
+      return result.rows.map((row) => ({
+        userId: row.user_id,
+        isMention: false,
+        unreadCount: Number(row.unread),
+      }));
+    },
+
     async listPushRecipients(
       db: Executor,
       input: {
@@ -1036,6 +1171,7 @@ export function createChatRepository() {
           and cm.user_id <> ${input.senderId}
           and cm.last_read_seq < m.seq
           and u.is_deleted = false
+          and (cm.muted_until is null or cm.muted_until <= now())
           and (
             cm.notify_level = 'all'
             or (
@@ -1412,6 +1548,20 @@ export function createChatRepository() {
         .executeTakeFirst();
     },
 
+    /** Who replied to a message (Message info shows staff only then). */
+    async listRepliers(db: Executor, roomId: string, seq: number) {
+      const rows = await db
+        .selectFrom("chat_messages")
+        .select("sender_id")
+        .distinct()
+        .where("room_id", "=", roomId)
+        .where("reply_to_seq", "=", String(seq))
+        .where("deleted_at", "is", null)
+        .where("sender_id", "is not", null)
+        .execute();
+      return rows.map((row) => row.sender_id!);
+    },
+
     async listReactions(
       db: Executor,
       roomId: string,
@@ -1623,6 +1773,49 @@ export function createChatRepository() {
         .execute();
     },
 
+    /**
+     * A forwarded file: a new ready upload for `roomId`, owned by the person
+     * forwarding, pointing at the same stored object. In the source's order.
+     */
+    async copyUploadsForForward(
+      db: Executor,
+      input: {
+        sourceRoomId: string;
+        sourceIds: readonly string[];
+        ownerId: string;
+        roomId: string;
+      },
+    ): Promise<string[]> {
+      const ids: string[] = [];
+      for (const sourceId of input.sourceIds) {
+        const row = await sql<{ id: string }>`
+          insert into chat_uploads (
+            id, owner_id, room_id, kind, mime_type, file_name, size_bytes,
+            width, height, duration_ms, waveform, storage_key, status
+          )
+          select gen_random_uuid(), ${input.ownerId}::uuid, ${input.roomId}::uuid,
+            kind, mime_type, file_name, size_bytes, width, height,
+            duration_ms, waveform, storage_key, 'ready'
+          from chat_uploads
+          where id = ${sourceId}::uuid and room_id = ${input.sourceRoomId}::uuid
+          returning id
+        `.execute(db);
+        const id = row.rows[0]?.id;
+        if (!id) throw new Error("Forwarded file is gone");
+        ids.push(id);
+      }
+      return ids;
+    },
+
+    async markForwarded(db: Executor, roomId: string, seq: number) {
+      await db
+        .updateTable("chat_messages")
+        .set({ forwarded: true })
+        .where("room_id", "=", roomId)
+        .where("seq", "=", String(seq))
+        .execute();
+    },
+
     async attachUploads(
       db: Executor,
       ids: readonly string[],
@@ -1662,8 +1855,18 @@ export function createChatRepository() {
       // A group's icon is attached to the group, not to a message: it is
       // never removable while a group uses it (deleting it would also clear
       // the group's icon, through the foreign key).
-      const result = await sql<{ id: string; storage_key: string }>`
-        select u.id, u.storage_key from chat_uploads u
+      // `shared`: a forwarded copy still uses the stored object, so only
+      // the row goes (the object stays for the copy).
+      const result = await sql<{
+        id: string;
+        storage_key: string;
+        shared: boolean;
+      }>`
+        select u.id, u.storage_key, exists (
+          select 1 from chat_uploads o
+          where o.storage_key = u.storage_key and o.id <> u.id
+        ) as shared
+        from chat_uploads u
         left join chat_messages m on m.room_id = u.room_id and m.seq = u.message_seq
         where (
              (u.status <> 'attached' and u.created_at < ${olderThan})
