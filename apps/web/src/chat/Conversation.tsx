@@ -70,6 +70,10 @@ import { ForwardDialog } from "./ForwardDialog";
 import { SelectionBar } from "./SelectionBar";
 import type { MessageAction } from "./MessageMenu";
 import { ChatThreadSkeleton } from "./ChatSkeletons";
+import {
+  setPendingPrivateReply,
+  takePendingPrivateReply,
+} from "./privateReply";
 
 /** Your own reactions, remembered for this tab (the server keeps counts). */
 const myReactions = new Map<string, string>();
@@ -113,6 +117,10 @@ export function Conversation({
   const stars = useStarredMessages(true);
   const composerRef = useRef<ComposerHandle>(null);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  /** The group a "Reply privately" quote comes from (its name). */
+  const [privateReplyGroup, setPrivateReplyGroup] = useState<string | null>(
+    null,
+  );
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [viewer, setViewer] = useState<{
@@ -182,7 +190,10 @@ export function Conversation({
 
   useEffect(() => {
     setChatOnScreen(room.id, true);
-    setReplyTo(null);
+    // "Reply privately" from a group opens this chat replying to its message.
+    const privateReply = takePendingPrivateReply(room.id);
+    setPrivateReplyGroup(privateReply?.groupName ?? null);
+    setReplyTo(privateReply?.message ?? null);
     setEditing(null);
     setPinnedIndex(0);
     setPerson(null);
@@ -409,6 +420,21 @@ export function Conversation({
         return;
       case "mute-sender":
         setDialog({ kind: "restrict", message, mode: "mute" });
+        return;
+      case "reply-privately":
+        // Opens the private chat with this message as the reply's quote.
+        if (message.sender) {
+          startDirect.mutate(message.sender.id, {
+            onSuccess: ({ room: direct }) => {
+              setPendingPrivateReply(direct.id, {
+                message,
+                groupName: room.title ?? null,
+              });
+              onOpenChat(direct.id);
+            },
+            onError: fail,
+          });
+        }
         return;
       case "message-sender":
         if (message.sender) {
@@ -802,6 +828,7 @@ export function Conversation({
           room={room}
           viewerId={viewerId}
           replyTo={replyTo}
+          replyGroupName={privateReplyGroup}
           onCancelReply={() => setReplyTo(null)}
           editing={editing}
           onDoneEditing={() => setEditing(null)}

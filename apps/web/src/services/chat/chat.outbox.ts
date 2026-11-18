@@ -51,6 +51,9 @@ export interface OutgoingMessage {
      * after that one, with that one's number.
      */
     clientId?: string;
+    /** "Reply privately": the group the quoted message is in. */
+    roomId?: string;
+    roomName?: string | null;
   } | null;
   mentions: string[];
   mentionAll: boolean;
@@ -210,6 +213,9 @@ async function deliver(
           clientId: next.clientId,
           body: next.body,
           ...(quoted ? { replyToSeq: quoted } : {}),
+          ...(quoted && next.replyTo?.roomId
+            ? { replyToRoomId: next.replyTo.roomId }
+            : {}),
           ...(next.mentions.length > 0 ? { mentions: next.mentions } : {}),
           ...(next.mentionAll ? { mentionAll: true } : {}),
           ...(attachments.length > 0
