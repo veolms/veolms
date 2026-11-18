@@ -155,6 +155,15 @@ export interface ChatMessageTable {
   deleted_reason: ChatDeletedReason | null;
   /** Forwarded from another chat (WhatsApp's "Forwarded" label). */
   forwarded: Generated<boolean>;
+  /**
+   * "Reply privately": the group whose message `reply_to_seq` quotes. Null
+   * for a reply in the same chat.
+   */
+  reply_to_room_id: ColumnType<
+    string | null,
+    string | null | undefined,
+    string | null
+  >;
 }
 
 export interface ChatReactionTable {

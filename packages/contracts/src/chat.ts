@@ -237,6 +237,13 @@ export const chatMessageSchema = z.object({
         })
         .nullable()
         .optional(),
+      /**
+       * "Reply privately": the group the quoted message is in (WhatsApp
+       * shows "Name · Group" over the quote). Absent for a reply in the
+       * same chat.
+       */
+      roomId: z.uuid().optional(),
+      roomName: z.string().nullable().optional(),
     })
     .nullable(),
   mentions: z.array(z.uuid()),
@@ -482,6 +489,11 @@ export const chatSendMessageRequestSchema = z
     /** The text, or a caption when files are attached (then it may be empty). */
     body: z.string().trim().max(CHAT_BODY_MAX_CHARS).default(""),
     replyToSeq: seqSchema.optional(),
+    /**
+     * "Reply privately": `replyToSeq` numbers a message of this group, sent
+     * by the person this private chat is with.
+     */
+    replyToRoomId: z.uuid().optional(),
     mentions: z.array(z.uuid()).max(50).optional(),
     mentionAll: z.boolean().optional(),
     /** Uploads finished with POST /chat/uploads/:id/complete. */

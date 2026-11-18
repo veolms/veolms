@@ -114,6 +114,12 @@ export function presentMessage(row: MessageRow): ChatMessage {
                 : preview(row.reply_body),
             deleted: row.reply_deleted_at !== null || row.reply_body === null,
             ...replyMedia(row),
+            ...(row.reply_to_room_id
+              ? {
+                  roomId: row.reply_to_room_id,
+                  roomName: row.reply_room_name ?? null,
+                }
+              : {}),
           },
     mentions: deleted ? [] : row.mentions,
     mentionAll: deleted ? false : row.mention_all,
