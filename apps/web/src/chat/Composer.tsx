@@ -262,7 +262,11 @@ export const Composer = forwardRef<
     const room_left = CHAT_MAX_ATTACHMENTS_PER_MESSAGE - files.length;
     for (const file of picked.slice(0, room_left)) {
       try {
-        const prepared = await prepareFile(file, asDocument);
+        const prepared = await prepareFile(
+          file,
+          asDocument,
+          room.me.uploadMaxBytes,
+        );
         setFiles((current) => [...current, prepared]);
       } catch (error) {
         onError(
