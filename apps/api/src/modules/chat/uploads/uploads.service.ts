@@ -4,7 +4,7 @@ import type { Readable } from "node:stream";
 import {
   CHAT_RESTORE_DAYS,
   CHAT_UPLOAD_DAILY_BYTES,
-  CHAT_UPLOAD_MAX_BYTES,
+  chatUploadMaxBytes,
   CHAT_UPLOAD_MIME_TYPES,
   type ChatAttachment,
   type ChatUploadKind,
@@ -200,10 +200,12 @@ export function createUploadsService(
       const mimeType = baseMime(input.mimeType);
       const allowed = CHAT_UPLOAD_MIME_TYPES[input.kind] as readonly string[];
       if (!allowed.includes(mimeType)) throw ChatErrors.uploadType();
-      const max = CHAT_UPLOAD_MAX_BYTES[input.kind];
+      // Learners up to 200 MB a file; staff as much as storage takes.
+      const isStaff = ROLE_LEVEL[ctx.role] >= ROLE_LEVEL.staff;
+      const max = chatUploadMaxBytes(isStaff);
       if (input.size > max) throw ChatErrors.uploadTooBig(max);
 
-      if (ROLE_LEVEL[ctx.role] < ROLE_LEVEL.staff) {
+      if (!isStaff) {
         const used = await repository.uploadedBytesSince(
           database,
           userId,

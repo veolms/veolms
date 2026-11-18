@@ -1,5 +1,5 @@
 import {
-  CHAT_UPLOAD_MAX_BYTES,
+  CHAT_UPLOAD_LEARNER_MAX_BYTES,
   CHAT_UPLOAD_MIME_TYPES,
   type ChatUploadKind,
 } from "@veolms/contracts";
@@ -165,10 +165,19 @@ function audioLengthMs(file: Blob): Promise<number> {
   });
 }
 
+/** "200 MB", "5 GB". */
+function sizeLimitLabel(bytes: number): string {
+  return bytes >= 1e9
+    ? `${Math.round(bytes / 1e9)} GB`
+    : `${Math.round(bytes / 1024 / 1024)} MB`;
+}
+
 /** Turns a picked file into something ready to send (or explains why not). */
 export async function prepareFile(
   file: File,
   asDocument = false,
+  /** Yours in this chat (`room.me.uploadMaxBytes`): learners 200 MB. */
+  maxBytes: number = CHAT_UPLOAD_LEARNER_MAX_BYTES,
 ): Promise<OutgoingFile> {
   const detected = kindFor(file.type);
   const kind: ChatUploadKind | null = asDocument
@@ -192,9 +201,9 @@ export async function prepareFile(
     if (durationMs > 0) prepared = { ...prepared, durationMs };
   }
   const blob = prepared.file ?? file;
-  if (blob.size > CHAT_UPLOAD_MAX_BYTES[kind]) {
+  if (blob.size > maxBytes) {
     throw new ChatFileError(
-      `${file.name} is too big (up to ${Math.round(CHAT_UPLOAD_MAX_BYTES[kind] / 1024 / 1024)} MB).`,
+      `${file.name} is too big (up to ${sizeLimitLabel(maxBytes)}).`,
     );
   }
   return {

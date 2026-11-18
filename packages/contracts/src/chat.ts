@@ -94,13 +94,17 @@ export const chatPersonSchema = z.object({
 export type ChatPerson = z.infer<typeof chatPersonSchema>;
 
 export const CHAT_MAX_ATTACHMENTS_PER_MESSAGE = 10;
-/** Per file, by kind (photos are made smaller in the browser first). */
-export const CHAT_UPLOAD_MAX_BYTES = {
-  image: 10 * 1024 * 1024,
-  video: 100 * 1024 * 1024,
-  audio: 16 * 1024 * 1024,
-  file: 25 * 1024 * 1024,
-} as const;
+/** A learner's file in chat, any kind (the owner's choice, 18 Nov). */
+export const CHAT_UPLOAD_LEARNER_MAX_BYTES = 200 * 1024 * 1024;
+/**
+ * Staff (admins, instructors, staff) have no limit of their own: this is
+ * what storage takes in one upload (Cloudflare R2: 5 GB).
+ */
+export const CHAT_UPLOAD_STAFF_MAX_BYTES = 5 * 1000 * 1000 * 1000;
+/** The largest file this person may send in this chat. */
+export function chatUploadMaxBytes(isStaff: boolean): number {
+  return isStaff ? CHAT_UPLOAD_STAFF_MAX_BYTES : CHAT_UPLOAD_LEARNER_MAX_BYTES;
+}
 /** What one learner may upload per day across all chats. */
 export const CHAT_UPLOAD_DAILY_BYTES = 300 * 1024 * 1024;
 export const CHAT_VOICE_MAX_SECONDS = 15 * 60;
@@ -364,6 +368,8 @@ export const chatRoomSummarySchema = z.object({
       .nullable(),
     canModerate: z.boolean(),
     isHelper: z.boolean(),
+    /** The largest file you may send here (chat details only). */
+    uploadMaxBytes: z.number().int().optional(),
     restriction: chatRestrictionSummarySchema.nullable(),
   }),
 });
