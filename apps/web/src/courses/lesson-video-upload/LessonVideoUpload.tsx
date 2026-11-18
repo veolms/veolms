@@ -895,7 +895,7 @@ export const LessonVideoUpload = forwardRef<
 
   const selectFile = useCallback(
     (file: File) => {
-      if (isBusy(phase)) return;
+      if (isBusy(phase) && !(phase === "transcoding" && mediaAssetId)) return;
 
       const validationError = validateFile(file);
       if (validationError) {
@@ -904,7 +904,9 @@ export const LessonVideoUpload = forwardRef<
       }
 
       failedReplacementForMediaIdRef.current =
-        mediaAssetId && phase === "failed" && !playbackReady
+        mediaAssetId &&
+        (phase === "failed" || phase === "transcoding") &&
+        !playbackReady
           ? mediaAssetId
           : null;
 
@@ -1104,7 +1106,8 @@ export const LessonVideoUpload = forwardRef<
     [phase],
   );
 
-  const canChooseFile = !isBusy(phase);
+  const canChooseFile =
+    !isBusy(phase) || (phase === "transcoding" && Boolean(mediaAssetId));
   const uploadStage = getUploadStage(
     phase,
     selectedFile,
@@ -1325,6 +1328,7 @@ export const LessonVideoUpload = forwardRef<
       phase={phase}
       progress={uploadProgress}
       embedded={inline}
+      onCancel={inline ? cancelUpload : undefined}
     />
   ) : (
     <TranscodingProgressStage
@@ -1341,7 +1345,11 @@ export const LessonVideoUpload = forwardRef<
       standalone={inlineStandalone}
       isYoutubeImport={isFollowingImport}
       onReplace={
-        mediaAssetId && !isReplacingVideo && !selectedFile
+        !inline &&
+        mediaAssetId &&
+        !isReplacingVideo &&
+        !selectedFile &&
+        canChooseFile
           ? () => fileInputRef.current?.click()
           : undefined
       }
@@ -1867,6 +1875,7 @@ interface UploadProgressStageProps {
   phase: UploadPhase;
   progress: number;
   embedded?: boolean;
+  onCancel?: () => void;
 }
 
 function UploadProgressStage({
@@ -1875,6 +1884,7 @@ function UploadProgressStage({
   phase,
   progress,
   embedded = false,
+  onCancel,
 }: UploadProgressStageProps) {
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
@@ -1901,6 +1911,15 @@ function UploadProgressStage({
           </span>
         </div>
         <ProgressBar label="Video upload progress" value={progress} />
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mt-3 cursor-pointer rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] px-3 py-1.5 text-sm font-semibold text-(--text)"
+          >
+            Cancel upload
+          </button>
+        )}
         <div className="mt-2.5 flex items-center justify-between gap-3 text-[0.7rem] sm:text-[0.72rem] text-(--muted) font-medium">
           <span>
             {formatBytes(loadedBytes)} of {formatBytes(file?.size ?? 0)}

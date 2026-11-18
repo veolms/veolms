@@ -1,6 +1,191 @@
 /** A playable first phase stays available while the remaining renditions run. */
 import { expect, expectVideoToPlay, test } from "./support/test";
 
+test("an author can change a completed video from a lesson", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    status: "draft",
+    lessons: [{ title: "Completed video", video: "ready" }],
+  });
+  await academy.signInAsAdmin();
+  await page.goto(`/courses/${course.id}/edit/curriculum`);
+  const expandSection = page.getByRole("button", { name: "Expand section" });
+  if (await expandSection.count()) await expandSection.first().click();
+  await page
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  await expectVideoToPlay(page);
+  await expect(
+    page.getByRole("button", { name: "Remove video from lesson" }),
+  ).toHaveCount(0);
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Change Video" }).click();
+  await (
+    await chooser
+  ).setFiles({
+    name: "replacement.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("test video"),
+  });
+  await expect(
+    page.getByRole("button", { name: "Upload video", exact: true }),
+  ).toBeVisible();
+});
+
+test("an author can replace a processing video and cancel the upload", async ({
+  page,
+  context,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    status: "draft",
+    lessons: [{ title: "Processing video", video: "queued" }],
+  });
+  await academy.signInAsAdmin();
+  let releaseUpload: (() => void) | undefined;
+  const waitForUpload = new Promise<void>((resolve) => {
+    releaseUpload = resolve;
+  });
+  await context.route("**/media/multipart/start", async (route) => {
+    await waitForUpload;
+    await route.abort().catch(() => {});
+  });
+  await page.goto(`/courses/${course.id}/edit/curriculum`);
+  const section = page.getByRole("button", { name: "Expand section" });
+  if (await section.count()) await section.first().click();
+  await page
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  await expect(
+    page.getByText("Processing", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Change Video" })).toHaveCount(
+    1,
+  );
+  await expect(
+    page.getByRole("button", { name: "Replace", exact: true }),
+  ).toHaveCount(0);
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Change Video" }).click();
+  await (
+    await chooser
+  ).setFiles({
+    name: "replacement.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("test video"),
+  });
+  await page.getByRole("button", { name: "Upload video", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel upload" }).click();
+  releaseUpload?.();
+  await expect(page.getByRole("button", { name: "Cancel upload" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("button", { name: "Change Video" }),
+  ).toBeVisible();
+});
+
+test("a replacement for a processing video remains attached after reopening", async ({
+  page,
+  context,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    status: "draft",
+    lessons: [
+      { title: "Processing video", video: "queued" },
+      { title: "Replacement", video: "queued" },
+    ],
+  });
+  const newId = course.lessons[1]!.mediaId!;
+  const headers = {
+    "access-control-allow-origin": "http://127.0.0.1:43917",
+    "access-control-allow-credentials": "true",
+  };
+  await context.route("**/media/multipart/start", (route) =>
+    route.fulfill({
+      headers,
+      json: {
+        success: true,
+        data: { mediaAssetId: newId, partSize: 1024, totalParts: 1 },
+      },
+    }),
+  );
+  await context.route(`**/media/${newId}/multipart/parts`, (route) =>
+    route.fulfill({
+      headers,
+      json: {
+        success: true,
+        data: {
+          parts: [
+            {
+              partNumber: 1,
+              url: "http://127.0.0.1:43917/test-processing-part",
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await context.route("**/test-processing-part", (route) =>
+    route.fulfill({ status: 200, body: "" }),
+  );
+  await context.route(`**/media/${newId}/multipart/complete`, (route) =>
+    route.fulfill({
+      headers,
+      json: { success: true, data: { status: "uploaded" } },
+    }),
+  );
+  await academy.signInAsAdmin();
+  await page.goto(`/courses/${course.id}/edit/curriculum`);
+  const section = page.getByRole("button", { name: "Expand section" });
+  if (await section.count()) await section.first().click();
+  await page
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  await expect(
+    page.getByText("Processing", { exact: true }).first(),
+  ).toBeVisible();
+  await page.getByLabel("Upload lesson media").setInputFiles({
+    name: "replacement.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("test video"),
+  });
+  const attachment = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/lessons/${course.lessons[0]!.id}/`) &&
+      response.request().method() === "PUT" &&
+      response.ok(),
+  );
+  await page.getByRole("button", { name: "Upload video", exact: true }).click();
+  await attachment;
+  const editor = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/courses/${course.id}/editor`) && response.ok(),
+  );
+  await page.reload();
+  expect(JSON.stringify(await (await editor).json())).toContain(newId);
+  const reopenSection = page.getByRole("button", { name: "Expand section" });
+  if (await reopenSection.count()) await reopenSection.first().click();
+  const collapsed = page.getByRole("button", {
+    name: "Collapse lesson editor",
+  });
+  if (!(await collapsed.count())) {
+    await page
+      .getByRole("button", { name: "Expand lesson editor" })
+      .first()
+      .click();
+  }
+  await expect(
+    page.getByText("Processing", { exact: true }).first(),
+  ).toBeVisible();
+});
+
 test("an author can save a playable video while other qualities process", async ({
   page,
   academy,
@@ -132,7 +317,20 @@ test("an uploaded video stays with its lesson while transcoding is queued", asyn
   // A second page reads the server state while the first editor remains open:
   // no unmount cleanup or lesson Save can hide a missing attachment.
   const reopened = await context.newPage();
+  const editorResponse = reopened.waitForResponse(
+    (response) =>
+      response.url().includes(`/courses/${course.id}/editor`) && response.ok(),
+  );
   await reopened.goto(`/courses/${course.id}/edit/curriculum`);
+  const { data: editor } = await (await editorResponse).json();
+  const lesson = editor.sections
+    .flatMap(
+      (section: {
+        lessons?: { id: string; contentMediaId?: string | null }[];
+      }) => section.lessons ?? [],
+    )
+    .find((item: { id: string }) => item.id === course.lessons[0]!.id);
+  expect(lesson?.contentMediaId).toBe(mediaId);
   const reopenSection = reopened.getByRole("button", {
     name: "Expand section",
   });
@@ -143,9 +341,6 @@ test("an uploaded video stays with its lesson while transcoding is queued", asyn
     .click();
   await expect(
     reopened.getByText("Processing", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(
-    reopened.getByText("Video attached", { exact: true }).first(),
   ).toBeVisible();
 });
 
@@ -273,16 +468,13 @@ test("a replacement for a failed video stays attached while queued", async ({
     .first()
     .click();
   await expect(
-    page.getByRole("button", { name: "Choose Replacement Video" }),
+    page.getByRole("button", { name: "Change Video" }),
   ).toBeVisible();
-  await page
-    .getByLabel("Choose a video file")
-    .last()
-    .setInputFiles({
-      name: "replacement.mp4",
-      mimeType: "video/mp4",
-      buffer: Buffer.from("test video"),
-    });
+  await page.getByLabel("Upload lesson media").setInputFiles({
+    name: "replacement.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("test video"),
+  });
   await page.getByRole("button", { name: "Upload video", exact: true }).click();
   await expect(
     page.getByText("Processing", { exact: true }).first(),
@@ -344,7 +536,7 @@ test("an author can replace a failed lesson video", async ({
     page.getByText("Video processing failed.").first(),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Choose Replacement Video" }),
+    page.getByRole("button", { name: "Change Video" }),
   ).toBeVisible();
 });
 
