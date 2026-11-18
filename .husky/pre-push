@@ -18,3 +18,8 @@ pnpm --filter @veolms/api test || {
   echo "API tests failed. Fix them before pushing."
   exit 1
 }
+
+pnpm --filter @veolms/video-player test || {
+  echo "Video player tests failed. Fix them before pushing."
+  exit 1
+}
