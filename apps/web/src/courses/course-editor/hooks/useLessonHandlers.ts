@@ -29,6 +29,7 @@ import type { PersistLessonOptions } from "../editorLocalTypes";
 import type { ApiError } from "../../../lib/api-error";
 
 export interface UseLessonHandlersArgs {
+  onLessonCreated: (sectionId: string, lessonId: string) => void;
   currentCourseId: string | null;
   currentCourseIdRef: RefObject<string | null>;
   refetchEditor: (options?: RefetchOptions) => Promise<
@@ -383,6 +384,7 @@ export interface UseLessonHandlersResult {
 }
 
 export function useLessonHandlers({
+  onLessonCreated,
   currentCourseId,
   currentCourseIdRef,
   refetchEditor,
@@ -611,6 +613,7 @@ export function useLessonHandlers({
           };
         }),
       );
+      onLessonCreated(targetSectionId, createdLesson.id);
     } catch (err: unknown) {
       // Rollback temporary lesson on failure
       setSections((prev) =>

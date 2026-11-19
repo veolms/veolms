@@ -24,15 +24,6 @@ const STAFF_PAGES = [
   { path: "/team", heading: "Team" },
 ];
 
-const STAFF_MENU = [
-  "Orders",
-  "Students",
-  "Analytics",
-  "Coupons",
-  "Platform",
-  "Team",
-];
-
 function sidebar(page: Page) {
   return page.getByRole("complementary", { name: /navigation$/u });
 }
@@ -45,9 +36,9 @@ test("a learner has no staff menu, and staff pages send them home or say access 
 
   await page.goto("/");
   await expect(sidebar(page)).toHaveAccessibleName("Student navigation");
-  for (const item of STAFF_MENU) {
+  for (const { heading } of STAFF_PAGES) {
     await expect(
-      sidebar(page).getByRole("button", { name: item, exact: true }),
+      sidebar(page).getByRole("link", { name: heading, exact: true }),
     ).toHaveCount(0);
   }
 
@@ -109,10 +100,13 @@ test("the administrator has the staff menu, and every staff page opens", async (
 
   await page.goto("/");
   await expect(sidebar(page)).toHaveAccessibleName("Creator navigation");
-  for (const item of STAFF_MENU) {
-    await expect(
-      sidebar(page).getByRole("button", { name: item, exact: true }),
-    ).toBeVisible();
+  for (const { path, heading } of STAFF_PAGES) {
+    const link = sidebar(page).getByRole("link", {
+      name: heading,
+      exact: true,
+    });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("href", path);
   }
 
   for (const { path, heading } of STAFF_PAGES) {

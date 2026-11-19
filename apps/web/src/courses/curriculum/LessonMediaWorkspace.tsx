@@ -712,7 +712,7 @@ export function LessonMediaWorkspace({
           !hasMediaAttached
         ) &&
           (contentType !== "video" ||
-            (isAttachedVideo && !hasVideoPreview) ||
+            isAttachedVideo ||
             !videoUploadSection) && (
             <div
               className={`flex flex-col ${
@@ -820,7 +820,7 @@ export function LessonMediaWorkspace({
                 ) : (
                   hasMediaAttached && (
                     <div className="flex shrink-0 items-center gap-1.5">
-                      {onRemoveMedia ? (
+                      {onRemoveMedia && contentType !== "video" ? (
                         <button
                           type="button"
                           disabled={disabled}
