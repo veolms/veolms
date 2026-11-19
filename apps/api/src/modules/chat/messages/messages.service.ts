@@ -93,10 +93,11 @@ export function createMessagesService(runtime: ChatRuntime) {
   }
 
   /**
-   * "Reply privately" (WhatsApp), for the group's staff only (the owner's
-   * choice, 18 Nov): a private chat's reply quoting a message the person it
-   * is with (or you) sent in a group. You must be staff there and able to
-   * read it, and the quoted message must still be there.
+   * "Reply privately" (WhatsApp), for every member of the group (learners,
+   * staff and admins; the owner's choice, 19 Nov): a private chat's reply
+   * quoting a message the person it is with (or you) sent in a group. You
+   * must be able to read the group, and the quoted message must still be
+   * there.
    */
   async function checkPrivateQuote(
     userId: string,
@@ -108,8 +109,7 @@ export function createMessagesService(runtime: ChatRuntime) {
     if (roomKind !== "direct" || fromRoomId === roomId) {
       throw ChatErrors.messageNotFound();
     }
-    const group = await views.assertCanRead(database, userId, fromRoomId);
-    if (ROLE_LEVEL[group.role] < ROLE_LEVEL.staff) throw ChatErrors.noAccess();
+    await views.assertCanRead(database, userId, fromRoomId);
     const quoted = await repository.findMessage(database, fromRoomId, fromSeq);
     if (!quoted || quoted.deleted_at || !quoted.sender_id) {
       throw ChatErrors.messageNotFound();
