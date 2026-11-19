@@ -21,6 +21,7 @@ import {
 import { playerRectOf, toPlayerPoint } from "../../react/pageFullscreen";
 import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { usePlayerMobileInteraction } from "../../react/PlayerInteractionMode";
+import { PRESS_TAIL_EVENTS, swallowTapThrough } from "./swallowTapThrough";
 
 export type PopoverMenuSide = "top" | "bottom";
 export type PopoverMenuAlign = "start" | "end";
@@ -340,6 +341,20 @@ export function PopoverMenu({
         !rootRef.current?.contains(target) &&
         !panelRef.current?.contains(target)
       ) {
+        // A tap on the player outside the open menu only closes it: it
+        // must not also play, pause or press the control under it. A tap
+        // elsewhere on the page still does what it does.
+        // The video surface plays on the press's `pointerup`, so the whole
+        // press is kept from the player, starting with this `pointerdown`.
+        const player = rootRef.current?.closest("[data-video-player-root]");
+        if (player?.contains(target)) {
+          event.stopPropagation();
+          swallowTapThrough({
+            events: PRESS_TAIL_EVENTS,
+            isProtected: (eventTarget) =>
+              eventTarget instanceof Node && player.contains(eventTarget),
+          });
+        }
         closeMenu();
       }
     };
@@ -691,7 +706,13 @@ export function PopoverMenu({
                   mobileSheetDragRef.current?.pointerId === event.pointerId &&
                   !mobileSheetDragRef.current.moved;
                 finishMobileSheetDrag(event);
-                if (tapped) closeAndRestoreFocus();
+                if (tapped) {
+                  // The dimmed layer goes with the sheet, before the tap's
+                  // click arrives: that click would land on the video (or
+                  // a button) under it and play it. The tap only closes.
+                  swallowTapThrough();
+                  closeAndRestoreFocus();
+                }
               }}
               onPointerCancel={(event) => finishMobileSheetDrag(event, true)}
               onClick={(event) => {
