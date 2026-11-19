@@ -63,3 +63,32 @@ test("Enter posts a comment, Shift+Enter adds a line, and the options change wha
     page.getByText("How do I shorten the prompt?").first(),
   ).toBeVisible();
 });
+
+test("a learner can reply to a discussion on a phone", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    title: "Mobile discussion course",
+  });
+  const learner = await academy.signedInLearner("mobile-reply");
+  await academy.giveCourse(learner, course);
+
+  await openLesson(page, course, 1);
+  await page.getByRole("button", { name: "Open discussion composer" }).click();
+  await page
+    .getByRole("textbox", { name: "Write a comment" })
+    .fill("A question from my phone");
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByText("A question from my phone").first(),
+  ).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/discussions/all");
+  await page.getByText("A question from my phone").first().click();
+  const reply = page.getByRole("textbox", { name: /Reply to/u });
+  await reply.fill("A reply from my phone");
+  await page.getByRole("button", { name: "Post reply" }).click();
+  await expect(page.getByText("A reply from my phone")).toBeVisible();
+});

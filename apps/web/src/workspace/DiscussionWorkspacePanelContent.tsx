@@ -979,7 +979,9 @@ export function DiscussionPanelContent({
               ? "after:opacity-100 after:duration-200"
               : "after:opacity-0 after:duration-700"
           } ${
-            variant === "phone" ? "pb-[var(--app-safe-area-bottom,0px)]" : ""
+            variant === "phone"
+              ? "pb-[max(0.75rem,var(--app-safe-area-bottom,0px))]"
+              : ""
           }`}
         >
           {isLocked ? (
