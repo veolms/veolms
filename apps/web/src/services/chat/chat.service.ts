@@ -114,6 +114,102 @@ export interface ChatUploadStart {
   uploadUrl: string;
   headers: Record<string, string>;
   viaApi: boolean;
+  /** A large file goes up in parts (see `putFile`). */
+  multipart?: {
+    storageUploadId: string;
+    partSize: number;
+    partUrls: string[];
+  };
+}
+
+/** Parts of a large file sent at once. */
+const PART_CONCURRENCY = 3;
+/** Tries per part before the upload fails (a dropped connection). */
+const PART_ATTEMPTS = 4;
+
+/** PUTs one blob with progress. */
+function putBlob(
+  url: string,
+  body: Blob,
+  options: {
+    headers?: Record<string, string>;
+    withCredentials?: boolean;
+    onProgress: (loaded: number) => void;
+    signal?: AbortSignal;
+  },
+) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    if (options.withCredentials) xhr.withCredentials = true;
+    for (const [name, value] of Object.entries(options.headers ?? {})) {
+      xhr.setRequestHeader(name, value);
+    }
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) options.onProgress(event.loaded);
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`Upload failed (${xhr.status})`));
+    xhr.onerror = () => reject(new Error("Upload failed"));
+    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+    if (options.signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    options.signal?.addEventListener("abort", () => xhr.abort());
+    xhr.send(body);
+  });
+}
+
+/**
+ * Sends a large file in parts, a few at a time; a part that fails is sent
+ * again (a long upload over a phone line drops now and then).
+ */
+async function putParts(
+  multipart: NonNullable<ChatUploadStart["multipart"]>,
+  file: Blob,
+  onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
+) {
+  const { partSize, partUrls } = multipart;
+  const loaded = new Array<number>(partUrls.length).fill(0);
+  const report = () =>
+    onProgress(loaded.reduce((sum, bytes) => sum + bytes, 0) / file.size);
+  let next = 0;
+  const worker = async () => {
+    while (next < partUrls.length) {
+      const index = next++;
+      const body = file.slice(index * partSize, (index + 1) * partSize);
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await putBlob(partUrls[index]!, body, {
+            signal,
+            onProgress: (bytes) => {
+              loaded[index] = bytes;
+              report();
+            },
+          });
+          loaded[index] = body.size;
+          report();
+          break;
+        } catch (error) {
+          loaded[index] = 0;
+          if (
+            attempt >= PART_ATTEMPTS ||
+            (error instanceof DOMException && error.name === "AbortError")
+          ) {
+            throw error;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(PART_CONCURRENCY, partUrls.length) }, worker),
+  );
 }
 
 export const chatService = {
@@ -304,9 +400,11 @@ export const chatService = {
       waveform?: number[];
     },
   ) => api.post<ChatUploadStart>(`/chat/rooms/${roomId}/uploads`, input),
-  completeUpload: (uploadId: string) =>
+  /** `storageUploadId`: a file sent in parts, joined first. */
+  completeUpload: (uploadId: string, storageUploadId?: string) =>
     api.post<{ attachment: ChatAttachment }>(
       `/chat/uploads/${uploadId}/complete`,
+      storageUploadId ? { storageUploadId } : undefined,
     ),
   /**
    * A photo for a group's icon: uploaded like a message's photo (signed,
@@ -358,35 +456,30 @@ export const chatService = {
     return getApiRequestUrl(download ? `${path}?download=1` : path);
   },
   /**
-   * PUTs a file with progress: to object storage (presigned), or to the API
-   * in development (`viaApi`, which needs the session cookie).
+   * PUTs a file with progress: to object storage (presigned; a large file
+   * in parts), or to the API in development (`viaApi`, which needs the
+   * session cookie).
    */
   putFile: (
     start: ChatUploadStart,
     file: Blob,
     onProgress: (fraction: number) => void,
     signal?: AbortSignal,
-  ) =>
-    new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const url = start.viaApi
+  ): Promise<void> => {
+    if (start.multipart) {
+      return putParts(start.multipart, file, onProgress, signal);
+    }
+    return putBlob(
+      start.viaApi
         ? getApiRequestUrl(start.uploadUrl.replace(/^\/v1/, ""))
-        : start.uploadUrl;
-      xhr.open("PUT", url);
-      if (start.viaApi) xhr.withCredentials = true;
-      for (const [name, value] of Object.entries(start.headers)) {
-        xhr.setRequestHeader(name, value);
-      }
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) onProgress(event.loaded / event.total);
-      };
-      xhr.onload = () =>
-        xhr.status >= 200 && xhr.status < 300
-          ? resolve()
-          : reject(new Error(`Upload failed (${xhr.status})`));
-      xhr.onerror = () => reject(new Error("Upload failed"));
-      xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
-      signal?.addEventListener("abort", () => xhr.abort());
-      xhr.send(file);
-    }),
+        : start.uploadUrl,
+      file,
+      {
+        headers: start.headers,
+        withCredentials: start.viaApi,
+        onProgress: (loaded) => onProgress(loaded / Math.max(1, file.size)),
+        ...(signal ? { signal } : {}),
+      },
+    );
+  },
 };
