@@ -424,7 +424,7 @@
     .sidebar-appearance,
     .mobile-menu-sheet__appearance
   ).sidebar-appearance--mobile-dock
-  > button {
+  > :is(button, a) {
   position: relative;
   display: inline-flex;
   min-width: 0;
@@ -447,7 +447,7 @@
     .sidebar-appearance,
     .mobile-menu-sheet__appearance
   ).sidebar-appearance--mobile-dock
-  > button:not(.is-active) {
+  > :is(button, a):not(.is-active) {
   background: color-mix(in srgb, var(--canvas) 86%, black 14%);
 }
 
@@ -455,7 +455,7 @@
     .sidebar-appearance,
     .mobile-menu-sheet__appearance
   ).sidebar-appearance--mobile-dock
-  > button
+  > :is(button, a)
   > svg {
   filter: none;
 }

@@ -1,7 +1,7 @@
 import type { ChatMessage } from "@veolms/contracts";
 
 /**
- * WhatsApp's "Reply privately" (group staff only): the group message a
+ * WhatsApp's "Reply privately" (any group member): the group message a
  * private chat is about to open replying to. Its `roomId` is the group's,
  * which is what makes the reply a private one.
  */

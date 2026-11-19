@@ -197,12 +197,8 @@ export function MessageMenu({
           >
             <Star size={16} aria-hidden="true" /> {starred ? "Unstar" : "Star"}
           </DropdownMenuItem>
-          {ctx.isGroup &&
-          ctx.canModerate &&
-          !outgoing &&
-          message.sender &&
-          !message.deleted ? (
-            // WhatsApp's "Reply privately", for the group's staff only.
+          {ctx.isGroup && !outgoing && message.sender && !message.deleted ? (
+            // WhatsApp's "Reply privately", for every member of the group.
             <DropdownMenuItem onClick={() => onAction("reply-privately")}>
               <ArrowBendUpLeft size={16} aria-hidden="true" /> Reply privately
             </DropdownMenuItem>
