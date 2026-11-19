@@ -126,6 +126,11 @@ function mediaErrorToVideoEngineError(
  * plays (`finishLoading` clears the error).
  */
 const LOAD_TIMEOUT_MS = 45_000;
+/**
+ * How far the playhead must move on, while playing, for a "buffering"
+ * report to be taken back (see the `timeupdate` listener).
+ */
+const PLAYHEAD_MOVED_SECONDS = 0.5;
 
 export abstract class MediaElementEngineBase implements VideoEngine {
   abstract readonly name: VideoEngineName;
@@ -570,10 +575,14 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     this.updateSnapshot({ lifecycle: "ready", error: null });
   }
 
+  /** Where the playhead stood when buffering was last reported. */
+  #bufferingFrom: number | null = null;
+
   protected setBuffering(buffering: boolean): void {
     if (this.#snapshot.buffering === buffering) {
       return;
     }
+    this.#bufferingFrom = buffering ? this.#snapshot.currentTime : null;
     this.updateSnapshot({ buffering });
     this.#events.emit("bufferingchange", { buffering });
   }
@@ -735,6 +744,20 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     });
     listen("timeupdate", () => {
       this.syncTime();
+      // A playhead moving on is not waiting for data, whatever was said
+      // last. Safari reports `stalled` (and at times `waiting`) for a video
+      // that plays on from its buffer and then sends nothing that clears
+      // it: production's "long buffering" on Safari came with 30-114 s
+      // buffered ahead while the time ran on (18 Nov).
+      if (
+        this.#snapshot.buffering &&
+        !media.paused &&
+        this.#bufferingFrom !== null &&
+        this.#snapshot.currentTime - this.#bufferingFrom >=
+          PLAYHEAD_MOVED_SECONDS
+      ) {
+        this.setBuffering(false);
+      }
       this.#events.emit("timeupdate", {
         currentTime: this.#snapshot.currentTime,
         duration: this.#snapshot.duration,
@@ -763,8 +786,15 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     listen("waiting", () => this.setBuffering(true));
     // `stalled` is the network going quiet; while the video is paused that is
     // not a buffer running dry (see `pause`).
+    // Nor, when the element still has data to play: Safari sends `stalled`
+    // for a streamed (MSE) video playing from its buffer.
     listen("stalled", () => {
-      if (!media.paused) this.setBuffering(true);
+      if (
+        !media.paused &&
+        media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA
+      ) {
+        this.setBuffering(true);
+      }
     });
     listen("canplay", () => this.setBuffering(false));
     listen("canplaythrough", () => this.setBuffering(false));

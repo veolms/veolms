@@ -9,6 +9,14 @@ import { chatService } from "../services/chat";
 import { formatDuration } from "./chatFormat";
 import { VideoThumb } from "./VideoThumb";
 
+/**
+ * A quote's heading: who wrote it, and for a "Reply privately" the group
+ * it is from ("Pranjali · Complete Backend"), as WhatsApp shows it.
+ */
+export function quoteTitle(name: string, groupName?: string | null): string {
+  return groupName ? `${name} · ${groupName}` : name;
+}
+
 /** The quoted message's first file, as a quote shows it. */
 export interface QuoteMedia {
   kind: ChatUploadKind;

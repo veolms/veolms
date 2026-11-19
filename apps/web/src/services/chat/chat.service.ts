@@ -102,6 +102,8 @@ export interface ChatSendInput {
   clientId: string;
   body: string;
   replyToSeq?: number;
+  /** "Reply privately": the group `replyToSeq` is in. */
+  replyToRoomId?: string;
   mentions?: string[];
   mentionAll?: boolean;
   attachmentIds?: string[];

@@ -276,6 +276,16 @@
   font-size: 0.86rem;
 }
 
+/* iPhone and iPad Safari zoom the page into a field whose text is under
+   16px when it is tapped, and leave it zoomed: the sign-in card was cut off
+   at the left (the two-factor code, 18 Nov). 16px there; elsewhere as is.
+   Tailwind has no variant for this WebKit-only @supports test. */
+@supports (-webkit-touch-callout: none) {
+  .auth-form__input {
+    font-size: 16px;
+  }
+}
+
 .auth-form__input::placeholder {
   color: color-mix(in srgb, var(--muted) 88%, var(--text));
   font-weight: 500;

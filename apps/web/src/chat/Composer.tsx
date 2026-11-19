@@ -62,7 +62,7 @@ import {
 import { FormatBar } from "./FormatBar";
 import { MediaStage } from "./MediaStage";
 import { tidyDictation, useDictation } from "./useDictation";
-import { quoteMediaOf, ReplyQuoteBody } from "./ReplyQuote";
+import { quoteMediaOf, quoteTitle, ReplyQuoteBody } from "./ReplyQuote";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 
 export interface ComposerHandle {
@@ -101,6 +101,8 @@ export const Composer = forwardRef<
     room: ChatRoomDetail;
     viewerId: string | null;
     replyTo: ChatMessage | null;
+    /** "Reply privately": the group the quoted message is from. */
+    replyGroupName?: string | null;
     onCancelReply: () => void;
     editing: ChatMessage | null;
     onDoneEditing: () => void;
@@ -112,6 +114,7 @@ export const Composer = forwardRef<
     room,
     viewerId,
     replyTo,
+    replyGroupName = null,
     onCancelReply,
     editing,
     onDoneEditing,
@@ -121,6 +124,11 @@ export const Composer = forwardRef<
   ref,
 ) {
   const client = useQueryClient();
+  // A quote from another chat is a "Reply privately" (from a group).
+  const privateQuote =
+    replyTo && replyTo.roomId !== room.id
+      ? { roomId: replyTo.roomId, roomName: replyGroupName }
+      : null;
   const [text, setText] = useState(() => drafts.get(room.id) ?? "");
   const [files, setFiles] = useState<OutgoingFile[]>(() =>
     chatDraftFiles.get<OutgoingFile>(room.id),
@@ -254,7 +262,11 @@ export const Composer = forwardRef<
     const room_left = CHAT_MAX_ATTACHMENTS_PER_MESSAGE - files.length;
     for (const file of picked.slice(0, room_left)) {
       try {
-        const prepared = await prepareFile(file, asDocument);
+        const prepared = await prepareFile(
+          file,
+          asDocument,
+          room.me.uploadMaxBytes,
+        );
         setFiles((current) => [...current, prepared]);
       } catch (error) {
         onError(
@@ -375,6 +387,7 @@ export const Composer = forwardRef<
             preview: replyTo.body.slice(0, 120),
             media: quoteMediaOf(replyTo.attachments),
             ...(replyTo.seq === 0 ? { clientId: replyTo.id } : {}),
+            ...privateQuote,
           }
         : null,
       mentions: mentioned,
@@ -405,6 +418,7 @@ export const Composer = forwardRef<
             preview: replyTo.body.slice(0, 120),
             media: quoteMediaOf(replyTo.attachments),
             ...(replyTo.seq === 0 ? { clientId: replyTo.id } : {}),
+            ...privateQuote,
           }
         : null,
       mentions: [],
@@ -465,9 +479,12 @@ export const Composer = forwardRef<
               title={
                 editing
                   ? "Edit message"
-                  : replyTo?.sender?.id === viewerId
-                    ? "You"
-                    : (replyTo?.sender?.name ?? "Message")
+                  : quoteTitle(
+                      replyTo?.sender?.id === viewerId
+                        ? "You"
+                        : (replyTo?.sender?.name ?? "Message"),
+                      privateQuote?.roomName,
+                    )
               }
               text={(editing ?? replyTo)?.body ?? ""}
               media={quoteMediaOf((editing ?? replyTo)?.attachments ?? [])}

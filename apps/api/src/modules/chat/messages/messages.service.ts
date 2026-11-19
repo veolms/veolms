@@ -92,6 +92,37 @@ export function createMessagesService(runtime: ChatRuntime) {
     return row;
   }
 
+  /**
+   * "Reply privately" (WhatsApp), for every member of the group (learners,
+   * staff and admins; the owner's choice, 19 Nov): a private chat's reply
+   * quoting a message the person it is with (or you) sent in a group. You
+   * must be able to read the group, and the quoted message must still be
+   * there.
+   */
+  async function checkPrivateQuote(
+    userId: string,
+    roomId: string,
+    roomKind: string,
+    fromRoomId: string,
+    fromSeq: number,
+  ): Promise<{ fromRoomId: string; fromSeq: number }> {
+    if (roomKind !== "direct" || fromRoomId === roomId) {
+      throw ChatErrors.messageNotFound();
+    }
+    await views.assertCanRead(database, userId, fromRoomId);
+    const quoted = await repository.findMessage(database, fromRoomId, fromSeq);
+    if (!quoted || quoted.deleted_at || !quoted.sender_id) {
+      throw ChatErrors.messageNotFound();
+    }
+    if (
+      quoted.sender_id !== userId &&
+      !(await repository.findMember(database, roomId, quoted.sender_id))
+    ) {
+      throw ChatErrors.messageNotFound();
+    }
+    return { fromRoomId, fromSeq };
+  }
+
   async function reloadAndPublish(roomId: string, seq: number) {
     const message = presentMessage(await loadMessage(roomId, seq));
     await publishMessage("update", message);
@@ -539,7 +570,10 @@ export function createMessagesService(runtime: ChatRuntime) {
                 body: row.body,
                 ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
               },
-              { forwarded: true },
+              // WhatsApp: your own message sent on is yours again, with no
+              // "Forwarded" over it; someone else's, or one that was
+              // already a forward, says so.
+              { forwarded: row.sender_id !== userId || Boolean(row.forwarded) },
             );
             sent += 1;
           } catch (caught) {
@@ -621,6 +655,20 @@ export function createMessagesService(runtime: ChatRuntime) {
         });
       }
 
+      // "Reply privately" (WhatsApp): this private chat's reply quotes a
+      // group message of the person it is with (or your own), from a group
+      // you can read. Checked before sending; saved on the message after.
+      const privateQuote =
+        input.replyToRoomId && input.replyToSeq !== undefined
+          ? await checkPrivateQuote(
+              userId,
+              roomId,
+              room.kind,
+              input.replyToRoomId,
+              input.replyToSeq,
+            )
+          : null;
+
       const recipientOfRequest =
         room.kind === "direct" &&
         room.direct_status === "requested" &&
@@ -654,7 +702,8 @@ export function createMessagesService(runtime: ChatRuntime) {
         clientId: input.clientId,
         kind: "text",
         body: input.body,
-        replyToSeq: input.replyToSeq ?? null,
+        // A private reply's quote is in another chat: set after sending.
+        replyToSeq: privateQuote ? null : (input.replyToSeq ?? null),
         mentions,
         mentionAll,
         exemptLimits: isStaff,
@@ -681,6 +730,9 @@ export function createMessagesService(runtime: ChatRuntime) {
       const seq = Number(result.message_seq);
       if (result.outcome === "sent" && options.forwarded) {
         await repository.markForwarded(database, roomId, seq);
+      }
+      if (result.outcome === "sent" && privateQuote) {
+        await repository.markPrivateReply(database, roomId, seq, privateQuote);
       }
       const message = presentMessage(await loadMessage(roomId, seq));
       if (result.outcome === "sent") {
