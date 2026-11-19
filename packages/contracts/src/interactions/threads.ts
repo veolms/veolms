@@ -304,6 +304,8 @@ export const workspaceDiscussionItemSchema = z.object({
   isOwn: z.boolean().optional(),
   /** Whether the viewer has liked this thread, reply or note. */
   isLiked: z.boolean().optional(),
+  userReaction: discussionReactionTypeSchema.nullable().optional(),
+  topReactions: z.array(discussionReactionTypeSchema).optional(),
   mentionedAt: z.string().optional(),
   /** Threads only. */
   ...threadMarksShape,

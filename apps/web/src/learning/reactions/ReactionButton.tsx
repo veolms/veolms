@@ -29,8 +29,10 @@ export function ReactionButton({
   className = "",
 }: ReactionButtonProps) {
   const [showPicker, setShowPicker] = useState(false);
+  const [keyboardFocusedPicker, setKeyboardFocusedPicker] = useState(false);
   const hoverTimer = useRef<number | undefined>(undefined);
   const longPressTimer = useRef<number | undefined>(undefined);
+  const longPressHandledRef = useRef(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Active reaction: if userReaction is set, use it. Otherwise, if liked, default to "like".
@@ -62,8 +64,10 @@ export function ReactionButton({
 
   const handleTouchStart = () => {
     if (!canParticipate) return;
+    longPressHandledRef.current = false;
     window.clearTimeout(longPressTimer.current);
     longPressTimer.current = window.setTimeout(() => {
+      longPressHandledRef.current = true;
       setShowPicker(true);
     }, 400);
   };
@@ -82,6 +86,13 @@ export function ReactionButton({
     window.clearTimeout(hoverTimer.current);
     window.clearTimeout(longPressTimer.current);
 
+    // If this click is a touch compatibility click after a recognized long press,
+    // consume it without toggling like.
+    if (longPressHandledRef.current) {
+      longPressHandledRef.current = false;
+      return;
+    }
+
     if (showPicker) {
       setShowPicker(false);
     }
@@ -96,8 +107,22 @@ export function ReactionButton({
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!canParticipate) {
+        onParticipationRequired?.();
+        return;
+      }
+      setKeyboardFocusedPicker(true);
+      setShowPicker(true);
+    }
+  };
+
   const handleSelectReaction = (reaction: DiscussionReactionType) => {
     setShowPicker(false);
+    setKeyboardFocusedPicker(false);
+    buttonRef.current?.focus();
     if (activeReaction === reaction) {
       // Re-selecting current reaction toggles it off
       onToggle(false);
@@ -122,6 +147,7 @@ export function ReactionButton({
         ref={buttonRef}
         type="button"
         onClick={handleClick}
+        onKeyDown={handleKeyDown}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         aria-pressed={isReacted}
@@ -150,7 +176,12 @@ export function ReactionButton({
         <ReactionPicker
           currentReaction={activeReaction}
           onSelect={handleSelectReaction}
-          onClose={() => setShowPicker(false)}
+          onClose={() => {
+            setShowPicker(false);
+            setKeyboardFocusedPicker(false);
+            buttonRef.current?.focus();
+          }}
+          autoFocusFirst={keyboardFocusedPicker}
         />
       )}
     </div>

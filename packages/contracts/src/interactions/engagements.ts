@@ -33,6 +33,7 @@ export const listReactionsQuerySchema = z.object({
   targetId: z.uuid(),
   reaction: discussionReactionTypeSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().max(512).optional(),
 });
 export type ListReactionsQuery = z.infer<typeof listReactionsQuerySchema>;
 
@@ -50,6 +51,7 @@ export type ReactionAuthor = z.infer<typeof reactionAuthorSchema>;
 export const reactionsListResponseSchema = z.object({
   users: z.array(reactionAuthorSchema),
   counts: z.record(z.string(), z.number().int().nonnegative()),
+  nextCursor: z.string().nullable().optional(),
 });
 export type ReactionsListResponse = z.infer<typeof reactionsListResponseSchema>;
 

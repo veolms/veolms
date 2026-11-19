@@ -515,6 +515,39 @@ export function calculateNextLikesCount(
 }
 
 /**
+ * Reconciles the top reactions array when a viewer reacts, changes reaction, or unreacts.
+ * Removes stale reactions when no participants remain, and keeps at most 3 top reactions.
+ */
+export function reconcileTopReactions(
+  currentTop: readonly DiscussionReactionType[] | undefined,
+  prevReaction: DiscussionReactionType | null,
+  nextReaction: DiscussionReactionType | null,
+  nextLikesCount: number,
+): DiscussionReactionType[] {
+  if (nextLikesCount <= 0) {
+    return [];
+  }
+  let list = currentTop ? [...currentTop] : [];
+
+  if (prevReaction && prevReaction !== nextReaction) {
+    if (nextLikesCount <= (nextReaction ? 1 : 0)) {
+      list = list.filter((r) => r !== prevReaction);
+    }
+  }
+
+  if (nextReaction) {
+    list = [nextReaction, ...list.filter((r) => r !== nextReaction)].slice(
+      0,
+      3,
+    );
+  } else if (prevReaction && list.length === 1 && list[0] === prevReaction) {
+    list = [];
+  }
+
+  return list;
+}
+
+/**
  * Directly updates thread like status across all matching cache keys:
  * 1. Specific or all lessonThreads queries
  * 2. Thread details query
@@ -552,17 +585,28 @@ export function updateThreadLikeInCache(
         )
           return thread;
         hasChange = true;
+        const prevReaction =
+          thread.userReaction ?? (currentLiked ? "like" : null);
+        const nextReaction = desiredLiked
+          ? (reaction ?? thread.userReaction ?? "like")
+          : null;
+        const nextLikesCount = calculateNextLikesCount(
+          thread.likesCount ?? 0,
+          thread.isLiked,
+          desiredLiked,
+        );
+        const nextTop = reconcileTopReactions(
+          thread.topReactions,
+          prevReaction,
+          nextReaction,
+          nextLikesCount,
+        );
         return {
           ...thread,
           isLiked: desiredLiked,
-          userReaction: desiredLiked
-            ? (reaction ?? thread.userReaction ?? "like")
-            : null,
-          likesCount: calculateNextLikesCount(
-            thread.likesCount ?? 0,
-            thread.isLiked,
-            desiredLiked,
-          ),
+          userReaction: nextReaction,
+          topReactions: nextTop,
+          likesCount: nextLikesCount,
         };
       });
       return hasChange ? { ...old, threads: nextThreads } : old;
@@ -580,17 +624,27 @@ export function updateThreadLikeInCache(
         (!reaction || old.userReaction === reaction)
       )
         return old;
+      const prevReaction = old.userReaction ?? (currentLiked ? "like" : null);
+      const nextReaction = desiredLiked
+        ? (reaction ?? old.userReaction ?? "like")
+        : null;
+      const nextLikesCount = calculateNextLikesCount(
+        old.likesCount ?? 0,
+        old.isLiked,
+        desiredLiked,
+      );
+      const nextTop = reconcileTopReactions(
+        old.topReactions,
+        prevReaction,
+        nextReaction,
+        nextLikesCount,
+      );
       return {
         ...old,
         isLiked: desiredLiked,
-        userReaction: desiredLiked
-          ? (reaction ?? old.userReaction ?? "like")
-          : null,
-        likesCount: calculateNextLikesCount(
-          old.likesCount ?? 0,
-          old.isLiked,
-          desiredLiked,
-        ),
+        userReaction: nextReaction,
+        topReactions: nextTop,
+        likesCount: nextLikesCount,
       };
     },
   );
@@ -611,27 +665,28 @@ export function updateThreadLikeInCache(
         )
           return thread;
         hasChange = true;
+        const prevReaction =
+          thread.userReaction ?? (currentLiked ? "like" : null);
         const nextReaction = desiredLiked
           ? (reaction ?? thread.userReaction ?? "like")
           : null;
-        const currentTop = thread.topReactions ?? [];
-        const nextTop =
-          desiredLiked && nextReaction
-            ? [
-                nextReaction,
-                ...currentTop.filter((r) => r !== nextReaction),
-              ].slice(0, 3)
-            : currentTop;
+        const nextLikesCount = calculateNextLikesCount(
+          thread.likesCount ?? 0,
+          thread.isLiked,
+          desiredLiked,
+        );
+        const nextTop = reconcileTopReactions(
+          thread.topReactions,
+          prevReaction,
+          nextReaction,
+          nextLikesCount,
+        );
         return {
           ...thread,
           isLiked: desiredLiked,
           userReaction: nextReaction,
           topReactions: nextTop,
-          likesCount: calculateNextLikesCount(
-            thread.likesCount ?? 0,
-            thread.isLiked,
-            desiredLiked,
-          ),
+          likesCount: nextLikesCount,
         };
       });
       return hasChange ? { ...old, threads: nextThreads } : old;
@@ -669,17 +724,22 @@ export function updateThreadLikeInCache(
             return item;
           }
           pageChanged = true;
+          const prevReaction =
+            thread.userReaction ?? (currentLiked ? "like" : null);
           const nextReaction = desiredLiked
             ? (reaction ?? thread.userReaction ?? "like")
             : null;
-          const currentTop = thread.topReactions ?? [];
-          const nextTop =
-            desiredLiked && nextReaction
-              ? [
-                  nextReaction,
-                  ...currentTop.filter((r) => r !== nextReaction),
-                ].slice(0, 3)
-              : currentTop;
+          const nextLikesCount = calculateNextLikesCount(
+            thread.likesCount ?? 0,
+            thread.isLiked,
+            desiredLiked,
+          );
+          const nextTop = reconcileTopReactions(
+            thread.topReactions,
+            prevReaction,
+            nextReaction,
+            nextLikesCount,
+          );
           return {
             ...item,
             thread: {
@@ -687,11 +747,7 @@ export function updateThreadLikeInCache(
               isLiked: desiredLiked,
               userReaction: nextReaction,
               topReactions: nextTop,
-              likesCount: calculateNextLikesCount(
-                thread.likesCount ?? 0,
-                thread.isLiked,
-                desiredLiked,
-              ),
+              likesCount: nextLikesCount,
             },
           };
         });
@@ -731,27 +787,28 @@ export function updateReplyLikeInCache(
           )
             return reply;
           hasChange = true;
+          const prevReaction =
+            reply.userReaction ?? (currentLiked ? "like" : null);
           const nextReaction = desiredLiked
             ? (reaction ?? reply.userReaction ?? "like")
             : null;
-          const currentTop = reply.topReactions ?? [];
-          const nextTop =
-            desiredLiked && nextReaction
-              ? [
-                  nextReaction,
-                  ...currentTop.filter((r) => r !== nextReaction),
-                ].slice(0, 3)
-              : currentTop;
+          const nextLikesCount = calculateNextLikesCount(
+            reply.likesCount ?? 0,
+            reply.isLiked,
+            desiredLiked,
+          );
+          const nextTop = reconcileTopReactions(
+            reply.topReactions,
+            prevReaction,
+            nextReaction,
+            nextLikesCount,
+          );
           return {
             ...reply,
             isLiked: desiredLiked,
             userReaction: nextReaction,
             topReactions: nextTop,
-            likesCount: calculateNextLikesCount(
-              reply.likesCount ?? 0,
-              reply.isLiked,
-              desiredLiked,
-            ),
+            likesCount: nextLikesCount,
           };
         });
         return hasChange ? { ...page, replies: nextReplies } : page;
@@ -807,6 +864,7 @@ export function updateNoteLikeInCache(
   noteId: string,
   desiredLiked: boolean,
   serverId?: string,
+  reaction?: DiscussionReactionType,
 ): void {
   // 1. Update notes list queries
   setNoteQueriesData(
@@ -824,16 +882,35 @@ export function updateNoteLikeInCache(
           return note;
         }
         const currentLiked = Boolean(note.isLiked);
-        if (currentLiked === desiredLiked) return note;
+        if (
+          currentLiked === desiredLiked &&
+          (!reaction || note.userReaction === reaction)
+        ) {
+          return note;
+        }
         hasChange = true;
+        const prevReaction =
+          note.userReaction ?? (currentLiked ? "like" : null);
+        const nextReaction = desiredLiked
+          ? (reaction ?? note.userReaction ?? "like")
+          : null;
+        const nextLikesCount = calculateNextLikesCount(
+          note.likesCount ?? 0,
+          note.isLiked,
+          desiredLiked,
+        );
+        const nextTop = reconcileTopReactions(
+          note.topReactions,
+          prevReaction,
+          nextReaction,
+          nextLikesCount,
+        );
         return {
           ...note,
           isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            note.likesCount ?? 0,
-            note.isLiked,
-            desiredLiked,
-          ),
+          userReaction: nextReaction,
+          topReactions: nextTop,
+          likesCount: nextLikesCount,
         };
       });
       return hasChange ? { ...old, notes: nextNotes } : old;
@@ -857,15 +934,33 @@ export function updateNoteLikeInCache(
           return old;
         }
         const currentLiked = Boolean(old.isLiked);
-        if (currentLiked === desiredLiked) return old;
+        if (
+          currentLiked === desiredLiked &&
+          (!reaction || old.userReaction === reaction)
+        ) {
+          return old;
+        }
+        const prevReaction = old.userReaction ?? (currentLiked ? "like" : null);
+        const nextReaction = desiredLiked
+          ? (reaction ?? old.userReaction ?? "like")
+          : null;
+        const nextLikesCount = calculateNextLikesCount(
+          old.likesCount ?? 0,
+          old.isLiked,
+          desiredLiked,
+        );
+        const nextTop = reconcileTopReactions(
+          old.topReactions,
+          prevReaction,
+          nextReaction,
+          nextLikesCount,
+        );
         return {
           ...old,
           isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            old.likesCount ?? 0,
-            old.isLiked,
-            desiredLiked,
-          ),
+          userReaction: nextReaction,
+          topReactions: nextTop,
+          likesCount: nextLikesCount,
         };
       },
     );

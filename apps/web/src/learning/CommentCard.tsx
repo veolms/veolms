@@ -690,13 +690,15 @@ export const CommentCard = React.memo(function CommentCard({
       setLocalReplies((current) =>
         current.map((r) => {
           if (r.id !== replyId) return r;
+          const prevLiked = Boolean(r.liked);
           const nextLiked =
-            desiredLiked !== undefined ? desiredLiked : !Boolean(r.liked);
+            desiredLiked !== undefined ? desiredLiked : !prevLiked;
+          const delta = (nextLiked ? 1 : 0) - (prevLiked ? 1 : 0);
           return {
             ...r,
             liked: nextLiked,
             userReaction: nextLiked ? (reaction ?? "like") : null,
-            likes: Math.max(0, r.likes + (nextLiked ? 1 : -1)),
+            likes: Math.max(0, r.likes + delta),
           };
         }),
       );

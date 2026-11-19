@@ -9,7 +9,12 @@ import { sql } from "kysely";
 import { escapeLikePattern } from "../../../../lib/like-pattern.ts";
 import { isCourseParticipant } from "../shared/discussion.mentions.ts";
 import { fuzzyMatchesAny } from "../../../../lib/fuzzy-search.ts";
-import { authorRoleSql, mapAuthorRole } from "../shared/discussion.utils.ts";
+import {
+  authorRoleSql,
+  mapAuthorRole,
+  type DiscussionListCursor,
+  encodeDiscussionCursor,
+} from "../shared/discussion.utils.ts";
 import { toIsoString } from "../shared/discussion.presenters.ts";
 
 export interface EngagementExistenceRow {
@@ -49,9 +54,11 @@ export interface EngagementsRepository {
     targetId: string,
     filterReaction?: DiscussionReactionType,
     limit?: number,
+    pageCursor?: DiscussionListCursor,
   ): Promise<{
     users: ReactionAuthor[];
     counts: Record<string, number>;
+    nextCursor?: string | null;
   }>;
 
   addLike(
@@ -168,18 +175,26 @@ export function createEngagementsRepository(): EngagementsRepository {
       if (existing) {
         if (existing.reaction_type === reaction) {
           // Same reaction pressed again: remove it (unlike)
-          await db
+          const deleteResult = await db
             .deleteFrom("learning_likes")
             .where("id", "=", existing.id)
-            .execute();
+            .executeTakeFirst();
+          const numDeleted = Number(deleteResult.numDeletedRows ?? 0n);
+          if (numDeleted === 0) {
+            return { liked: false, reaction: null, changedCount: 0 };
+          }
           return { liked: false, reaction: null, changedCount: -1 };
         }
         // Different reaction selected: update it in place
-        await db
+        const updateResult = await db
           .updateTable("learning_likes")
           .set({ reaction_type: reaction })
           .where("id", "=", existing.id)
-          .execute();
+          .executeTakeFirst();
+        const numUpdated = Number(updateResult.numUpdatedRows ?? 0n);
+        if (numUpdated === 0) {
+          return { liked: false, reaction: null, changedCount: 0 };
+        }
         return { liked: true, reaction, changedCount: 0 };
       }
 
@@ -197,7 +212,14 @@ export function createEngagementsRepository(): EngagementsRepository {
       return { liked: true, reaction, changedCount: 1 };
     },
 
-    async listReactions(db, targetType, targetId, filterReaction, limit = 50) {
+    async listReactions(
+      db,
+      targetType,
+      targetId,
+      filterReaction,
+      limit = 50,
+      pageCursor,
+    ) {
       const countRows = await db
         .selectFrom("learning_likes")
         .select([
@@ -220,6 +242,7 @@ export function createEngagementsRepository(): EngagementsRepository {
         .selectFrom("learning_likes as l")
         .innerJoin("users as u", "u.id", "l.user_id")
         .select([
+          "l.id as likeId",
           "u.id",
           "u.display_name as displayName",
           "u.username",
@@ -242,12 +265,33 @@ export function createEngagementsRepository(): EngagementsRepository {
         );
       }
 
+      if (pageCursor) {
+        query = query.where(
+          sql`(l.created_at, l.id)`,
+          "<",
+          sql`(${pageCursor.createdAt}, ${pageCursor.id})`,
+        );
+      }
+
       const rows = await query
         .orderBy("l.created_at", "desc")
-        .limit(limit)
+        .orderBy("l.id", "desc")
+        .limit(limit + 1)
         .execute();
 
-      const users: ReactionAuthor[] = rows.map((r) => ({
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && page.length > 0) {
+        const last = page[page.length - 1]!;
+        nextCursor = encodeDiscussionCursor({
+          id: last.likeId,
+          createdAt: new Date(last.createdAt),
+        });
+      }
+
+      const users: ReactionAuthor[] = page.map((r) => ({
         id: r.id,
         displayName: r.displayName || "Learner",
         username: r.username,
@@ -257,7 +301,7 @@ export function createEngagementsRepository(): EngagementsRepository {
         createdAt: toIsoString(r.createdAt),
       }));
 
-      return { users, counts };
+      return { users, counts, nextCursor };
     },
 
     async addLike(db, userId, targetType, targetId) {

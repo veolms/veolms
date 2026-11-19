@@ -73,7 +73,7 @@ export function createEngagementsController({
 
     async listReactions(request, reply) {
       const user = request.user;
-      const { targetType, targetId, reaction, limit } = request.query;
+      const { targetType, targetId, reaction, limit, cursor } = request.query;
 
       const result = await service.listReactions(
         database,
@@ -82,6 +82,7 @@ export function createEngagementsController({
         targetId,
         reaction,
         limit,
+        cursor,
       );
       await reply.status(200).send(result);
     },

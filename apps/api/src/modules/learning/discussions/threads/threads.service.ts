@@ -1390,18 +1390,24 @@ export function createThreadsService(
         ),
       ),
     ];
-    const [likes, lessonNumbers] = await Promise.all([
-      query.currentUserId
-        ? threadsRepo.listViewerLikes(
-            db,
-            query.currentUserId,
-            response.items.map((item) => item.id),
-          )
+    const itemIds = response.items.map((item) => item.id);
+    const [likes, topReactionsMap, lessonNumbers] = await Promise.all([
+      query.currentUserId && itemIds.length > 0
+        ? threadsRepo.listViewerLikes(db, query.currentUserId, itemIds)
         : null,
+      itemIds.length > 0
+        ? threadsRepo.listTopWorkspaceReactions(db, itemIds)
+        : new Map<string, DiscussionReactionType[]>(),
       lessonIds.length > 0 ? threadsRepo.listLessonNumbers(db, lessonIds) : [],
     ]);
     const liked = new Set(
       (likes ?? []).map((like) => `${like.target_type}:${like.target_id}`),
+    );
+    const viewerReactions = new Map(
+      (likes ?? []).map((like) => [
+        `${like.target_type}:${like.target_id}`,
+        like.reaction_type ?? "like",
+      ]),
     );
     const numberByLesson = new Map(
       lessonNumbers.map((row) => [row.id, row.lessonNumber]),
@@ -1412,16 +1418,27 @@ export function createThreadsService(
     ]);
     return {
       ...response,
-      items: marked.map((item) => ({
-        ...item,
-        ...(matchedReplies.has(item.id)
-          ? { searchMatchedReply: matchedReplies.get(item.id) }
-          : {}),
-        ...(likes ? { isLiked: liked.has(`${item.itemType}:${item.id}`) } : {}),
-        lessonNumber: item.lessonId
-          ? (numberByLesson.get(item.lessonId) ?? null)
-          : null,
-      })),
+      items: marked.map((item) => {
+        const itemKey = `${item.itemType}:${item.id}`;
+        const isItemLiked = likes ? liked.has(itemKey) : undefined;
+        const userReaction =
+          likes && liked.has(itemKey)
+            ? (viewerReactions.get(itemKey) ?? "like")
+            : null;
+        const top =
+          topReactionsMap.get(item.id) ?? (item.likesCount > 0 ? ["like"] : []);
+        return {
+          ...item,
+          ...(matchedReplies.has(item.id)
+            ? { searchMatchedReply: matchedReplies.get(item.id) }
+            : {}),
+          ...(likes ? { isLiked: isItemLiked, userReaction } : {}),
+          topReactions: top,
+          lessonNumber: item.lessonId
+            ? (numberByLesson.get(item.lessonId) ?? null)
+            : null,
+        };
+      }),
     };
   };
 

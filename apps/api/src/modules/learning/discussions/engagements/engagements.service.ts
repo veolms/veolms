@@ -17,6 +17,12 @@ import {
 } from "../shared/discussion.access.ts";
 import { createDiscussionRepository } from "../shared/discussion.repository.ts";
 import {
+  createLessonDiscussionAccess,
+  type LessonDiscussionAccess,
+} from "../shared/lesson-discussion-access.ts";
+import { DiscussionErrors } from "../shared/discussion.errors.ts";
+import { decodeDiscussionCursor } from "../shared/discussion.utils.ts";
+import {
   createNotesRepository,
   type NotesRepository,
 } from "../notes/notes.repository.ts";
@@ -40,6 +46,7 @@ export interface EngagementsService {
     targetId: string,
     filterReaction?: DiscussionReactionType,
     limit?: number,
+    cursor?: string,
   ): Promise<ReactionsListResponse>;
 
   toggleBookmark(
@@ -83,11 +90,13 @@ export function createEngagementsService({
   repliesRepo,
   notesRepo = createNotesRepository(),
   engagementsRepo,
+  lessonAccess = createLessonDiscussionAccess(),
 }: {
   threadsRepo: ThreadsRepository;
   repliesRepo: RepliesRepository;
   notesRepo?: NotesRepository;
   engagementsRepo: EngagementsRepository;
+  lessonAccess?: LessonDiscussionAccess;
 }): EngagementsService {
   const courseAccess = createDiscussionAccess();
   const discussionRepo = createDiscussionRepository();
@@ -200,14 +209,59 @@ export function createEngagementsService({
 
     async listReactions(
       db,
-      _actor,
+      actor,
       targetType,
       targetId,
       filterReaction,
       limit,
+      cursor,
     ) {
       if (targetType === "thread") {
-        const thread = await threadsRepo.findThreadById(db, targetId);
+        const row = await threadsRepo.findThreadById(db, targetId);
+        if (!row) {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
+
+        const lessonReadAccess = row.lessonId
+          ? await lessonAccess.assertCanReadLesson(db, {
+              courseId: row.courseId,
+              lessonId: row.lessonId,
+              actor,
+            })
+          : null;
+        if (lessonReadAccess?.canReadPrivateState) {
+          courseAccess.assertThreadVisibleToMember(
+            actor!,
+            row,
+            lessonReadAccess.canModerate,
+          );
+        } else if (lessonReadAccess) {
+          courseAccess.assertThreadIsActive(row);
+          if (row.visibility !== "public") {
+            throw httpError(
+              404,
+              "THREAD_NOT_FOUND",
+              "Discussion thread not found",
+            );
+          }
+        } else {
+          if (!actor) {
+            throw DiscussionErrors.unauthorized();
+          }
+          await courseAccess.assertCanAccessThread(db, actor, row);
+        }
+      } else if (targetType === "reply") {
+        const reply = await repliesRepo.findReplyById(db, targetId);
+        if (!reply) {
+          throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
+        }
+        courseAccess.assertReplyIsActive(reply);
+
+        const thread = await threadsRepo.findThreadById(db, reply.threadId);
         if (!thread) {
           throw httpError(
             404,
@@ -215,24 +269,61 @@ export function createEngagementsService({
             "Discussion thread not found",
           );
         }
-      } else if (targetType === "reply") {
-        const reply = await repliesRepo.findReplyById(db, targetId);
-        if (!reply) {
-          throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
+
+        const lessonReadAccess = thread.lessonId
+          ? await lessonAccess.assertCanReadLesson(db, {
+              courseId: thread.courseId,
+              lessonId: thread.lessonId,
+              actor,
+            })
+          : null;
+        if (lessonReadAccess?.canReadPrivateState) {
+          courseAccess.assertThreadVisibleToMember(
+            actor!,
+            thread,
+            lessonReadAccess.canModerate,
+          );
+        } else if (lessonReadAccess) {
+          courseAccess.assertThreadIsActive(thread);
+          if (thread.visibility !== "public") {
+            throw httpError(
+              404,
+              "THREAD_NOT_FOUND",
+              "Discussion thread not found",
+            );
+          }
+        } else {
+          if (!actor) {
+            throw DiscussionErrors.unauthorized();
+          }
+          await courseAccess.assertCanAccessThread(db, actor, thread);
         }
       } else if (targetType === "note") {
         const note = await notesRepo.findNoteAccessTarget(db, targetId);
         if (!note) {
           throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
         }
+
+        if (note.visibility === "private") {
+          if (!actor || actor.userId !== note.userId) {
+            throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+          }
+        } else {
+          if (!actor) {
+            throw DiscussionErrors.unauthorized();
+          }
+          await courseAccess.assertCanAccessNote(db, actor, note);
+        }
       }
 
+      const pageCursor = decodeDiscussionCursor(cursor);
       return engagementsRepo.listReactions(
         db,
         targetType,
         targetId,
         filterReaction,
         limit,
+        pageCursor,
       );
     },
 

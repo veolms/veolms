@@ -436,13 +436,31 @@ export class DesiredStateCoordinator {
     if (like) {
       like.serverId = serverThread.id;
       like.serverBaseline = Boolean(serverThread.isLiked);
+      if (serverThread.userReaction !== undefined) {
+        like.serverBaselineReaction = serverThread.userReaction;
+      }
       this.applyLikeCacheUpdate(
         "thread",
         clientId,
         like.desiredState,
         like.queryClient,
         like.lessonContext,
+        like.threadId,
+        like.serverId,
+        like.reaction,
       );
+      if (serverThread.id !== clientId) {
+        this.applyLikeCacheUpdate(
+          "thread",
+          serverThread.id,
+          like.desiredState,
+          like.queryClient,
+          like.lessonContext,
+          like.threadId,
+          like.serverId,
+          like.reaction,
+        );
+      }
       this.scheduleLikeConvergence(like, 0);
     }
     this.resolvePendingBoolean(
@@ -473,6 +491,9 @@ export class DesiredStateCoordinator {
     state.serverId = serverReply.id;
     state.threadId = serverReply.threadId;
     state.serverBaseline = Boolean(serverReply.isLiked);
+    if (serverReply.userReaction !== undefined) {
+      state.serverBaselineReaction = serverReply.userReaction;
+    }
     this.applyLikeCacheUpdate(
       "reply",
       clientId,
@@ -480,7 +501,21 @@ export class DesiredStateCoordinator {
       state.queryClient,
       state.lessonContext,
       state.threadId,
+      state.serverId,
+      state.reaction,
     );
+    if (serverReply.id !== clientId) {
+      this.applyLikeCacheUpdate(
+        "reply",
+        serverReply.id,
+        state.desiredState,
+        state.queryClient,
+        state.lessonContext,
+        state.threadId,
+        state.serverId,
+        state.reaction,
+      );
+    }
     this.scheduleLikeConvergence(state, 0);
   }
 
@@ -496,6 +531,9 @@ export class DesiredStateCoordinator {
     if (!state) return;
     state.serverId = serverNote.id;
     state.serverBaseline = Boolean(serverNote.isLiked);
+    if (serverNote.userReaction !== undefined) {
+      state.serverBaselineReaction = serverNote.userReaction;
+    }
     this.applyLikeCacheUpdate(
       "note",
       clientId,
@@ -504,7 +542,20 @@ export class DesiredStateCoordinator {
       state.lessonContext,
       undefined,
       state.serverId,
+      state.reaction,
     );
+    if (serverNote.id !== clientId) {
+      this.applyLikeCacheUpdate(
+        "note",
+        serverNote.id,
+        state.desiredState,
+        state.queryClient,
+        state.lessonContext,
+        undefined,
+        state.serverId,
+        state.reaction,
+      );
+    }
     this.scheduleLikeConvergence(state, 0);
   }
 
@@ -663,7 +714,10 @@ export class DesiredStateCoordinator {
         reaction ?? (desiredLiked ? (state.reaction ?? "like") : undefined);
       state.intentRevision += 1;
       if (serverId) state.serverId = serverId;
-      if (currentBaselineReaction !== undefined) {
+      if (
+        currentBaselineReaction !== undefined &&
+        state.serverBaselineReaction === undefined
+      ) {
         state.serverBaselineReaction = currentBaselineReaction;
       }
       if (resolvedServerId && !state.serverId) {
@@ -725,7 +779,7 @@ export class DesiredStateCoordinator {
         );
       }
     } else if (targetType === "note") {
-      updateNoteLikeInCache(client, targetId, desiredLiked, serverId);
+      updateNoteLikeInCache(client, targetId, desiredLiked, serverId, reaction);
     }
   }
 

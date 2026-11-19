@@ -7,6 +7,7 @@ interface ReactionPickerProps {
   onSelect: (reaction: DiscussionReactionType) => void;
   onClose: () => void;
   position?: "top" | "bottom";
+  autoFocusFirst?: boolean;
 }
 
 export function ReactionPicker({
@@ -14,13 +15,39 @@ export function ReactionPicker({
   onSelect,
   onClose,
   position = "top",
+  autoFocusFirst = false,
 }: ReactionPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (autoFocusFirst) {
+      const firstButton =
+        containerRef.current?.querySelector<HTMLButtonElement>("button");
+      firstButton?.focus();
+    }
+  }, [autoFocusFirst]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         onClose();
+      } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        const buttons = Array.from(
+          containerRef.current?.querySelectorAll<HTMLButtonElement>("button") ??
+            [],
+        );
+        if (buttons.length === 0) return;
+        const activeIndex = buttons.indexOf(
+          document.activeElement as HTMLButtonElement,
+        );
+        if (activeIndex >= 0) {
+          e.preventDefault();
+          const nextIndex =
+            e.key === "ArrowRight"
+              ? (activeIndex + 1) % buttons.length
+              : (activeIndex - 1 + buttons.length) % buttons.length;
+          buttons[nextIndex]?.focus();
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);

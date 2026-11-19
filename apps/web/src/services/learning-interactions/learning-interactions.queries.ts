@@ -6,6 +6,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type {
+  DiscussionReactionType,
+  EngagementTargetType,
   LearningNotesListResponse,
   LearningRepliesListResponse,
   ListLearningNotesQuery,
@@ -17,6 +19,7 @@ import type {
   LessonDiscussionCountsResponse,
   ListLessonDiscussionsQuery,
   PublicPopularDiscussionsResponse,
+  ReactionsListResponse,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
@@ -1027,27 +1030,30 @@ export function useUserNotes(
 }
 
 export function useReactionsQuery(
-  targetType: "thread" | "reply" | "note",
+  targetType: EngagementTargetType,
   targetId: string | undefined,
-  reactionFilter?: string,
+  reactionFilter?: DiscussionReactionType | "all" | string,
   options?: { enabled?: boolean },
 ) {
-  return useQuery({
+  return useInfiniteQuery<ReactionsListResponse>({
     queryKey: learningInteractionKeys.reactions(
       targetType,
       targetId ?? "",
       reactionFilter,
     ),
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       learningInteractionsService.listReactions({
         targetType,
         targetId: targetId!,
         reaction:
           reactionFilter && reactionFilter !== "all"
-            ? (reactionFilter as any)
+            ? (reactionFilter as DiscussionReactionType)
             : undefined,
         limit: 50,
+        ...(pageParam ? { cursor: pageParam as string } : {}),
       }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: Boolean(targetId) && (options?.enabled ?? true),
     staleTime: 10 * 1000,
   });

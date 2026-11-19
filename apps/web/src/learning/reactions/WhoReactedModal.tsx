@@ -4,7 +4,7 @@ import type {
   DiscussionReactionType,
   EngagementTargetType,
 } from "@veolms/contracts";
-import { useReactionsQuery } from "../../services/learning-interactions/learning-interactions.queries";
+import { useReactionsQuery } from "../../services/learning-interactions";
 import { DiscussionAvatar } from "../DiscussionAvatar";
 import { ProfileLink } from "../../profiles/ProfileLink";
 import { LoadingSpinnerIcon } from "../../components/LoadingSpinner";
@@ -49,15 +49,20 @@ export function WhoReactedModal({
     }
   }, [isOpen]);
 
-  const { data, isLoading } = useReactionsQuery(
-    targetType,
-    targetId,
-    activeTab,
-    { enabled: isOpen && Boolean(targetId) },
-  );
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useReactionsQuery(targetType, targetId, activeTab, {
+    enabled: isOpen && Boolean(targetId),
+  });
 
-  const users = data?.users ?? [];
-  const counts = data?.counts ?? { all: 0 };
+  const users = data?.pages.flatMap((page) => page.users) ?? [];
+  const counts = data?.pages[0]?.counts ?? { all: 0 };
 
   const closeDialog = () => {
     const dialog = dialogRef.current;
@@ -138,7 +143,18 @@ export function WhoReactedModal({
 
       {/* User list */}
       <div className="flex-1 overflow-y-auto p-3">
-        {isLoading ? (
+        {isError ? (
+          <div className="flex h-40 flex-col items-center justify-center gap-3 text-center text-sm text-(--muted)">
+            <p>Failed to load reactions.</p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="rounded-lg bg-(--surface-sunken) px-3 py-1.5 text-xs font-medium text-(--text) hover:bg-(--border) transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        ) : isLoading ? (
           <div className="flex h-40 items-center justify-center text-(--muted)">
             <LoadingSpinnerIcon className="h-6 w-6 animate-spin text-(--accent)" />
           </div>
@@ -147,76 +163,91 @@ export function WhoReactedModal({
             No reactions yet.
           </div>
         ) : (
-          <div className="divide-y divide-(--border)/40">
-            {users.map((user) => {
-              const reactionConfig = getReactionConfig(user.reaction);
-              const ReactionIcon = reactionConfig.icon;
+          <div className="space-y-3">
+            <div className="divide-y divide-(--border)/40">
+              {users.map((user) => {
+                const reactionConfig = getReactionConfig(user.reaction);
+                const ReactionIcon = reactionConfig.icon;
 
-              return (
-                <div
-                  key={user.id}
-                  className="flex items-center justify-between gap-3 px-2 py-2.5 transition-colors hover:bg-(--surface-sunken)/40 rounded-lg"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative shrink-0">
-                      <DiscussionAvatar
-                        src={user.avatarUrl}
-                        className="size-9"
-                        width={36}
-                        height={36}
-                      />
-                      <span
-                        className={`absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-(--surface) bg-(--surface) ${reactionConfig.colorClass}`}
-                      >
-                        <ReactionIcon size={11} weight="fill" />
-                      </span>
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        {user.username ? (
-                          <ProfileLink
-                            username={user.username}
-                            variant="name"
-                            className="truncate text-sm font-medium hover:underline text-(--text)"
-                          >
-                            {user.displayName}
-                          </ProfileLink>
-                        ) : (
-                          <span className="truncate text-sm font-medium text-(--text)">
-                            {user.displayName}
-                          </span>
-                        )}
-
-                        {user.role === "Instructor" && (
-                          <span className="rounded bg-(--accent-light,rgba(99,102,241,0.1)) px-1.5 py-0.5 text-[10px] font-semibold text-(--accent)">
-                            Instructor
-                          </span>
-                        )}
-                        {user.role === "Admin" && (
-                          <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-500">
-                            Admin
-                          </span>
-                        )}
+                return (
+                  <div
+                    key={`${user.id}-${user.reaction}`}
+                    className="flex items-center justify-between gap-3 px-2 py-2.5 transition-colors hover:bg-(--surface-sunken)/40 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <DiscussionAvatar
+                          src={user.avatarUrl}
+                          className="size-9"
+                          width={36}
+                          height={36}
+                        />
+                        <span
+                          className={`absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-(--surface) bg-(--surface) ${reactionConfig.colorClass}`}
+                        >
+                          <ReactionIcon size={11} weight="fill" />
+                        </span>
                       </div>
 
-                      {user.username && (
-                        <p className="truncate text-xs text-(--muted)">
-                          @{user.username}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {user.username ? (
+                            <ProfileLink
+                              username={user.username}
+                              variant="name"
+                              className="truncate text-sm font-medium hover:underline text-(--text)"
+                            >
+                              {user.displayName}
+                            </ProfileLink>
+                          ) : (
+                            <span className="truncate text-sm font-medium text-(--text)">
+                              {user.displayName}
+                            </span>
+                          )}
 
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${reactionConfig.badgeColorClass} flex items-center gap-1`}
-                  >
-                    <ReactionIcon size={13} weight="fill" />
-                    <span>{reactionConfig.label}</span>
-                  </span>
-                </div>
-              );
-            })}
+                          {user.role === "Instructor" && (
+                            <span className="rounded bg-(--accent-light,rgba(99,102,241,0.1)) px-1.5 py-0.5 text-[10px] font-semibold text-(--accent)">
+                              Instructor
+                            </span>
+                          )}
+                          {user.role === "Admin" && (
+                            <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-500">
+                              Admin
+                            </span>
+                          )}
+                        </div>
+
+                        {user.username && (
+                          <p className="truncate text-xs text-(--muted)">
+                            @{user.username}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${reactionConfig.badgeColorClass} flex items-center gap-1`}
+                    >
+                      <ReactionIcon size={13} weight="fill" />
+                      <span>{reactionConfig.label}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {hasNextPage && (
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => void fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="rounded-lg bg-(--surface-sunken) px-3 py-1.5 text-xs font-medium text-(--text) hover:bg-(--border) transition-colors disabled:opacity-50"
+                >
+                  {isFetchingNextPage ? "Loading..." : "Load more"}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
