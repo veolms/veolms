@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { NextLessonInfo } from "../../player";
 import type { Lesson } from "../../courseContent";
 import { mediaService } from "../../../services/media";
@@ -16,10 +16,17 @@ import {
   useLiveLessonProgressSource,
   type LiveLessonProgress,
 } from "../../player/liveLessonProgress";
-import { seedResumePositionFromProgress } from "../../player/lessonPlayerPersistence";
+import {
+  readResumePosition,
+  seedResumePositionFromProgress,
+} from "../../player/lessonPlayerPersistence";
+import { noteLessonPosition } from "../../lessonPositionOutbox";
 import { LESSON_PROGRESS_COMPLETE_THRESHOLD } from "../workspaceConstants";
 import { isPlaceholderLesson } from "../../staticLessonPage";
-import type { useCourseOverview } from "../../../services/courses";
+import {
+  useCourseAccess,
+  type useCourseOverview,
+} from "../../../services/courses";
 
 export interface UseLessonProgressStateArgs {
   courseSlug: string | undefined;
@@ -95,6 +102,26 @@ export function useLessonProgressState({
         : undefined,
     [adaptedCurriculum],
   );
+  // Progress is kept by the server only for a learner holding a grant to
+  // the course or a free course open to everyone (learning-progress.service's
+  // rule). Anyone else watching a free preview lesson of a course they do
+  // not hold had every read and every save refused (403), every few
+  // seconds and on from the mini player after they left. The access answer
+  // is the one the page already holds (no request of its own).
+  const courseAccess = useCourseAccess(courseOverview?.course.slug, {
+    enabled: Boolean(userId),
+    fromTabCopy: true,
+  }).data;
+  // The server says so itself (`keepsProgress`): a grant, or a free course
+  // open to everyone. Full access alone is not enough (an admin, a creator
+  // or staff previewing every course keep none). An older answer without
+  // it falls back to enrolment or an open free course.
+  const progressKept =
+    courseAccess !== undefined &&
+    (courseAccess.keepsProgress ??
+      (courseAccess.enrolled ||
+        (courseAccess.pricing.pricingType === "free" &&
+          courseAccess.canSelfEnroll)));
   const {
     lessonProgress: persistedLessonProgress,
     progressKnown,
@@ -105,6 +132,7 @@ export function useLessonProgressState({
     lessonIdsByNumber,
     enabled:
       Boolean(courseOverview?.course.slug) &&
+      progressKept &&
       !(
         courseAccessRefused &&
         (courseOverview?.pricing?.pricingType === "paid" ||
@@ -116,10 +144,10 @@ export function useLessonProgressState({
   const progressCourseKey = courseOverview?.course.slug;
   const detachedProgressTarget = useMemo(
     () =>
-      userId && progressCourseKey
+      userId && progressCourseKey && progressKept
         ? { userId, courseKey: progressCourseKey, lessonIdsByNumber }
         : undefined,
-    [lessonIdsByNumber, progressCourseKey, userId],
+    [lessonIdsByNumber, progressCourseKey, progressKept, userId],
   );
   // Lessons this account has started elsewhere resume where it left them,
   // for the player and for the hover/next-lesson preload alike (both read
@@ -156,6 +184,42 @@ export function useLessonProgressState({
     return merged;
   }, [localLessonProgress, persistedLessonProgress]);
   const liveLessonProgress = useLiveLessonProgressSource(lessonProgress);
+  // A finished lesson opened again is where the learner carries on, even
+  // left before it played a moment (its video still loading): "Continue"
+  // took them back to the lesson they had stopped at before (a learner
+  // starting the course over, 2026-11-14). Only a lesson played counts as
+  // played last, so opening it is noted as played, at the place it opens
+  // at. At least 1 second: a position of 0 is what a lesson watched to its
+  // end leaves, and from there the server moves on to the next one. Once
+  // per lesson opened, and only for one finished when it was opened (one
+  // finishing while it plays is not opened again).
+  const notedOpenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!progressKept || !progressKnown || !progressCourseKey) return;
+    const durationSeconds =
+      adaptedCurriculum?.lessonsByNumber.get(selectedLesson)?.durationSeconds;
+    if (!durationSeconds || notedOpenRef.current === selectedLesson) return;
+    notedOpenRef.current = selectedLesson;
+    if ((lessonProgress[selectedLesson] ?? 0) < 100) return;
+    noteLessonPosition(
+      progressCourseKey,
+      selectedLesson,
+      Math.max(
+        1,
+        readResumePosition(
+          `${encodeURIComponent(progressCourseKey)}-lesson-${selectedLesson}`,
+          durationSeconds,
+        ),
+      ),
+    );
+  }, [
+    adaptedCurriculum,
+    lessonProgress,
+    progressCourseKey,
+    progressKept,
+    progressKnown,
+    selectedLesson,
+  ]);
   // Every lesson is finished, by the rule that gives a lesson its check mark
   // in the list. The end screen says the course is complete only then.
   const courseComplete = useMemo(

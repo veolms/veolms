@@ -3,8 +3,10 @@ import type {
   ChatRoomSummary,
   ChatSenderRole,
 } from "@veolms/contracts";
+import { chatUploadMaxBytes } from "@veolms/contracts";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 
+import { ROLE_LEVEL } from "./chat.access.ts";
 import { ChatErrors } from "./chat.errors.ts";
 import { chatRoomIconUrl, presentMessage, preview } from "./chat.presenters.ts";
 import type { ChatRuntime } from "./chat.runtime.ts";
@@ -512,7 +514,13 @@ export function createRoomViews(runtime: ChatRuntime) {
     }
     return {
       ...summary,
-      me: { ...summary.me, isHelper: roomAccess.isHelper },
+      me: {
+        ...summary.me,
+        isHelper: roomAccess.isHelper,
+        uploadMaxBytes: chatUploadMaxBytes(
+          ROLE_LEVEL[roomAccess.role] >= ROLE_LEVEL.staff,
+        ),
+      },
       memberNames: names
         .filter((n) => n.id !== userId)
         .map((n) => n.display_name),

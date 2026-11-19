@@ -16,14 +16,15 @@ This repository is a monorepo containing the following packages and applications
 
 ## Tests that guard features
 
-Three sets of tests protect what learners and staff rely on. Run all of them with
+These sets of tests protect what learners and staff rely on. Run all of them with
 `pnpm test:all` before pushing to `dev`.
 
-| Set            | Where                       | Command             | Needs                          |
-| -------------- | --------------------------- | ------------------- | ------------------------------ |
-| API unit tests | `apps/api/src/**/*.test.ts` | `pnpm test:api`     | nothing                        |
-| API flow tests | `apps/api/test/flows/`      | `pnpm test:flows`   | Docker Postgres                |
-| Browser tests  | `apps/web/tests/journeys/`  | `pnpm test:browser` | Docker Postgres, Google Chrome |
+| Set            | Where                                    | Command                                   | Needs                          |
+| -------------- | ---------------------------------------- | ----------------------------------------- | ------------------------------ |
+| API unit tests | `apps/api/src/**/*.test.ts`              | `pnpm test:api`                           | nothing                        |
+| Player tests   | `packages/video-player/src/**/*.test.ts` | `pnpm --filter @veolms/video-player test` | nothing                        |
+| API flow tests | `apps/api/test/flows/`                   | `pnpm test:flows`                         | Docker Postgres                |
+| Browser tests  | `apps/web/tests/journeys/`               | `pnpm test:browser`                       | Docker Postgres, Google Chrome |
 
 The flow and browser tests cover: signing in, who can open which lesson (the lesson
 lock), buying and joining courses, video playback, learning progress, and the staff

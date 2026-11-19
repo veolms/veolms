@@ -39,6 +39,7 @@ export interface UseWizardNavigationStateResult {
   routeEditTab: string | undefined;
   searchParams: URLSearchParams;
   activeEditId: string | null;
+  setCreatedCourseId: Dispatch<SetStateAction<string | null>>;
   requestedSectionId: string | null;
   requestedLessonId: string | null;
   activeStep: CourseWizardStepId;
@@ -77,13 +78,19 @@ export function useWizardNavigationState({
     () => new URLSearchParams(location?.search ?? ""),
     [location?.search],
   );
+  const [createdCourseId, setCreatedCourseId] = useState<string | null>(null);
   const activeEditId =
     propCourseId ||
     propEditCourseId ||
     routeCourseId ||
     searchParams.get("edit") ||
     searchParams.get("courseId") ||
+    createdCourseId ||
     null;
+
+  useEffect(() => {
+    if (routeCourseId && createdCourseId) setCreatedCourseId(null);
+  }, [routeCourseId, createdCourseId]);
 
   const requestedSectionId = searchParams.get("sectionId");
   const requestedLessonId = searchParams.get("lessonId");
@@ -309,7 +316,10 @@ export function useWizardNavigationState({
 
     // Let the route-to-state effect below settle when the user navigates to a
     // different course or enters the editor through a different tab URL.
-    if (previousEditorRouteIdentityRef.current !== editorRouteIdentity) {
+    if (
+      !createdCourseId &&
+      previousEditorRouteIdentityRef.current !== editorRouteIdentity
+    ) {
       return;
     }
 
@@ -323,6 +333,7 @@ export function useWizardNavigationState({
     void navigate(canonicalPath, { replace: shouldReplace });
   }, [
     activeEditId,
+    createdCourseId,
     activeStep,
     editorRouteIdentity,
     location.pathname,
@@ -346,6 +357,7 @@ export function useWizardNavigationState({
     routeEditTab,
     searchParams,
     activeEditId,
+    setCreatedCourseId,
     requestedSectionId,
     requestedLessonId,
     activeStep,

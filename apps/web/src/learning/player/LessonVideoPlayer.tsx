@@ -297,6 +297,8 @@ export interface LessonVideoPlayerProps {
   subscribeSwipeOutsideFraction?: SubscribeOutsideFraction;
   onMobileLandscapeFullscreenChange?: (active: boolean) => void;
   onProgressChange?: (progress: number) => void;
+  /** The loaded media's duration, for validating inline timestamps. */
+  onDurationChange?: (seconds: number | null) => void;
   /**
    * Called on every time update once a minute or less of the video is left
    * (see `NEAR_LESSON_END_SECONDS`); the owner decides what to do once.
@@ -542,6 +544,7 @@ export function LessonVideoPlayer({
   media,
   totalLessons,
   onProgressChange,
+  onDurationChange,
   onNearLessonEnd,
   watchTimeCourseKey,
   onAutoplayEnabledChange = () => undefined,
@@ -1117,6 +1120,11 @@ export function LessonVideoPlayer({
         setAutoplayCancelled(false);
         const snapshot = playerRef.current?.getSnapshot();
         const actualDuration = event.detail.duration;
+        onDurationChange?.(
+          Number.isFinite(actualDuration) && actualDuration > 0
+            ? actualDuration
+            : null,
+        );
         const loadedPosition = snapshot?.media.currentTime ?? 0;
         // A lesson reopened at its end, or within moments of it, used to
         // start on its last second, finish again at once and move on to the
@@ -1372,6 +1380,14 @@ export function LessonVideoPlayer({
             textTracks[0]!;
           playerRef.current?.selectTextTrack(preferredTrack.id);
         }
+      } else if (event.type === "durationchange") {
+        onDurationChange?.(
+          Number.isFinite(event.detail.duration) && event.detail.duration > 0
+            ? event.detail.duration
+            : null,
+        );
+      } else if (event.type === "unloaded") {
+        onDurationChange?.(null);
       }
     },
     [
@@ -1381,6 +1397,7 @@ export function LessonVideoPlayer({
       playbackTelemetry,
       onLessonEnded,
       onProgressChange,
+      onDurationChange,
       onNearLessonEnd,
       trackWatchTime,
       persistResumePosition,

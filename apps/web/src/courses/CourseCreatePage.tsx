@@ -113,6 +113,7 @@ export function CourseCreatePage({
     routeEditTab,
     searchParams,
     activeEditId,
+    setCreatedCourseId,
     requestedSectionId,
     requestedLessonId,
     activeStep,
@@ -988,6 +989,8 @@ export function CourseCreatePage({
     saveAllDirtyLessons,
     handleToggleLessonExpand,
   } = useLessonHandlers({
+    onLessonCreated: (sectionId, lessonId) =>
+      navigateToCurriculumFocus(sectionId, lessonId),
     currentCourseId,
     currentCourseIdRef,
     refetchEditor,
@@ -1170,6 +1173,7 @@ export function CourseCreatePage({
     persistBasicsField,
     handleShowInstructorNameChange,
   } = useBasicsPersistence({
+    onCourseCreated: setCreatedCourseId,
     setServerBasics,
     setBasicsDraft,
     serverBasicsRef,

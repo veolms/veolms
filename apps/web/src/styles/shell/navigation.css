@@ -424,7 +424,7 @@
     .sidebar-appearance,
     .mobile-menu-sheet__appearance
   ).sidebar-appearance--mobile-dock
-  > button {
+  > :is(button, a) {
   position: relative;
   display: inline-flex;
   min-width: 0;
@@ -447,7 +447,7 @@
     .sidebar-appearance,
     .mobile-menu-sheet__appearance
   ).sidebar-appearance--mobile-dock
-  > button:not(.is-active) {
+  > :is(button, a):not(.is-active) {
   background: color-mix(in srgb, var(--canvas) 86%, black 14%);
 }
 
@@ -455,7 +455,7 @@
     .sidebar-appearance,
     .mobile-menu-sheet__appearance
   ).sidebar-appearance--mobile-dock
-  > button
+  > :is(button, a)
   > svg {
   filter: none;
 }
@@ -1731,6 +1731,20 @@
   .courses-app > .courses-main,
   .courses-app > .courses-main-frame > .courses-main {
     z-index: 1;
+  }
+
+  /* In the framed layout the frame is a box of its own, and its z-index
+     above holds the page at that level already. The scroller inside it must
+     not be a level of its own as well: Safari (to 27 at least) then cuts
+     every `position: fixed` box inside the scroller to the scroller's own
+     box, and the lesson's course content, a fixed card beside the frame
+     (split-frame-pane.css), was not drawn at all, only its frame's shadow
+     (ticket #1029; since 2026-11-04). Chrome draws it either way. */
+  :root[data-content-layout="framed"]
+    .courses-app
+    > .courses-main-frame
+    > .courses-main {
+    z-index: auto;
   }
 }
 

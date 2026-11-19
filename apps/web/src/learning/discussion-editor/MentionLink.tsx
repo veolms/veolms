@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
 import { ProfileLink } from "../../profiles/ProfileLink";
-import { usePublicProfile } from "../../services/auth";
+import { useMemberUsername } from "../../services/auth";
 
 /**
  * An "@name" in a post. Only a member who exists is marked (and opens their
- * profile); any other "@word" reads as the plain text it is. Each name is
- * looked up once and kept for a few minutes (usePublicProfile), and until
- * the answer comes the text stays plain.
+ * profile); any other "@word" reads as the plain text it is. The names on
+ * screen are checked together and kept for a few minutes
+ * (useMemberUsername), and until the answer comes the text stays plain.
  */
 export function MentionLink({ username }: { username: string }) {
-  const profile = usePublicProfile(username);
-  if (!profile.data) return <>@{username}</>;
+  const member = useMemberUsername(username);
+  if (!member.data) return <>@{username}</>;
   return (
     <ProfileLink
       username={username}

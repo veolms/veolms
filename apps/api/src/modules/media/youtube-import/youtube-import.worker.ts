@@ -29,8 +29,8 @@ import { capturePosterFrame, posterKeyFor } from "./poster.ts";
 import { outputPrefixFor } from "./youtube-import.cancel.ts";
 import {
   downloadHlsLadder,
+  encodeVideoToHlsLadder,
   readLocalLadder,
-  transmuxMp4ToHls,
 } from "./source/hls.ts";
 import {
   YoutubeUnavailableError,
@@ -338,22 +338,33 @@ export function startYoutubeImportWorker({
             },
           });
         } else {
-          // No HLS ladder: YouTube's single muxed MP4 (360p), stream-copied to HLS.
-          progress(
-            STAGE_END.resolved + 1,
-            "Downloading from YouTube (single quality)",
-            true,
-          );
+          // No HLS ladder: the best picture and sound YouTube has up to the
+          // highest quality wanted, encoded here into every quality. It was
+          // YouTube's one 360p file, and such lessons had only 360p.
+          progress(STAGE_END.resolved + 1, "Downloading from YouTube", true);
           await fs.rm(hlsDir, { recursive: true, force: true });
           await fs.mkdir(hlsDir, { recursive: true });
-          const mp4 = path.join(scratchDir, "source.mp4");
-          await downloadProgressiveVideo(ytdlp, job.source_url, mp4, signal);
-          await transmuxMp4ToHls(await tools.getFfmpeg(), mp4, hlsDir, {
-            quality: String(metadata.height ?? 360),
-            width: metadata.width,
+          const source = path.join(scratchDir, "source.mkv");
+          const ffmpeg = await tools.getFfmpeg();
+          await downloadProgressiveVideo(ytdlp, job.source_url, source, {
+            ffmpegPath: ffmpeg,
+            maxHeight: Math.max(
+              360,
+              ...config.YOUTUBE_IMPORT_QUALITIES.map(Number),
+            ),
             signal,
           });
-          await fs.rm(mp4, { force: true });
+          throwIfStopped();
+          progress(
+            STAGE_END.resolved + 2,
+            "Encoding every quality (this takes a while)",
+            true,
+          );
+          await encodeVideoToHlsLadder(ffmpeg, source, hlsDir, {
+            qualities: config.YOUTUBE_IMPORT_QUALITIES,
+            signal,
+          });
+          await fs.rm(source, { force: true });
         }
         throwIfStopped();
         await write({

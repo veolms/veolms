@@ -4,7 +4,8 @@ import type { Readable } from "node:stream";
 import {
   CHAT_RESTORE_DAYS,
   CHAT_UPLOAD_DAILY_BYTES,
-  CHAT_UPLOAD_MAX_BYTES,
+  CHAT_UPLOAD_MULTIPART_FROM_BYTES,
+  chatUploadMaxBytes,
   CHAT_UPLOAD_MIME_TYPES,
   type ChatAttachment,
   type ChatUploadKind,
@@ -22,6 +23,18 @@ import type { ChatRuntime } from "../shared/chat.runtime.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PUT_EXPIRES_SECONDS = 15 * 60;
+/** A file sent in parts may take hours on a slow line. */
+const PART_EXPIRES_SECONDS = 12 * 60 * 60;
+const MIB = 1024 * 1024;
+/** Storage takes at most 10,000 parts per file, each at least 5 MiB. */
+const MAX_PARTS = 10_000;
+const MIN_PART_BYTES = 64 * MIB;
+
+/** Whole MiB, at least 64 MiB, and few enough parts for storage. */
+export function multipartPartSize(fileSize: number): number {
+  const forPartLimit = Math.ceil(Math.ceil(fileSize / MAX_PARTS) / MIB) * MIB;
+  return Math.max(MIN_PART_BYTES, forPartLimit);
+}
 /** Read links expire on 6-hour boundaries so the same URL repeats (cacheable). */
 const READ_BUCKET_SECONDS = 6 * 60 * 60;
 
@@ -119,6 +132,30 @@ export function createUploadsService(
     diskDirectory: join(process.cwd(), ".data", "chat-uploads"),
   });
 
+  /**
+   * Joins a file sent in parts. Storage's own list of the parts it holds is
+   * used (the browser cannot read their ETags across origins). A retry after
+   * the parts were already joined finds no upload to join: the size check
+   * that follows decides then.
+   */
+  async function joinParts(storageKey: string, storageUploadId: string) {
+    let parts: Array<{ partNumber: number; etag: string; size: number }>;
+    try {
+      parts = await storage.listMultipartUploadParts(
+        storageKey,
+        storageUploadId,
+      );
+    } catch {
+      return;
+    }
+    if (parts.length === 0) throw ChatErrors.uploadMismatch();
+    try {
+      await storage.completeMultipartUpload(storageKey, storageUploadId, parts);
+    } catch {
+      throw ChatErrors.uploadMismatch();
+    }
+  }
+
   /** A short-lived link, on 6-hour boundaries so browsers can cache it. */
   async function signedRedirect(key: string, disposition?: string) {
     const now = Math.floor(Date.now() / 1000);
@@ -200,10 +237,12 @@ export function createUploadsService(
       const mimeType = baseMime(input.mimeType);
       const allowed = CHAT_UPLOAD_MIME_TYPES[input.kind] as readonly string[];
       if (!allowed.includes(mimeType)) throw ChatErrors.uploadType();
-      const max = CHAT_UPLOAD_MAX_BYTES[input.kind];
+      // Learners up to 200 MB a file; staff as much as storage takes.
+      const isStaff = ROLE_LEVEL[ctx.role] >= ROLE_LEVEL.staff;
+      const max = chatUploadMaxBytes(isStaff);
       if (input.size > max) throw ChatErrors.uploadTooBig(max);
 
-      if (ROLE_LEVEL[ctx.role] < ROLE_LEVEL.staff) {
+      if (!isStaff) {
         const used = await repository.uploadedBytesSince(
           database,
           userId,
@@ -240,6 +279,33 @@ export function createUploadsService(
           uploadUrl: `/v1/chat/uploads/${id}/content`,
           headers: { "Content-Type": mimeType },
           viaApi: true,
+        };
+      }
+      // A large file (staff only: learners stop at 200 MB) goes up in
+      // parts: one request may carry at most 5 GB.
+      if (input.size > CHAT_UPLOAD_MULTIPART_FROM_BYTES) {
+        const storageUploadId = await storage.createMultipartUpload(
+          storageKey,
+          mimeType,
+        );
+        const partSize = multipartPartSize(input.size);
+        const partCount = Math.ceil(input.size / partSize);
+        const partUrls = await Promise.all(
+          Array.from({ length: partCount }, (_, index) =>
+            storage.getPresignedUploadPartUrl(
+              storageKey,
+              storageUploadId,
+              index + 1,
+              PART_EXPIRES_SECONDS,
+            ),
+          ),
+        );
+        return {
+          uploadId: id,
+          uploadUrl: "",
+          headers: {} as Record<string, string>,
+          viaApi: false,
+          multipart: { storageUploadId, partSize, partUrls },
         };
       }
       const uploadUrl = await storage.getPresignedPutUrl(
@@ -281,12 +347,15 @@ export function createUploadsService(
     },
 
     /** Checks what storage holds against what was announced, then marks it ready. */
-    async complete(userId: string, uploadId: string) {
+    async complete(userId: string, uploadId: string, storageUploadId?: string) {
       const upload = await repository.findUpload(database, uploadId);
       if (!upload || upload.owner_id !== userId)
         throw ChatErrors.uploadNotFound();
       if (upload.status === "pending") {
         if (hasObjectStorage()) {
+          if (storageUploadId) {
+            await joinParts(upload.storage_key, storageUploadId);
+          }
           const head = await storage.headObject(upload.storage_key);
           if (
             !head ||

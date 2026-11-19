@@ -12,7 +12,6 @@ export interface MobileSheetProfileProps {
   shellProfileDisplayName: string;
   shellProfileAvatarUrl: string | null;
   shellProfileAvatarSrcSet: { url: string; width: number; height: number }[];
-  unreadNotificationCount: number;
   setProfileMenu: Dispatch<SetStateAction<boolean>>;
   setEdgeSidebarOpen: Dispatch<SetStateAction<boolean>>;
   dismissProfileMenuThen: (afterDismiss: () => void) => void;
@@ -29,7 +28,6 @@ export function MobileSheetProfile({
   shellProfileDisplayName,
   shellProfileAvatarUrl,
   shellProfileAvatarSrcSet,
-  unreadNotificationCount,
   setProfileMenu,
   setEdgeSidebarOpen,
   dismissProfileMenuThen,
@@ -53,7 +51,6 @@ export function MobileSheetProfile({
             username={activeUser.username}
             avatarUrl={shellProfileAvatarUrl}
             avatarSrcSet={shellProfileAvatarSrcSet}
-            unreadNotificationCount={unreadNotificationCount}
             onClose={() => setProfileMenu(false)}
             onNavigate={(path) => {
               setEdgeSidebarOpen(false);

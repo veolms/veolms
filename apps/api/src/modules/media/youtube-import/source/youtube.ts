@@ -242,12 +242,26 @@ export async function readVideoMetadata(
   };
 }
 
-/** yt-dlp's own download of a muxed MP4 (format 18 = 360p), for videos with no HLS. */
+/**
+ * yt-dlp's own download of a video YouTube offers no HLS ladder for: its
+ * best picture up to `maxHeight`, with its best sound, put together in one
+ * file (Matroska, which holds whatever codecs they come in; the qualities
+ * are encoded from it, see `encodeVideoToHlsLadder`).
+ *
+ * It used to take format 18, YouTube's one file with picture and sound
+ * together, which is 360p: such lessons had no other quality (lecture-153
+ * of the Node.js course, reported 2026-11-16). Format 18 is still the last
+ * resort when the separate streams cannot be had.
+ */
 export async function downloadProgressiveVideo(
   ytdlp: YtDlp,
   videoUrl: string,
-  outputMp4Path: string,
-  signal?: AbortSignal,
+  outputPath: string,
+  {
+    ffmpegPath,
+    maxHeight,
+    signal,
+  }: { ffmpegPath: string; maxHeight: number; signal?: AbortSignal },
 ): Promise<void> {
   const result = await runProcess(
     ytdlp.path,
@@ -256,9 +270,13 @@ export async function downloadProgressiveVideo(
         "--no-warnings",
         "--no-playlist",
         "-f",
-        "18/best[ext=mp4][vcodec!=none][acodec!=none]/best",
+        `bv*[height<=${maxHeight}]+ba/b[height<=${maxHeight}]/18/best`,
+        "--merge-output-format",
+        "mkv",
+        "--ffmpeg-location",
+        ffmpegPath,
         "-o",
-        outputMp4Path,
+        outputPath,
         videoUrl,
       ],
       ytdlp,

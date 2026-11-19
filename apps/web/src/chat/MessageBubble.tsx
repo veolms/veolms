@@ -8,6 +8,7 @@ import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { ChatMessage } from "@veolms/contracts";
 import { useRef, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router";
 
 import { cn } from "../lib/utils";
 import { ChatAvatar } from "./ChatAvatar";
@@ -17,7 +18,7 @@ import { MessageAttachments, type ViewableMedia } from "./MessageAttachments";
 import { MessageMenu, type MessageAction } from "./MessageMenu";
 import { MessageText } from "./MessageText";
 import { ReactionDetails } from "./ReactionDetails";
-import { ReplyQuoteBody } from "./ReplyQuote";
+import { quoteTitle, ReplyQuoteBody } from "./ReplyQuote";
 
 export interface BubbleContext {
   viewerId: string | null;
@@ -87,6 +88,7 @@ export function MessageBubble({
   onJumpTo: (seq: number, from?: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
   // WhatsApp folds a very long message: the start, then "Read more".
   const [expanded, setExpanded] = useState(false);
   const collapsed =
@@ -336,11 +338,22 @@ export function MessageBubble({
         {message.replyTo && !deleted ? (
           <button
             type="button"
-            onClick={() => onJumpTo(message.replyTo!.seq, message.seq)}
+            onClick={() =>
+              message.replyTo!.roomId
+                ? // "Reply privately": the quote is in the group (opened at
+                  // it, as "Copy link" does).
+                  void navigate(
+                    `/chat/${message.replyTo!.roomId}?seq=${message.replyTo!.seq}`,
+                  )
+                : onJumpTo(message.replyTo!.seq, message.seq)
+            }
             className="mb-1 block w-full cursor-pointer overflow-hidden rounded-md border-0 border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2 py-1 text-left"
           >
             <ReplyQuoteBody
-              title={message.replyTo.senderName ?? "Message"}
+              title={quoteTitle(
+                message.replyTo.senderName ?? "Message",
+                message.replyTo.roomName,
+              )}
               text={message.replyTo.preview}
               media={message.replyTo.media}
               deleted={message.replyTo.deleted}

@@ -406,6 +406,16 @@ export const authService = {
     return response;
   },
 
+  /** Which of these names (up to 25) are members' usernames. */
+  listExistingUsernames: async (
+    names: readonly string[],
+  ): Promise<string[]> => {
+    const response = await api.get<{ usernames: string[] }>(
+      `/auth/usernames/existing?names=${encodeURIComponent(names.join(","))}`,
+    );
+    return response.usernames;
+  },
+
   getPublicProfile: async (
     username: string,
   ): Promise<PublicProfileResponse> => {

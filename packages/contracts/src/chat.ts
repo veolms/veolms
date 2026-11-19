@@ -94,13 +94,23 @@ export const chatPersonSchema = z.object({
 export type ChatPerson = z.infer<typeof chatPersonSchema>;
 
 export const CHAT_MAX_ATTACHMENTS_PER_MESSAGE = 10;
-/** Per file, by kind (photos are made smaller in the browser first). */
-export const CHAT_UPLOAD_MAX_BYTES = {
-  image: 10 * 1024 * 1024,
-  video: 100 * 1024 * 1024,
-  audio: 16 * 1024 * 1024,
-  file: 25 * 1024 * 1024,
-} as const;
+/** A learner's file in chat, any kind (the owner's choice, 18 Nov). */
+export const CHAT_UPLOAD_LEARNER_MAX_BYTES = 200 * 1024 * 1024;
+/**
+ * Staff (admins, instructors, staff) have no limit of their own (the
+ * owner's choice, 19 Nov): this is only storage's ceiling for one file
+ * (Cloudflare R2: 5 TB, sent in parts).
+ */
+export const CHAT_UPLOAD_STAFF_MAX_BYTES = 5 * 1024 ** 4;
+/**
+ * Files larger than this go up in parts (S3 multipart): one request may
+ * carry at most 5 GB, and a large file then survives a dropped part.
+ */
+export const CHAT_UPLOAD_MULTIPART_FROM_BYTES = 256 * 1024 * 1024;
+/** The largest file this person may send in this chat. */
+export function chatUploadMaxBytes(isStaff: boolean): number {
+  return isStaff ? CHAT_UPLOAD_STAFF_MAX_BYTES : CHAT_UPLOAD_LEARNER_MAX_BYTES;
+}
 /** What one learner may upload per day across all chats. */
 export const CHAT_UPLOAD_DAILY_BYTES = 300 * 1024 * 1024;
 export const CHAT_VOICE_MAX_SECONDS = 15 * 60;
@@ -164,8 +174,26 @@ export const chatCreateUploadResponseSchema = z.object({
   headers: z.record(z.string(), z.string()),
   /** True when the URL is the API itself (development without object storage). */
   viaApi: z.boolean(),
+  /**
+   * A large file goes up in parts instead (`uploadUrl` is then empty):
+   * PUT bytes [i·partSize, (i+1)·partSize) to `partUrls[i]`, then complete
+   * the upload with `storageUploadId`.
+   */
+  multipart: z
+    .object({
+      storageUploadId: z.string(),
+      partSize: z.number().int().min(1),
+      partUrls: z.array(z.string()).min(1),
+    })
+    .optional(),
 });
 export const chatUploadParamsSchema = z.strictObject({ uploadId: z.uuid() });
+export const chatCompleteUploadRequestSchema = z
+  .strictObject({
+    /** The multipart upload to join (a file sent in parts). */
+    storageUploadId: z.string().min(1).max(1024).optional(),
+  })
+  .optional();
 export const chatCompleteUploadResponseSchema = z.object({
   attachment: chatAttachmentSchema,
 });
@@ -237,6 +265,13 @@ export const chatMessageSchema = z.object({
         })
         .nullable()
         .optional(),
+      /**
+       * "Reply privately": the group the quoted message is in (WhatsApp
+       * shows "Name · Group" over the quote). Absent for a reply in the
+       * same chat.
+       */
+      roomId: z.uuid().optional(),
+      roomName: z.string().nullable().optional(),
     })
     .nullable(),
   mentions: z.array(z.uuid()),
@@ -357,6 +392,8 @@ export const chatRoomSummarySchema = z.object({
       .nullable(),
     canModerate: z.boolean(),
     isHelper: z.boolean(),
+    /** The largest file you may send here (chat details only). */
+    uploadMaxBytes: z.number().int().optional(),
     restriction: chatRestrictionSummarySchema.nullable(),
   }),
 });
@@ -482,6 +519,11 @@ export const chatSendMessageRequestSchema = z
     /** The text, or a caption when files are attached (then it may be empty). */
     body: z.string().trim().max(CHAT_BODY_MAX_CHARS).default(""),
     replyToSeq: seqSchema.optional(),
+    /**
+     * "Reply privately": `replyToSeq` numbers a message of this group, sent
+     * by the person this private chat is with.
+     */
+    replyToRoomId: z.uuid().optional(),
     mentions: z.array(z.uuid()).max(50).optional(),
     mentionAll: z.boolean().optional(),
     /** Uploads finished with POST /chat/uploads/:id/complete. */

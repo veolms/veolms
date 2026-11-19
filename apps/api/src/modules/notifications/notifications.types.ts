@@ -153,6 +153,13 @@ export interface ChatMessagePush {
   seq: number;
   senderId: string;
   senderName: string;
+  /**
+   * Pictures for the Android notification: public, static PNG/JPEG/WebP
+   * URLs, or null/absent for none. The sender's (for a reaction, the
+   * reactor's) photo, and the group's picture (never for a private chat).
+   */
+  senderAvatarUrl?: string | null;
+  roomIconUrl?: string | null;
   /** One line: the text, or what was attached ("Photo", "Voice message"). */
   text: string;
   sentAt: Date;

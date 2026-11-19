@@ -53,7 +53,7 @@ export function FormatBar({
     <div
       role="toolbar"
       aria-label="Formatting"
-      className="absolute bottom-full left-1/2 z-20 mb-1 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-solid border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_8px_24px_rgb(0_0_0/0.28)]"
+      className="absolute bottom-full left-1/2 z-40 mb-1 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-solid border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_8px_24px_rgb(0_0_0/0.28)]"
       // Keep the selection: a press here must not move focus.
       onMouseDown={(event) => event.preventDefault()}
     >

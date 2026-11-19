@@ -24,16 +24,6 @@ const STAFF_PAGES = [
   { path: "/team", heading: "Team" },
 ];
 
-const STAFF_MENU = [
-  "Orders",
-  "Students",
-  "Analytics",
-  "Coupons",
-  "Platform",
-  "Team",
-];
-
-/** The sidebar; its menu items are links. */
 function sidebar(page: Page) {
   return page.getByRole("complementary", { name: /navigation$/u });
 }
@@ -46,9 +36,9 @@ test("a learner has no staff menu, and staff pages send them home or say access 
 
   await page.goto("/");
   await expect(sidebar(page)).toHaveAccessibleName("Student navigation");
-  for (const item of STAFF_MENU) {
+  for (const { heading } of STAFF_PAGES) {
     await expect(
-      sidebar(page).getByRole("link", { name: item, exact: true }),
+      sidebar(page).getByRole("link", { name: heading, exact: true }),
     ).toHaveCount(0);
   }
 
@@ -110,10 +100,13 @@ test("the administrator has the staff menu, and every staff page opens", async (
 
   await page.goto("/");
   await expect(sidebar(page)).toHaveAccessibleName("Creator navigation");
-  for (const item of STAFF_MENU) {
-    await expect(
-      sidebar(page).getByRole("link", { name: item, exact: true }),
-    ).toBeVisible();
+  for (const { path, heading } of STAFF_PAGES) {
+    const link = sidebar(page).getByRole("link", {
+      name: heading,
+      exact: true,
+    });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("href", path);
   }
 
   for (const { path, heading } of STAFF_PAGES) {
@@ -141,11 +134,7 @@ test("a learner's purchase shows in the administrator's Orders, and the learner 
   await page.getByRole("button", { name: "Pay Now" }).click();
   const paymentWindow = page.getByRole("dialog", { name: "Payment window" });
   await paymentWindow.getByRole("button", { name: "Pay" }).click();
-  // After paying, the learner lands on their order page.
-  await expect(page).toHaveURL(/\/purchase-history\/[0-9a-f-]{36}$/u);
-  await expect(
-    page.getByRole("heading", { name: "Payment successful" }),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(new RegExp(`/learn/${course.slug}/`, "u"));
 
   // The administrator, in their own browser.
   const admin = await openSecondBrowser(browser, await academy.adminSession());

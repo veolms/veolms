@@ -75,6 +75,9 @@ export interface MessageRow {
   reply_attachments: ChatAttachmentRef[] | null;
   reply_deleted_at: Date | null;
   reply_sender_name: string | null;
+  reply_to_room_id?: string | null;
+  /** "Reply privately": the quoted group's name. */
+  reply_room_name?: string | null;
 }
 
 export interface RoomListRow extends ChatRoomRow {
@@ -142,12 +145,20 @@ export function createChatRepository() {
       .selectFrom("chat_messages as m")
       .leftJoin("users as su", "su.id", "m.sender_id")
       .leftJoin("users as du", "du.id", "m.deleted_by")
+      // A reply quotes a message of its own chat, or with "Reply privately"
+      // one of the group named by reply_to_room_id.
       .leftJoin("chat_messages as rm", (join) =>
         join
-          .onRef("rm.room_id", "=", "m.room_id")
+          .on(
+            "rm.room_id",
+            "=",
+            sql<string>`coalesce(m.reply_to_room_id, m.room_id)`,
+          )
           .onRef("rm.seq", "=", "m.reply_to_seq"),
       )
       .leftJoin("users as ru", "ru.id", "rm.sender_id")
+      .leftJoin("chat_rooms as rr", "rr.id", "m.reply_to_room_id")
+      .leftJoin("courses as rc", "rc.id", "rr.course_id")
       .select([
         "m.room_id",
         "m.seq",
@@ -160,6 +171,8 @@ export function createChatRepository() {
         "m.kind",
         "m.body",
         "m.reply_to_seq",
+        "m.reply_to_room_id",
+        sql<string | null>`coalesce(rr.title, rc.title)`.as("reply_room_name"),
         // node-postgres does not parse uuid[]; text[] arrives as an array.
         sql<string[]>`m.mentions::text[]`.as("mentions"),
         "m.mention_all",
@@ -1808,6 +1821,24 @@ export function createChatRepository() {
         ids.push(id);
       }
       return ids;
+    },
+
+    /** "Reply privately": the quote is of `fromSeq` in group `fromRoomId`. */
+    async markPrivateReply(
+      db: Executor,
+      roomId: string,
+      seq: number,
+      quote: { fromRoomId: string; fromSeq: number },
+    ) {
+      await db
+        .updateTable("chat_messages")
+        .set({
+          reply_to_room_id: quote.fromRoomId,
+          reply_to_seq: String(quote.fromSeq),
+        })
+        .where("room_id", "=", roomId)
+        .where("seq", "=", String(seq))
+        .execute();
     },
 
     async markForwarded(db: Executor, roomId: string, seq: number) {

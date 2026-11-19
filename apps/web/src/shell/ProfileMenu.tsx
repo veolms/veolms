@@ -36,7 +36,6 @@ export interface ProfileIdentityData {
 
 interface ProfileMenuIdentityProps extends ProfileIdentityData {
   variant?: "menu" | "mobile";
-  unreadNotificationCount?: number;
   onNavigate: (path: string) => void;
   onClose?: () => void;
 }
@@ -47,7 +46,6 @@ export function ProfileMenuIdentity({
   avatarUrl,
   avatarSrcSet,
   variant = "menu",
-  unreadNotificationCount = 0,
   onNavigate,
   onClose,
 }: ProfileMenuIdentityProps) {
@@ -92,12 +90,6 @@ export function ProfileMenuIdentity({
             avatarUrl={avatarUrl}
             avatarSrcSet={avatarSrcSet}
           />
-          {unreadNotificationCount > 0 ? (
-            <i
-              className="courses-profile__presence"
-              aria-label={`${unreadNotificationCount} unread notifications`}
-            />
-          ) : null}
         </span>
         <span className="profile-menu__identity-copy grid min-w-0 gap-0.5 text-left">
           <strong className="truncate text-[0.84rem] font-semibold text-(--text)">
@@ -139,7 +131,6 @@ interface ProfileMenuProps {
   role: CourseRole;
   allowedRoles: readonly CourseRole[];
   userRoles?: readonly string[] | null;
-  unreadNotificationCount?: number;
   sidebarHidden?: boolean;
   includeSidebarControl?: boolean;
   beforeAccountContent?: ReactNode;
@@ -194,7 +185,6 @@ export function ProfileMenu({
   role,
   allowedRoles,
   userRoles,
-  unreadNotificationCount = 0,
   sidebarHidden = false,
   includeSidebarControl = true,
   beforeAccountContent,
@@ -343,7 +333,6 @@ export function ProfileMenu({
           {identity ? (
             <ProfileMenuIdentity
               {...identity}
-              unreadNotificationCount={unreadNotificationCount}
               onNavigate={onNavigate}
               onClose={onClose}
             />

@@ -802,13 +802,6 @@ export function CoursesPage({
     setEdgeSidebarOpen(false);
     dismissMobileMenuThen(() => onNavigatePage("/notifications"));
   };
-  // Reading mode's switch, at the top of the settings (gear) menu.
-  const settingsMenuReadingMode = (mobile: boolean) => ({
-    enabled: readingModeEnabled,
-    onToggle: () => updateReadingMode({ enabled: !readingModeEnabled }),
-    onOpenSettings: () => showReadingModeMenu(mobile),
-  });
-
   const {
     previewAcademyTheme,
     confirmDesktopPaletteTheme,
@@ -839,7 +832,6 @@ export function CoursesPage({
   });
 
   const {
-    openAppearanceThemeMenu,
     startDockLongPress,
     moveDockLongPress,
     finishDockLongPress,
@@ -848,14 +840,7 @@ export function CoursesPage({
     cancelAppearanceSwipe,
   } = useDockLongPress({
     theme,
-    paletteMenu,
-    setPaletteMenu,
-    paletteMenuSource,
-    setReadingModeMenu,
-    mobilePaletteMenu,
-    setMobilePaletteMenu,
     themeRevealOriginRef,
-    revertPalettePreviewRef,
     acknowledgeLongPressRef,
     appearanceSwipeRef,
     appearanceSwipeConsumedRef,
@@ -1259,7 +1244,6 @@ export function CoursesPage({
                 shellProfileDisplayName={shellProfileDisplayName}
                 shellProfileAvatarUrl={shellProfileAvatarUrl}
                 shellProfileAvatarSrcSet={shellProfileAvatarSrcSet}
-                unreadNotificationCount={unreadNotificationCount}
                 sidebarPresentedAsOverlay={sidebarPresentedAsOverlay}
                 compactNavigation={compactNavigation}
                 setProfileMenu={setProfileMenu}
@@ -1303,7 +1287,6 @@ export function CoursesPage({
                 consumeAppearanceGestureClick={consumeAppearanceGestureClick}
                 cancelDesktopPalettePreview={cancelDesktopPalettePreview}
                 activateAppearanceOption={activateAppearanceOption}
-                openAppearanceThemeMenu={openAppearanceThemeMenu}
                 startDockLongPress={startDockLongPress}
                 moveDockLongPress={moveDockLongPress}
                 finishDockLongPress={finishDockLongPress}
@@ -1356,7 +1339,6 @@ export function CoursesPage({
                         : null
                     }
                     onNavigate={navigateSettingsQuickMenu}
-                    readingMode={settingsMenuReadingMode(false)}
                     showSignedInTabs={isAuthenticated}
                   />
                 </Suspense>
@@ -1500,7 +1482,6 @@ export function CoursesPage({
                             : null
                         }
                         onNavigate={navigateSettingsQuickMenu}
-                        readingMode={settingsMenuReadingMode(true)}
                         showSignedInTabs={isAuthenticated}
                       />
                     </Suspense>
@@ -1548,7 +1529,6 @@ export function CoursesPage({
                   shellProfileDisplayName={shellProfileDisplayName}
                   shellProfileAvatarUrl={shellProfileAvatarUrl}
                   shellProfileAvatarSrcSet={shellProfileAvatarSrcSet}
-                  unreadNotificationCount={unreadNotificationCount}
                   setProfileMenu={setProfileMenu}
                   setEdgeSidebarOpen={setEdgeSidebarOpen}
                   dismissProfileMenuThen={dismissProfileMenuThen}
@@ -1563,7 +1543,6 @@ export function CoursesPage({
                   effectiveRole={effectiveRole}
                   allowedWorkspaceRoles={allowedWorkspaceRoles}
                   userRoles={userRoles}
-                  unreadNotificationCount={unreadNotificationCount}
                   mobileMoreNavigation={mobileMoreNavigation}
                   isNavigationItemActive={isNavigationItemActive}
                   sidebarPreferences={sidebarPreferences}
@@ -1591,7 +1570,6 @@ export function CoursesPage({
                   consumeAppearanceGestureClick={consumeAppearanceGestureClick}
                   cancelMobilePalettePreview={cancelMobilePalettePreview}
                   activateAppearanceOption={activateAppearanceOption}
-                  openAppearanceThemeMenu={openAppearanceThemeMenu}
                   startDockLongPress={startDockLongPress}
                   moveDockLongPress={moveDockLongPress}
                   finishDockLongPress={finishDockLongPress}

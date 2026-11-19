@@ -19,7 +19,7 @@ import {
  * - nobody signed in: "Login", the real button;
  * - signed in, the account remembered in this tab: the signed-in button as
  *   `SidebarProfileButton` draws it, with the name, picture, second line,
- *   role icon and unread dot it showed last, so nothing moves when the real
+ *   role icon it showed last, so nothing moves when the real
  *   one takes its place;
  * - signed in, nothing remembered: the placeholder.
  *
@@ -58,7 +58,7 @@ export function EarlyProfileButtons({
       <div
         aria-hidden="true"
         data-early-profile=""
-        className={`${className} pointer-events-none [:root:not([data-profile-hint])_&]:hidden! [:root[data-profile-hint-avatar]_&_[data-early-fallback]]:hidden! [:root:not([data-profile-hint-avatar])_&_[data-early-avatar]]:hidden! [:root:not([data-profile-hint-unread])_&_[data-early-dot]]:hidden! [:root:not([data-profile-hint-icon=student])_&_[data-early-icon=student]]:hidden! [:root:not([data-profile-hint-icon=admin])_&_[data-early-icon=admin]]:hidden! [:root:not([data-profile-hint-icon=creator])_&_[data-early-icon=creator]]:hidden!`}
+        className={`${className} pointer-events-none [:root:not([data-profile-hint])_&]:hidden! [:root[data-profile-hint-avatar]_&_[data-early-fallback]]:hidden! [:root:not([data-profile-hint-avatar])_&_[data-early-avatar]]:hidden! [:root:not([data-profile-hint-icon=student])_&_[data-early-icon=student]]:hidden! [:root:not([data-profile-hint-icon=admin])_&_[data-early-icon=admin]]:hidden! [:root:not([data-profile-hint-icon=creator])_&_[data-early-icon=creator]]:hidden!`}
       >
         <span className="courses-profile__avatar-wrap">
           <i className={IMAGE_AVATAR_CLASS} data-early-avatar="">
@@ -67,7 +67,6 @@ export function EarlyProfileButtons({
           <i className={FALLBACK_AVATAR_CLASS} data-early-fallback="">
             <UserCircle size={28} weight="duotone" />
           </i>
-          <i className="courses-profile__presence" data-early-dot="" />
         </span>
         <span>
           <strong className="block truncate after:content-(--profile-hint-name)" />

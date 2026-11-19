@@ -18,7 +18,7 @@ export interface FlowLesson {
   /** Unpublished lessons are shown to nobody but staff. */
   published?: boolean;
   /** The lesson's video: transcoded, still being prepared, or none. */
-  video?: "ready" | "processing" | "none";
+  video?: "ready" | "processing" | "queued" | "none";
   /**
    * A reading whose text is a PDF (`FLOW_LESSON_PDF`, already uploaded)
    * instead of a video. `video` is then ignored.
@@ -174,9 +174,36 @@ export async function createCourse(
           height: 1080,
           duration_seconds: options.videoSeconds ?? 600,
           metadata: JSON.stringify({}),
-          status: video === "ready" ? "ready" : "processing",
+          status:
+            video === "ready"
+              ? "ready"
+              : video === "queued"
+                ? "uploaded"
+                : "processing",
           upload_id: null,
           upload_part_size: null,
+        })
+        .execute();
+    }
+    if (video === "queued" && mediaId) {
+      await db
+        .insertInto("video_jobs")
+        .values({
+          id: crypto.randomUUID(),
+          video_id: mediaId,
+          status: "queued",
+          video_key: `videos/${mediaId}`,
+          output_prefix: `protected/transcoded/${mediaId}`,
+          video_size: 1_048_576,
+          qualities: ["360p"],
+          worker_id: null,
+          error_message: null,
+          original_file_key: null,
+          video_metadata: null,
+          provider_job_id: null,
+          started_at: null,
+          completed_at: null,
+          failed_at: null,
         })
         .execute();
     }

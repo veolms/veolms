@@ -128,8 +128,26 @@ groups). Not shown when that chat is open on screen.
 | `isRequest`              | `"true"` for a first message from someone not yet accepted           |
 | `unreadCount`            | Unread messages in that chat for the reader (max 99)                 |
 | `deepLink`               | `/chat/<roomId>?seq=<seq>`                                           |
+| `senderAvatarUrl`        | Android only: the sender's picture (for a reaction, the reactor's)   |
+| `roomIconUrl`            | Android only, groups only: the group's picture                       |
 | `actionToken`            | Android only: the token for Reply / Mark as read (section 5)         |
 | `actionTokenExpiresAt`   | ISO time the token stops working                                     |
+
+The two picture keys are left out when there is no picture. Each is a
+complete, public, static URL to a PNG, JPEG or WebP image (the CDN's, so
+https in production), fetched with no cookie and no redirects:
+
+- `senderAvatarUrl`: an uploaded photo's 160 px WebP, a Google photo's
+  original, or the PNG of a DiceBear default
+  (`https://api.dicebear.com/10.x/<style>/png?seed=…&size=128`). Not for a
+  deleted sender.
+- `roomIconUrl`: a course chat's public course picture (its 240 px WebP).
+  None for private chats, team chats, unpublished courses, or a group whose
+  admins set their own icon (it is a private upload, with no public copy).
+
+A picture can still fail to load (the CDN or DiceBear unreachable, the
+phone offline): the app then shows its own fallback (a letter avatar) and
+never holds the notification back for it.
 
 iOS gets an alert for both kinds (`thread-id` = the channel group, or
 `chat:<roomId>` for chats, so a chat's messages stack).

@@ -51,6 +51,9 @@ export interface OutgoingMessage {
      * after that one, with that one's number.
      */
     clientId?: string;
+    /** "Reply privately": the group the quoted message is in. */
+    roomId?: string;
+    roomName?: string | null;
   } | null;
   mentions: string[];
   mentionAll: boolean;
@@ -132,7 +135,10 @@ async function uploadFile(
     file.progress = fraction;
     update(roomId, message.clientId, { files: [...message.files] });
   });
-  const { attachment } = await chatService.completeUpload(start.uploadId);
+  const { attachment } = await chatService.completeUpload(
+    start.uploadId,
+    start.multipart?.storageUploadId,
+  );
   file.attachment = attachment;
   file.progress = 1;
   return attachment;
@@ -210,6 +216,9 @@ async function deliver(
           clientId: next.clientId,
           body: next.body,
           ...(quoted ? { replyToSeq: quoted } : {}),
+          ...(quoted && next.replyTo?.roomId
+            ? { replyToRoomId: next.replyTo.roomId }
+            : {}),
           ...(next.mentions.length > 0 ? { mentions: next.mentions } : {}),
           ...(next.mentionAll ? { mentionAll: true } : {}),
           ...(attachments.length > 0

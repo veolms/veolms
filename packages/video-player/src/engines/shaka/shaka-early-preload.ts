@@ -33,6 +33,14 @@ export interface EarlyShakaPreloadSession {
   speculative?: boolean;
   /** The position (seconds) the preload was made for. */
   startTime?: number;
+  /**
+   * The video this session's player was actually given to preload, fixed
+   * when it starts. `manifestUrl` and `mediaKey` say which lesson the
+   * session is for; this says what its player holds. A player only takes a
+   * preload whose video is the one it was asked for (see
+   * `earlyShakaPreloadMatches`).
+   */
+  preloadedFor?: { src: string; id?: string };
   /** The licence servers the preload was made with (`shakaDrmServers`). */
   drmServers?: string;
   /** Stops following late extensions (see `followLateExtensions`). */
@@ -71,10 +79,34 @@ export function isEarlyShakaStandbyReady(
 ): boolean {
   const session = getEarlyShakaPreloadSession();
   if (!session || session.consumed || !session.standby?.isReady) return false;
-  return (
-    session.manifestUrl === source.src ||
-    Boolean(session.mediaKey && source.id && session.mediaKey === source.id)
-  );
+  return earlyShakaPreloadMatches(session, source);
+}
+
+/**
+ * Whether a preload is of `source`'s video: the same manifest address, or
+ * the same media key (the paid bootstrap can give the protected address
+ * after the player's source was made from another). Judged by what its
+ * player was given to load, not only by the session's label: on 17 Nov a
+ * learner's lesson 19 played lesson 21's video, from a session that held
+ * lesson 21's preload but had been labelled lesson 19 (see
+ * `startEarlyShakaPreload`).
+ */
+export function earlyShakaPreloadMatches(
+  session: EarlyShakaPreloadSession,
+  source: Pick<VideoSource, "src" | "id">,
+): boolean {
+  const loaded = session.preloadedFor;
+  if (
+    loaded &&
+    (loaded.src !== session.manifestUrl ||
+      Boolean(session.mediaKey && loaded.id && loaded.id !== session.mediaKey))
+  ) {
+    // Labelled for one video while holding another: nobody may take it.
+    return false;
+  }
+  const src = loaded?.src ?? session.manifestUrl;
+  const id = loaded?.id ?? session.mediaKey;
+  return src === source.src || Boolean(id && source.id && id === source.id);
 }
 
 type SpeculativePreloadListener = (session: EarlyShakaPreloadSession) => void;
@@ -365,24 +397,40 @@ export async function startEarlyShakaPreload(
     releaseClaimedSessionSlot(existing);
     existing = null;
   }
-  const existingMatches =
-    existing &&
-    existing.manifestUrl === source.src &&
-    (!existing.mediaKey || !source.id || existing.mediaKey === source.id);
-  if (existingMatches && existing?.player) {
-    existing!.mediaKey = source.id;
+  const isThisVideo = (candidate: EarlyShakaPreloadSession) =>
+    candidate.manifestUrl === source.src &&
+    (!candidate.mediaKey || !source.id || candidate.mediaKey === source.id) &&
+    (!candidate.preloadedFor || earlyShakaPreloadMatches(candidate, source));
+  const takeOver = (candidate: EarlyShakaPreloadSession) => {
+    candidate.mediaKey = source.id;
     // The page now opening this lesson owns the preload from here on.
-    if (!options.speculative) existing!.speculative = false;
+    if (!options.speculative) candidate.speculative = false;
     settleEarlySession();
-    return existing;
-  }
+    return candidate;
+  };
+  if (existing?.player && isThisVideo(existing)) return takeOver(existing);
   if (!existing && source.src === lastAdoptedManifestUrl) {
     // Already being played by the player that adopted its preload.
     return null;
   }
-  if (existing && !existingMatches) {
+  if (existing && !isThisVideo(existing)) {
     await abandonEarlyShakaPreloadSession({ destroyPlayer: true });
+    // While that was torn down, another call may have put its own lesson's
+    // session in the slot, holding that lesson's player and preload. It
+    // used to be taken over here and given this lesson's address, and the
+    // lesson page then played the other lesson's video (production, 17 Nov:
+    // lesson 19 showed lesson 21's). Only a session for this same video is
+    // carried on; another lesson's is ended, and if the slot is taken yet
+    // again meanwhile, that newest request keeps it.
     existing = getEarlyShakaPreloadSession();
+    if (existing?.consumed) existing = null;
+    if (existing && !isThisVideo(existing)) {
+      await abandonEarlyShakaPreloadSession({ destroyPlayer: true });
+      const newest = getEarlyShakaPreloadSession();
+      if (newest && !newest.consumed) return null;
+      existing = null;
+    }
+    if (existing?.player) return takeOver(existing);
   }
 
   let session = existing;
@@ -435,9 +483,16 @@ export async function startEarlyShakaPreload(
       await player.destroy();
       return null;
     }
+    if (session.player) {
+      // Another call for this same video got its player in first: that
+      // one's preload stands, and this player is not needed.
+      await player.destroy();
+      return session;
+    }
 
     registerShakaNetworkingFilters(player, networkingFilters);
     session.player = player;
+    session.preloadedFor = { src: source.src, id: source.id };
     session.networkingFilters = networkingFilters;
     session.startTime = source.startTime ?? 0;
     // Read just before the preload copies the configuration it will keep.

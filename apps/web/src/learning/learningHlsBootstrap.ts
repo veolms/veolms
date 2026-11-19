@@ -64,14 +64,21 @@ export function noteLessonsWithoutVideo(
   lessonsWithoutVideoThisPage.set(courseSlug, numbers);
 }
 
-/** Whether this page's course data shows the lesson without a video. */
+/**
+ * Whether the lesson is known to have no video: from this page's course
+ * data once it is in, and until then from the copy kept from earlier visits
+ * (`rememberLessonsWithoutVideo`). Without that copy, a lesson opened from
+ * inside the app (its course data still on its way) asked for its
+ * neighbours' playback, and a reading next door answered 404 every time
+ * (seen on production, 16 Nov: advanced-backend-with-nodejs lesson 2).
+ */
 export function isKnownWithoutVideo(
   courseSlug: string,
   lessonNumber: number,
 ): boolean {
-  return (
-    lessonsWithoutVideoThisPage.get(courseSlug)?.has(lessonNumber) ?? false
-  );
+  const fresh = lessonsWithoutVideoThisPage.get(courseSlug);
+  if (fresh) return fresh.has(lessonNumber);
+  return isRememberedWithoutVideo(courseSlug, lessonNumber);
 }
 
 /** Keeps which of a course's lessons (in order) have no video. */
