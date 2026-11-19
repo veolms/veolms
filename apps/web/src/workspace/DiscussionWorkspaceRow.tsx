@@ -33,6 +33,8 @@ import { createDiscussionDraft } from "../learning/discussion-editor/types";
 // Drawn with the row, not loaded after it: a post first shown as plain
 // text and then redrawn as Markdown jumps in front of the learner.
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
+import { ReactionSummaryBadge } from "../learning/reactions/ReactionSummaryBadge";
+import { WhoReactedModal } from "../learning/reactions/WhoReactedModal";
 
 const ROW_TEXT_CLASS =
   "max-w-180 text-base leading-relaxed max-[48.75rem]:text-[0.9375rem] wrap-anywhere text-(--text) select-text";
@@ -180,6 +182,7 @@ export function DiscussionWorkspaceRow({
   const isNote = card.itemType === "note" || card.kind === "note";
   const username = card.authorUsername.replace(/^@+/, "");
   const search = useSearchHighlight();
+  const [whoReactedOpen, setWhoReactedOpen] = useState(false);
 
   // The row, its name and Enter select it; pressed again while it is the
   // open discussion, they close the panel. "Reply" always opens it.
@@ -398,8 +401,24 @@ export function DiscussionWorkspaceRow({
           {actions.canLike && (
             <DiscussionLikeButton
               liked={Boolean(card.isLiked)}
+              userReaction={card.userReaction}
               count={card.likes}
               onToggle={actions.like}
+            />
+          )}
+          {card.likes > 0 && (
+            <ReactionSummaryBadge
+              totalCount={card.likes}
+              topReactions={card.topReactions}
+              onClick={() => setWhoReactedOpen(true)}
+            />
+          )}
+          {whoReactedOpen && card.id && (
+            <WhoReactedModal
+              isOpen={whoReactedOpen}
+              onClose={() => setWhoReactedOpen(false)}
+              targetType={isNote ? "note" : "thread"}
+              targetId={card.id}
             />
           )}
           {!isNote && (

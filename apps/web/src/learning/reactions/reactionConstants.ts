@@ -26,48 +26,54 @@ export const REACTION_CONFIGS: Record<DiscussionReactionType, ReactionConfig> =
       type: "like",
       label: "Like",
       icon: ThumbsUp,
-      colorClass: "text-blue-500",
-      badgeColorClass: "bg-blue-500/15 text-blue-500",
+      colorClass: "text-[var(--reaction-like)]",
+      badgeColorClass:
+        "bg-[color-mix(in_srgb,var(--reaction-like)_16%,transparent)] text-[var(--reaction-like)]",
       emoji: "👍",
     },
     celebrate: {
       type: "celebrate",
       label: "Celebrate",
       icon: HandsClapping,
-      colorClass: "text-emerald-500",
-      badgeColorClass: "bg-emerald-500/15 text-emerald-500",
+      colorClass: "text-[var(--reaction-celebrate)]",
+      badgeColorClass:
+        "bg-[color-mix(in_srgb,var(--reaction-celebrate)_16%,transparent)] text-[var(--reaction-celebrate)]",
       emoji: "👏",
     },
     support: {
       type: "support",
       label: "Support",
       icon: Handshake,
-      colorClass: "text-purple-500",
-      badgeColorClass: "bg-purple-500/15 text-purple-500",
+      colorClass: "text-[var(--reaction-support)]",
+      badgeColorClass:
+        "bg-[color-mix(in_srgb,var(--reaction-support)_16%,transparent)] text-[var(--reaction-support)]",
       emoji: "🤝",
     },
     love: {
       type: "love",
       label: "Love",
       icon: Heart,
-      colorClass: "text-rose-500",
-      badgeColorClass: "bg-rose-500/15 text-rose-500",
+      colorClass: "text-[var(--reaction-love)]",
+      badgeColorClass:
+        "bg-[color-mix(in_srgb,var(--reaction-love)_16%,transparent)] text-[var(--reaction-love)]",
       emoji: "❤️",
     },
     insightful: {
       type: "insightful",
       label: "Insightful",
       icon: Lightbulb,
-      colorClass: "text-amber-500",
-      badgeColorClass: "bg-amber-500/15 text-amber-500",
+      colorClass: "text-[var(--reaction-insightful)]",
+      badgeColorClass:
+        "bg-[color-mix(in_srgb,var(--reaction-insightful)_16%,transparent)] text-[var(--reaction-insightful)]",
       emoji: "💡",
     },
     funny: {
       type: "funny",
       label: "Funny",
       icon: Smiley,
-      colorClass: "text-cyan-500",
-      badgeColorClass: "bg-cyan-500/15 text-cyan-500",
+      colorClass: "text-[var(--reaction-funny)]",
+      badgeColorClass:
+        "bg-[color-mix(in_srgb,var(--reaction-funny)_16%,transparent)] text-[var(--reaction-funny)]",
       emoji: "😂",
     },
   };

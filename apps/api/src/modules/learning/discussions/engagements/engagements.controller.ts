@@ -59,7 +59,7 @@ export function createEngagementsController({
   return {
     async toggleLike(request, reply) {
       const user = request.user!;
-      const { targetType, targetId, reaction } = request.body;
+      const { targetType, targetId, reaction, desiredLiked } = request.body;
 
       const result = await service.toggleLike(
         database,
@@ -67,6 +67,7 @@ export function createEngagementsController({
         targetType,
         targetId,
         reaction,
+        desiredLiked,
       );
       await reply.status(200).send(result);
     },

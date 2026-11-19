@@ -33,4 +33,10 @@
   --on-accent-glyph: #ffffff;
   --success: #4ade80;
   --danger: #fb7185;
+  --reaction-like: var(--accent);
+  --reaction-celebrate: var(--success);
+  --reaction-support: color-mix(in srgb, var(--accent) 70%, #a855f7);
+  --reaction-love: var(--danger);
+  --reaction-insightful: #f59e0b;
+  --reaction-funny: #06b6d4;
 }

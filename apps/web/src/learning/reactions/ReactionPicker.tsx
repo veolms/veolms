@@ -1,23 +1,82 @@
-import React, { useEffect, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import type { DiscussionReactionType } from "@veolms/contracts";
 import { REACTION_CONFIGS, REACTION_TYPES } from "./reactionConstants";
 
 interface ReactionPickerProps {
+  anchorRef: React.RefObject<HTMLElement | null>;
   currentReaction?: DiscussionReactionType | null;
   onSelect: (reaction: DiscussionReactionType) => void;
   onClose: () => void;
-  position?: "top" | "bottom";
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
   autoFocusFirst?: boolean;
 }
 
 export function ReactionPicker({
+  anchorRef,
   currentReaction,
   onSelect,
   onClose,
-  position = "top",
+  onMouseEnter,
+  onMouseLeave,
   autoFocusFirst = false,
 }: ReactionPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
+    null,
+  );
+
+  const updatePosition = useCallback(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const pickerWidth = 264;
+    const pickerHeight = 48;
+
+    let top = rect.top - pickerHeight - 8;
+    if (top < 8) {
+      top = rect.bottom + 8;
+    }
+
+    const maxLeft = Math.max(8, window.innerWidth - pickerWidth - 8);
+    const left = Math.max(8, Math.min(rect.left, maxLeft));
+
+    setCoords({ top, left });
+  }, [anchorRef]);
+
+  useLayoutEffect(() => {
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [updatePosition]);
+
+  useEffect(() => {
+    function handlePointerDown(e: PointerEvent) {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (
+        containerRef.current?.contains(target) ||
+        anchorRef.current?.contains(target)
+      ) {
+        return;
+      }
+      onClose();
+    }
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    return () =>
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [anchorRef, onClose]);
 
   useEffect(() => {
     if (autoFocusFirst) {
@@ -54,16 +113,23 @@ export function ReactionPicker({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  return (
+  if (typeof document === "undefined" || !coords) return null;
+
+  return createPortal(
     <div
       ref={containerRef}
       role="toolbar"
       aria-label="Reactions"
       data-reaction-picker
-      className={`absolute left-0 z-50 flex items-center gap-1 rounded-full border border-(--border) bg-(--surface) px-2 py-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 ${
-        position === "top" ? "bottom-full mb-2" : "top-full mt-2"
-      }`}
-      onMouseLeave={onClose}
+      style={{
+        position: "fixed",
+        top: `${coords.top}px`,
+        left: `${coords.left}px`,
+        zIndex: 1000,
+      }}
+      className="flex items-center gap-1 rounded-full border border-(--border) bg-(--surface) px-2 py-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       onClick={(e) => e.stopPropagation()}
     >
       {REACTION_TYPES.map((type) => {
@@ -99,6 +165,7 @@ export function ReactionPicker({
           </button>
         );
       })}
-    </div>
+    </div>,
+    document.body,
   );
 }

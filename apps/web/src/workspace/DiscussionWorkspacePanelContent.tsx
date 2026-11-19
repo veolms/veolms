@@ -10,7 +10,7 @@ import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircl
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import type { LearningReply } from "@veolms/contracts";
+import type { DiscussionReactionType, LearningReply } from "@veolms/contracts";
 import { DiscussionAvatar } from "../learning/DiscussionAvatar";
 import { ThreadReplyComposer } from "../learning/ThreadReplyComposer";
 import {
@@ -33,6 +33,7 @@ import {
   useUpdateNote,
   useUpdateReply,
   useUpdateThread,
+  reconcileTopReactions,
 } from "../services/learning-interactions";
 import type { LocalComposerAttachment } from "../services/learning-interactions/attachment-model";
 import { DiscussionWorkspaceActionMenu } from "./DiscussionWorkspaceActionMenu";
@@ -50,6 +51,8 @@ import { useCommentTapGestures } from "../learning/useCommentTapGestures";
 import { useCapabilities } from "../services/authorization";
 import { useReplyHeartMutation } from "../services/learning-interactions/thread-marks";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
+import { ReactionSummaryBadge } from "../learning/reactions/ReactionSummaryBadge";
+import { WhoReactedModal } from "../learning/reactions/WhoReactedModal";
 
 /** The thread's replies as the replies query keeps them. */
 type RepliesPages = InfiniteData<{ replies: LearningReply[] }>;
@@ -207,13 +210,18 @@ function PanelReply({
   reply: LearningReply;
   /** The reply the panel was opened for. */
   highlighted: boolean;
-  onLike: (reply: LearningReply) => void;
+  onLike: (
+    reply: LearningReply,
+    desiredLiked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => void;
   /** Course staff on a public post: may give the creator's heart. */
   canHeart: boolean;
   onHeart: (reply: LearningReply, give: boolean) => void;
   /** Given, the reply's text is shown in the editor to change it. */
   edit?: PanelEditHandlers;
 }) {
+  const [whoReactedOpen, setWhoReactedOpen] = useState(false);
   const tapGestures = useCommentTapGestures({});
   return (
     <article
@@ -260,11 +268,27 @@ function PanelReply({
         <div className="-ml-2.5 flex items-center gap-1">
           <DiscussionLikeButton
             liked={Boolean(reply.isLiked)}
+            userReaction={reply.userReaction}
             count={reply.likesCount}
-            onToggle={() => onLike(reply)}
+            onToggle={(liked, reaction) => onLike(reply, liked, reaction)}
             noun="reply"
             iconSize={14}
           />
+          {reply.likesCount > 0 && (
+            <ReactionSummaryBadge
+              totalCount={reply.likesCount}
+              topReactions={reply.topReactions}
+              onClick={() => setWhoReactedOpen(true)}
+            />
+          )}
+          {whoReactedOpen && reply.id && (
+            <WhoReactedModal
+              isOpen={whoReactedOpen}
+              onClose={() => setWhoReactedOpen(false)}
+              targetType="reply"
+              targetId={reply.id}
+            />
+          )}
           <CreatorHeartButton
             heart={reply.creatorHeart}
             canGive={canHeart}
@@ -453,6 +477,7 @@ export function DiscussionPanelContent({
     ? `${baseAuthorName || "You"} (You)`
     : baseAuthorName;
   const postContent = post?.content ?? card.content;
+  const [whoReactedOpen, setWhoReactedOpen] = useState(false);
 
   // The editor's code is fetched while the reader reads, not when they
   // start to write.
@@ -611,10 +636,18 @@ export function DiscussionPanelContent({
 
   // The count changes at once; the server's answer then refreshes it, and
   // a failure puts it back.
-  const likeReply = (reply: LearningReply) => {
+  const likeReply = (
+    reply: LearningReply,
+    desiredLiked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => {
     if (!threadId) return;
     const repliesKey = learningInteractionKeys.threadReplies(threadId);
-    const liked = !reply.isLiked;
+    const nextLiked =
+      desiredLiked !== undefined ? desiredLiked : !reply.isLiked;
+    const nextReaction = nextLiked
+      ? (reaction ?? reply.userReaction ?? "like")
+      : null;
     const before = queryClient.getQueriesData<RepliesPages>({
       queryKey: repliesKey,
     });
@@ -626,24 +659,38 @@ export function DiscussionPanelContent({
               ...data,
               pages: data.pages.map((page) => ({
                 ...page,
-                replies: page.replies.map((item) =>
-                  item.id === reply.id
-                    ? {
-                        ...item,
-                        isLiked: liked,
-                        likesCount: Math.max(
-                          0,
-                          item.likesCount + (liked ? 1 : -1),
-                        ),
-                      }
-                    : item,
-                ),
+                replies: page.replies.map((item) => {
+                  if (item.id !== reply.id) return item;
+                  const nextLikesCount = Math.max(
+                    0,
+                    item.likesCount +
+                      (nextLiked ? (reply.isLiked ? 0 : 1) : -1),
+                  );
+                  const nextTop = reconcileTopReactions(
+                    item.topReactions,
+                    reply.userReaction ?? (reply.isLiked ? "like" : null),
+                    nextReaction,
+                    nextLikesCount,
+                  );
+                  return {
+                    ...item,
+                    isLiked: nextLiked,
+                    userReaction: nextReaction,
+                    likesCount: nextLikesCount,
+                    topReactions: nextTop,
+                  };
+                }),
               })),
             }
           : data,
     );
     void learningInteractionsService
-      .toggleLike({ targetType: "reply", targetId: reply.id })
+      .toggleLike({
+        targetType: "reply",
+        targetId: reply.id,
+        reaction: nextLiked ? (reaction ?? "like") : null,
+        desiredLiked: nextLiked,
+      })
       .then(refreshAfterChange)
       .catch(() => {
         for (const [key, data] of before) queryClient.setQueryData(key, data);
@@ -908,9 +955,25 @@ export function DiscussionPanelContent({
             <div className="mt-3 -ml-2.5 flex flex-wrap items-center gap-1">
               <DiscussionLikeButton
                 liked={Boolean(card.isLiked)}
+                userReaction={card.userReaction}
                 count={card.likes}
                 onToggle={postActions.like}
               />
+              {card.likes > 0 && (
+                <ReactionSummaryBadge
+                  totalCount={card.likes}
+                  topReactions={card.topReactions}
+                  onClick={() => setWhoReactedOpen(true)}
+                />
+              )}
+              {whoReactedOpen && card.id && (
+                <WhoReactedModal
+                  isOpen={whoReactedOpen}
+                  onClose={() => setWhoReactedOpen(false)}
+                  targetType={isNote ? "note" : "thread"}
+                  targetId={card.id}
+                />
+              )}
               <DiscussionStaffActions card={card} staff={postActions.staff} />
             </div>
           )}

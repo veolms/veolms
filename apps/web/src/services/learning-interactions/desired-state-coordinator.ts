@@ -763,7 +763,7 @@ export class DesiredStateCoordinator {
     if (targetType === "thread") {
       updateThreadLikeInCache(
         client,
-        targetId,
+        serverId ?? targetId,
         desiredLiked,
         lessonContext,
         reaction,
@@ -773,13 +773,20 @@ export class DesiredStateCoordinator {
         updateReplyLikeInCache(
           client,
           threadId,
-          targetId,
+          serverId ?? targetId,
           desiredLiked,
           reaction,
         );
       }
     } else if (targetType === "note") {
-      updateNoteLikeInCache(client, targetId, desiredLiked, serverId, reaction);
+      updateNoteLikeInCache(
+        client,
+        serverId ?? targetId,
+        desiredLiked,
+        serverId,
+        reaction,
+        lessonContext,
+      );
     }
   }
 
@@ -833,7 +840,8 @@ export class DesiredStateCoordinator {
       .toggleLike({
         targetType: state.targetType,
         targetId: state.serverId,
-        reaction: targetState ? targetReaction : undefined,
+        reaction: targetState ? (targetReaction ?? "like") : null,
+        desiredLiked: targetState,
       })
       .then((response) => {
         if (this.generation !== capturedGen || !this.isLikeStateCurrent(state))

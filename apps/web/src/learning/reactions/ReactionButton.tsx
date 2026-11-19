@@ -31,8 +31,10 @@ export function ReactionButton({
   const [showPicker, setShowPicker] = useState(false);
   const [keyboardFocusedPicker, setKeyboardFocusedPicker] = useState(false);
   const hoverTimer = useRef<number | undefined>(undefined);
-  const longPressTimer = useRef<number | undefined>(undefined);
-  const longPressHandledRef = useRef(false);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const isTouchRef = useRef(false);
+  const touchMovedRef = useRef(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Active reaction: if userReaction is set, use it. Otherwise, if liked, default to "like".
@@ -46,12 +48,13 @@ export function ReactionButton({
   useEffect(() => {
     return () => {
       window.clearTimeout(hoverTimer.current);
-      window.clearTimeout(longPressTimer.current);
+      window.clearTimeout(closeTimer.current);
     };
   }, []);
 
   const handleMouseEnter = () => {
     if (!canParticipate) return;
+    window.clearTimeout(closeTimer.current);
     window.clearTimeout(hoverTimer.current);
     hoverTimer.current = window.setTimeout(() => {
       setShowPicker(true);
@@ -60,20 +63,47 @@ export function ReactionButton({
 
   const handleMouseLeave = () => {
     window.clearTimeout(hoverTimer.current);
+    closeTimer.current = window.setTimeout(() => {
+      setShowPicker(false);
+    }, 250);
   };
 
-  const handleTouchStart = () => {
+  const handlePickerMouseEnter = () => {
+    window.clearTimeout(closeTimer.current);
+  };
+
+  const handlePickerMouseLeave = () => {
+    setShowPicker(false);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLButtonElement>) => {
     if (!canParticipate) return;
-    longPressHandledRef.current = false;
-    window.clearTimeout(longPressTimer.current);
-    longPressTimer.current = window.setTimeout(() => {
-      longPressHandledRef.current = true;
-      setShowPicker(true);
-    }, 400);
+    const touch = e.touches[0];
+    if (!touch) return;
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    touchMovedRef.current = false;
+    isTouchRef.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLButtonElement>) => {
+    if (!touchStartPos.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dx = Math.abs(touch.clientX - touchStartPos.current.x);
+    const dy = Math.abs(touch.clientY - touchStartPos.current.y);
+    if (dx > 10 || dy > 10) {
+      touchMovedRef.current = true;
+      touchStartPos.current = null;
+    }
   };
 
   const handleTouchEnd = () => {
-    window.clearTimeout(longPressTimer.current);
+    if (!canParticipate) return;
+    if (!touchMovedRef.current && isTouchRef.current) {
+      // Direct touch on mobile immediately reveals all reactions so user can react
+      setShowPicker((prev) => !prev);
+    }
+    touchStartPos.current = null;
   };
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -84,17 +114,17 @@ export function ReactionButton({
     }
 
     window.clearTimeout(hoverTimer.current);
-    window.clearTimeout(longPressTimer.current);
+    window.clearTimeout(closeTimer.current);
 
-    // If this click is a touch compatibility click after a recognized long press,
-    // consume it without toggling like.
-    if (longPressHandledRef.current) {
-      longPressHandledRef.current = false;
+    // If this click was triggered by a touch interaction, the touch handler already toggled the picker.
+    if (isTouchRef.current) {
+      isTouchRef.current = false;
       return;
     }
 
     if (showPicker) {
       setShowPicker(false);
+      return;
     }
 
     if (isReacted) {
@@ -149,6 +179,7 @@ export function ReactionButton({
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         aria-pressed={isReacted}
         aria-label={ariaLabel}
@@ -174,6 +205,7 @@ export function ReactionButton({
 
       {showPicker && (
         <ReactionPicker
+          anchorRef={buttonRef}
           currentReaction={activeReaction}
           onSelect={handleSelectReaction}
           onClose={() => {
@@ -181,6 +213,8 @@ export function ReactionButton({
             setKeyboardFocusedPicker(false);
             buttonRef.current?.focus();
           }}
+          onMouseEnter={handlePickerMouseEnter}
+          onMouseLeave={handlePickerMouseLeave}
           autoFocusFirst={keyboardFocusedPicker}
         />
       )}

@@ -115,6 +115,11 @@ function pressLike(container: HTMLElement, point: { x: number; y: number }) {
   );
   if (!button || button.matches(":disabled")) return;
   const wasLiked = button.getAttribute("aria-pressed") === "true";
+  if (wasLiked) {
+    // Double tap should only add a Like and never remove a reaction (#394)
+    popLike(button, point);
+    return;
+  }
   button.click();
   // After the like is shown: a thumbs-up where the finger was, only when
   // the tap gave a like (a signed-out reader gets the login window).

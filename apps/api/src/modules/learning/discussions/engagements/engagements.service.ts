@@ -36,7 +36,8 @@ export interface EngagementsService {
     actor: DiscussionActor,
     targetType: EngagementTargetType,
     targetId: string,
-    reaction?: DiscussionReactionType,
+    reaction?: DiscussionReactionType | null,
+    desiredLiked?: boolean,
   ): Promise<ToggleLikeResponse>;
 
   listReactions(
@@ -102,7 +103,7 @@ export function createEngagementsService({
   const discussionRepo = createDiscussionRepository();
 
   return {
-    async toggleLike(db, actor, targetType, targetId, reaction) {
+    async toggleLike(db, actor, targetType, targetId, reaction, desiredLiked) {
       return withWriteTransaction(db, async (trx) => {
         if (targetType === "thread") {
           const thread = await threadsRepo.findThreadById(trx, targetId);
@@ -172,13 +173,13 @@ export function createEngagementsService({
           );
         }
 
-        const reactionToSet: DiscussionReactionType = reaction ?? "like";
         const result = await engagementsRepo.setReaction(
           trx,
           actor.userId,
           targetType,
           targetId,
-          reactionToSet,
+          reaction,
+          desiredLiked,
         );
 
         if (result.changedCount !== 0) {

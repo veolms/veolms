@@ -47,6 +47,7 @@ import {
   useThreadReplies,
   useUpdateReply,
   desiredStateCoordinator,
+  reconcileTopReactions,
 } from "../services/learning-interactions";
 import {
   optimisticDeletionCoordinator,
@@ -344,19 +345,39 @@ export const CommentCard = React.memo(function CommentCard({
     };
   }, [isHighlighted, onHighlightShown]);
   const queryClient = useContext(QueryClientContext);
-  const [localLiked, setLocalLiked] = useState(comment.liked ?? false);
+  const [localLiked, setLocalLiked] = useState<boolean | null>(null);
   const [localReaction, setLocalReaction] = useState<
     DiscussionReactionType | null | undefined
-  >(comment.userReaction ?? (comment.liked ? "like" : null));
+  >(undefined);
+  const [localLikes, setLocalLikes] = useState<number | null>(null);
+  const [localTopReactions, setLocalTopReactions] = useState<
+    DiscussionReactionType[] | null
+  >(null);
 
   useEffect(() => {
-    setLocalLiked(comment.liked ?? false);
-    setLocalReaction(comment.userReaction ?? (comment.liked ? "like" : null));
-  }, [comment.liked, comment.userReaction]);
+    setLocalLiked(null);
+    setLocalReaction(undefined);
+    setLocalLikes(null);
+    setLocalTopReactions(null);
+  }, [
+    comment.id,
+    comment.liked,
+    comment.userReaction,
+    comment.likes,
+    comment.topReactions,
+  ]);
 
-  const isCommentLiked = isBackendMode ? Boolean(comment.liked) : localLiked;
+  const isCommentLiked =
+    localLiked !== null ? localLiked : Boolean(comment.liked);
   const activeUserReaction =
-    comment.userReaction !== undefined ? comment.userReaction : localReaction;
+    localReaction !== undefined
+      ? localReaction
+      : (comment.userReaction ?? (comment.liked ? "like" : null));
+  const activeLikes = localLikes !== null ? localLikes : (comment.likes ?? 0);
+  const activeTopReactions =
+    localTopReactions !== null
+      ? localTopReactions
+      : (comment.topReactions ?? (activeLikes > 0 ? ["like"] : []));
   const [whoReactedTarget, setWhoReactedTarget] = useState<{
     type: "thread" | "reply" | "note";
     id: string;
@@ -680,6 +701,12 @@ export const CommentCard = React.memo(function CommentCard({
         desiredLiked: nextLiked,
         reaction,
         currentBaseline: currentLiked,
+        currentBaselineReaction:
+          reply.userReaction !== undefined
+            ? reply.userReaction
+            : currentLiked
+              ? "like"
+              : null,
         lessonContext: courseId ? { courseId, lessonId: "" } : undefined,
         queryClient,
         pendingTarget: !getServerEntityId(reply),
@@ -781,7 +808,7 @@ export const CommentCard = React.memo(function CommentCard({
         inert={deletion.hidden ? true : undefined}
         className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.hidden ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
       >
-        <div className={`min-h-0 ${deletion.hidden ? "overflow-hidden" : ""}`}>
+        <div className="min-h-0 overflow-hidden">
           <div className="relative flex gap-3 sm:gap-3.5">
             <ProfileLink
               username={comment.authorUsername}
@@ -1023,23 +1050,36 @@ export const CommentCard = React.memo(function CommentCard({
                     <ReactionButton
                       liked={isCommentLiked}
                       userReaction={activeUserReaction}
-                      count={comment.likes}
+                      count={activeLikes}
                       canParticipate={canParticipate}
                       onParticipationRequired={onParticipationRequired}
                       onToggle={(desiredLiked, reaction) => {
-                        setLocalLiked(desiredLiked);
-                        setLocalReaction(
-                          desiredLiked ? (reaction ?? "like") : null,
+                        const prevLiked = isCommentLiked;
+                        const nextLiked = desiredLiked;
+                        const nextReaction = desiredLiked
+                          ? (reaction ?? "like")
+                          : null;
+                        const delta = (nextLiked ? 1 : 0) - (prevLiked ? 1 : 0);
+                        const nextLikes = Math.max(0, activeLikes + delta);
+                        const nextTop = reconcileTopReactions(
+                          activeTopReactions,
+                          activeUserReaction,
+                          nextReaction,
+                          nextLikes,
                         );
+                        setLocalLiked(nextLiked);
+                        setLocalReaction(nextReaction);
+                        setLocalLikes(nextLikes);
+                        setLocalTopReactions(nextTop);
                         onLike(comment.id, desiredLiked, reaction);
                       }}
                     />
                   )}
 
-                  {comment.likes > 0 && (
+                  {activeLikes > 0 && (
                     <ReactionSummaryBadge
-                      topReactions={comment.topReactions}
-                      totalCount={comment.likes}
+                      topReactions={activeTopReactions}
+                      totalCount={activeLikes}
                       onClick={() => {
                         setWhoReactedTarget({
                           type: isNote ? "note" : "thread",
@@ -1385,22 +1425,38 @@ function ReplyCard({
     reply.content ?? createDiscussionDraft(reply.text),
   );
   const [editError, setEditError] = useState("");
-  const [localLiked, setLocalLiked] = useState(reply.liked ?? false);
+  const [localLiked, setLocalLiked] = useState<boolean | null>(null);
   const [localReaction, setLocalReaction] = useState<
     DiscussionReactionType | null | undefined
-  >(reply.userReaction ?? (reply.liked ? "like" : null));
+  >(undefined);
+  const [localLikes, setLocalLikes] = useState<number | null>(null);
+  const [localTopReactions, setLocalTopReactions] = useState<
+    DiscussionReactionType[] | null
+  >(null);
 
   useEffect(() => {
-    setLocalLiked(reply.liked ?? false);
-    setLocalReaction(reply.userReaction ?? (reply.liked ? "like" : null));
-  }, [reply.liked, reply.userReaction]);
+    setLocalLiked(null);
+    setLocalReaction(undefined);
+    setLocalLikes(null);
+    setLocalTopReactions(null);
+  }, [
+    reply.id,
+    reply.liked,
+    reply.userReaction,
+    reply.likes,
+    reply.topReactions,
+  ]);
 
-  const isReplyLiked = isBackendMode ? Boolean(reply.liked) : localLiked;
+  const isReplyLiked = localLiked !== null ? localLiked : Boolean(reply.liked);
   const activeReplyReaction =
-    reply.userReaction !== undefined ? reply.userReaction : localReaction;
-  const replyLikesCount = isBackendMode
-    ? reply.likes
-    : reply.likes + (localLiked ? 1 : 0);
+    localReaction !== undefined
+      ? localReaction
+      : (reply.userReaction ?? (reply.liked ? "like" : null));
+  const replyLikesCount = localLikes !== null ? localLikes : (reply.likes ?? 0);
+  const activeReplyTopReactions =
+    localTopReactions !== null
+      ? localTopReactions
+      : (reply.topReactions ?? (replyLikesCount > 0 ? ["like"] : []));
   const replyClientId = getClientEntityId(reply);
   const replyServerId = getServerEntityId(reply);
   const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
@@ -1439,7 +1495,7 @@ function ReplyCard({
         inert={deletion.hidden ? true : undefined}
         className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.hidden ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
       >
-        <div className={`min-h-0 ${deletion.hidden ? "overflow-hidden" : ""}`}>
+        <div className="min-h-0 overflow-hidden">
           <div className="relative flex gap-3">
             <ProfileLink
               username={reply.authorUsername}
@@ -1583,10 +1639,23 @@ function ReplyCard({
                     canParticipate={canParticipate}
                     onParticipationRequired={onParticipationRequired}
                     onToggle={(desiredLiked, reaction) => {
-                      setLocalLiked(desiredLiked);
-                      setLocalReaction(
-                        desiredLiked ? (reaction ?? "like") : null,
+                      const prevLiked = isReplyLiked;
+                      const nextLiked = desiredLiked;
+                      const nextReaction = desiredLiked
+                        ? (reaction ?? "like")
+                        : null;
+                      const delta = (nextLiked ? 1 : 0) - (prevLiked ? 1 : 0);
+                      const nextLikes = Math.max(0, replyLikesCount + delta);
+                      const nextTop = reconcileTopReactions(
+                        activeReplyTopReactions,
+                        activeReplyReaction,
+                        nextReaction,
+                        nextLikes,
                       );
+                      setLocalLiked(nextLiked);
+                      setLocalReaction(nextReaction);
+                      setLocalLikes(nextLikes);
+                      setLocalTopReactions(nextTop);
                       onLike(reply.id, desiredLiked, reaction);
                     }}
                     noun="reply"
@@ -1595,7 +1664,7 @@ function ReplyCard({
                 )}
                 {replyLikesCount > 0 && (
                   <ReactionSummaryBadge
-                    topReactions={reply.topReactions}
+                    topReactions={activeReplyTopReactions}
                     totalCount={replyLikesCount}
                     onClick={() => {
                       onOpenWhoReacted?.(

@@ -45,7 +45,8 @@ export interface EngagementsRepository {
     userId: string,
     targetType: EngagementTargetType,
     targetId: string,
-    reaction: DiscussionReactionType,
+    reaction?: DiscussionReactionType | null,
+    desiredLiked?: boolean,
   ): Promise<SetReactionResult>;
 
   listReactions(
@@ -158,47 +159,86 @@ export function createEngagementsRepository(): EngagementsRepository {
       return row ? { id: row.id, reaction_type: row.reaction_type } : undefined;
     },
 
-    async setReaction(db, userId, targetType, targetId, reaction) {
+    async setReaction(
+      db,
+      userId,
+      targetType,
+      targetId,
+      reaction,
+      desiredLiked,
+    ) {
+      // 1. Explicit removal requested
+      if (reaction === null || desiredLiked === false) {
+        const deleteResult = await db
+          .deleteFrom("learning_likes")
+          .where("user_id", "=", userId)
+          .where("target_type", "=", targetType)
+          .where("target_id", "=", targetId)
+          .executeTakeFirst();
+        const numDeleted = Number(deleteResult.numDeletedRows ?? 0n);
+        return {
+          liked: false,
+          reaction: null,
+          changedCount: numDeleted > 0 ? -1 : 0,
+        };
+      }
+
+      // 2. Reaction specified or desiredLiked explicitly true
+      if (reaction !== undefined || desiredLiked === true) {
+        const chosenReaction = reaction ?? "like";
+        // Use UPSERT (onConflict) to avoid race conditions
+        const row = await db
+          .insertInto("learning_likes")
+          .values({
+            id: sql`gen_random_uuid()`,
+            user_id: userId,
+            target_type: targetType,
+            target_id: targetId,
+            reaction_type: chosenReaction,
+          })
+          .onConflict((oc) =>
+            oc.columns(["user_id", "target_type", "target_id"]).doUpdateSet({
+              reaction_type: chosenReaction,
+            }),
+          )
+          .returning([
+            "id",
+            "reaction_type",
+            sql<boolean>`(xmax = 0)`.as("is_insert"),
+          ])
+          .executeTakeFirstOrThrow();
+
+        const isInsert = Boolean(row.is_insert);
+        return {
+          liked: true,
+          reaction:
+            (row.reaction_type as DiscussionReactionType) ?? chosenReaction,
+          changedCount: isInsert ? 1 : 0,
+        };
+      }
+
+      // 3. Legacy toggle fallback (neither reaction nor desiredLiked specified)
       const existing = await db
         .selectFrom("learning_likes")
-        .select([
-          "id",
-          sql<DiscussionReactionType>`coalesce(reaction_type, 'like')`.as(
-            "reaction_type",
-          ),
-        ])
+        .select(["id", "reaction_type"])
         .where("user_id", "=", userId)
         .where("target_type", "=", targetType)
         .where("target_id", "=", targetId)
         .executeTakeFirst();
 
       if (existing) {
-        if (existing.reaction_type === reaction) {
-          // Same reaction pressed again: remove it (unlike)
-          const deleteResult = await db
-            .deleteFrom("learning_likes")
-            .where("id", "=", existing.id)
-            .executeTakeFirst();
-          const numDeleted = Number(deleteResult.numDeletedRows ?? 0n);
-          if (numDeleted === 0) {
-            return { liked: false, reaction: null, changedCount: 0 };
-          }
-          return { liked: false, reaction: null, changedCount: -1 };
-        }
-        // Different reaction selected: update it in place
-        const updateResult = await db
-          .updateTable("learning_likes")
-          .set({ reaction_type: reaction })
+        const deleteResult = await db
+          .deleteFrom("learning_likes")
           .where("id", "=", existing.id)
           .executeTakeFirst();
-        const numUpdated = Number(updateResult.numUpdatedRows ?? 0n);
-        if (numUpdated === 0) {
-          return { liked: false, reaction: null, changedCount: 0 };
-        }
-        return { liked: true, reaction, changedCount: 0 };
+        const numDeleted = Number(deleteResult.numDeletedRows ?? 0n);
+        return {
+          liked: false,
+          reaction: null,
+          changedCount: numDeleted > 0 ? -1 : 0,
+        };
       }
 
-      // Not reacted yet: insert new reaction
       await db
         .insertInto("learning_likes")
         .values({
@@ -206,10 +246,19 @@ export function createEngagementsRepository(): EngagementsRepository {
           user_id: userId,
           target_type: targetType,
           target_id: targetId,
-          reaction_type: reaction,
+          reaction_type: "like",
         })
+        .onConflict((oc) =>
+          oc.columns(["user_id", "target_type", "target_id"]).doUpdateSet({
+            reaction_type: "like",
+          }),
+        )
         .execute();
-      return { liked: true, reaction, changedCount: 1 };
+      return {
+        liked: true,
+        reaction: "like",
+        changedCount: 1,
+      };
     },
 
     async listReactions(

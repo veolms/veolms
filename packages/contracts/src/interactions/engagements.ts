@@ -18,7 +18,8 @@ export type DiscussionReactionType = z.infer<
 export const toggleLikeRequestSchema = z.object({
   targetType: engagementTargetTypeSchema,
   targetId: z.uuid(),
-  reaction: discussionReactionTypeSchema.optional(),
+  reaction: discussionReactionTypeSchema.nullable().optional(),
+  desiredLiked: z.boolean().optional(),
 });
 export type ToggleLikeRequest = z.infer<typeof toggleLikeRequestSchema>;
 
