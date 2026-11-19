@@ -97,10 +97,16 @@ export const CHAT_MAX_ATTACHMENTS_PER_MESSAGE = 10;
 /** A learner's file in chat, any kind (the owner's choice, 18 Nov). */
 export const CHAT_UPLOAD_LEARNER_MAX_BYTES = 200 * 1024 * 1024;
 /**
- * Staff (admins, instructors, staff) have no limit of their own: this is
- * what storage takes in one upload (Cloudflare R2: 5 GB).
+ * Staff (admins, instructors, staff) have no limit of their own (the
+ * owner's choice, 19 Nov): this is only storage's ceiling for one file
+ * (Cloudflare R2: 5 TB, sent in parts).
  */
-export const CHAT_UPLOAD_STAFF_MAX_BYTES = 5 * 1000 * 1000 * 1000;
+export const CHAT_UPLOAD_STAFF_MAX_BYTES = 5 * 1024 ** 4;
+/**
+ * Files larger than this go up in parts (S3 multipart): one request may
+ * carry at most 5 GB, and a large file then survives a dropped part.
+ */
+export const CHAT_UPLOAD_MULTIPART_FROM_BYTES = 256 * 1024 * 1024;
 /** The largest file this person may send in this chat. */
 export function chatUploadMaxBytes(isStaff: boolean): number {
   return isStaff ? CHAT_UPLOAD_STAFF_MAX_BYTES : CHAT_UPLOAD_LEARNER_MAX_BYTES;
@@ -168,8 +174,26 @@ export const chatCreateUploadResponseSchema = z.object({
   headers: z.record(z.string(), z.string()),
   /** True when the URL is the API itself (development without object storage). */
   viaApi: z.boolean(),
+  /**
+   * A large file goes up in parts instead (`uploadUrl` is then empty):
+   * PUT bytes [i·partSize, (i+1)·partSize) to `partUrls[i]`, then complete
+   * the upload with `storageUploadId`.
+   */
+  multipart: z
+    .object({
+      storageUploadId: z.string(),
+      partSize: z.number().int().min(1),
+      partUrls: z.array(z.string()).min(1),
+    })
+    .optional(),
 });
 export const chatUploadParamsSchema = z.strictObject({ uploadId: z.uuid() });
+export const chatCompleteUploadRequestSchema = z
+  .strictObject({
+    /** The multipart upload to join (a file sent in parts). */
+    storageUploadId: z.string().min(1).max(1024).optional(),
+  })
+  .optional();
 export const chatCompleteUploadResponseSchema = z.object({
   attachment: chatAttachmentSchema,
 });

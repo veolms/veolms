@@ -167,9 +167,11 @@ function audioLengthMs(file: Blob): Promise<number> {
 
 /** "200 MB", "5 GB". */
 function sizeLimitLabel(bytes: number): string {
-  return bytes >= 1e9
-    ? `${Math.round(bytes / 1e9)} GB`
-    : `${Math.round(bytes / 1024 / 1024)} MB`;
+  return bytes >= 1e12
+    ? `${Math.round(bytes / 1e12)} TB`
+    : bytes >= 1e9
+      ? `${Math.round(bytes / 1e9)} GB`
+      : `${Math.round(bytes / 1024 / 1024)} MB`;
 }
 
 /** Turns a picked file into something ready to send (or explains why not). */

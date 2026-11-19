@@ -135,7 +135,10 @@ async function uploadFile(
     file.progress = fraction;
     update(roomId, message.clientId, { files: [...message.files] });
   });
-  const { attachment } = await chatService.completeUpload(start.uploadId);
+  const { attachment } = await chatService.completeUpload(
+    start.uploadId,
+    start.multipart?.storageUploadId,
+  );
   file.attachment = attachment;
   file.progress = 1;
   return attachment;

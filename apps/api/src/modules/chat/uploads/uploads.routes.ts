@@ -1,4 +1,5 @@
 import {
+  chatCompleteUploadRequestSchema,
   chatCompleteUploadResponseSchema,
   chatCreateUploadRequestSchema,
   chatCreateUploadResponseSchema,
@@ -116,7 +117,10 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
         operationId: "completeChatUpload",
         tags,
         summary: "Confirm an upload finished (checks the stored size and type)",
+        description:
+          "For a file sent in parts, pass its `storageUploadId`: the parts are joined first.",
         params: chatUploadParamsSchema,
+        body: chatCompleteUploadRequestSchema,
         response: {
           200: jsonResponse("Ready to send", chatCompleteUploadResponseSchema),
           400: errorResponse("The stored file does not match"),
@@ -124,8 +128,17 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { uploadId: string } }>) =>
-      service.complete(request.user!.id, request.params.uploadId),
+    async (
+      request: FastifyRequest<{
+        Params: { uploadId: string };
+        Body: { storageUploadId?: string } | undefined;
+      }>,
+    ) =>
+      service.complete(
+        request.user!.id,
+        request.params.uploadId,
+        request.body?.storageUploadId,
+      ),
   );
 
   app.get(
