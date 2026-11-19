@@ -1,6 +1,6 @@
-import { CheckIcon as Check } from "@phosphor-icons/react/Check";
-import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+
+import { HighlightedCodeBlock } from "../components/code/HighlightedCodeBlock";
 
 /**
  * Message text as WhatsApp shows it: links become links, @names are
@@ -38,8 +38,9 @@ export function MessageText({
     if (before)
       blocks.push(<Lines key={`t${at}`} text={before} onMention={onMention} />);
     blocks.push(
-      <CodeBlock
+      <HighlightedCodeBlock
         key={`c${index}`}
+        className="my-1.5 text-left"
         language={(match[1] ?? "").trim()}
         code={(match[2] ?? "").replace(/\n$/, "")}
       />,
@@ -60,33 +61,6 @@ export function MessageText({
       }
     >
       {blocks}
-    </span>
-  );
-}
-
-function CodeBlock({ code, language }: { code: string; language: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <span className="my-1 block overflow-hidden rounded-lg bg-[#0d1117] text-left text-slate-100">
-      <span className="flex items-center justify-between px-3 py-1 text-[0.7rem] text-slate-400">
-        <span>{language || "code"}</span>
-        <button
-          type="button"
-          onClick={() => {
-            void navigator.clipboard?.writeText(code).then(() => {
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            });
-          }}
-          className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[0.7rem] text-slate-300 hover:text-white"
-        >
-          {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </span>
-      <code className="block overflow-x-auto px-3 pb-2.5 font-mono text-[0.82em] leading-relaxed whitespace-pre">
-        {code}
-      </code>
     </span>
   );
 }
