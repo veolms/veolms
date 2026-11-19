@@ -1,15 +1,30 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
+  DiscussionReactionType,
   EngagementTargetType,
+  ReactionAuthor,
   UserAutocompleteItem,
 } from "@veolms/contracts";
 import { sql } from "kysely";
 import { escapeLikePattern } from "../../../../lib/like-pattern.ts";
 import { isCourseParticipant } from "../shared/discussion.mentions.ts";
 import { fuzzyMatchesAny } from "../../../../lib/fuzzy-search.ts";
+import { authorRoleSql, mapAuthorRole } from "../shared/discussion.utils.ts";
+import { toIsoString } from "../shared/discussion.presenters.ts";
 
 export interface EngagementExistenceRow {
   id: string;
+}
+
+export interface EngagementLikeRow {
+  id: string;
+  reaction_type?: DiscussionReactionType;
+}
+
+export interface SetReactionResult {
+  liked: boolean;
+  reaction: DiscussionReactionType | null;
+  changedCount: number;
 }
 
 export interface EngagementsRepository {
@@ -18,7 +33,26 @@ export interface EngagementsRepository {
     userId: string,
     targetType: EngagementTargetType,
     targetId: string,
-  ): Promise<EngagementExistenceRow | undefined>;
+  ): Promise<EngagementLikeRow | undefined>;
+
+  setReaction(
+    db: DatabaseExecutor,
+    userId: string,
+    targetType: EngagementTargetType,
+    targetId: string,
+    reaction: DiscussionReactionType,
+  ): Promise<SetReactionResult>;
+
+  listReactions(
+    db: DatabaseExecutor,
+    targetType: EngagementTargetType,
+    targetId: string,
+    filterReaction?: DiscussionReactionType,
+    limit?: number,
+  ): Promise<{
+    users: ReactionAuthor[];
+    counts: Record<string, number>;
+  }>;
 
   addLike(
     db: DatabaseExecutor,
@@ -102,13 +136,128 @@ export interface EngagementsRepository {
 export function createEngagementsRepository(): EngagementsRepository {
   return {
     async findLike(db, userId, targetType, targetId) {
-      return db
+      const row = await db
         .selectFrom("learning_likes")
-        .select("id")
+        .select([
+          "id",
+          sql<DiscussionReactionType>`coalesce(reaction_type, 'like')`.as(
+            "reaction_type",
+          ),
+        ])
         .where("user_id", "=", userId)
         .where("target_type", "=", targetType)
         .where("target_id", "=", targetId)
         .executeTakeFirst();
+      return row ? { id: row.id, reaction_type: row.reaction_type } : undefined;
+    },
+
+    async setReaction(db, userId, targetType, targetId, reaction) {
+      const existing = await db
+        .selectFrom("learning_likes")
+        .select([
+          "id",
+          sql<DiscussionReactionType>`coalesce(reaction_type, 'like')`.as(
+            "reaction_type",
+          ),
+        ])
+        .where("user_id", "=", userId)
+        .where("target_type", "=", targetType)
+        .where("target_id", "=", targetId)
+        .executeTakeFirst();
+
+      if (existing) {
+        if (existing.reaction_type === reaction) {
+          // Same reaction pressed again: remove it (unlike)
+          await db
+            .deleteFrom("learning_likes")
+            .where("id", "=", existing.id)
+            .execute();
+          return { liked: false, reaction: null, changedCount: -1 };
+        }
+        // Different reaction selected: update it in place
+        await db
+          .updateTable("learning_likes")
+          .set({ reaction_type: reaction })
+          .where("id", "=", existing.id)
+          .execute();
+        return { liked: true, reaction, changedCount: 0 };
+      }
+
+      // Not reacted yet: insert new reaction
+      await db
+        .insertInto("learning_likes")
+        .values({
+          id: sql`gen_random_uuid()`,
+          user_id: userId,
+          target_type: targetType,
+          target_id: targetId,
+          reaction_type: reaction,
+        })
+        .execute();
+      return { liked: true, reaction, changedCount: 1 };
+    },
+
+    async listReactions(db, targetType, targetId, filterReaction, limit = 50) {
+      const countRows = await db
+        .selectFrom("learning_likes")
+        .select([
+          sql<string>`coalesce(reaction_type, 'like')`.as("reaction_type"),
+          sql<number>`count(*)::int`.as("count"),
+        ])
+        .where("target_type", "=", targetType)
+        .where("target_id", "=", targetId)
+        .groupBy(sql`coalesce(reaction_type, 'like')`)
+        .execute();
+
+      const counts: Record<string, number> & { all: number } = { all: 0 };
+      for (const row of countRows) {
+        const c = Number(row.count);
+        counts[row.reaction_type] = c;
+        counts.all += c;
+      }
+
+      let query = db
+        .selectFrom("learning_likes as l")
+        .innerJoin("users as u", "u.id", "l.user_id")
+        .select([
+          "u.id",
+          "u.display_name as displayName",
+          "u.username",
+          "u.avatar_data_url as avatarUrl",
+          authorRoleSql("u.id"),
+          sql<DiscussionReactionType>`coalesce(l.reaction_type, 'like')`.as(
+            "reaction",
+          ),
+          "l.created_at as createdAt",
+        ])
+        .where("l.target_type", "=", targetType)
+        .where("l.target_id", "=", targetId)
+        .where("u.is_deleted", "=", false);
+
+      if (filterReaction) {
+        query = query.where(
+          sql`coalesce(l.reaction_type, 'like')`,
+          "=",
+          filterReaction,
+        );
+      }
+
+      const rows = await query
+        .orderBy("l.created_at", "desc")
+        .limit(limit)
+        .execute();
+
+      const users: ReactionAuthor[] = rows.map((r) => ({
+        id: r.id,
+        displayName: r.displayName || "Learner",
+        username: r.username,
+        avatarUrl: r.avatarUrl,
+        role: mapAuthorRole(r.authorRole),
+        reaction: r.reaction,
+        createdAt: toIsoString(r.createdAt),
+      }));
+
+      return { users, counts };
     },
 
     async addLike(db, userId, targetType, targetId) {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { discussionReactionTypeSchema } from "./engagements.ts";
 
 export const discussionEntryKindSchema = z.enum([
   "comment",
@@ -139,6 +140,8 @@ export const learningThreadSchema = z.object({
   repliesCount: z.number().int().nonnegative().default(0),
   attachments: z.array(learningThreadAttachmentSummarySchema).optional(),
   isLiked: z.boolean().optional(),
+  userReaction: discussionReactionTypeSchema.nullable().optional(),
+  topReactions: z.array(discussionReactionTypeSchema).optional(),
   isBookmarked: z.boolean().optional(),
   isFollowing: z.boolean().optional(),
   isOwn: z.boolean().optional(),

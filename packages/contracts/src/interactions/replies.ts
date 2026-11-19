@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { discussionReactionTypeSchema } from "./engagements.ts";
 import {
   creatorHeartSchema,
   discussionAuthorSchema,
@@ -15,6 +16,8 @@ export const learningReplySchema = z.object({
   likesCount: z.number().int().nonnegative().default(0),
   attachments: z.array(learningThreadAttachmentSummarySchema).optional(),
   isLiked: z.boolean().optional(),
+  userReaction: discussionReactionTypeSchema.nullable().optional(),
+  topReactions: z.array(discussionReactionTypeSchema).optional(),
   isOwn: z.boolean().optional(),
   /** The creator's heart, when staff gave one; as on a comment. */
   creatorHeart: creatorHeartSchema.nullable().optional(),

@@ -1,5 +1,6 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
+  DiscussionReactionType,
   InteractionStatus,
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
@@ -126,12 +127,20 @@ export interface RepliesRepository {
   /** Marks every attachment of the reply as deleted. */
   markAttachmentsDeleted(db: DatabaseExecutor, replyId: string): Promise<void>;
 
-  /** Which of the given replies the user has liked. */
+  /** Which of the given replies the user has liked and with what reaction. */
   listReplyLikes(
     db: DatabaseExecutor,
     userId: string,
     replyIds: string[],
-  ): Promise<Array<{ target_id: string }>>;
+  ): Promise<
+    Array<{ target_id: string; reaction_type: DiscussionReactionType }>
+  >;
+
+  /** Top up to 3 reaction types for each reply. */
+  listTopReplyReactions(
+    db: DatabaseExecutor,
+    replyIds: readonly string[],
+  ): Promise<Map<string, DiscussionReactionType[]>>;
 }
 
 export function createRepliesRepository(): RepliesRepository {
@@ -374,13 +383,47 @@ export function createRepliesRepository(): RepliesRepository {
     },
 
     async listReplyLikes(db, userId, replyIds) {
+      if (replyIds.length === 0) return [];
       return db
         .selectFrom("learning_likes")
-        .select("target_id")
+        .select([
+          "target_id",
+          sql<DiscussionReactionType>`coalesce(reaction_type, 'like')`.as(
+            "reaction_type",
+          ),
+        ])
         .where("user_id", "=", userId)
         .where("target_type", "=", "reply")
         .where("target_id", "in", replyIds)
         .execute();
+    },
+
+    async listTopReplyReactions(db, replyIds) {
+      if (replyIds.length === 0) return new Map();
+      const rows = await db
+        .selectFrom("learning_likes")
+        .select([
+          "target_id",
+          sql<DiscussionReactionType>`coalesce(reaction_type, 'like')`.as(
+            "reaction_type",
+          ),
+          sql<number>`count(*)::int`.as("count"),
+        ])
+        .where("target_type", "=", "reply")
+        .where("target_id", "in", [...replyIds])
+        .groupBy(["target_id", sql`coalesce(reaction_type, 'like')`])
+        .orderBy("count", "desc")
+        .execute();
+
+      const map = new Map<string, DiscussionReactionType[]>();
+      for (const row of rows) {
+        const list = map.get(row.target_id) ?? [];
+        if (list.length < 3) {
+          list.push(row.reaction_type);
+          map.set(row.target_id, list);
+        }
+      }
+      return map;
     },
   };
 }

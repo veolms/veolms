@@ -1,10 +1,13 @@
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type {
   CreatorHeart,
+  DiscussionReactionType,
   DiscussionsWorkspaceResponse,
   LearningRepliesListResponse,
   LearningThread,
   LearningThreadsListResponse,
+  LessonDiscussionItem,
+  LessonDiscussionsListResponse,
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { learningInteractionKeys } from "./learning-interactions.keys";
@@ -522,6 +525,7 @@ export function updateThreadLikeInCache(
   threadId: string,
   desiredLiked: boolean,
   lessonContext?: { courseId: string; lessonId: string },
+  reaction?: DiscussionReactionType,
 ): void {
   // 1. Update lesson threads lists
   setThreadQueriesData(
@@ -542,11 +546,18 @@ export function updateThreadLikeInCache(
       const nextThreads = old.threads.map((thread) => {
         if (!matchesThreadIdentity(thread, threadId)) return thread;
         const currentLiked = Boolean(thread.isLiked);
-        if (currentLiked === desiredLiked) return thread;
+        if (
+          currentLiked === desiredLiked &&
+          (!reaction || thread.userReaction === reaction)
+        )
+          return thread;
         hasChange = true;
         return {
           ...thread,
           isLiked: desiredLiked,
+          userReaction: desiredLiked
+            ? (reaction ?? thread.userReaction ?? "like")
+            : null,
           likesCount: calculateNextLikesCount(
             thread.likesCount ?? 0,
             thread.isLiked,
@@ -564,10 +575,17 @@ export function updateThreadLikeInCache(
     (old) => {
       if (!old) return old;
       const currentLiked = Boolean(old.isLiked);
-      if (currentLiked === desiredLiked) return old;
+      if (
+        currentLiked === desiredLiked &&
+        (!reaction || old.userReaction === reaction)
+      )
+        return old;
       return {
         ...old,
         isLiked: desiredLiked,
+        userReaction: desiredLiked
+          ? (reaction ?? old.userReaction ?? "like")
+          : null,
         likesCount: calculateNextLikesCount(
           old.likesCount ?? 0,
           old.isLiked,
@@ -587,11 +605,28 @@ export function updateThreadLikeInCache(
       const nextThreads = old.threads.map((thread) => {
         if (!matchesThreadIdentity(thread, threadId)) return thread;
         const currentLiked = Boolean(thread.isLiked);
-        if (currentLiked === desiredLiked) return thread;
+        if (
+          currentLiked === desiredLiked &&
+          (!reaction || thread.userReaction === reaction)
+        )
+          return thread;
         hasChange = true;
+        const nextReaction = desiredLiked
+          ? (reaction ?? thread.userReaction ?? "like")
+          : null;
+        const currentTop = thread.topReactions ?? [];
+        const nextTop =
+          desiredLiked && nextReaction
+            ? [
+                nextReaction,
+                ...currentTop.filter((r) => r !== nextReaction),
+              ].slice(0, 3)
+            : currentTop;
         return {
           ...thread,
           isLiked: desiredLiked,
+          userReaction: nextReaction,
+          topReactions: nextTop,
           likesCount: calculateNextLikesCount(
             thread.likesCount ?? 0,
             thread.isLiked,
@@ -600,6 +635,70 @@ export function updateThreadLikeInCache(
         };
       });
       return hasChange ? { ...old, threads: nextThreads } : old;
+    },
+  );
+
+  // 4. Update unified lesson discussions feed
+  queryClient.setQueriesData<InfiniteData<LessonDiscussionsListResponse>>(
+    {
+      queryKey: lessonContext
+        ? learningInteractionKeys.lessonDiscussionsRoot(
+            lessonContext.courseId,
+            lessonContext.lessonId,
+          )
+        : learningInteractionKeys.lessonDiscussionsRoot(),
+    },
+    (old) => {
+      if (!old?.pages) return old;
+      let changed = false;
+      const pages = old.pages.map((page) => {
+        let pageChanged = false;
+        const items = page.items.map((item) => {
+          if (
+            item.sourceType !== "thread" ||
+            !matchesThreadIdentity(item.thread, threadId)
+          ) {
+            return item;
+          }
+          const thread = item.thread;
+          const currentLiked = Boolean(thread.isLiked);
+          if (
+            currentLiked === desiredLiked &&
+            (!reaction || thread.userReaction === reaction)
+          ) {
+            return item;
+          }
+          pageChanged = true;
+          const nextReaction = desiredLiked
+            ? (reaction ?? thread.userReaction ?? "like")
+            : null;
+          const currentTop = thread.topReactions ?? [];
+          const nextTop =
+            desiredLiked && nextReaction
+              ? [
+                  nextReaction,
+                  ...currentTop.filter((r) => r !== nextReaction),
+                ].slice(0, 3)
+              : currentTop;
+          return {
+            ...item,
+            thread: {
+              ...thread,
+              isLiked: desiredLiked,
+              userReaction: nextReaction,
+              topReactions: nextTop,
+              likesCount: calculateNextLikesCount(
+                thread.likesCount ?? 0,
+                thread.isLiked,
+                desiredLiked,
+              ),
+            },
+          };
+        });
+        changed ||= pageChanged;
+        return pageChanged ? { ...page, items } : page;
+      });
+      return changed ? { ...old, pages } : old;
     },
   );
 }
@@ -612,6 +711,7 @@ export function updateReplyLikeInCache(
   threadId: string,
   replyId: string,
   desiredLiked: boolean,
+  reaction?: DiscussionReactionType,
 ): void {
   queryClient.setQueriesData<ReplyListCache>(
     { queryKey: learningInteractionKeys.threadRepliesRoot(threadId) },
@@ -625,11 +725,28 @@ export function updateReplyLikeInCache(
           )
             return reply;
           const currentLiked = Boolean(reply.isLiked);
-          if (currentLiked === desiredLiked) return reply;
+          if (
+            currentLiked === desiredLiked &&
+            (!reaction || reply.userReaction === reaction)
+          )
+            return reply;
           hasChange = true;
+          const nextReaction = desiredLiked
+            ? (reaction ?? reply.userReaction ?? "like")
+            : null;
+          const currentTop = reply.topReactions ?? [];
+          const nextTop =
+            desiredLiked && nextReaction
+              ? [
+                  nextReaction,
+                  ...currentTop.filter((r) => r !== nextReaction),
+                ].slice(0, 3)
+              : currentTop;
           return {
             ...reply,
             isLiked: desiredLiked,
+            userReaction: nextReaction,
+            topReactions: nextTop,
             likesCount: calculateNextLikesCount(
               reply.likesCount ?? 0,
               reply.isLiked,

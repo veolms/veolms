@@ -1,7 +1,9 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
+  DiscussionReactionType,
   EngagementTargetType,
   LockThreadResponse,
+  ReactionsListResponse,
   ToggleBookmarkResponse,
   ToggleFollowResponse,
   ToggleLikeResponse,
@@ -28,7 +30,17 @@ export interface EngagementsService {
     actor: DiscussionActor,
     targetType: EngagementTargetType,
     targetId: string,
+    reaction?: DiscussionReactionType,
   ): Promise<ToggleLikeResponse>;
+
+  listReactions(
+    db: DatabaseExecutor,
+    actor: DiscussionActor | null,
+    targetType: EngagementTargetType,
+    targetId: string,
+    filterReaction?: DiscussionReactionType,
+    limit?: number,
+  ): Promise<ReactionsListResponse>;
 
   toggleBookmark(
     db: DatabaseExecutor,
@@ -81,7 +93,7 @@ export function createEngagementsService({
   const discussionRepo = createDiscussionRepository();
 
   return {
-    async toggleLike(db, actor, targetType, targetId) {
+    async toggleLike(db, actor, targetType, targetId, reaction) {
       return withWriteTransaction(db, async (trx) => {
         if (targetType === "thread") {
           const thread = await threadsRepo.findThreadById(trx, targetId);
@@ -151,49 +163,77 @@ export function createEngagementsService({
           );
         }
 
-        const alreadyLiked = await engagementsRepo.findLike(
+        const reactionToSet: DiscussionReactionType = reaction ?? "like";
+        const result = await engagementsRepo.setReaction(
           trx,
           actor.userId,
           targetType,
           targetId,
+          reactionToSet,
         );
 
-        if (alreadyLiked) {
-          const removed = await engagementsRepo.removeLike(
-            trx,
-            actor.userId,
-            targetType,
-            targetId,
-          );
-          if (removed) {
-            if (targetType === "thread") {
-              await threadsRepo.incrementLikesCount(trx, targetId, -1);
-            } else if (targetType === "reply") {
-              await repliesRepo.incrementLikesCount(trx, targetId, -1);
-            } else if (targetType === "note") {
-              await notesRepo.incrementLikesCount(trx, targetId, -1);
-            }
-          }
-        } else {
-          const added = await engagementsRepo.addLike(
-            trx,
-            actor.userId,
-            targetType,
-            targetId,
-          );
-          if (added) {
-            if (targetType === "thread") {
-              await threadsRepo.incrementLikesCount(trx, targetId, 1);
-            } else if (targetType === "reply") {
-              await repliesRepo.incrementLikesCount(trx, targetId, 1);
-            } else if (targetType === "note") {
-              await notesRepo.incrementLikesCount(trx, targetId, 1);
-            }
+        if (result.changedCount !== 0) {
+          if (targetType === "thread") {
+            await threadsRepo.incrementLikesCount(
+              trx,
+              targetId,
+              result.changedCount,
+            );
+          } else if (targetType === "reply") {
+            await repliesRepo.incrementLikesCount(
+              trx,
+              targetId,
+              result.changedCount,
+            );
+          } else if (targetType === "note") {
+            await notesRepo.incrementLikesCount(
+              trx,
+              targetId,
+              result.changedCount,
+            );
           }
         }
 
-        return { liked: !alreadyLiked };
+        return { liked: result.liked, reaction: result.reaction };
       });
+    },
+
+    async listReactions(
+      db,
+      _actor,
+      targetType,
+      targetId,
+      filterReaction,
+      limit,
+    ) {
+      if (targetType === "thread") {
+        const thread = await threadsRepo.findThreadById(db, targetId);
+        if (!thread) {
+          throw httpError(
+            404,
+            "THREAD_NOT_FOUND",
+            "Discussion thread not found",
+          );
+        }
+      } else if (targetType === "reply") {
+        const reply = await repliesRepo.findReplyById(db, targetId);
+        if (!reply) {
+          throw httpError(404, "REPLY_NOT_FOUND", "Reply not found");
+        }
+      } else if (targetType === "note") {
+        const note = await notesRepo.findNoteAccessTarget(db, targetId);
+        if (!note) {
+          throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+        }
+      }
+
+      return engagementsRepo.listReactions(
+        db,
+        targetType,
+        targetId,
+        filterReaction,
+        limit,
+      );
     },
 
     async toggleBookmark(db, actor, threadId) {

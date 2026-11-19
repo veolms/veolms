@@ -11,6 +11,7 @@ import type {
 } from "@veolms/database";
 import type {
   DiscussionEntryKind,
+  DiscussionReactionType,
   DiscussionVisibility,
   InteractionStatus,
   ListLearningThreadsQuery,
@@ -547,12 +548,20 @@ export interface ThreadsRepository {
     threadIds: readonly string[],
   ): Promise<ThreadMarksRow[]>;
 
-  /** Which of the given threads the user has liked. */
+  /** Which of the given threads the user has liked and with what reaction. */
   listThreadLikes(
     db: DatabaseExecutor,
     userId: string,
     threadIds: readonly string[],
-  ): Promise<Array<{ target_id: string }>>;
+  ): Promise<
+    Array<{ target_id: string; reaction_type: DiscussionReactionType }>
+  >;
+
+  /** Top up to 3 reaction types for each thread. */
+  listTopThreadReactions(
+    db: DatabaseExecutor,
+    threadIds: readonly string[],
+  ): Promise<Map<string, DiscussionReactionType[]>>;
 
   listThreadBookmarks(
     db: DatabaseExecutor,
@@ -1399,13 +1408,47 @@ export function createThreadsRepository(): ThreadsRepository {
     },
 
     async listThreadLikes(db, userId, threadIds) {
+      if (threadIds.length === 0) return [];
       return db
         .selectFrom("learning_likes")
-        .select("target_id")
+        .select([
+          "target_id",
+          sql<DiscussionReactionType>`coalesce(reaction_type, 'like')`.as(
+            "reaction_type",
+          ),
+        ])
         .where("user_id", "=", userId)
         .where("target_type", "=", "thread")
         .where("target_id", "in", [...threadIds])
         .execute();
+    },
+
+    async listTopThreadReactions(db, threadIds) {
+      if (threadIds.length === 0) return new Map();
+      const rows = await db
+        .selectFrom("learning_likes")
+        .select([
+          "target_id",
+          sql<DiscussionReactionType>`coalesce(reaction_type, 'like')`.as(
+            "reaction_type",
+          ),
+          sql<number>`count(*)::int`.as("count"),
+        ])
+        .where("target_type", "=", "thread")
+        .where("target_id", "in", [...threadIds])
+        .groupBy(["target_id", sql`coalesce(reaction_type, 'like')`])
+        .orderBy("count", "desc")
+        .execute();
+
+      const map = new Map<string, DiscussionReactionType[]>();
+      for (const row of rows) {
+        const list = map.get(row.target_id) ?? [];
+        if (list.length < 3) {
+          list.push(row.reaction_type);
+          map.set(row.target_id, list);
+        }
+      }
+      return map;
     },
 
     async listLessonNumbers(db, lessonIds) {

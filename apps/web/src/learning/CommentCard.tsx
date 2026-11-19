@@ -71,12 +71,17 @@ import {
   getReplyTotalCount,
 } from "../services/learning-interactions/reply-pagination";
 import { TimeAgo } from "../components/TimeAgo";
-import type { CreatorHeart } from "@veolms/contracts";
+import type { CreatorHeart, DiscussionReactionType } from "@veolms/contracts";
 import { CreatorHeartButton, PinnedLabel } from "./CreatorHeartButton";
 import { useCommentTapGestures } from "./useCommentTapGestures";
 import { useReplyHeartMutation } from "../services/learning-interactions/thread-marks";
 import { useThreadStaffActions } from "./useThreadStaffActions";
 import { cheerLike } from "../components/likeFeedback";
+import {
+  ReactionButton,
+  ReactionSummaryBadge,
+  WhoReactedModal,
+} from "./reactions";
 
 export interface CommentReply {
   id: string | number;
@@ -94,6 +99,8 @@ export interface CommentReply {
   content?: DiscussionContent;
   likes: number;
   liked?: boolean;
+  userReaction?: DiscussionReactionType | null;
+  topReactions?: DiscussionReactionType[];
   role?: "Instructor";
   isOwn?: boolean;
   isAccepted?: boolean;
@@ -117,6 +124,8 @@ export interface Comment {
   visibility?: DiscussionVisibility;
   likes: number;
   liked?: boolean;
+  userReaction?: DiscussionReactionType | null;
+  topReactions?: DiscussionReactionType[];
   replies?: number;
   thread?: CommentReply[];
   repliesExpanded?: boolean;
@@ -150,7 +159,11 @@ export interface Comment {
 
 interface CommentCardProps {
   comment: Comment;
-  onLike: (id: string | number, liked: boolean) => void;
+  onLike: (
+    id: string | number,
+    liked: boolean,
+    reaction?: DiscussionReactionType,
+  ) => void;
   onOpenThread?: (id: string | number, focusComposer?: boolean) => void;
   onEdit?: (comment: Comment) => void;
   onDelete?: (id: string | number) => void;
@@ -332,7 +345,22 @@ export const CommentCard = React.memo(function CommentCard({
   }, [isHighlighted, onHighlightShown]);
   const queryClient = useContext(QueryClientContext);
   const [localLiked, setLocalLiked] = useState(comment.liked ?? false);
+  const [localReaction, setLocalReaction] = useState<
+    DiscussionReactionType | null | undefined
+  >(comment.userReaction ?? (comment.liked ? "like" : null));
+
+  useEffect(() => {
+    setLocalLiked(comment.liked ?? false);
+    setLocalReaction(comment.userReaction ?? (comment.liked ? "like" : null));
+  }, [comment.liked, comment.userReaction]);
+
   const isCommentLiked = isBackendMode ? Boolean(comment.liked) : localLiked;
+  const activeUserReaction =
+    comment.userReaction !== undefined ? comment.userReaction : localReaction;
+  const [whoReactedTarget, setWhoReactedTarget] = useState<{
+    type: "thread" | "reply" | "note";
+    id: string;
+  } | null>(null);
   const [repliesOpen, setRepliesOpen] = useState(
     comment.repliesExpanded ?? false,
   );
@@ -627,20 +655,30 @@ export const CommentCard = React.memo(function CommentCard({
     }
   };
 
-  const handleLikeReply = (replyId: string | number) => {
+  const handleLikeReply = (
+    replyId: string | number,
+    desiredLiked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => {
     if (isBackendEntity) {
       const reply = effectiveReplies.find(
         (r) => getClientEntityId(r) === String(replyId),
       );
       if (!reply) return;
       const currentLiked = Boolean(reply?.liked);
-      const nextLiked = !currentLiked;
+      const nextLiked =
+        desiredLiked !== undefined
+          ? desiredLiked
+          : reaction
+            ? true
+            : !currentLiked;
       desiredStateCoordinator.setLiked({
         targetType: "reply",
         targetId: String(replyId),
         serverId: getServerEntityId(reply),
         threadId: threadId!,
         desiredLiked: nextLiked,
+        reaction,
         currentBaseline: currentLiked,
         lessonContext: courseId ? { courseId, lessonId: "" } : undefined,
         queryClient,
@@ -652,10 +690,12 @@ export const CommentCard = React.memo(function CommentCard({
       setLocalReplies((current) =>
         current.map((r) => {
           if (r.id !== replyId) return r;
-          const nextLiked = !Boolean(r.liked);
+          const nextLiked =
+            desiredLiked !== undefined ? desiredLiked : !Boolean(r.liked);
           return {
             ...r,
             liked: nextLiked,
+            userReaction: nextLiked ? (reaction ?? "like") : null,
             likes: Math.max(0, r.likes + (nextLiked ? 1 : -1)),
           };
         }),
@@ -739,7 +779,7 @@ export const CommentCard = React.memo(function CommentCard({
         inert={deletion.hidden ? true : undefined}
         className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.hidden ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
       >
-        <div className="min-h-0 overflow-hidden">
+        <div className={`min-h-0 ${deletion.hidden ? "overflow-hidden" : ""}`}>
           <div className="relative flex gap-3 sm:gap-3.5">
             <ProfileLink
               username={comment.authorUsername}
@@ -978,36 +1018,36 @@ export const CommentCard = React.memo(function CommentCard({
                   className="mt-2 flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--muted) sm:text-sm"
                 >
                   {(canParticipate || onParticipationRequired) && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        if (!canParticipate) {
-                          event.stopPropagation();
-                          onParticipationRequired?.();
-                          return;
-                        }
-                        if (!isCommentLiked) cheerLike(event.currentTarget);
-                        if (!isBackendMode) {
-                          setLocalLiked((current) => !current);
-                        }
-                        onLike(comment.id, !isCommentLiked);
+                    <ReactionButton
+                      liked={isCommentLiked}
+                      userReaction={activeUserReaction}
+                      count={comment.likes}
+                      canParticipate={canParticipate}
+                      onParticipationRequired={onParticipationRequired}
+                      onToggle={(desiredLiked, reaction) => {
+                        setLocalLiked(desiredLiked);
+                        setLocalReaction(
+                          desiredLiked ? (reaction ?? "like") : null,
+                        );
+                        onLike(comment.id, desiredLiked, reaction);
                       }}
-                      aria-pressed={isCommentLiked}
-                      aria-label={isCommentLiked ? "Unlike" : "Like"}
-                      data-comment-like
-                      className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isCommentLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
-                    >
-                      <span
-                        data-like-icon
-                        className="relative inline-grid place-items-center"
-                      >
-                        <ThumbsUp
-                          size={19}
-                          weight={isCommentLiked ? "fill" : "regular"}
-                        />
-                      </span>
-                      <span>{comment.likes}</span>
-                    </button>
+                    />
+                  )}
+
+                  {comment.likes > 0 && (
+                    <ReactionSummaryBadge
+                      topReactions={comment.topReactions}
+                      totalCount={comment.likes}
+                      onClick={() => {
+                        setWhoReactedTarget({
+                          type: isNote ? "note" : "thread",
+                          id: String(
+                            getServerEntityId(comment) ||
+                              getClientEntityId(comment),
+                          ),
+                        });
+                      }}
+                    />
                   )}
 
                   {!isNote && replyCount > 0 && (
@@ -1176,6 +1216,9 @@ export const CommentCard = React.memo(function CommentCard({
                     onEdit={handleEditReply}
                     onDelete={handleDeleteReply}
                     onLike={handleLikeReply}
+                    onOpenWhoReacted={(replyId) =>
+                      setWhoReactedTarget({ type: "reply", id: replyId })
+                    }
                     canHeart={staff.canMark}
                     threadServerId={getServerEntityId(comment)}
                     onOpenThread={
@@ -1251,6 +1294,14 @@ export const CommentCard = React.memo(function CommentCard({
           className="absolute top-5 right-0"
         />
       )}
+      {whoReactedTarget && (
+        <WhoReactedModal
+          isOpen={Boolean(whoReactedTarget)}
+          onClose={() => setWhoReactedTarget(null)}
+          targetType={whoReactedTarget.type}
+          targetId={whoReactedTarget.id}
+        />
+      )}
     </article>
   );
 });
@@ -1275,7 +1326,12 @@ interface ReplyCardProps {
     draft: DiscussionDraft,
   ) => Promise<boolean> | void;
   onDelete: (replyId: string | number) => Promise<boolean> | void;
-  onLike: (replyId: string | number) => void;
+  onLike: (
+    replyId: string | number,
+    desiredLiked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => void;
+  onOpenWhoReacted?: (replyId: string) => void;
   onReport: () => void;
   onSeekToTimestamp?: (seconds: number) => void;
   onCopyTextNotice?: (message: string) => void;
@@ -1306,6 +1362,7 @@ function ReplyCard({
   onEdit,
   onDelete,
   onLike,
+  onOpenWhoReacted,
   onReport,
   onSeekToTimestamp,
   onCopyTextNotice,
@@ -1327,7 +1384,18 @@ function ReplyCard({
   );
   const [editError, setEditError] = useState("");
   const [localLiked, setLocalLiked] = useState(reply.liked ?? false);
+  const [localReaction, setLocalReaction] = useState<
+    DiscussionReactionType | null | undefined
+  >(reply.userReaction ?? (reply.liked ? "like" : null));
+
+  useEffect(() => {
+    setLocalLiked(reply.liked ?? false);
+    setLocalReaction(reply.userReaction ?? (reply.liked ? "like" : null));
+  }, [reply.liked, reply.userReaction]);
+
   const isReplyLiked = isBackendMode ? Boolean(reply.liked) : localLiked;
+  const activeReplyReaction =
+    reply.userReaction !== undefined ? reply.userReaction : localReaction;
   const replyLikesCount = isBackendMode
     ? reply.likes
     : reply.likes + (localLiked ? 1 : 0);
@@ -1369,7 +1437,7 @@ function ReplyCard({
         inert={deletion.hidden ? true : undefined}
         className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${deletion.hidden ? "pointer-events-none -translate-y-1 grid-rows-[0fr] opacity-0" : "translate-y-0 grid-rows-[1fr] opacity-100"}`}
       >
-        <div className="min-h-0 overflow-hidden">
+        <div className={`min-h-0 ${deletion.hidden ? "overflow-hidden" : ""}`}>
           <div className="relative flex gap-3">
             <ProfileLink
               username={reply.authorUsername}
@@ -1506,36 +1574,33 @@ function ReplyCard({
                 className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm"
               >
                 {(canParticipate || onParticipationRequired) && (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      if (!canParticipate) {
-                        event.stopPropagation();
-                        onParticipationRequired?.();
-                        return;
-                      }
-                      if (!isReplyLiked) cheerLike(event.currentTarget);
-                      if (!isBackendMode) {
-                        setLocalLiked((current) => !current);
-                      }
-                      onLike(reply.id);
+                  <ReactionButton
+                    liked={isReplyLiked}
+                    userReaction={activeReplyReaction}
+                    count={replyLikesCount}
+                    canParticipate={canParticipate}
+                    onParticipationRequired={onParticipationRequired}
+                    onToggle={(desiredLiked, reaction) => {
+                      setLocalLiked(desiredLiked);
+                      setLocalReaction(
+                        desiredLiked ? (reaction ?? "like") : null,
+                      );
+                      onLike(reply.id, desiredLiked, reaction);
                     }}
-                    aria-pressed={isReplyLiked}
-                    aria-label={isReplyLiked ? "Unlike reply" : "Like reply"}
-                    data-comment-like
-                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isReplyLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
-                  >
-                    <span
-                      data-like-icon
-                      className="relative inline-grid place-items-center"
-                    >
-                      <ThumbsUp
-                        size={18}
-                        weight={isReplyLiked ? "fill" : "regular"}
-                      />
-                    </span>
-                    <span>{replyLikesCount}</span>
-                  </button>
+                    noun="reply"
+                    iconSize={16}
+                  />
+                )}
+                {replyLikesCount > 0 && (
+                  <ReactionSummaryBadge
+                    topReactions={reply.topReactions}
+                    totalCount={replyLikesCount}
+                    onClick={() => {
+                      onOpenWhoReacted?.(
+                        String(replyServerId || replyClientId || reply.id),
+                      );
+                    }}
+                  />
                 )}
                 {canParticipate && (
                   <button

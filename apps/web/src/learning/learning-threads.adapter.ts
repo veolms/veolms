@@ -52,6 +52,8 @@ export function adaptLearningThreadToComment(
     visibility: thread.visibility,
     likes: thread.likesCount ?? 0,
     liked: Boolean(thread.isLiked),
+    userReaction: thread.userReaction ?? (thread.isLiked ? "like" : null),
+    topReactions: thread.topReactions ?? (thread.likesCount ? ["like"] : []),
     replies: thread.repliesCount ?? 0,
     thread: [],
     isQuestion,

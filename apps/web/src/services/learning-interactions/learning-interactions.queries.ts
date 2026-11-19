@@ -1025,3 +1025,30 @@ export function useUserNotes(
       : result.data,
   };
 }
+
+export function useReactionsQuery(
+  targetType: "thread" | "reply" | "note",
+  targetId: string | undefined,
+  reactionFilter?: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: learningInteractionKeys.reactions(
+      targetType,
+      targetId ?? "",
+      reactionFilter,
+    ),
+    queryFn: () =>
+      learningInteractionsService.listReactions({
+        targetType,
+        targetId: targetId!,
+        reaction:
+          reactionFilter && reactionFilter !== "all"
+            ? (reactionFilter as any)
+            : undefined,
+        limit: 50,
+      }),
+    enabled: Boolean(targetId) && (options?.enabled ?? true),
+    staleTime: 10 * 1000,
+  });
+}
