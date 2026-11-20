@@ -1,15 +1,19 @@
 import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useEffect, useRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 
 import { FileVideoPlayer } from "../components/video";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { cn } from "../lib/utils";
+import { dayLabel, messageTime } from "./chatFormat";
 import { ChatImage } from "./ChatImage";
 import type { ViewableMedia } from "./MessageAttachments";
 import { usePhotoZoom } from "./usePhotoZoom";
+import { VideoThumb } from "./VideoThumb";
 
 /**
  * Full-screen photos and videos (WhatsApp's media viewer): ← / → between
@@ -73,8 +77,24 @@ export function MediaViewer({
         className="flex items-center gap-3 px-4 py-3 text-white"
         onClick={(e) => e.stopPropagation()}
       >
-        <span className="min-w-0 flex-1 truncate text-sm">
-          {item.name} · {index + 1} of {items.length}
+        <span className="flex min-w-0 flex-1 flex-col">
+          {item.senderName || item.sentAt ? (
+            <>
+              <span className="truncate text-[15px] font-semibold">
+                {item.senderName ?? item.name}
+              </span>
+              <span className="truncate text-xs text-white/70">
+                {item.sentAt
+                  ? `${dayLabel(item.sentAt)} at ${messageTime(item.sentAt)}`
+                  : null}
+                {items.length > 1 ? ` · ${index + 1} of ${items.length}` : ""}
+              </span>
+            </>
+          ) : (
+            <span className="truncate text-sm">
+              {item.name} · {index + 1} of {items.length}
+            </span>
+          )}
         </span>
         <a
           href={`${item.url}?download=1`}
@@ -170,7 +190,92 @@ export function MediaViewer({
           </button>
         ) : null}
       </div>
+      {items.length > 1 ? (
+        <MediaStrip items={items} index={index} onIndex={onIndex} />
+      ) : null}
     </div>,
     document.body,
+  );
+}
+
+/** Thumbnails drawn either side of the open item (bounds the work on a long chat). */
+const STRIP_REACH = 40;
+
+/**
+ * The row of the chat's photos and videos along the viewer's foot, as in
+ * WhatsApp: the open one framed and kept in view, any other a tap away.
+ */
+function MediaStrip({
+  items,
+  index,
+  onIndex,
+}: {
+  items: ViewableMedia[];
+  index: number;
+  onIndex: (index: number) => void;
+}) {
+  const currentRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    currentRef.current?.scrollIntoView({
+      block: "nearest",
+      inline: "center",
+      behavior: "smooth",
+    });
+  }, [index]);
+  const from = Math.max(0, index - STRIP_REACH);
+  const shown = items.slice(from, index + STRIP_REACH + 1);
+  return (
+    <div
+      className="flex shrink-0 justify-center-safe gap-1.5 overflow-x-auto border-0 border-t border-solid border-white/10 px-4 py-2.5 [scrollbar-width:none]"
+      onClick={(e) => e.stopPropagation()}
+      role="listbox"
+      aria-label="Photos and videos in this chat"
+    >
+      {shown.map((media, offset) => {
+        const at = from + offset;
+        const current = at === index;
+        return (
+          <button
+            key={`${at}:${media.url}`}
+            ref={current ? currentRef : undefined}
+            type="button"
+            role="option"
+            aria-selected={current}
+            aria-label={
+              media.kind === "video"
+                ? `Video ${media.name}`
+                : `Photo ${media.name}`
+            }
+            onClick={() => onIndex(at)}
+            className={cn(
+              "relative size-14 shrink-0 cursor-pointer overflow-hidden rounded-md border-0 bg-white/10 p-0 transition-opacity sm:size-16",
+              current
+                ? "opacity-100 outline-2 outline-offset-1 outline-(--accent) outline-solid"
+                : "opacity-60 hover:opacity-100",
+            )}
+          >
+            {media.kind === "image" ? (
+              <ChatImage
+                src={media.url}
+                alt=""
+                loading="lazy"
+                draggable={false}
+                className="size-full object-cover"
+              />
+            ) : (
+              <>
+                <VideoThumb
+                  src={media.url}
+                  className="size-full object-cover"
+                />
+                <span className="absolute inset-0 grid place-items-center text-white">
+                  <Play size={16} weight="fill" />
+                </span>
+              </>
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }
