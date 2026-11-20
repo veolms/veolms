@@ -673,10 +673,13 @@ function ChatRow({
                 </span>
               </>
             )}
-            {/* Room for the hover chevron, as in WhatsApp. */}
+            {/* Room for the hover chevron, as in WhatsApp: whenever the
+                chevron shows (hover, focus, open menu). After Mute or Pin
+                the focus goes back to the chevron, which then sat on top of
+                the muted and pinned icons. */}
             <span
               className={cn(
-                "flex shrink-0 items-center gap-1 transition-[margin] duration-150 group-hover/row:mr-7",
+                "flex shrink-0 items-center gap-1 transition-[margin] duration-150 group-hover/row:mr-7 group-focus-within/row:mr-7",
                 menuOpen && "mr-7",
               )}
             >
@@ -710,7 +713,7 @@ function ChatRow({
       </button>
       <div
         className={cn(
-          "absolute right-2 bottom-3 translate-x-1 opacity-0 transition-[opacity,translate] duration-150 group-hover/row:translate-x-0 group-hover/row:opacity-100 focus-within:translate-x-0 focus-within:opacity-100",
+          "absolute right-2 bottom-3 translate-x-1 opacity-0 transition-[opacity,translate] duration-150 group-hover/row:translate-x-0 group-hover/row:opacity-100 group-focus-within/row:translate-x-0 group-focus-within/row:opacity-100",
           menuOpen && "translate-x-0 opacity-100",
         )}
       >
