@@ -5,6 +5,7 @@ import type { ChatAttachment } from "@veolms/contracts";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { HighlightedCodeBlock } from "../components/code/HighlightedCodeBlock";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { chatService } from "../services/chat";
 import { formatBytes } from "./chatFormat";
@@ -190,16 +191,62 @@ export function FilePreview({
             </table>
           </div>
         ) : (
-          <pre className="m-0 size-full max-w-5xl overflow-auto rounded-lg bg-[#0d1117] p-4 font-mono text-[0.82rem] leading-relaxed whitespace-pre-wrap text-slate-100">
-            {attachment.mimeType === "application/json"
-              ? prettyJson(text)
-              : text}
-          </pre>
+          // Coloured like code in comments and messages: by the file's
+          // type or name, else by what the text looks like.
+          <div className="size-full max-w-5xl overflow-auto rounded-xl">
+            <HighlightedCodeBlock
+              className="my-0 min-h-full"
+              language={fileLanguage(attachment)}
+              code={
+                attachment.mimeType === "application/json"
+                  ? prettyJson(text)
+                  : text
+              }
+            />
+          </div>
         )}
       </div>
     </div>,
     document.body,
   );
+}
+
+const EXTENSION_LANGUAGES: Record<string, string> = {
+  js: "js",
+  mjs: "js",
+  cjs: "js",
+  jsx: "jsx",
+  ts: "ts",
+  tsx: "tsx",
+  py: "py",
+  java: "java",
+  c: "c",
+  h: "c",
+  cpp: "cpp",
+  cs: "cs",
+  go: "go",
+  rs: "rs",
+  rb: "rb",
+  php: "php",
+  sh: "sh",
+  sql: "sql",
+  html: "html",
+  css: "css",
+  scss: "scss",
+  xml: "xml",
+  yml: "yaml",
+  yaml: "yaml",
+  toml: "toml",
+  json: "json",
+  md: "md",
+};
+
+/** The language to colour a text file as; undefined lets the text decide. */
+function fileLanguage(attachment: ChatAttachment): string | undefined {
+  if (attachment.mimeType === "application/json") return "json";
+  if (attachment.mimeType === "text/markdown") return "md";
+  const extension = /\.([a-z0-9]+)$/i.exec(attachment.name)?.[1];
+  return extension ? EXTENSION_LANGUAGES[extension.toLowerCase()] : undefined;
 }
 
 function prettyJson(text: string): string {

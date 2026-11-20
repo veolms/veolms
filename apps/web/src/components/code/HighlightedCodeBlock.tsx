@@ -4,9 +4,10 @@ import type {
   DynamicImportLanguageRegistration,
   HighlighterCore,
 } from "@shikijs/core";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { cn } from "../../lib/utils";
+import { detectLanguage, languageLabel } from "./detectLanguage";
 
 /**
  * A fenced code block with syntax colours (Shiki, loaded on first use, one
@@ -35,7 +36,15 @@ export function HighlightedCodeBlock({
   const theme = useResolvedCodeTheme();
   const [tokens, setTokens] = useState<HighlightedToken[][] | null>(null);
   const [copied, setCopied] = useState(false);
-  const resolvedLanguage = resolveLanguage(language);
+  // A block without a language name is coloured by what it looks like.
+  const detected = useMemo(
+    () => (language ? undefined : detectLanguage(code)),
+    [code, language],
+  );
+  const resolvedLanguage = resolveLanguage(language || detected);
+  const label =
+    language ||
+    (detected && resolvedLanguage ? languageLabel(detected) : "text");
 
   useEffect(() => {
     let active = true;
@@ -67,7 +76,7 @@ export function HighlightedCodeBlock({
     >
       <div className="flex h-9 items-center justify-between border-b px-3 [border-color:color-mix(in_srgb,var(--text)_8%,transparent)]">
         <span className="font-mono text-[11px] uppercase tracking-wide text-(--muted)">
-          {language || "text"}
+          {label}
         </span>
         <button
           type="button"
