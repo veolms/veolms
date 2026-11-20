@@ -801,6 +801,8 @@ function PendingStatus({
     );
   }
   if (uploading.length === 0) return null;
+  // A video being made smaller (Standard) before it goes up.
+  const preparing = uploading.find((f) => f.preparing !== undefined);
   const progress =
     uploading.reduce((sum, f) => sum + f.progress, 0) / uploading.length;
   return (
@@ -808,7 +810,9 @@ function PendingStatus({
       className="flex justify-end px-[4%] pt-0.5 text-[0.72rem] text-(--muted)"
       aria-live="polite"
     >
-      Uploading {Math.round(progress * 100)}%
+      {preparing
+        ? `Preparing ${Math.round((preparing.preparing ?? 0) * 100)}%`
+        : `Uploading ${Math.round(progress * 100)}%`}
     </div>
   );
 }

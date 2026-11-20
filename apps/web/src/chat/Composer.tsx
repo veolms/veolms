@@ -49,6 +49,11 @@ import {
 } from "../store/chatDrafts.store";
 import { isTouchOnlyDevice, useChatPrefs } from "../store/chatPrefs.store";
 import { ChatFileError, prepareFile } from "./chatMedia";
+import {
+  saveSendQuality,
+  savedSendQuality,
+  type SendQuality,
+} from "./mediaQuality";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
 import {
@@ -133,6 +138,13 @@ export const Composer = forwardRef<
   const [files, setFiles] = useState<OutgoingFile[]>(() =>
     chatDraftFiles.get<OutgoingFile>(room.id),
   );
+  // Standard (smaller) or HD for photos, videos and audio; this device
+  // remembers the last choice, as WhatsApp does.
+  const [quality, setQuality] = useState<SendQuality>(savedSendQuality);
+  function changeQuality(next: SendQuality) {
+    setQuality(next);
+    saveSendQuality(next);
+  }
   /** The draft that was in the box before Edit, put back afterwards. */
   const draftBeforeEditRef = useRef("");
   /** The chat the files on screen belong to (kept as its draft). */
@@ -393,6 +405,7 @@ export const Composer = forwardRef<
       mentions: mentioned,
       mentionAll: room.me.canModerate && /(^|\s)@everyone\b/.test(body),
       files,
+      quality,
     });
     setText("");
     drafts.delete(room.id);
@@ -510,6 +523,8 @@ export const Composer = forwardRef<
         <MediaStage
           files={files}
           composerHeight={rootHeight}
+          quality={quality}
+          onQualityChange={changeQuality}
           onAddMore={() => mediaInputRef.current?.click()}
           onClear={() =>
             setFiles((current) => {

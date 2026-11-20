@@ -8,12 +8,11 @@ import type { OutgoingFile } from "../services/chat";
 
 /**
  * Files picked for a message, prepared in the browser (CHAT_ROOM_PLAN
- * §14.6): photos are re-drawn on a canvas (max 2048 px, WebP or JPEG),
- * which also drops their EXIF location data; videos and voice messages
- * report their length and size. The API never touches the bytes.
+ * §14.6): photos, videos and voice messages report their size and length
+ * here. The copy that is sent (Standard or HD; a photo re-drawn, which
+ * drops its EXIF location) is made when the message is sent
+ * (mediaQuality.ts). The API never touches the bytes.
  */
-
-const MAX_IMAGE_EDGE = 2048;
 
 export class ChatFileError extends Error {}
 
@@ -43,12 +42,6 @@ function loadImage(file: Blob): Promise<HTMLImageElement> {
   });
 }
 
-function canvasBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
-  return new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, type, quality),
-  );
-}
-
 async function preparePhoto(file: File): Promise<Partial<OutgoingFile>> {
   // GIFs keep their animation: sent as they are.
   if (file.type === "image/gif") {
@@ -60,29 +53,10 @@ async function preparePhoto(file: File): Promise<Partial<OutgoingFile>> {
       height: image.naturalHeight,
     };
   }
+  // Re-drawn at the size the sender picks (Standard or HD) when the message
+  // is sent (mediaQuality.ts); here only checked and measured for preview.
   const image = await loadImage(file);
-  const scale = Math.min(
-    1,
-    MAX_IMAGE_EDGE / Math.max(image.naturalWidth, image.naturalHeight),
-  );
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  canvas.getContext("2d")!.drawImage(image, 0, 0, width, height);
-  // WebP where the browser can make it, else JPEG.
-  let blob = await canvasBlob(canvas, "image/webp", 0.82);
-  let mimeType = "image/webp";
-  if (!blob || blob.type !== "image/webp") {
-    blob = await canvasBlob(canvas, "image/jpeg", 0.85);
-    mimeType = "image/jpeg";
-  }
-  if (!blob) throw new ChatFileError("This photo could not be prepared.");
-  const name =
-    file.name.replace(/\.[^.]+$/, "") +
-    (mimeType === "image/webp" ? ".webp" : ".jpg");
-  return { file: blob, mimeType, width, height, name };
+  return { width: image.naturalWidth, height: image.naturalHeight };
 }
 
 function videoMeta(

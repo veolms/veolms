@@ -11,6 +11,7 @@ import type { OutgoingFile } from "../services/chat";
 import { formatBytes } from "./chatFormat";
 import { DiscardFilesDialog } from "./ChatDialogs";
 import { LocalPdfPreview } from "./LocalPdfPreview";
+import { hasQualityChoice, type SendQuality } from "./mediaQuality";
 
 /**
  * WhatsApp's media preview before sending: the picked file large, a strip
@@ -25,9 +26,14 @@ export function MediaStage({
   onReorder,
   onClear,
   onAddMore,
+  quality,
+  onQualityChange,
 }: {
   files: OutgoingFile[];
   composerHeight: number;
+  /** Photos, videos and audio: a smaller copy (Standard) or HD. */
+  quality: SendQuality;
+  onQualityChange: (quality: SendQuality) => void;
   onRemove: (localId: string) => void;
   /** Move a file in the order they are sent (drag a thumbnail). */
   onReorder: (from: number, to: number) => void;
@@ -110,6 +116,7 @@ export function MediaStage({
 
   if (!active) return null;
   const totalBytes = files.reduce((sum, f) => sum + f.file.size, 0);
+  const qualityApplies = files.some(hasQualityChoice);
   const canAdd = files.length < CHAT_MAX_ATTACHMENTS_PER_MESSAGE;
 
   return (
@@ -136,8 +143,38 @@ export function MediaStage({
             {files.length > 1
               ? `${files.length} files · ${formatBytes(totalBytes)}`
               : formatBytes(active.file.size)}
+            {qualityApplies
+              ? quality === "hd"
+                ? " · HD quality"
+                : " · Standard quality"
+              : null}
           </div>
         </div>
+        {qualityApplies ? (
+          // WhatsApp's HD button: off sends a smaller copy (Standard), on
+          // sends photos large and videos and audio as they are.
+          <button
+            type="button"
+            aria-pressed={quality === "hd"}
+            aria-label="HD quality"
+            title={
+              quality === "hd"
+                ? "HD: best quality, larger files"
+                : "Standard: smaller files that send faster. Turn on for HD."
+            }
+            onClick={() =>
+              onQualityChange(quality === "hd" ? "standard" : "hd")
+            }
+            className={cn(
+              "inline-flex h-8 cursor-pointer items-center justify-center rounded-md border px-2 text-[0.75rem] font-bold tracking-wide transition-colors",
+              quality === "hd"
+                ? "border-transparent bg-(--accent) text-(--on-accent)"
+                : "border-(--border-strong) bg-transparent text-(--muted) hover:bg-(--chat-hover) hover:text-(--text)",
+            )}
+          >
+            HD
+          </button>
+        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-4">
