@@ -807,6 +807,13 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       this.refreshNativeTextTracks();
     });
     listen("error", () => {
+      // An error event with no error on the element is Shaka mending a
+      // decoder failure itself (`allowMediaSourceRecoveries`): it rebuilds
+      // the media source, which reads as time 0 and paused for a moment,
+      // then seeks back and plays on. Taken for a failure, it was "mended"
+      // again from that moment: the lesson reloaded at 0:00, paused, at 1x
+      // (lecture 42 at 16x, 20 Nov).
+      if (!media.error) return;
       const error = mediaErrorToVideoEngineError(media.error);
       if (error.fatal && this.recoverFromMediaFailure(error)) return;
       // A fetch the element gave up on (MEDIA_ERR_ABORTED, MEDIA_ERR_NETWORK)

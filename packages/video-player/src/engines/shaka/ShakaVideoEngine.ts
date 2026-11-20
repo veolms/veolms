@@ -168,6 +168,46 @@ const LOAD_RETRY_OFFLINE_WAIT_MS = 20_000;
  * within the window; a video that keeps failing then shows its error.
  */
 const MEDIA_RECOVERY_LIMIT = 3;
+/**
+ * A video that fails again where the last recovery reloaded it, before it
+ * has played on past that place, is not mended by loading it once more: the
+ * video file itself stops there (lecture 603's sound that ends at 1:04,
+ * lecture 42's pieces that cannot be decoded). Production showed learners
+ * a loader for two to three minutes while the same reload was tried three
+ * times. The second failure at the same place now shows the error at once
+ * (`MEDIA_STUCK`), saying what happened, and the host reports it.
+ *
+ * "The same place" is within this many seconds of where the last recovery
+ * reloaded it; playing on this far past that place forgets it.
+ */
+const SAME_PLACE_SECONDS = 3;
+/**
+ * Before the error, one reload past the place: at the start of the next
+ * segment (its own keyframe), or this far on when the manifest cannot say.
+ * Lecture 42's broken piece is one segment of about 5 s; past it the video
+ * plays on. A video broken from there on (lecture 603) fails again and the
+ * error is shown.
+ */
+const SKIP_PAST_FALLBACK_SECONDS = 6;
+const SAME_PLACE_PLAYED_PAST_SECONDS = 10;
+/**
+ * A stream that starves again at the place it was last reloaded at is
+ * taken as stuck after this long, without the nudge (see WATCHDOG_STARVED_MS).
+ */
+const WATCHDOG_STARVED_AGAIN_MS = 4_000;
+/**
+ * The sound buffered far ahead while the picture has nothing where the
+ * playhead stands, or the other way round, and the playhead not moving:
+ * the two tracks of the file do not line up there (lecture 603's sound,
+ * whose times started over in every part, so it was laid down at the
+ * wrong place and the video waited for sound that never came). A slow
+ * connection leaves both tracks short; this is the file. Mended as a
+ * freeze (one reload) once it has lasted this long; the second time at
+ * the same place shows the error (see SAME_PLACE_SECONDS). The starved
+ * check took minutes to see it, as the stream kept fetching far ahead.
+ */
+const WATCHDOG_TRACKS_APART_AHEAD_SECONDS = 10;
+const WATCHDOG_TRACKS_APART_MS = 8_000;
 const MEDIA_RECOVERY_WINDOW_MS = 10 * 60_000;
 /**
  * A decoder that failed twice in the window is probably struggling with
@@ -791,6 +831,21 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   /** When each self-recovery from a media failure began (see above). */
   #mediaRecoveries: number[] = [];
   #mediaRecoveryInFlight = false;
+  /**
+   * Where the video last stood while it was playing well, whether play was
+   * asked for, and at what speed: a recovery starts from these, not from
+   * the element, which a failure (or Shaka's own mending of it) can leave
+   * at time 0, paused, at 1x.
+   */
+  #lastGoodTime: number | null = null;
+  #lastPlayRequested = false;
+  #lastPlaybackRate = 1;
+  /** Where the last media recovery reloaded the video (see SAME_PLACE_SECONDS). */
+  #lastRecoveryPosition: number | null = null;
+  /** The reload past the place has been made (see SKIP_PAST_FALLBACK_SECONDS). */
+  #skippedPast = false;
+  /** `MEDIA_STUCK` is on screen: later errors of this load would hide it. */
+  #stuckShown = false;
   /** Set once the decoder has failed twice on this source (see above). */
   #mediaRecoveryMaxHeight: number | null = null;
   /** The source and options of the load most recently asked for. */
@@ -818,6 +873,20 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #chosenQualityWaitSince = 0;
   /** The playhead the starved check last saw. */
   #starvedLastTime = -1;
+  /** When one track was first seen far ahead of the other (see above). */
+  #tracksApartSince = 0;
+  /** The lagging track, while that lasts. */
+  #tracksApartLagging: "audio" | "video" | null = null;
+  /** Segments of the lagging track answered when it was first seen. */
+  #tracksApartAnswered = 0;
+  /**
+   * Segments asked for and answered for each track (see
+   * `watchSegmentActivity`); the difference is what is still on its way.
+   * A failed request is never answered, so it counts as on its way: a
+   * track waiting on the network is never taken for a broken file.
+   */
+  #segmentsAsked = { audio: 0, video: 0 };
+  #segmentsAnswered = { audio: 0, video: 0 };
   /** The newest segment request asked for, and the newest answered. */
   #lastSegmentRequestAt = 0;
   #lastSegmentResponseAt = 0;
@@ -916,9 +985,15 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       // nothing about this one.
       this.#mediaRecoveries = [];
       this.#mediaRecoveryMaxHeight = null;
+      this.#lastRecoveryPosition = null;
+      this.#skippedPast = false;
+      this.#lastGoodTime = null;
+      this.#lastPlayRequested = false;
+      this.#lastPlaybackRate = 1;
       this.#timedOutLoadRetries = 0;
     }
     this.#lastLoad = { src: source.src, options };
+    this.#stuckShown = false;
     // Asked for by a reload after an interruption (reloadAfterInterruption).
     const startClean = this.#nextLoadClean;
     this.#nextLoadClean = false;
@@ -1195,6 +1270,42 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       return false;
     }
     if (this.#mediaRecoveryInFlight) return true;
+    const place = this.recoveryPlace(media);
+    const stuck = this.stuckAtLastRecovery(place.time);
+    let skipTo: number | null = null;
+    if (stuck && !this.#skippedPast) {
+      // Failed again at the same place: once, take it up just past it.
+      this.#skippedPast = true;
+      const player = this.#player;
+      const active = player?.getVariantTracks().find((track) => track.active);
+      const past =
+        (player ? nextSegmentStart(player, active, place.time + 0.5) : null) ??
+        place.time + SKIP_PAST_FALLBACK_SECONDS;
+      const duration = media.duration;
+      if (!Number.isFinite(duration) || past < duration - 1) {
+        markPlayback("media-recovery-skip", {
+          code: error.code,
+          from: place.time,
+          to: past,
+        });
+        skipTo = past;
+      }
+    }
+    if (stuck && skipTo === null) {
+      const position = place.time;
+      markPlayback("media-recovery-stopped", { code: error.code, position });
+      this.emitError(
+        new VideoEngineError({
+          category: "MEDIA",
+          code: "MEDIA_STUCK",
+          message: `Playback stops at ${position.toFixed(1)} s each time (${error.code}).`,
+          cause: error,
+          details: [{ position, failure: error.code, details: error.details }],
+        }),
+      );
+      this.#stuckShown = true;
+      return true;
+    }
     const now = Date.now();
     this.#mediaRecoveries = this.#mediaRecoveries.filter(
       (at) => now - at < MEDIA_RECOVERY_WINDOW_MS,
@@ -1205,8 +1316,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     if (this.#mediaRecoveries.length >= 2) {
       this.#mediaRecoveryMaxHeight = MEDIA_RECOVERY_MAX_HEIGHT;
     }
-    const startTime = media.currentTime;
-    const wasPlaying = !media.paused && !media.ended;
+    const startTime = skipTo ?? place.time;
+    this.#lastRecoveryPosition = startTime;
+    const wasPlaying = place.playing;
+    const playbackRate = place.rate;
     markPlayback("media-recovery", {
       attempt: this.#mediaRecoveries.length,
       code: error.code,
@@ -1230,6 +1343,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       await Promise.resolve();
       try {
         await this.load(source, { startTime });
+        if (playbackRate !== 1) this.setPlaybackRate(playbackRate);
         if (
           this.#mediaRecoveryMaxHeight !== null &&
           this.#qualityChoice !== "manual"
@@ -1240,7 +1354,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
             player.configure({ abr: this.abrConfiguration(source, runtime) });
           }
         }
-        if (wasPlaying) await this.play();
+        // Asked for, not waited on: the play promise settles only once the
+        // picture moves, and at a place the file cannot play it never did,
+        // which kept the recovery "in flight" and the watchdog off for good.
+        if (wasPlaying) void this.play().catch(() => undefined);
       } catch {
         // The load showed its own failure.
       } finally {
@@ -1248,6 +1365,79 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       }
     })();
     return true;
+  }
+
+  /**
+   * The track (sound or picture) that has nothing at `time` while the
+   * other is buffered far past it (see WATCHDOG_TRACKS_APART_MS), or null.
+   */
+  private laggingTrackAt(time: number): "audio" | "video" | null {
+    let info: ReturnType<NonNullable<ShakaPlayerLike["getBufferedInfo"]>>;
+    try {
+      const read = this.#player?.getBufferedInfo?.();
+      if (!read) return null;
+      info = read;
+    } catch {
+      return null;
+    }
+    // A video with one track only (an audio lesson) has nothing to compare.
+    if (!info.audio?.length || !info.video?.length) return null;
+    const aheadIn = (ranges: readonly { start: number; end: number }[]) => {
+      const range = ranges.find(
+        (candidate) => candidate.start <= time + 0.1 && candidate.end > time,
+      );
+      return range ? range.end - time : 0;
+    };
+    const audio = aheadIn(info.audio);
+    const video = aheadIn(info.video);
+    if (audio < 0.5 && video >= WATCHDOG_TRACKS_APART_AHEAD_SECONDS) {
+      return "audio";
+    }
+    if (video < 0.5 && audio >= WATCHDOG_TRACKS_APART_AHEAD_SECONDS) {
+      return "video";
+    }
+    return null;
+  }
+
+  /**
+   * Where a recovery takes the video up again (see `#lastGoodTime`): the
+   * element's own time while it still has one, else where it last stood.
+   */
+  private recoveryPlace(media: HTMLMediaElement): {
+    time: number;
+    playing: boolean;
+    rate: number;
+  } {
+    const reset = media.currentTime === 0 && (this.#lastGoodTime ?? 0) > 0;
+    return {
+      time: reset ? (this.#lastGoodTime ?? 0) : media.currentTime,
+      playing: reset
+        ? this.#lastPlayRequested
+        : (!media.paused && !media.ended) || this.#lastPlayRequested,
+      rate:
+        media.playbackRate > 0 && media.playbackRate !== 1
+          ? media.playbackRate
+          : this.#lastPlaybackRate,
+    };
+  }
+
+  /**
+   * Once `MEDIA_STUCK` is shown, the failures that follow it (Shaka's own
+   * reports of the same broken place) are left out: the last one used to
+   * take the screen and the report, with a code that says nothing.
+   */
+  protected override emitError(
+    error: VideoEngineError,
+    setErrorState = true,
+  ): void {
+    if (this.#stuckShown && error.code !== "MEDIA_STUCK") return;
+    super.emitError(error, setErrorState);
+  }
+
+  /** Whether `position` is where the last recovery reloaded the video. */
+  private stuckAtLastRecovery(position: number): boolean {
+    const last = this.#lastRecoveryPosition;
+    return last !== null && Math.abs(position - last) < SAME_PLACE_SECONDS;
   }
 
   /**
@@ -2459,6 +2649,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#waitingForKeySince = 0;
     this.#starvedSince = 0;
     this.#starvedNudgedAt = 0;
+    this.#tracksApartSince = 0;
+    this.#tracksApartLagging = null;
     this.#chosenQualityWaits = [];
     this.#chosenQualityWaitSince = 0;
     this.watchSegmentActivity();
@@ -2484,11 +2676,23 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const now = Date.now();
     this.#lastSegmentRequestAt = now;
     this.#lastSegmentResponseAt = now;
-    const request: ShakaRequestFilterLike = (type) => {
-      if (type === segmentType) this.#lastSegmentRequestAt = Date.now();
+    this.#segmentsAsked = { audio: 0, video: 0 };
+    this.#segmentsAnswered = { audio: 0, video: 0 };
+    const request: ShakaRequestFilterLike = (type, _request, context) => {
+      if (type !== segmentType) return;
+      this.#lastSegmentRequestAt = Date.now();
+      const kind = context?.stream?.type;
+      if (kind === "audio" || kind === "video") {
+        this.#segmentsAsked[kind] += 1;
+      }
     };
-    const response: ShakaResponseFilterLike = (type) => {
-      if (type === segmentType) this.#lastSegmentResponseAt = Date.now();
+    const response: ShakaResponseFilterLike = (type, _response, context) => {
+      if (type !== segmentType) return;
+      this.#lastSegmentResponseAt = Date.now();
+      const kind = context?.stream?.type;
+      if (kind === "audio" || kind === "video") {
+        this.#segmentsAnswered[kind] += 1;
+      }
     };
     networking.registerRequestFilter(request);
     networking.registerResponseFilter(response);
@@ -2552,6 +2756,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       return;
     }
     const now = Date.now();
+    // What a recovery starts from (see `#lastGoodTime`), read only while
+    // the video stands somewhere: Shaka's own mending shows time 0, paused.
+    if (!media.seeking && media.currentTime > 0) {
+      this.#lastGoodTime = media.currentTime;
+      this.#lastPlayRequested = !media.paused && !media.ended;
+      if (media.playbackRate > 0) this.#lastPlaybackRate = media.playbackRate;
+    }
     // Nothing in front of the playhead and the stream asking for nothing:
     // waiting would never end. Online only; offline is the network's. Shaka
     // holds a starved video at rate 0, so play asked for is enough here.
@@ -2560,6 +2771,52 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const starvedMoved = starvedTime !== this.#starvedLastTime;
     this.#starvedLastTime = starvedTime;
     const starvedAhead = bufferedAheadSeconds(media);
+    if (
+      this.#lastRecoveryPosition !== null &&
+      starvedTime > this.#lastRecoveryPosition + SAME_PLACE_PLAYED_PAST_SECONDS
+    ) {
+      this.#lastRecoveryPosition = null;
+      this.#skippedPast = false;
+    }
+    // A seek into such a place never ends (no sound to land on), so a
+    // seeking video is looked at too; a slow link is told apart below.
+    const lagging =
+      playRequested && !starvedMoved ? this.laggingTrackAt(starvedTime) : null;
+    if (lagging && lagging === this.#tracksApartLagging) {
+      // The file, not the link, when the lagging track is not waiting on
+      // the network (nothing of it on its way), or when segments of it kept
+      // arriving and none filled the gap: they are laid down somewhere else.
+      // On a slow link a segment of it is on its way, and the first to land
+      // fills the gap, which ends this.
+      const nothingOnItsWay =
+        this.#segmentsAsked[lagging] <= this.#segmentsAnswered[lagging];
+      const arrivedInVain =
+        this.#segmentsAnswered[lagging] - this.#tracksApartAnswered >= 2;
+      if (
+        now - this.#tracksApartSince >= WATCHDOG_TRACKS_APART_MS &&
+        (nothingOnItsWay || arrivedInVain)
+      ) {
+        this.#tracksApartSince = 0;
+        this.#tracksApartLagging = null;
+        this.#starvedSince = 0;
+        this.#starvedNudgedAt = 0;
+        this.recoverFromFreeze("TRACKS_APART", {
+          position: starvedTime,
+          readyState: media.readyState,
+        });
+        return;
+      }
+    } else if (lagging) {
+      this.#tracksApartSince = now;
+      this.#tracksApartLagging = lagging;
+      this.#tracksApartAnswered = this.#segmentsAnswered[lagging];
+    } else {
+      this.#tracksApartSince = 0;
+      this.#tracksApartLagging = null;
+    }
+    // Starved again where the last recovery left it: that reload did not
+    // help, so neither will a nudge (see SAME_PLACE_SECONDS).
+    const starvedAgain = this.stuckAtLastRecovery(starvedTime);
     if (
       this.chosenQualityCannotKeepUp(media, playRequested, starvedAhead, now)
     ) {
@@ -2576,6 +2833,18 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#starvedNudgedAt = 0;
     } else if (this.#starvedSince === 0) {
       this.#starvedSince = now;
+    } else if (
+      starvedAgain &&
+      now - this.#starvedSince >= WATCHDOG_STARVED_AGAIN_MS
+    ) {
+      this.#starvedSince = 0;
+      this.#starvedNudgedAt = 0;
+      this.recoverFromFreeze("STREAM_STARVED", {
+        ahead: starvedAhead,
+        readyState: media.readyState,
+        again: true,
+      });
+      return;
     } else if (
       this.#starvedNudgedAt === 0 &&
       now - this.#starvedSince >= WATCHDOG_STARVED_MS

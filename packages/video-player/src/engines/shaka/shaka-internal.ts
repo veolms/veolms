@@ -101,11 +101,15 @@ export interface ShakaRequestContextLike {
 export type ShakaRequestFilterLike = (
   type: number,
   request: ShakaNetworkRequestLike,
+  /** The stream a segment belongs to (Shaka 4.3+). */
+  context?: { stream?: { type?: string } },
 ) => void | Promise<void>;
 
 export type ShakaResponseFilterLike = (
   type: number,
   response: ShakaNetworkResponseLike,
+  /** The stream a segment belongs to (Shaka 4.3+). */
+  context?: { stream?: { type?: string } },
 ) => void | Promise<void>;
 
 export interface ShakaNetworkingEngineLike {
@@ -180,6 +184,11 @@ export interface ShakaPlayerLike {
   };
   getNetworkingEngine(): ShakaNetworkingEngineLike | null;
   getStats?(): { estimatedBandwidth?: number; maxSegmentDuration?: number };
+  /** What each track has buffered, apart (`total` is where they overlap). */
+  getBufferedInfo?(): {
+    audio: readonly { start: number; end: number }[];
+    video: readonly { start: number; end: number }[];
+  };
   /** Resumes streams stopped by a failure, after `retryDelaySeconds`. */
   retryStreaming?(retryDelaySeconds?: number): boolean;
   /** Deprecated in Shaka 5 but still exported; read only for segment times. */

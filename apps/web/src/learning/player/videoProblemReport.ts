@@ -35,8 +35,60 @@ export interface VideoProblemReportOptions {
   lessonTitle: string;
 }
 
+/**
+ * A fault in the video is reported by itself when it is shown, so a learner
+ * who tries again and again would send the same report each time. The same
+ * lesson's same error is sent once a day from a device; within that day the
+ * first report's number is shown again.
+ */
+const REPORT_ONCE_PER_MS = 24 * 60 * 60_000;
+const SENT_REPORTS_KEY = "veolms.videoProblemReports";
+
+function sentReportKey(code: string): string {
+  return `${location.pathname}|${code}`;
+}
+
+function readSentReports(): Record<string, { at: number; reference: string }> {
+  try {
+    const parsed: unknown = JSON.parse(
+      localStorage.getItem(SENT_REPORTS_KEY) ?? "{}",
+    );
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, { at: number; reference: string }>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberSentReport(code: string, reference: string): void {
+  try {
+    const now = Date.now();
+    const kept = Object.fromEntries(
+      Object.entries(readSentReports()).filter(
+        ([, sent]) => now - sent.at < REPORT_ONCE_PER_MS,
+      ),
+    );
+    kept[sentReportKey(code)] = { at: now, reference };
+    localStorage.setItem(SENT_REPORTS_KEY, JSON.stringify(kept));
+  } catch {
+    // Storage refused: the next report is sent again, which is harmless.
+  }
+}
+
 /** Sends the report; resolves with its number for the button ("#123"). */
 export async function sendVideoProblemReport({
+  error,
+  lessonTitle,
+}: VideoProblemReportOptions): Promise<string> {
+  const sent = readSentReports()[sentReportKey(error.code)];
+  if (sent && Date.now() - sent.at < REPORT_ONCE_PER_MS) return sent.reference;
+  const reference = await sendReport({ error, lessonTitle });
+  rememberSentReport(error.code, reference);
+  return reference;
+}
+
+async function sendReport({
   error,
   lessonTitle,
 }: VideoProblemReportOptions): Promise<string> {
