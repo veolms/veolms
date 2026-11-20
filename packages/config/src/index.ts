@@ -321,6 +321,16 @@ const serverConfigSchema = z.object({
     .string()
     .min(32, "PAYMENT_KEYS_ENCRYPTION_KEY must be at least 32 characters")
     .optional(),
+  /**
+   * Encrypts affiliates' payout details (UPI id, bank account, IFSC) and PAN,
+   * and nothing else. No default and no fallback: unset, the server refuses
+   * to store payout details. Make one with `openssl rand -base64 48`; change
+   * it only with `encryption-key:rotate --affiliate-payouts`.
+   */
+  AFFILIATE_PAYOUT_ENCRYPTION_KEY: z
+    .string()
+    .min(32, "AFFILIATE_PAYOUT_ENCRYPTION_KEY must be at least 32 characters")
+    .optional(),
   WEB_URL: z.url().default("http://localhost:3000"),
   /**
    * Short links (docs/short-links.md). The address the website Worker reads

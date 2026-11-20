@@ -63,6 +63,15 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "support-ticket",
       caseSensitive: true,
     }),
+    // The affiliate's dashboard, and the page to join the program.
+    route("affiliate", "routes/affiliate/dashboard.tsx", {
+      id: "affiliate",
+      caseSensitive: true,
+    }),
+    route("affiliates/join", "routes/affiliate/join.tsx", {
+      id: "affiliate-join",
+      caseSensitive: true,
+    }),
     // Chat: course groups, team groups and private chats (WhatsApp-style).
     route("chat/:roomId?", "routes/chat/chat.tsx", {
       id: "chat",

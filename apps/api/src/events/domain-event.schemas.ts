@@ -347,3 +347,57 @@ export const workshopAnnouncedEventSchema = z.strictObject({
   endsAt: z.iso.datetime().nullable(),
   timeZone: z.string().nullable(),
 });
+
+// ------------------------------------------------------------ affiliates
+// The affiliate program's emails (PRD FR-14), all on the transactional lane.
+
+export const affiliateApplicationReceivedEventSchema = z.strictObject({
+  affiliateId: z.uuid(),
+  applicantName: z.string().min(1).max(255),
+  code: z.string().min(1).max(20),
+});
+
+export const affiliateStatusChangedEventSchema = z.strictObject({
+  affiliateId: z.uuid(),
+  recipientUserId: z.uuid(),
+  status: z.enum(["approved", "rejected", "suspended"]),
+  code: z.string().min(1).max(20),
+  reason: z.string().max(2000).nullable(),
+});
+
+export const affiliateCommissionEarnedEventSchema = z.strictObject({
+  affiliateId: z.uuid(),
+  recipientUserId: z.uuid(),
+  orderId: z.uuid(),
+  /** In the order's currency, minor units. */
+  amount: z.number().int().positive(),
+  currency: z.string().length(3),
+  holdDays: z.number().int().min(0),
+});
+
+export const affiliateCommissionReversedEventSchema = z.strictObject({
+  affiliateId: z.uuid(),
+  recipientUserId: z.uuid(),
+  refundId: z.uuid(),
+  /** Positive: how much was taken back, minor units. */
+  amount: z.number().int().positive(),
+  currency: z.string().length(3),
+});
+
+export const affiliatePayoutRequestedEventSchema = z.strictObject({
+  payoutId: z.uuid(),
+  affiliateId: z.uuid(),
+  affiliateCode: z.string().min(1).max(20),
+  amount: z.number().int().positive(),
+  currency: z.string().length(3),
+});
+
+export const affiliatePayoutDecidedEventSchema = z.strictObject({
+  payoutId: z.uuid(),
+  recipientUserId: z.uuid(),
+  status: z.enum(["paid", "rejected", "failed"]),
+  amount: z.number().int().positive(),
+  currency: z.string().length(3),
+  reference: z.string().max(100).nullable(),
+  reason: z.string().max(2000).nullable(),
+});

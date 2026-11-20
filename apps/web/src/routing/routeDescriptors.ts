@@ -561,6 +561,18 @@ export const routeDescriptors = {
     description:
       "Report a problem or send feedback, and read the team's replies.",
   },
+  affiliate: {
+    kind: "shell",
+    page: "extension",
+    title: "Affiliate",
+    description: "Your affiliate link, earnings and payouts at {site}.",
+  },
+  "affiliate-join": {
+    kind: "shell",
+    page: "extension",
+    title: "Become an affiliate",
+    description: "Earn a commission by sharing {site} with your audience.",
+  },
   "support-new": {
     kind: "shell",
     page: "extension",
@@ -631,6 +643,8 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "progress-learner": "/progress/:username",
   support: "/support",
   "support-inbox": "/support-inbox",
+  affiliate: "/affiliate",
+  "affiliate-join": "/affiliates/join",
   chat: "/chat",
   "public-profile": "/:username",
   reviews: "/reviews",
@@ -712,6 +726,8 @@ const canonicalPathsByRouteId = {
   "progress-learner": "/progress/:username",
   support: "/support",
   "support-new": "/support/new",
+  affiliate: "/affiliate",
+  "affiliate-join": "/affiliates/join",
   chat: "/chat",
   reviews: "/reviews",
   quizzes: "/quizzes",

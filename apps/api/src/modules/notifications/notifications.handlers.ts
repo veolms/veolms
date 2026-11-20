@@ -33,6 +33,12 @@ import {
   workshopUpdatedEventSchema,
   workshopAnnouncedEventSchema,
   emailUnsubscribedEventSchema,
+  affiliateApplicationReceivedEventSchema,
+  affiliateCommissionEarnedEventSchema,
+  affiliateCommissionReversedEventSchema,
+  affiliatePayoutDecidedEventSchema,
+  affiliatePayoutRequestedEventSchema,
+  affiliateStatusChangedEventSchema,
 } from "../../events/domain-event.schemas.ts";
 import type { OrderConfirmationItem } from "@veolms/contracts";
 import type { Json } from "@veolms/database";
@@ -778,6 +784,119 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       // One notice to many learners: after sign-in codes and receipts.
       lane: "bulk" as const,
     }));
+  },
+  // The affiliate program (PRD FR-14). Mandatory: they are about the
+  // affiliate's own money and standing (the commission email is switched
+  // off by the affiliate's own setting, before it is published).
+  "affiliate.application_received": async (payload, dependencies) => {
+    const event = affiliateApplicationReceivedEventSchema.parse(payload);
+    const recipientUserIds =
+      (await dependencies.listPermissionHolderUserIds?.("affiliate.manage")) ??
+      [];
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "affiliate.application_received",
+      category: "transactional" as const,
+      templateKey: "affiliate.application_received" as const,
+      templateData: { applicantName: event.applicantName, code: event.code },
+      channels: commonChannels,
+      mandatory: true,
+      deepLink: "/affiliates/admin?tab=affiliates",
+    }));
+  },
+  "affiliate.status_changed": async (payload) => {
+    const event = affiliateStatusChangedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "affiliate.status_changed",
+        category: "transactional",
+        templateKey: "affiliate.status_changed",
+        templateData: {
+          status: event.status,
+          code: event.code,
+          reason: event.reason ?? "",
+        },
+        channels: commonChannels,
+        mandatory: true,
+        deepLink: "/affiliate",
+      },
+    ];
+  },
+  "affiliate.commission_earned": async (payload) => {
+    const event = affiliateCommissionEarnedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "affiliate.commission_earned",
+        category: "transactional",
+        templateKey: "affiliate.commission_earned",
+        templateData: {
+          amount: event.amount,
+          currency: event.currency,
+          holdDays: event.holdDays,
+        },
+        channels: commonChannels,
+        mandatory: true,
+        deepLink: "/affiliate",
+      },
+    ];
+  },
+  "affiliate.commission_reversed": async (payload) => {
+    const event = affiliateCommissionReversedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "affiliate.commission_reversed",
+        category: "transactional",
+        templateKey: "affiliate.commission_reversed",
+        templateData: { amount: event.amount, currency: event.currency },
+        channels: commonChannels,
+        mandatory: true,
+        deepLink: "/affiliate",
+      },
+    ];
+  },
+  "affiliate.payout_requested": async (payload, dependencies) => {
+    const event = affiliatePayoutRequestedEventSchema.parse(payload);
+    const recipientUserIds =
+      (await dependencies.listPermissionHolderUserIds?.("affiliate.payout")) ??
+      [];
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "affiliate.payout_requested",
+      category: "transactional" as const,
+      templateKey: "affiliate.payout_requested" as const,
+      templateData: {
+        code: event.affiliateCode,
+        amount: event.amount,
+        currency: event.currency,
+      },
+      channels: commonChannels,
+      mandatory: true,
+      deepLink: "/affiliates/admin?tab=payouts",
+    }));
+  },
+  "affiliate.payout_decided": async (payload) => {
+    const event = affiliatePayoutDecidedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "affiliate.payout_decided",
+        category: "transactional",
+        templateKey: "affiliate.payout_decided",
+        templateData: {
+          status: event.status,
+          amount: event.amount,
+          currency: event.currency,
+          reference: event.reference ?? "",
+          reason: event.reason ?? "",
+        },
+        channels: commonChannels,
+        mandatory: true,
+        deepLink: "/affiliate",
+      },
+    ];
   },
   "email.unsubscribed": async (payload, dependencies) => {
     const event = emailUnsubscribedEventSchema.parse(payload);

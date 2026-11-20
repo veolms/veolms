@@ -20,6 +20,7 @@ export interface OrderAttributionRow {
   click_id: string | null;
   affiliate_user_id: string | null;
   affiliate_status: string;
+  notify_on_commission: boolean;
 }
 
 export async function findOrderAttribution(
@@ -34,6 +35,7 @@ export async function findOrderAttribution(
       "t.click_id",
       "a.user_id as affiliate_user_id",
       "a.status as affiliate_status",
+      "a.notify_on_commission",
     ])
     .where("t.order_id", "=", orderId)
     .executeTakeFirst();
@@ -439,6 +441,7 @@ export async function deleteClicksBefore(
 export interface AffiliateUserRow {
   user_id: string | null;
   status: string;
+  notify_on_commission: boolean;
 }
 
 export async function findAffiliateUser(
@@ -447,7 +450,7 @@ export async function findAffiliateUser(
 ): Promise<AffiliateUserRow | undefined> {
   return await executor
     .selectFrom("affiliates")
-    .select(["user_id", "status"])
+    .select(["user_id", "status", "notify_on_commission"])
     .where("id", "=", affiliateId)
     .executeTakeFirst();
 }

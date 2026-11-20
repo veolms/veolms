@@ -152,6 +152,8 @@ export interface AffiliatePayoutTable {
   payout_details_encrypted: string;
   payout_details_hint: string | null;
   requested_by: "affiliate" | "admin";
+  /** The affiliate's Idempotency-Key: a repeat returns this payout. */
+  idempotency_key: string | null;
   /** UTR or UPI reference; required to mark paid. */
   reference: string | null;
   paid_on: ColumnType<string | null, string | null, string | null>;

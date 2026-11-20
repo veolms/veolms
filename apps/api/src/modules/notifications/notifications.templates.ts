@@ -413,6 +413,84 @@ export function renderNotificationTemplate(
         body: `Payment for order ${stringValue(data, "orderNumber")} failed: ${stringValue(data, "reason")}`,
       };
       break;
+    case "affiliate.application_received":
+      inApp = {
+        title: "New affiliate application",
+        body: `${stringValue(data, "applicantName")} applied to the affiliate program as ${stringValue(data, "code")}. Review it in Affiliates.`,
+      };
+      break;
+    case "affiliate.status_changed": {
+      const status = stringValue(data, "status");
+      const reason = optionalString(data, "reason");
+      const code = stringValue(data, "code");
+      inApp =
+        status === "approved"
+          ? {
+              title: "You're an affiliate",
+              body: `Your code is ${code}. Share your link from the affiliate dashboard; you earn on every paid purchase it brings.`,
+            }
+          : status === "rejected"
+            ? {
+                title: "Affiliate application not approved",
+                body: reason
+                  ? `Your application wasn't approved: ${reason}`
+                  : "Your application wasn't approved.",
+              }
+            : {
+                title: "Affiliate account suspended",
+                body: [
+                  "Your affiliate links have stopped earning.",
+                  reason ? `Reason: ${reason}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
+              };
+      break;
+    }
+    case "affiliate.commission_earned":
+      inApp = {
+        title: "You earned a commission",
+        body: `${formatMoney(numberValue(data, "amount"), { currency: stringValue(data, "currency") })} from a sale through your link. It is held for ${numberValue(data, "holdDays")} days, the refund period, then it's yours to withdraw.`,
+      };
+      break;
+    case "affiliate.commission_reversed":
+      inApp = {
+        title: "A commission was reversed",
+        body: `A purchase you referred was refunded, so ${formatMoney(numberValue(data, "amount"), { currency: stringValue(data, "currency") })} was taken back from your earnings.`,
+      };
+      break;
+    case "affiliate.payout_requested":
+      inApp = {
+        title: "Affiliate payout requested",
+        body: `${stringValue(data, "code")} asked for a payout of ${formatMoney(numberValue(data, "amount"), { currency: stringValue(data, "currency") })}.`,
+      };
+      break;
+    case "affiliate.payout_decided": {
+      const status = stringValue(data, "status");
+      const amount = formatMoney(numberValue(data, "amount"), {
+        currency: stringValue(data, "currency"),
+      });
+      const reason = optionalString(data, "reason");
+      const reference = optionalString(data, "reference");
+      inApp =
+        status === "paid"
+          ? {
+              title: "Payout sent",
+              body: `${amount} was paid to you${reference ? ` (reference ${reference})` : ""}.`,
+            }
+          : {
+              title:
+                status === "failed" ? "Payout failed" : "Payout not approved",
+              body: [
+                `Your payout of ${amount} was ${status === "failed" ? "not completed" : "not approved"}.`,
+                reason ? `Reason: ${reason}` : null,
+                "The amount is back in your available balance.",
+              ]
+                .filter(Boolean)
+                .join(" "),
+            };
+      break;
+    }
     case "refund.completed":
       inApp = {
         title: "Refund completed",

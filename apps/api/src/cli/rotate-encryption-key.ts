@@ -1,6 +1,7 @@
 /**
  * One-off rotation of an encryption key: MFA_ENCRYPTION_KEY, or with
- * --payment-keys PAYMENT_KEYS_ENCRYPTION_KEY.
+ * --payment-keys PAYMENT_KEYS_ENCRYPTION_KEY, or with --affiliate-payouts
+ * AFFILIATE_PAYOUT_ENCRYPTION_KEY.
  *
  * MFA_ENCRYPTION_KEY encrypts user_totp_credentials.secret_encrypted
  * (authenticator-app secrets, auth.utils.ts, "v1:iv:tag:data", key
@@ -11,6 +12,11 @@
  * encrypted_webhook_secret (payment-keys-crypto.ts, "v1:iv:tag:data"). It is
  * shared with nothing else, so rotating one key never touches the other's
  * values.
+ *
+ * AFFILIATE_PAYOUT_ENCRYPTION_KEY encrypts only affiliates' payout details and
+ * PAN: affiliates.payout_details_encrypted and pan_encrypted, and the copy
+ * each payout keeps (affiliate_payouts.payout_details_encrypted)
+ * (affiliate-payout-crypto.ts, "v1:iv:tag:data").
  *
  * Decrypts every value with the old key and re-encrypts it with the new one in
  * a single transaction. Writes nothing unless every value decrypts, and checks
@@ -24,6 +30,8 @@
  *     pnpm --filter @veolms/api encryption-key:rotate [--dry-run] [--yes]
  *   OLD_PAYMENT_KEYS_ENCRYPTION_KEY=… NEW_PAYMENT_KEYS_ENCRYPTION_KEY=… \
  *     pnpm --filter @veolms/api encryption-key:rotate --payment-keys [--dry-run] [--yes]
+ *   OLD_AFFILIATE_PAYOUT_ENCRYPTION_KEY=… NEW_AFFILIATE_PAYOUT_ENCRYPTION_KEY=… \
+ *     pnpm --filter @veolms/api encryption-key:rotate --affiliate-payouts [--dry-run] [--yes]
  *
  * --dry-run decrypts everything with the old key (and round-trips it through
  * the new key when one is given), reports counts, and writes nothing.
@@ -45,6 +53,10 @@ import {
   decryptPaymentSecretWith,
   encryptPaymentSecretWith,
 } from "../modules/commerce/payments/gateways/payment-keys-crypto.ts";
+import {
+  decryptPayoutSecretWith,
+  encryptPayoutSecretWith,
+} from "../modules/affiliates/affiliate-payout-crypto.ts";
 
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
 const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
@@ -69,8 +81,17 @@ const paymentKeysCipher: Cipher = {
   decrypt: decryptPaymentSecretWith,
 };
 
+const affiliatePayoutCipher: Cipher = {
+  encrypt: encryptPayoutSecretWith,
+  decrypt: decryptPayoutSecretWith,
+};
+
 type Column = {
-  table: "user_totp_credentials" | "creator_payment_configs";
+  table:
+    | "user_totp_credentials"
+    | "creator_payment_configs"
+    | "affiliates"
+    | "affiliate_payouts";
   column: string;
   cipher: Cipher;
 };
@@ -98,6 +119,24 @@ const PAYMENT_KEY_COLUMNS: Column[] = [
     table: "creator_payment_configs",
     column: "encrypted_webhook_secret",
     cipher: paymentKeysCipher,
+  },
+];
+
+const AFFILIATE_PAYOUT_COLUMNS: Column[] = [
+  {
+    table: "affiliates",
+    column: "payout_details_encrypted",
+    cipher: affiliatePayoutCipher,
+  },
+  {
+    table: "affiliates",
+    column: "pan_encrypted",
+    cipher: affiliatePayoutCipher,
+  },
+  {
+    table: "affiliate_payouts",
+    column: "payout_details_encrypted",
+    cipher: affiliatePayoutCipher,
   },
 ];
 
@@ -133,10 +172,23 @@ async function main() {
   const dryRun = args.includes("--dry-run");
   const confirmed = args.includes("--yes");
   const paymentKeys = args.includes("--payment-keys");
+  const affiliatePayouts = args.includes("--affiliate-payouts");
+  if (paymentKeys && affiliatePayouts) {
+    console.error(
+      `\n${red("✘ Rotate one key at a time: --payment-keys or --affiliate-payouts.")}\n`,
+    );
+    process.exit(1);
+  }
   const keyName = paymentKeys
     ? "PAYMENT_KEYS_ENCRYPTION_KEY"
-    : "MFA_ENCRYPTION_KEY";
-  const COLUMNS = paymentKeys ? PAYMENT_KEY_COLUMNS : MFA_COLUMNS;
+    : affiliatePayouts
+      ? "AFFILIATE_PAYOUT_ENCRYPTION_KEY"
+      : "MFA_ENCRYPTION_KEY";
+  const COLUMNS = paymentKeys
+    ? PAYMENT_KEY_COLUMNS
+    : affiliatePayouts
+      ? AFFILIATE_PAYOUT_COLUMNS
+      : MFA_COLUMNS;
   const oldKey = process.env[`OLD_${keyName}`] ?? "";
   const newKey = process.env[`NEW_${keyName}`] ?? "";
 
@@ -179,7 +231,9 @@ async function main() {
   // Which key the API would use with this environment, without showing it.
   const configuredKey = paymentKeys
     ? (config.PAYMENT_KEYS_ENCRYPTION_KEY ?? "")
-    : config.MFA_ENCRYPTION_KEY;
+    : affiliatePayouts
+      ? (config.AFFILIATE_PAYOUT_ENCRYPTION_KEY ?? "")
+      : config.MFA_ENCRYPTION_KEY;
   console.log(
     `\n${bold(`${keyName} in this environment:`)} ${
       configuredKey === oldKey
@@ -197,9 +251,11 @@ async function main() {
       // Holds off other writers (a still-running API) until the commit, while
       // leaving reads alone. Gives up rather than queue behind a writer.
       await sql`set local lock_timeout = '10s'`.execute(trx);
-      await sql`lock table ${sql.table(paymentKeys ? "creator_payment_configs" : "user_totp_credentials")} in share row exclusive mode`.execute(
-        trx,
-      );
+      for (const table of new Set(COLUMNS.map((target) => target.table))) {
+        await sql`lock table ${sql.table(table)} in share row exclusive mode`.execute(
+          trx,
+        );
+      }
 
       const values: Value[] = [];
       const failures: Failure[] = [];

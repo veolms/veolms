@@ -10,6 +10,7 @@ export interface AccountContacts {
   id: string;
   email: string | null;
   phone: string | null;
+  displayName: string | null;
 }
 
 export async function findAccountContacts(
@@ -19,13 +20,14 @@ export async function findAccountContacts(
   if (userIds.length === 0) return [];
   const rows = await executor
     .selectFrom("users")
-    .select(["id", "email", "phone_no"])
+    .select(["id", "email", "phone_no", "display_name"])
     .where("id", "in", [...userIds])
     .execute();
   return rows.map((row) => ({
     id: row.id,
     email: row.email,
     phone: row.phone_no,
+    displayName: row.display_name,
   }));
 }
 

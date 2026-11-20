@@ -136,3 +136,29 @@ export async function listProcessedRefundsSince(
     .execute();
   return rows.map((row) => ({ id: row.id, orderId: row.order_id }));
 }
+
+/** What the affiliate's history shows of each order line: its title and order number. */
+export async function listOrderLineLabels(
+  executor: DatabaseExecutor,
+  orderItemIds: readonly string[],
+): Promise<
+  Map<string, { title: string; orderNumber: string; buyerUserId: string }>
+> {
+  if (orderItemIds.length === 0) return new Map();
+  const rows = await executor
+    .selectFrom("order_items as i")
+    .innerJoin("orders as o", "o.id", "i.order_id")
+    .select(["i.id", "i.title_snapshot", "o.order_number", "o.user_id"])
+    .where("i.id", "in", [...orderItemIds])
+    .execute();
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      {
+        title: row.title_snapshot,
+        orderNumber: row.order_number,
+        buyerUserId: row.user_id,
+      },
+    ]),
+  );
+}

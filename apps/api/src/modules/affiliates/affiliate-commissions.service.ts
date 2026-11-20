@@ -8,10 +8,11 @@ import type {
   DatabaseExecutor,
   OrderItemType,
 } from "@veolms/database";
-import { sql, type Kysely } from "kysely";
+import { sql, type Kysely, type Transaction } from "kysely";
 import type { FastifyBaseLogger } from "fastify";
 
 import { config } from "../../config.ts";
+import { createOutboxService } from "../../events/outbox.service.ts";
 import {
   findAccountContacts,
   listSignInAddressesSince,
@@ -154,7 +155,29 @@ export async function recordSaleCommissions(
       flags,
     });
   }
-  return await repository.insertSaleCommissions(executor, rows);
+  const written = await repository.insertSaleCommissions(executor, rows);
+  // One email per order, not per item, and only when the affiliate wants it.
+  if (
+    written > 0 &&
+    attribution.notify_on_commission &&
+    attribution.affiliate_user_id
+  ) {
+    await createOutboxService().publish(executor as Transaction<Database>, {
+      type: "affiliate.commission_earned",
+      version: 1,
+      dedupeKey: `affiliate.commission_earned:${order.id}`,
+      occurredAt: input.paidAt,
+      payload: {
+        affiliateId: attribution.affiliate_id,
+        recipientUserId: attribution.affiliate_user_id,
+        orderId: order.id,
+        amount: rows.reduce((sum, row) => sum + row.amount, 0),
+        currency: order.currency,
+        holdDays: settings.holdDays,
+      },
+    });
+  }
+  return written;
 }
 
 /**
@@ -221,7 +244,29 @@ export async function recordRefundReversals(
       approvedAt: waits ? null : input.now,
     });
   }
-  return await repository.insertReversals(executor, rows);
+  const written = await repository.insertReversals(executor, rows);
+  if (written > 0 && rows[0]) {
+    const affiliate = await repository.findAffiliateUser(
+      executor,
+      rows[0].affiliateId,
+    );
+    if (affiliate?.user_id) {
+      await createOutboxService().publish(executor as Transaction<Database>, {
+        type: "affiliate.commission_reversed",
+        version: 1,
+        dedupeKey: `affiliate.commission_reversed:${refund.id}`,
+        occurredAt: input.now,
+        payload: {
+          affiliateId: rows[0].affiliateId,
+          recipientUserId: affiliate.user_id,
+          refundId: refund.id,
+          amount: -rows.reduce((sum, row) => sum + row.amount, 0),
+          currency: rows[0].currency,
+        },
+      });
+    }
+  }
+  return written;
 }
 
 /**

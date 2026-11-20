@@ -41,7 +41,13 @@ export type NotificationTemplateKey =
   | "workshop.recording_ready"
   | "workshop.updated"
   | "workshop.announced"
-  | "email.unsubscribed";
+  | "email.unsubscribed"
+  | "affiliate.application_received"
+  | "affiliate.status_changed"
+  | "affiliate.commission_earned"
+  | "affiliate.commission_reversed"
+  | "affiliate.payout_requested"
+  | "affiliate.payout_decided";
 
 /**
  * One bought item as the purchase email shows it (stored as JSON in the

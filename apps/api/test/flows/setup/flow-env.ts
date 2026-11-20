@@ -49,6 +49,8 @@ Object.assign(process.env, {
   MFA_ENCRYPTION_KEY: "flow_test_mfa_encryption_key_at_least_32_chars",
   PAYMENT_KEYS_ENCRYPTION_KEY:
     "flow_test_payment_keys_encryption_key_32_chars_plus",
+  AFFILIATE_PAYOUT_ENCRYPTION_KEY:
+    "flow_test_affiliate_payout_encryption_key_32_chars",
   SETUP_TOKEN: "flow_test_setup_token_at_least_32_chars_long",
   API_DEV_PRETTY_LOGS: "false",
   API_DOCS_ENABLED: "false",
