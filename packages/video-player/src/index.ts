@@ -133,7 +133,9 @@ export type {
 } from "./controls/BufferingIndicator";
 export {
   ErrorOverlay,
+  isVideoContentError,
   PlayerErrorNotice,
+  playerErrorWords,
   VideoPlayerCloseButton,
   VideoPlayerNotice,
 } from "./controls/ErrorOverlay";

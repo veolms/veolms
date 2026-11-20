@@ -128,7 +128,10 @@ import { sendVideoProblemReport } from "./videoProblemReport";
 import { useAuthStore } from "../../store/auth.store";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
-import type { PlayerErrorReport } from "@veolms/video-player";
+import {
+  isVideoContentError,
+  type PlayerErrorReport,
+} from "@veolms/video-player";
 import type { LessonStagePlan } from "../lessonWithoutVideo";
 
 /** Whether the lesson's video is not playing (none on screen counts too). */
@@ -710,6 +713,9 @@ export function LessonVideoPlayer({
       signedIn
         ? {
             send: (error) => sendVideoProblemReport({ error, lessonTitle }),
+            // A fault in the video itself goes to the team at once (once a
+            // day per lesson and kind, see `sendVideoProblemReport`).
+            auto: isVideoContentError,
             icon: <Flag weight="bold" />,
             sentIcon: <Check weight="bold" />,
           }

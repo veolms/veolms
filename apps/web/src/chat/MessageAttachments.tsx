@@ -21,6 +21,27 @@ export interface ViewableMedia {
   mimeType?: string;
   width?: number | null;
   height?: number | null;
+  /** Who sent it and when, for the viewer's header (WhatsApp's "You · Today at 1:15 AM"). */
+  senderName?: string;
+  sentAt?: string;
+}
+
+/** A message's photos and videos, as the viewer shows them. */
+export function viewableMediaOf(
+  attachments: ChatAttachment[],
+  sent?: { senderName?: string; sentAt?: string },
+): ViewableMedia[] {
+  return attachments
+    .filter((a) => a.kind === "image" || a.kind === "video")
+    .map((a) => ({
+      url: chatService.fileUrl(a),
+      kind: a.kind as "image" | "video",
+      name: a.name,
+      mimeType: a.mimeType,
+      width: a.width,
+      height: a.height,
+      ...sent,
+    }));
 }
 
 /**
@@ -43,14 +64,7 @@ export function MessageAttachments({
   const others = attachments.filter(
     (a) => a.kind === "audio" || a.kind === "file",
   );
-  const viewable: ViewableMedia[] = media.map((a) => ({
-    url: chatService.fileUrl(a),
-    kind: a.kind as "image" | "video",
-    name: a.name,
-    mimeType: a.mimeType,
-    width: a.width,
-    height: a.height,
-  }));
+  const viewable = viewableMediaOf(media);
 
   return (
     <div className="flex flex-col gap-1">

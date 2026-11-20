@@ -62,7 +62,7 @@ import { lastSeenLabel, ROLE_LABEL } from "./chatFormat";
 import { Composer, type ComposerHandle } from "./Composer";
 import { EmojiPanel } from "./EmojiPanel";
 import { MediaViewer } from "./MediaViewer";
-import type { ViewableMedia } from "./MessageAttachments";
+import { viewableMediaOf, type ViewableMedia } from "./MessageAttachments";
 import type { BubbleContext } from "./MessageBubble";
 import { MessageList, type MessageFocus } from "./MessageList";
 import { PersonCard, type CardPerson } from "./PersonCard";
@@ -127,6 +127,23 @@ export function Conversation({
     items: ViewableMedia[];
     index: number;
   } | null>(null);
+  // Every photo and video of the loaded messages, oldest first: what the
+  // viewer moves through and shows along its foot.
+  const chatMedia = useMemo(
+    () =>
+      (thread.data?.messages ?? []).flatMap((message) =>
+        message.deleted
+          ? []
+          : viewableMediaOf(message.attachments, {
+              senderName:
+                message.sender?.id === viewerId
+                  ? "You"
+                  : (message.sender?.name ?? undefined),
+              sentAt: message.createdAt,
+            }),
+      ),
+    [thread.data?.messages, viewerId],
+  );
   const [focus, setFocus] = useState<MessageFocus | null>(null);
   /** Messages ticked for Forward (WhatsApp's Select); null when not choosing. */
   const [selected, setSelected] = useState<ReadonlySet<number> | null>(null);
@@ -759,7 +776,17 @@ export function Conversation({
             loadingOlder={thread.loadingOlder}
             onLoadOlder={() => void thread.loadOlder()}
             onAction={onAction}
-            onOpenMedia={(items, index) => setViewer({ items, index })}
+            onOpenMedia={(items, index) => {
+              // As WhatsApp does: every photo and video of the chat (those
+              // loaded), in order, opened at the one tapped.
+              const opened = items[index];
+              const at = opened
+                ? chatMedia.findIndex((media) => media.url === opened.url)
+                : -1;
+              setViewer(
+                at >= 0 ? { items: chatMedia, index: at } : { items, index },
+              );
+            }}
             onJumpTo={(seq, from) => void jumpTo(seq, from)}
             onAtBottom={onAtBottom}
             onRetry={(clientId) =>

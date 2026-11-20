@@ -322,6 +322,11 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       });
     }
     media.playbackRate = rate;
+    // A reset of the element (a reload, or Shaka rebuilding its media
+    // source after a decode error) sets the speed back to the default one:
+    // at 1x for a moment, which the lesson page saved as the learner's
+    // chosen speed (lecture 42 at 16x, 20 Nov). The default is kept with it.
+    media.defaultPlaybackRate = rate;
     this.syncPlaybackRate();
   }
 
@@ -807,6 +812,13 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       this.refreshNativeTextTracks();
     });
     listen("error", () => {
+      // An error event with no error on the element is Shaka mending a
+      // decoder failure itself (`allowMediaSourceRecoveries`): it rebuilds
+      // the media source, which reads as time 0 and paused for a moment,
+      // then seeks back and plays on. Taken for a failure, it was "mended"
+      // again from that moment: the lesson reloaded at 0:00, paused, at 1x
+      // (lecture 42 at 16x, 20 Nov).
+      if (!media.error) return;
       const error = mediaErrorToVideoEngineError(media.error);
       if (error.fatal && this.recoverFromMediaFailure(error)) return;
       // A fetch the element gave up on (MEDIA_ERR_ABORTED, MEDIA_ERR_NETWORK)
