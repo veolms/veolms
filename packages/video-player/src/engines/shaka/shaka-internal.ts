@@ -189,6 +189,8 @@ export interface ShakaPlayerLike {
     audio: readonly { start: number; end: number }[];
     video: readonly { start: number; end: number }[];
   };
+  /** The speed the video is set to; not 0 while Shaka holds it to buffer. */
+  getPlaybackRate?(): number;
   /** Resumes streams stopped by a failure, after `retryDelaySeconds`. */
   retryStreaming?(retryDelaySeconds?: number): boolean;
   /** Deprecated in Shaka 5 but still exported; read only for segment times. */
@@ -242,9 +244,42 @@ export interface ShakaRuntimeLike {
       ): Uint8Array;
     };
   };
+  abr?: {
+    SimpleAbrManager?: new () => { playbackRateChanged(rate: number): void };
+  };
 }
 
 export type ShakaRuntimeLoader = () => Promise<unknown>;
+
+const speedBlindAbrFactories = new WeakMap<ShakaRuntimeLike, () => unknown>();
+
+/**
+ * Shaka's own quality chooser, told the video always plays at normal speed.
+ * Shaka counts a video played at 16x as needing 16 times its bitrate, so a
+ * 1080p lesson at 16x "needed" 18 Mbps and automatic quality fell to 360p
+ * on a 200 Mbps line (whose measured speed, waits included, read 4.5 Mbps:
+ * 2026-11-21). YouTube keeps the quality when the speed goes up, and so do
+ * we: quality follows the connection, and fetching several segments at once
+ * (`parallel-segment-fetch.ts`) is what keeps a fast video fed. One factory
+ * per runtime: Shaka makes a new chooser only when the factory changes.
+ */
+export function speedBlindAbrFactory(
+  runtime: ShakaRuntimeLike,
+): (() => unknown) | undefined {
+  const Manager = runtime.abr?.SimpleAbrManager;
+  if (!Manager) return undefined;
+  let factory = speedBlindAbrFactories.get(runtime);
+  if (!factory) {
+    factory = () => {
+      const manager = new Manager();
+      const original = manager.playbackRateChanged.bind(manager);
+      manager.playbackRateChanged = () => original(1);
+      return manager;
+    };
+    speedBlindAbrFactories.set(runtime, factory);
+  }
+  return factory;
+}
 
 /**
  * No segment prefetch during playback: segments go through Shaka's plain
@@ -821,6 +856,8 @@ export function createShakaConfiguration(
     droppedFrames:
       streaming?.abrDroppedFrames ?? SHAKA_ABR_DEFAULTS.droppedFrames,
   };
+  const abrFactory = speedBlindAbrFactory(runtime);
+  if (abrFactory) result.abrFactory = abrFactory;
 
   result.manifest = {
     // See `VideoStreamingConfiguration.detectEmbeddedCaptions`.
