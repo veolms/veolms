@@ -11,6 +11,7 @@ import { applyMessages, applyToRoomList, markRoomRead } from "./chat.cache";
 import { chatKeys } from "./chat.keys";
 import { chatService } from "./chat.service";
 import { getChatPrefs } from "../../store/chatPrefs.store";
+import type { SendQuality } from "../../chat/mediaQuality";
 import { sentPop } from "./chat.sounds";
 
 /**
@@ -35,6 +36,12 @@ export interface OutgoingFile {
   previewUrl: string | null;
   progress: number;
   attachment: ChatAttachment | null;
+  /** The file as picked; `file` becomes the copy sent (Standard / HD). */
+  original?: Blob;
+  /** Done making the copy to send (kept across a retry). */
+  prepared?: boolean;
+  /** 0–1 while the copy to send is being made (a video takes a while). */
+  preparing?: number;
 }
 
 export interface OutgoingMessage {
@@ -58,6 +65,8 @@ export interface OutgoingMessage {
   mentions: string[];
   mentionAll: boolean;
   files: OutgoingFile[];
+  /** How photos, videos and audio go: smaller (Standard) or HD. */
+  quality?: SendQuality;
   status: "sending" | "failed";
   error: string | null;
   createdAt: string;
@@ -121,6 +130,24 @@ async function uploadFile(
   file: OutgoingFile,
 ): Promise<ChatAttachment> {
   if (file.attachment) return file.attachment;
+  if (!file.prepared) {
+    // The copy to send: a smaller one in Standard (made here, in the
+    // browser), or the original. Kept, so a retry doesn't make it again.
+    const { prepareForSending } = await import("../../chat/mediaQuality");
+    file.original ??= file.file;
+    const ready = await prepareForSending(
+      file,
+      message.quality ?? "standard",
+      (fraction) => {
+        file.preparing = fraction;
+        update(roomId, message.clientId, { files: [...message.files] });
+      },
+    ).catch(() => null);
+    if (ready) Object.assign(file, ready);
+    file.prepared = true;
+    file.preparing = undefined;
+    update(roomId, message.clientId, { files: [...message.files] });
+  }
   const start = await chatService.startUpload(roomId, {
     kind: file.kind,
     name: file.name,
