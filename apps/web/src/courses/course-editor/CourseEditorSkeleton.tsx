@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import "../../styles/features/course-wizard.css";
-import { useLocation, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import {
   WIZARD_STEPS,
@@ -15,6 +15,7 @@ export function CourseEditorSkeleton() {
     editTab?: string;
   }>();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isEditing = Boolean(courseId || location?.pathname?.includes("/edit/"));
   const activeStep: CourseWizardStepId = parseWizardTab(editTab) || "basics";
@@ -137,7 +138,14 @@ export function CourseEditorSkeleton() {
               aria-selected={isActive}
               tabIndex={isActive ? 0 : -1}
               data-page-tab-tone={step.tone}
-              className={`inline-flex flex-row items-center gap-2 !border-b-transparent shrink-0 whitespace-nowrap cursor-default ${isActive ? "is-active" : ""}`}
+              onClick={() => {
+                void navigate(
+                  courseId
+                    ? `/courses/${courseId}/edit/${step.id}`
+                    : `/courses/create/${step.id}`,
+                );
+              }}
+              className={`inline-flex flex-row items-center gap-2 !border-b-transparent shrink-0 whitespace-nowrap cursor-pointer ${isActive ? "is-active" : ""}`}
             >
               <Icon
                 size={17}

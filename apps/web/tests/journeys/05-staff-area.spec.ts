@@ -152,3 +152,50 @@ test("a learner's purchase shows in the administrator's Orders, and the learner 
     await admin.context.close();
   }
 });
+
+test("an administrator opens a lesson and moves between course editing steps", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    title: "Editing journey",
+    status: "draft",
+    lessons: [{ title: "First lesson", video: "none" }],
+  });
+  await academy.signInAsAdmin();
+  await page.goto(`/courses/${course.id}/edit/curriculum`);
+
+  await expect(
+    page.getByRole("heading", { name: "Edit Course" }),
+  ).toBeVisible();
+  const expandSection = page.getByRole("button", { name: "Expand section" });
+  if (await expandSection.count()) await expandSection.first().click();
+  await expect(
+    page.getByText("First lesson", { exact: true }).first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Collapse lesson editor" }).first(),
+  ).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`lessonId=${course.lessons[0]!.id}`, "u"),
+  );
+
+  await page.getByRole("tab", { name: "Pricing", exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/courses/${course.id}/edit/pricing`, "u"),
+  );
+  await expect(
+    page.getByRole("heading", { name: "Price details" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Basics", exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/courses/${course.id}/edit/basics`, "u"),
+  );
+  await expect(page.getByRole("textbox", { name: "Course Title" })).toHaveValue(
+    "Editing journey",
+  );
+});

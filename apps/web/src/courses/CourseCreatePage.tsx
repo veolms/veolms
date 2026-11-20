@@ -1489,7 +1489,13 @@ export function CourseCreatePage({
         isDownstreamUnlocked={isDownstreamUnlocked}
         actionLoading={actionLoading}
         isInitialLoadingCourse={isInitialLoadingCourse}
-        navigateToStep={navigateToStep}
+        navigateToStep={
+          isInitialLoadingCourse
+            ? async (step) => {
+                setActiveStep(step);
+              }
+            : navigateToStep
+        }
         isStepAllowed={isStepAllowed}
       />
 
