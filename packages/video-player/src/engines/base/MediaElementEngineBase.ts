@@ -322,6 +322,11 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       });
     }
     media.playbackRate = rate;
+    // A reset of the element (a reload, or Shaka rebuilding its media
+    // source after a decode error) sets the speed back to the default one:
+    // at 1x for a moment, which the lesson page saved as the learner's
+    // chosen speed (lecture 42 at 16x, 20 Nov). The default is kept with it.
+    media.defaultPlaybackRate = rate;
     this.syncPlaybackRate();
   }
 
