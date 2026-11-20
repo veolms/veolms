@@ -1,3 +1,4 @@
+import "../../styles/features/course-wizard.css";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { ChatCircleTextIcon as ChatCircleText } from "@phosphor-icons/react/ChatCircleText";

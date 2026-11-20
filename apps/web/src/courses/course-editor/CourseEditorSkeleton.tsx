@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from "react";
+import "../../styles/features/course-wizard.css";
 import { useLocation, useParams } from "react-router";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import {
@@ -16,6 +18,41 @@ export function CourseEditorSkeleton() {
 
   const isEditing = Boolean(courseId || location?.pathname?.includes("/edit/"));
   const activeStep: CourseWizardStepId = parseWizardTab(editTab) || "basics";
+
+  const navRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const tab = nav?.querySelector<HTMLButtonElement>('[aria-selected="true"]');
+    if (!nav || !tab) return;
+    const update = () => {
+      const style = getComputedStyle(tab);
+      const token = style
+        .getPropertyValue("--page-tab-active-indicator")
+        .trim();
+      const color = token.includes("--page-tab-tone")
+        ? style.getPropertyValue("--page-tab-tone").trim()
+        : token || "var(--accent)";
+      nav.style.setProperty("--page-tab-indicator-left", `${tab.offsetLeft}px`);
+      nav.style.setProperty(
+        "--page-tab-indicator-width",
+        `${tab.offsetWidth}px`,
+      );
+      nav.style.setProperty("--page-tab-indicator-color", color);
+      if (
+        tab.offsetLeft < nav.scrollLeft ||
+        tab.offsetLeft + tab.offsetWidth > nav.scrollLeft + nav.offsetWidth
+      ) {
+        nav.scrollLeft =
+          tab.offsetLeft - nav.offsetWidth / 2 + tab.offsetWidth / 2;
+      }
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(nav);
+    observer.observe(tab);
+    return () => observer.disconnect();
+  }, [activeStep]);
 
   let subtitle = isEditing
     ? "Update the essential details of your course."
@@ -81,6 +118,7 @@ export function CourseEditorSkeleton() {
       </header>
 
       <nav
+        ref={navRef}
         className="course-wizard-steps-nav settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)] [&::after]:hidden!"
         role="tablist"
         aria-label={
