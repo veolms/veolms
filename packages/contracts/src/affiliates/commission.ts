@@ -77,6 +77,13 @@ export type AffiliateRuleTargetType =
 export const AFFILIATE_RATE_TYPES = ["percent", "fixed"] as const;
 export type AffiliateRateType = (typeof AFFILIATE_RATE_TYPES)[number];
 
+/**
+ * The currency affiliates are paid in. The first release pays affiliates in
+ * India only (PRD section 18), so commissions on orders in another currency
+ * are converted to rupees with the order's own settlement.
+ */
+export const AFFILIATE_PAYOUT_CURRENCY = "INR";
+
 /** Percentages are stored in basis points: 2000 is 20%. */
 export const AFFILIATE_PERCENT_BASIS_POINTS_MAX = 10_000;
 

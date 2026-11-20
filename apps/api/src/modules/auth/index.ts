@@ -26,5 +26,10 @@ export {
   getAcademyId,
   getAcademyRow,
 } from "./setup/academy-cache.ts";
+export {
+  findAccountContacts,
+  listSignInAddressesSince,
+  type AccountContacts,
+} from "./shared/account-facts.ts";
 export * from "./shared/auth.constants.ts";
 export * from "./shared/auth.types.ts";

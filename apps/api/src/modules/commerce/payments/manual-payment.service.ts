@@ -14,6 +14,7 @@ import { CommerceErrors } from "../shared/commerce.errors.ts";
 import { isUniqueViolation } from "../shared/db-errors.ts";
 import { listHeldItemTitles } from "../shared/order-holdings.ts";
 import { recordCouponRedemptionForPaidOrder } from "../coupons/coupon-redemption.service.ts";
+import { recordSaleCommissionsSafely } from "../../affiliates/affiliate-commissions.service.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as manualPaymentRepo from "./manual-payment.repository.ts";
@@ -355,6 +356,11 @@ export function createManualPaymentService({
             orderItems,
             now,
           );
+          // The affiliate's commissions, exactly as for a gateway payment.
+          await recordSaleCommissionsSafely(trx, {
+            orderId: order.id,
+            paidAt: now,
+          });
           await outbox.publish(trx, {
             type: "payment.completed",
             version: 1,

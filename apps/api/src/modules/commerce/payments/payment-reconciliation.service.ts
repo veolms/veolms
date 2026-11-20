@@ -9,6 +9,8 @@ import { recordCouponRedemptionForPaidOrder } from "../coupons/coupon-redemption
 import * as cartRepo from "../cart/cart.repository.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
+import { recordSaleCommissionsSafely } from "../../affiliates/affiliate-commissions.service.ts";
+import type { FastifyBaseLogger } from "fastify";
 import { config } from "../../../config.ts";
 import * as refundRepo from "../refunds/refund.repository.ts";
 import { listHeldItemTitles } from "../shared/order-holdings.ts";
@@ -94,8 +96,11 @@ export function createPaymentReconciliationService({
   database,
   accessService = createAccessService(),
   autoRefundExtraPayments = config.AUTO_REFUND_EXTRA_PAYMENTS,
+  logger,
 }: {
   database: Kysely<Database>;
+  /** Where a failure of the affiliate commissions is reported. */
+  logger?: Pick<FastifyBaseLogger, "error">;
   accessService?: AccessService;
   /** See `AUTO_REFUND_EXTRA_PAYMENTS`. */
   autoRefundExtraPayments?: boolean;
@@ -385,6 +390,16 @@ export function createPaymentReconciliationService({
         order,
         orderItems,
         now,
+      );
+
+      // 4b. The affiliate's commissions, if the order has affiliate credit:
+      //     written with the payment so a sale is never paid without them,
+      //     and behind the payment claim above so they are written once.
+      //     Never a reason for the payment to fail (see the module).
+      await recordSaleCommissionsSafely(
+        trx,
+        { orderId: order.id, paidAt: now },
+        logger,
       );
 
       // 5. Clean up purchased items from student's active cart

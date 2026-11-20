@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { createMarketingSender } from "./modules/marketing/marketing-sender.ts";
+import { AffiliateCommissionWorker } from "./modules/affiliates/affiliate-commission.worker.ts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { config } from "./config.ts";
@@ -104,6 +105,14 @@ export function registerBackgroundJobs(
   });
   fulfillmentScheduler.start();
 
+  // The affiliate program: commissions approved after the hold period,
+  // and the daily repair, refund-rate flag and click purge.
+  const affiliateCommissionWorker = new AffiliateCommissionWorker({
+    database,
+    logger: app.log,
+  });
+  affiliateCommissionWorker.start();
+
   const learningReminderWorker = new LearningReminderWorker({
     database,
     logger: app.log,
@@ -183,6 +192,7 @@ export function registerBackgroundJobs(
     // shared Kysely instance is destroyed right after these hooks.
     await fulfillmentScheduler.stop();
     await learningReminderWorker.stop();
+    await affiliateCommissionWorker.stop();
     await workshopReminderWorker.stop();
     await stopNotificationLoop?.();
     await stopDiscussionUploadPurge?.();

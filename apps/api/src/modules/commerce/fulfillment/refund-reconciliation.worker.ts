@@ -3,6 +3,7 @@ import type { Kysely } from "kysely";
 import type { FastifyBaseLogger } from "fastify";
 import type { GatewayRefundDetails, PaymentGateways } from "@veolms/contracts";
 import * as refundRepo from "../refunds/refund.repository.ts";
+import { recordRefundReversalsSafely } from "../../affiliates/affiliate-commissions.service.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
@@ -266,6 +267,11 @@ export function createRefundReconciliationWorker({
                     );
                   }
                 }
+                await recordRefundReversalsSafely(
+                  trx,
+                  { refundId: refund.id, now: new Date() },
+                  log,
+                );
                 await outbox.publish(trx, {
                   type: "refund.completed",
                   version: 1,

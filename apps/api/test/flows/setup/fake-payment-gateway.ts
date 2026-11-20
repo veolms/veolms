@@ -176,6 +176,13 @@ export class FakePaymentGateway implements PaymentGateway {
     this.#refundOutcomes.push(outcome);
   }
 
+  /** A pending refund the gateway later reports as settled. */
+  settleRefund(gatewayRefundId: string): void {
+    const refund = this.#refunds.get(gatewayRefundId);
+    if (refund)
+      this.#refunds.set(gatewayRefundId, { ...refund, status: "processed" });
+  }
+
   /** A refund the gateway later reports as failed: its money stays paid. */
   failRefund(gatewayRefundId: string): void {
     const refund = this.#refunds.get(gatewayRefundId);

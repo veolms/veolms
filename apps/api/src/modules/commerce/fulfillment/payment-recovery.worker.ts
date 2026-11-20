@@ -68,6 +68,7 @@ export function createPaymentRecoveryWorker({
     database,
     accessService,
     autoRefundExtraPayments,
+    logger,
   });
   const extraPaymentRefunds = createExtraPaymentRefundService({
     database,

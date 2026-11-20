@@ -16,6 +16,7 @@ import {
 import { isUniqueViolation } from "../shared/db-errors.ts";
 import { outsideRefundId, refundChannelRefusal } from "./outside-refund.ts";
 import * as refundRepo from "./refund.repository.ts";
+import { recordRefundReversalsSafely } from "../../affiliates/affiliate-commissions.service.ts";
 import { toRefundContract } from "./refund.mapper.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
@@ -522,6 +523,10 @@ export function createRefundService({
             });
           }
         }
+
+        // The affiliate's commission on what was refunded is reversed,
+        // even when the learner keeps access: the money went back.
+        await recordRefundReversalsSafely(trx, { refundId: record.id, now });
 
         await outbox.publish(trx, {
           type: "refund.completed",

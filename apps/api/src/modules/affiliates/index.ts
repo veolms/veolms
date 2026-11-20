@@ -9,3 +9,8 @@ export {
   type AffiliateTrackingService,
 } from "./affiliate-tracking.service.ts";
 export type { AttributionDecision } from "./affiliate-tracking.ts";
+export {
+  recordRefundReversalsSafely,
+  recordSaleCommissionsSafely,
+} from "./affiliate-commissions.service.ts";
+export { AffiliateCommissionWorker } from "./affiliate-commission.worker.ts";

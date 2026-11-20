@@ -35,7 +35,7 @@ export interface CommissionTarget {
 }
 
 /** `a × b ÷ c`, rounded half away from zero. `c` must be positive. */
-function mulDivRound(a: number, b: number, c: number): number {
+export function mulDivRound(a: number, b: number, c: number): number {
   if (c <= 0) throw new RangeError("Divisor must be positive");
   const product = BigInt(a) * BigInt(b);
   const divisor = BigInt(c);

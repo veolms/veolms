@@ -27,6 +27,7 @@ import {
   isOrderAlreadyPaid,
 } from "../payments/surplus-payment.ts";
 import * as refundRepository from "../refunds/refund.repository.ts";
+import { recordRefundReversalsSafely } from "../../affiliates/affiliate-commissions.service.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
 import * as webhookRepository from "../webhooks/webhook.repository.ts";
 
@@ -64,6 +65,7 @@ export function createPaymentWorker({
     database,
     accessService,
     autoRefundExtraPayments,
+    logger,
   });
   const extraPaymentRefunds = paymentGateways
     ? createExtraPaymentRefundService({ database, paymentGateways, logger })
@@ -423,6 +425,12 @@ export function createPaymentWorker({
           );
         }
       }
+
+      await recordRefundReversalsSafely(
+        transaction,
+        { refundId: refund.id, now },
+        log,
+      );
 
       // Keyed by the refund ROW id, matching refund.service.ts and
       // refund-reconciliation.worker.ts — the webhook adopts the admin's
