@@ -60,6 +60,17 @@ export interface VideoEngineEventMap {
   /** Segments arrive again after one or more `streamingretry`. */
   streamingrecovered: { attempts: number };
   /**
+   * A video played faster than 2x has stood still `stops` times within half
+   * a minute: the device (`cause` "device", plenty was downloaded) or its
+   * connection or processor (`cause` "loading", nothing was) is not keeping
+   * up with `playbackRate` (see `PlaybackStrainDetector`).
+   */
+  playbackstrain: {
+    playbackRate: number;
+    stops: number;
+    cause: "device" | "loading";
+  };
+  /**
    * The engine now plays in another media element: the standby one it had
    * prepared the next video in (see `VideoEngine.setStandbyMedia`).
    */
