@@ -1310,12 +1310,19 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#mediaRecoveries = this.#mediaRecoveries.filter(
       (at) => now - at < MEDIA_RECOVERY_WINDOW_MS,
     );
-    if (this.#mediaRecoveries.length >= MEDIA_RECOVERY_LIMIT) return false;
-    this.#mediaRecoveries.push(now);
-    this.#mediaRecoveryInFlight = true;
-    if (this.#mediaRecoveries.length >= 2) {
-      this.#mediaRecoveryMaxHeight = MEDIA_RECOVERY_MAX_HEIGHT;
+    // A skip past a place the file cannot play is neither a loop (it moves
+    // on, and fails for good the next time at the same place) nor the
+    // device struggling with the picture: it is not counted against the
+    // limit and does not lower the quality. Lecture 42 has 44 such pieces;
+    // counted, a learner at 16x ran out of recoveries in minutes.
+    if (skipTo === null) {
+      if (this.#mediaRecoveries.length >= MEDIA_RECOVERY_LIMIT) return false;
+      this.#mediaRecoveries.push(now);
+      if (this.#mediaRecoveries.length >= 2) {
+        this.#mediaRecoveryMaxHeight = MEDIA_RECOVERY_MAX_HEIGHT;
+      }
     }
+    this.#mediaRecoveryInFlight = true;
     const startTime = skipTo ?? place.time;
     this.#lastRecoveryPosition = startTime;
     const wasPlaying = place.playing;
