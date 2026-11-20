@@ -640,6 +640,7 @@ export function CourseCreatePage({
     setSections,
     sectionsRef,
     sectionHeaderElementsRef,
+    lessonElementsRef,
     pendingAddedSectionScrollRef,
     sectionScrollDelayRef,
     lessonTitleDraftsRef,
@@ -660,6 +661,7 @@ export function CourseCreatePage({
     onNavigatePage,
     activeEditId,
     requestedSectionId,
+    requestedLessonId,
     activeStep,
     isCreatingSection,
     creatingLessonSectionId,
@@ -1625,6 +1627,7 @@ export function CourseCreatePage({
                   handleSectionDragOver={handleSectionDragOver}
                   handleSectionDragEnd={handleSectionDragEnd}
                   sectionHeaderElementsRef={sectionHeaderElementsRef}
+                  lessonElementsRef={lessonElementsRef}
                   handleToggleSectionExpand={handleToggleSectionExpand}
                   setDragEnabledSectionId={setDragEnabledSectionId}
                   handleSaveSectionTitle={handleSaveSectionTitle}

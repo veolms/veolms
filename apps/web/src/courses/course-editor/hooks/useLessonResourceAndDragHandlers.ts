@@ -1,7 +1,8 @@
 import type { Dispatch, SetStateAction, RefObject } from "react";
-import type { NavigateFunction } from "react-router";
+import { useLocation, type NavigateFunction } from "react-router";
 import type { LessonResourceItem } from "../../lesson-resources/LessonResourceManager";
 import { getCourseEditorPath } from "../../courseEditorRouting";
+import { withKeepScroll } from "../../../shell/applicationScroll";
 import type { UseMutationResult } from "@tanstack/react-query";
 import type {
   CourseEditorDataResponse,
@@ -158,19 +159,25 @@ export function useLessonResourceAndDragHandlers({
   setDragEnabledLessonId,
   persistLesson,
 }: UseLessonResourceAndDragHandlersArgs): UseLessonResourceAndDragHandlersResult {
+  const location = useLocation();
   const navigateToCurriculumFocus = (
     sectionId?: string | null,
     lessonId?: string | null,
   ) => {
-    void navigate(
-      getCourseEditorPath({
-        mode: isEditing ? "edit" : "create",
-        courseId: activeEditId,
-        step: "curriculum",
-        sectionId,
-        lessonId,
-      }),
-    );
+    const targetPath = getCourseEditorPath({
+      mode: isEditing ? "edit" : "create",
+      courseId: activeEditId,
+      step: "curriculum",
+      sectionId,
+      lessonId,
+    });
+    const currentPath = `${location.pathname}${location.search}`;
+    if (currentPath === targetPath) return;
+
+    void navigate(targetPath, {
+      replace: true,
+      state: withKeepScroll(location.state),
+    });
   };
 
   const handleToggleSectionExpand = async (sectionId: string) => {
