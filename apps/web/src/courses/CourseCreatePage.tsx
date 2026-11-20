@@ -1472,6 +1472,7 @@ export function CourseCreatePage({
         isPublished={isPublished}
         activeStep={activeStep}
         publishValidationError={publishValidationError}
+        isLoading={isInitialLoadingCourse}
       />
 
       {/* Wizard Steps Navigation */}
@@ -1496,14 +1497,7 @@ export function CourseCreatePage({
       {isInitialLoadingCourse ? (
         <CourseWizardSkeleton activeStep={activeStep} />
       ) : (
-        <Suspense
-          fallback={
-            <CenteredLoadingSpinner
-              label="Loading course details"
-              className="min-h-80 w-full flex-1"
-            />
-          }
-        >
+        <Suspense fallback={<CourseWizardSkeleton activeStep={activeStep} />}>
           <SwipeableTabPanel
             tabs={WIZARD_STEP_IDS}
             activeTab={activeStep}
