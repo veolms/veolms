@@ -159,6 +159,12 @@ export const CommerceErrors = {
       "COUPON_INACTIVE",
       `Coupon "${code}" is currently inactive.`,
     ),
+  AFFILIATE_OWN_COUPON: (code: string) =>
+    new AppError(
+      400,
+      "AFFILIATE_OWN_COUPON",
+      `"${code}" is your own affiliate code, so it can't be used on your own purchase.`,
+    ),
   COUPON_EXPIRED: (code: string) =>
     new AppError(400, "COUPON_EXPIRED", `Coupon "${code}" has expired.`),
   COUPON_NOT_STARTED: (code: string) =>

@@ -79,6 +79,7 @@ import { AuthPageFrame } from "./auth/AuthPageFrame";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
 import { AnalyticsPageViews } from "./lib/AnalyticsPageViews";
 import { AnalyticsIdentity } from "./lib/AnalyticsIdentity";
+import { AffiliateReferralCapture } from "./affiliates/AffiliateReferralCapture";
 import { NotificationTapHandler } from "./notifications/NotificationTapHandler";
 import { PushDeviceRegistration } from "./notifications/PushDeviceRegistration";
 import {
@@ -562,6 +563,7 @@ export default function Root() {
         <GlobalGoogleOneTap />
         <AnalyticsPageViews />
         <AnalyticsIdentity />
+        <AffiliateReferralCapture />
         <PushDeviceRegistration />
         <NotificationTapHandler />
         <Outlet />

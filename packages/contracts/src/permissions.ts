@@ -135,6 +135,13 @@ export const permissions = [
 
   // Email marketing: broadcasts, automations and their reports.
   "marketing.manage",
+
+  // Affiliate program: see it, run it, and pay affiliates (payout details
+  // are a key of their own, so support staff can manage affiliates without
+  // seeing PAN and bank numbers).
+  "affiliate.read",
+  "affiliate.manage",
+  "affiliate.payout",
 ] as const;
 
 /** Every key that opens a section of the Analytics page. */

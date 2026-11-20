@@ -15,18 +15,27 @@ import { createCommerceContext } from "../shared/commerce.context.ts";
 import { createCheckoutService } from "./checkout.service.ts";
 import { createCheckoutController } from "./checkout.controller.ts";
 import { createPlatformSettingsService } from "../../platform/index.ts";
+import { createAffiliateTrackingService } from "../../affiliates/index.ts";
+import { config } from "../../../config.ts";
 
 const checkoutRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
+  const platformSettings = createPlatformSettingsService({
+    database: options.database,
+  });
   const service = createCheckoutService({
     database: options.database,
     paymentGateways: options.services.paymentGateways,
+    affiliateAttribution: createAffiliateTrackingService({
+      database: options.database,
+      platformSettings,
+      serverSecret: config.SESSION_SECRET,
+    }),
+    logger: app.log,
   });
   const controller = createCheckoutController({
     service,
-    platformSettings: createPlatformSettingsService({
-      database: options.database,
-    }),
+    platformSettings,
   });
 
   // 1. POST /checkout/preview - Calculates authoritative total, items and coupon preview

@@ -11,11 +11,13 @@ import {
   type ReleaseCheckoutOrderResponse,
 } from "@veolms/contracts";
 import type { Database, DatabaseExecutor as Executor } from "@veolms/database";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
+import type { FastifyBaseLogger } from "fastify";
 import { AppError } from "../../../lib/errors.ts";
 import { config } from "../../../config.ts";
 import * as courseRepo from "../../courses/course/course.repository.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import type { AffiliateTrackingService } from "../../affiliates/index.ts";
 import { isUniqueViolation } from "../shared/db-errors.ts";
 import {
   CHECKOUT_WINDOW_GRACE_SECONDS,
@@ -98,6 +100,11 @@ export interface CheckoutContext {
    * prices is charged (`pricingRegionForCountry`).
    */
   country?: string | null;
+  /**
+   * The affiliate click in the buyer's cookie, already verified. Used only
+   * to decide who gets credit for the order.
+   */
+  affiliateClickId?: string | null;
 }
 
 export interface CheckoutServiceOptions {
@@ -110,6 +117,16 @@ export interface CheckoutServiceOptions {
   autoRefundExtraPayments?: boolean;
   /** See `MANUAL_PAYMENT_BLOCK_DAYS`. */
   manualPaymentBlockDays?: number;
+  /**
+   * The affiliate module's attribution: who gets credit for a new order.
+   * Left out, orders are made with no affiliate credit.
+   */
+  affiliateAttribution?: Pick<
+    AffiliateTrackingService,
+    "resolveOrderAttribution"
+  >;
+  /** Where a failed attribution is reported (the order goes ahead). */
+  logger?: Pick<FastifyBaseLogger, "error">;
 }
 
 export function createCheckoutService({
@@ -117,6 +134,8 @@ export function createCheckoutService({
   paymentGateways,
   autoRefundExtraPayments = config.AUTO_REFUND_EXTRA_PAYMENTS,
   manualPaymentBlockDays = config.MANUAL_PAYMENT_BLOCK_DAYS,
+  affiliateAttribution,
+  logger,
   pricingService = createPricingService({ database }),
   paymentService = createPaymentService({
     database,
@@ -939,6 +958,30 @@ export function createCheckoutService({
         }));
 
         await orderRepo.insertOrderItems(trx, orderItemRows);
+
+        // Who gets credit for this order, if anyone, decided now and never
+        // again (a cleared cookie or a later click cannot change it). Never
+        // a reason for the order to fail: a failure is rolled back to here,
+        // logged, and the order goes on with no credit.
+        if (affiliateAttribution) {
+          await sql`savepoint affiliate_attribution`.execute(trx);
+          try {
+            await affiliateAttribution.resolveOrderAttribution(trx, {
+              orderId,
+              buyerUserId: user.id,
+              couponId: pricing.couponId ?? null,
+              clickId: context.affiliateClickId ?? null,
+              now,
+            });
+            await sql`release savepoint affiliate_attribution`.execute(trx);
+          } catch (error) {
+            await sql`rollback to savepoint affiliate_attribution`.execute(trx);
+            logger?.error(
+              { err: error, orderId },
+              "Affiliate attribution failed; the order has no affiliate credit",
+            );
+          }
+        }
 
         let initialPaymentId: string | undefined;
 

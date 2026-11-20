@@ -24,6 +24,7 @@ import * as courseConfigRepo from "../../courses/configuration/configuration.rep
 import * as bundleRepo from "../bundles/bundle.repository.ts";
 import { bundleCharge } from "../bundles/bundle-pricing.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
+import { isOwnAffiliateCoupon } from "../../affiliates/index.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
 import { raiseToMinimumCharge, resolveCourseCharge } from "./pricing.amount.ts";
 import { allocateCouponDiscount } from "./coupon-allocation.ts";
@@ -698,6 +699,10 @@ export function createPricingService({
       }
       if (!coupon.is_active) {
         throw CommerceErrors.COUPON_INACTIVE(codeUpper);
+      }
+      // An affiliate's personal code works for everyone but its owner.
+      if (userId && (await isOwnAffiliateCoupon(database, coupon.id, userId))) {
+        throw CommerceErrors.AFFILIATE_OWN_COUPON(codeUpper);
       }
       if (new Date(coupon.starts_at) > now) {
         throw CommerceErrors.COUPON_NOT_STARTED(codeUpper);

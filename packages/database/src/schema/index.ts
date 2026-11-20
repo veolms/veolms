@@ -18,6 +18,7 @@ export * from "./home-page.schema.ts";
 export * from "./quotes.schema.ts";
 export * from "./short-links.schema.ts";
 export * from "./marketing.schema.ts";
+export * from "./affiliates.schema.ts";
 export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
@@ -165,6 +166,16 @@ import type {
   MarketingEmailRecipientTable,
   MarketingEmailTable,
 } from "./marketing.schema.ts";
+import type {
+  AffiliateAuditLogTable,
+  AffiliateClickTable,
+  AffiliateCommissionRuleTable,
+  AffiliateCommissionTable,
+  AffiliateOrderAttributionTable,
+  AffiliatePayoutTable,
+  AffiliateReferralTable,
+  AffiliateTable,
+} from "./affiliates.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
@@ -325,6 +336,16 @@ export interface Database {
   support_messages: SupportMessageTable;
   support_attachments: SupportAttachmentTable;
   support_events: SupportEventTable;
+
+  // Affiliate program
+  affiliates: AffiliateTable;
+  affiliate_commission_rules: AffiliateCommissionRuleTable;
+  affiliate_clicks: AffiliateClickTable;
+  affiliate_referrals: AffiliateReferralTable;
+  affiliate_order_attributions: AffiliateOrderAttributionTable;
+  affiliate_commissions: AffiliateCommissionTable;
+  affiliate_payouts: AffiliatePayoutTable;
+  affiliate_audit_log: AffiliateAuditLogTable;
 
   // Workshops
   workshops: WorkshopTable;

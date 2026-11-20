@@ -1,4 +1,6 @@
 import {
+  affiliateProgramSettingsSchema,
+  DEFAULT_AFFILIATE_PROGRAM_SETTINGS,
   DEFAULT_MAX_DEVICES_PER_STUDENT,
   DEFAULT_MAX_SIMULTANEOUS_STREAMS,
   DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
@@ -11,6 +13,7 @@ import {
   platformLegalSettingsSchema,
   platformSecuritySettingsSchema,
   PLATFORM_BRAND_ASSET_FIELDS,
+  type AffiliateProgramSettings,
   type PlatformBrandAsset,
   type PlatformBrandingSettings,
   type PlatformInvoiceSettings,
@@ -18,6 +21,7 @@ import {
   type PlatformSettings,
   type PlatformSettingsResponse,
   type PublicPlatformSettings,
+  type UpdateAffiliateProgramSettingsRequest,
   type UpdatePlatformSettingsRequest,
 } from "@veolms/contracts";
 import { cacheTags, createCache, invalidateCache } from "@veolms/api-core";
@@ -147,6 +151,36 @@ function resolveLegalSettings(
 }
 
 /**
+ * The affiliate program's settings as saved, each one that does not read
+ * falling back to its default. Kept in the same document as the Platform
+ * page's settings but never part of them: only the affiliate admin reads
+ * and changes it.
+ */
+function resolveAffiliateProgramSettings(
+  saved: Record<string, unknown>,
+): AffiliateProgramSettings {
+  const fields = affiliateProgramSettingsSchema.shape;
+  const read = <K extends keyof AffiliateProgramSettings>(
+    key: K,
+  ): AffiliateProgramSettings[K] => {
+    const parsed = fields[key].safeParse(saved[key]);
+    return parsed.success
+      ? (parsed.data as AffiliateProgramSettings[K])
+      : DEFAULT_AFFILIATE_PROGRAM_SETTINGS[key];
+  };
+  return {
+    enabled: read("enabled"),
+    joinMode: read("joinMode"),
+    attributionWindowDays: read("attributionWindowDays"),
+    holdDays: read("holdDays"),
+    minPayoutMinor: read("minPayoutMinor"),
+    buyerDiscountPercent: read("buyerDiscountPercent"),
+    termsText: read("termsText"),
+    tdsEnabled: read("tdsEnabled"),
+  };
+}
+
+/**
  * The settings in force: each one saved by an admin, or its default. A
  * document written by another version of the contract keeps what still
  * reads correctly, setting by setting, rather than failing the page.
@@ -211,6 +245,13 @@ export interface PlatformSettingsService {
   getInvoiceSettings(): Promise<PlatformInvoiceSettings>;
   /** Who the academy's legal pages name (Platform > Legal pages). */
   getLegalSettings(): Promise<PlatformLegalSettings>;
+  /** The affiliate program's settings (not part of the Platform page). */
+  getAffiliateProgramSettings(): Promise<AffiliateProgramSettings>;
+  /** Saves the named affiliate program settings; the rest keep their value. */
+  updateAffiliateProgramSettings(
+    changes: UpdateAffiliateProgramSettingsRequest,
+    updatedBy: string | null,
+  ): Promise<AffiliateProgramSettings>;
   updateSettings(
     changes: UpdatePlatformSettingsRequest,
     updatedBy: string | null,
@@ -284,6 +325,7 @@ export function createPlatformSettingsService({
     changes: UpdatePlatformSettingsRequest & {
       invoice?: Partial<PlatformInvoiceSettings>;
       branding?: Partial<PlatformBrandingSettings>;
+      affiliates?: UpdateAffiliateProgramSettingsRequest;
     },
     updatedBy: string | null,
   ): Promise<PlatformSettingsResponse> {
@@ -314,6 +356,14 @@ export function createPlatformSettingsService({
         : {}),
       ...(changes.branding
         ? { branding: { ...current.document.branding, ...changes.branding } }
+        : {}),
+      ...(changes.affiliates
+        ? {
+            affiliates: {
+              ...current.document.affiliates,
+              ...changes.affiliates,
+            },
+          }
         : {}),
     };
 
@@ -356,6 +406,16 @@ export function createPlatformSettingsService({
       toPublicSettings((await readSettings()).settings),
     getInvoiceSettings: async () => (await readSettings()).settings.invoice,
     getLegalSettings: async () => (await readSettings()).settings.legal,
+    getAffiliateProgramSettings: async () =>
+      resolveAffiliateProgramSettings(
+        (await readSettings()).document.affiliates ?? {},
+      ),
+    updateAffiliateProgramSettings: async (changes, updatedBy) => {
+      await updateSettings({ affiliates: changes }, updatedBy);
+      return resolveAffiliateProgramSettings(
+        (await readSettings()).document.affiliates ?? {},
+      );
+    },
     updateSettings,
     setInvoiceLogo: async (logoUrl, updatedBy) =>
       await updateSettings({ invoice: { logoUrl } }, updatedBy),

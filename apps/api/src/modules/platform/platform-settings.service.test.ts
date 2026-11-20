@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { clearAllCaches } from "@veolms/api-core";
 import {
+  DEFAULT_AFFILIATE_PROGRAM_SETTINGS,
   DEFAULT_PLATFORM_BRANDING_SETTINGS,
   DEFAULT_PLATFORM_INVOICE_SETTINGS,
   DEFAULT_PLATFORM_LEGAL_SETTINGS,
@@ -362,5 +363,60 @@ await test("the website's artwork is saved piece by piece and sent to every visi
   await service.setBrandAsset("logo-light", null, null);
   assert.deepEqual(writes.at(-1), {
     branding: { logoLightUrl: null, iconUrl: icon },
+  });
+});
+
+await test("the affiliate program starts switched off with the PRD's starting numbers", async () => {
+  const { database } = fakeDatabase();
+  const service = createPlatformSettingsService({ database });
+
+  assert.deepEqual(
+    await service.getAffiliateProgramSettings(),
+    DEFAULT_AFFILIATE_PROGRAM_SETTINGS,
+  );
+  assert.equal(DEFAULT_AFFILIATE_PROGRAM_SETTINGS.enabled, false);
+  assert.equal(DEFAULT_AFFILIATE_PROGRAM_SETTINGS.attributionWindowDays, 30);
+  assert.equal(DEFAULT_AFFILIATE_PROGRAM_SETTINGS.holdDays, 30);
+  assert.equal(DEFAULT_AFFILIATE_PROGRAM_SETTINGS.minPayoutMinor, 50_000);
+});
+
+await test("affiliate settings that no longer read fall back one by one, and none of them reach the Platform page or the public", async () => {
+  const { database } = fakeDatabase({
+    affiliates: { enabled: true, holdDays: 400, joinMode: "invite_only" },
+  });
+  const service = createPlatformSettingsService({ database });
+
+  const program = await service.getAffiliateProgramSettings();
+  assert.equal(program.enabled, true);
+  assert.equal(program.joinMode, "invite_only");
+  assert.equal(program.holdDays, DEFAULT_AFFILIATE_PROGRAM_SETTINGS.holdDays);
+
+  const { settings } = await service.getSettings();
+  assert.equal("affiliates" in settings, false);
+  assert.equal("affiliates" in (await service.getPublicSettings()), false);
+});
+
+await test("saving affiliate settings keeps the other sections and the affiliate settings not named", async () => {
+  const { database, writes } = fakeDatabase({
+    legal: { companyName: "Example Labs LLP" },
+    affiliates: { joinMode: "invite_only" },
+  });
+  const service = createPlatformSettingsService({ database });
+
+  const saved = await service.updateAffiliateProgramSettings(
+    { enabled: true, buyerDiscountPercent: 10 },
+    null,
+  );
+
+  assert.equal(saved.enabled, true);
+  assert.equal(saved.buyerDiscountPercent, 10);
+  assert.equal(saved.joinMode, "invite_only");
+  assert.deepEqual(writes.at(-1), {
+    legal: { companyName: "Example Labs LLP" },
+    affiliates: {
+      joinMode: "invite_only",
+      enabled: true,
+      buyerDiscountPercent: 10,
+    },
   });
 });

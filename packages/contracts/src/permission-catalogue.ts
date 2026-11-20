@@ -361,6 +361,29 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
     ],
   },
   {
+    area: "affiliates",
+    label: "Affiliates",
+    entries: [
+      entry(
+        "affiliate.read",
+        "View affiliates",
+        "See affiliates, their commissions, payouts and the program's reports.",
+      ),
+      entry(
+        "affiliate.manage",
+        "Manage affiliates",
+        "Change the program's settings and rates; invite, approve, reject and suspend affiliates; review commissions.",
+        ["affiliate.read"],
+      ),
+      entry(
+        "affiliate.payout",
+        "Pay affiliates",
+        "See full payout details (PAN, bank, UPI), create payouts, mark them paid and export the payment file.",
+        ["affiliate.read"],
+      ),
+    ],
+  },
+  {
     area: "analytics",
     label: "Analytics",
     // One tick per tab of the Analytics page, so a role opens exactly the

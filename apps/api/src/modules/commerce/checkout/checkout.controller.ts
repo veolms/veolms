@@ -8,6 +8,7 @@ import { AppError } from "../../../lib/errors.ts";
 import { config } from "../../../config.ts";
 import { pricingRegionForCountry } from "../shared/pricing-region.ts";
 import type { PlatformSettingsService } from "../../platform/index.ts";
+import { readAffiliateClickId } from "../../affiliates/index.ts";
 
 /**
  * The buyer's country, as the proxy in front of the API (Cloudflare) names
@@ -84,6 +85,7 @@ export function createCheckoutController({
     };
     return await service.createOrder(user, request.body, {
       country: buyerCountry(request),
+      affiliateClickId: readAffiliateClickId(request),
     });
   }
 
