@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "../../loadFailureMessage";
 import {
   useCallback,
   useEffect,
@@ -293,8 +294,7 @@ export function useLessonStagePlan({
               kind: "retry",
               illustration: "went-wrong",
               title: "Something went wrong",
-              message:
-                "We couldn't load this course. Check your connection and try again.",
+              message: `We couldn't load this course. ${loadFailureMessage()}`,
               actionLabel: "Try again",
               onAction: retryCourseOverview,
             }
@@ -334,7 +334,7 @@ export function useLessonStagePlan({
       return {
         kind: "retry",
         title: "Couldn't load this audio",
-        message: "Check your connection and try again.",
+        message: loadFailureMessage(audioLink.failure.status),
         actionLabel: "Try again",
         onAction: audioLink.retry,
       };

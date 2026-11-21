@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "../loadFailureMessage";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   PDFDocumentLoadingTask,
@@ -263,8 +264,7 @@ export function LessonPdfReading({
       {failed ? (
         <div className="grid justify-items-center gap-3 py-10 text-center">
           <p className="m-0 text-sm text-(--muted)">
-            Couldn&apos;t load this reading. Check your connection and try
-            again.
+            Couldn&apos;t load this reading. {loadFailureMessage()}
           </p>
           <button
             type="button"
