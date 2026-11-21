@@ -906,6 +906,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #lastRecoveryPosition: number | null = null;
   /** The reload past the place has been made (see SKIP_PAST_FALLBACK_SECONDS). */
   #skippedPast = false;
+  /**
+   * The last segment download that failed for a reason that passes (no
+   * answer, a timeout, 5xx), while no segment has arrived since; null once
+   * one does. Set, a stall is the network's, never the video's.
+   */
+  #networkTrouble: VideoEngineError | null = null;
   /** `MEDIA_STUCK` is on screen: later errors of this load would hide it. */
   #stuckShown = false;
   /** Set once the decoder has failed twice on this source (see above). */
@@ -1053,6 +1059,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#mediaRecoveryMaxHeight = null;
       this.#lastRecoveryPosition = null;
       this.#skippedPast = false;
+      this.#networkTrouble = null;
       this.#lastGoodTime = null;
       this.#lastPlayRequested = false;
       this.#lastPlaybackRate = 1;
@@ -1527,6 +1534,17 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     if (this.#mediaRecoveryInFlight) return true;
     const place = this.recoveryPlace(media);
     const stuck = this.stuckAtLastRecovery(place.time);
+    // Nothing has come in since a download failed with no answer (or a
+    // timeout, or a server error), or the browser is offline: a stall here
+    // is the network's. Blamed on the video, a learner whose connection
+    // dropped at 13:38 of a lesson saw "This part of the video can't play"
+    // and the video was reported broken (45 of 45 requests unanswered,
+    // 21 Nov 2026). It is never skipped past or called stuck then.
+    const networkDown = browserOffline() || this.#networkTrouble !== null;
+    if (stuck && networkDown) {
+      this.showNetworkTrouble(error, place.time);
+      return true;
+    }
     let skipTo: number | null = null;
     if (stuck && !this.#skippedPast) {
       // Failed again at the same place: once, take it up just past it.
@@ -1571,7 +1589,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     // limit and does not lower the quality. Lecture 42 has 44 such pieces;
     // counted, a learner at 16x ran out of recoveries in minutes.
     if (skipTo === null) {
-      if (this.#mediaRecoveries.length >= MEDIA_RECOVERY_LIMIT) return false;
+      if (this.#mediaRecoveries.length >= MEDIA_RECOVERY_LIMIT) {
+        if (!networkDown) return false;
+        this.showNetworkTrouble(error, place.time);
+        return true;
+      }
       this.#mediaRecoveries.push(now);
       if (this.#mediaRecoveries.length >= 2) {
         this.#mediaRecoveryMaxHeight = MEDIA_RECOVERY_MAX_HEIGHT;
@@ -1665,6 +1687,37 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
    * Where a recovery takes the video up again (see `#lastGoodTime`): the
    * element's own time while it still has one, else where it last stood.
    */
+  /**
+   * The stall, shown as what it is: the failed download itself when there
+   * was one (its status picks the words: our server, or the connection),
+   * else the connection lost. Not the video's fault, so not reported.
+   */
+  private showNetworkTrouble(failure: VideoEngineError, position: number) {
+    const trouble = this.#networkTrouble;
+    markPlayback("media-recovery-network", {
+      code: failure.code,
+      position,
+      download: trouble?.code ?? null,
+    });
+    this.emitError(
+      trouble
+        ? new VideoEngineError({
+            category: trouble.category,
+            code: trouble.code,
+            message: trouble.message,
+            cause: failure,
+            details: trouble.details,
+          })
+        : new VideoEngineError({
+            category: "NETWORK",
+            code: "NETWORK_LOST",
+            message: `The browser is offline; playback stopped at ${position.toFixed(1)} s (${failure.code}).`,
+            cause: failure,
+            details: [{ position, failure: failure.code }],
+          }),
+    );
+  }
+
   private recoveryPlace(media: HTMLMediaElement): {
     time: number;
     playing: boolean;
@@ -3735,6 +3788,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     });
     // A segment in again: the streams are healthy.
     listen("segmentappended", () => {
+      this.#networkTrouble = null;
       const attempts = this.#streamingRetries;
       this.#streamingRetries = 0;
       this.#retryOnOnline = false;
@@ -3802,6 +3856,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
     const kind = networkFailureKind(error);
     if (kind === null || error.category === "DRM") return false;
+    if (kind === "transient") this.#networkTrouble = error;
     if (
       kind === "missing" &&
       this.#streamingRetries >= STREAMING_MISSING_RETRY_LIMIT
