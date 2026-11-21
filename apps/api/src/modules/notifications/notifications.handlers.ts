@@ -35,6 +35,9 @@ import type {
   NotificationIntent,
 } from "./notifications.types.ts";
 
+/** New quizzes notify the course's learners: off until admins choose per quiz. */
+const QUIZ_ASSIGNED_NOTIFIES = false;
+
 export class UnknownNotificationEventError extends Error {
   constructor(eventType: string) {
     super(`No notification handler is registered for event "${eventType}".`);
@@ -549,6 +552,11 @@ const notificationHandlers: Record<string, NotificationHandler> = {
   },
   "quiz.assigned": async (payload, dependencies) => {
     const event = quizAssignedEventSchema.parse(payload);
+    // Off for now (owner, 22 Nov 2026): a new quiz notified every learner
+    // of the course. An admin will choose per quiz whether to notify; until
+    // then nobody is. The event is still published, so that choice can turn
+    // this back on without touching quiz authoring.
+    if (!QUIZ_ASSIGNED_NOTIFIES) return [];
     const recipientUserIds =
       await dependencies.listActiveCourseRecipientUserIds(event.courseId);
     return recipientUserIds.map((recipientUserId) => ({
