@@ -213,8 +213,33 @@ export interface PlayerErrorReport {
  * Whether the error is the video's own (its file stops or cannot be
  * decoded at a place) rather than the connection's or the device's.
  */
+/**
+ * The HTTP status a file request was refused with (Shaka's BAD_HTTP_STATUS,
+ * 1001, carries it second in its data), or null when there was no answer.
+ */
+export function refusedHttpStatus(error: VideoEngineError): number | null {
+  if (error.code !== "SHAKA_1001") return null;
+  const status = error.details[1];
+  return typeof status === "number" ? status : null;
+}
+
+/** A file of the video the server says is not there (404, 410). */
+function isMissingFile(error: VideoEngineError): boolean {
+  const status = refusedHttpStatus(error);
+  return status === 404 || status === 410;
+}
+
+/**
+ * An error in the video itself, not the viewer's connection or device: it
+ * is reported by itself (see `PlayerErrorReport.auto`).
+ */
 export function isVideoContentError(error: VideoEngineError): boolean {
-  return error.code === "MEDIA_STUCK" || error.category === "MEDIA";
+  return (
+    error.code === "MEDIA_STUCK" ||
+    error.category === "MEDIA" ||
+    error.category === "MANIFEST" ||
+    isMissingFile(error)
+  );
 }
 
 /**
@@ -239,10 +264,49 @@ export function playerErrorWords(error: VideoEngineError): {
       message: "Your browser couldn't play this part of the video.",
     };
   }
-  if (
-    error.category === "NETWORK" ||
-    (typeof navigator !== "undefined" && navigator.onLine === false)
-  ) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return {
+      title: "You're offline",
+      message: "Check your internet connection and try again.",
+    };
+  }
+  // The server answered, so the connection is fine: "check your
+  // connection" over a missing file (21 Nov 2026, JS lectures 71, 77, 98)
+  // sent learners looking in the wrong place.
+  const status = refusedHttpStatus(error);
+  if (status === 404 || status === 410) {
+    return {
+      title: "This video isn't available right now",
+      message: "Part of it is missing on our side. We've been told about it.",
+    };
+  }
+  if (status === 401 || status === 403) {
+    return {
+      title: "This video couldn't be opened",
+      message: "Try again. If it keeps happening, report it.",
+    };
+  }
+  if (status !== null && status >= 500) {
+    return {
+      title: "Our video server is having trouble",
+      message: "Please try again in a moment.",
+    };
+  }
+  if (status !== null) {
+    return {
+      title: "This video couldn't be loaded",
+      message: "Try again. If it keeps happening, report it.",
+    };
+  }
+  if (error.category === "MANIFEST") {
+    return {
+      title: "This video can't be opened",
+      message:
+        "Something is wrong with the video on our side. We've been told about it.",
+    };
+  }
+  if (error.category === "NETWORK") {
+    // No answer at all (1002), or none in time (1003): the connection.
     return {
       title: "Can't load the video",
       message: "Check your internet connection and try again.",
@@ -254,7 +318,10 @@ export function playerErrorWords(error: VideoEngineError): {
       message: "Try again. If it keeps happening, report it.",
     };
   }
-  return { title: "Something went wrong" };
+  return {
+    title: "Something went wrong",
+    message: "Try again. If it keeps happening, report it.",
+  };
 }
 
 type ReportState =
