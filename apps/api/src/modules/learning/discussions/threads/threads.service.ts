@@ -3,6 +3,7 @@ import type { DatabaseExecutor } from "@veolms/database";
 import type {
   CreateLearningThreadRequest,
   DiscussionAttachmentSummary,
+  DiscussionReactionType,
   DiscussionsWorkspaceResponse,
   LearningThread,
   LearningThreadEditResponse,
@@ -203,10 +204,21 @@ export function createThreadsService(
     db: DatabaseExecutor,
     userId: string | null | undefined,
     threadIds: readonly string[],
-  ): Promise<Set<string>> {
-    if (!userId || threadIds.length === 0) return new Set();
+  ): Promise<{
+    likedThreadIds: Set<string>;
+    threadReactions: Map<string, DiscussionReactionType>;
+  }> {
+    if (!userId || threadIds.length === 0) {
+      return { likedThreadIds: new Set(), threadReactions: new Map() };
+    }
     const rows = await threadsRepo.listThreadLikes(db, userId, threadIds);
-    return new Set(rows.map((row) => row.target_id));
+    const likedThreadIds = new Set<string>();
+    const threadReactions = new Map<string, DiscussionReactionType>();
+    for (const row of rows) {
+      likedThreadIds.add(row.target_id);
+      threadReactions.set(row.target_id, row.reaction_type);
+    }
+    return { likedThreadIds, threadReactions };
   }
 
   async function listBookmarkedThreadIds(
@@ -291,11 +303,20 @@ export function createThreadsService(
     currentUserId?: string | null,
     attachments: DiscussionAttachmentRow[] = [],
     viewer?: {
-      likedThreadIds: Set<string>;
+      likedThreadIds?: Set<string>;
+      threadReactions?: Map<string, DiscussionReactionType>;
+      topReactions?: Map<string, DiscussionReactionType[]>;
       bookmarkedThreadIds: Set<string>;
       followedThreadIds: Set<string>;
     },
   ): LearningThread {
+    const userReaction = viewer?.threadReactions?.get(row.id) ?? null;
+    const isLiked =
+      viewer?.likedThreadIds?.has(row.id) ?? Boolean(userReaction);
+    const topReactions =
+      viewer?.topReactions?.get(row.id) ??
+      (Number(row.likesCount || 0) > 0 ? ["like"] : []);
+
     return {
       id: row.id,
       courseId: row.courseId,
@@ -314,7 +335,9 @@ export function createThreadsService(
       attachments: attachments.map((attachment) =>
         presentDiscussionAttachment(attachment, storage),
       ),
-      isLiked: viewer?.likedThreadIds.has(row.id) ?? false,
+      isLiked,
+      userReaction,
+      topReactions,
       isBookmarked: viewer?.bookmarkedThreadIds.has(row.id) ?? false,
       isFollowing: viewer?.followedThreadIds.has(row.id) ?? false,
       isOwn: currentUserId ? row.userId === currentUserId : false,
@@ -492,18 +515,22 @@ export function createThreadsService(
       const viewerUserId = actor && canReadPrivateState ? actor.userId : null;
       const [
         attachments,
-        likedThreadIds,
+        { likedThreadIds, threadReactions },
+        topReactions,
         bookmarkedThreadIds,
         followedThreadIds,
       ] = await Promise.all([
         listReadyAttachments(db, "thread", [threadId]),
         listLikedThreadIds(db, viewerUserId, [threadId]),
+        threadsRepo.listTopThreadReactions(db, [threadId]),
         listBookmarkedThreadIds(db, viewerUserId, [threadId]),
         listFollowedThreadIds(db, viewerUserId, [threadId]),
       ]);
 
       return mapThreadRow(row, actor?.userId, attachments.get(threadId), {
         likedThreadIds,
+        threadReactions,
+        topReactions,
         bookmarkedThreadIds,
         followedThreadIds,
       });
@@ -559,12 +586,14 @@ export function createThreadsService(
 
       const threadIds = page.map((row) => row.id);
       const [
-        likedThreadIds,
+        { likedThreadIds, threadReactions },
+        topReactions,
         bookmarkedThreadIds,
         followedThreadIds,
         attachmentsByThreadId,
       ] = await Promise.all([
         listLikedThreadIds(db, query.currentUserId, threadIds),
+        threadsRepo.listTopThreadReactions(db, threadIds),
         listBookmarkedThreadIds(db, query.currentUserId, threadIds),
         listFollowedThreadIds(db, query.currentUserId, threadIds),
         listReadyAttachments(db, "thread", threadIds),
@@ -575,7 +604,13 @@ export function createThreadsService(
           row,
           query.currentUserId,
           attachmentsByThreadId.get(row.id),
-          { likedThreadIds, bookmarkedThreadIds, followedThreadIds },
+          {
+            likedThreadIds,
+            threadReactions,
+            topReactions,
+            bookmarkedThreadIds,
+            followedThreadIds,
+          },
         ),
       );
 
@@ -1355,18 +1390,24 @@ export function createThreadsService(
         ),
       ),
     ];
-    const [likes, lessonNumbers] = await Promise.all([
-      query.currentUserId
-        ? threadsRepo.listViewerLikes(
-            db,
-            query.currentUserId,
-            response.items.map((item) => item.id),
-          )
+    const itemIds = response.items.map((item) => item.id);
+    const [likes, topReactionsMap, lessonNumbers] = await Promise.all([
+      query.currentUserId && itemIds.length > 0
+        ? threadsRepo.listViewerLikes(db, query.currentUserId, itemIds)
         : null,
+      itemIds.length > 0
+        ? threadsRepo.listTopWorkspaceReactions(db, itemIds)
+        : new Map<string, DiscussionReactionType[]>(),
       lessonIds.length > 0 ? threadsRepo.listLessonNumbers(db, lessonIds) : [],
     ]);
     const liked = new Set(
       (likes ?? []).map((like) => `${like.target_type}:${like.target_id}`),
+    );
+    const viewerReactions = new Map(
+      (likes ?? []).map((like) => [
+        `${like.target_type}:${like.target_id}`,
+        like.reaction_type ?? "like",
+      ]),
     );
     const numberByLesson = new Map(
       lessonNumbers.map((row) => [row.id, row.lessonNumber]),
@@ -1377,16 +1418,27 @@ export function createThreadsService(
     ]);
     return {
       ...response,
-      items: marked.map((item) => ({
-        ...item,
-        ...(matchedReplies.has(item.id)
-          ? { searchMatchedReply: matchedReplies.get(item.id) }
-          : {}),
-        ...(likes ? { isLiked: liked.has(`${item.itemType}:${item.id}`) } : {}),
-        lessonNumber: item.lessonId
-          ? (numberByLesson.get(item.lessonId) ?? null)
-          : null,
-      })),
+      items: marked.map((item) => {
+        const itemKey = `${item.itemType}:${item.id}`;
+        const isItemLiked = likes ? liked.has(itemKey) : undefined;
+        const userReaction =
+          likes && liked.has(itemKey)
+            ? (viewerReactions.get(itemKey) ?? "like")
+            : null;
+        const top =
+          topReactionsMap.get(item.id) ?? (item.likesCount > 0 ? ["like"] : []);
+        return {
+          ...item,
+          ...(matchedReplies.has(item.id)
+            ? { searchMatchedReply: matchedReplies.get(item.id) }
+            : {}),
+          ...(likes ? { isLiked: isItemLiked, userReaction } : {}),
+          topReactions: top,
+          lessonNumber: item.lessonId
+            ? (numberByLesson.get(item.lessonId) ?? null)
+            : null,
+        };
+      }),
     };
   };
 

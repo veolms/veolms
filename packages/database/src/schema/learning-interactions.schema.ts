@@ -17,6 +17,8 @@ export type ReportReason =
   | "other";
 export type ReportStatus = "pending" | "reviewed" | "dismissed" | "actioned";
 export type SuspensionScope = "commenting" | "qa" | "all";
+export type DiscussionReactionType =
+  "like" | "celebrate" | "support" | "love" | "insightful" | "funny";
 
 export interface LearningThreadTable {
   id: string;
@@ -72,6 +74,7 @@ export interface LearningLikeTable {
   user_id: string;
   target_type: EngagementTargetType;
   target_id: string;
+  reaction_type: Generated<DiscussionReactionType>;
   created_at: Generated<Date>;
 }
 

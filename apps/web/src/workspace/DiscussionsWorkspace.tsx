@@ -93,6 +93,8 @@ import {
 import { DiscussionWorkspaceListRow } from "./DiscussionWorkspaceRow";
 import { isRightPanelShortcut } from "../keyboardShortcuts";
 import { DiscussionWorkspacePanel } from "./DiscussionWorkspacePanel";
+import { getReactionConfig } from "../learning/reactions/reactionConstants";
+import { WhoReactedModal } from "../learning/reactions/WhoReactedModal";
 import { useSettingsTabShortcuts } from "../settings/useSettingsTabShortcuts";
 import { DiscussionCourseThumbnailsContext } from "./DiscussionCourseThumbnail";
 import { useDiscussionWorkspaceReport } from "./useDiscussionWorkspaceReport";
@@ -1019,6 +1021,7 @@ function DiscussionWorkspaceQuestionCard({
   expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [whoReactedOpen, setWhoReactedOpen] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
   const lifecycleStatus: "open" | "answered" | "solved" =
     thread.status === "answered"
@@ -1139,6 +1142,7 @@ function DiscussionWorkspaceCommentCard({
   expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [whoReactedOpen, setWhoReactedOpen] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
   const destination = getDiscussionThreadDestination(thread);
   const destinationLabel = [thread.course, thread.lesson]
@@ -1184,12 +1188,49 @@ function DiscussionWorkspaceCommentCard({
       }
       rail={{
         top: (
-          <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
-            <ThumbsUp size={15} weight="fill" aria-hidden="true" />
-            <span>
-              {thread.likes} {thread.likes === 1 ? "like" : "likes"}
-            </span>
-          </span>
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (thread.likes > 0) setWhoReactedOpen(true);
+              }}
+              aria-label={`View who reacted, ${thread.likes} ${
+                thread.likes === 1 ? "reaction" : "reactions"
+              }`}
+              className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge hover:underline cursor-pointer"
+            >
+              {thread.topReactions && thread.topReactions.length > 0 ? (
+                <span className="mr-0.5 flex items-center -space-x-1">
+                  {thread.topReactions.slice(0, 3).map((r, i) => {
+                    const cfg = getReactionConfig(r);
+                    const RIcon = cfg.icon;
+                    return (
+                      <span
+                        key={`${r}-${i}`}
+                        className={`relative inline-flex h-4 w-4 items-center justify-center rounded-full ${cfg.colorClass}`}
+                      >
+                        <RIcon size={13} weight="fill" />
+                      </span>
+                    );
+                  })}
+                </span>
+              ) : (
+                <ThumbsUp size={15} weight="fill" aria-hidden="true" />
+              )}
+              <span>
+                {thread.likes} {thread.likes === 1 ? "like" : "likes"}
+              </span>
+            </button>
+            {whoReactedOpen && thread.id && (
+              <WhoReactedModal
+                isOpen={whoReactedOpen}
+                onClose={() => setWhoReactedOpen(false)}
+                targetType="thread"
+                targetId={thread.id}
+              />
+            )}
+          </>
         ),
         middle: (
           <span>
@@ -1478,6 +1519,7 @@ function DiscussionWorkspaceNoteCard({
   expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [whoReactedOpen, setWhoReactedOpen] = useState(false);
   const timestampLabel = formatNoteTimestamp(note.timestampSeconds);
   const metadataItems = getDiscussionWorkspaceMetadataItems(note, {
     timestampLabel,
@@ -1528,12 +1570,49 @@ function DiscussionWorkspaceNoteCard({
       }
       rail={{
         top: (
-          <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
-            <ThumbsUp size={15} weight="fill" aria-hidden="true" />
-            <span>
-              {note.likes} {note.likes === 1 ? "like" : "likes"}
-            </span>
-          </span>
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (note.likes > 0) setWhoReactedOpen(true);
+              }}
+              aria-label={`View who reacted, ${note.likes} ${
+                note.likes === 1 ? "reaction" : "reactions"
+              }`}
+              className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge hover:underline cursor-pointer"
+            >
+              {note.topReactions && note.topReactions.length > 0 ? (
+                <span className="mr-0.5 flex items-center -space-x-1">
+                  {note.topReactions.slice(0, 3).map((r, i) => {
+                    const cfg = getReactionConfig(r);
+                    const RIcon = cfg.icon;
+                    return (
+                      <span
+                        key={`${r}-${i}`}
+                        className={`relative inline-flex h-4 w-4 items-center justify-center rounded-full ${cfg.colorClass}`}
+                      >
+                        <RIcon size={13} weight="fill" />
+                      </span>
+                    );
+                  })}
+                </span>
+              ) : (
+                <ThumbsUp size={15} weight="fill" aria-hidden="true" />
+              )}
+              <span>
+                {note.likes} {note.likes === 1 ? "like" : "likes"}
+              </span>
+            </button>
+            {whoReactedOpen && note.id && (
+              <WhoReactedModal
+                isOpen={whoReactedOpen}
+                onClose={() => setWhoReactedOpen(false)}
+                targetType="note"
+                targetId={note.id}
+              />
+            )}
+          </>
         ),
         bottom: (
           <time dateTime={note.updatedAt || note.createdAt}>
@@ -1663,6 +1742,7 @@ export function PublicDiscussionWorkspaceCard({
   const canNavigate = Boolean(
     destination && (allowPublicRead || hasCourseAccess),
   );
+  const [whoReactedOpen, setWhoReactedOpen] = useState(false);
   const handleNavigation = canNavigate
     ? () => onNavigatePage?.(destination!, { exact: true })
     : onAccessDenied;
@@ -1687,13 +1767,33 @@ export function PublicDiscussionWorkspaceCard({
       onNavigate={destination ? handleNavigation : undefined}
       rail={{
         top: (
-          <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
-            <ThumbsUp size={15} weight="fill" aria-hidden="true" />
-            <span>
-              {discussion.likeCount}{" "}
-              {discussion.likeCount === 1 ? "like" : "likes"}
-            </span>
-          </span>
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (discussion.likeCount > 0) setWhoReactedOpen(true);
+              }}
+              aria-label={`View who reacted, ${discussion.likeCount} ${
+                discussion.likeCount === 1 ? "like" : "likes"
+              }`}
+              className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge hover:underline cursor-pointer"
+            >
+              <ThumbsUp size={15} weight="fill" aria-hidden="true" />
+              <span>
+                {discussion.likeCount}{" "}
+                {discussion.likeCount === 1 ? "like" : "likes"}
+              </span>
+            </button>
+            {whoReactedOpen && discussion.id && (
+              <WhoReactedModal
+                isOpen={whoReactedOpen}
+                onClose={() => setWhoReactedOpen(false)}
+                targetType="thread"
+                targetId={discussion.id}
+              />
+            )}
+          </>
         ),
         middle: (
           <span>

@@ -1,7 +1,9 @@
 import { z } from "zod";
 import {
+  listReactionsQuerySchema,
   lockThreadRequestSchema,
   lockThreadResponseSchema,
+  reactionsListResponseSchema,
   toggleBookmarkResponseSchema,
   toggleFollowResponseSchema,
   toggleLikeRequestSchema,
@@ -55,6 +57,28 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.toggleLike,
+  );
+
+  // 1b. GET /interactions/reactions - List reactions and who reacted
+  app.get(
+    "/interactions/reactions",
+    {
+      preHandler: permissions.optionalAuthenticated,
+      schema: {
+        operationId: "listLearningReactions",
+        tags: ["Learning Engagements"],
+        summary: "List reactions and who reacted to a thread, reply, or note",
+        querystring: listReactionsQuerySchema,
+        response: {
+          200: jsonResponse(
+            "List of reactions and who reacted",
+            reactionsListResponseSchema,
+          ),
+          404: errorResponse("Target resource not found"),
+        },
+      },
+    },
+    controller.listReactions,
   );
 
   // 2. POST /threads/:threadId/bookmark - Toggle bookmark/saved

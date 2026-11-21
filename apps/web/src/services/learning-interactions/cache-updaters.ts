@@ -1,10 +1,13 @@
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type {
   CreatorHeart,
+  DiscussionReactionType,
   DiscussionsWorkspaceResponse,
   LearningRepliesListResponse,
   LearningThread,
   LearningThreadsListResponse,
+  LessonDiscussionItem,
+  LessonDiscussionsListResponse,
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { learningInteractionKeys } from "./learning-interactions.keys";
@@ -483,14 +486,23 @@ function setNoteQueriesData(
   );
 }
 
+export function normalizeEntityId(id: string | number | undefined): string {
+  if (id === undefined || id === null) return "";
+  return String(id).replace(/^(thread|note|reply):/, "");
+}
+
 function matchesThreadIdentity(
   thread: { id: string; clientId?: string; serverId?: string },
   identity: string,
 ): boolean {
+  const normTarget = normalizeEntityId(identity);
   return (
     thread.id === identity ||
+    normalizeEntityId(thread.id) === normTarget ||
     getClientEntityId(thread) === identity ||
-    getServerEntityId(thread) === identity
+    normalizeEntityId(getClientEntityId(thread)) === normTarget ||
+    getServerEntityId(thread) === identity ||
+    normalizeEntityId(getServerEntityId(thread)) === normTarget
   );
 }
 
@@ -512,6 +524,39 @@ export function calculateNextLikesCount(
 }
 
 /**
+ * Reconciles the top reactions array when a viewer reacts, changes reaction, or unreacts.
+ * Removes stale reactions when no participants remain, and keeps at most 3 top reactions.
+ */
+export function reconcileTopReactions(
+  currentTop: readonly DiscussionReactionType[] | undefined,
+  prevReaction: DiscussionReactionType | null,
+  nextReaction: DiscussionReactionType | null,
+  nextLikesCount: number,
+): DiscussionReactionType[] {
+  if (nextLikesCount <= 0) {
+    return [];
+  }
+  let list = currentTop ? [...currentTop] : [];
+
+  if (prevReaction && prevReaction !== nextReaction) {
+    if (nextLikesCount <= (nextReaction ? 1 : 0)) {
+      list = list.filter((r) => r !== prevReaction);
+    }
+  }
+
+  if (nextReaction) {
+    list = [nextReaction, ...list.filter((r) => r !== nextReaction)].slice(
+      0,
+      3,
+    );
+  } else if (prevReaction && list.length === 1 && list[0] === prevReaction) {
+    list = [];
+  }
+
+  return list;
+}
+
+/**
  * Directly updates thread like status across all matching cache keys:
  * 1. Specific or all lessonThreads queries
  * 2. Thread details query
@@ -522,6 +567,7 @@ export function updateThreadLikeInCache(
   threadId: string,
   desiredLiked: boolean,
   lessonContext?: { courseId: string; lessonId: string },
+  reaction?: DiscussionReactionType,
 ): void {
   // 1. Update lesson threads lists
   setThreadQueriesData(
@@ -542,16 +588,34 @@ export function updateThreadLikeInCache(
       const nextThreads = old.threads.map((thread) => {
         if (!matchesThreadIdentity(thread, threadId)) return thread;
         const currentLiked = Boolean(thread.isLiked);
-        if (currentLiked === desiredLiked) return thread;
+        if (
+          currentLiked === desiredLiked &&
+          (!reaction || thread.userReaction === reaction)
+        )
+          return thread;
         hasChange = true;
+        const prevReaction =
+          thread.userReaction ?? (currentLiked ? "like" : null);
+        const nextReaction = desiredLiked
+          ? (reaction ?? thread.userReaction ?? "like")
+          : null;
+        const nextLikesCount = calculateNextLikesCount(
+          thread.likesCount ?? 0,
+          thread.isLiked,
+          desiredLiked,
+        );
+        const nextTop = reconcileTopReactions(
+          thread.topReactions,
+          prevReaction,
+          nextReaction,
+          nextLikesCount,
+        );
         return {
           ...thread,
           isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            thread.likesCount ?? 0,
-            thread.isLiked,
-            desiredLiked,
-          ),
+          userReaction: nextReaction,
+          topReactions: nextTop,
+          likesCount: nextLikesCount,
         };
       });
       return hasChange ? { ...old, threads: nextThreads } : old;
@@ -559,23 +623,43 @@ export function updateThreadLikeInCache(
   );
 
   // 2. Update single thread details query
-  queryClient.setQueryData<LearningThread>(
-    learningInteractionKeys.threadDetails(threadId),
-    (old) => {
-      if (!old) return old;
-      const currentLiked = Boolean(old.isLiked);
-      if (currentLiked === desiredLiked) return old;
-      return {
-        ...old,
-        isLiked: desiredLiked,
-        likesCount: calculateNextLikesCount(
+  const rawThreadId = normalizeEntityId(threadId);
+  for (const tid of new Set([threadId, rawThreadId])) {
+    queryClient.setQueryData<LearningThread>(
+      learningInteractionKeys.threadDetails(tid),
+      (old) => {
+        if (!old) return old;
+        const currentLiked = Boolean(old.isLiked);
+        if (
+          currentLiked === desiredLiked &&
+          (!reaction || old.userReaction === reaction)
+        )
+          return old;
+        const prevReaction = old.userReaction ?? (currentLiked ? "like" : null);
+        const nextReaction = desiredLiked
+          ? (reaction ?? old.userReaction ?? "like")
+          : null;
+        const nextLikesCount = calculateNextLikesCount(
           old.likesCount ?? 0,
           old.isLiked,
           desiredLiked,
-        ),
-      };
-    },
-  );
+        );
+        const nextTop = reconcileTopReactions(
+          old.topReactions,
+          prevReaction,
+          nextReaction,
+          nextLikesCount,
+        );
+        return {
+          ...old,
+          isLiked: desiredLiked,
+          userReaction: nextReaction,
+          topReactions: nextTop,
+          likesCount: nextLikesCount,
+        };
+      },
+    );
+  }
 
   // 3. Update hub threads list if present
   setThreadQueriesData(
@@ -587,19 +671,102 @@ export function updateThreadLikeInCache(
       const nextThreads = old.threads.map((thread) => {
         if (!matchesThreadIdentity(thread, threadId)) return thread;
         const currentLiked = Boolean(thread.isLiked);
-        if (currentLiked === desiredLiked) return thread;
+        if (
+          currentLiked === desiredLiked &&
+          (!reaction || thread.userReaction === reaction)
+        )
+          return thread;
         hasChange = true;
+        const prevReaction =
+          thread.userReaction ?? (currentLiked ? "like" : null);
+        const nextReaction = desiredLiked
+          ? (reaction ?? thread.userReaction ?? "like")
+          : null;
+        const nextLikesCount = calculateNextLikesCount(
+          thread.likesCount ?? 0,
+          thread.isLiked,
+          desiredLiked,
+        );
+        const nextTop = reconcileTopReactions(
+          thread.topReactions,
+          prevReaction,
+          nextReaction,
+          nextLikesCount,
+        );
         return {
           ...thread,
           isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            thread.likesCount ?? 0,
-            thread.isLiked,
-            desiredLiked,
-          ),
+          userReaction: nextReaction,
+          topReactions: nextTop,
+          likesCount: nextLikesCount,
         };
       });
       return hasChange ? { ...old, threads: nextThreads } : old;
+    },
+  );
+
+  // 4. Update unified lesson discussions feed
+  queryClient.setQueriesData<InfiniteData<LessonDiscussionsListResponse>>(
+    {
+      queryKey: lessonContext
+        ? learningInteractionKeys.lessonDiscussionsRoot(
+            lessonContext.courseId,
+            lessonContext.lessonId,
+          )
+        : learningInteractionKeys.lessonDiscussionsRoot(),
+    },
+    (old) => {
+      if (!old?.pages) return old;
+      let changed = false;
+      const pages = old.pages.map((page) => {
+        let pageChanged = false;
+        const items = page.items.map((item) => {
+          if (
+            item.sourceType !== "thread" ||
+            !matchesThreadIdentity(item.thread, threadId)
+          ) {
+            return item;
+          }
+          const thread = item.thread;
+          const currentLiked = Boolean(thread.isLiked);
+          if (
+            currentLiked === desiredLiked &&
+            (!reaction || thread.userReaction === reaction)
+          ) {
+            return item;
+          }
+          pageChanged = true;
+          const prevReaction =
+            thread.userReaction ?? (currentLiked ? "like" : null);
+          const nextReaction = desiredLiked
+            ? (reaction ?? thread.userReaction ?? "like")
+            : null;
+          const nextLikesCount = calculateNextLikesCount(
+            thread.likesCount ?? 0,
+            thread.isLiked,
+            desiredLiked,
+          );
+          const nextTop = reconcileTopReactions(
+            thread.topReactions,
+            prevReaction,
+            nextReaction,
+            nextLikesCount,
+          );
+          return {
+            ...item,
+            thread: {
+              ...thread,
+              isLiked: desiredLiked,
+              userReaction: nextReaction,
+              topReactions: nextTop,
+              likesCount: nextLikesCount,
+            },
+          };
+        });
+        changed ||= pageChanged;
+        return pageChanged ? { ...page, items } : page;
+      });
+      return changed ? { ...old, pages } : old;
     },
   );
 }
@@ -612,41 +779,71 @@ export function updateReplyLikeInCache(
   threadId: string,
   replyId: string,
   desiredLiked: boolean,
+  reaction?: DiscussionReactionType,
 ): void {
-  queryClient.setQueriesData<ReplyListCache>(
-    { queryKey: learningInteractionKeys.threadRepliesRoot(threadId) },
-    (old) => {
-      const updatePage = (page: LearningRepliesCacheResponse) => {
-        let hasChange = false;
-        const nextReplies = page.replies.map((reply) => {
-          if (
-            getClientEntityId(reply) !== replyId &&
-            getServerEntityId(reply) !== replyId
-          )
-            return reply;
-          const currentLiked = Boolean(reply.isLiked);
-          if (currentLiked === desiredLiked) return reply;
-          hasChange = true;
-          return {
-            ...reply,
-            isLiked: desiredLiked,
-            likesCount: calculateNextLikesCount(
+  const normReplyId = normalizeEntityId(replyId);
+  const rawThreadId = normalizeEntityId(threadId);
+  for (const tid of new Set([threadId, rawThreadId])) {
+    queryClient.setQueriesData<ReplyListCache>(
+      { queryKey: learningInteractionKeys.threadRepliesRoot(tid) },
+      (old) => {
+        const updatePage = (page: LearningRepliesCacheResponse) => {
+          let hasChange = false;
+          const nextReplies = page.replies.map((reply) => {
+            const cId = getClientEntityId(reply);
+            const sId = getServerEntityId(reply);
+            const rId = String(reply.id);
+            if (
+              cId !== replyId &&
+              sId !== replyId &&
+              rId !== replyId &&
+              normalizeEntityId(cId) !== normReplyId &&
+              normalizeEntityId(sId) !== normReplyId &&
+              normalizeEntityId(rId) !== normReplyId
+            )
+              return reply;
+            const currentLiked = Boolean(reply.isLiked);
+            if (
+              currentLiked === desiredLiked &&
+              (!reaction || reply.userReaction === reaction)
+            )
+              return reply;
+            hasChange = true;
+            const prevReaction =
+              reply.userReaction ?? (currentLiked ? "like" : null);
+            const nextReaction = desiredLiked
+              ? (reaction ?? reply.userReaction ?? "like")
+              : null;
+            const nextLikesCount = calculateNextLikesCount(
               reply.likesCount ?? 0,
               reply.isLiked,
               desiredLiked,
-            ),
-          };
-        });
-        return hasChange ? { ...page, replies: nextReplies } : page;
-      };
-      return isInfiniteCacheData<LearningRepliesCacheResponse>(old)
-        ? (mapPaginatedCache<LearningRepliesCacheResponse>(old, updatePage) ??
-            old)
-        : old
-          ? updatePage(old)
-          : old;
-    },
-  );
+            );
+            const nextTop = reconcileTopReactions(
+              reply.topReactions,
+              prevReaction,
+              nextReaction,
+              nextLikesCount,
+            );
+            return {
+              ...reply,
+              isLiked: desiredLiked,
+              userReaction: nextReaction,
+              topReactions: nextTop,
+              likesCount: nextLikesCount,
+            };
+          });
+          return hasChange ? { ...page, replies: nextReplies } : page;
+        };
+        return isInfiniteCacheData<LearningRepliesCacheResponse>(old)
+          ? (mapPaginatedCache<LearningRepliesCacheResponse>(old, updatePage) ??
+              old)
+          : old
+            ? updatePage(old)
+            : old;
+      },
+    );
+  }
 }
 
 /** Puts the creator's heart on a reply (or takes it off) in its thread's cache. */
@@ -690,7 +887,12 @@ export function updateNoteLikeInCache(
   noteId: string,
   desiredLiked: boolean,
   serverId?: string,
+  reaction?: DiscussionReactionType,
+  lessonContext?: { courseId: string; lessonId: string },
 ): void {
+  const normNoteId = normalizeEntityId(noteId);
+  const normServerId = normalizeEntityId(serverId);
+
   // 1. Update notes list queries
   setNoteQueriesData(
     queryClient,
@@ -699,24 +901,53 @@ export function updateNoteLikeInCache(
       if (!old?.notes) return old;
       let hasChange = false;
       const nextNotes = old.notes.map((note) => {
-        if (
-          note.id !== noteId &&
-          getClientEntityId(note) !== noteId &&
-          getServerEntityId(note) !== noteId
-        ) {
+        const nId = normalizeEntityId(note.id);
+        const cId = normalizeEntityId(getClientEntityId(note));
+        const sId = normalizeEntityId(getServerEntityId(note));
+        const isMatch =
+          note.id === noteId ||
+          nId === normNoteId ||
+          getClientEntityId(note) === noteId ||
+          cId === normNoteId ||
+          getServerEntityId(note) === noteId ||
+          sId === normNoteId ||
+          (normServerId &&
+            (nId === normServerId ||
+              cId === normServerId ||
+              sId === normServerId));
+        if (!isMatch) {
           return note;
         }
         const currentLiked = Boolean(note.isLiked);
-        if (currentLiked === desiredLiked) return note;
+        if (
+          currentLiked === desiredLiked &&
+          (!reaction || note.userReaction === reaction)
+        ) {
+          return note;
+        }
         hasChange = true;
+        const prevReaction =
+          note.userReaction ?? (currentLiked ? "like" : null);
+        const nextReaction = desiredLiked
+          ? (reaction ?? note.userReaction ?? "like")
+          : null;
+        const nextLikesCount = calculateNextLikesCount(
+          note.likesCount ?? 0,
+          note.isLiked,
+          desiredLiked,
+        );
+        const nextTop = reconcileTopReactions(
+          note.topReactions,
+          prevReaction,
+          nextReaction,
+          nextLikesCount,
+        );
         return {
           ...note,
           isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            note.likesCount ?? 0,
-            note.isLiked,
-            desiredLiked,
-          ),
+          userReaction: nextReaction,
+          topReactions: nextTop,
+          likesCount: nextLikesCount,
         };
       });
       return hasChange ? { ...old, notes: nextNotes } : old;
@@ -724,35 +955,137 @@ export function updateNoteLikeInCache(
   );
 
   // 2. Update note details query if cached
-  for (const detailId of new Set([noteId, serverId].filter(Boolean))) {
+  for (const detailId of new Set(
+    [noteId, serverId, normNoteId, normServerId].filter(Boolean),
+  )) {
     queryClient.setQueryData(
       learningInteractionKeys.noteDetails(detailId!),
       (old: LearningNoteCacheItem | undefined) => {
         if (!old) return old;
-        if (
-          old.id !== noteId &&
-          old.id !== serverId &&
-          getClientEntityId(old) !== noteId &&
-          getClientEntityId(old) !== serverId &&
-          getServerEntityId(old) !== noteId &&
-          getServerEntityId(old) !== serverId
-        ) {
+        const nId = normalizeEntityId(old.id);
+        const cId = normalizeEntityId(getClientEntityId(old));
+        const sId = normalizeEntityId(getServerEntityId(old));
+        const isMatch =
+          old.id === noteId ||
+          nId === normNoteId ||
+          getClientEntityId(old) === noteId ||
+          cId === normNoteId ||
+          getServerEntityId(old) === noteId ||
+          sId === normNoteId ||
+          (normServerId &&
+            (nId === normServerId ||
+              cId === normServerId ||
+              sId === normServerId));
+        if (!isMatch) {
           return old;
         }
         const currentLiked = Boolean(old.isLiked);
-        if (currentLiked === desiredLiked) return old;
+        if (
+          currentLiked === desiredLiked &&
+          (!reaction || old.userReaction === reaction)
+        ) {
+          return old;
+        }
+        const prevReaction = old.userReaction ?? (currentLiked ? "like" : null);
+        const nextReaction = desiredLiked
+          ? (reaction ?? old.userReaction ?? "like")
+          : null;
+        const nextLikesCount = calculateNextLikesCount(
+          old.likesCount ?? 0,
+          old.isLiked,
+          desiredLiked,
+        );
+        const nextTop = reconcileTopReactions(
+          old.topReactions,
+          prevReaction,
+          nextReaction,
+          nextLikesCount,
+        );
         return {
           ...old,
           isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            old.likesCount ?? 0,
-            old.isLiked,
-            desiredLiked,
-          ),
+          userReaction: nextReaction,
+          topReactions: nextTop,
+          likesCount: nextLikesCount,
         };
       },
     );
   }
+
+  // 3. Update unified lesson discussions feed
+  queryClient.setQueriesData<InfiniteData<LessonDiscussionsListResponse>>(
+    {
+      queryKey: lessonContext
+        ? learningInteractionKeys.lessonDiscussionsRoot(
+            lessonContext.courseId,
+            lessonContext.lessonId,
+          )
+        : learningInteractionKeys.lessonDiscussionsRoot(),
+    },
+    (old) => {
+      if (!old?.pages) return old;
+      let changed = false;
+      const pages = old.pages.map((page) => {
+        let pageChanged = false;
+        const items = page.items.map((item) => {
+          if (item.sourceType !== "note") return item;
+          const note = item.note;
+          const nId = normalizeEntityId(note.id);
+          const cId = normalizeEntityId(getClientEntityId(note));
+          const sId = normalizeEntityId(getServerEntityId(note));
+          const isMatch =
+            note.id === noteId ||
+            nId === normNoteId ||
+            getClientEntityId(note) === noteId ||
+            cId === normNoteId ||
+            getServerEntityId(note) === noteId ||
+            sId === normNoteId ||
+            (normServerId &&
+              (nId === normServerId ||
+                cId === normServerId ||
+                sId === normServerId));
+          if (!isMatch) return item;
+          const currentLiked = Boolean(note.isLiked);
+          if (
+            currentLiked === desiredLiked &&
+            (!reaction || note.userReaction === reaction)
+          ) {
+            return item;
+          }
+          pageChanged = true;
+          const prevReaction =
+            note.userReaction ?? (currentLiked ? "like" : null);
+          const nextReaction = desiredLiked
+            ? (reaction ?? note.userReaction ?? "like")
+            : null;
+          const nextLikesCount = calculateNextLikesCount(
+            note.likesCount ?? 0,
+            note.isLiked,
+            desiredLiked,
+          );
+          const nextTop = reconcileTopReactions(
+            note.topReactions,
+            prevReaction,
+            nextReaction,
+            nextLikesCount,
+          );
+          return {
+            ...item,
+            note: {
+              ...note,
+              isLiked: desiredLiked,
+              userReaction: nextReaction,
+              topReactions: nextTop,
+              likesCount: nextLikesCount,
+            },
+          };
+        });
+        changed ||= pageChanged;
+        return pageChanged ? { ...page, items } : page;
+      });
+      return changed ? { ...old, pages } : old;
+    },
+  );
 }
 
 /**

@@ -52,6 +52,8 @@ export function adaptLearningNoteToComment(
     visibility: note.visibility || "private",
     likes: note.likesCount ?? 0,
     liked: Boolean(note.isLiked),
+    userReaction: note.userReaction ?? (note.isLiked ? "like" : null),
+    topReactions: note.topReactions ?? (note.likesCount ? ["like"] : []),
     isBookmarked: Boolean(note.isBookmarked),
     replies: note.repliesCount ?? 0,
     entryKind: "note",

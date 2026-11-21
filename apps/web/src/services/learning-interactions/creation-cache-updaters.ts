@@ -667,6 +667,10 @@ export function reconcileOptimisticReplyInCaches(
         const existing = replies[existingIndex]!;
         replies[existingIndex] = {
           ...confirmedReply,
+          isLiked: existing.isLiked ?? confirmedReply.isLiked,
+          userReaction: existing.userReaction ?? confirmedReply.userReaction,
+          topReactions: existing.topReactions ?? confirmedReply.topReactions,
+          likesCount: existing.likesCount ?? confirmedReply.likesCount,
           localSequence:
             "localSequence" in existing
               ? existing.localSequence
@@ -933,6 +937,24 @@ export function reconcileOptimisticThreadInLessonCaches(
       );
       if (!hasPending && !hasConfirmed) return old;
 
+      const existingPending = old.threads.find((thread) =>
+        isPendingThreadForClient(thread, clientId),
+      );
+      const threadToInsert = {
+        ...confirmedThread,
+        ...(existingPending
+          ? {
+              isLiked: existingPending.isLiked ?? confirmedThread.isLiked,
+              userReaction:
+                existingPending.userReaction ?? confirmedThread.userReaction,
+              topReactions:
+                existingPending.topReactions ?? confirmedThread.topReactions,
+              likesCount:
+                existingPending.likesCount ?? confirmedThread.likesCount,
+            }
+          : {}),
+      };
+
       const withoutPending = old.threads.filter(
         (thread) => !isPendingThreadForClient(thread, clientId),
       );
@@ -941,7 +963,7 @@ export function reconcileOptimisticThreadInLessonCaches(
           ...old,
           threads: withoutPending.map((thread) =>
             hasServerThread(thread, serverThread.id)
-              ? confirmedThread
+              ? threadToInsert
               : asThreadEntity(thread),
           ),
         };
@@ -951,7 +973,7 @@ export function reconcileOptimisticThreadInLessonCaches(
         isPendingThreadForClient(thread, clientId),
       );
       const nextThreads = withoutPending.map(asThreadEntity);
-      nextThreads.splice(Math.max(0, pendingIndex), 0, confirmedThread);
+      nextThreads.splice(Math.max(0, pendingIndex), 0, threadToInsert);
       return { ...old, threads: nextThreads };
     },
   );

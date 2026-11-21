@@ -1,15 +1,35 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
+  DiscussionReactionType,
   EngagementTargetType,
+  ReactionAuthor,
   UserAutocompleteItem,
 } from "@veolms/contracts";
 import { sql } from "kysely";
 import { escapeLikePattern } from "../../../../lib/like-pattern.ts";
 import { isCourseParticipant } from "../shared/discussion.mentions.ts";
 import { fuzzyMatchesAny } from "../../../../lib/fuzzy-search.ts";
+import {
+  authorRoleSql,
+  mapAuthorRole,
+  type DiscussionListCursor,
+  encodeDiscussionCursor,
+} from "../shared/discussion.utils.ts";
+import { toIsoString } from "../shared/discussion.presenters.ts";
 
 export interface EngagementExistenceRow {
   id: string;
+}
+
+export interface EngagementLikeRow {
+  id: string;
+  reaction_type?: DiscussionReactionType;
+}
+
+export interface SetReactionResult {
+  liked: boolean;
+  reaction: DiscussionReactionType | null;
+  changedCount: number;
 }
 
 export interface EngagementsRepository {
@@ -18,7 +38,29 @@ export interface EngagementsRepository {
     userId: string,
     targetType: EngagementTargetType,
     targetId: string,
-  ): Promise<EngagementExistenceRow | undefined>;
+  ): Promise<EngagementLikeRow | undefined>;
+
+  setReaction(
+    db: DatabaseExecutor,
+    userId: string,
+    targetType: EngagementTargetType,
+    targetId: string,
+    reaction?: DiscussionReactionType | null,
+    desiredLiked?: boolean,
+  ): Promise<SetReactionResult>;
+
+  listReactions(
+    db: DatabaseExecutor,
+    targetType: EngagementTargetType,
+    targetId: string,
+    filterReaction?: DiscussionReactionType,
+    limit?: number,
+    pageCursor?: DiscussionListCursor,
+  ): Promise<{
+    users: ReactionAuthor[];
+    counts: Record<string, number>;
+    nextCursor?: string | null;
+  }>;
 
   addLike(
     db: DatabaseExecutor,
@@ -102,13 +144,213 @@ export interface EngagementsRepository {
 export function createEngagementsRepository(): EngagementsRepository {
   return {
     async findLike(db, userId, targetType, targetId) {
-      return db
+      const row = await db
         .selectFrom("learning_likes")
-        .select("id")
+        .select([
+          "id",
+          sql<DiscussionReactionType>`coalesce(reaction_type, 'like')`.as(
+            "reaction_type",
+          ),
+        ])
         .where("user_id", "=", userId)
         .where("target_type", "=", targetType)
         .where("target_id", "=", targetId)
         .executeTakeFirst();
+      return row ? { id: row.id, reaction_type: row.reaction_type } : undefined;
+    },
+
+    async setReaction(
+      db,
+      userId,
+      targetType,
+      targetId,
+      reaction,
+      desiredLiked,
+    ) {
+      // 1. Explicit removal requested
+      if (reaction === null || desiredLiked === false) {
+        const deleteResult = await db
+          .deleteFrom("learning_likes")
+          .where("user_id", "=", userId)
+          .where("target_type", "=", targetType)
+          .where("target_id", "=", targetId)
+          .executeTakeFirst();
+        const numDeleted = Number(deleteResult.numDeletedRows ?? 0n);
+        return {
+          liked: false,
+          reaction: null,
+          changedCount: numDeleted > 0 ? -1 : 0,
+        };
+      }
+
+      // 2. Reaction specified or desiredLiked explicitly true
+      if (reaction !== undefined || desiredLiked === true) {
+        const chosenReaction = reaction ?? "like";
+        // Use UPSERT (onConflict) to avoid race conditions
+        const row = await db
+          .insertInto("learning_likes")
+          .values({
+            id: sql`gen_random_uuid()`,
+            user_id: userId,
+            target_type: targetType,
+            target_id: targetId,
+            reaction_type: chosenReaction,
+          })
+          .onConflict((oc) =>
+            oc.columns(["user_id", "target_type", "target_id"]).doUpdateSet({
+              reaction_type: chosenReaction,
+            }),
+          )
+          .returning([
+            "id",
+            "reaction_type",
+            sql<boolean>`(xmax = 0)`.as("is_insert"),
+          ])
+          .executeTakeFirstOrThrow();
+
+        const isInsert = Boolean(row.is_insert);
+        return {
+          liked: true,
+          reaction:
+            (row.reaction_type as DiscussionReactionType) ?? chosenReaction,
+          changedCount: isInsert ? 1 : 0,
+        };
+      }
+
+      // 3. Legacy toggle fallback (neither reaction nor desiredLiked specified)
+      const existing = await db
+        .selectFrom("learning_likes")
+        .select(["id", "reaction_type"])
+        .where("user_id", "=", userId)
+        .where("target_type", "=", targetType)
+        .where("target_id", "=", targetId)
+        .executeTakeFirst();
+
+      if (existing) {
+        const deleteResult = await db
+          .deleteFrom("learning_likes")
+          .where("id", "=", existing.id)
+          .executeTakeFirst();
+        const numDeleted = Number(deleteResult.numDeletedRows ?? 0n);
+        return {
+          liked: false,
+          reaction: null,
+          changedCount: numDeleted > 0 ? -1 : 0,
+        };
+      }
+
+      await db
+        .insertInto("learning_likes")
+        .values({
+          id: sql`gen_random_uuid()`,
+          user_id: userId,
+          target_type: targetType,
+          target_id: targetId,
+          reaction_type: "like",
+        })
+        .onConflict((oc) =>
+          oc.columns(["user_id", "target_type", "target_id"]).doUpdateSet({
+            reaction_type: "like",
+          }),
+        )
+        .execute();
+      return {
+        liked: true,
+        reaction: "like",
+        changedCount: 1,
+      };
+    },
+
+    async listReactions(
+      db,
+      targetType,
+      targetId,
+      filterReaction,
+      limit = 50,
+      pageCursor,
+    ) {
+      const countRows = await db
+        .selectFrom("learning_likes")
+        .select([
+          sql<string>`coalesce(reaction_type, 'like')`.as("reaction_type"),
+          sql<number>`count(*)::int`.as("count"),
+        ])
+        .where("target_type", "=", targetType)
+        .where("target_id", "=", targetId)
+        .groupBy(sql`coalesce(reaction_type, 'like')`)
+        .execute();
+
+      const counts: Record<string, number> & { all: number } = { all: 0 };
+      for (const row of countRows) {
+        const c = Number(row.count);
+        counts[row.reaction_type] = c;
+        counts.all += c;
+      }
+
+      let query = db
+        .selectFrom("learning_likes as l")
+        .innerJoin("users as u", "u.id", "l.user_id")
+        .select([
+          "l.id as likeId",
+          "u.id",
+          "u.display_name as displayName",
+          "u.username",
+          "u.avatar_data_url as avatarUrl",
+          authorRoleSql("u.id"),
+          sql<DiscussionReactionType>`coalesce(l.reaction_type, 'like')`.as(
+            "reaction",
+          ),
+          "l.created_at as createdAt",
+        ])
+        .where("l.target_type", "=", targetType)
+        .where("l.target_id", "=", targetId)
+        .where("u.is_deleted", "=", false);
+
+      if (filterReaction) {
+        query = query.where(
+          sql`coalesce(l.reaction_type, 'like')`,
+          "=",
+          filterReaction,
+        );
+      }
+
+      if (pageCursor) {
+        query = query.where(
+          sql`(l.created_at, l.id)`,
+          "<",
+          sql`(${pageCursor.createdAt}, ${pageCursor.id})`,
+        );
+      }
+
+      const rows = await query
+        .orderBy("l.created_at", "desc")
+        .orderBy("l.id", "desc")
+        .limit(limit + 1)
+        .execute();
+
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && page.length > 0) {
+        const last = page[page.length - 1]!;
+        nextCursor = encodeDiscussionCursor({
+          id: last.likeId,
+          createdAt: new Date(last.createdAt),
+        });
+      }
+
+      const users: ReactionAuthor[] = page.map((r) => ({
+        id: r.id,
+        displayName: r.displayName || "Learner",
+        username: r.username,
+        avatarUrl: r.avatarUrl,
+        role: mapAuthorRole(r.authorRole),
+        reaction: r.reaction,
+        createdAt: toIsoString(r.createdAt),
+      }));
+
+      return { users, counts, nextCursor };
     },
 
     async addLike(db, userId, targetType, targetId) {
