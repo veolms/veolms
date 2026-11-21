@@ -1,14 +1,12 @@
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
-import { XIcon as X } from "@phosphor-icons/react/X";
 import type { ChatAttachment } from "@veolms/contracts";
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 
 import { HighlightedCodeBlock } from "../components/code/HighlightedCodeBlock";
-import { useBackDismiss } from "../navigation/useBackDismiss";
 import { chatService } from "../services/chat";
 import { formatBytes } from "./chatFormat";
+import { PdfPages } from "./PdfPages";
 
 /** Read as text in the preview: at most this much (bigger: download). */
 const TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
@@ -56,33 +54,14 @@ function csvCells(line: string): string[] {
 }
 
 /**
- * A document full screen, as WhatsApp and Telegram open one: PDFs in the
- * browser's own viewer, text, Markdown and JSON as text, CSV as a table;
- * anything else says so and offers the download. Esc or Back closes it.
+ * A document inside the media viewer, as WhatsApp opens one: a PDF's pages
+ * drawn one under another (PdfPages), text, Markdown and JSON as coloured
+ * text, CSV as a table; anything else says so and offers the download.
  */
-export function FilePreview({
-  attachment,
-  onClose,
-}: {
-  attachment: ChatAttachment;
-  onClose: () => void;
-}) {
-  useBackDismiss({ open: true, onDismiss: onClose });
+export function DocumentView({ attachment }: { attachment: ChatAttachment }) {
   const kind = previewKind(attachment);
   const [text, setText] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    // Esc closes the file, not the chat behind it.
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
 
   // Text is read through a short-lived link (no cookies to the store).
   useEffect(() => {
@@ -97,8 +76,8 @@ export function FilePreview({
     return () => controller.abort();
   }, [attachment, kind]);
 
-  const control =
-    "inline-flex size-11 cursor-pointer items-center justify-center rounded-full border-0 bg-white/10 text-white hover:bg-white/20";
+  if (kind === "pdf") return <PdfPages attachment={attachment} />;
+
   const rows =
     kind === "csv" && text !== null
       ? text
@@ -108,106 +87,83 @@ export function FilePreview({
           .map(csvCells)
       : null;
 
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={attachment.name}
-      className="fixed inset-0 z-300 flex flex-col bg-black/92"
-    >
-      <div className="flex items-center gap-3 px-4 py-3 text-white">
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold">
-            {attachment.name}
-          </span>
-          <span className="block text-[0.75rem] text-white/60">
-            {formatBytes(attachment.size)}
-          </span>
-        </span>
-        <a
-          href={chatService.fileUrl(attachment, true)}
-          className={control}
-          aria-label="Download"
-          download={attachment.name}
-        >
-          <DownloadSimple size={20} />
-        </a>
-        <button
-          type="button"
-          className={control}
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <X size={20} />
-        </button>
-      </div>
-      <div className="flex min-h-0 flex-1 justify-center px-2 pb-2 sm:px-6 sm:pb-6">
-        {kind === "pdf" ? (
-          <iframe
-            title={attachment.name}
-            src={chatService.fileUrl(attachment)}
-            className="size-full max-w-5xl rounded-lg border-0 bg-white"
+  return (
+    <div className="flex size-full justify-center px-2 pb-2 sm:px-16 sm:pb-6">
+      {kind === null || failed ? (
+        <NoPreview attachment={attachment} failed={failed} />
+      ) : text === null ? (
+        <div className="mt-10 h-1 w-40 animate-pulse rounded bg-white/30" />
+      ) : rows ? (
+        <div className="size-full max-w-5xl overflow-auto rounded-lg bg-white text-[0.82rem] text-slate-900">
+          <table className="w-full border-collapse">
+            <tbody>
+              {rows.map((cells, r) => (
+                <tr
+                  key={r}
+                  className={
+                    r === 0 ? "sticky top-0 bg-slate-100 font-semibold" : ""
+                  }
+                >
+                  {cells.map((cell, c) => (
+                    <td
+                      key={c}
+                      className="border border-solid border-slate-200 px-2 py-1 whitespace-nowrap"
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        // Coloured like code in comments and messages: by the file's
+        // type or name, else by what the text looks like.
+        <div className="size-full max-w-5xl overflow-auto rounded-xl">
+          <HighlightedCodeBlock
+            className="my-0 min-h-full"
+            language={fileLanguage(attachment)}
+            code={
+              attachment.mimeType === "application/json"
+                ? prettyJson(text)
+                : text
+            }
           />
-        ) : kind === null || failed ? (
-          <div className="flex max-w-sm flex-col items-center justify-center gap-3 text-center text-white">
-            <FileText size={56} weight="duotone" aria-hidden="true" />
-            <p className="m-0 text-[0.95rem]">
-              {failed
-                ? "This file couldn’t be opened here."
-                : "No preview for this kind of file."}
-            </p>
-            <a
-              href={chatService.fileUrl(attachment, true)}
-              download={attachment.name}
-              className="rounded-full bg-white px-5 py-2.5 text-[0.88rem] font-semibold text-black no-underline"
-            >
-              Download
-            </a>
-          </div>
-        ) : text === null ? (
-          <div className="mt-10 h-1 w-40 animate-pulse rounded bg-white/30" />
-        ) : rows ? (
-          <div className="size-full max-w-5xl overflow-auto rounded-lg bg-white text-[0.82rem] text-slate-900">
-            <table className="w-full border-collapse">
-              <tbody>
-                {rows.map((cells, r) => (
-                  <tr
-                    key={r}
-                    className={
-                      r === 0 ? "sticky top-0 bg-slate-100 font-semibold" : ""
-                    }
-                  >
-                    {cells.map((cell, c) => (
-                      <td
-                        key={c}
-                        className="border border-solid border-slate-200 px-2 py-1 whitespace-nowrap"
-                      >
-                        {cell}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          // Coloured like code in comments and messages: by the file's
-          // type or name, else by what the text looks like.
-          <div className="size-full max-w-5xl overflow-auto rounded-xl">
-            <HighlightedCodeBlock
-              className="my-0 min-h-full"
-              language={fileLanguage(attachment)}
-              code={
-                attachment.mimeType === "application/json"
-                  ? prettyJson(text)
-                  : text
-              }
-            />
-          </div>
-        )}
-      </div>
-    </div>,
-    document.body,
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A file this viewer can't show: its type, size and the download. */
+export function NoPreview({
+  attachment,
+  failed = false,
+}: {
+  attachment: ChatAttachment;
+  failed?: boolean;
+}) {
+  return (
+    <div className="flex size-full max-w-sm flex-col items-center justify-center gap-3 self-center text-center text-white">
+      <FileText size={56} weight="duotone" aria-hidden="true" />
+      <p className="m-0 text-[0.95rem] font-semibold break-all">
+        {attachment.name}
+      </p>
+      <p className="m-0 text-[0.85rem] text-white/70">
+        {failed
+          ? "This file couldn’t be opened here."
+          : `No preview for this kind of file · ${formatBytes(attachment.size)}`}
+      </p>
+      <a
+        href={chatService.fileUrl(attachment, true)}
+        download={attachment.name}
+        className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[0.88rem] font-semibold text-black no-underline"
+      >
+        <DownloadSimple size={18} aria-hidden="true" />
+        Download
+      </a>
+    </div>
   );
 }
 

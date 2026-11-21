@@ -11,7 +11,7 @@ const WIDTH_PX = 576;
 
 let pdfjsReady: Promise<typeof import("pdfjs-dist")> | null = null;
 /** pdf.js and its worker, loaded with the first PDF a chat shows. */
-function loadPdfJs() {
+export function loadPdfJs() {
   pdfjsReady ??= Promise.all([
     import("pdfjs-dist"),
     import("pdfjs-dist/build/pdf.worker.min.mjs?url"),

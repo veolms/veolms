@@ -47,6 +47,8 @@ import {
   useUpdateMyChatState,
   isRoomMuted,
 } from "../services/chat";
+import type { ChatThread } from "../services/chat/chat.cache";
+import { chatKeys } from "../services/chat/chat.keys";
 import { ChatAvatar } from "./ChatAvatar";
 import { copyImage } from "./copyImage";
 import { roomAvatarUrl } from "./chatIcon";
@@ -123,12 +125,15 @@ export function Conversation({
   );
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
+  // The open file, by its address: the chat's files can grow in front of
+  // it (earlier messages loaded) without moving the viewer off it.
+  // `items` is for a file not among the chat's (one still sending).
   const [viewer, setViewer] = useState<{
+    url: string;
     items: ViewableMedia[];
-    index: number;
   } | null>(null);
-  // Every photo and video of the loaded messages, oldest first: what the
-  // viewer moves through and shows along its foot.
+  // Every photo, video and document of the loaded messages, oldest first:
+  // what the viewer moves through and shows along its foot.
   const chatMedia = useMemo(
     () =>
       (thread.data?.messages ?? []).flatMap((message) =>
@@ -139,11 +144,51 @@ export function Conversation({
                 message.sender?.id === viewerId
                   ? "You"
                   : (message.sender?.name ?? undefined),
+              senderAvatarUrl: message.sender?.avatarUrl ?? null,
+              senderAvatarName: message.sender?.name ?? undefined,
               sentAt: message.createdAt,
             }),
       ),
     [thread.data?.messages, viewerId],
   );
+  const viewerItems = viewer
+    ? chatMedia.some((media) => media.url === viewer.url)
+      ? chatMedia
+      : viewer.items
+    : [];
+  const viewerIndex = viewer
+    ? Math.max(
+        0,
+        viewerItems.findIndex((media) => media.url === viewer.url),
+      )
+    : 0;
+  // The viewer's strip reached the first loaded file: older messages are
+  // loaded until one brings a file (or the chat's start is reached).
+  const loadingEarlierMedia = useRef(false);
+  const loadEarlierMedia = useCallback(async () => {
+    if (loadingEarlierMedia.current) return;
+    loadingEarlierMedia.current = true;
+    const key = chatKeys.messages(room.id);
+    const files = () =>
+      (client.getQueryData<ChatThread>(key)?.messages ?? []).reduce(
+        (count, message) =>
+          count +
+          (message.deleted
+            ? 0
+            : message.attachments.filter((a) => a.kind !== "audio").length),
+        0,
+      );
+    const before = files();
+    try {
+      for (let page = 0; page < 20; page += 1) {
+        if (!client.getQueryData<ChatThread>(key)?.hasMoreBefore) break;
+        await thread.loadOlder();
+        if (files() > before) break;
+      }
+    } finally {
+      loadingEarlierMedia.current = false;
+    }
+  }, [client, room.id, thread]);
   const [focus, setFocus] = useState<MessageFocus | null>(null);
   /** Messages ticked for Forward (WhatsApp's Select); null when not choosing. */
   const [selected, setSelected] = useState<ReadonlySet<number> | null>(null);
@@ -777,15 +822,10 @@ export function Conversation({
             onLoadOlder={() => void thread.loadOlder()}
             onAction={onAction}
             onOpenMedia={(items, index) => {
-              // As WhatsApp does: every photo and video of the chat (those
-              // loaded), in order, opened at the one tapped.
+              // As WhatsApp does: every file of the chat (those loaded),
+              // in order, opened at the one tapped.
               const opened = items[index];
-              const at = opened
-                ? chatMedia.findIndex((media) => media.url === opened.url)
-                : -1;
-              setViewer(
-                at >= 0 ? { items: chatMedia, index: at } : { items, index },
-              );
+              if (opened) setViewer({ url: opened.url, items });
             }}
             onJumpTo={(seq, from) => void jumpTo(seq, from)}
             onAtBottom={onAtBottom}
@@ -1002,10 +1042,18 @@ export function Conversation({
       ) : null}
       {viewer ? (
         <MediaViewer
-          items={viewer.items}
-          index={viewer.index}
-          onIndex={(index) => setViewer((v) => (v ? { ...v, index } : v))}
+          items={viewerItems}
+          index={viewerIndex}
+          onIndex={(index) => {
+            const next = viewerItems[index];
+            if (next) setViewer((v) => (v ? { ...v, url: next.url } : v));
+          }}
           onClose={() => setViewer(null)}
+          onNearStart={
+            thread.data?.hasMoreBefore
+              ? () => void loadEarlierMedia()
+              : undefined
+          }
         />
       ) : null}
     </section>
