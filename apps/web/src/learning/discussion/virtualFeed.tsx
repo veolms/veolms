@@ -116,6 +116,23 @@ function useDiscussionRangeExtractor(
   );
 }
 
+/**
+ * The rows' ref, the same function from one render to the next. A new one
+ * each render (an inline arrow) made React detach and attach it again on
+ * every row of every render, and each attach had the virtualizer measure
+ * that row there and then: a style and layout pass of the whole lesson page
+ * per row, a second and a half at a time on a slow computer when a lesson
+ * was opened (2026-11-15).
+ */
+function useMeasureElement(virtualizer: {
+  measureElement: (element: HTMLDivElement | null) => void;
+}) {
+  return useCallback(
+    (element: HTMLDivElement | null) => virtualizer.measureElement(element),
+    [virtualizer],
+  );
+}
+
 function DiscussionVirtualFeedRows({
   feedRef,
   entries,
@@ -198,16 +215,14 @@ function DiscussionViewportVirtualFeed({
     scrollMargin: phoneScrollMargin,
   });
   keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
+  const measureElement = useMeasureElement(virtualizer);
 
   return (
     <>
       <DiscussionVirtualFeedRows
         {...props}
         feedRef={feedRef}
-        virtualizer={{
-          ...virtualizer,
-          measureElement: (element) => virtualizer.measureElement(element),
-        }}
+        virtualizer={{ ...virtualizer, measureElement }}
         scrollMargin={phoneScrollMargin}
       />
     </>
@@ -349,6 +364,36 @@ function useDiscussionVirtualFeedScrollMargin(
   return scrollMargin;
 }
 
+/**
+ * A layout change (the comment box opening or closing, a filter, the
+ * lesson description loading) drops every remembered comment height. The
+ * comments on screen are then measured again here, before paint: their
+ * ref is the same function from render to render (see useMeasureElement),
+ * so nothing else measures them, and they kept the 240 px guess. A long
+ * comment (code, a long note) is taller than that, and the ones below it
+ * were drawn over it each time anyone posted (21 Nov 2026).
+ */
+function useRemeasureOnLayoutChange(
+  virtualizer: {
+    measure: () => void;
+    getTotalSize: () => number;
+    measureElement: (element: HTMLDivElement | null) => void;
+  },
+  feedRef: React.RefObject<HTMLDivElement | null>,
+  layoutKey: string | undefined,
+) {
+  useLayoutEffect(() => {
+    virtualizer.measure();
+    // Rebuilt from the guesses first: measured against the old layout, a
+    // row the same height as before counted as "no change" and kept the
+    // guess.
+    virtualizer.getTotalSize();
+    feedRef.current
+      ?.querySelectorAll<HTMLDivElement>(":scope > [data-index]")
+      .forEach((row) => virtualizer.measureElement(row));
+  }, [feedRef, layoutKey, virtualizer]);
+}
+
 function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
   const feedRef = useRef<HTMLDivElement>(null);
   const marginMeasuredRef = useRef(false);
@@ -376,20 +421,16 @@ function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
     scrollMargin,
   });
   keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
+  const measureElement = useMeasureElement(virtualizer);
 
-  useEffect(() => {
-    virtualizer.measure();
-  }, [props.layoutKey, virtualizer]);
+  useRemeasureOnLayoutChange(virtualizer, feedRef, props.layoutKey);
 
   return (
     <DiscussionVirtualFeedRows
       {...props}
       feedRef={feedRef}
       scrollMargin={scrollMargin}
-      virtualizer={{
-        ...virtualizer,
-        measureElement: (element) => virtualizer.measureElement(element),
-      }}
+      virtualizer={{ ...virtualizer, measureElement }}
     />
   );
 }
@@ -422,20 +463,16 @@ function DiscussionScrollportVirtualFeed(props: DiscussionVirtualFeedProps) {
     scrollMargin,
   });
   keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
+  const measureElement = useMeasureElement(virtualizer);
 
-  useEffect(() => {
-    virtualizer.measure();
-  }, [props.layoutKey, virtualizer]);
+  useRemeasureOnLayoutChange(virtualizer, feedRef, props.layoutKey);
 
   return (
     <DiscussionVirtualFeedRows
       {...props}
       feedRef={feedRef}
       scrollMargin={scrollMargin}
-      virtualizer={{
-        ...virtualizer,
-        measureElement: (element) => virtualizer.measureElement(element),
-      }}
+      virtualizer={{ ...virtualizer, measureElement }}
     />
   );
 }

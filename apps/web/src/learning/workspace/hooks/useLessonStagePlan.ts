@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "../../loadFailureMessage";
 import {
   useCallback,
   useEffect,
@@ -38,6 +39,7 @@ import type { CourseLesson } from "@veolms/contracts";
 import type { OctopusKind } from "../../../components/OctopusIllustration";
 import { reportPlaybackIncident } from "../../player/playbackIncidents";
 import { coursesService } from "../../../services/courses/courses.service";
+import { isPlaceholderLesson } from "../../staticLessonPage";
 
 /**
  * Bootstrap failures that are not a fault: the learner must sign in or get
@@ -292,8 +294,7 @@ export function useLessonStagePlan({
               kind: "retry",
               illustration: "went-wrong",
               title: "Something went wrong",
-              message:
-                "We couldn't load this course. Check your connection and try again.",
+              message: `We couldn't load this course. ${loadFailureMessage()}`,
               actionLabel: "Try again",
               onAction: retryCourseOverview,
             }
@@ -333,7 +334,7 @@ export function useLessonStagePlan({
       return {
         kind: "retry",
         title: "Couldn't load this audio",
-        message: "Check your connection and try again.",
+        message: loadFailureMessage(audioLink.failure.status),
         actionLabel: "Try again",
         onAction: audioLink.retry,
       };
@@ -387,8 +388,12 @@ export function useLessonStagePlan({
     }
 
     // The same statement as when the course itself says the lesson has no
-    // video: it is asked for only while the course is still loading.
+    // video: it is asked for only while the course is still loading. Until
+    // the course says what the lesson is, the loader stays: a reading lesson
+    // has no video either, and showed "No video" for the seconds its course
+    // took to arrive (production, 20 Nov), or for good when it never did.
     if (playbackBootstrapError.code === "MEDIA_NOT_FOUND") {
+      if (!stageLesson || isPlaceholderLesson(stageLesson)) return null;
       return noVideoNoticeFor(stageLesson, courseOverview?.course.id);
     }
 
@@ -418,9 +423,13 @@ export function useLessonStagePlan({
   // limit is for a video request.
   const lessonTextPending =
     !courseUnavailable &&
-    !requestsLessonPlayback &&
-    !requestsLessonAudio &&
-    lessonDescriptionState === "loading";
+    ((!requestsLessonPlayback &&
+      !requestsLessonAudio &&
+      lessonDescriptionState === "loading") ||
+      // Told the lesson has no video before the course said what it is
+      // (see the MEDIA_NOT_FOUND answer above).
+      ((!stageLesson || isPlaceholderLesson(stageLesson)) &&
+        playbackBootstrapError?.code === "MEDIA_NOT_FOUND"));
   // The player's loader while an audio lesson's file address is on its way.
   const audioLinkPending =
     !courseUnavailable &&

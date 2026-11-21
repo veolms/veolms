@@ -45,6 +45,7 @@ import {
 } from "../../store/pendingMfaLogin";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { forgetAccountBrowserState } from "../../store/accountBrowserState";
+import { tellNativeSignedOut } from "../../native-bridge";
 import { unregisterThisPushDevice } from "../notifications";
 import { loadWebPush, readSavedWebPush } from "../webPush";
 import { authKeys } from "./auth.keys";
@@ -192,6 +193,9 @@ export function cancelPendingLogin(queryClient: QueryClient): Promise<void> {
       // the step.
       endPendingMfaLogin();
       clearSignedOutState(queryClient, sessionEnded);
+      // Inside the app: its Google account picker does not pick the
+      // account of the sign-in walked away from by itself. Fire and forget.
+      tellNativeSignedOut();
       pendingLoginCancellation = null;
     }
   })();
@@ -681,6 +685,9 @@ export function useSignOut() {
       predicate: (query) => isVisitorQuery(query.queryKey),
     });
     for (const listener of signedOutListeners) listener();
+    // Inside the app: its Google account picker no longer picks this
+    // account by itself. Fire and forget.
+    tellNativeSignedOut();
     return "signed-out";
   }, [queryClient]);
 

@@ -31,6 +31,87 @@ export interface MessageFocus {
   from?: number;
 }
 
+/** A scroll this soon after the reader's touch, wheel or key is theirs. */
+const READER_SCROLL_MS = 3_000;
+/**
+ * Where each chat was left this visit: the message at the top of the view
+ * and how far down it sat, or the bottom. Coming back to the chat (from a
+ * lesson opened out of the mini player, from another page) shows the same
+ * place; before, it jumped to the unread divider or the bottom.
+ */
+const leftAt = new Map<
+  string,
+  { seq: number; offset: number } | { atBottom: true }
+>();
+
+/** The first message row showing at the top of the list, and its offset. */
+function topRow(box: HTMLElement): { seq: number; offset: number } | null {
+  for (const row of box.querySelectorAll<HTMLElement>(
+    '[id^="chat-message-"]',
+  )) {
+    if (row.offsetTop + row.offsetHeight <= box.scrollTop) continue;
+    const seq = Number(row.id.slice("chat-message-".length));
+    if (!Number.isInteger(seq) || seq <= 0) continue;
+    return { seq, offset: row.offsetTop - box.scrollTop };
+  }
+  return null;
+}
+
+/**
+ * Draws the rows that are about to be on screen at their real height before
+ * the list is placed. Rows skip layout off screen (content-visibility) and
+ * stand at a guessed 56px until the browser has drawn them, a frame after
+ * they first show: a chat opened at the bottom painted its last messages at
+ * the guess, then at their real size (a video message 470px, not 56), and
+ * everything above slid up by hundreds of pixels (production, 15 Nov). From
+ * `start` (the bottom when null) about two screens of rows are drawn now;
+ * two frames later they go back to being skipped when off screen, with
+ * their real size remembered.
+ */
+function drawRowsNow(box: HTMLElement, start: HTMLElement | null) {
+  const rows = [...box.querySelectorAll<HTMLElement>('[id^="chat-message-"]')];
+  if (rows.length === 0) return;
+  let index = rows.length - 1;
+  if (start) {
+    const found = rows.findIndex(
+      (row) =>
+        row === start ||
+        Boolean(
+          start.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+    );
+    if (found >= 0) index = found;
+  }
+  const drawn: HTMLElement[] = [];
+  const draw = (row: HTMLElement) => {
+    row.style.contentVisibility = "visible";
+    drawn.push(row);
+    return row.offsetHeight;
+  };
+  const screen = box.clientHeight;
+  // Below the start (or above the bottom), one and a half screens; above
+  // the start, one more screen for a place kept partway down a message.
+  let height = 0;
+  if (start) {
+    for (let i = index; i < rows.length && height < screen * 1.5; i += 1) {
+      height += draw(rows[i]!);
+    }
+    height = 0;
+    for (let i = index - 1; i >= 0 && height < screen; i -= 1) {
+      height += draw(rows[i]!);
+    }
+  } else {
+    for (let i = index; i >= 0 && height < screen * 1.5; i -= 1) {
+      height += draw(rows[i]!);
+    }
+  }
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      for (const row of drawn) row.style.contentVisibility = "";
+    }),
+  );
+}
+
 /** Puts a message in the middle of the list. */
 function centre(box: HTMLElement, row: HTMLElement) {
   box.scrollTop = Math.max(
@@ -88,10 +169,12 @@ function asMessage(
 }
 
 export function MessageList({
+  roomId,
   thread,
   outgoing,
   ctx,
   unreadAfterSeq,
+  openedAtSeq,
   focus,
   loadingOlder,
   onLoadOlder,
@@ -105,11 +188,15 @@ export function MessageList({
 }: {
   /** Who is typing now: a bubble of moving dots under the last message. */
   typing?: readonly string[];
+  /** The chat shown, for where it was left (see `leftAt`). */
+  roomId: string;
   thread: ChatThread;
   outgoing: OutgoingMessage[];
   ctx: BubbleContext;
   /** Your read position when the chat opened: the "unread" divider goes after it. */
   unreadAfterSeq: number;
+  /** The chat's newest message number on the server when it was opened. */
+  openedAtSeq: number;
   /** Bring this message into view and blink it. */
   focus: MessageFocus | null;
   loadingOlder: boolean;
@@ -132,9 +219,9 @@ export function MessageList({
    * the list keeps growing for a moment. Until the reader scrolls, the view
    * stays at the bottom (or at the unread divider), as in WhatsApp.
    */
-  const anchorRef = useRef<"bottom" | "divider" | { seq: number } | null>(
-    "bottom",
-  );
+  const anchorRef = useRef<
+    "bottom" | "divider" | { seq: number; offset?: number } | null
+  >("bottom");
   /** Held somewhere other than the bottom until the reader scrolls. */
   const held = () =>
     anchorRef.current !== null && anchorRef.current !== "bottom";
@@ -174,19 +261,29 @@ export function MessageList({
     }
   }
   // Only messages already there when the chat opened count as unread:
-  // one arriving while you watch is read.
-  const openedAtSeqRef = useRef(lastSeq);
+  // one arriving while you watch is read. "There" is the server's count at
+  // opening: the list first drawn may be the copy kept on the device, older
+  // than the server, and taking its newest message left everything after
+  // it out of the count ("5 unread" above many more).
+  const openedAtSeqRef = useRef(Math.max(lastSeq, openedAtSeq));
   if (openedAtSeqRef.current === 0 && lastSeq > 0)
     openedAtSeqRef.current = lastSeq;
 
-  const pending = useMemo(
-    () =>
-      outgoing.map((o) => ({
+  const pending = useMemo(() => {
+    // Already in the chat (the live stream can bring it before the send
+    // reply): drawn once, not twice for a moment.
+    const arrived = new Set(
+      thread.messages
+        .map((m) => m.clientId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    return outgoing
+      .filter((o) => !arrived.has(o.clientId))
+      .map((o) => ({
         outgoing: o,
         message: asMessage(o, ctx.viewerId),
-      })),
-    [outgoing, ctx.viewerId],
-  );
+      }));
+  }, [outgoing, ctx.viewerId, thread.messages]);
   const unreadCount = thread.messages.filter(
     (m) =>
       m.seq > unreadAfterSeq &&
@@ -199,8 +296,30 @@ export function MessageList({
     const box = scrollRef.current;
     if (!box || initialisedRef.current || thread.messages.length === 0) return;
     initialisedRef.current = true;
+    // The place the chat was left this visit comes first, unless a message
+    // was asked for (that one is shown instead).
+    const left = focus ? undefined : leftAt.get(roomId);
+    const leftRow =
+      left && "seq" in left
+        ? document.getElementById(`chat-message-${left.seq}`)
+        : null;
     const divider = box.querySelector<HTMLElement>("[data-unread-divider]");
-    if (divider && unreadCount > 0) {
+    drawRowsNow(
+      box,
+      left && "seq" in left && leftRow
+        ? leftRow
+        : !left && divider && unreadCount > 0
+          ? divider
+          : null,
+    );
+    if (left && "seq" in left && leftRow) {
+      anchorRef.current = { seq: left.seq, offset: left.offset };
+      atBottomRef.current = false;
+      box.scrollTop = Math.max(0, leftRow.offsetTop - left.offset);
+    } else if (left && "atBottom" in left) {
+      anchorRef.current = "bottom";
+      box.scrollTop = box.scrollHeight;
+    } else if (divider && unreadCount > 0) {
       anchorRef.current = "divider";
       atBottomRef.current = false;
       box.scrollTop = Math.max(0, divider.offsetTop - 80);
@@ -235,7 +354,9 @@ export function MessageList({
         if (divider) box.scrollTop = Math.max(0, divider.offsetTop - 80);
       } else if (anchor && typeof anchor === "object") {
         const row = document.getElementById(`chat-message-${anchor.seq}`);
-        if (row) centre(box, row);
+        if (row && anchor.offset !== undefined) {
+          box.scrollTop = Math.max(0, row.offsetTop - anchor.offset);
+        } else if (row) centre(box, row);
       } else if (atBottomRef.current) {
         box.scrollTop = box.scrollHeight;
       }
@@ -244,6 +365,7 @@ export function MessageList({
     observer.observe(content);
     // The reader taking over ends the hold at the divider or a message.
     const release = () => {
+      readerScrolledAtRef.current = Date.now();
       if (anchorRef.current !== "bottom") anchorRef.current = null;
     };
     box.addEventListener("wheel", release, { passive: true });
@@ -277,6 +399,7 @@ export function MessageList({
     initialisedRef.current = true;
     anchorRef.current = { seq: focus.seq };
     atBottomRef.current = false;
+    drawRowsNow(box, row);
     centre(box, row);
     flash(row);
     setReturnSeq(focus.from ?? null);
@@ -326,14 +449,62 @@ export function MessageList({
     else readIfInView();
   }, [lastSeq, onAtBottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Where the chat was left: noted shortly after the reader scrolls (a
+  // touch, the wheel, a key or a click on the list, momentum included). A
+  // scroll the page makes is not the reader's: leaving the chat resizes
+  // the list, and the scroll that caused read as "at the bottom".
+  const placeFrameRef = useRef<number | null>(null);
+  const readerScrolledAtRef = useRef(0);
+  function rememberPlace() {
+    const box = scrollRef.current;
+    if (!box || !initialisedRef.current) return;
+    // A list already hidden (the page changing) has no height: it would
+    // read as "at the bottom". What scrolling noted stands.
+    if (box.clientHeight === 0) return;
+    if (box.scrollHeight - box.scrollTop - box.clientHeight < STICK_PX) {
+      leftAt.set(roomId, { atBottom: true });
+      return;
+    }
+    const top = topRow(box);
+    if (top) leftAt.set(roomId, top);
+  }
+  function rememberPlaceSoon() {
+    if (Date.now() - readerScrolledAtRef.current > READER_SCROLL_MS) return;
+    if (placeFrameRef.current !== null) return;
+    placeFrameRef.current = window.setTimeout(() => {
+      placeFrameRef.current = null;
+      rememberPlaceRef.current();
+    }, 120);
+  }
+  const rememberPlaceRef = useRef(rememberPlace);
+  rememberPlaceRef.current = rememberPlace;
+  useLayoutEffect(
+    () => () => {
+      if (placeFrameRef.current !== null) {
+        window.clearTimeout(placeFrameRef.current);
+      }
+    },
+    [],
+  );
+
   function onScroll() {
     const box = scrollRef.current;
     if (!box) return;
     const distance = box.scrollHeight - box.scrollTop - box.clientHeight;
     const atBottom = distance < STICK_PX;
+    rememberPlaceSoon();
     // Held at the divider or a message, a scroll the page made (not the
-    // reader) leaves the bottom flag alone.
-    if (!held()) atBottomRef.current = atBottom;
+    // reader) leaves the bottom flag alone. The reader's own scroll leaves
+    // the bottom as soon as it moves up at all, and comes back to it only
+    // at the very bottom: a scroll up of one wheel notch (about 110px, less
+    // than STICK_PX) still counted as "at the bottom", and the next row to
+    // reach its real height put the list straight back down (the chat
+    // "moved a little" and would not scroll up, 2026-11-17).
+    const readerScrolling =
+      Date.now() - readerScrolledAtRef.current < READER_SCROLL_MS;
+    if (!held()) {
+      atBottomRef.current = readerScrolling ? distance < 2 : atBottom;
+    }
     setShowJump(distance > 400);
     if (atBottom && !held()) {
       lastSeenSeqRef.current = lastSeq;
@@ -630,6 +801,8 @@ function PendingStatus({
     );
   }
   if (uploading.length === 0) return null;
+  // A video being made smaller (Standard) before it goes up.
+  const preparing = uploading.find((f) => f.preparing !== undefined);
   const progress =
     uploading.reduce((sum, f) => sum + f.progress, 0) / uploading.length;
   return (
@@ -637,7 +810,9 @@ function PendingStatus({
       className="flex justify-end px-[4%] pt-0.5 text-[0.72rem] text-(--muted)"
       aria-live="polite"
     >
-      Uploading {Math.round(progress * 100)}%
+      {preparing
+        ? `Preparing ${Math.round((preparing.preparing ?? 0) * 100)}%`
+        : `Uploading ${Math.round(progress * 100)}%`}
     </div>
   );
 }

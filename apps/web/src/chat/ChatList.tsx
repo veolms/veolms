@@ -197,6 +197,9 @@ export function ChatList({
   const archivedCount = rooms?.filter(isArchived).length ?? 0;
   const term = search.trim();
   const visible = (rooms ?? []).filter((room) => {
+    // A private chat joins the list with its first message, as in WhatsApp:
+    // opening someone's chat from their name or profile adds nothing.
+    if (room.kind === "direct" && room.lastSeq === 0) return false;
     if (isArchived(room) !== archivedView) return false;
     // Loose, like the app's other search boxes: typos, parts of words and
     // any order ("bhupsh", "node backend") still find the chat.
@@ -498,15 +501,33 @@ function ChatRow({
     room.kind === "direct" &&
     room.directStatus === "requested" &&
     room.requestedByMe === false;
-  const preview = last
-    ? last.deleted
-      ? mine
-        ? "You deleted this message"
-        : "This message was deleted"
-      : `${room.kind !== "direct" && last.senderName && !mine ? `${last.senderName.split(" ")[0]}: ` : ""}${plainPreview(last.preview)}`
-    : room.kind === "direct"
-      ? ""
-      : "No messages yet";
+  // Only while it is newer than the last message (a message that came after
+  // it takes the line back).
+  const reaction =
+    room.lastReaction &&
+    (!last || new Date(room.lastReaction.at) > new Date(last.createdAt))
+      ? room.lastReaction
+      : null;
+  const reactionText = reaction
+    ? `${
+        reaction.byId === viewerId
+          ? "You reacted"
+          : room.kind === "direct"
+            ? "Reacted"
+            : `${reaction.byName.split(" ")[0]} reacted`
+      } ${reaction.emoji} to: "${plainPreview(reaction.preview)}"`
+    : null;
+  const preview = reactionText
+    ? reactionText
+    : last
+      ? last.deleted
+        ? mine
+          ? "You deleted this message"
+          : "This message was deleted"
+        : `${room.kind !== "direct" && last.senderName && !mine ? `${last.senderName.split(" ")[0]}: ` : ""}${plainPreview(last.preview)}`
+      : room.kind === "direct"
+        ? ""
+        : "No messages yet";
 
   const setState = (patch: Parameters<typeof myState.mutate>[0]["patch"]) =>
     myState.mutate({ roomId: room.id, patch });
@@ -652,10 +673,13 @@ function ChatRow({
                 </span>
               </>
             )}
-            {/* Room for the hover chevron, as in WhatsApp. */}
+            {/* Room for the hover chevron, as in WhatsApp: whenever the
+                chevron shows (hover, focus, open menu). After Mute or Pin
+                the focus goes back to the chevron, which then sat on top of
+                the muted and pinned icons. */}
             <span
               className={cn(
-                "flex shrink-0 items-center gap-1 transition-[margin] duration-150 group-hover/row:mr-7",
+                "flex shrink-0 items-center gap-1 transition-[margin] duration-150 group-hover/row:mr-7 group-focus-within/row:mr-7",
                 menuOpen && "mr-7",
               )}
             >
@@ -689,7 +713,7 @@ function ChatRow({
       </button>
       <div
         className={cn(
-          "absolute right-2 bottom-3 translate-x-1 opacity-0 transition-[opacity,translate] duration-150 group-hover/row:translate-x-0 group-hover/row:opacity-100 focus-within:translate-x-0 focus-within:opacity-100",
+          "absolute right-2 bottom-3 translate-x-1 opacity-0 transition-[opacity,translate] duration-150 group-hover/row:translate-x-0 group-hover/row:opacity-100 group-focus-within/row:translate-x-0 group-focus-within/row:opacity-100",
           menuOpen && "translate-x-0 opacity-100",
         )}
       >

@@ -111,6 +111,7 @@ export function CourseCreatePage({
     routeEditTab,
     searchParams,
     activeEditId,
+    setCreatedCourseId,
     requestedSectionId,
     requestedLessonId,
     activeStep,
@@ -639,6 +640,7 @@ export function CourseCreatePage({
     setSections,
     sectionsRef,
     sectionHeaderElementsRef,
+    lessonElementsRef,
     pendingAddedSectionScrollRef,
     sectionScrollDelayRef,
     lessonTitleDraftsRef,
@@ -659,6 +661,7 @@ export function CourseCreatePage({
     onNavigatePage,
     activeEditId,
     requestedSectionId,
+    requestedLessonId,
     activeStep,
     isCreatingSection,
     creatingLessonSectionId,
@@ -986,6 +989,8 @@ export function CourseCreatePage({
     saveAllDirtyLessons,
     handleToggleLessonExpand,
   } = useLessonHandlers({
+    onLessonCreated: (sectionId, lessonId) =>
+      navigateToCurriculumFocus(sectionId, lessonId),
     currentCourseId,
     currentCourseIdRef,
     refetchEditor,
@@ -1168,6 +1173,7 @@ export function CourseCreatePage({
     persistBasicsField,
     handleShowInstructorNameChange,
   } = useBasicsPersistence({
+    onCourseCreated: setCreatedCourseId,
     setServerBasics,
     setBasicsDraft,
     serverBasicsRef,
@@ -1466,6 +1472,7 @@ export function CourseCreatePage({
         isPublished={isPublished}
         activeStep={activeStep}
         publishValidationError={publishValidationError}
+        isLoading={isInitialLoadingCourse}
       />
 
       {/* Wizard Steps Navigation */}
@@ -1482,7 +1489,13 @@ export function CourseCreatePage({
         isDownstreamUnlocked={isDownstreamUnlocked}
         actionLoading={actionLoading}
         isInitialLoadingCourse={isInitialLoadingCourse}
-        navigateToStep={navigateToStep}
+        navigateToStep={
+          isInitialLoadingCourse
+            ? async (step) => {
+                setActiveStep(step);
+              }
+            : navigateToStep
+        }
         isStepAllowed={isStepAllowed}
       />
 
@@ -1490,14 +1503,7 @@ export function CourseCreatePage({
       {isInitialLoadingCourse ? (
         <CourseWizardSkeleton activeStep={activeStep} />
       ) : (
-        <Suspense
-          fallback={
-            <CenteredLoadingSpinner
-              label="Loading course details"
-              className="min-h-80 w-full flex-1"
-            />
-          }
-        >
+        <Suspense fallback={<CourseWizardSkeleton activeStep={activeStep} />}>
           <SwipeableTabPanel
             tabs={WIZARD_STEP_IDS}
             activeTab={activeStep}
@@ -1621,6 +1627,7 @@ export function CourseCreatePage({
                   handleSectionDragOver={handleSectionDragOver}
                   handleSectionDragEnd={handleSectionDragEnd}
                   sectionHeaderElementsRef={sectionHeaderElementsRef}
+                  lessonElementsRef={lessonElementsRef}
                   handleToggleSectionExpand={handleToggleSectionExpand}
                   setDragEnabledSectionId={setDragEnabledSectionId}
                   handleSaveSectionTitle={handleSaveSectionTitle}

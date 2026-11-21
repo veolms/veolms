@@ -273,9 +273,16 @@ export function createRoomsService(runtime: ChatRuntime) {
         muteFor?: ChatMuteFor;
         archived?: boolean;
         pinned?: boolean;
+        readReceipts?: boolean | null;
       },
     ) {
       await views.assertCanRead(database, userId, roomId);
+      if (
+        patch.readReceipts !== undefined &&
+        !(await access.isChatStaff(database, userId))
+      ) {
+        throw ChatErrors.notModerator();
+      }
       if (patch.pinned === true) {
         const member = await repository.findMember(database, roomId, userId);
         if (
@@ -302,6 +309,9 @@ export function createRoomsService(runtime: ChatRuntime) {
           : {}),
         ...(patch.pinned !== undefined
           ? { pinned_at: patch.pinned ? new Date() : null }
+          : {}),
+        ...(patch.readReceipts !== undefined
+          ? { read_receipts: patch.readReceipts }
           : {}),
       });
       return roomDetail(userId, roomId);

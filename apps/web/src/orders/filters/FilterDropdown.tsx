@@ -96,7 +96,10 @@ export function FilterDropdown({
       </PopoverTrigger>
       <PopoverContent
         align={align}
-        className={`flex max-w-[calc(100vw-1rem)] flex-col overflow-hidden ${contentClassName}`}
+        // Clipped, not `overflow: hidden`: a hidden box can still be scrolled
+        // by focus (a checkbox low in the list, ticked), and stayed shifted
+        // with its search box off the top, out of the user's reach.
+        className={`flex max-w-[calc(100vw-1rem)] flex-col overflow-clip ${contentClassName}`}
       >
         {children}
       </PopoverContent>

@@ -99,6 +99,8 @@ export function presentMessage(row: MessageRow): ChatMessage {
           role: asRole(row.sender_role),
         }
       : null,
+    ...(row.client_id ? { clientId: row.client_id } : {}),
+    ...(row.forwarded && !deleted ? { forwarded: true } : {}),
     body: deleted ? "" : row.body,
     replyTo:
       row.reply_to_seq === null
@@ -112,6 +114,12 @@ export function presentMessage(row: MessageRow): ChatMessage {
                 : preview(row.reply_body),
             deleted: row.reply_deleted_at !== null || row.reply_body === null,
             ...replyMedia(row),
+            ...(row.reply_to_room_id
+              ? {
+                  roomId: row.reply_to_room_id,
+                  roomName: row.reply_room_name ?? null,
+                }
+              : {}),
           },
     mentions: deleted ? [] : row.mentions,
     mentionAll: deleted ? false : row.mention_all,

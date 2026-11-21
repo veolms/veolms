@@ -254,6 +254,23 @@ export const publicProfileResponseSchema = z.strictObject({
   websiteUrl: z.string().max(500).nullable(),
 });
 
+/** The most names one `GET /auth/usernames/existing` checks. */
+export const EXISTING_USERNAMES_MAX = 25;
+
+/**
+ * `GET /auth/usernames/existing?names=a,b`: which of these words are the
+ * usernames of members (an "@name" in a post is marked only for those).
+ * Words that cannot be usernames are dropped rather than refused.
+ */
+export const existingUsernamesQuerySchema = z.strictObject({
+  names: z.string().max(EXISTING_USERNAMES_MAX * 31),
+});
+
+export const existingUsernamesResponseSchema = z.strictObject({
+  /** The members among the names, lower-case. */
+  usernames: z.array(z.string().min(3).max(30)),
+});
+
 /** The session may be absent when the client is visiting a public route. */
 export const currentUserResponseSchema = userProfileResponseSchema.nullable();
 
@@ -325,6 +342,12 @@ export type RegisterRequest = z.input<typeof registerRequestSchema>;
 export type AuthUser = z.output<typeof authUserSchema>;
 export type UserProfileResponse = z.output<typeof userProfileResponseSchema>;
 export type ProfileUpdateRequest = z.input<typeof profileUpdateRequestSchema>;
+export type ExistingUsernamesQuery = z.input<
+  typeof existingUsernamesQuerySchema
+>;
+export type ExistingUsernamesResponse = z.output<
+  typeof existingUsernamesResponseSchema
+>;
 export type PublicProfileUsernameParams = z.input<
   typeof publicProfileUsernameParamsSchema
 >;

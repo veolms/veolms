@@ -118,13 +118,26 @@ import {
   type PlaybackDeniedPlayingOn,
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
-import { isLowMemoryDevice } from "./deviceTier";
+import { canAffordSecondPlayer } from "./playbackHeadroom";
+import { usePlayerBuildRefresh } from "./usePlayerBuildRefresh";
+
 import { sendVideoProblemReport } from "./videoProblemReport";
 import { useAuthStore } from "../../store/auth.store";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
-import type { PlayerErrorReport } from "@veolms/video-player";
+import {
+  isVideoContentError,
+  type PlayerErrorReport,
+} from "@veolms/video-player";
 import type { LessonStagePlan } from "../lessonWithoutVideo";
+
+/** Whether the lesson's video is not playing (none on screen counts too). */
+function isLessonVideoPaused(): boolean {
+  const video = document.querySelector<HTMLVideoElement>(
+    "[data-video-player-root] video",
+  );
+  return !video || video.paused;
+}
 
 /**
  * The stream has been waiting out failures for this many retries in a row
@@ -144,6 +157,10 @@ const FINISHED_LESSON_RESUME_TAIL_SECONDS = 3;
 // From here on the next lesson is preloaded, whatever the video's length: a
 // percentage would start hours early in a long lesson.
 const NEAR_LESSON_END_SECONDS = 60;
+/** While playing, progress reaches the page in steps this big (percent). */
+const PLAYING_PROGRESS_STEP = 5;
+/** From here on, every report goes through: the lesson is being finished. */
+const PLAYING_PROGRESS_END = 99;
 // ...and only once this lesson is downloaded to its end, within this much.
 // Preloaded while its last segments were still on their way, the next
 // lesson took the link from them on a slow connection: they came late or
@@ -280,6 +297,8 @@ export interface LessonVideoPlayerProps {
   subscribeSwipeOutsideFraction?: SubscribeOutsideFraction;
   onMobileLandscapeFullscreenChange?: (active: boolean) => void;
   onProgressChange?: (progress: number) => void;
+  /** The loaded media's duration, for validating inline timestamps. */
+  onDurationChange?: (seconds: number | null) => void;
   /**
    * Called on every time update once a minute or less of the video is left
    * (see `NEAR_LESSON_END_SECONDS`); the owner decides what to do once.
@@ -525,6 +544,7 @@ export function LessonVideoPlayer({
   media,
   totalLessons,
   onProgressChange,
+  onDurationChange,
   onNearLessonEnd,
   watchTimeCourseKey,
   onAutoplayEnabledChange = () => undefined,
@@ -563,6 +583,8 @@ export function LessonVideoPlayer({
   const playerRef = useRef<VideoPlayerHandle>(null);
   // Sharp drag frames from the kept segments, on a mouse or trackpad only.
   const latestPositionRef = useRef(0);
+  /** The progress step last reported while playing (see PLAYING_PROGRESS_STEP). */
+  const reportedProgressStepRef = useRef(-1);
   const lastPersistedAtRef = useRef<number | null>(null);
   const preferencesReadyRef = useRef(false);
   const captionsEnabledRef = useRef(false);
@@ -688,6 +710,9 @@ export function LessonVideoPlayer({
       signedIn
         ? {
             send: (error) => sendVideoProblemReport({ error, lessonTitle }),
+            // A fault in the video itself goes to the team at once (once a
+            // day per lesson and kind, see `sendVideoProblemReport`).
+            auto: isVideoContentError,
             icon: <Flag weight="bold" />,
             sentIcon: <Check weight="bold" />,
           }
@@ -964,14 +989,16 @@ export function LessonVideoPlayer({
   // come (see `streamingretry`); 0 once one does, or a video is loaded.
   const [streamingRetries, setStreamingRetries] = useState(0);
   const reconnecting = streamingRetries >= RECONNECTING_NOTICE_AFTER_RETRIES;
-  // A small device prepares no second video out of sight: the standby is
-  // a whole second media pipeline (see deviceTier.ts).
-  const [withStandby] = useState(() => !isLowMemoryDevice());
+  // A second video prepared out of sight is a whole second media pipeline:
+  // not on a device short of memory or cores (see canAffordSecondPlayer).
+  const [withStandby] = useState(() => canAffordSecondPlayer());
   const effectiveLessonId = lessonId ?? playbackBootstrap?.lessonId ?? null;
   const effectiveLessonIdRef = useRef(effectiveLessonId);
   useEffect(() => {
     effectiveLessonIdRef.current = effectiveLessonId;
   }, [effectiveLessonId]);
+  // A tab open across a deploy moves onto the new player between lessons.
+  usePlayerBuildRefresh(effectiveLessonId, isLessonVideoPaused);
 
   useEffect(() => {
     const courseKey = watchTimeCourseKey;
@@ -1037,6 +1064,12 @@ export function LessonVideoPlayer({
       if (event.type === "fullscreenchange") {
         setPlayerFullscreen(event.detail.active);
       }
+      // The quality picked in the menu is kept for every lesson. One the
+      // connection could not carry goes to Auto for this lesson only (the
+      // player's own fallback); the choice stays saved, so the next lesson
+      // starts at it again, as YouTube does. It used to be replaced by Auto
+      // for good, and a learner's 1080p was lost to waits at 16x on a fast
+      // line (2026-11-21).
       if (event.type === "streamingretry") {
         setStreamingRetries(event.detail.attempt);
       } else if (
@@ -1090,6 +1123,11 @@ export function LessonVideoPlayer({
         setAutoplayCancelled(false);
         const snapshot = playerRef.current?.getSnapshot();
         const actualDuration = event.detail.duration;
+        onDurationChange?.(
+          Number.isFinite(actualDuration) && actualDuration > 0
+            ? actualDuration
+            : null,
+        );
         const loadedPosition = snapshot?.media.currentTime ?? 0;
         // A lesson reopened at its end, or within moments of it, used to
         // start on its last second, finish again at once and move on to the
@@ -1170,16 +1208,28 @@ export function LessonVideoPlayer({
         // list. The seek where it is let go reports where it ended.
         const scrubbing = playerRef.current?.getSnapshot().ui.scrubbing;
         if (event.detail.duration > 0) {
-          if (!scrubbing) {
-            onProgressChange?.(
-              Math.max(
-                0,
-                Math.min(
-                  100,
-                  (event.detail.currentTime / event.detail.duration) * 100,
-                ),
-              ),
-            );
+          // While it plays, progress goes to the page in steps of
+          // PLAYING_PROGRESS_STEP percent (and at the end), not every percent:
+          // each report re-renders the whole lesson page (discussions, lesson
+          // list, hundreds of icons), three commits a time, which on a slow
+          // processor took the time the video needed (measured 2026-11-15:
+          // the page's main thread 88% busy at 4x CPU slowdown). Pause, seek
+          // and end report the exact value.
+          const percent = Math.max(
+            0,
+            Math.min(
+              100,
+              (event.detail.currentTime / event.detail.duration) * 100,
+            ),
+          );
+          const step = Math.floor(percent / PLAYING_PROGRESS_STEP);
+          if (
+            !scrubbing &&
+            (step !== reportedProgressStepRef.current ||
+              percent >= PLAYING_PROGRESS_END)
+          ) {
+            reportedProgressStepRef.current = step;
+            onProgressChange?.(percent);
           }
           if (
             event.detail.duration - event.detail.currentTime <=
@@ -1238,6 +1288,21 @@ export function LessonVideoPlayer({
         const snapshot = playerRef.current?.getSnapshot();
         if (snapshot) latestPositionRef.current = snapshot.media.currentTime;
         persistResumePosition(true);
+        // The exact progress where it stopped (playing reports it in steps).
+        const duration = snapshot?.media.duration ?? 0;
+        if (
+          snapshot &&
+          duration > 0 &&
+          !snapshot.ui.scrubbing &&
+          activeMediaKeyRef.current === requestedMediaKeyRef.current
+        ) {
+          onProgressChange?.(
+            Math.max(
+              0,
+              Math.min(100, (snapshot.media.currentTime / duration) * 100),
+            ),
+          );
+        }
       } else if (event.type === "ended") {
         // A finished lesson has nowhere to resume from. Storing its end as
         // the place to resume reopened it on its last second. The position
@@ -1318,6 +1383,14 @@ export function LessonVideoPlayer({
             textTracks[0]!;
           playerRef.current?.selectTextTrack(preferredTrack.id);
         }
+      } else if (event.type === "durationchange") {
+        onDurationChange?.(
+          Number.isFinite(event.detail.duration) && event.detail.duration > 0
+            ? event.detail.duration
+            : null,
+        );
+      } else if (event.type === "unloaded") {
+        onDurationChange?.(null);
       }
     },
     [
@@ -1327,6 +1400,7 @@ export function LessonVideoPlayer({
       playbackTelemetry,
       onLessonEnded,
       onProgressChange,
+      onDurationChange,
       onNearLessonEnd,
       trackWatchTime,
       persistResumePosition,

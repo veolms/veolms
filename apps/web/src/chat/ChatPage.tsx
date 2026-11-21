@@ -2,7 +2,12 @@ import "./chat.css";
 
 import type { ChatMessage } from "@veolms/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { ToastNotification } from "../ToastNotification";
@@ -37,6 +42,11 @@ import { useChatPrefs } from "../store/chatPrefs.store";
 import { CHAT_TEXT_SIZES, CHAT_WALLPAPERS } from "./chatWallpapers";
 import { useChatShortcuts } from "./useChatShortcuts";
 import { MOBILE_NAV_KEEP_ATTRIBUTE } from "../shell/academyShellConstants";
+import { useBackDismiss } from "../navigation/useBackDismiss";
+import { usePhoneLayout } from "./usePhoneLayout";
+
+/** History state of a chat opened from the chat list (see `open`). */
+const OPENED_FROM_LIST = "veolmsChatFromList";
 
 /** Chats loaded ahead, from the top of the list. */
 const WARM_CHATS = 6;
@@ -89,6 +99,24 @@ export function ChatPage() {
   const [panel, setPanel] = useState<ListPanel>("chats");
   const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // A file, photo or video saved from a chat: the browser often shows
+  // nothing for a moment (a phone none at all), so say it has started.
+  // Every download in chat is a link (bubbles, file cards, the viewer, which
+  // sits outside this page), so one listener on the document hears them all.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      const link =
+        event.target instanceof Element
+          ? event.target.closest<HTMLAnchorElement>(
+              'a[download], a[href*="download=1"]',
+            )
+          : null;
+      if (link) setToast("Download started");
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [focusComposer, setFocusComposer] = useState(0);
   // "Go to this message" from search, a report, a starred message or a link
@@ -177,10 +205,38 @@ export function ChatPage() {
   const open = useCallback(
     (id: string | null) => {
       void flushReceipts();
-      navigate(id ? `/chat/${id}` : "/chat");
+      // A chat opened from the list remembers it, so going back steps back
+      // to that entry instead of adding the list again.
+      navigate(id ? `/chat/${id}` : "/chat", {
+        state: id ? { [OPENED_FROM_LIST]: true } : undefined,
+      });
     },
     [navigate],
   );
+
+  // On a phone the open chat covers the screen, and the system back button
+  // does what the arrow beside its name does: back to the chat list. Before,
+  // back went to whatever page came before the chat; for a chat reached
+  // with a lesson playing in the mini player, that was the lesson, and the
+  // closed video opened again.
+  const location = useLocation();
+  const phone = usePhoneLayout();
+  const openedFromList = Boolean(
+    (location.state as Record<string, unknown> | null)?.[OPENED_FROM_LIST],
+  );
+  const backLayerOpen = Boolean(roomId) && phone;
+  const leaveToList = useCallback(() => {
+    void flushReceipts();
+    if (openedFromList) navigate(-1);
+    else navigate("/chat", { replace: true });
+  }, [navigate, openedFromList]);
+  useBackDismiss({ open: backLayerOpen, onDismiss: leaveToList });
+  // The arrow beside the name goes the same way as the system button: it
+  // takes the back step, whose dismissal above leaves for the list.
+  const backToList = useCallback(() => {
+    if (backLayerOpen) window.history.back();
+    else open(null);
+  }, [backLayerOpen, open]);
 
   // "Info" from a profile photo: open the chat with its info showing.
   const infoForRef = useRef<string | null>(null);
@@ -378,7 +434,7 @@ export function ChatPage() {
             key={current.id}
             room={current}
             viewerId={viewerId}
-            onBack={() => open(null)}
+            onBack={backToList}
             onOpenInfo={() => setDrawer({ kind: "info" })}
             onOpenMessageInfo={(message) =>
               setDrawer({ kind: "message", message })

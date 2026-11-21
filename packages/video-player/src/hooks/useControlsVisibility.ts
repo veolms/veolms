@@ -5,6 +5,39 @@ import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
 
+// What a mouse can rest on while it uses the controls: a button, the
+// volume, a menu, the timeline. As on YouTube, the controls stay up while
+// the mouse is over them, however long it rests there.
+const CONTROL_SELECTOR = [
+  "[data-player-control]",
+  "[data-player-control-hit-area]",
+  "[data-player-control-cluster]",
+  "[data-player-timeline-wrap]",
+  "[data-video-player-timeline]",
+  "[data-mobile-volume-control]",
+  "[role=menu]",
+  "[role=dialog]",
+].join(",");
+const TIMELINE_SELECTOR =
+  "[data-player-timeline-wrap], [data-video-player-timeline]";
+
+/**
+ * Whether the mouse is over the controls: on one of them, or in the bar they
+ * sit in (from the timeline down), the gaps between the buttons included.
+ */
+function isOverControls(event: PointerEvent, pointerRoot: HTMLElement) {
+  const target = event.target;
+  if (!(target instanceof Element) || !pointerRoot.contains(target))
+    return false;
+  if (target.closest(CONTROL_SELECTOR)) return true;
+  const timeline = pointerRoot.querySelector(TIMELINE_SELECTOR);
+  if (!timeline) return false;
+  const bar = timeline.getBoundingClientRect();
+  if (bar.height === 0) return false;
+  const shell = pointerRoot.getBoundingClientRect();
+  return event.clientY >= bar.top - 6 && event.clientY <= shell.bottom;
+}
+
 type PlayerPointerMode = "mouse" | "touch";
 type PlayerInputMode = "keyboard" | "pointer";
 
@@ -47,6 +80,7 @@ export function useControlsVisibility({
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerModeRef = useRef<PlayerPointerMode>("touch");
   const pointerInsideRef = useRef(false);
+  const pointerOverControlsRef = useRef(false);
   const inputModeRef = useRef<PlayerInputMode>("pointer");
   // A keyboard shortcut showed the controls: they stay for the idle delay
   // even with the mouse away from the player, as after a mouse move.
@@ -145,7 +179,10 @@ export function useControlsVisibility({
       scrubbing ||
       settingsOpen ||
       controlsLocked ||
-      hasKeyboardFocus();
+      hasKeyboardFocus() ||
+      (pointerModeRef.current === "mouse" &&
+        pointerInsideRef.current &&
+        pointerOverControlsRef.current);
     const controlsTemporarilySuppressed = () =>
       !firstPlaybackPending &&
       (temporarySpeedBoost ||
@@ -197,6 +234,8 @@ export function useControlsVisibility({
       const desktopMousePointer = isDesktopMousePointer(event);
       pointerModeRef.current = desktopMousePointer ? "mouse" : "touch";
       pointerInsideRef.current = desktopMousePointer;
+      pointerOverControlsRef.current =
+        desktopMousePointer && isOverControls(event, pointerRoot);
       if (controlsTemporarilySuppressed()) {
         controller.setControlsVisible(false);
         return;
@@ -272,6 +311,7 @@ export function useControlsVisibility({
     const handlePointerLeave = (event: PointerEvent) => {
       if (!isDesktopMousePointer(event)) return;
       pointerInsideRef.current = false;
+      pointerOverControlsRef.current = false;
       keyboardRevealRef.current = false;
       clearTimer();
       if (controlsMustRemainVisible()) {

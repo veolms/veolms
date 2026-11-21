@@ -52,7 +52,7 @@ export interface CourseOptions {
     title?: string;
     preview?: boolean;
     published?: boolean;
-    video?: "ready" | "processing" | "none";
+    video?: "ready" | "processing" | "queued" | "none";
   }[];
 }
 

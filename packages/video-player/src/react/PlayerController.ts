@@ -14,6 +14,7 @@ import type { TimelineMarker } from "../timeline/timelineMath";
 import {
   formatPlaybackRate,
   playbackRatesMatch,
+  roundPlaybackRate,
 } from "../playback/playbackRates";
 import {
   canUseElementFullscreen,
@@ -33,6 +34,7 @@ import {
   type PlayerHudOptions,
   type PlayerSettingsView,
   type PlayerSnapshot,
+  type PlayerStrainNotice,
   type PlayerZoomState,
 } from "./playerState";
 
@@ -193,6 +195,11 @@ export class PlayerController {
   /** Settles once the last `stop` is done; a load waits for it. */
   #stopping: Promise<void> = Promise.resolve();
   #hudId = 0;
+  /**
+   * The video the learner dismissed the strain notice on (its address): not
+   * shown again for it. Another video may be asked again.
+   */
+  #strainDismissedSource: string | null = null;
   // The speed this player was last asked for (`setPlaybackRate`). A loaded
   // video playing at another speed was set so from outside the player (see
   // `isOutsideRateChange`).
@@ -264,9 +271,16 @@ export class PlayerController {
           pendingRate === undefined
             ? engineMedia
             : { ...engineMedia, playbackRate: pendingRate };
+        // Slowed down below the speed the strain notice is about: said.
+        const strain = this.#snapshot.ui.strainNotice;
+        const ui =
+          strain && media.playbackRate < strain.rate
+            ? { ...this.#snapshot.ui, strainNotice: null }
+            : this.#snapshot.ui;
         this.#snapshot = {
           ...this.#snapshot,
           media,
+          ui,
           activeChapterId: activeChapter?.id ?? null,
         };
         this.notify();
@@ -276,6 +290,17 @@ export class PlayerController {
     for (const type of forwardedVideoEngineEvents) {
       this.forwardEngineEvent(type);
     }
+
+    this.#engineUnsubscribers.push(
+      this.engine.on("playbackstrain", ({ playbackRate, cause }) =>
+        this.showStrainNotice(playbackRate, cause),
+      ),
+      this.engine.on("loadstart", () => {
+        if (this.#snapshot.ui.strainNotice) {
+          this.updateUi({ strainNotice: null });
+        }
+      }),
+    );
 
     this.#engineUnsubscribers.push(
       this.engine.on("mediachange", ({ media, standby }) =>
@@ -861,10 +886,23 @@ export class PlayerController {
     this.engine.seek(time);
   }
 
-  seekBy(delta: number): void {
+  /**
+   * Seeks by `delta` seconds, held inside the video, and returns how far
+   * playback actually moved (negative for back): 0 at the start for a
+   * backward seek, or at the end for a forward one. The seek feedback
+   * counts this, not the requested step.
+   */
+  seekBy(delta: number): number {
     const currentTime =
       this.#pendingMediaProperties.seekTime ?? this.#snapshot.media.currentTime;
-    this.seekTo(currentTime + delta);
+    const { duration } = this.#snapshot.media;
+    const end = Number.isFinite(duration) && duration > 0 ? duration : null;
+    const target = Math.max(
+      0,
+      end === null ? currentTime + delta : Math.min(currentTime + delta, end),
+    );
+    this.seekTo(target);
+    return target - currentTime;
   }
 
   setVolume(volume: number): void {
@@ -1096,6 +1134,42 @@ export class PlayerController {
   clearHud(id?: number): void {
     if (id !== undefined && this.#snapshot.ui.hud?.id !== id) return;
     this.updateUi({ hud: null });
+  }
+
+  /**
+   * Says over the video that it keeps standing still at `rate` and offers
+   * half the speed, unless the learner already dismissed it for this video.
+   */
+  private showStrainNotice(
+    rate: number,
+    cause: PlayerStrainNotice["cause"],
+  ): void {
+    const source = this.engine.getSnapshot().source?.src ?? null;
+    if (source !== null && source === this.#strainDismissedSource) return;
+    const shown = this.#snapshot.ui.strainNotice;
+    if (shown?.rate === rate && shown.cause === cause) return;
+    this.updateUi({
+      strainNotice: {
+        rate,
+        suggestedRate: Math.max(1, roundPlaybackRate(rate / 2)),
+        cause,
+      },
+    });
+  }
+
+  /** The strain notice's slower speed, taken. */
+  acceptStrainNotice(): void {
+    const notice = this.#snapshot.ui.strainNotice;
+    if (!notice) return;
+    this.updateUi({ strainNotice: null });
+    this.setPlaybackRate(notice.suggestedRate);
+  }
+
+  /** The strain notice, put away: not shown again for this video. */
+  dismissStrainNotice(): void {
+    if (!this.#snapshot.ui.strainNotice) return;
+    this.#strainDismissedSource = this.engine.getSnapshot().source?.src ?? null;
+    this.updateUi({ strainNotice: null });
   }
 
   async enterFullscreen(): Promise<void> {

@@ -28,6 +28,7 @@ import {
   getAdjacentWizardSteps,
   parseWizardTab,
 } from "../wizardSteps";
+import { withKeepScroll } from "../../../shell/applicationScroll";
 
 export interface UseWizardNavigationStateArgs {
   propCourseId: string | undefined;
@@ -39,6 +40,7 @@ export interface UseWizardNavigationStateResult {
   routeEditTab: string | undefined;
   searchParams: URLSearchParams;
   activeEditId: string | null;
+  setCreatedCourseId: Dispatch<SetStateAction<string | null>>;
   requestedSectionId: string | null;
   requestedLessonId: string | null;
   activeStep: CourseWizardStepId;
@@ -77,13 +79,19 @@ export function useWizardNavigationState({
     () => new URLSearchParams(location?.search ?? ""),
     [location?.search],
   );
+  const [createdCourseId, setCreatedCourseId] = useState<string | null>(null);
   const activeEditId =
     propCourseId ||
     propEditCourseId ||
     routeCourseId ||
     searchParams.get("edit") ||
     searchParams.get("courseId") ||
+    createdCourseId ||
     null;
+
+  useEffect(() => {
+    if (routeCourseId && createdCourseId) setCreatedCourseId(null);
+  }, [routeCourseId, createdCourseId]);
 
   const requestedSectionId = searchParams.get("sectionId");
   const requestedLessonId = searchParams.get("lessonId");
@@ -135,6 +143,12 @@ export function useWizardNavigationState({
       return next.slice(-3);
     });
   }, []);
+
+  useEffect(() => {
+    if (requestedLessonId) {
+      rememberLessonEditor(requestedLessonId);
+    }
+  }, [requestedLessonId, rememberLessonEditor]);
 
   const navigateToStepRef = useRef<
     (destination: CourseWizardStepId) => Promise<void>
@@ -241,6 +255,12 @@ export function useWizardNavigationState({
   }, []);
 
   useEffect(() => {
+    if (
+      activeStep === "curriculum" &&
+      (requestedLessonId || requestedSectionId)
+    ) {
+      return;
+    }
     const scrollport = document.getElementById("courses-main-scrollport");
     if (scrollport) {
       scrollport.scrollTop = 0;
@@ -252,7 +272,7 @@ export function useWizardNavigationState({
     if (typeof window !== "undefined") {
       window.scrollTo(0, 0);
     }
-  }, [activeStep]);
+  }, [activeStep, requestedLessonId, requestedSectionId]);
 
   useEffect(() => {
     setMountedTabs(getAdjacentWizardSteps(activeStep));
@@ -309,7 +329,10 @@ export function useWizardNavigationState({
 
     // Let the route-to-state effect below settle when the user navigates to a
     // different course or enters the editor through a different tab URL.
-    if (previousEditorRouteIdentityRef.current !== editorRouteIdentity) {
+    if (
+      !createdCourseId &&
+      previousEditorRouteIdentityRef.current !== editorRouteIdentity
+    ) {
       return;
     }
 
@@ -320,9 +343,13 @@ export function useWizardNavigationState({
       searchParams.has("step");
     const shouldReplace =
       location.pathname === "/courses/create" || hasLegacyQueryParams;
-    void navigate(canonicalPath, { replace: shouldReplace });
+    void navigate(canonicalPath, {
+      replace: shouldReplace,
+      state: withKeepScroll(location.state),
+    });
   }, [
     activeEditId,
+    createdCourseId,
     activeStep,
     editorRouteIdentity,
     location.pathname,
@@ -346,6 +373,7 @@ export function useWizardNavigationState({
     routeEditTab,
     searchParams,
     activeEditId,
+    setCreatedCourseId,
     requestedSectionId,
     requestedLessonId,
     activeStep,

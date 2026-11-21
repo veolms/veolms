@@ -178,7 +178,11 @@ export const ChatErrors = {
     new AppError(
       400,
       "CHAT_UPLOAD_TOO_BIG",
-      `Files of this kind can be up to ${Math.round(maxBytes / 1024 / 1024)} MB.`,
+      maxBytes >= 1e12
+        ? `Files can be up to ${Math.round(maxBytes / 1e12)} TB.`
+        : maxBytes >= 1e9
+          ? `Files can be up to ${Math.round(maxBytes / 1e9)} GB.`
+          : `Files can be up to ${Math.round(maxBytes / 1024 / 1024)} MB.`,
     ),
   uploadQuota: () =>
     new AppError(

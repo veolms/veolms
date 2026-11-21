@@ -251,8 +251,39 @@ export function createChatAccess(repository: ChatRepository) {
     return off;
   }
 
+  /**
+   * Whose read receipts are off in a given chat, as "roomId:userId": a
+   * staff member's choice for that chat, else their setting for all chats.
+   * Learners' are always on.
+   */
+  async function receiptsOffIn(
+    db: Executor,
+    pairs: ReadonlyArray<{ roomId: string; userId: string }>,
+  ): Promise<Set<string>> {
+    const off = new Set<string>();
+    if (pairs.length === 0) return off;
+    const userIds = [...new Set(pairs.map((p) => p.userId))];
+    const [profiles, overrides] = await Promise.all([
+      repository.getProfiles(db, userIds),
+      repository.memberReceiptOverrides(db, pairs),
+    ]);
+    const profileOn = new Map(
+      profiles.map((p) => [p.user_id, p.read_receipts]),
+    );
+    const chosen = new Map(
+      overrides.map((o) => [`${o.room_id}:${o.user_id}`, o.read_receipts]),
+    );
+    for (const { roomId, userId } of pairs) {
+      const key = `${roomId}:${userId}`;
+      const on = chosen.get(key) ?? profileOn.get(userId) ?? true;
+      if (!on && (await isChatStaff(db, userId))) off.add(key);
+    }
+    return off;
+  }
+
   return {
     receiptsOff,
+    receiptsOffIn,
     isPlatformModerator,
     isChatStaff,
     isManager,

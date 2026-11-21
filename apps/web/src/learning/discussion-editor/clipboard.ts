@@ -77,6 +77,31 @@ export function createDiscussionClipboardExtension({
 
       const html = event.clipboardData?.getData("text/html");
       if (!html) return false;
+      // Code goes in exactly as copied. Turned into Markdown, a code
+      // editor's copy (VS Code) got a blank line between every line, lost
+      // its indents and had "=" escaped as "\=" (21 Nov 2026).
+      const plain = (event.clipboardData?.getData("text/plain") ?? "").replace(
+        /\r\n?/g,
+        "\n",
+      );
+      if (plain && insideCodeBlock(view)) {
+        event.preventDefault();
+        replaceSelection(view, plain);
+        return true;
+      }
+      if (plain && looksLikeCopiedCode(html)) {
+        event.preventDefault();
+        // Several lines of code pasted into the text become a code block,
+        // as on GitHub and Slack: left as text, its lines ran together as
+        // paragraphs and only the indented ones showed as code (21 Nov).
+        replaceSelection(
+          view,
+          plain.includes("\n")
+            ? fencedCode(view, plain, editorLanguage(event.clipboardData))
+            : plain,
+        );
+        return true;
+      }
       const markdown = htmlToDiscussionMarkdown(html);
       if (!markdown) return false;
       event.preventDefault();
@@ -94,6 +119,80 @@ export function createDiscussionClipboardExtension({
       return true;
     },
   });
+}
+
+/** VS Code's language ids, as the code fences name them. */
+const EDITOR_LANGUAGES: Record<string, string> = {
+  javascript: "js",
+  javascriptreact: "jsx",
+  typescript: "ts",
+  typescriptreact: "tsx",
+  shellscript: "sh",
+  python: "py",
+  csharp: "cs",
+  cpp: "cpp",
+  plaintext: "",
+};
+
+/**
+ * The language of code copied from VS Code (it puts the editor's mode on
+ * the clipboard); otherwise none, and the code is coloured by what it
+ * looks like.
+ */
+function editorLanguage(clipboard: DataTransfer | null): string {
+  try {
+    const data = JSON.parse(
+      clipboard?.getData("vscode-editor-data") || "{}",
+    ) as { mode?: unknown };
+    if (typeof data.mode !== "string") return "";
+    const mode = data.mode.toLowerCase();
+    const language = EDITOR_LANGUAGES[mode] ?? mode;
+    return /^[a-z0-9#+-]{1,20}$/.test(language) ? language : "";
+  } catch {
+    return "";
+  }
+}
+
+/** `code` as a fenced block on lines of its own, wherever the caret is. */
+function fencedCode(view: EditorView, code: string, language: string): string {
+  const { state } = view;
+  const { from, to } = state.selection.main;
+  const before = state.doc.lineAt(from);
+  const after = state.doc.lineAt(to);
+  const lead = from > before.from ? "\n\n" : "";
+  const tail = to < after.to ? "\n\n" : "\n";
+  // A fence longer than any run of backticks in the code itself.
+  const longest = Math.max(
+    2,
+    ...(code.match(/`+/g) ?? []).map((run) => run.length),
+  );
+  const fence = "`".repeat(longest + 1);
+  return `${lead}${fence}${language}\n${code.replace(/\n+$/, "")}\n${fence}${tail}`;
+}
+
+/** The caret is inside a fenced code block (an odd number of fences above it). */
+function insideCodeBlock(view: EditorView): boolean {
+  const { state } = view;
+  const caretLine = state.doc.lineAt(state.selection.main.from).number;
+  let open = false;
+  for (let number = 1; number < caretLine; number += 1) {
+    if (/^\s*(```|~~~)/.test(state.doc.line(number).text)) open = !open;
+  }
+  return open;
+}
+
+/**
+ * HTML that is code from an editor or a page's code box: kept-as-typed
+ * spacing (`white-space: pre`) or a monospace font with no table, list or
+ * heading that would be worth keeping as Markdown.
+ */
+function looksLikeCopiedCode(html: string): boolean {
+  if (/<(table|ul|ol|h[1-6])\b/i.test(html)) return false;
+  return (
+    /white-space:\s*pre/i.test(html) ||
+    /^\s*(<meta[^>]*>\s*)?<pre\b/i.test(html) ||
+    /font-family:[^;"]*(monospace|consolas|menlo|courier|monaco)/i.test(html)
+  );
 }
 
 export function htmlToDiscussionMarkdown(html: string) {

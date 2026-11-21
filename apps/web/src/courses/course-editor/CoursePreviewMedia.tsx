@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent, LazyExoticComponent } from "react";
-import type { VideoEngine } from "@veolms/video-player";
+import type { VideoSource } from "@veolms/video-player";
+import { FileVideoPlayer } from "../../components/video";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
 import { ImageIcon } from "@phosphor-icons/react/Image";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
@@ -339,26 +340,17 @@ function TrailerVideo({
   localUrl: string | null;
   poster: string | null;
 }) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  // The saved trailer's stream, fetched when it is to play.
+  const [source, setSource] = useState<VideoSource | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || localUrl || !courseId) return;
-
-    let engine: VideoEngine | undefined;
+    if (localUrl || !courseId) return undefined;
     let cancelled = false;
     void import("./courseTrailerVideoEngine")
-      .then(({ loadCourseTrailerVideo }) =>
-        loadCourseTrailerVideo(video, courseId),
-      )
-      .then(async (loaded) => {
-        if (cancelled) {
-          await loaded.destroy().catch(() => undefined);
-          return;
-        }
-        engine = loaded;
-        await loaded.play().catch(() => undefined);
+      .then(({ loadCourseTrailerSource }) => loadCourseTrailerSource(courseId))
+      .then((loaded) => {
+        if (!cancelled) setSource(loaded);
       })
       .catch((caught: unknown) => {
         if (cancelled) return;
@@ -371,25 +363,22 @@ function TrailerVideo({
             : "The trailer could not be played.",
         );
       });
-
     return () => {
       cancelled = true;
-      void engine?.destroy().catch(() => undefined);
     };
   }, [courseId, localUrl]);
 
   return (
     <div className="absolute inset-0 bg-black">
-      <video
-        ref={videoRef}
-        src={localUrl ?? undefined}
-        poster={poster ?? undefined}
-        autoPlay={Boolean(localUrl)}
-        controls
-        playsInline
-        className="block h-full w-full object-contain"
-        aria-label="Course trailer"
-      />
+      {localUrl || source ? (
+        <FileVideoPlayer
+          src={localUrl ?? source?.src ?? ""}
+          source={localUrl ? undefined : (source ?? undefined)}
+          poster={poster ?? undefined}
+          title="Course trailer"
+          autoPlay
+        />
+      ) : null}
       {error ? (
         <p
           className="absolute inset-x-3 bottom-3 m-0 rounded-md bg-black/70 px-3 py-2 text-center text-[0.78rem] text-white"

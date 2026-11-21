@@ -49,8 +49,16 @@ function recognitionClass(): RecognitionConstructor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+/**
+ * Off until it has been tried on real phones and computers: browsers'
+ * speech recognition varied too much (Android repeats words, sessions end
+ * on their own, accuracy depends on the browser's speech service). Turn on
+ * here when it is ready.
+ */
+export const VOICE_TYPING_ENABLED = false;
+
 export function dictationSupported(): boolean {
-  return recognitionClass() !== null;
+  return VOICE_TYPING_ENABLED && recognitionClass() !== null;
 }
 
 /** Android Chrome repeats words in continuous mode: one phrase per session. */

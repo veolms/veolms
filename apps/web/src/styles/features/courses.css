@@ -109,7 +109,7 @@
   overflow-y: auto;
 }
 
-.courses-nav button {
+.courses-nav :is(button, a) {
   position: relative;
   display: flex;
   width: 100%;
@@ -127,16 +127,16 @@
     transform 150ms ease;
 }
 
-.courses-nav button:hover {
+.courses-nav :is(button, a):hover {
   color: var(--text);
   background: var(--hover);
 }
 
-.courses-nav button:active {
+.courses-nav :is(button, a):active {
   transform: scale(0.985);
 }
 
-.courses-nav button.is-active {
+.courses-nav :is(button, a).is-active {
   color: var(--text);
   background: linear-gradient(
     96deg,
@@ -146,17 +146,17 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.courses-nav button > svg {
+.courses-nav :is(button, a) > svg {
   flex: 0 0 auto;
 }
 
-.courses-nav button > span {
+.courses-nav :is(button, a) > span {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.courses-nav button > b {
+.courses-nav :is(button, a) > b {
   display: inline-flex;
   min-width: 20px;
   height: 20px;
@@ -748,8 +748,8 @@
 }
 
 .courses-app--collapsed .courses-sidebar__label,
-.courses-app--collapsed .courses-nav button > span,
-.courses-app--collapsed .courses-nav button > b,
+.courses-app--collapsed .courses-nav :is(button, a) > span,
+.courses-app--collapsed .courses-nav :is(button, a) > b,
 .courses-app--collapsed
   .courses-profile__button
   > span:not(.courses-profile__avatar-wrap),
@@ -762,7 +762,7 @@
   align-items: center;
 }
 
-.courses-app--collapsed .courses-nav button {
+.courses-app--collapsed .courses-nav :is(button, a) {
   width: 50px;
   justify-content: center;
   padding: 0;
@@ -1494,8 +1494,8 @@
   }
 
   .courses-app:not(.courses-app--hidden) .courses-sidebar__label,
-  .courses-app:not(.courses-app--hidden) .courses-nav button > span,
-  .courses-app:not(.courses-app--hidden) .courses-nav button > b,
+  .courses-app:not(.courses-app--hidden) .courses-nav :is(button, a) > span,
+  .courses-app:not(.courses-app--hidden) .courses-nav :is(button, a) > b,
   .courses-app:not(.courses-app--hidden)
     .courses-profile__button
     > span:not(.courses-profile__avatar-wrap),
@@ -1507,7 +1507,7 @@
     margin-top: 11px;
   }
 
-  .courses-app:not(.courses-app--hidden) .courses-nav button {
+  .courses-app:not(.courses-app--hidden) .courses-nav :is(button, a) {
     justify-content: center;
     padding: 0;
   }

@@ -74,7 +74,7 @@
     }
   }
 
-  .mobile-bottom-nav > button {
+  .mobile-bottom-nav > :is(button, a) {
     position: relative;
     display: flex;
     flex: 1 1 0;
@@ -88,7 +88,7 @@
     color: var(--muted);
   }
 
-  .mobile-bottom-nav > button > span {
+  .mobile-bottom-nav > :is(button, a) > span {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -119,11 +119,11 @@
     border-width: 1px;
   }
 
-  .mobile-bottom-nav > button svg {
+  .mobile-bottom-nav > :is(button, a) svg {
     color: var(--nav-icon-color, var(--muted));
   }
 
-  .mobile-bottom-nav > button small {
+  .mobile-bottom-nav > :is(button, a) small {
     max-width: 100%;
     overflow: hidden;
     color: inherit;
@@ -133,7 +133,7 @@
     text-overflow: ellipsis;
   }
 
-  .mobile-bottom-nav > button b {
+  .mobile-bottom-nav > :is(button, a) b {
     position: absolute;
     top: -7px;
     right: -10px;
@@ -149,13 +149,13 @@
     font-size: 0.56rem;
   }
 
-  .mobile-bottom-nav > button.is-active {
+  .mobile-bottom-nav > :is(button, a).is-active {
     color: var(--nav-icon-color, var(--accent));
     background: transparent;
     box-shadow: none;
   }
 
-  .mobile-bottom-nav > button.is-active svg {
+  .mobile-bottom-nav > :is(button, a).is-active svg {
     color: currentColor;
   }
 
@@ -389,7 +389,7 @@
     border-radius: 10px !important;
   }
 
-  .mobile-menu-sheet__list > button {
+  .mobile-menu-sheet__list > :is(button, a) {
     position: relative;
     display: grid;
     min-height: 50px;
@@ -403,11 +403,11 @@
     touch-action: pan-y;
   }
 
-  .mobile-menu-sheet__list > button svg {
+  .mobile-menu-sheet__list > :is(button, a) svg {
     color: var(--nav-icon-color, var(--muted));
   }
 
-  .mobile-menu-sheet__list > button span {
+  .mobile-menu-sheet__list > :is(button, a) span {
     overflow: hidden;
     font-size: 0.83rem;
     font-weight: 550;
@@ -415,7 +415,7 @@
     text-overflow: ellipsis;
   }
 
-  .mobile-menu-sheet__list > button b {
+  .mobile-menu-sheet__list > :is(button, a) b {
     display: inline-flex;
     min-width: 21px;
     height: 21px;
@@ -427,7 +427,7 @@
     font-size: 0.63rem;
   }
 
-  .mobile-menu-sheet__list > button.is-active {
+  .mobile-menu-sheet__list > :is(button, a).is-active {
     color: var(--text);
     background: linear-gradient(
       96deg,
@@ -448,15 +448,15 @@
     overflow: hidden;
   }
 
-  .mobile-menu-sheet__appearance--palette-open > button.is-active {
+  .mobile-menu-sheet__appearance--palette-open > :is(button, a).is-active {
     box-shadow: none;
   }
 
-  .mobile-menu-sheet__appearance > button {
+  .mobile-menu-sheet__appearance > :is(button, a) {
     min-height: 44px;
   }
 
-  .mobile-menu-sheet__appearance > button.is-active {
+  .mobile-menu-sheet__appearance > :is(button, a).is-active {
     color: var(--text);
     border-color: transparent;
     background: var(--sidebar-menu-active-background);
@@ -471,7 +471,7 @@
     box-shadow: var(--sidebar-menu-active-shadow);
   }
 
-  .mobile-menu-sheet__appearance > button > i {
+  .mobile-menu-sheet__appearance > :is(button, a) > i {
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -512,7 +512,7 @@
 }
 
 @media (max-width: 440px) {
-  .mobile-bottom-nav > button small {
+  .mobile-bottom-nav > :is(button, a) small {
     font-size: 0.58rem;
   }
 

@@ -2,13 +2,16 @@ import type { QueryClient } from "@tanstack/react-query";
 import type {
   ChatAttachment,
   ChatMessage,
+  ChatRoomDetail,
   ChatUploadKind,
 } from "@veolms/contracts";
 
 import { getApiError } from "../../lib/api-error";
 import { applyMessages, applyToRoomList, markRoomRead } from "./chat.cache";
+import { chatKeys } from "./chat.keys";
 import { chatService } from "./chat.service";
 import { getChatPrefs } from "../../store/chatPrefs.store";
+import type { SendQuality } from "../../chat/mediaQuality";
 import { sentPop } from "./chat.sounds";
 
 /**
@@ -33,6 +36,12 @@ export interface OutgoingFile {
   previewUrl: string | null;
   progress: number;
   attachment: ChatAttachment | null;
+  /** The file as picked; `file` becomes the copy sent (Standard / HD). */
+  original?: Blob;
+  /** Done making the copy to send (kept across a retry). */
+  prepared?: boolean;
+  /** 0–1 while the copy to send is being made (a video takes a while). */
+  preparing?: number;
 }
 
 export interface OutgoingMessage {
@@ -49,10 +58,15 @@ export interface OutgoingMessage {
      * after that one, with that one's number.
      */
     clientId?: string;
+    /** "Reply privately": the group the quoted message is in. */
+    roomId?: string;
+    roomName?: string | null;
   } | null;
   mentions: string[];
   mentionAll: boolean;
   files: OutgoingFile[];
+  /** How photos, videos and audio go: smaller (Standard) or HD. */
+  quality?: SendQuality;
   status: "sending" | "failed";
   error: string | null;
   createdAt: string;
@@ -116,6 +130,24 @@ async function uploadFile(
   file: OutgoingFile,
 ): Promise<ChatAttachment> {
   if (file.attachment) return file.attachment;
+  if (!file.prepared) {
+    // The copy to send: a smaller one in Standard (made here, in the
+    // browser), or the original. Kept, so a retry doesn't make it again.
+    const { prepareForSending } = await import("../../chat/mediaQuality");
+    file.original ??= file.file;
+    const ready = await prepareForSending(
+      file,
+      message.quality ?? "standard",
+      (fraction) => {
+        file.preparing = fraction;
+        update(roomId, message.clientId, { files: [...message.files] });
+      },
+    ).catch(() => null);
+    if (ready) Object.assign(file, ready);
+    file.prepared = true;
+    file.preparing = undefined;
+    update(roomId, message.clientId, { files: [...message.files] });
+  }
   const start = await chatService.startUpload(roomId, {
     kind: file.kind,
     name: file.name,
@@ -130,10 +162,42 @@ async function uploadFile(
     file.progress = fraction;
     update(roomId, message.clientId, { files: [...message.files] });
   });
-  const { attachment } = await chatService.completeUpload(start.uploadId);
+  const { attachment } = await chatService.completeUpload(
+    start.uploadId,
+    start.multipart?.storageUploadId,
+  );
   file.attachment = attachment;
   file.progress = 1;
   return attachment;
+}
+
+/**
+ * Your first message of a request (a private chat they have not accepted):
+ * the box closes until they answer, without a reload, as the server will
+ * refuse a second one.
+ */
+function markRequestPending(
+  client: QueryClient,
+  roomId: string,
+  viewerId: string | null,
+) {
+  const key = chatKeys.room(roomId);
+  const room = client.getQueryData<ChatRoomDetail>(key);
+  if (
+    !room ||
+    !viewerId ||
+    room.kind !== "direct" ||
+    room.directStatus !== "requested" ||
+    !room.requestedByMe ||
+    room.me.cannotPostReason === "request_pending"
+  ) {
+    return;
+  }
+  client.setQueryData<ChatRoomDetail>(key, {
+    ...room,
+    me: { ...room.me, canPost: false, cannotPostReason: "request_pending" },
+  });
+  void client.invalidateQueries({ queryKey: key });
 }
 
 /** Numbers of messages this tab sent, by their client id (replies to them). */
@@ -154,6 +218,26 @@ function replySeq(
     : null;
 }
 
+/**
+ * What a learner reads under a message that did not go: never a code or a
+ * server's own words ("Upload failed (403)", a schema error).
+ */
+function sendErrorText(error: unknown): string {
+  if (
+    error instanceof DOMException &&
+    (error.name === "NotReadableError" || error.name === "NotFoundError")
+  ) {
+    return "This file can’t be read any more. Discard it and pick it again.";
+  }
+  if (error instanceof Error && error.message.startsWith("Upload failed")) {
+    return "Couldn’t upload. Check your connection and tap Retry.";
+  }
+  if (error instanceof Error && error.message.startsWith("Not sent:")) {
+    return error.message;
+  }
+  return getApiError(error).message;
+}
+
 async function deliver(
   client: QueryClient,
   viewerId: string | null,
@@ -161,6 +245,8 @@ async function deliver(
 ) {
   if (running.has(roomId)) return;
   running.add(roomId);
+  /** Failed messages sent again ahead of a reply to them, this round. */
+  const retriedFirst = new Set<string>();
   try {
     for (;;) {
       const next = outbox.get(roomId)?.find((m) => m.status === "sending");
@@ -168,17 +254,33 @@ async function deliver(
       try {
         const quoted = next.replyTo ? replySeq(roomId, next.replyTo) : null;
         if (quoted === "waiting") {
-          // Its message did not go (it failed): this one can't go first.
-          throw new Error("Send the message you replied to first.");
+          // The message it replies to did not go (it failed): that one is
+          // sent again first, once, then this one follows it.
+          const first = next.replyTo?.clientId;
+          if (first && !retriedFirst.has(first)) {
+            retriedFirst.add(first);
+            update(roomId, first, { status: "sending", error: null });
+            continue;
+          }
+          throw new Error(
+            "Not sent: the message you replied to didn’t send. Tap Retry.",
+          );
         }
         const attachments: ChatAttachment[] = [];
         for (const file of next.files) {
           attachments.push(await uploadFile(roomId, next, file));
         }
+        // Deleted (discarded) while its files went up: not sent after all.
+        if (!outbox.get(roomId)?.some((m) => m.clientId === next.clientId)) {
+          continue;
+        }
         const { message } = await chatService.send(roomId, {
           clientId: next.clientId,
           body: next.body,
           ...(quoted ? { replyToSeq: quoted } : {}),
+          ...(quoted && next.replyTo?.roomId
+            ? { replyToRoomId: next.replyTo.roomId }
+            : {}),
           ...(next.mentions.length > 0 ? { mentions: next.mentions } : {}),
           ...(next.mentionAll ? { mentionAll: true } : {}),
           ...(attachments.length > 0
@@ -186,6 +288,7 @@ async function deliver(
             : {}),
         });
         sentSeqs.set(next.clientId, message.seq);
+        markRequestPending(client, roomId, viewerId);
         applyMessages(client, roomId, [message]);
         applyToRoomList(client, message, { viewerId, isNew: true, open: true });
         markRoomRead(client, roomId, message.seq);
@@ -194,10 +297,7 @@ async function deliver(
       } catch (error) {
         update(roomId, next.clientId, {
           status: "failed",
-          error:
-            error instanceof Error && !("response" in error)
-              ? error.message
-              : getApiError(error).message,
+          error: sendErrorText(error),
         });
       }
     }

@@ -6,6 +6,8 @@ import { PLAYBACK_BOOTSTRAP_SESSION_KEY_PREFIX } from "../store/accountBrowserSt
 import {
   LEARNING_COURSE_SLUG_META_NAME,
   LEARNING_LESSON_NUMBER_META_NAME,
+  LEARNING_LESSON_NO_VIDEO_META_NAME,
+  LESSONS_WITHOUT_VIDEO_STORAGE_KEY,
 } from "./learningHlsBootstrap";
 
 /**
@@ -188,6 +190,8 @@ function startFromHead(config: {
   keptWithoutTokenMs: number;
   courseMeta: string;
   lessonMeta: string;
+  noVideoMeta: string;
+  noVideoKey: string;
   learnerViewKey: string;
   learnerViewHeader: string;
   learnerViewValue: string;
@@ -210,6 +214,18 @@ function startFromHead(config: {
       lessonNumber = Number(match[2]);
     }
     if (!courseSlug || !(lessonNumber >= 1)) return;
+    // A lesson without a video (a reading, a quiz) has no playback: the API
+    // answers 404. Known from the built page, or from the course's lessons
+    // as this browser last saw them.
+    if (meta(config.noVideoMeta) === "1") return;
+    try {
+      const numbers = JSON.parse(
+        localStorage.getItem(config.noVideoKey) || "{}",
+      )[courseSlug];
+      if (Array.isArray(numbers) && numbers.indexOf(lessonNumber) >= 0) return;
+    } catch {
+      // Unknown: asked for, as before.
+    }
     const root = document.documentElement;
     let learnerView = false;
     try {
@@ -306,6 +322,8 @@ export const getPlaybackBootstrapHeadStartScript = (apiBase: string) =>
     keptWithoutTokenMs: KEPT_WITHOUT_TOKEN_MS,
     courseMeta: LEARNING_COURSE_SLUG_META_NAME,
     lessonMeta: LEARNING_LESSON_NUMBER_META_NAME,
+    noVideoMeta: LEARNING_LESSON_NO_VIDEO_META_NAME,
+    noVideoKey: LESSONS_WITHOUT_VIDEO_STORAGE_KEY,
     learnerViewKey: "veolms-learner-view",
     learnerViewHeader: LEARNER_VIEW_HEADER,
     learnerViewValue: LEARNER_VIEW_HEADER_VALUE,

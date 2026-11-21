@@ -10,6 +10,7 @@ import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { getNavigationIconColor } from "./navigation";
+import { SidebarNotificationsButton } from "./SidebarNotificationsButton";
 import { themeRevealOriginFromClick } from "./themeViewTransition";
 import type { ThemeRevealOrigin } from "./themeViewTransition";
 import { academyThemes } from "../themes";
@@ -37,10 +38,6 @@ export interface MobileSheetAppearanceProps {
     option: AppearanceOption,
     mobile?: boolean,
     source?: "appearance" | "theme",
-  ) => void;
-  openAppearanceThemeMenu: (
-    event: ReactMouseEvent<HTMLButtonElement>,
-    mobile?: boolean,
   ) => void;
   startDockLongPress: (
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -78,7 +75,6 @@ export interface MobileSheetAppearanceProps {
   settingsControlTitle: string;
   primaryShortcutModifier: "Meta" | "Control";
   settingsQuickMenu: "desktop" | "mobile" | null;
-  toggleSettingsNavigation: () => void;
   openSettingsQuickMenu: (
     event: ReactMouseEvent<HTMLButtonElement>,
     mobile?: boolean,
@@ -87,6 +83,9 @@ export interface MobileSheetAppearanceProps {
   isFullscreen: boolean;
   fullscreenActionLabel: "Exit fullscreen" | "Fullscreen";
   toggleFullscreen: () => Promise<void>;
+  /** Unread notifications for the bell; 0 for a guest. */
+  unreadNotificationCount: number;
+  openNotifications: () => void;
 }
 
 export function MobileSheetAppearance({
@@ -97,7 +96,6 @@ export function MobileSheetAppearance({
   consumeAppearanceGestureClick,
   cancelMobilePalettePreview,
   activateAppearanceOption,
-  openAppearanceThemeMenu,
   startDockLongPress,
   moveDockLongPress,
   finishDockLongPress,
@@ -120,12 +118,13 @@ export function MobileSheetAppearance({
   settingsControlTitle,
   primaryShortcutModifier,
   settingsQuickMenu,
-  toggleSettingsNavigation,
   openSettingsQuickMenu,
   showSettingsQuickMenu,
   isFullscreen,
   fullscreenActionLabel,
   toggleFullscreen,
+  unreadNotificationCount,
+  openNotifications,
 }: MobileSheetAppearanceProps) {
   // The theme on screen, which is the one being previewed while the colour
   // menu is open.
@@ -168,7 +167,7 @@ export function MobileSheetAppearance({
                 paletteMenuSource === "appearance"
               }
               aria-controls="mobile-theme-menu"
-              aria-label={`Choose color theme and light or dark mode. Current theme: ${displayedThemeName}`}
+              aria-label={`Choose color theme and light or dark mode. Current theme: ${displayedThemeName}. Hold for reading mode`}
               title={`Color theme - ${displayedThemeName}`}
               onClick={(event) => {
                 if (consumeAppearanceGestureClick(event)) return;
@@ -186,16 +185,13 @@ export function MobileSheetAppearance({
                     "appearance",
                   );
               }}
-              onContextMenu={(event) =>
-                openAppearanceThemeMenu(event, true)
-              }
+              // A right-click or a long press opens reading mode's menu.
+              onContextMenu={(event) => openReadingModeMenu(event, true)}
               onPointerDown={(event) =>
-                startDockLongPress(event, () =>
-                  activateAppearanceOption(
-                    "theme",
-                    true,
-                    "appearance",
-                  ),
+                startDockLongPress(
+                  event,
+                  () => showReadingModeMenu(true),
+                  true,
                 )
               }
               onPointerMove={moveDockLongPress}
@@ -252,6 +248,21 @@ export function MobileSheetAppearance({
                 }}
               />
             </button>
+          );
+        }
+
+        if (item === "notifications") {
+          return (
+            <SidebarNotificationsButton
+              key={item}
+              unreadCount={unreadNotificationCount}
+              active={page === "notifications"}
+              iconColor={getNavigationIconColor(
+                "Notifications",
+                sidebarPreferences,
+              )}
+              onOpen={openNotifications}
+            />
           );
         }
 
@@ -326,9 +337,11 @@ export function MobileSheetAppearance({
               aria-expanded={settingsQuickMenu === "mobile"}
               aria-controls="mobile-settings-quick-menu"
               data-settings-quick-trigger
+              // A tap opens the settings menu: reading mode and the
+              // settings pages.
               onClick={(event) => {
                 if (consumeAppearanceGestureClick(event)) return;
-                toggleSettingsNavigation();
+                openSettingsQuickMenu(event, true);
               }}
               onContextMenu={(event) =>
                 openSettingsQuickMenu(event, true)

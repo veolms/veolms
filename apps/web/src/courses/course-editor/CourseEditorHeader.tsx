@@ -8,6 +8,7 @@ export interface CourseEditorHeaderProps {
   isPublished: boolean;
   activeStep: CourseWizardStepId;
   publishValidationError: string | null;
+  isLoading?: boolean;
 }
 
 export function CourseEditorHeader({
@@ -16,6 +17,7 @@ export function CourseEditorHeader({
   isPublished,
   activeStep,
   publishValidationError,
+  isLoading = false,
 }: CourseEditorHeaderProps) {
   // prettier-ignore
   return (
@@ -35,15 +37,24 @@ export function CourseEditorHeader({
               <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
                 {isEditing ? "Edit Course" : "Create New Course"}
               </h1>
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium tracking-[0.02em] ${
-                  isPublished
-                    ? "is-published border border-green-500/35 text-green-400 bg-green-500/12"
-                    : "border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
-                }`}
-              >
-                {isPublished ? "Published" : "Draft"}
-              </span>
+              {isLoading ? (
+                <span
+                  className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium tracking-[0.02em] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-transparent bg-[color-mix(in_srgb,var(--text)_8%,transparent)] animate-pulse select-none"
+                  aria-hidden="true"
+                >
+                  Loading
+                </span>
+              ) : (
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium tracking-[0.02em] ${
+                    isPublished
+                      ? "is-published border border-green-500/35 text-green-400 bg-green-500/12"
+                      : "border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                  }`}
+                >
+                  {isPublished ? "Published" : "Draft"}
+                </span>
+              )}
             </div>
             <p className="m-0 mt-0.5 text-(--muted) text-[0.82rem] max-w-155 leading-[1.35]">
               {activeStep === "curriculum"

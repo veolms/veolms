@@ -47,7 +47,10 @@ import {
   useUpdateMyChatState,
   isRoomMuted,
 } from "../services/chat";
+import type { ChatThread } from "../services/chat/chat.cache";
+import { chatKeys } from "../services/chat/chat.keys";
 import { ChatAvatar } from "./ChatAvatar";
+import { copyImage } from "./copyImage";
 import { roomAvatarUrl } from "./chatIcon";
 import {
   ClearChatDialog,
@@ -61,18 +64,24 @@ import { lastSeenLabel, ROLE_LABEL } from "./chatFormat";
 import { Composer, type ComposerHandle } from "./Composer";
 import { EmojiPanel } from "./EmojiPanel";
 import { MediaViewer } from "./MediaViewer";
-import type { ViewableMedia } from "./MessageAttachments";
+import { viewableMediaOf, type ViewableMedia } from "./MessageAttachments";
 import type { BubbleContext } from "./MessageBubble";
 import { MessageList, type MessageFocus } from "./MessageList";
 import { PersonCard, type CardPerson } from "./PersonCard";
+import { ForwardDialog } from "./ForwardDialog";
+import { SelectionBar } from "./SelectionBar";
 import type { MessageAction } from "./MessageMenu";
 import { ChatThreadSkeleton } from "./ChatSkeletons";
+import {
+  setPendingPrivateReply,
+  takePendingPrivateReply,
+} from "./privateReply";
 
 /** Your own reactions, remembered for this tab (the server keeps counts). */
 const myReactions = new Map<string, string>();
 
 type DialogState =
-  | { kind: "delete"; message: ChatMessage }
+  | { kind: "delete"; messages: ChatMessage[] }
   | { kind: "report"; message: ChatMessage }
   | { kind: "restrict"; message: ChatMessage; mode: "mute" | "ban" }
   | { kind: "react"; message: ChatMessage }
@@ -110,13 +119,80 @@ export function Conversation({
   const stars = useStarredMessages(true);
   const composerRef = useRef<ComposerHandle>(null);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  /** The group a "Reply privately" quote comes from (its name). */
+  const [privateReplyGroup, setPrivateReplyGroup] = useState<string | null>(
+    null,
+  );
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
+  // The open file, by its address: the chat's files can grow in front of
+  // it (earlier messages loaded) without moving the viewer off it.
+  // `items` is for a file not among the chat's (one still sending).
   const [viewer, setViewer] = useState<{
+    url: string;
     items: ViewableMedia[];
-    index: number;
   } | null>(null);
+  // Every photo, video and document of the loaded messages, oldest first:
+  // what the viewer moves through and shows along its foot.
+  const chatMedia = useMemo(
+    () =>
+      (thread.data?.messages ?? []).flatMap((message) =>
+        message.deleted
+          ? []
+          : viewableMediaOf(message.attachments, {
+              senderName:
+                message.sender?.id === viewerId
+                  ? "You"
+                  : (message.sender?.name ?? undefined),
+              senderAvatarUrl: message.sender?.avatarUrl ?? null,
+              senderAvatarName: message.sender?.name ?? undefined,
+              sentAt: message.createdAt,
+            }),
+      ),
+    [thread.data?.messages, viewerId],
+  );
+  const viewerItems = viewer
+    ? chatMedia.some((media) => media.url === viewer.url)
+      ? chatMedia
+      : viewer.items
+    : [];
+  const viewerIndex = viewer
+    ? Math.max(
+        0,
+        viewerItems.findIndex((media) => media.url === viewer.url),
+      )
+    : 0;
+  // The viewer's strip reached the first loaded file: older messages are
+  // loaded until one brings a file (or the chat's start is reached).
+  const loadingEarlierMedia = useRef(false);
+  const loadEarlierMedia = useCallback(async () => {
+    if (loadingEarlierMedia.current) return;
+    loadingEarlierMedia.current = true;
+    const key = chatKeys.messages(room.id);
+    const files = () =>
+      (client.getQueryData<ChatThread>(key)?.messages ?? []).reduce(
+        (count, message) =>
+          count +
+          (message.deleted
+            ? 0
+            : message.attachments.filter((a) => a.kind !== "audio").length),
+        0,
+      );
+    const before = files();
+    try {
+      for (let page = 0; page < 20; page += 1) {
+        if (!client.getQueryData<ChatThread>(key)?.hasMoreBefore) break;
+        await thread.loadOlder();
+        if (files() > before) break;
+      }
+    } finally {
+      loadingEarlierMedia.current = false;
+    }
+  }, [client, room.id, thread]);
   const [focus, setFocus] = useState<MessageFocus | null>(null);
+  /** Messages ticked for Forward (WhatsApp's Select); null when not choosing. */
+  const [selected, setSelected] = useState<ReadonlySet<number> | null>(null);
+  const [forwarding, setForwarding] = useState<number[] | null>(null);
   const [person, setPerson] = useState<{
     person: CardPerson;
     anchor: HTMLElement | null;
@@ -141,12 +217,23 @@ export function Conversation({
     };
   }, [dragging]);
   const [, forceRender] = useState(0);
-  const unreadAfterRef = useRef<{ roomId: string; seq: number }>({
+  // Where the unread part starts, and how far the chat reached when it was
+  // opened (the server's count: a copy kept on the device may be behind).
+  const unreadAfterRef = useRef<{
+    roomId: string;
+    seq: number;
+    openedAtSeq: number;
+  }>({
     roomId: room.id,
     seq: room.me.lastReadSeq,
+    openedAtSeq: room.lastSeq,
   });
   if (unreadAfterRef.current.roomId !== room.id) {
-    unreadAfterRef.current = { roomId: room.id, seq: room.me.lastReadSeq };
+    unreadAfterRef.current = {
+      roomId: room.id,
+      seq: room.me.lastReadSeq,
+      openedAtSeq: room.lastSeq,
+    };
   }
 
   const deleteMessage = useDeleteMessage();
@@ -165,10 +252,15 @@ export function Conversation({
 
   useEffect(() => {
     setChatOnScreen(room.id, true);
-    setReplyTo(null);
+    // "Reply privately" from a group opens this chat replying to its message.
+    const privateReply = takePendingPrivateReply(room.id);
+    setPrivateReplyGroup(privateReply?.groupName ?? null);
+    setReplyTo(privateReply?.message ?? null);
     setEditing(null);
     setPinnedIndex(0);
     setPerson(null);
+    setSelected(null);
+    setForwarding(null);
     return () => setChatOnScreen(room.id, false);
   }, [room.id]);
 
@@ -252,6 +344,14 @@ export function Conversation({
     starred: starredIds,
     myReactions,
     onOpenPerson: (who, anchor) => setPerson({ person: who, anchor }),
+    selected,
+    onToggleSelect: (seq) =>
+      setSelected((current) => {
+        const next = new Set(current ?? []);
+        if (next.has(seq)) next.delete(seq);
+        else next.add(seq);
+        return next.size > 0 ? next : null;
+      }),
     resolveMention,
   };
 
@@ -303,6 +403,12 @@ export function Conversation({
       return;
     }
     switch (action) {
+      case "forward":
+        setForwarding([message.seq]);
+        return;
+      case "select":
+        setSelected(new Set([message.seq]));
+        return;
       case "reply":
         setEditing(null);
         setReplyTo(message);
@@ -329,6 +435,16 @@ export function Conversation({
           }, i * 400);
         });
         return;
+      case "copy-image": {
+        const photo = message.attachments.find((a) => a.kind === "image");
+        if (!photo) return;
+        copyImage(photo, message.body)
+          .then(() => onToast("Image copied"))
+          .catch(() =>
+            onToast("Couldn't copy this image. Use Download instead."),
+          );
+        return;
+      }
       case "copy-link":
         // Opens this chat at this message, blinking (for the people in it).
         void navigator.clipboard
@@ -359,13 +475,34 @@ export function Conversation({
         setDialog({ kind: "react", message });
         return;
       case "delete":
-        setDialog({ kind: "delete", message });
+        // Not sent yet (still on its way, or failed): the server has no
+        // such message; it is taken off this device's queue instead.
+        if (message.seq === 0) {
+          discardMessage(room.id, message.id);
+          return;
+        }
+        setDialog({ kind: "delete", messages: [message] });
         return;
       case "report":
         setDialog({ kind: "report", message });
         return;
       case "mute-sender":
         setDialog({ kind: "restrict", message, mode: "mute" });
+        return;
+      case "reply-privately":
+        // Opens the private chat with this message as the reply's quote.
+        if (message.sender) {
+          startDirect.mutate(message.sender.id, {
+            onSuccess: ({ room: direct }) => {
+              setPendingPrivateReply(direct.id, {
+                message,
+                groupName: room.title ?? null,
+              });
+              onOpenChat(direct.id);
+            },
+            onError: fail,
+          });
+        }
         return;
       case "message-sender":
         if (message.sender) {
@@ -461,7 +598,42 @@ export function Conversation({
           </span>
         </div>
       ) : null}
-      <header className="z-10 flex h-16 shrink-0 items-center gap-1 border-b border-solid border-(--chat-line) bg-(--chat-panel) pr-2 pl-2 @[720px]/chat:pl-4">
+      {selected ? (
+        <SelectionBar
+          count={selected.size}
+          onCancel={() => setSelected(null)}
+          onCopy={() => {
+            const text = (thread.data?.messages ?? [])
+              .filter((m) => selected.has(m.seq) && m.body)
+              .map((m) => m.body)
+              .join("\n\n");
+            if (!text) {
+              onToast("Only text can be copied.");
+              return;
+            }
+            void navigator.clipboard
+              ?.writeText(text)
+              .then(() => onToast("Messages copied"));
+          }}
+          onForward={() => setForwarding([...selected].sort((a, b) => a - b))}
+          onDelete={() => {
+            const chosen = (thread.data?.messages ?? []).filter(
+              (m) => selected.has(m.seq) && !m.deleted,
+            );
+            if (chosen.length === 0) {
+              onToast("These messages are already deleted.");
+              return;
+            }
+            setDialog({ kind: "delete", messages: chosen });
+          }}
+        />
+      ) : null}
+      <header
+        className={cn(
+          "z-10 flex h-16 shrink-0 items-center gap-1 border-b border-solid border-(--chat-line) bg-(--chat-panel) pr-2 pl-2 @[720px]/chat:pl-4",
+          selected && "hidden",
+        )}
+      >
         <button
           type="button"
           className={cn(iconButton, "@[720px]/chat:hidden")}
@@ -487,6 +659,9 @@ export function Conversation({
               {room.title}
             </span>
             <span
+              // Cut with "…" on the smallest screens; the whole line is in
+              // the tooltip (and contact info shows it too).
+              title={subtitle || undefined}
               className={cn(
                 "block truncate text-[0.8rem]",
                 typing.length > 0 || presence?.online
@@ -498,9 +673,11 @@ export function Conversation({
             </span>
           </span>
         </button>
+        {/* On a phone the name and "last seen" need the room; Search
+            messages stays in the ⋮ menu. */}
         <button
           type="button"
-          className={iconButton}
+          className={cn(iconButton, "hidden @[480px]/chat:inline-flex")}
           onClick={onOpenSearch}
           aria-label="Search messages"
           title="Search messages"
@@ -650,15 +827,22 @@ export function Conversation({
         <div className="chat-wallpaper" aria-hidden="true" />
         {thread.data ? (
           <MessageList
+            roomId={room.id}
             thread={thread.data}
             outgoing={outgoing}
             ctx={ctx}
             unreadAfterSeq={unreadAfterRef.current.seq}
+            openedAtSeq={unreadAfterRef.current.openedAtSeq}
             focus={focus}
             loadingOlder={thread.loadingOlder}
             onLoadOlder={() => void thread.loadOlder()}
             onAction={onAction}
-            onOpenMedia={(items, index) => setViewer({ items, index })}
+            onOpenMedia={(items, index) => {
+              // As WhatsApp does: every file of the chat (those loaded),
+              // in order, opened at the one tapped.
+              const opened = items[index];
+              if (opened) setViewer({ url: opened.url, items });
+            }}
             onJumpTo={(seq, from) => void jumpTo(seq, from)}
             onAtBottom={onAtBottom}
             onRetry={(clientId) =>
@@ -727,6 +911,7 @@ export function Conversation({
           room={room}
           viewerId={viewerId}
           replyTo={replyTo}
+          replyGroupName={privateReplyGroup}
           onCancelReply={() => setReplyTo(null)}
           editing={editing}
           onDoneEditing={() => setEditing(null)}
@@ -766,16 +951,36 @@ export function Conversation({
       ) : null}
       {dialog?.kind === "delete" ? (
         <DeleteMessageDialog
-          message={dialog.message}
-          own={dialog.message.sender?.id === viewerId}
+          messages={dialog.messages}
+          viewerId={viewerId}
           asAdmin={room.me.canModerate || room.me.isHelper}
           onClose={() => setDialog(null)}
           onDelete={(scope) => {
-            deleteMessage.mutate(
-              { roomId: room.id, seq: dialog.message.seq, scope },
-              { onError: fail },
-            );
+            const seqs = dialog.messages.map((m) => m.seq);
+            void (async () => {
+              let failed = 0;
+              for (const seq of seqs) {
+                try {
+                  await deleteMessage.mutateAsync({
+                    roomId: room.id,
+                    seq,
+                    scope,
+                  });
+                } catch (error) {
+                  failed += 1;
+                  if (seqs.length === 1) fail(error);
+                }
+              }
+              if (seqs.length > 1) {
+                onToast(
+                  failed === 0
+                    ? `${seqs.length} messages deleted`
+                    : `${seqs.length - failed} of ${seqs.length} messages deleted. Try the rest again.`,
+                );
+              }
+            })();
             setDialog(null);
+            setSelected(null);
           }}
         />
       ) : null}
@@ -840,6 +1045,22 @@ export function Conversation({
           </div>
         </div>
       ) : null}
+      {forwarding ? (
+        <ForwardDialog
+          fromRoomId={room.id}
+          seqs={forwarding}
+          onClose={() => setForwarding(null)}
+          onToast={onToast}
+          onDone={(roomIds) => {
+            setForwarding(null);
+            setSelected(null);
+            // One chat: open it, as WhatsApp does.
+            if (roomIds.length === 1 && roomIds[0] !== room.id) {
+              onOpenChat(roomIds[0]!);
+            }
+          }}
+        />
+      ) : null}
       {person ? (
         <PersonCard
           person={person.person}
@@ -857,10 +1078,18 @@ export function Conversation({
       ) : null}
       {viewer ? (
         <MediaViewer
-          items={viewer.items}
-          index={viewer.index}
-          onIndex={(index) => setViewer((v) => (v ? { ...v, index } : v))}
+          items={viewerItems}
+          index={viewerIndex}
+          onIndex={(index) => {
+            const next = viewerItems[index];
+            if (next) setViewer((v) => (v ? { ...v, url: next.url } : v));
+          }}
           onClose={() => setViewer(null)}
+          onNearStart={
+            thread.data?.hasMoreBefore
+              ? () => void loadEarlierMedia()
+              : undefined
+          }
         />
       ) : null}
     </section>

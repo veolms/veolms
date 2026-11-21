@@ -13,6 +13,10 @@ import {
   APPEARANCE_LONG_PRESS_MOVE_TOLERANCE,
 } from "../academyShellConstants";
 import type { AppearanceOption } from "../academyShellTypes";
+import { guardMenuTapThrough } from "../menuTapThrough";
+
+/** How long after a touch on the transition overlay its stray click may come. */
+const STRAY_ROOT_CLICK_MS = 1_200;
 
 export interface UseThemeTransitionGesturesArgs {
   onNavigatePage: NavigateTo;
@@ -228,6 +232,29 @@ export function useThemeTransitionGestures({
     const isThemeTransitionSurfaceTarget = (target: EventTarget | null) =>
       getThemeTransitionKind() !== null &&
       (target === document || target === root || target === document.body);
+    // A touch that began on the transition's overlay (a colour tapped while
+    // the last colour change was still revealing) is handed to the control
+    // under it by onThemeTransitionClick. The browser's own click for that
+    // touch comes after the reveal has ended, aimed at the page's root: taken
+    // for a tap outside, it closed the colour menu and the phone's bottom
+    // sheet with it (learners' report, 16 Nov). That click is dropped.
+    let surfaceTouchAt = Number.NEGATIVE_INFINITY;
+    const onSurfaceTouchStart = (event: TouchEvent) => {
+      if (isThemeTransitionSurfaceTarget(event.target)) {
+        surfaceTouchAt = performance.now();
+      }
+    };
+    const onStrayRootClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        (target === root || target === document.body) &&
+        performance.now() - surfaceTouchAt < STRAY_ROOT_CLICK_MS
+      ) {
+        surfaceTouchAt = Number.NEGATIVE_INFINITY;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
     const onThemeTransitionPointerDown = (event: PointerEvent) => {
       const kind = getThemeTransitionKind();
       if (kind) {
@@ -484,6 +511,13 @@ export function useThemeTransitionGestures({
       }
     };
     document.addEventListener("click", onThemeTransitionClick, true);
+    // On the window, ahead of every document listener (a drawer's outside
+    // press among them).
+    window.addEventListener("touchstart", onSurfaceTouchStart, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("click", onStrayRootClick, true);
     document.addEventListener(
       "pointermove",
       onThemeTransitionPointerMove,
@@ -511,6 +545,8 @@ export function useThemeTransitionGestures({
       true,
     );
     document.addEventListener("pointerdown", onPointerDown);
+    // Before anything closes a menu (see guardMenuTapThrough).
+    document.addEventListener("pointerdown", guardMenuTapThrough, true);
     document.addEventListener("keydown", onEscape);
     return () => {
       themeTransitionObserver.disconnect();
@@ -520,6 +556,8 @@ export function useThemeTransitionGestures({
         window.clearTimeout(resetSuppressedModeClickTimer);
       }
       document.removeEventListener("click", onThemeTransitionClick, true);
+      window.removeEventListener("touchstart", onSurfaceTouchStart, true);
+      window.removeEventListener("click", onStrayRootClick, true);
       document.removeEventListener(
         "pointermove",
         onThemeTransitionPointerMove,
@@ -551,6 +589,7 @@ export function useThemeTransitionGestures({
         true,
       );
       document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerdown", guardMenuTapThrough, true);
       document.removeEventListener("keydown", onEscape);
     };
   }, [

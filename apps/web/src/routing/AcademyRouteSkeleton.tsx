@@ -9,6 +9,7 @@ import { ProgressPageSkeleton } from "../progress/ProgressPageSkeleton";
 import { QuizAuthoringLoadingSkeleton } from "../quizzes/QuizAuthoringLoadingSkeleton";
 import { StudentDetailsSkeleton } from "../students/StudentDetailsSkeleton";
 import { StudentsTableSkeleton } from "../students/StudentsTableSkeleton";
+import { CourseEditorRouteFallback } from "../shell/academyPageFallbacks";
 
 interface AcademyRouteSkeletonProps {
   page?: string;
@@ -63,6 +64,14 @@ export function AcademyRouteSkeleton({
 
   if (page === "progress") {
     return <ProgressPageSkeleton />;
+  }
+
+  if (
+    page === "course-create" ||
+    page === "course-edit" ||
+    page === "edit-course"
+  ) {
+    return <CourseEditorRouteFallback />;
   }
 
   return (

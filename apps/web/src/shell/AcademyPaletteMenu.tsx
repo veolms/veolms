@@ -151,6 +151,10 @@ export function AcademyPaletteMenu({
       aria-label="Choose a color theme"
       aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home End Enter Escape"
       data-sidebar-swipe-ignore
+      // Not a swipe of the phone's bottom sheet either: a tap on a swatch
+      // that drifted down a few pixels was taken for one and closed the
+      // sheet in the middle of choosing a colour.
+      data-base-ui-swipe-ignore
       onKeyDown={handleKeyDown}
     >
       {themes.map((item, index) => (

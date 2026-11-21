@@ -179,8 +179,32 @@
   animation: chat-flash-fill 2.6s ease-in-out;
 }
 
+/* The bubble's tail (outside the bubble's box) takes the same wash. */
+@keyframes chat-tail-flash {
+  0%,
+  100% {
+    fill: var(--tail-fill);
+  }
+  12%,
+  46% {
+    fill: color-mix(in srgb, var(--accent) 40%, var(--tail-fill));
+  }
+  29%,
+  63% {
+    fill: color-mix(in srgb, var(--accent) 10%, var(--tail-fill));
+  }
+  80% {
+    fill: color-mix(in srgb, var(--accent) 28%, var(--tail-fill));
+  }
+}
+
+.chat-flash > .chat-tail {
+  animation: chat-tail-flash 2.6s ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .chat-flash::after {
+  .chat-flash::after,
+  .chat-flash > .chat-tail {
     animation: none;
   }
 

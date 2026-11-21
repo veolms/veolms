@@ -131,7 +131,10 @@ export function LearningBackgroundSurface({
   return (
     <div
       ref={surfaceRef}
-      className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-hidden! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none starting:opacity-0! ${deepGroundClasses} ${className}`}
+      // The reveal is registered as not inherited (foundation.css) so that
+      // its changes on the motion stage restyle only this box: taken from
+      // the stage, its parent, here.
+      className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-hidden! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none starting:opacity-0! [--learning-background-reveal-duration:inherit] [--learning-background-reveal:inherit] ${deepGroundClasses} ${className}`}
       style={{
         contain: "strict",
         opacity: "var(--learning-background-reveal, 0)",

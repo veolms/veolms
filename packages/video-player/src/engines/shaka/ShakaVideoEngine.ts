@@ -8,16 +8,27 @@ import type {
   VideoAudioTrack,
   VideoEngineCapabilities,
   VideoLoadOptions,
+  VideoNetworkRequest,
   VideoQuality,
   VideoSource,
   VideoTextTrack,
 } from "../../core/types";
+import {
+  BUFFERED_PLAYBACK_GRACE_SECONDS,
+  isPlaybackStalled,
+} from "../../core/playbackStall";
 import { MediaElementEngineBase } from "../base/MediaElementEngineBase";
+import {
+  measureSegmentFetches,
+  parallelSegmentFetchCount,
+  segmentPrefetchLimitFor,
+} from "./parallel-segment-fetch";
 import {
   abandonEarlyShakaPreloadSession,
   claimEarlyShakaPreloadSession,
   consumeEarlyShakaPreloadSession,
   discardEarlyShakaPreloadManager,
+  earlyShakaPreloadMatches,
   getEarlyShakaPreloadSession,
   noteEarlyShakaPreloadAdopted,
   noteShakaSourceLoading,
@@ -58,6 +69,7 @@ import type {
   ShakaPlayerLike,
   ShakaPreloadManagerLike,
   ShakaRequestContextLike,
+  ShakaRequestFilterLike,
   ShakaResponseFilterLike,
   ShakaRuntimeLike,
   ShakaRuntimeLoader,
@@ -161,6 +173,46 @@ const LOAD_RETRY_OFFLINE_WAIT_MS = 20_000;
  * within the window; a video that keeps failing then shows its error.
  */
 const MEDIA_RECOVERY_LIMIT = 3;
+/**
+ * A video that fails again where the last recovery reloaded it, before it
+ * has played on past that place, is not mended by loading it once more: the
+ * video file itself stops there (lecture 603's sound that ends at 1:04,
+ * lecture 42's pieces that cannot be decoded). Production showed learners
+ * a loader for two to three minutes while the same reload was tried three
+ * times. The second failure at the same place now shows the error at once
+ * (`MEDIA_STUCK`), saying what happened, and the host reports it.
+ *
+ * "The same place" is within this many seconds of where the last recovery
+ * reloaded it; playing on this far past that place forgets it.
+ */
+const SAME_PLACE_SECONDS = 3;
+/**
+ * Before the error, one reload past the place: at the start of the next
+ * segment (its own keyframe), or this far on when the manifest cannot say.
+ * Lecture 42's broken piece is one segment of about 5 s; past it the video
+ * plays on. A video broken from there on (lecture 603) fails again and the
+ * error is shown.
+ */
+const SKIP_PAST_FALLBACK_SECONDS = 6;
+const SAME_PLACE_PLAYED_PAST_SECONDS = 10;
+/**
+ * A stream that starves again at the place it was last reloaded at is
+ * taken as stuck after this long, without the nudge (see WATCHDOG_STARVED_MS).
+ */
+const WATCHDOG_STARVED_AGAIN_MS = 4_000;
+/**
+ * The sound buffered far ahead while the picture has nothing where the
+ * playhead stands, or the other way round, and the playhead not moving:
+ * the two tracks of the file do not line up there (lecture 603's sound,
+ * whose times started over in every part, so it was laid down at the
+ * wrong place and the video waited for sound that never came). A slow
+ * connection leaves both tracks short; this is the file. Mended as a
+ * freeze (one reload) once it has lasted this long; the second time at
+ * the same place shows the error (see SAME_PLACE_SECONDS). The starved
+ * check took minutes to see it, as the stream kept fetching far ahead.
+ */
+const WATCHDOG_TRACKS_APART_AHEAD_SECONDS = 10;
+const WATCHDOG_TRACKS_APART_MS = 8_000;
 const MEDIA_RECOVERY_WINDOW_MS = 10 * 60_000;
 /**
  * A decoder that failed twice in the window is probably struggling with
@@ -184,6 +236,40 @@ const WATCHDOG_BUFFERED_AHEAD_SECONDS = 2;
 const WATCHDOG_FROZEN_PLAYHEAD_MS = 8_000;
 const WATCHDOG_WAITING_FOR_KEY_MS = 8_000;
 const WATCHDOG_NO_FRAMES_MS = 6_000;
+/**
+ * A playing video with nothing buffered in front of it whose streaming has
+ * gone quiet: no segment asked for or received for this long (a request
+ * still under way counts as activity for `WATCHDOG_REQUEST_ALIVE_MS`).
+ * Production showed it on fast connections (43 Mbps, the tab's network at
+ * zero): the loader stayed until the page was reloaded. First the stream
+ * is nudged (`retryStreaming` and a seek to where it stands); if it is
+ * still starved `WATCHDOG_STARVED_RELOAD_MS` later, the video is loaded
+ * again where it was, as after a decoder failure.
+ */
+const WATCHDOG_STARVED_MS = 10_000;
+const WATCHDOG_STARVED_RELOAD_MS = 8_000;
+const WATCHDOG_REQUEST_ALIVE_MS = 30_000;
+// Under what the frozen-playhead check needs (WATCHDOG_BUFFERED_AHEAD_SECONDS):
+// Shaka holds a video still with up to its rebuffering goal (1.5 s) in hand.
+const WATCHDOG_STARVED_AHEAD_SECONDS = WATCHDOG_BUFFERED_AHEAD_SECONDS;
+/**
+ * A chosen quality (the menu's, kept for every lesson on the device) that
+ * the link cannot carry: playback waiting for data this long at once, or
+ * this many seconds within a minute, hands the lesson to automatic quality,
+ * as YouTube does. A learner who once picked 1080p on good Wi-Fi stayed at
+ * 1080p on a link that took 15s to fetch each 5s piece (production, 14-15
+ * Nov), the loader up most of the lesson.
+ */
+const CHOSEN_QUALITY_WAIT_MS = 8_000;
+const CHOSEN_QUALITY_WAIT_SECONDS_PER_MINUTE = 12;
+/**
+ * Only a link that cannot carry the chosen quality at normal speed with this
+ * much room lets the chosen quality go. On a 200 Mbps line a 1080p lesson at
+ * 16x waited for segments the CDN did not hold, and the old rule dropped the
+ * learner's 1080p for Auto (2026-11-21); the measurement (waits included)
+ * read 4.5 Mbps against a 1.1 Mbps video.
+ */
+const CHOSEN_QUALITY_LINK_HEADROOM = 1.5;
 /**
  * How long after a learner's seek, and how many times, a forward gap jump
  * past the place they sought to is undone (see `keepLearnerSeekTarget`).
@@ -391,14 +477,11 @@ function preloadSessionMatchesSource(
   session: EarlyShakaPreloadSession,
   source: VideoSource,
 ): boolean {
-  const manifestMatches = session.manifestUrl === source.src;
-  const mediaKeyMatches = Boolean(
-    session.mediaKey && source.id && session.mediaKey === source.id,
-  );
   // The paid bootstrap can resolve after the player source was created. A
   // stable media key is sufficient to adopt that session; its manifest URL
   // may be the protected API HLS path rather than the local fallback URL.
-  return manifestMatches || mediaKeyMatches;
+  // Judged by what the preload's player holds (see the function).
+  return earlyShakaPreloadMatches(session, source);
 }
 
 function visualQualityKey(track: ShakaVariantTrackLike): string {
@@ -556,6 +639,201 @@ function nextSegmentStart(
   }
 }
 
+/**
+ * When a video's parts' init segments are fetched in the background (see
+ * `warmInitSegments`): looked at this long after it loads, and again this
+ * often up to INIT_WARM_CHECKS times, until it plays with
+ * INIT_WARM_MIN_AHEAD_SECONDS in hand on a link at least
+ * INIT_WARM_MIN_LINK_RATIO times its bitrate. On a slow or busy link they
+ * only took room from the video's own segments: production's log showed
+ * learners whose last requests were all these, with the video still
+ * waiting for its first picture (14-15 Nov).
+ */
+const INIT_WARM_DELAY_MS = 15_000;
+const INIT_WARM_CHECKS = 8;
+const INIT_WARM_MIN_AHEAD_SECONDS = 10;
+const INIT_WARM_MIN_LINK_RATIO = 4;
+/** How many of them are fetched at once. */
+const INIT_WARM_PARALLEL = 2;
+/** More than this many is not a lesson's: nothing is fetched. */
+const INIT_WARM_MAX = 400;
+
+/**
+ * Every distinct init segment of a DASH video's playing quality (the video
+ * representations `height` tall, or all when unknown) and its audio, in
+ * period order, from the manifest's text. A lesson is packaged as one
+ * period per key (about a minute each), each with its own init segment.
+ * Read from the text, not from Shaka's manifest objects: its compiled
+ * build renames the field that holds a segment's init segment.
+ */
+export function dashInitSegmentUris(
+  mpd: string,
+  manifestUrl: string,
+  height: number | null,
+): string[] {
+  const uris: string[] = [];
+  if (typeof DOMParser === "undefined" || !/<MPD[\s>]/.test(mpd)) return uris;
+  try {
+    const doc = new DOMParser().parseFromString(mpd, "application/xml");
+    const seen = new Set<string>();
+    const base = (element: Element | null, from: string): string => {
+      const own = element?.querySelector(":scope > BaseURL")?.textContent;
+      return own ? new URL(own.trim(), from).toString() : from;
+    };
+    const root = base(doc.documentElement, manifestUrl);
+    for (const period of Array.from(doc.getElementsByTagName("Period"))) {
+      const periodBase = base(period, root);
+      for (const set of Array.from(
+        period.getElementsByTagName("AdaptationSet"),
+      )) {
+        const setBase = base(set, periodBase);
+        const setTemplate = set.querySelector(":scope > SegmentTemplate");
+        for (const rep of Array.from(
+          set.getElementsByTagName("Representation"),
+        )) {
+          const mime =
+            rep.getAttribute("mimeType") ?? set.getAttribute("mimeType") ?? "";
+          const isVideo = mime.startsWith("video/");
+          if (!isVideo && !mime.startsWith("audio/")) continue;
+          if (
+            isVideo &&
+            height !== null &&
+            Number(rep.getAttribute("height")) !== height
+          ) {
+            continue;
+          }
+          const template =
+            rep.querySelector(":scope > SegmentTemplate") ?? setTemplate;
+          const init = template?.getAttribute("initialization");
+          if (!init) continue;
+          const path = init
+            .replace(/\$RepresentationID\$/g, rep.getAttribute("id") ?? "")
+            .replace(/\$Bandwidth\$/g, rep.getAttribute("bandwidth") ?? "");
+          const uri = new URL(path, base(rep, setBase)).toString();
+          if (seen.has(uri)) continue;
+          seen.add(uri);
+          uris.push(uri);
+        }
+      }
+    }
+  } catch {
+    // Only a head start: nothing is fetched.
+    return [];
+  }
+  return uris;
+}
+
+/**
+ * How many segments are fetched at once is looked at this often while the
+ * video plays fast or is fetching several (`fetchSegmentsTogetherWhenNeeded`),
+ * and every fifth time otherwise: at normal speed the answer is almost
+ * always one.
+ */
+const PARALLEL_FETCH_CHECK_MS = 2_000;
+const PARALLEL_FETCH_IDLE_CHECKS = 5;
+/** At or under this speed, with one at a time, the look is the rare one. */
+const PARALLEL_FETCH_IDLE_RATE = 1.5;
+/**
+ * More at once is taken up straight away; fewer only after it has been
+ * enough for this long, so a few quick answers among slow ones do not
+ * switch it down and up again (each change drops the fetches under way).
+ */
+const PARALLEL_FETCH_LOWER_AFTER_MS = 10_000;
+/** One at a time from a seek until this long after it has ended. */
+const PARALLEL_FETCH_SEEK_QUIET_MS = 1_000;
+
+/**
+ * How long the segment of the playing video at `time` plays for (seconds)
+ * and whether its sound comes as segments of its own, from the manifest;
+ * null when Shaka cannot say.
+ */
+function segmentShapeAt(
+  player: ShakaPlayerLike,
+  time: number,
+): { seconds: number; streams: number } | null {
+  try {
+    const active = player.getVariantTracks().find((track) => track.active);
+    if (!active) return null;
+    const variant = player
+      .getManifest?.()
+      ?.variants.find(
+        (candidate) => String(candidate.id) === String(active.id),
+      );
+    const index = (variant?.video ?? variant?.audio)?.segmentIndex;
+    if (!index) return null;
+    const position = index.find(time);
+    const segment = position === null ? null : index.get(position);
+    if (!segment) return null;
+    const seconds = segment.endTime - segment.startTime;
+    if (!(seconds > 0)) return null;
+    return { seconds, streams: variant?.video && variant.audio ? 2 : 1 };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The buffer ahead grows with the connection, as YouTube's does, instead of
+ * staying at the source's goal (60s for a lesson). Checked this often while
+ * the video plays.
+ */
+const ADAPTIVE_BUFFER_CHECK_MS = 10_000;
+/** The connection this many times the playing bitrate: up to this far ahead. */
+const ADAPTIVE_BUFFER_FAST_RATIO = 4;
+const ADAPTIVE_BUFFER_FAST_SECONDS = 600;
+/** This many times: three minutes. Less: the source's own goal. */
+const ADAPTIVE_BUFFER_GOOD_RATIO = 2;
+const ADAPTIVE_BUFFER_GOOD_SECONDS = 180;
+/**
+ * What the buffer (ahead and behind) may hold. Chrome keeps about 150 MB of
+ * video per page before it evicts; more ahead than fits would be fetched
+ * only to be thrown away.
+ */
+const ADAPTIVE_BUFFER_MEMORY_BYTES = 110 * 1024 * 1024;
+/** A goal is changed only when the new one differs by more than this. */
+const ADAPTIVE_BUFFER_STEP_SECONDS = 20;
+
+/**
+ * How far ahead to buffer: the source's goal on a connection under twice
+ * the playing bitrate; three minutes on one at least twice as fast; up to
+ * ten on one four times as fast. A lesson shorter than that is buffered
+ * whole (Shaka stops at its end). Never more than the memory budget holds
+ * at this bitrate, the part kept behind included, and never under the
+ * source's goal.
+ */
+export function adaptiveBufferingGoal(options: {
+  baseGoal: number;
+  bufferBehind: number;
+  bandwidth: number | null;
+  bitrate: number | null;
+  /**
+   * The highest bitrate the video may switch up to: the memory budget is
+   * reckoned at it, so a switch up never overfills the browser's buffer
+   * (an overfilled one refuses segments and can hold playback still).
+   */
+  maxBitrate?: number | null;
+  remaining: number;
+}): number {
+  const { baseGoal, bufferBehind, bandwidth, bitrate, remaining } = options;
+  const budgetBitrate = Math.max(bitrate ?? 0, options.maxBitrate ?? 0);
+  if (!bandwidth || !bitrate || bandwidth <= 0 || bitrate <= 0) return baseGoal;
+  const ratio = bandwidth / bitrate;
+  const wanted =
+    ratio >= ADAPTIVE_BUFFER_FAST_RATIO
+      ? ADAPTIVE_BUFFER_FAST_SECONDS
+      : ratio >= ADAPTIVE_BUFFER_GOOD_RATIO
+        ? ADAPTIVE_BUFFER_GOOD_SECONDS
+        : baseGoal;
+  const fits =
+    (ADAPTIVE_BUFFER_MEMORY_BYTES * 8) / budgetBitrate - bufferBehind;
+  const goal = Math.min(
+    wanted,
+    fits,
+    Number.isFinite(remaining) && remaining > 0 ? remaining + 1 : wanted,
+  );
+  return Math.max(baseGoal, Math.round(goal));
+}
+
 /** A response this big is a video segment, not a manifest or a key. */
 const MEASURED_SEGMENT_MIN_BYTES = 100_000;
 
@@ -615,6 +893,27 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   /** When each self-recovery from a media failure began (see above). */
   #mediaRecoveries: number[] = [];
   #mediaRecoveryInFlight = false;
+  /**
+   * Where the video last stood while it was playing well, whether play was
+   * asked for, and at what speed: a recovery starts from these, not from
+   * the element, which a failure (or Shaka's own mending of it) can leave
+   * at time 0, paused, at 1x.
+   */
+  #lastGoodTime: number | null = null;
+  #lastPlayRequested = false;
+  #lastPlaybackRate = 1;
+  /** Where the last media recovery reloaded the video (see SAME_PLACE_SECONDS). */
+  #lastRecoveryPosition: number | null = null;
+  /** The reload past the place has been made (see SKIP_PAST_FALLBACK_SECONDS). */
+  #skippedPast = false;
+  /**
+   * The last segment download that failed for a reason that passes (no
+   * answer, a timeout, 5xx), while no segment has arrived since; null once
+   * one does. Set, a stall is the network's, never the video's.
+   */
+  #networkTrouble: VideoEngineError | null = null;
+  /** `MEDIA_STUCK` is on screen: later errors of this load would hide it. */
+  #stuckShown = false;
   /** Set once the decoder has failed twice on this source (see above). */
   #mediaRecoveryMaxHeight: number | null = null;
   /** The source and options of the load most recently asked for. */
@@ -633,13 +932,54 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #lastFrameCount = -1;
   #framesStillSince = 0;
   #waitingForKeySince = 0;
+  /** Starved with nothing ahead since (see WATCHDOG_STARVED_MS); 0 if not. */
+  #starvedSince = 0;
+  /** When the starved stream was nudged; 0 if it has not been. */
+  #starvedNudgedAt = 0;
+  /** Seconds a chosen quality waited for data (see CHOSEN_QUALITY_WAIT_MS). */
+  #chosenQualityWaits: number[] = [];
+  #chosenQualityWaitSince = 0;
+  /** The playhead the starved check last saw. */
+  #starvedLastTime = -1;
+  /** When one track was first seen far ahead of the other (see above). */
+  #tracksApartSince = 0;
+  /** The lagging track, while that lasts. */
+  #tracksApartLagging: "audio" | "video" | null = null;
+  /** Segments of the lagging track answered when it was first seen. */
+  #tracksApartAnswered = 0;
+  /**
+   * Segments asked for and answered for each track (see
+   * `watchSegmentActivity`); the difference is what is still on its way.
+   * A failed request is never answered, so it counts as on its way: a
+   * track waiting on the network is never taken for a broken file.
+   */
+  #segmentsAsked = { audio: 0, video: 0 };
+  #segmentsAnswered = { audio: 0, video: 0 };
+  /** The newest segment request asked for, and the newest answered. */
+  #lastSegmentRequestAt = 0;
+  #lastSegmentResponseAt = 0;
+  #segmentActivityFilters: {
+    player: ShakaPlayerLike;
+    request: ShakaRequestFilterLike;
+    response: ShakaResponseFilterLike;
+  } | null = null;
   #stopWatchingSpeculativePreloads: (() => void) | null = null;
+  /** Stops growing the buffer with the connection (see `growBufferWithConnection`). */
+  #stopAdaptiveBuffer: (() => void) | null = null;
+  /** A caller limited the buffer (`setBufferAheadLimit`): it is not grown. */
+  #bufferAheadLimited = false;
+  /** The goal the adaptive buffer set, or null while it is the source's. */
+  #adaptiveGoal: number | null = null;
   /** Drops a source's streaming settings still waiting for its first frame. */
   #cancelDeferredStreaming: (() => void) | null = null;
   /** Turns a preload's segment prefetch off now (see `lowerPrefetchLater`). */
   #lowerPrefetchNow: (() => void) | null = null;
   /** Stops waiting to turn a preload's segment prefetch off. */
   #cancelPrefetchOff: (() => void) | null = null;
+  /** Stops `fetchSegmentsTogetherWhenNeeded` for the load it was made for. */
+  #stopParallelFetch: (() => void) | null = null;
+  /** Back to one segment at a time now: a seek is starting. */
+  #pauseParallelFetch: (() => void) | null = null;
   /** The place the learner last sought to (see `keepLearnerSeekTarget`). */
   #learnerSeek: { target: number; at: number; restores: number } | null = null;
   #autoQuality = true;
@@ -717,9 +1057,16 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       // nothing about this one.
       this.#mediaRecoveries = [];
       this.#mediaRecoveryMaxHeight = null;
+      this.#lastRecoveryPosition = null;
+      this.#skippedPast = false;
+      this.#networkTrouble = null;
+      this.#lastGoodTime = null;
+      this.#lastPlayRequested = false;
+      this.#lastPlaybackRate = 1;
       this.#timedOutLoadRetries = 0;
     }
     this.#lastLoad = { src: source.src, options };
+    this.#stuckShown = false;
     // Asked for by a reload after an interruption (reloadAfterInterruption).
     const startClean = this.#nextLoadClean;
     this.#nextLoadClean = false;
@@ -735,6 +1082,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
           interruptions,
           startClean || interruptions > 0,
         );
+        this.warmInitSegments(source);
+        this.growBufferWithConnection(source);
+        this.fetchSegmentsTogetherWhenNeeded(source);
         return;
       } catch (error) {
         if (!(error instanceof LoadRetry)) throw error;
@@ -793,6 +1143,379 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   }
 
   /**
+   * Grows the buffer ahead with the connection while the video plays
+   * (`adaptiveBufferingGoal`), for as long as this load lasts. A source
+   * whose goal is under a minute (a low-memory phone, a muted hero video)
+   * keeps it.
+   */
+  private growBufferWithConnection(source: VideoSource): void {
+    this.#stopAdaptiveBuffer?.();
+    this.#adaptiveGoal = null;
+    const player = this.#player;
+    const runtime = this.#runtime;
+    const media = this.mediaElement;
+    if (!player || !runtime || !media) return;
+    const streaming = createShakaConfiguration(source, runtime).streaming as
+      Record<string, unknown> | undefined;
+    const baseGoal = Number(streaming?.bufferingGoal);
+    const bufferBehind = Number(streaming?.bufferBehind);
+    if (!(baseGoal >= 60)) return;
+    const generation = this.#loadGeneration;
+    const check = (): void => {
+      if (this.#player !== player || !this.isCurrentOperation(generation)) {
+        stop();
+        return;
+      }
+      if (this.#bufferAheadLimited || media.paused) return;
+      const active = player.getVariantTracks().find((track) => track.active);
+      const bandwidth =
+        measuredSegmentBandwidth() ??
+        player.getStats?.()?.estimatedBandwidth ??
+        null;
+      const goal = adaptiveBufferingGoal({
+        baseGoal,
+        bufferBehind: Number.isFinite(bufferBehind) ? bufferBehind : 30,
+        bandwidth,
+        bitrate: active?.bandwidth ?? null,
+        maxBitrate: player
+          .getVariantTracks()
+          .reduce((top, track) => Math.max(top, track.bandwidth ?? 0), 0),
+        remaining: media.duration - media.currentTime,
+      });
+      const current = this.#adaptiveGoal ?? baseGoal;
+      if (Math.abs(goal - current) <= ADAPTIVE_BUFFER_STEP_SECONDS) return;
+      this.#adaptiveGoal = goal === baseGoal ? null : goal;
+      player.configure({ streaming: { bufferingGoal: goal } });
+      markPlayback("buffer-goal", {
+        goal,
+        bandwidth: bandwidth === null ? null : Math.round(bandwidth),
+        bitrate: active?.bandwidth ?? null,
+      });
+    };
+    const timer = setInterval(check, ADAPTIVE_BUFFER_CHECK_MS);
+    const stop = (): void => {
+      clearInterval(timer);
+      if (this.#stopAdaptiveBuffer === stop) this.#stopAdaptiveBuffer = null;
+    };
+    this.#stopAdaptiveBuffer = stop;
+  }
+
+  /**
+   * Fetches several segments at once for as long as one at a time cannot
+   * keep up with the video (`parallelSegmentFetchCount`: how fast it plays,
+   * how long its segments are, how long one takes to arrive),
+   * through Shaka's segment prefetch, for as long as this load lasts. At
+   * normal speeds that is never, and nothing here touches the player.
+   *
+   * A seek runs without it (see `SHAKA_SEGMENT_PREFETCH_LIMIT`: with prefetch
+   * on, a seek that cancelled an init segment left playback waiting for
+   * good). The limit goes to the source's own before the seek starts, which
+   * empties Shaka's prefetch, init segments included, and comes back once
+   * the seek has been over for a moment. Scrubbing, which limits the buffer,
+   * stays at one too.
+   */
+  private fetchSegmentsTogetherWhenNeeded(source: VideoSource): void {
+    this.#stopParallelFetch?.();
+    const player = this.#player;
+    const runtime = this.#runtime;
+    const media = this.mediaElement;
+    if (!player || !runtime || !media) return;
+    if (typeof performance === "undefined") return;
+    const generation = this.#loadGeneration;
+    const ownLimit = Number(
+      (
+        createShakaConfiguration(source, runtime).streaming as
+          Record<string, unknown> | undefined
+      )?.segmentPrefetchLimit ?? 0,
+    );
+    /** How many are fetched at once now; 1 while the player is untouched. */
+    let count = 1;
+    let fewerWantedSince = 0;
+    let quietUntil = 0;
+    let idleChecks = 0;
+    let lastRate = 1;
+    const current = (): boolean =>
+      this.#player === player && this.isCurrentOperation(generation);
+    /**
+     * The speed the video is set to. Shaka's own figure, the one its
+     * prefetch multiplies by: while Shaka holds a video that ran out of
+     * data, the element's rate is 0 and Shaka's is still the set speed.
+     */
+    const setRate = (): number => {
+      let rate = Number.NaN;
+      try {
+        rate = Math.abs(player.getPlaybackRate?.() ?? media.playbackRate);
+      } catch {
+        // Between loads Shaka has no rate to give: the last one stands.
+      }
+      if (rate > 0) lastRate = rate;
+      return lastRate;
+    };
+    const apply = (
+      next: number,
+      rate: number,
+      detail?: Record<string, unknown>,
+    ): void => {
+      // Never set while it has always been one: the player is as it was.
+      if (next <= 1 && count <= 1) return;
+      const limit = next > 1 ? segmentPrefetchLimitFor(next, rate) : ownLimit;
+      const set = player.getConfiguration?.()?.streaming?.segmentPrefetchLimit;
+      // A preload's own prefetch is still on (`lowerPrefetchLater` turns it
+      // off when nothing is lost by it) and fetches at least as many: left
+      // alone, since any change here drops what it has fetched.
+      const preloadCovers =
+        this.#cancelPrefetchOff !== null &&
+        typeof set === "number" &&
+        set >= limit;
+      if (
+        !preloadCovers &&
+        (typeof set !== "number" || Math.abs(set - limit) > 1e-6)
+      ) {
+        // This decides the limit now, not the wait for a preload's to end.
+        if (next > 1) this.#cancelPrefetchOff?.();
+        player.configure({ streaming: { segmentPrefetchLimit: limit } });
+      }
+      if (next !== count) {
+        markPlayback("parallel-fetch", { count: next, rate, ...detail });
+      }
+      count = next;
+    };
+    const check = (rare = false): void => {
+      if (!current()) {
+        stop();
+        return;
+      }
+      // A preload taken over plays with its own settings until its first
+      // frame (`applyStreamingAfterFirstFrame`): nothing is set before.
+      if (this.#cancelDeferredStreaming) return;
+      const now = performance.now();
+      const rate = setRate();
+      if (media.seeking || now < quietUntil || this.#bufferAheadLimited) {
+        fewerWantedSince = 0;
+        apply(1, rate, { reason: "seek" });
+        return;
+      }
+      if (rare && count <= 1 && rate <= PARALLEL_FETCH_IDLE_RATE) {
+        idleChecks = (idleChecks + 1) % PARALLEL_FETCH_IDLE_CHECKS;
+        if (idleChecks !== 0) return;
+      }
+      const shape = segmentShapeAt(player, media.currentTime);
+      const measured = measureSegmentFetches(
+        performance.getEntriesByType("resource") as PerformanceResourceTiming[],
+        now,
+      );
+      const wanted = parallelSegmentFetchCount({
+        rate,
+        segmentSeconds: shape?.seconds ?? null,
+        fetchSeconds: measured.fetchSeconds,
+        bandwidth: measured.bandwidth,
+        bitrate:
+          shape && measured.meanBytes !== null
+            ? (measured.meanBytes * 8 * shape.streams) / shape.seconds
+            : null,
+      });
+      const detail = {
+        segment: shape?.seconds ?? null,
+        fetch:
+          measured.fetchSeconds === null
+            ? null
+            : Math.round(measured.fetchSeconds * 1000),
+      };
+      if (wanted >= count) {
+        fewerWantedSince = 0;
+        apply(wanted, rate, detail);
+        return;
+      }
+      if (fewerWantedSince === 0) fewerWantedSince = now;
+      if (now - fewerWantedSince >= PARALLEL_FETCH_LOWER_AFTER_MS) {
+        fewerWantedSince = 0;
+        apply(wanted, rate, detail);
+        return;
+      }
+      // Kept for now, at the speed the video plays at now.
+      apply(count, rate);
+    };
+    const pause = (): void => {
+      if (!current()) {
+        stop();
+        return;
+      }
+      quietUntil = performance.now() + PARALLEL_FETCH_SEEK_QUIET_MS;
+      fewerWantedSince = 0;
+      apply(1, setRate(), { reason: "seek" });
+      // Looked at again as soon as the seek has been over that long, not
+      // at the next regular look: at 16× that wait empties the buffer.
+      clearTimeout(afterSeek);
+      afterSeek = setTimeout(check, PARALLEL_FETCH_SEEK_QUIET_MS + 50);
+    };
+    // Shaka hears the same event first (it listened first), so its rate
+    // is the new one by now.
+    const onRateChange = (): void => check();
+    let afterSeek: ReturnType<typeof setTimeout> | undefined;
+    const timer = setInterval(() => check(true), PARALLEL_FETCH_CHECK_MS);
+    const stop = (): void => {
+      clearInterval(timer);
+      clearTimeout(afterSeek);
+      media.removeEventListener("ratechange", onRateChange);
+      media.removeEventListener("seeking", pause);
+      media.removeEventListener("seeked", pause);
+      if (this.#stopParallelFetch === end) {
+        this.#stopParallelFetch = null;
+        this.#pauseParallelFetch = null;
+      }
+    };
+    // Stopped from outside (another load, an unload, the teardown): the
+    // video still on the player goes back to its own limit, so the next
+    // one does not start with this one's.
+    const end = (): void => {
+      const together = count > 1;
+      stop();
+      if (!together || this.#player !== player) return;
+      count = 1;
+      try {
+        player.configure({ streaming: { segmentPrefetchLimit: ownLimit } });
+      } catch {
+        // The player is on its way out.
+      }
+    };
+    media.addEventListener("ratechange", onRateChange);
+    // A seek made on the element itself, not through `seek`: late, but
+    // before Shaka fetches for the new place (as `lowerPrefetchLater`).
+    media.addEventListener("seeking", pause);
+    media.addEventListener("seeked", pause);
+    this.#stopParallelFetch = end;
+    this.#pauseParallelFetch = pause;
+    check();
+  }
+
+  /**
+   * Fetches the init segment of every part of the video in the background,
+   * a few seconds after it loads. A seek into a part not reached yet needed
+   * two downloads one after the other, that part's init segment and then
+   * its media segment, and for a part nobody watched lately both came cold
+   * from storage through the CDN (about a second each): two seconds of
+   * loader on any connection. The init segments are a kilobyte each and
+   * kept by the browser for a year (`immutable`), so after this a seek
+   * waits for its media segment only. The same request filter as the
+   * player's own requests makes the same addresses, which the browser's
+   * cache then answers. Skipped when the viewer asked to save data.
+   */
+  private warmInitSegments(source: VideoSource): void {
+    const player = this.#player;
+    if (!player || typeof fetch !== "function") return;
+    const connection = (
+      navigator as Navigator & { connection?: { saveData?: boolean } }
+    ).connection;
+    if (connection?.saveData) return;
+    const generation = this.#loadGeneration;
+    const current = () =>
+      this.#player === player && this.isCurrentOperation(generation);
+    // Asked for as the player's own requests are: the same request filter
+    // (the media origin, tokens, cache keys) makes the same addresses, which
+    // the browser's cache then answers.
+    const filtered = async (
+      type: VideoNetworkRequest["type"],
+      uri: string,
+    ): Promise<VideoNetworkRequest> => {
+      const request: VideoNetworkRequest = {
+        type,
+        uris: [uri],
+        method: "GET",
+        headers: {},
+        body: null,
+        allowCrossSiteCredentials: false,
+      };
+      await source.networking?.requestFilter?.(request);
+      return request;
+    };
+    const fetchFiltered = async (
+      type: VideoNetworkRequest["type"],
+      uri: string,
+    ): Promise<Response> => {
+      const request = await filtered(type, uri);
+      return fetch(request.uris[0] ?? uri, {
+        headers: request.headers,
+        priority: "low",
+      } as RequestInit);
+    };
+    let checks = 0;
+    const warmWhenRoomy = async (): Promise<void> => {
+      if (!current()) return;
+      const media = this.mediaElement;
+      const active = player.getVariantTracks().find((track) => track.active);
+      const bandwidth =
+        measuredSegmentBandwidth() ??
+        player.getStats?.()?.estimatedBandwidth ??
+        0;
+      const roomy =
+        media !== null &&
+        !media.paused &&
+        bufferedAheadSeconds(media) >= INIT_WARM_MIN_AHEAD_SECONDS &&
+        (active?.bandwidth ?? 0) > 0 &&
+        bandwidth >= (active?.bandwidth ?? 0) * INIT_WARM_MIN_LINK_RATIO;
+      if (!roomy) {
+        checks += 1;
+        if (checks < INIT_WARM_CHECKS) {
+          setTimeout(() => void warmWhenRoomy(), INIT_WARM_DELAY_MS);
+        }
+        return;
+      }
+      let manifestUrl: string;
+      let mpd = source.inlinedManifest ?? "";
+      try {
+        // The source's address may be relative to the media origin, which
+        // only the request filter knows.
+        const request = await filtered("manifest", source.src);
+        manifestUrl = new URL(
+          request.uris[0] ?? source.src,
+          globalThis.location?.href,
+        ).toString();
+        if (!/^https?:/i.test(manifestUrl)) return;
+        if (!mpd) {
+          // Not handed over with the source: the manifest's few kilobytes
+          // once more (the init segments it lists are what saves the time).
+          const response = await fetch(manifestUrl, {
+            headers: request.headers,
+            priority: "low",
+          } as RequestInit);
+          if (!response.ok) throw new Error(String(response.status));
+          mpd = await response.text();
+        }
+      } catch {
+        markPlayback("init-warm", { count: 0, manifest: "unreadable" });
+        return;
+      }
+      if (!current()) return;
+      const uris = dashInitSegmentUris(
+        mpd,
+        manifestUrl,
+        active?.height ?? null,
+      );
+      markPlayback("init-warm", {
+        count: uris.length,
+        inline: Boolean(source.inlinedManifest),
+      });
+      if (uris.length < 2 || uris.length > INIT_WARM_MAX) return;
+      let next = 0;
+      const worker = async (): Promise<void> => {
+        while (next < uris.length && current()) {
+          const uri = uris[next]!;
+          next += 1;
+          try {
+            await (await fetchFiltered("segment", uri)).arrayBuffer();
+          } catch {
+            // Only a head start: the seek fetches it as before.
+          }
+        }
+      };
+      for (let index = 0; index < INIT_WARM_PARALLEL; index += 1) {
+        void worker();
+      }
+    };
+    setTimeout(() => void warmWhenRoomy(), INIT_WARM_DELAY_MS);
+  }
+
+  /**
    * See `MediaElementEngineBase.recoverFromMediaFailure` and
    * `MEDIA_RECOVERY_LIMIT`. The same failure reaches here twice (from the
    * media element and from Shaka): the second finds the recovery under way.
@@ -809,18 +1532,78 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       return false;
     }
     if (this.#mediaRecoveryInFlight) return true;
+    const place = this.recoveryPlace(media);
+    const stuck = this.stuckAtLastRecovery(place.time);
+    // Nothing has come in since a download failed with no answer (or a
+    // timeout, or a server error), or the browser is offline: a stall here
+    // is the network's. Blamed on the video, a learner whose connection
+    // dropped at 13:38 of a lesson saw "This part of the video can't play"
+    // and the video was reported broken (45 of 45 requests unanswered,
+    // 21 Nov 2026). It is never skipped past or called stuck then.
+    const networkDown = browserOffline() || this.#networkTrouble !== null;
+    if (stuck && networkDown) {
+      this.showNetworkTrouble(error, place.time);
+      return true;
+    }
+    let skipTo: number | null = null;
+    if (stuck && !this.#skippedPast) {
+      // Failed again at the same place: once, take it up just past it.
+      this.#skippedPast = true;
+      const player = this.#player;
+      const active = player?.getVariantTracks().find((track) => track.active);
+      const past =
+        (player ? nextSegmentStart(player, active, place.time + 0.5) : null) ??
+        place.time + SKIP_PAST_FALLBACK_SECONDS;
+      const duration = media.duration;
+      if (!Number.isFinite(duration) || past < duration - 1) {
+        markPlayback("media-recovery-skip", {
+          code: error.code,
+          from: place.time,
+          to: past,
+        });
+        skipTo = past;
+      }
+    }
+    if (stuck && skipTo === null) {
+      const position = place.time;
+      markPlayback("media-recovery-stopped", { code: error.code, position });
+      this.emitError(
+        new VideoEngineError({
+          category: "MEDIA",
+          code: "MEDIA_STUCK",
+          message: `Playback stops at ${position.toFixed(1)} s each time (${error.code}).`,
+          cause: error,
+          details: [{ position, failure: error.code, details: error.details }],
+        }),
+      );
+      this.#stuckShown = true;
+      return true;
+    }
     const now = Date.now();
     this.#mediaRecoveries = this.#mediaRecoveries.filter(
       (at) => now - at < MEDIA_RECOVERY_WINDOW_MS,
     );
-    if (this.#mediaRecoveries.length >= MEDIA_RECOVERY_LIMIT) return false;
-    this.#mediaRecoveries.push(now);
-    this.#mediaRecoveryInFlight = true;
-    if (this.#mediaRecoveries.length >= 2) {
-      this.#mediaRecoveryMaxHeight = MEDIA_RECOVERY_MAX_HEIGHT;
+    // A skip past a place the file cannot play is neither a loop (it moves
+    // on, and fails for good the next time at the same place) nor the
+    // device struggling with the picture: it is not counted against the
+    // limit and does not lower the quality. Lecture 42 has 44 such pieces;
+    // counted, a learner at 16x ran out of recoveries in minutes.
+    if (skipTo === null) {
+      if (this.#mediaRecoveries.length >= MEDIA_RECOVERY_LIMIT) {
+        if (!networkDown) return false;
+        this.showNetworkTrouble(error, place.time);
+        return true;
+      }
+      this.#mediaRecoveries.push(now);
+      if (this.#mediaRecoveries.length >= 2) {
+        this.#mediaRecoveryMaxHeight = MEDIA_RECOVERY_MAX_HEIGHT;
+      }
     }
-    const startTime = media.currentTime;
-    const wasPlaying = !media.paused && !media.ended;
+    this.#mediaRecoveryInFlight = true;
+    const startTime = skipTo ?? place.time;
+    this.#lastRecoveryPosition = startTime;
+    const wasPlaying = place.playing;
+    const playbackRate = place.rate;
     markPlayback("media-recovery", {
       attempt: this.#mediaRecoveries.length,
       code: error.code,
@@ -844,6 +1627,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       await Promise.resolve();
       try {
         await this.load(source, { startTime });
+        if (playbackRate !== 1) this.setPlaybackRate(playbackRate);
         if (
           this.#mediaRecoveryMaxHeight !== null &&
           this.#qualityChoice !== "manual"
@@ -854,7 +1638,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
             player.configure({ abr: this.abrConfiguration(source, runtime) });
           }
         }
-        if (wasPlaying) await this.play();
+        // Asked for, not waited on: the play promise settles only once the
+        // picture moves, and at a place the file cannot play it never did,
+        // which kept the recovery "in flight" and the watchdog off for good.
+        if (wasPlaying) void this.play().catch(() => undefined);
       } catch {
         // The load showed its own failure.
       } finally {
@@ -862,6 +1649,110 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       }
     })();
     return true;
+  }
+
+  /**
+   * The track (sound or picture) that has nothing at `time` while the
+   * other is buffered far past it (see WATCHDOG_TRACKS_APART_MS), or null.
+   */
+  private laggingTrackAt(time: number): "audio" | "video" | null {
+    let info: ReturnType<NonNullable<ShakaPlayerLike["getBufferedInfo"]>>;
+    try {
+      const read = this.#player?.getBufferedInfo?.();
+      if (!read) return null;
+      info = read;
+    } catch {
+      return null;
+    }
+    // A video with one track only (an audio lesson) has nothing to compare.
+    if (!info.audio?.length || !info.video?.length) return null;
+    const aheadIn = (ranges: readonly { start: number; end: number }[]) => {
+      const range = ranges.find(
+        (candidate) => candidate.start <= time + 0.1 && candidate.end > time,
+      );
+      return range ? range.end - time : 0;
+    };
+    const audio = aheadIn(info.audio);
+    const video = aheadIn(info.video);
+    if (audio < 0.5 && video >= WATCHDOG_TRACKS_APART_AHEAD_SECONDS) {
+      return "audio";
+    }
+    if (video < 0.5 && audio >= WATCHDOG_TRACKS_APART_AHEAD_SECONDS) {
+      return "video";
+    }
+    return null;
+  }
+
+  /**
+   * Where a recovery takes the video up again (see `#lastGoodTime`): the
+   * element's own time while it still has one, else where it last stood.
+   */
+  /**
+   * The stall, shown as what it is: the failed download itself when there
+   * was one (its status picks the words: our server, or the connection),
+   * else the connection lost. Not the video's fault, so not reported.
+   */
+  private showNetworkTrouble(failure: VideoEngineError, position: number) {
+    const trouble = this.#networkTrouble;
+    markPlayback("media-recovery-network", {
+      code: failure.code,
+      position,
+      download: trouble?.code ?? null,
+    });
+    this.emitError(
+      trouble
+        ? new VideoEngineError({
+            category: trouble.category,
+            code: trouble.code,
+            message: trouble.message,
+            cause: failure,
+            details: trouble.details,
+          })
+        : new VideoEngineError({
+            category: "NETWORK",
+            code: "NETWORK_LOST",
+            message: `The browser is offline; playback stopped at ${position.toFixed(1)} s (${failure.code}).`,
+            cause: failure,
+            details: [{ position, failure: failure.code }],
+          }),
+    );
+  }
+
+  private recoveryPlace(media: HTMLMediaElement): {
+    time: number;
+    playing: boolean;
+    rate: number;
+  } {
+    const reset = media.currentTime === 0 && (this.#lastGoodTime ?? 0) > 0;
+    return {
+      time: reset ? (this.#lastGoodTime ?? 0) : media.currentTime,
+      playing: reset
+        ? this.#lastPlayRequested
+        : (!media.paused && !media.ended) || this.#lastPlayRequested,
+      rate:
+        media.playbackRate > 0 && media.playbackRate !== 1
+          ? media.playbackRate
+          : this.#lastPlaybackRate,
+    };
+  }
+
+  /**
+   * Once `MEDIA_STUCK` is shown, the failures that follow it (Shaka's own
+   * reports of the same broken place) are left out: the last one used to
+   * take the screen and the report, with a code that says nothing.
+   */
+  protected override emitError(
+    error: VideoEngineError,
+    setErrorState = true,
+  ): void {
+    if (this.#stuckShown && error.code !== "MEDIA_STUCK") return;
+    super.emitError(error, setErrorState);
+  }
+
+  /** Whether `position` is where the last recovery reloaded the video. */
+  private stuckAtLastRecovery(position: number): boolean {
+    const last = this.#lastRecoveryPosition;
+    return last !== null && Math.abs(position - last) < SAME_PLACE_SECONDS;
   }
 
   /**
@@ -941,6 +1832,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const previous = this.#player;
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
+    this.#stopParallelFetch?.();
     this.#learnerSeek = null;
     this.stopWatchingForHoldRelease();
     this.clearNetworkingFilters();
@@ -991,6 +1883,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#qualityChoice = null;
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
+    this.#stopParallelFetch?.();
     this.#learnerSeek = null;
     this.stopWatchingForHoldRelease();
     // Watched for release once the networking filters are in (they are
@@ -1169,6 +2062,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.setBufferingHold(false);
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
+    this.#stopParallelFetch?.();
     this.#learnerSeek = null;
     rememberShakaBandwidthEstimate(previous);
     this.clearNetworkingFilters();
@@ -1275,6 +2169,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const runtime = this.#runtime;
     const source = this.getSnapshot().source;
     if (!player || !runtime || !source) return;
+    // A limit holds the adaptive buffer back; lifted, the source's goal is
+    // back and the next check grows it again.
+    this.#bufferAheadLimited = seconds !== null;
+    this.#adaptiveGoal = null;
     player.configure({
       streaming:
         seconds === null
@@ -1283,7 +2181,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     });
   }
 
-  override enableAutoQuality(): void {
+  override enableAutoQuality(options: { fallback?: boolean } = {}): void {
     const player = this.requirePlayer();
     const runtime = this.#runtime;
     const source = this.getSnapshot().source;
@@ -1304,7 +2202,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       autoQuality: true,
       selectedQualityId: active?.id ?? null,
     });
-    this.emit("qualitychange", { quality: active, auto: true });
+    this.emit("qualitychange", {
+      quality: active,
+      auto: true,
+      ...(options.fallback ? { fallback: true } : {}),
+    });
   }
 
   override selectAudioTrack(id: string): void {
@@ -1445,6 +2347,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#selectedTextTrackId = null;
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
+    this.#stopParallelFetch?.();
     this.#learnerSeek = null;
     this.revealVideo();
     rememberShakaBandwidthEstimate(this.#player);
@@ -1463,6 +2366,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#retryOnOnline = false;
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
+    this.#stopParallelFetch?.();
     this.#learnerSeek = null;
     rememberShakaBandwidthEstimate(this.#player);
     this.clearNetworkingFilters();
@@ -1516,6 +2420,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   ): void {
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
+    this.#stopParallelFetch?.();
     this.#learnerSeek = null;
     const media = this.mediaElement;
     const apply = (): void => {
@@ -1631,6 +2536,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   override seek(time: number): void {
     // Prefetch off before the seek starts (see `lowerPrefetchLater`).
     this.#lowerPrefetchNow?.();
+    this.#pauseParallelFetch?.();
     super.seek(time);
     const media = this.mediaElement;
     this.#learnerSeek = media
@@ -1677,11 +2583,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     source: VideoSource,
     abr: Record<string, unknown>,
   ): { defaultBandwidthEstimate?: number } {
-    if (
-      (shakaStartVideoHeight(source) === null &&
-        shakaHeldVideoHeight(source) === null) ||
-      abr.enabled === false
-    ) {
+    // A start height only: a held height (a replay from the device) is
+    // let go of on the first segment from the network, and from there the
+    // network's own speed decides. Floored at the held 1080p, a learner on
+    // a 1.4 Mbps evening link was sent 1.7 MB pieces that took ten seconds
+    // each until enough of them had come to measure (production, 15 Nov).
+    if (shakaStartVideoHeight(source) === null || abr.enabled === false) {
       return {};
     }
     const active = player.getVariantTracks().find((track) => track.active);
@@ -1761,7 +2668,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   /**
    * Releases a held height (see `holdVideoHeight`) the moment a video
    * segment comes from the network: the device no longer has what plays
-   * next, so ABR chooses from here on, from at least the held variant.
+   * next, so ABR chooses from here on, from what the network measures.
    */
   private watchForHoldRelease(
     player: ShakaPlayerLike,
@@ -1805,10 +2712,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#heldHeight = null;
     markPlayback("cached-height-released", { height });
     if (this.#qualityChoice !== null) return;
-    const abr = this.abrConfiguration(source, runtime);
-    player.configure({
-      abr: { ...abr, ...this.startHeightBandwidthFloor(player, source, abr) },
-    });
+    // ABR from what the network was measured at, not from the held height
+    // (see startHeightBandwidthFloor).
+    player.configure({ abr: this.abrConfiguration(source, runtime) });
   }
 
   /** The variant to play for the height chosen for `source`, if any. */
@@ -2063,6 +2969,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#lastPlayheadTime = -1;
     this.#lastFrameCount = -1;
     this.#waitingForKeySince = 0;
+    this.#starvedSince = 0;
+    this.#starvedNudgedAt = 0;
+    this.#tracksApartSince = 0;
+    this.#tracksApartLagging = null;
+    this.#chosenQualityWaits = [];
+    this.#chosenQualityWaitSince = 0;
+    this.watchSegmentActivity();
     media.addEventListener("waitingforkey", this.handleWaitingForKey);
     this.#watchdog = window.setInterval(
       () => this.watchPlayback(),
@@ -2070,7 +2983,67 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     );
   }
 
+  /**
+   * Notes when segments are asked for and answered, for the starved-stream
+   * check (WATCHDOG_STARVED_MS). A failed request never reaches the
+   * response filter; the next attempt is a new request, so it still counts.
+   */
+  private watchSegmentActivity(): void {
+    this.stopWatchingSegmentActivity();
+    const player = this.#player;
+    const runtime = this.#runtime;
+    const networking = player?.getNetworkingEngine();
+    const segmentType = runtime?.net?.NetworkingEngine?.RequestType?.SEGMENT;
+    if (!player || !networking || typeof segmentType !== "number") return;
+    const now = Date.now();
+    this.#lastSegmentRequestAt = now;
+    this.#lastSegmentResponseAt = now;
+    this.#segmentsAsked = { audio: 0, video: 0 };
+    this.#segmentsAnswered = { audio: 0, video: 0 };
+    const request: ShakaRequestFilterLike = (type, _request, context) => {
+      if (type !== segmentType) return;
+      this.#lastSegmentRequestAt = Date.now();
+      const kind = context?.stream?.type;
+      if (kind === "audio" || kind === "video") {
+        this.#segmentsAsked[kind] += 1;
+      }
+    };
+    const response: ShakaResponseFilterLike = (type, _response, context) => {
+      if (type !== segmentType) return;
+      this.#lastSegmentResponseAt = Date.now();
+      const kind = context?.stream?.type;
+      if (kind === "audio" || kind === "video") {
+        this.#segmentsAnswered[kind] += 1;
+      }
+    };
+    networking.registerRequestFilter(request);
+    networking.registerResponseFilter(response);
+    this.#segmentActivityFilters = { player, request, response };
+  }
+
+  private stopWatchingSegmentActivity(): void {
+    const filters = this.#segmentActivityFilters;
+    if (!filters) return;
+    this.#segmentActivityFilters = null;
+    const networking = filters.player.getNetworkingEngine();
+    networking?.unregisterRequestFilter(filters.request);
+    networking?.unregisterResponseFilter(filters.response);
+  }
+
+  /** Whether segment streaming has gone quiet (see WATCHDOG_STARVED_MS). */
+  private segmentStreamingQuiet(now: number): boolean {
+    const requested = this.#lastSegmentRequestAt;
+    const answered = this.#lastSegmentResponseAt;
+    // A request asked for after the last answer is still under way, unless
+    // it has been a very long time.
+    if (requested > answered) {
+      return now - requested >= WATCHDOG_REQUEST_ALIVE_MS;
+    }
+    return now - Math.max(requested, answered) >= WATCHDOG_STARVED_MS;
+  }
+
   private stopWatchdog(): void {
+    this.stopWatchingSegmentActivity();
     if (this.#watchdog !== null) {
       window.clearInterval(this.#watchdog);
       this.#watchdog = null;
@@ -2105,6 +3078,115 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       return;
     }
     const now = Date.now();
+    // What a recovery starts from (see `#lastGoodTime`), read only while
+    // the video stands somewhere: Shaka's own mending shows time 0, paused.
+    if (!media.seeking && media.currentTime > 0) {
+      this.#lastGoodTime = media.currentTime;
+      this.#lastPlayRequested = !media.paused && !media.ended;
+      if (media.playbackRate > 0) this.#lastPlaybackRate = media.playbackRate;
+    }
+    // Nothing in front of the playhead and the stream asking for nothing:
+    // waiting would never end. Online only; offline is the network's. Shaka
+    // holds a starved video at rate 0, so play asked for is enough here.
+    const playRequested = !media.paused && !media.ended;
+    const starvedTime = media.currentTime;
+    const starvedMoved = starvedTime !== this.#starvedLastTime;
+    this.#starvedLastTime = starvedTime;
+    const starvedAhead = bufferedAheadSeconds(media);
+    if (
+      this.#lastRecoveryPosition !== null &&
+      starvedTime > this.#lastRecoveryPosition + SAME_PLACE_PLAYED_PAST_SECONDS
+    ) {
+      this.#lastRecoveryPosition = null;
+      this.#skippedPast = false;
+    }
+    // A seek into such a place never ends (no sound to land on), so a
+    // seeking video is looked at too; a slow link is told apart below.
+    const lagging =
+      playRequested && !starvedMoved ? this.laggingTrackAt(starvedTime) : null;
+    if (lagging && lagging === this.#tracksApartLagging) {
+      // The file, not the link, when the lagging track is not waiting on
+      // the network (nothing of it on its way), or when segments of it kept
+      // arriving and none filled the gap: they are laid down somewhere else.
+      // On a slow link a segment of it is on its way, and the first to land
+      // fills the gap, which ends this.
+      const nothingOnItsWay =
+        this.#segmentsAsked[lagging] <= this.#segmentsAnswered[lagging];
+      const arrivedInVain =
+        this.#segmentsAnswered[lagging] - this.#tracksApartAnswered >= 2;
+      if (
+        now - this.#tracksApartSince >= WATCHDOG_TRACKS_APART_MS &&
+        (nothingOnItsWay || arrivedInVain)
+      ) {
+        this.#tracksApartSince = 0;
+        this.#tracksApartLagging = null;
+        this.#starvedSince = 0;
+        this.#starvedNudgedAt = 0;
+        this.recoverFromFreeze("TRACKS_APART", {
+          position: starvedTime,
+          readyState: media.readyState,
+        });
+        return;
+      }
+    } else if (lagging) {
+      this.#tracksApartSince = now;
+      this.#tracksApartLagging = lagging;
+      this.#tracksApartAnswered = this.#segmentsAnswered[lagging];
+    } else {
+      this.#tracksApartSince = 0;
+      this.#tracksApartLagging = null;
+    }
+    // Starved again where the last recovery left it: that reload did not
+    // help, so neither will a nudge (see SAME_PLACE_SECONDS).
+    const starvedAgain = this.stuckAtLastRecovery(starvedTime);
+    if (
+      this.chosenQualityCannotKeepUp(media, playRequested, starvedAhead, now)
+    ) {
+      return;
+    }
+    if (
+      !playRequested ||
+      starvedMoved ||
+      starvedAhead >= WATCHDOG_STARVED_AHEAD_SECONDS ||
+      browserOffline() ||
+      !this.segmentStreamingQuiet(now)
+    ) {
+      this.#starvedSince = 0;
+      this.#starvedNudgedAt = 0;
+    } else if (this.#starvedSince === 0) {
+      this.#starvedSince = now;
+    } else if (
+      starvedAgain &&
+      now - this.#starvedSince >= WATCHDOG_STARVED_AGAIN_MS
+    ) {
+      this.#starvedSince = 0;
+      this.#starvedNudgedAt = 0;
+      this.recoverFromFreeze("STREAM_STARVED", {
+        ahead: starvedAhead,
+        readyState: media.readyState,
+        again: true,
+      });
+      return;
+    } else if (
+      this.#starvedNudgedAt === 0 &&
+      now - this.#starvedSince >= WATCHDOG_STARVED_MS
+    ) {
+      this.#starvedNudgedAt = now;
+      this.nudgeStarvedStream(media, starvedAhead);
+      return;
+    } else if (
+      this.#starvedNudgedAt !== 0 &&
+      now - this.#starvedNudgedAt >= WATCHDOG_STARVED_RELOAD_MS
+    ) {
+      this.#starvedSince = 0;
+      this.#starvedNudgedAt = 0;
+      this.recoverFromFreeze("STREAM_STARVED", {
+        ahead: starvedAhead,
+        readyState: media.readyState,
+      });
+      return;
+    }
+
     const wantsToPlay = !media.paused && !media.ended && media.playbackRate > 0;
     if (!wantsToPlay) {
       this.#playheadStillSince = 0;
@@ -2174,6 +3256,93 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#framesStillSince = 0;
       this.recoverFromFreeze("NO_VIDEO_FRAMES", { frames });
     }
+  }
+
+  /**
+   * Whether the connection, as the last segment downloads measured it,
+   * carries the playing quality at normal speed with room to spare. Waits
+   * on such a link come from somewhere else (segments the CDN did not hold,
+   * a video played at 16x), and a lower quality would not end them: the
+   * learner's choice is kept. False when nothing has been measured yet.
+   */
+  private linkCarriesChosenQuality(): boolean {
+    const bandwidth = measuredSegmentBandwidth();
+    const bitrate = this.#player
+      ?.getVariantTracks()
+      .find((track) => track.active)?.bandwidth;
+    if (!bandwidth || !bitrate || !(bitrate > 0)) return false;
+    return bandwidth >= bitrate * CHOSEN_QUALITY_LINK_HEADROOM;
+  }
+
+  /**
+   * Whether a chosen quality keeps the video waiting for data (see
+   * CHOSEN_QUALITY_WAIT_MS); when it does, the lesson goes to automatic
+   * quality and this says so.
+   */
+  private chosenQualityCannotKeepUp(
+    media: HTMLMediaElement,
+    playRequested: boolean,
+    ahead: number,
+    now: number,
+  ): boolean {
+    // What the loader shows as waiting (Shaka holds a "playing" video at
+    // rate 0 without a `waiting` event, so the element alone misses it).
+    const waiting =
+      !this.#autoQuality &&
+      playRequested &&
+      !media.seeking &&
+      !this.linkCarriesChosenQuality() &&
+      (isPlaybackStalled(this.getSnapshot()) ||
+        (ahead < BUFFERED_PLAYBACK_GRACE_SECONDS && media.readyState < 3)) &&
+      !browserOffline();
+    if (!waiting) {
+      this.#chosenQualityWaitSince = 0;
+      return false;
+    }
+    if (this.#chosenQualityWaitSince === 0) this.#chosenQualityWaitSince = now;
+    this.#chosenQualityWaits = this.#chosenQualityWaits.filter(
+      (at) => now - at < 60_000,
+    );
+    this.#chosenQualityWaits.push(now);
+    if (
+      now - this.#chosenQualityWaitSince < CHOSEN_QUALITY_WAIT_MS &&
+      this.#chosenQualityWaits.length < CHOSEN_QUALITY_WAIT_SECONDS_PER_MINUTE
+    ) {
+      return false;
+    }
+    this.#chosenQualityWaits = [];
+    this.#chosenQualityWaitSince = 0;
+    markPlayback("chosen-quality-fallback", {
+      height:
+        this.#player?.getVariantTracks().find((track) => track.active)
+          ?.height ?? null,
+    });
+    try {
+      this.enableAutoQuality({ fallback: true });
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * The first answer to a starved stream: ask Shaka to stream again (it
+   * may have stopped after a failure it did not report) and seek to where
+   * the playhead stands, which makes it look again at what is missing.
+   */
+  private nudgeStarvedStream(media: HTMLMediaElement, ahead: number): void {
+    markPlayback("watchdog", {
+      code: "STREAM_STARVED_NUDGE",
+      ahead,
+      readyState: media.readyState,
+    });
+    try {
+      this.#player?.retryStreaming?.(0);
+    } catch {
+      // Nothing to retry: the seek below still asks for the segments.
+    }
+    const time = media.currentTime;
+    media.currentTime = time;
   }
 
   /** A freeze the watchdog found, mended as a decoder failure is. */
@@ -2619,6 +3788,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     });
     // A segment in again: the streams are healthy.
     listen("segmentappended", () => {
+      this.#networkTrouble = null;
       const attempts = this.#streamingRetries;
       this.#streamingRetries = 0;
       this.#retryOnOnline = false;
@@ -2686,6 +3856,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
     const kind = networkFailureKind(error);
     if (kind === null || error.category === "DRM") return false;
+    if (kind === "transient") this.#networkTrouble = error;
     if (
       kind === "missing" &&
       this.#streamingRetries >= STREAMING_MISSING_RETRY_LIMIT

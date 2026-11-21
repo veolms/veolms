@@ -162,6 +162,13 @@ export function chatPushDeliveries(
           isRequest: String(message.isRequest),
           unreadCount: String(Math.min(recipient.unreadCount, 99)),
           deepLink: `/chat/${message.roomId}?seq=${message.seq}`,
+          // Android draws them; left out when there is no picture.
+          ...(message.senderAvatarUrl
+            ? { senderAvatarUrl: message.senderAvatarUrl }
+            : {}),
+          ...(message.roomIconUrl && message.roomKind !== "direct"
+            ? { roomIconUrl: message.roomIconUrl }
+            : {}),
         },
       };
       return {

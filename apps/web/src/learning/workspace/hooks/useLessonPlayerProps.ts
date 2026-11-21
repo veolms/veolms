@@ -81,6 +81,7 @@ export interface UseLessonPlayerPropsArgs {
   seekTimeOnly: boolean;
   selectedLessonRecord: CourseLesson | null;
   selectedLessonDescription: string | null;
+  onLessonDurationChange: (seconds: number | null) => void;
   curriculumShortcutLabel: ReturnType<typeof getRightPanelShortcutLabel>;
   updateAutoplayEnabled: (enabled: boolean) => void;
   goToPreviousLesson: () => void;
@@ -149,6 +150,7 @@ export function useLessonPlayerProps({
   seekTimeOnly,
   selectedLessonRecord,
   selectedLessonDescription,
+  onLessonDurationChange,
   curriculumShortcutLabel,
   updateAutoplayEnabled,
   goToPreviousLesson,
@@ -330,6 +332,7 @@ export function useLessonPlayerProps({
       onMiniPlayerRestoreReady,
       onMobileLandscapeFullscreenChange: handleMobileLandscapeFullscreenChange,
       onProgressChange: updateSelectedLessonProgress,
+      onDurationChange: onLessonDurationChange,
       onNearLessonEnd: handleNearLessonEnd,
       onSeekToTimestampReady: registerLessonPlayerSeek,
       resumePersistenceKey: `${coursePersistenceKey}-lesson-${selectedLesson}`,
@@ -366,6 +369,7 @@ export function useLessonPlayerProps({
       lessonStage,
       nextLessonId,
       nextLessonInfo,
+      onLessonDurationChange,
       onMiniPlayerRestoreReady,
       onMinimizePlayer,
       playbackBootstrap,

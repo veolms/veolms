@@ -799,3 +799,98 @@ await test("a long non-Latin push fits FCM's 4 KB, and a notification's text is 
     assert.equal(hasLoneSurrogate(value), false);
   }
 });
+
+await test("chat pushes carry pictures for Android, left out when there are none", () => {
+  const base = {
+    roomId: "r1",
+    roomTitle: "JavaScript course",
+    messageId: "m1",
+    seq: 7,
+    senderId: "s1",
+    senderName: "Asha",
+    text: "Hi",
+    sentAt: now,
+    isRequest: false,
+    recipients: [{ userId: "u1", isMention: false, unreadCount: 1 }],
+  };
+  const avatar = "https://cdn.example.com/public/avatars/s1--a1/160.webp";
+  const icon = "https://cdn.example.com/public/thumbnails/m9/240.webp";
+  const data = (message: Parameters<typeof chatPushDeliveries>[0]) =>
+    (
+      chatPushDeliveries(message, new Set(["u1"]), now)[0]!
+        .payload as unknown as PushPayload
+    ).data;
+
+  const group = data({
+    ...base,
+    roomKind: "course",
+    senderAvatarUrl: avatar,
+    roomIconUrl: icon,
+  });
+  assert.equal(group.senderAvatarUrl, avatar);
+  assert.equal(group.roomIconUrl, icon);
+
+  const direct = data({
+    ...base,
+    roomKind: "direct",
+    senderAvatarUrl: avatar,
+    roomIconUrl: icon,
+  });
+  assert.equal(direct.senderAvatarUrl, avatar);
+  assert.equal("roomIconUrl" in direct, false, "never for a private chat");
+
+  const none = data({
+    ...base,
+    roomKind: "team",
+    senderAvatarUrl: null,
+    roomIconUrl: null,
+  });
+  assert.equal("senderAvatarUrl" in none, false);
+  assert.equal("roomIconUrl" in none, false);
+  assert.deepEqual(
+    none,
+    data({ ...base, roomKind: "team" }),
+    "nothing else changes",
+  );
+});
+
+await test("chat pictures go to Android only; iOS gets the same data as before", () => {
+  const payload: PushPayload = {
+    ...notificationPayload,
+    kind: "chat_message",
+    androidChannelId: "chat_messages",
+    importance: "HIGH",
+    androidDataOnly: true,
+    threadId: "chat:r1",
+    data: {
+      roomId: "r1",
+      senderName: "Asha",
+      text: "Hi",
+      senderAvatarUrl: "https://cdn.example.com/public/avatars/s1--a1/160.webp",
+      roomIconUrl: "https://cdn.example.com/public/thumbnails/m9/240.webp",
+    },
+  };
+  const send = (platform: "android" | "ios", body: PushPayload) =>
+    buildFcmMessage({
+      payload: body,
+      fid,
+      platform,
+      targetField: "fid",
+      expiresAt: new Date(now.getTime() + 60_000),
+      now,
+    }).message;
+
+  const android = send("android", payload).data as Record<string, string>;
+  assert.equal(android.senderAvatarUrl, payload.data.senderAvatarUrl);
+  assert.equal(android.roomIconUrl, payload.data.roomIconUrl);
+
+  const {
+    senderAvatarUrl: _a,
+    roomIconUrl: _r,
+    ...withoutPictures
+  } = payload.data;
+  assert.deepEqual(
+    send("ios", payload),
+    send("ios", { ...payload, data: withoutPictures }),
+  );
+});
