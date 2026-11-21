@@ -406,3 +406,55 @@ export function studentAddedEmail({
     }),
   };
 }
+
+export interface AffiliateInvitationInput {
+  academyName: string;
+  logoUrl?: string | null;
+  invitedByName: string | null;
+  /** The code the invitee will have, upper case. */
+  code: string;
+  /** "20%" or "₹100", or null when the academy has not set one. */
+  rate: string | null;
+  joinUrl: string;
+  email: string;
+}
+
+/**
+ * An invitation to the academy's affiliate program. Signing in with the
+ * invited address and accepting the terms on the join page approves it.
+ */
+export function affiliateInvitationEmail({
+  academyName,
+  logoUrl = null,
+  invitedByName,
+  code,
+  rate,
+  joinUrl,
+  email,
+}: AffiliateInvitationInput): EmailContent {
+  const title = `Become an affiliate of ${academyName}`;
+  const who = invitedByName
+    ? `${invitedByName} invited you`
+    : "You have been invited";
+  const intro = `${who} to join the ${academyName} affiliate program${rate ? ` and earn ${rate} of each purchase you bring` : ""}.`;
+  const next = `Sign in with ${email} and accept the terms. Your code will be ${code}.`;
+  return {
+    subject: title,
+    text: `${intro}\n\n${next}\n\nJoin: ${joinUrl}\n\nIf you did not expect this, you can ignore this email.`,
+    html: layout({
+      academyName,
+      logoUrl,
+      title,
+      preheader: intro,
+      bodyHtml: [
+        heading(title),
+        paragraph(escapeHtml(intro)),
+        paragraph(escapeHtml(next)),
+        button(joinUrl, "See the program"),
+        divider(),
+        smallPrint("If you did not expect this, you can ignore this email."),
+      ].join(""),
+      footer: `Sent by ${escapeHtml(academyName)} because someone on its team invited this address to its affiliate program.`,
+    }),
+  };
+}

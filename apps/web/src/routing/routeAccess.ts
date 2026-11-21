@@ -47,6 +47,9 @@ const RESERVED_PROFILE_PATHS = new Set([
   "/support",
   "/support-inbox",
   "/coupons",
+  "/affiliate",
+  "/affiliates",
+  "/affiliate-program",
   "/workshops",
   "/home-page",
   "/platform",
@@ -98,6 +101,8 @@ export function isCourseAuthorPath(pathname: string): boolean {
     normalized.startsWith("/analytics/") ||
     normalized === "/coupons" ||
     normalized.startsWith("/coupons/") ||
+    normalized === "/affiliate-program" ||
+    normalized.startsWith("/affiliate-program/") ||
     normalized === "/workshops/new" ||
     /^\/workshops\/[0-9a-f-]{36}\/edit$/.test(normalized) ||
     normalized === "/support-inbox" ||
@@ -214,6 +219,8 @@ const LOGIN_PROMPT_PATH_ROOTS = [
   "/support-inbox",
   "/chat",
   "/coupons",
+  "/affiliate",
+  "/affiliate-program",
   "/home-page",
   "/platform",
   "/team",

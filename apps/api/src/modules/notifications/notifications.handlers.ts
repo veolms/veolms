@@ -37,6 +37,7 @@ import {
   affiliateCommissionEarnedEventSchema,
   affiliateCommissionReversedEventSchema,
   affiliatePayoutDecidedEventSchema,
+  affiliatePayoutOverdueEventSchema,
   affiliatePayoutRequestedEventSchema,
   affiliateStatusChangedEventSchema,
 } from "../../events/domain-event.schemas.ts";
@@ -801,7 +802,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       templateData: { applicantName: event.applicantName, code: event.code },
       channels: commonChannels,
       mandatory: true,
-      deepLink: "/affiliates/admin?tab=affiliates",
+      deepLink: "/affiliate-program/affiliates",
     }));
   },
   "affiliate.status_changed": async (payload) => {
@@ -874,7 +875,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
       channels: commonChannels,
       mandatory: true,
-      deepLink: "/affiliates/admin?tab=payouts",
+      deepLink: "/affiliate-program/payouts",
     }));
   },
   "affiliate.payout_decided": async (payload) => {
@@ -897,6 +898,27 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         deepLink: "/affiliate",
       },
     ];
+  },
+  "affiliate.payout_overdue": async (payload, dependencies) => {
+    const event = affiliatePayoutOverdueEventSchema.parse(payload);
+    const recipientUserIds =
+      (await dependencies.listPermissionHolderUserIds?.("affiliate.payout")) ??
+      [];
+    return recipientUserIds.map((recipientUserId) => ({
+      recipientUserId,
+      type: "affiliate.payout_overdue",
+      category: "transactional" as const,
+      templateKey: "affiliate.payout_overdue" as const,
+      templateData: {
+        code: event.affiliateCode,
+        amount: event.amount,
+        currency: event.currency,
+        daysOpen: event.daysOpen,
+      },
+      channels: commonChannels,
+      mandatory: true,
+      deepLink: "/affiliate-program/payouts",
+    }));
   },
   "email.unsubscribed": async (payload, dependencies) => {
     const event = emailUnsubscribedEventSchema.parse(payload);

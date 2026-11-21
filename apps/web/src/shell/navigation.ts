@@ -2,6 +2,7 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
+import { HandshakeIcon as Handshake } from "@phosphor-icons/react/Handshake";
 import { HouseIcon as House } from "@phosphor-icons/react/House";
 import { LifebuoyIcon as Lifebuoy } from "@phosphor-icons/react/Lifebuoy";
 import { BrowserIcon as Browser } from "@phosphor-icons/react/Browser";
@@ -106,6 +107,13 @@ const adminNavigation: readonly NavigationItem[] = [
     "/analytics",
   ),
   createNavigationItem("admin-coupons", "Coupons", Tag, "/coupons"),
+  // People who share the academy for a commission, and paying them.
+  createNavigationItem(
+    "admin-affiliates",
+    "Affiliates",
+    Handshake,
+    "/affiliate-program",
+  ),
   // The academy's quizzes: building them, who they are assigned to, and
   // their attempts and results.
   createNavigationItem("admin-quizzes", "Quizzes", Exam, "/quizzes"),
@@ -184,6 +192,7 @@ const navigationTones: Record<string, string> = {
   Dashboard: "#5da9ff",
   Courses: "#f472b6",
   Coupons: "#fbbf24",
+  Affiliates: "#34d399",
   Platform: "#38bdf8",
   Team: "#818cf8",
   Support: "#fb7185",

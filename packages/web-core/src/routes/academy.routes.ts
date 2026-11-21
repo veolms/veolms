@@ -72,6 +72,12 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "affiliate-join",
       caseSensitive: true,
     }),
+    // The admin's Affiliates page: overview, affiliates, commissions,
+    // payouts and settings.
+    route("affiliate-program/:tab?", "routes/affiliate/program.tsx", {
+      id: "affiliate-program",
+      caseSensitive: true,
+    }),
     // Chat: course groups, team groups and private chats (WhatsApp-style).
     route("chat/:roomId?", "routes/chat/chat.tsx", {
       id: "chat",

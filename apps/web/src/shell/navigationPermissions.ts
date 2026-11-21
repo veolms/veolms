@@ -13,6 +13,7 @@ export const NAVIGATION_PERMISSIONS: Readonly<
   // their permissions allow (see CreatorDashboard).
   "/orders": ["billing.read"],
   "/coupons": ["coupon.read"],
+  "/affiliate-program": ["affiliate.read"],
   // Building quizzes and reading their results; the API asks the same.
   "/quizzes": ["quiz.read"],
   "/students": ["student.read"],

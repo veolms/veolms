@@ -47,7 +47,8 @@ export type NotificationTemplateKey =
   | "affiliate.commission_earned"
   | "affiliate.commission_reversed"
   | "affiliate.payout_requested"
-  | "affiliate.payout_decided";
+  | "affiliate.payout_decided"
+  | "affiliate.payout_overdue";
 
 /**
  * One bought item as the purchase email shows it (stored as JSON in the

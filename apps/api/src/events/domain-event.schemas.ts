@@ -401,3 +401,12 @@ export const affiliatePayoutDecidedEventSchema = z.strictObject({
   reference: z.string().max(100).nullable(),
   reason: z.string().max(2000).nullable(),
 });
+
+/** A payout open for over a week: a weekly nudge to whoever pays. */
+export const affiliatePayoutOverdueEventSchema = z.strictObject({
+  payoutId: z.uuid(),
+  affiliateCode: z.string().min(1).max(20),
+  amount: z.number().int().positive(),
+  currency: z.string().length(3),
+  daysOpen: z.number().int().min(0),
+});

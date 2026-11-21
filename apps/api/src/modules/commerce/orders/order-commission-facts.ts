@@ -1,5 +1,6 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type { OrderItemType, RefundStatus } from "@veolms/database";
+import { sql } from "kysely";
 
 /**
  * What the affiliate program reads about orders and refunds: commerce owns
@@ -161,4 +162,126 @@ export async function listOrderLineLabels(
       },
     ]),
   );
+}
+
+export type CommissionProductType = "course" | "bundle" | "workshop" | "quiz";
+
+/**
+ * Titles of the products commission rules point at. A quiz pass is named
+ * after its course. Products since deleted are left out.
+ */
+export async function listProductTitles(
+  executor: DatabaseExecutor,
+  refs: readonly { type: CommissionProductType; id: string }[],
+): Promise<Map<string, string>> {
+  const ids = (type: CommissionProductType) => [
+    ...new Set(refs.filter((ref) => ref.type === type).map((ref) => ref.id)),
+  ];
+  const titles = new Map<string, string>();
+  const courseIds = ids("course");
+  if (courseIds.length) {
+    for (const row of await executor
+      .selectFrom("courses")
+      .select(["id", "title"])
+      .where("id", "in", courseIds)
+      .execute())
+      titles.set(`course:${row.id}`, row.title);
+  }
+  const bundleIds = ids("bundle");
+  if (bundleIds.length) {
+    for (const row of await executor
+      .selectFrom("course_bundles")
+      .select(["id", "title"])
+      .where("id", "in", bundleIds)
+      .execute())
+      titles.set(`bundle:${row.id}`, row.title);
+  }
+  const workshopIds = ids("workshop");
+  if (workshopIds.length) {
+    for (const row of await executor
+      .selectFrom("workshops")
+      .select(["id", "title"])
+      .where("id", "in", workshopIds)
+      .execute())
+      titles.set(`workshop:${row.id}`, row.title);
+  }
+  const quizIds = ids("quiz");
+  if (quizIds.length) {
+    for (const row of await executor
+      .selectFrom("course_quiz_pricing as q")
+      .innerJoin("courses as c", "c.id", "q.course_id")
+      .select(["q.id", "c.title"])
+      .where("q.id", "in", quizIds)
+      .execute())
+      titles.set(`quiz:${row.id}`, `Quizzes: ${row.title}`);
+  }
+  return titles;
+}
+
+/** What a commission rule may be limited to, for the rule form. */
+export async function listProductOptions(
+  executor: DatabaseExecutor,
+): Promise<{ type: CommissionProductType; id: string; title: string }[]> {
+  const [courses, bundles, workshops] = await Promise.all([
+    executor
+      .selectFrom("courses")
+      .select(["id", "title"])
+      .orderBy("title")
+      .limit(500)
+      .execute(),
+    executor
+      .selectFrom("course_bundles")
+      .select(["id", "title"])
+      .orderBy("title")
+      .limit(200)
+      .execute(),
+    executor
+      .selectFrom("workshops")
+      .select(["id", "title"])
+      .orderBy("title")
+      .limit(200)
+      .execute(),
+  ]);
+  return [
+    ...courses.map((row) => ({ type: "course" as const, ...row })),
+    ...bundles.map((row) => ({ type: "bundle" as const, ...row })),
+    ...workshops.map((row) => ({ type: "workshop" as const, ...row })),
+  ];
+}
+
+/**
+ * Net revenue of orders paid in a period, in one settled currency: totals
+ * less processed refunds, an order that settled in another currency at the
+ * rate it settled at (as the revenue reports count it). `attributedOnly`
+ * keeps the orders credited to an affiliate.
+ */
+export async function sumPaidOrderRevenue(
+  executor: DatabaseExecutor,
+  input: { from: Date; to: Date; currency: string; attributedOnly: boolean },
+): Promise<{ orders: number; net: number }> {
+  const inSettled = (amount: ReturnType<typeof sql>) => sql<number>`(case
+    when o.settlement_currency is not null and o.total_amount > 0
+      then round(${amount}::numeric * o.settlement_amount / o.total_amount)
+    else ${amount} end)`;
+  let query = executor
+    .selectFrom("orders as o")
+    .select([
+      sql<string>`count(*) filter (where o.status <> 'refunded')`.as("orders"),
+      sql<string>`coalesce(sum(${inSettled(sql`o.total_amount - (
+        select coalesce(sum(r.amount), 0) from refunds r
+        where r.order_id = o.id and r.status = 'processed')`)}), 0)`.as("net"),
+    ])
+    .where("o.status", "in", ["paid", "partially_refunded", "refunded"])
+    .where("o.paid_at", ">=", input.from)
+    .where("o.paid_at", "<", input.to)
+    .where(
+      sql<boolean>`coalesce(o.settlement_currency, o.currency) = ${input.currency}`,
+    );
+  if (input.attributedOnly) {
+    query = query.where(
+      sql<boolean>`exists (select 1 from affiliate_order_attributions a where a.order_id = o.id)`,
+    );
+  }
+  const row = await query.executeTakeFirstOrThrow();
+  return { orders: Number(row.orders), net: Number(row.net) };
 }

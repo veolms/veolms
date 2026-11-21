@@ -8,6 +8,7 @@ export {
   type EmailTransportConfig,
 } from "./email.service.ts";
 export {
+  affiliateInvitationEmail,
   contactChangedEmail,
   deactivatedAccountSignInEmail,
   escapeHtml,
@@ -16,6 +17,7 @@ export {
   teamInvitationEmail,
   teamMemberAddedEmail,
   teamPreapprovedEmail,
+  type AffiliateInvitationInput,
   type EmailContent,
   type OtpVerificationInput,
   type StudentAddedInput,

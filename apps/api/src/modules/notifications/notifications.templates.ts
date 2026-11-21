@@ -491,6 +491,12 @@ export function renderNotificationTemplate(
             };
       break;
     }
+    case "affiliate.payout_overdue":
+      inApp = {
+        title: "An affiliate payout is waiting",
+        body: `${stringValue(data, "code")} asked for ${formatMoney(numberValue(data, "amount"), { currency: stringValue(data, "currency") })} ${numberValue(data, "daysOpen")} days ago and hasn't been paid yet.`,
+      };
+      break;
     case "refund.completed":
       inApp = {
         title: "Refund completed",

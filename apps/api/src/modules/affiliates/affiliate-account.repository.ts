@@ -47,6 +47,8 @@ export async function findOpenInvitation(
     .selectAll()
     .where("invited_email", "=", email)
     .where("user_id", "is", null)
+    // A rejected (withdrawn) invitation can't be accepted.
+    .where("status", "=", "pending")
     .executeTakeFirst();
 }
 

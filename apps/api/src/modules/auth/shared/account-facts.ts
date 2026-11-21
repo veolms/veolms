@@ -1,4 +1,5 @@
 import type { DatabaseExecutor } from "@veolms/database";
+import { sql } from "kysely";
 
 /**
  * What other modules may read about accounts for checks of their own (the
@@ -47,4 +48,40 @@ export async function listSignInAddressesSince(
     .where("ip_address", "is not", null)
     .execute();
   return [...new Set(rows.map((row) => row.ip_address!))];
+}
+
+/** The account with this email (lower case), if any; deleted ones excluded. */
+export async function findAccountIdByEmail(
+  executor: DatabaseExecutor,
+  email: string,
+): Promise<string | undefined> {
+  const row = await executor
+    .selectFrom("users")
+    .select("id")
+    .where(sql<boolean>`lower(email) = ${email.toLowerCase()}`)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+  return row?.id;
+}
+
+/** Accounts whose name, username or email contains the text (admin search). */
+export async function searchAccountIds(
+  executor: DatabaseExecutor,
+  text: string,
+  limit = 200,
+): Promise<string[]> {
+  const pattern = `%${text.replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;
+  const rows = await executor
+    .selectFrom("users")
+    .select("id")
+    .where((eb) =>
+      eb.or([
+        eb("display_name", "ilike", pattern),
+        eb("username", "ilike", pattern),
+        eb("email", "ilike", pattern),
+      ]),
+    )
+    .limit(limit)
+    .execute();
+  return rows.map((row) => row.id);
 }

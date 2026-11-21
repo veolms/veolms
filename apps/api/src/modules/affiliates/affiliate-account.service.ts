@@ -31,6 +31,7 @@ import {
   affiliatePayoutEncryptionReady,
   encryptPayoutSecret,
 } from "./affiliate-payout-crypto.ts";
+import { dayString } from "./affiliate-tds.ts";
 import { findProgramDefaultRule } from "./affiliates.repository.ts";
 
 /**
@@ -596,7 +597,7 @@ export function createAffiliateAccountService({
       method: row.payout_method,
       hint: row.payout_details_hint,
       reference: row.reference,
-      paidOn: row.paid_on,
+      paidOn: dayString(row.paid_on as string | Date | null),
       reason: row.reason,
       createdAt: row.created_at.toISOString(),
     };

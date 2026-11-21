@@ -8,6 +8,7 @@ import {
   flagHighRefundRates,
   purgeOldClicks,
   reconcileCommissions,
+  remindOverduePayouts,
 } from "./affiliate-commissions.service.ts";
 
 const APPROVAL_PASS = "affiliate-commission-approval";
@@ -20,8 +21,8 @@ const DAILY_HOUR_UTC = 22;
 /**
  * The affiliate program's background work (PRD section 14.2), in process
  * like the other pollers: commissions approved every 15 minutes; once a
- * day the repair of anything a failure missed, the refund-rate flag and the
- * purge of old clicks. Every instance may run it; every step is safe to
+ * day the repair of anything a failure missed, the refund-rate flag, the
+ * purge of old clicks and the reminder about payouts open over a week. Every instance may run it; every step is safe to
  * repeat.
  */
 export class AffiliateCommissionWorker {
@@ -101,8 +102,11 @@ export class AffiliateCommissionWorker {
       const purged = await runBackgroundPass(DAILY_PASS, () =>
         purgeOldClicks(this.database),
       );
+      const reminded = await runBackgroundPass(DAILY_PASS, () =>
+        remindOverduePayouts(this.database),
+      );
       this.logger?.info(
-        { job: DAILY_PASS, ...repaired, flagged, purged },
+        { job: DAILY_PASS, ...repaired, flagged, purged, reminded },
         "Affiliate daily work done",
       );
     }, DAILY_PASS);

@@ -39,6 +39,7 @@ import {
   saleFraudFlags,
 } from "./affiliate-fraud.ts";
 import { CLICK_RETENTION_MONTHS, hashAddress } from "./affiliate-tracking.ts";
+import { listOverduePayouts } from "./affiliate-admin.repository.ts";
 import * as repository from "./affiliate-commissions.repository.ts";
 
 /**
@@ -530,4 +531,57 @@ export async function purgeOldClicks(
     deleted += gone;
     if (gone < batch) return deleted;
   }
+}
+
+const OVERDUE_PAYOUT_DAYS = 7;
+
+/** The ISO week a moment falls in, as "2026-W51". */
+export function isoWeek(now: Date): string {
+  const day = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  const weekday = day.getUTCDay() || 7;
+  day.setUTCDate(day.getUTCDate() + 4 - weekday);
+  const yearStart = Date.UTC(day.getUTCFullYear(), 0, 1);
+  const week = Math.ceil(((day.getTime() - yearStart) / DAY_MS + 1) / 7);
+  return `${day.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+/**
+ * Nudges whoever pays about payouts open for more than a week (PRD section
+ * 14.2). The dedupe key is the payout and the week, so at most one email a
+ * week per payout however often this runs.
+ */
+export async function remindOverduePayouts(
+  database: Kysely<Database>,
+  options: { now?: Date } = {},
+): Promise<number> {
+  const now = options.now ?? new Date();
+  const overdue = await listOverduePayouts(
+    database,
+    new Date(now.getTime() - OVERDUE_PAYOUT_DAYS * DAY_MS),
+  );
+  if (overdue.length === 0) return 0;
+  const week = isoWeek(now);
+  await database.transaction().execute(async (trx) => {
+    const outbox = createOutboxService();
+    for (const payout of overdue) {
+      await outbox.publish(trx, {
+        type: "affiliate.payout_overdue",
+        version: 1,
+        dedupeKey: `affiliate.payout_overdue:${payout.id}:${week}`,
+        occurredAt: now,
+        payload: {
+          payoutId: payout.id,
+          affiliateCode: payout.code.toUpperCase(),
+          amount: Number(payout.gross_amount),
+          currency: payout.currency,
+          daysOpen: Math.floor(
+            (now.getTime() - payout.created_at.getTime()) / DAY_MS,
+          ),
+        },
+      });
+    }
+  });
+  return overdue.length;
 }

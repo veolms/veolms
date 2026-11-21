@@ -573,6 +573,13 @@ export const routeDescriptors = {
     title: "Become an affiliate",
     description: "Earn a commission by sharing {site} with your audience.",
   },
+  "affiliate-program": {
+    kind: "shell",
+    page: "extension",
+    title: "Affiliates",
+    description:
+      "The {site} affiliate program: affiliates, commissions and payouts.",
+  },
   "support-new": {
     kind: "shell",
     page: "extension",
@@ -645,6 +652,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "support-inbox": "/support-inbox",
   affiliate: "/affiliate",
   "affiliate-join": "/affiliates/join",
+  "affiliate-program": "/affiliate-program",
   chat: "/chat",
   "public-profile": "/:username",
   reviews: "/reviews",
@@ -728,6 +736,7 @@ const canonicalPathsByRouteId = {
   "support-new": "/support/new",
   affiliate: "/affiliate",
   "affiliate-join": "/affiliates/join",
+  "affiliate-program": "/affiliate-program",
   chat: "/chat",
   reviews: "/reviews",
   quizzes: "/quizzes",
