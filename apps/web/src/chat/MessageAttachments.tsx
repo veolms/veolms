@@ -9,33 +9,47 @@ import { chatService } from "../services/chat";
 import { cn } from "../lib/utils";
 import { formatBytes, formatDuration } from "./chatFormat";
 import { ChatImage } from "./ChatImage";
-import { FilePreview, previewKind } from "./FilePreview";
+import { previewKind } from "./FilePreview";
 import { PdfFirstPage } from "./PdfFirstPage";
 import { VoiceMessage } from "./VoiceMessage";
 import { VideoThumb } from "./VideoThumb";
 
 export interface ViewableMedia {
   url: string;
-  kind: "image" | "video";
+  /** A document ("file") opens in the same viewer, as in WhatsApp. */
+  kind: "image" | "video" | "file";
+  /** The attachment itself (a document is read and drawn from it). */
+  attachment: ChatAttachment;
   name: string;
   mimeType?: string;
   width?: number | null;
   height?: number | null;
   /** Who sent it and when, for the viewer's header (WhatsApp's "You · Today at 1:15 AM"). */
   senderName?: string;
+  senderAvatarUrl?: string | null;
+  /** The sender's own name, for the avatar's initials ("You" is not one). */
+  senderAvatarName?: string;
   sentAt?: string;
 }
 
-/** A message's photos and videos, as the viewer shows them. */
+/** A message's photos, videos and documents, as the viewer shows them. */
 export function viewableMediaOf(
   attachments: ChatAttachment[],
-  sent?: { senderName?: string; sentAt?: string },
+  sent?: {
+    senderName?: string;
+    senderAvatarUrl?: string | null;
+    senderAvatarName?: string;
+    sentAt?: string;
+  },
 ): ViewableMedia[] {
   return attachments
-    .filter((a) => a.kind === "image" || a.kind === "video")
+    .filter(
+      (a) => a.kind === "image" || a.kind === "video" || a.kind === "file",
+    )
     .map((a) => ({
       url: chatService.fileUrl(a),
-      kind: a.kind as "image" | "video",
+      kind: a.kind as "image" | "video" | "file",
+      attachment: a,
       name: a.name,
       mimeType: a.mimeType,
       width: a.width,
@@ -96,7 +110,11 @@ export function MessageAttachments({
             outgoing={outgoing}
           />
         ) : (
-          <FileTile key={attachment.id} attachment={attachment} />
+          <FileTile
+            key={attachment.id}
+            attachment={attachment}
+            onOpen={() => onOpenMedia(viewableMediaOf([attachment]), 0)}
+          />
         ),
       )}
     </div>
@@ -186,7 +204,7 @@ function MediaTile({
 }
 
 /** WhatsApp-style document colours by type. */
-function fileTone(extension: string): string {
+export function fileTone(extension: string): string {
   if (extension === "PDF") return "bg-[#e5484d]";
   if (["DOC", "DOCX", "TXT", "MD"].includes(extension)) return "bg-[#2f6fde]";
   if (["XLS", "XLSX", "CSV"].includes(extension)) return "bg-[#1f9d55]";
@@ -194,9 +212,14 @@ function fileTone(extension: string): string {
   return "bg-[#7a8699]";
 }
 
-function FileTile({ attachment }: { attachment: ChatAttachment }) {
+function FileTile({
+  attachment,
+  onOpen,
+}: {
+  attachment: ChatAttachment;
+  onOpen: () => void;
+}) {
   const extension = attachment.name.split(".").pop()?.toUpperCase() ?? "FILE";
-  const [previewing, setPreviewing] = useState(false);
   const canPreview = previewKind(attachment) !== null;
   const isPdf = attachment.mimeType === "application/pdf";
   const [pages, setPages] = useState<number | null>(null);
@@ -209,7 +232,7 @@ function FileTile({ attachment }: { attachment: ChatAttachment }) {
           type="button"
           tabIndex={-1}
           aria-hidden="true"
-          onClick={() => setPreviewing(true)}
+          onClick={onOpen}
           className="block w-full cursor-pointer border-0 bg-transparent p-0"
         >
           <PdfFirstPage attachment={attachment} onPages={onPages} />
@@ -218,7 +241,7 @@ function FileTile({ attachment }: { attachment: ChatAttachment }) {
       <div className="flex items-center">
         <button
           type="button"
-          onClick={() => setPreviewing(true)}
+          onClick={onOpen}
           aria-label={`${canPreview ? "Open" : "Show"} ${attachment.name}`}
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 border-0 bg-transparent py-2.5 pl-2.5 text-left text-(--text)"
         >
@@ -255,12 +278,6 @@ function FileTile({ attachment }: { attachment: ChatAttachment }) {
           <DownloadSimple size={20} />
         </a>
       </div>
-      {previewing ? (
-        <FilePreview
-          attachment={attachment}
-          onClose={() => setPreviewing(false)}
-        />
-      ) : null}
     </div>
   );
 }
