@@ -54,6 +54,9 @@ function isTechnicalApiError(
     status >= 500 ||
     code.trim().toUpperCase() === "INTERNAL_SERVER_ERROR" ||
     code.trim().toUpperCase() === "ROUTE_NOT_FOUND" ||
+    // A request the app built wrong: its wording is for developers.
+    code.trim().toUpperCase() === "REQUEST_VALIDATION_FAILED" ||
+    /documented schema/i.test(message) ||
     /^Route\s+\w+\s+\/.*\s+does not exist\.?$/i.test(message.trim())
   );
 }
@@ -83,7 +86,11 @@ function isNormalisedApiError(error: unknown): error is ApiError {
 }
 
 export function getApiError(error: unknown): ApiError {
-  if (isNormalisedApiError(error)) return error;
+  if (isNormalisedApiError(error)) {
+    // Already in shape, but its words still must not be technical ones.
+    const message = getSafeApiMessage(error.status, error.code, error.message);
+    return message === error.message ? error : { ...error, message };
+  }
 
   if (isHttpClientError(error)) {
     const data = error.response?.data;

@@ -127,6 +127,30 @@ const PART_CONCURRENCY = 3;
 /** Tries per part before the upload fails (a dropped connection). */
 const PART_ATTEMPTS = 4;
 
+/** Tries for a file sent whole before the upload fails. */
+const PUT_ATTEMPTS = 3;
+
+/** `attempt` again after a pause (1 s, 2 s, …), unless it was stopped. */
+async function withRetries(
+  attempts: number,
+  attempt: () => Promise<void>,
+): Promise<void> {
+  for (let tried = 1; ; tried += 1) {
+    try {
+      await attempt();
+      return;
+    } catch (error) {
+      if (
+        tried >= attempts ||
+        (error instanceof DOMException && error.name === "AbortError")
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000 * tried));
+    }
+  }
+}
+
 /** PUTs one blob with progress. */
 function putBlob(
   url: string,
@@ -469,17 +493,21 @@ export const chatService = {
     if (start.multipart) {
       return putParts(start.multipart, file, onProgress, signal);
     }
-    return putBlob(
-      start.viaApi
-        ? getApiRequestUrl(start.uploadUrl.replace(/^\/v1/, ""))
-        : start.uploadUrl,
-      file,
-      {
-        headers: start.headers,
-        withCredentials: start.viaApi,
-        onProgress: (loaded) => onProgress(loaded / Math.max(1, file.size)),
-        ...(signal ? { signal } : {}),
-      },
+    // Tried again by itself, as a part is: a phone's connection drops now
+    // and then, and one drop used to leave the message "Upload failed".
+    return withRetries(PUT_ATTEMPTS, () =>
+      putBlob(
+        start.viaApi
+          ? getApiRequestUrl(start.uploadUrl.replace(/^\/v1/, ""))
+          : start.uploadUrl,
+        file,
+        {
+          headers: start.headers,
+          withCredentials: start.viaApi,
+          onProgress: (loaded) => onProgress(loaded / Math.max(1, file.size)),
+          ...(signal ? { signal } : {}),
+        },
+      ),
     );
   },
 };

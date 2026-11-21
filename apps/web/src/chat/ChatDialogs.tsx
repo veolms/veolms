@@ -191,45 +191,57 @@ export function MuteChatDialog({
 }
 
 export function DeleteMessageDialog({
-  message,
-  own,
+  messages,
+  viewerId,
   asAdmin,
   onDelete,
   onClose,
 }: {
-  message: ChatMessage;
-  own: boolean;
+  /** One message (its menu) or several (chosen with Select). */
+  messages: ChatMessage[];
+  viewerId: string | null;
   asAdmin: boolean;
   onDelete: (scope: "everyone" | "me") => void;
   onClose: () => void;
 }) {
-  const canForEveryone =
-    (own &&
-      Date.now() - new Date(message.createdAt).getTime() <
-        CHAT_DELETE_FOR_EVERYONE_HOURS * 3_600_000) ||
-    asAdmin;
+  const message = messages[0]!;
+  const several = messages.length > 1;
+  const isOwn = (m: ChatMessage) => m.sender?.id === viewerId;
+  const own = messages.every(isOwn);
+  // "For everyone" only when it is allowed for each of them (WhatsApp).
+  const canForEveryone = messages.every(
+    (m) =>
+      asAdmin ||
+      (isOwn(m) &&
+        Date.now() - new Date(m.createdAt).getTime() <
+          CHAT_DELETE_FOR_EVERYONE_HOURS * 3_600_000),
+  );
   return (
     <ChatDialog
       title={
-        own
-          ? "Delete message?"
-          : `Delete ${message.sender?.name ?? "this"}'s message?`
+        several
+          ? `Delete ${messages.length} messages?`
+          : own
+            ? "Delete message?"
+            : `Delete ${message.sender?.name ?? "this"}'s message?`
       }
       onClose={onClose}
     >
       {/* Which message, so the wrong one is not deleted. */}
-      <div className="mb-3 rounded-lg border-l-4 border-solid border-(--chat-line-strong) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
-        <p className="m-0 line-clamp-3 text-[0.88rem] break-words text-(--text-secondary)">
-          {message.body ||
-            (message.attachments[0]?.kind === "image"
-              ? "📷 Photo"
-              : message.attachments[0]?.kind === "video"
-                ? "🎥 Video"
-                : message.attachments[0]?.kind === "audio"
-                  ? "🎤 Voice message"
-                  : `📄 ${message.attachments[0]?.name ?? "Message"}`)}
-        </p>
-      </div>
+      {several ? null : (
+        <div className="mb-3 rounded-lg border-l-4 border-solid border-(--chat-line-strong) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
+          <p className="m-0 line-clamp-3 text-[0.88rem] break-words text-(--text-secondary)">
+            {message.body ||
+              (message.attachments[0]?.kind === "image"
+                ? "📷 Photo"
+                : message.attachments[0]?.kind === "video"
+                  ? "🎥 Video"
+                  : message.attachments[0]?.kind === "audio"
+                    ? "🎤 Voice message"
+                    : `📄 ${message.attachments[0]?.name ?? "Message"}`)}
+          </p>
+        </div>
+      )}
       <p className="m-0 mb-5 text-[0.85rem] leading-snug text-(--muted)">
         {!own && asAdmin
           ? "Everyone will see “This message was deleted by admin”. Group admins can restore it for 7 days."
