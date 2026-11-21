@@ -364,6 +364,36 @@ function useDiscussionVirtualFeedScrollMargin(
   return scrollMargin;
 }
 
+/**
+ * A layout change (the comment box opening or closing, a filter, the
+ * lesson description loading) drops every remembered comment height. The
+ * comments on screen are then measured again here, before paint: their
+ * ref is the same function from render to render (see useMeasureElement),
+ * so nothing else measures them, and they kept the 240 px guess. A long
+ * comment (code, a long note) is taller than that, and the ones below it
+ * were drawn over it each time anyone posted (21 Nov 2026).
+ */
+function useRemeasureOnLayoutChange(
+  virtualizer: {
+    measure: () => void;
+    getTotalSize: () => number;
+    measureElement: (element: HTMLDivElement | null) => void;
+  },
+  feedRef: React.RefObject<HTMLDivElement | null>,
+  layoutKey: string | undefined,
+) {
+  useLayoutEffect(() => {
+    virtualizer.measure();
+    // Rebuilt from the guesses first: measured against the old layout, a
+    // row the same height as before counted as "no change" and kept the
+    // guess.
+    virtualizer.getTotalSize();
+    feedRef.current
+      ?.querySelectorAll<HTMLDivElement>(":scope > [data-index]")
+      .forEach((row) => virtualizer.measureElement(row));
+  }, [feedRef, layoutKey, virtualizer]);
+}
+
 function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
   const feedRef = useRef<HTMLDivElement>(null);
   const marginMeasuredRef = useRef(false);
@@ -393,9 +423,7 @@ function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
   keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
   const measureElement = useMeasureElement(virtualizer);
 
-  useEffect(() => {
-    virtualizer.measure();
-  }, [props.layoutKey, virtualizer]);
+  useRemeasureOnLayoutChange(virtualizer, feedRef, props.layoutKey);
 
   return (
     <DiscussionVirtualFeedRows
@@ -437,9 +465,7 @@ function DiscussionScrollportVirtualFeed(props: DiscussionVirtualFeedProps) {
   keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
   const measureElement = useMeasureElement(virtualizer);
 
-  useEffect(() => {
-    virtualizer.measure();
-  }, [props.layoutKey, virtualizer]);
+  useRemeasureOnLayoutChange(virtualizer, feedRef, props.layoutKey);
 
   return (
     <DiscussionVirtualFeedRows
