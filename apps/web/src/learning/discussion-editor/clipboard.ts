@@ -77,6 +77,15 @@ export function createDiscussionClipboardExtension({
 
       const html = event.clipboardData?.getData("text/html");
       if (!html) return false;
+      // Code goes in exactly as copied. Turned into Markdown, a code
+      // editor's copy (VS Code) got a blank line between every line, lost
+      // its indents and had "=" escaped as "\=" (21 Nov 2026).
+      const plain = event.clipboardData?.getData("text/plain") ?? "";
+      if (plain && (insideCodeBlock(view) || looksLikeCopiedCode(html))) {
+        event.preventDefault();
+        replaceSelection(view, plain.replace(/\r\n?/g, "\n"));
+        return true;
+      }
       const markdown = htmlToDiscussionMarkdown(html);
       if (!markdown) return false;
       event.preventDefault();
@@ -94,6 +103,31 @@ export function createDiscussionClipboardExtension({
       return true;
     },
   });
+}
+
+/** The caret is inside a fenced code block (an odd number of fences above it). */
+function insideCodeBlock(view: EditorView): boolean {
+  const { state } = view;
+  const caretLine = state.doc.lineAt(state.selection.main.from).number;
+  let open = false;
+  for (let number = 1; number < caretLine; number += 1) {
+    if (/^\s*(```|~~~)/.test(state.doc.line(number).text)) open = !open;
+  }
+  return open;
+}
+
+/**
+ * HTML that is code from an editor or a page's code box: kept-as-typed
+ * spacing (`white-space: pre`) or a monospace font with no table, list or
+ * heading that would be worth keeping as Markdown.
+ */
+function looksLikeCopiedCode(html: string): boolean {
+  if (/<(table|ul|ol|h[1-6])\b/i.test(html)) return false;
+  return (
+    /white-space:\s*pre/i.test(html) ||
+    /^\s*(<meta[^>]*>\s*)?<pre\b/i.test(html) ||
+    /font-family:[^;"]*(monospace|consolas|menlo|courier|monaco)/i.test(html)
+  );
 }
 
 export function htmlToDiscussionMarkdown(html: string) {
