@@ -1,6 +1,13 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from "@tanstack/react-query";
 import type {
+  AffiliateCommissionsQuery,
   AffiliateCommissionsResponse,
+  AffiliatePayoutsQueryInput,
+  AffiliatePayoutsResponse,
   AffiliateCommissionStatus,
   AffiliateMeResponse,
 } from "@veolms/contracts";
@@ -56,7 +63,27 @@ export function useAffiliateCommissions(status?: AffiliateCommissionStatus) {
 export function useAffiliatePayouts() {
   return useQuery({
     queryKey: affiliatesKeys.payouts(),
-    queryFn: affiliatesService.listPayouts,
+    queryFn: () => affiliatesService.listPayouts(),
     staleTime: 30_000,
+  });
+}
+
+/** A page of the affiliate's commissions for the filters given. */
+export function useAffiliateCommissionsPage(query: AffiliateCommissionsQuery) {
+  return useQuery<AffiliateCommissionsResponse, ApiError>({
+    queryKey: [...affiliatesKeys.all, "commissions", "page", query],
+    queryFn: () => affiliatesService.listCommissions(query),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+  });
+}
+
+/** A page of the affiliate's payouts for the filters given. */
+export function useAffiliatePayoutsPage(query: AffiliatePayoutsQueryInput) {
+  return useQuery<AffiliatePayoutsResponse, ApiError>({
+    queryKey: [...affiliatesKeys.payouts(), "page", query],
+    queryFn: () => affiliatesService.listPayouts(query),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
   });
 }

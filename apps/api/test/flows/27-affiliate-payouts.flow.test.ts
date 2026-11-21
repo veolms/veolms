@@ -494,6 +494,64 @@ await test("the history lists every row with the buyer masked; its total equals 
   assert.equal(total, me.body.data?.balances.available?.amountMinor);
 });
 
+await test("the affiliate's lists page by number, filter by state, kind, date and order, and sum up each state", async () => {
+  const rahul = await affiliateWithEarnings(5_000);
+  type Page = {
+    items: { orderNumber: string | null; status: string; paid: boolean }[];
+    total: number;
+    page: number;
+    pageCount: number;
+    summary: Record<string, { count: number; amount: { amountMinor: number } }>;
+  };
+  const all = await rahul.client.get<Page>(
+    "/v1/affiliate/me/commissions?page=1&pageSize=10",
+  );
+  assert.equal(all.status, 200, JSON.stringify(all.body));
+  assert.equal(all.body.data!.total, 1);
+  assert.equal(all.body.data!.pageCount, 1);
+  assert.equal(all.body.data!.summary.available!.count, 1);
+  assert.ok(all.body.data!.summary.available!.amount.amountMinor > 0);
+
+  // A state with nothing in it: no rows, and the figures stay the same.
+  const waiting = await rahul.client.get<Page>(
+    "/v1/affiliate/me/commissions?page=1&states=waiting",
+  );
+  assert.equal(waiting.body.data!.total, 0);
+  assert.equal(waiting.body.data!.summary.available!.count, 1);
+
+  // Its own order number finds it; another kind or a later day does not.
+  const number = all.body.data!.items[0]!.orderNumber!;
+  const found = await rahul.client.get<Page>(
+    `/v1/affiliate/me/commissions?page=1&q=${encodeURIComponent(number)}&kinds=sale`,
+  );
+  assert.equal(found.body.data!.total, 1);
+  const adjustments = await rahul.client.get<Page>(
+    "/v1/affiliate/me/commissions?page=1&kinds=adjustment",
+  );
+  assert.equal(adjustments.body.data!.total, 0);
+  const later = await rahul.client.get<Page>(
+    "/v1/affiliate/me/commissions?page=1&from=2099-01-01",
+  );
+  assert.equal(later.body.data!.total, 0);
+  const unknown = await rahul.client.get(
+    "/v1/affiliate/me/commissions?page=1&states=owed",
+  );
+  assert.equal(unknown.status, 400);
+
+  // Payouts by page and status.
+  await setUpi(rahul.client);
+  await requestPayout(rahul.client);
+  const open = await rahul.client.get<{ items: unknown[]; total: number }>(
+    "/v1/affiliate/me/payouts?page=1&statuses=requested",
+  );
+  assert.equal(open.status, 200, JSON.stringify(open.body));
+  assert.equal(open.body.data!.total, 1);
+  const paid = await rahul.client.get<{ total: number }>(
+    "/v1/affiliate/me/payouts?page=1&statuses=paid",
+  );
+  assert.equal(paid.body.data!.total, 0);
+});
+
 await test("stats count the click, the sale and what it earned", async () => {
   const rahul = await affiliateWithEarnings(5_000);
   const stats = await rahul.client.get<{

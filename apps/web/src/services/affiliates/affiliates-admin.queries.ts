@@ -1,11 +1,11 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type {
+  AdminAffiliatesQueryInput,
   AdminAffiliatesResponse,
+  AdminCommissionsQueryInput,
   AdminCommissionsResponse,
+  AdminPayoutsQueryInput,
   AdminPayoutsResponse,
-  AffiliateCommissionStatus,
-  AffiliatePayoutStatus,
-  AffiliateStatus,
 } from "@veolms/contracts";
 
 import type { ApiError } from "../../lib/api-error";
@@ -37,22 +37,17 @@ export function useAffiliateProductOptions(enabled = true) {
   });
 }
 
-export function useAdminAffiliates(filters: {
-  status?: AffiliateStatus;
-  q?: string;
-}) {
-  return useInfiniteQuery<AdminAffiliatesResponse, ApiError>({
-    queryKey: affiliatesAdminKeys.list(filters.status, filters.q),
-    queryFn: ({ pageParam }) =>
-      affiliatesAdminService.listAffiliates({
-        status: filters.status,
-        q: filters.q || undefined,
-        cursor: pageParam as string | undefined,
-        limit: 25,
-      }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
+/** A page of affiliates for the filters given (kept while the next loads). */
+export function useAdminAffiliates(
+  query: AdminAffiliatesQueryInput,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery<AdminAffiliatesResponse, ApiError>({
+    queryKey: affiliatesAdminKeys.list(query),
+    queryFn: () => affiliatesAdminService.listAffiliates(query),
+    placeholderData: keepPreviousData,
     staleTime: 15_000,
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -65,43 +60,20 @@ export function useAdminAffiliate(id: string | null) {
   });
 }
 
-export function useAdminCommissions(filters: {
-  status?: AffiliateCommissionStatus;
-  flagged?: boolean;
-  affiliateId?: string;
-}) {
-  const key = {
-    status: filters.status,
-    flagged: filters.flagged ? "true" : undefined,
-    affiliateId: filters.affiliateId,
-  };
-  return useInfiniteQuery<AdminCommissionsResponse, ApiError>({
-    queryKey: affiliatesAdminKeys.commissions(key),
-    queryFn: ({ pageParam }) =>
-      affiliatesAdminService.listCommissions({
-        status: filters.status,
-        flagged: filters.flagged ? "true" : undefined,
-        affiliateId: filters.affiliateId,
-        cursor: pageParam as string | undefined,
-        limit: 25,
-      }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
+export function useAdminCommissions(query: AdminCommissionsQueryInput) {
+  return useQuery<AdminCommissionsResponse, ApiError>({
+    queryKey: affiliatesAdminKeys.commissions(query),
+    queryFn: () => affiliatesAdminService.listCommissions(query),
+    placeholderData: keepPreviousData,
     staleTime: 15_000,
   });
 }
 
-export function useAdminPayouts(status?: AffiliatePayoutStatus) {
-  return useInfiniteQuery<AdminPayoutsResponse, ApiError>({
-    queryKey: affiliatesAdminKeys.payouts(status),
-    queryFn: ({ pageParam }) =>
-      affiliatesAdminService.listPayouts({
-        status,
-        cursor: pageParam as string | undefined,
-        limit: 25,
-      }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
+export function useAdminPayouts(query: AdminPayoutsQueryInput) {
+  return useQuery<AdminPayoutsResponse, ApiError>({
+    queryKey: affiliatesAdminKeys.payouts(query),
+    queryFn: () => affiliatesAdminService.listPayouts(query),
+    placeholderData: keepPreviousData,
     staleTime: 15_000,
   });
 }
@@ -112,6 +84,7 @@ export function useAffiliateSummary(
   return useQuery({
     queryKey: affiliatesAdminKeys.summary(range.from, range.to),
     queryFn: () => affiliatesAdminService.getSummary(range),
+    placeholderData: keepPreviousData,
     staleTime: 60_000,
   });
 }

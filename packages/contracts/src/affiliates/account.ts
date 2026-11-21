@@ -11,6 +11,7 @@ import {
   affiliateCodeSchema,
   affiliateMoneySchema,
 } from "./commission.ts";
+import { csvOf, pageSize } from "./list-params.ts";
 import { AFFILIATE_JOIN_MODES } from "./program-settings.ts";
 
 /**
@@ -179,11 +180,39 @@ export type AffiliateStatsResponse = z.infer<
   typeof affiliateStatsResponseSchema
 >;
 
+/**
+ * Where a commission stands, as the affiliate sees it: waiting out the
+ * refund period (or a review), available to withdraw, in a payout, paid,
+ * or rejected.
+ */
+export const AFFILIATE_VIEW_STATES = [
+  "waiting",
+  "available",
+  "in_payout",
+  "paid",
+  "rejected",
+] as const;
+export type AffiliateViewState = (typeof AFFILIATE_VIEW_STATES)[number];
+
 export const affiliateCommissionsQuerySchema = z.strictObject({
   status: z.enum(AFFILIATE_COMMISSION_STATUSES).optional(),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
+  /** With a page, the list pages by number and the filters below apply. */
+  page: z.coerce.number().int().min(1).max(10_000).optional(),
+  pageSize,
+  /** One or more of AFFILIATE_VIEW_STATES, comma separated. */
+  states: csvOf(AFFILIATE_VIEW_STATES).optional(),
+  kinds: csvOf(AFFILIATE_COMMISSION_KINDS).optional(),
+  /** Earned on or after / on or before (IST days). */
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  /** Matches the order number. */
+  q: z.string().trim().max(100).optional(),
 });
+export type AffiliateCommissionsQueryParsed = z.infer<
+  typeof affiliateCommissionsQuerySchema
+>;
 export type AffiliateCommissionsQuery = z.input<
   typeof affiliateCommissionsQuerySchema
 >;
@@ -215,9 +244,29 @@ export type AffiliateCommissionRow = z.infer<
   typeof affiliateCommissionRowSchema
 >;
 
+const viewCountAndAmount = z.strictObject({
+  count: z.number().int(),
+  /** In rupees (the amount the affiliate is paid). */
+  amount: affiliateMoneySchema,
+});
+
 export const affiliateCommissionsResponseSchema = z.strictObject({
   items: z.array(affiliateCommissionRowSchema),
   nextCursor: z.string().nullable(),
+  /** Set when the list was asked for by page. */
+  total: z.number().int().optional(),
+  page: z.number().int().optional(),
+  pageCount: z.number().int().optional(),
+  /** Every state for the other filters, for the summary tiles. */
+  summary: z
+    .strictObject({
+      waiting: viewCountAndAmount,
+      available: viewCountAndAmount,
+      inPayout: viewCountAndAmount,
+      paid: viewCountAndAmount,
+      rejected: viewCountAndAmount,
+    })
+    .optional(),
 });
 export type AffiliateCommissionsResponse = z.infer<
   typeof affiliateCommissionsResponseSchema
@@ -239,8 +288,26 @@ export const affiliatePayoutSchema = z.strictObject({
 });
 export type AffiliatePayout = z.infer<typeof affiliatePayoutSchema>;
 
+export const affiliatePayoutsQuerySchema = z.strictObject({
+  /** With a page, the list pages by number and the filters below apply. */
+  page: z.coerce.number().int().min(1).max(10_000).optional(),
+  pageSize,
+  statuses: csvOf(AFFILIATE_PAYOUT_STATUSES).optional(),
+  /** Asked for on or after / on or before (IST days). */
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+});
+export type AffiliatePayoutsQuery = z.infer<typeof affiliatePayoutsQuerySchema>;
+export type AffiliatePayoutsQueryInput = z.input<
+  typeof affiliatePayoutsQuerySchema
+>;
+
 export const affiliatePayoutsResponseSchema = z.strictObject({
   items: z.array(affiliatePayoutSchema),
+  /** Set when the list was asked for by page. */
+  total: z.number().int().optional(),
+  page: z.number().int().optional(),
+  pageCount: z.number().int().optional(),
 });
 export type AffiliatePayoutsResponse = z.infer<
   typeof affiliatePayoutsResponseSchema

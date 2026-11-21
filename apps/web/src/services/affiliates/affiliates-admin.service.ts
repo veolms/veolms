@@ -1,13 +1,13 @@
 import type {
   AdminAffiliateDetail,
-  AdminAffiliatesQuery,
+  AdminAffiliatesQueryInput,
   AdminAffiliatesResponse,
   AdminCommissionRow,
   AdminCommissionsQueryInput,
   AdminCommissionsResponse,
   AdminPayout,
   AdminPayoutDetailsResponse,
-  AdminPayoutsQuery,
+  AdminPayoutsQueryInput,
   AdminPayoutsResponse,
   AffiliateAdjustmentRequest,
   AffiliateAdminSettingsResponse,
@@ -30,10 +30,24 @@ import type {
 
 import { api, getApiBaseUrl } from "../../lib/api-client";
 
-function queryString(params: Record<string, string | undefined>): string {
+/** A list's filters as query values: empty ones left out. */
+export type AdminListParams = Record<
+  string,
+  string | number | boolean | undefined | null
+>;
+
+function cleanParams<T extends object>(params: T): T {
+  return Object.fromEntries(
+    Object.entries(params).filter(
+      ([, value]) => value !== undefined && value !== null && value !== "",
+    ),
+  ) as T;
+}
+
+function queryString(params: AdminListParams): string {
   const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value) query.set(key, value);
+  for (const [key, value] of Object.entries(cleanParams(params))) {
+    query.set(key, String(value));
   }
   const text = query.toString();
   return text ? `?${text}` : "";
@@ -54,8 +68,10 @@ export const affiliatesAdminService = {
   listProducts: () =>
     api.get<{ items: AffiliateProductOption[] }>("/affiliates/products"),
 
-  listAffiliates: (query: AdminAffiliatesQuery) =>
-    api.get<AdminAffiliatesResponse>("/affiliates", { params: query }),
+  listAffiliates: (query: AdminAffiliatesQueryInput) =>
+    api.get<AdminAffiliatesResponse>("/affiliates", {
+      params: cleanParams(query),
+    }),
   getAffiliate: (id: string) =>
     api.get<AdminAffiliateDetail>(`/affiliates/${id}`),
   invite: (payload: InviteAffiliateRequest) =>
@@ -74,7 +90,7 @@ export const affiliatesAdminService = {
 
   listCommissions: (query: AdminCommissionsQueryInput) =>
     api.get<AdminCommissionsResponse>("/affiliates/commissions", {
-      params: query,
+      params: cleanParams(query),
     }),
   approveCommission: (id: string) =>
     api.post<AdminCommissionRow>(`/affiliates/commissions/${id}/approve`, {}),
@@ -96,8 +112,10 @@ export const affiliatesAdminService = {
       input.body,
     ),
 
-  listPayouts: (query: AdminPayoutsQuery) =>
-    api.get<AdminPayoutsResponse>("/affiliates/payouts", { params: query }),
+  listPayouts: (query: AdminPayoutsQueryInput) =>
+    api.get<AdminPayoutsResponse>("/affiliates/payouts", {
+      params: cleanParams(query),
+    }),
   createPayouts: (payload: CreateAdminPayoutsRequest) =>
     api.post<CreateAdminPayoutsResponse>("/affiliates/payouts", payload),
   markPaid: (input: { id: string; body: MarkPayoutPaidRequest }) =>
@@ -117,19 +135,22 @@ export const affiliatesAdminService = {
 
   getSummary: (query: AffiliateReportQuery) =>
     api.get<AffiliateReportSummary>("/affiliates/reports/summary", {
-      params: query,
+      params: cleanParams(query),
     }),
   listAudit: (subjectId?: string) =>
     api.get<{ items: AffiliateAuditEntry[] }>("/affiliates/audit", {
       params: subjectId ? { subjectId } : {},
     }),
 
-  /** Links that download a CSV (the session cookie goes with them). */
-  payoutsExportUrl: (status = "requested") =>
-    `${getApiBaseUrl()}/affiliates/payouts/export${queryString({ status })}`,
+  /**
+   * Links that download a CSV (the session cookie goes with them), with the
+   * list's own filters so the file holds what the screen shows.
+   */
+  payoutsExportUrl: (filters: AdminListParams = { status: "requested" }) =>
+    `${getApiBaseUrl()}/affiliates/payouts/export${queryString(filters)}`,
   reportExportUrl: (
     type: "commissions" | "affiliates",
-    range: { from?: string; to?: string } = {},
+    filters: AdminListParams = {},
   ) =>
-    `${getApiBaseUrl()}/affiliates/reports/export${queryString({ type, ...range })}`,
+    `${getApiBaseUrl()}/affiliates/reports/export${queryString({ type, ...filters })}`,
 };

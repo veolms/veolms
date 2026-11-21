@@ -85,3 +85,18 @@ export async function searchAccountIds(
     .execute();
   return rows.map((row) => row.id);
 }
+
+/** Of these accounts, the ones that were closed (deactivated). */
+export async function listClosedAccountIds(
+  executor: DatabaseExecutor,
+  userIds: readonly string[],
+): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  const rows = await executor
+    .selectFrom("users")
+    .select("id")
+    .where("id", "in", [...userIds])
+    .where("is_deleted", "=", true)
+    .execute();
+  return rows.map((row) => row.id);
+}

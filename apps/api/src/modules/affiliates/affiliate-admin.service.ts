@@ -1,5 +1,7 @@
 import {
+  ADMIN_COMMISSION_STATES,
   AFFILIATE_PAYOUT_CURRENCY,
+  type AdminCommissionState,
   type AdminAffiliateDetail,
   type AdminAffiliateRow,
   type AdminAffiliatesQuery,
@@ -64,7 +66,22 @@ import {
 import * as admin from "./affiliate-admin.repository.ts";
 import { convertToPayoutCurrency } from "./affiliate-commission.ts";
 import { recordSaleCommissions } from "./affiliate-commissions.service.ts";
-import { decodeCursor, pageOf, periodOf } from "./affiliate-cursor.ts";
+import {
+  dayBounds,
+  pageCountOf,
+  pageWindow,
+  periodOf,
+} from "./affiliate-cursor.ts";
+
+/** What the older `status` parameter meant, in today's states. */
+const LEGACY_STATUS_STATES: Record<
+  "pending" | "approved" | "rejected",
+  AdminCommissionState[]
+> = {
+  pending: ["held", "pending"],
+  approved: ["owed", "in_payout", "paid"],
+  rejected: ["rejected"],
+};
 import {
   affiliatePayoutEncryptionReady,
   decryptPayoutSecret,
@@ -347,18 +364,34 @@ export function createAffiliateAdminService({
   }
 
   async function listAffiliates(
-    query: AdminAffiliatesQuery & { limit: number },
+    query: AdminAffiliatesQuery,
   ): Promise<AdminAffiliatesResponse> {
     const text = query.q?.trim() || undefined;
-    const rows = await admin.listAffiliates(database, {
-      status: query.status,
-      text,
-      userIds: text ? await searchAccountIds(database, text) : undefined,
-      before: decodeCursor(query.cursor),
-      limit: query.limit + 1,
-    });
-    const { page, nextCursor } = pageOf(rows, query.limit);
-    return { items: await toRows(page), nextCursor };
+    const statuses = query.statuses?.length
+      ? query.statuses
+      : query.status
+        ? [query.status]
+        : undefined;
+    const result = await admin.pageAffiliates(
+      database,
+      {
+        statuses,
+        text,
+        userIds: text ? await searchAccountIds(database, text) : undefined,
+        owed: query.owed,
+        flagged: query.flagged,
+        ...dayBounds(query),
+      },
+      query.sort,
+      pageWindow(query.page, query.pageSize),
+    );
+    return {
+      items: await toRows(result.rows),
+      total: result.total,
+      page: query.page,
+      pageCount: pageCountOf(result.total, query.pageSize),
+      counts: result.counts,
+    };
   }
 
   async function getAffiliate(id: string): Promise<AdminAffiliateDetail> {
@@ -579,6 +612,10 @@ export function createAffiliateAdminService({
           now,
         );
       } else {
+        if (move.to === "rejected") {
+          // A rejected applicant's payout details have no use (PRD 15.4).
+          await admin.clearPayoutDetails(trx, id);
+        }
         if (move.to === "suspended") {
           await admin.flagPendingRows(trx, id, "affiliate_suspended");
           if (moved.coupon_id) {
@@ -716,19 +753,75 @@ export function createAffiliateAdminService({
     });
   }
 
+  /** The page filters a commissions query asks for, older parameters included. */
+  function commissionPageFilters(query: {
+    states?: AdminCommissionState[];
+    kinds?: AdminCommissionsQuery["kinds"];
+    affiliateIds?: string[];
+    from?: string;
+    to?: string;
+    q?: string;
+    status?: AdminCommissionsQuery["status"];
+    kind?: AdminCommissionsQuery["kind"];
+    affiliateId?: string;
+    flagged?: boolean;
+  }): admin.CommissionPageFilters {
+    let states: AdminCommissionState[] | undefined = query.states?.length
+      ? query.states
+      : query.status
+        ? LEGACY_STATUS_STATES[query.status]
+        : undefined;
+    if (query.flagged === true) states = ["held"];
+    if (query.flagged === false) {
+      states = (states ?? [...ADMIN_COMMISSION_STATES]).filter(
+        (state) => state !== "held",
+      );
+    }
+    const kinds = query.kinds?.length
+      ? query.kinds
+      : query.kind
+        ? [query.kind]
+        : undefined;
+    const affiliateIds = query.affiliateIds?.length
+      ? query.affiliateIds
+      : query.affiliateId
+        ? [query.affiliateId]
+        : undefined;
+    return {
+      states,
+      kinds,
+      affiliateIds,
+      text: query.q?.trim() || undefined,
+      ...dayBounds(query),
+    };
+  }
+
   async function listCommissions(
     query: AdminCommissionsQuery,
   ): Promise<AdminCommissionsResponse> {
-    const rows = await admin.listCommissions(database, {
-      status: query.status,
-      kind: query.kind,
-      affiliateId: query.affiliateId,
-      flagged: query.flagged,
-      before: decodeCursor(query.cursor),
-      limit: query.limit + 1,
+    const result = await admin.pageCommissions(
+      database,
+      commissionPageFilters(query),
+      pageWindow(query.page, query.pageSize),
+    );
+    const tile = (state: admin.CommissionState) => ({
+      count: result.summary[state].count,
+      amount: money(result.summary[state].amount),
     });
-    const { page, nextCursor } = pageOf(rows, query.limit);
-    return { items: await toCommissionRows(page), nextCursor };
+    return {
+      items: await toCommissionRows(result.rows),
+      total: result.total,
+      page: query.page,
+      pageCount: pageCountOf(result.total, query.pageSize),
+      summary: {
+        held: tile("held"),
+        pending: tile("pending"),
+        owed: tile("owed"),
+        inPayout: tile("in_payout"),
+        paid: tile("paid"),
+        rejected: tile("rejected"),
+      },
+    };
   }
 
   async function commissionView(id: string): Promise<AdminCommissionRow> {
@@ -959,7 +1052,7 @@ export function createAffiliateAdminService({
     query: AffiliateReportQuery,
   ): Promise<AffiliateReportSummary> {
     const { from, to } = periodOf(query);
-    const [totals, attributed, all, top] = await Promise.all([
+    const [totals, attributed, all, top, clickOrders] = await Promise.all([
       admin.reportTotals(database, from, to),
       sumPaidOrderRevenue(database, {
         from,
@@ -974,6 +1067,7 @@ export function createAffiliateAdminService({
         attributedOnly: false,
       }),
       admin.topAffiliates(database, from, to),
+      admin.countClickOrders(database, from, to),
     ]);
     const people = await names(top.map((row) => row.userId));
     return {
@@ -983,8 +1077,11 @@ export function createAffiliateAdminService({
       shareOfRevenue: all.net > 0 ? attributed.net / all.net : null,
       orders: attributed.orders,
       clicks: totals.clicks,
+      // Only orders that followed a click: those by code or account never
+      // had one, and counting them gave rates over 100%.
       conversionRate:
-        totals.clicks > 0 ? attributed.orders / totals.clicks : null,
+        totals.clicks > 0 ? Math.min(1, clickOrders / totals.clicks) : null,
+      clickOrders,
       commissionEarned: money(totals.earned),
       owedNow: money(totals.owed),
       pending: money(totals.pending),
@@ -1047,12 +1144,26 @@ export function createAffiliateAdminService({
         "Earned (INR)",
         "Available (INR)",
       ]);
-      let before: admin.Cursor | undefined;
-      for (;;) {
-        const rows = await admin.listAffiliates(database, {
-          before,
-          limit: 500,
-        });
+      const text = query.q?.trim() || undefined;
+      // Joined in the range, like the list (from/to are its dates).
+      const filters: admin.AffiliatePageFilters = {
+        statuses: query.statuses,
+        text,
+        userIds: text ? await searchAccountIds(database, text) : undefined,
+        owed: query.owed,
+        flagged: query.flagged,
+        ...dayBounds(query),
+      };
+      for (let offset = 0; ; offset += 500) {
+        const { rows } = await admin.pageAffiliates(
+          database,
+          filters,
+          query.sort,
+          {
+            offset,
+            limit: 500,
+          },
+        );
         for (const row of await toRows(rows)) {
           yield line([
             row.code,
@@ -1066,12 +1177,11 @@ export function createAffiliateAdminService({
             rupees(row.available.amountMinor),
           ]);
         }
-        const last = rows.at(-1);
-        if (rows.length < 500 || !last) return;
-        before = { createdAt: last.created_at, id: last.id };
+        if (rows.length < 500) return;
       }
     }
-    const { from, to } = periodOf(query);
+    // The list's own filters, so the file holds what the screen shows.
+    const filters = commissionPageFilters(query);
     yield line([
       "Date",
       "Affiliate",
@@ -1088,12 +1198,9 @@ export function createAffiliateAdminService({
       "Flags",
       "Note",
     ]);
-    let before: admin.Cursor | undefined;
-    for (;;) {
-      const rows = await admin.listCommissions(database, {
-        from,
-        to,
-        before,
+    for (let offset = 0; ; offset += 500) {
+      const { rows } = await admin.pageCommissions(database, filters, {
+        offset,
         limit: 500,
       });
       for (const row of await toCommissionRows(rows)) {
@@ -1118,9 +1225,7 @@ export function createAffiliateAdminService({
           row.note,
         ]);
       }
-      const last = rows.at(-1);
-      if (rows.length < 500 || !last) return;
-      before = { createdAt: last.created_at, id: last.id };
+      if (rows.length < 500) return;
     }
   }
 

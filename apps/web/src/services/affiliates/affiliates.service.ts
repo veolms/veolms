@@ -5,6 +5,7 @@ import type {
   AffiliateMeResponse,
   AffiliatePayout,
   AffiliatePayoutDetailsRequest,
+  AffiliatePayoutsQueryInput,
   AffiliatePayoutsResponse,
   AffiliateStatsQuery,
   AffiliateStatsResponse,
@@ -15,6 +16,15 @@ import type {
 } from "@veolms/contracts";
 
 import { api } from "../../lib/api-client";
+
+/** A list's filters as query values, the empty ones left out. */
+function withoutEmpty<T extends object>(params: T): T {
+  return Object.fromEntries(
+    Object.entries(params).filter(
+      ([, value]) => value !== undefined && value !== null && value !== "",
+    ),
+  ) as T;
+}
 
 export const affiliatesService = {
   /** The join page's facts. */
@@ -55,11 +65,15 @@ export const affiliatesService = {
     query: AffiliateCommissionsQuery,
   ): Promise<AffiliateCommissionsResponse> =>
     api.get<AffiliateCommissionsResponse>("/affiliate/me/commissions", {
-      params: query,
+      params: withoutEmpty(query),
     }),
 
-  listPayouts: (): Promise<AffiliatePayoutsResponse> =>
-    api.get<AffiliatePayoutsResponse>("/affiliate/me/payouts"),
+  listPayouts: (
+    query: AffiliatePayoutsQueryInput = {},
+  ): Promise<AffiliatePayoutsResponse> =>
+    api.get<AffiliatePayoutsResponse>("/affiliate/me/payouts", {
+      params: withoutEmpty(query),
+    }),
 
   /** The key makes a double tap or a retry return the same payout. */
   requestPayout: (idempotencyKey: string): Promise<AffiliatePayout> =>

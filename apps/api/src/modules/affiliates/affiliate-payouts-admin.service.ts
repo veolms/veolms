@@ -3,6 +3,7 @@ import {
   type AdminPayout,
   type AdminPayoutsQuery,
   type AdminPayoutsResponse,
+  type AffiliatePayoutExportQuery,
   type CreateAdminPayoutsRequest,
   type CreateAdminPayoutsResponse,
   type MarkPayoutPaidRequest,
@@ -12,12 +13,15 @@ import type { Kysely, Transaction } from "kysely";
 
 import { createOutboxService } from "../../events/outbox.service.ts";
 import { AppError } from "../../lib/errors.ts";
-import { findAccountContacts } from "../auth/shared/account-facts.ts";
+import {
+  findAccountContacts,
+  searchAccountIds,
+} from "../auth/shared/account-facts.ts";
 import { csvCell } from "../commerce/orders/orders-csv.ts";
 import type { PlatformSettingsService } from "../platform/index.ts";
 import * as account from "./affiliate-account.repository.ts";
 import * as admin from "./affiliate-admin.repository.ts";
-import { decodeCursor, pageOf } from "./affiliate-cursor.ts";
+import { dayBounds, pageCountOf, pageWindow } from "./affiliate-cursor.ts";
 import {
   affiliatePayoutEncryptionReady,
   decryptPayoutSecret,
@@ -139,17 +143,61 @@ export function createAffiliatePayoutsAdminService({
     return (await toPayouts([row]))[0]!;
   }
 
+  async function payoutPageFilters(query: {
+    statuses?: AdminPayout["status"][];
+    methods?: ("upi" | "bank")[];
+    affiliateIds?: string[];
+    from?: string;
+    to?: string;
+    q?: string;
+    status?: AdminPayout["status"];
+    affiliateId?: string;
+  }): Promise<admin.PayoutPageFilters> {
+    const text = query.q?.trim() || undefined;
+    return {
+      statuses: query.statuses?.length
+        ? query.statuses
+        : query.status
+          ? [query.status]
+          : undefined,
+      methods: query.methods,
+      affiliateIds: query.affiliateIds?.length
+        ? query.affiliateIds
+        : query.affiliateId
+          ? [query.affiliateId]
+          : undefined,
+      text,
+      userIds: text ? await searchAccountIds(database, text) : undefined,
+      ...dayBounds(query),
+    };
+  }
+
   async function listPayouts(
-    query: AdminPayoutsQuery & { limit: number },
+    query: AdminPayoutsQuery,
   ): Promise<AdminPayoutsResponse> {
-    const rows = await admin.listPayouts(database, {
-      status: query.status,
-      affiliateId: query.affiliateId,
-      before: decodeCursor(query.cursor),
-      limit: query.limit + 1,
-    });
-    const { page, nextCursor } = pageOf(rows, query.limit);
-    return { items: await toPayouts(page), nextCursor };
+    const result = await admin.pagePayouts(
+      database,
+      await payoutPageFilters(query),
+      pageWindow(query.page, query.pageSize),
+    );
+    return {
+      items: await toPayouts(result.rows),
+      total: result.total,
+      page: query.page,
+      pageCount: pageCountOf(result.total, query.pageSize),
+      summary: {
+        toPay: {
+          count: result.summary.toPay.count,
+          amount: money(result.summary.toPay.amount),
+        },
+        paid: {
+          count: result.summary.paid.count,
+          amount: money(result.summary.paid.amount),
+        },
+        tds: money(result.summary.tds),
+        closed: result.summary.closed,
+      },
+    };
   }
 
   /**
@@ -398,7 +446,7 @@ export function createAffiliatePayoutsAdminService({
    */
   async function* exportCsv(
     actorUserId: string,
-    status: AdminPayout["status"],
+    query: AffiliatePayoutExportQuery,
   ): AsyncGenerator<string> {
     if (!affiliatePayoutEncryptionReady()) {
       throw new AppError(
@@ -407,7 +455,15 @@ export function createAffiliatePayoutsAdminService({
         "Payout details can't be read on this server.",
       );
     }
-    const rows = await admin.listPayouts(database, { status, limit: 1000 });
+    // The list's filters when it sent them; open payouts otherwise.
+    const filters = await payoutPageFilters({
+      ...query,
+      statuses: query.statuses?.length ? query.statuses : [query.status],
+    });
+    const rows = (
+      await admin.pagePayouts(database, filters, { offset: 0, limit: 2000 })
+    ).rows;
+    const status = filters.statuses?.join(",") ?? query.status;
     const payouts = await toPayouts(rows);
     await admin.insertAudit(database, {
       actorUserId,

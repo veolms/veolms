@@ -21,7 +21,14 @@ import {
   useAuthStore,
   type AuthIdentityHint,
 } from "../../store/auth.store";
-import { getRoleNavigationItems, type NavigationItem } from "../navigation";
+import { useAffiliateMe } from "../../services/affiliates";
+import {
+  getAffiliateNavigation,
+  getRoleNavigationItems,
+  setAffiliateNavigation,
+  subscribeAffiliateNavigation,
+  type NavigationItem,
+} from "../navigation";
 import {
   getUserRoles,
   getVisibleWorkspaceRoles,
@@ -231,6 +238,15 @@ export function useShellSession({
     () => ({ roles: userRoles ?? [], permissions }),
     [permissions, userRoles],
   );
+  // A learner with an affiliate record gets "Affiliate" in their menu.
+  const affiliateRecord = useAffiliateMe({ enabled: isAuthenticated });
+  const isAffiliate = isAuthenticated && Boolean(affiliateRecord.data);
+  useEffect(() => setAffiliateNavigation(isAffiliate), [isAffiliate]);
+  const affiliateNavigation = useSyncExternalStore(
+    subscribeAffiliateNavigation,
+    getAffiliateNavigation,
+    () => false,
+  );
   const roleNavigationItems = useMemo(
     () =>
       creatorViewExpected
@@ -240,6 +256,8 @@ export function useShellSession({
             teamNavigation,
           )
         : getRoleNavigationItems(effectiveRole, isAdmin, teamNavigation),
+    // `affiliateNavigation` is read inside getRoleNavigationItems.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       creatorViewExpected,
       effectiveRole,
@@ -247,6 +265,7 @@ export function useShellSession({
       isAdmin,
       isAuthenticated,
       teamNavigation,
+      affiliateNavigation,
     ],
   );
   // Every sign-out confirmed in this tab, whichever screen started it.

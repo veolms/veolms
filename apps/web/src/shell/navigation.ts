@@ -61,6 +61,41 @@ const studentNavigation: readonly NavigationItem[] = [
   createNavigationItem("student-settings", "Settings", GearSix, "/settings"),
 ];
 
+/**
+ * A learner who is an affiliate (any status) also gets their affiliate
+ * dashboard in the menu, before Settings. Whether they are is known once
+ * the shell has asked (`setAffiliateNavigation`); everything that builds
+ * the menu reads the same flag, so the number shortcuts stay in step.
+ */
+const studentAffiliateNavigation: readonly NavigationItem[] = [
+  ...studentNavigation.slice(0, -1),
+  createNavigationItem(
+    "student-affiliate",
+    "Affiliate",
+    Handshake,
+    "/affiliate",
+  ),
+  ...studentNavigation.slice(-1),
+];
+
+let affiliateNavigation = false;
+const affiliateNavigationListeners = new Set<() => void>();
+
+export function setAffiliateNavigation(on: boolean) {
+  if (on === affiliateNavigation) return;
+  affiliateNavigation = on;
+  for (const listener of affiliateNavigationListeners) listener();
+}
+
+export function subscribeAffiliateNavigation(listener: () => void) {
+  affiliateNavigationListeners.add(listener);
+  return () => {
+    affiliateNavigationListeners.delete(listener);
+  };
+}
+
+export const getAffiliateNavigation = () => affiliateNavigation;
+
 const creatorNavigation: readonly NavigationItem[] = [
   createNavigationItem("creator-courses", "Courses", BookOpen, "/courses"),
   createNavigationItem(
@@ -162,7 +197,9 @@ export function getRoleNavigationItems(
   isAdmin = false,
   team?: TeamNavigationAccess,
 ): readonly NavigationItem[] {
-  if (role === "student") return studentNavigation;
+  if (role === "student") {
+    return affiliateNavigation ? studentAffiliateNavigation : studentNavigation;
+  }
   if (isAdmin) return adminNavigation;
   if (!team) return creatorNavigation;
   // An instructor alone keeps their usual menu, less any page their
@@ -193,6 +230,7 @@ const navigationTones: Record<string, string> = {
   Courses: "#f472b6",
   Coupons: "#fbbf24",
   Affiliates: "#34d399",
+  Affiliate: "#34d399",
   Platform: "#38bdf8",
   Team: "#818cf8",
   Support: "#fb7185",

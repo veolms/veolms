@@ -76,7 +76,7 @@ export function createAffiliateAdminController({
 
     listAffiliates: async (
       request: FastifyRequest<{
-        Querystring: AdminAffiliatesQuery & { limit: number };
+        Querystring: AdminAffiliatesQuery;
       }>,
     ) => await service.listAffiliates(request.query),
     getAffiliate: async (request: FastifyRequest<{ Params: Id }>) =>
@@ -148,7 +148,7 @@ export function createAffiliateAdminController({
 
     listPayouts: async (
       request: FastifyRequest<{
-        Querystring: AdminPayoutsQuery & { limit: number };
+        Querystring: AdminPayoutsQuery;
       }>,
     ) => await payouts.listPayouts(request.query),
     createPayouts: async (
@@ -176,7 +176,7 @@ export function createAffiliateAdminController({
       await sendCsv(
         reply,
         "affiliate-payouts",
-        payouts.exportCsv(actor(request), request.query.status ?? "requested"),
+        payouts.exportCsv(actor(request), request.query),
       ),
 
     summary: async (

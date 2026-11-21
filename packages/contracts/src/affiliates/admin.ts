@@ -12,6 +12,7 @@ import {
   affiliateCodeSchema,
   affiliateMoneySchema,
 } from "./commission.ts";
+import { csvIds, csvOf, page, pageSize } from "./list-params.ts";
 import { affiliateProgramSettingsSchema } from "./program-settings.ts";
 
 /**
@@ -21,9 +22,13 @@ import { affiliateProgramSettingsSchema } from "./program-settings.ts";
  * and payout details `affiliate.payout`.
  */
 
-const listLimit = z.coerce.number().int().min(1).max(100).default(25);
-const cursor = z.string().max(200).optional();
 const reasonSchema = z.string().trim().min(3).max(2000);
+
+const pageInfo = {
+  total: z.number().int(),
+  page: z.number().int(),
+  pageCount: z.number().int(),
+};
 
 // ------------------------------------------------------------ settings, rules
 
@@ -74,14 +79,44 @@ export type AffiliateProductOption = z.infer<
 
 // ------------------------------------------------------------ affiliates
 
+export const ADMIN_AFFILIATE_SORTS = [
+  "newest",
+  "oldest",
+  "earned",
+  "owed",
+  "sales",
+  "clicks",
+] as const;
+export type AdminAffiliateSort = (typeof ADMIN_AFFILIATE_SORTS)[number];
+
 export const adminAffiliatesQuerySchema = z.strictObject({
+  /** One or more statuses, comma separated. */
+  statuses: csvOf(AFFILIATE_STATUSES).optional(),
+  /** One status (kept for older callers). */
   status: z.enum(AFFILIATE_STATUSES).optional(),
   /** Matches the code, name or email. */
   q: z.string().trim().max(100).optional(),
-  cursor,
-  limit: listLimit,
+  /** Only those owed money now. */
+  owed: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+  /** Only those with commissions held for review. */
+  flagged: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+  /** Joined on or after / on or before (IST days). */
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  sort: z.enum(ADMIN_AFFILIATE_SORTS).default("newest"),
+  page,
+  pageSize,
 });
-export type AdminAffiliatesQuery = z.input<typeof adminAffiliatesQuerySchema>;
+export type AdminAffiliatesQuery = z.infer<typeof adminAffiliatesQuerySchema>;
+export type AdminAffiliatesQueryInput = z.input<
+  typeof adminAffiliatesQuerySchema
+>;
 
 export const adminAffiliateRowSchema = z.strictObject({
   id: z.uuid(),
@@ -104,7 +139,14 @@ export type AdminAffiliateRow = z.infer<typeof adminAffiliateRowSchema>;
 
 export const adminAffiliatesResponseSchema = z.strictObject({
   items: z.array(adminAffiliateRowSchema),
-  nextCursor: z.string().nullable(),
+  ...pageInfo,
+  /** How many of each status match the search (for the status filter). */
+  counts: z.strictObject({
+    pending: z.number().int(),
+    approved: z.number().int(),
+    suspended: z.number().int(),
+    rejected: z.number().int(),
+  }),
 });
 export type AdminAffiliatesResponse = z.infer<
   typeof adminAffiliatesResponseSchema
@@ -174,7 +216,31 @@ export type AdminPayoutDetailsResponse = z.infer<
 
 // ------------------------------------------------------------ commissions
 
+/**
+ * Where a commission stands, as the admin thinks of it: held for review,
+ * waiting out the refund period, owed, in a payout, paid, or rejected.
+ */
+export const ADMIN_COMMISSION_STATES = [
+  "held",
+  "pending",
+  "owed",
+  "in_payout",
+  "paid",
+  "rejected",
+] as const;
+export type AdminCommissionState = (typeof ADMIN_COMMISSION_STATES)[number];
+
 export const adminCommissionsQuerySchema = z.strictObject({
+  /** One or more of ADMIN_COMMISSION_STATES, comma separated. */
+  states: csvOf(ADMIN_COMMISSION_STATES).optional(),
+  kinds: csvOf(AFFILIATE_COMMISSION_KINDS).optional(),
+  affiliateIds: csvIds.optional(),
+  /** Written on or after / on or before (IST days). */
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  /** Matches the order number, the affiliate's code or the buyer's email. */
+  q: z.string().trim().max(100).optional(),
+  // Kept for older callers.
   status: z.enum(AFFILIATE_COMMISSION_STATUSES).optional(),
   kind: z.enum(AFFILIATE_COMMISSION_KINDS).optional(),
   affiliateId: z.uuid().optional(),
@@ -183,8 +249,8 @@ export const adminCommissionsQuerySchema = z.strictObject({
     .enum(["true", "false"])
     .transform((value) => value === "true")
     .optional(),
-  cursor,
-  limit: listLimit,
+  page,
+  pageSize,
 });
 export type AdminCommissionsQuery = z.infer<typeof adminCommissionsQuerySchema>;
 export type AdminCommissionsQueryInput = z.input<
@@ -224,9 +290,23 @@ export const adminCommissionRowSchema = z.strictObject({
 });
 export type AdminCommissionRow = z.infer<typeof adminCommissionRowSchema>;
 
+const countAndAmount = z.strictObject({
+  count: z.number().int(),
+  amount: affiliateMoneySchema,
+});
+
 export const adminCommissionsResponseSchema = z.strictObject({
   items: z.array(adminCommissionRowSchema),
-  nextCursor: z.string().nullable(),
+  ...pageInfo,
+  /** Every state for the other filters (in rupees), for the summary tiles. */
+  summary: z.strictObject({
+    held: countAndAmount,
+    pending: countAndAmount,
+    owed: countAndAmount,
+    inPayout: countAndAmount,
+    paid: countAndAmount,
+    rejected: countAndAmount,
+  }),
 });
 export type AdminCommissionsResponse = z.infer<
   typeof adminCommissionsResponseSchema
@@ -277,12 +357,22 @@ export type SetOrderAttributionResponse = z.infer<
 // ------------------------------------------------------------ payouts
 
 export const adminPayoutsQuerySchema = z.strictObject({
+  statuses: csvOf(AFFILIATE_PAYOUT_STATUSES).optional(),
+  methods: csvOf(AFFILIATE_PAYOUT_METHODS).optional(),
+  affiliateIds: csvIds.optional(),
+  /** Asked for on or after / on or before (IST days). */
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  /** Matches the affiliate's code, name or email, or the reference. */
+  q: z.string().trim().max(100).optional(),
+  // Kept for older callers.
   status: z.enum(AFFILIATE_PAYOUT_STATUSES).optional(),
   affiliateId: z.uuid().optional(),
-  cursor,
-  limit: listLimit,
+  page,
+  pageSize,
 });
-export type AdminPayoutsQuery = z.input<typeof adminPayoutsQuerySchema>;
+export type AdminPayoutsQuery = z.infer<typeof adminPayoutsQuerySchema>;
+export type AdminPayoutsQueryInput = z.input<typeof adminPayoutsQuerySchema>;
 
 export const adminPayoutSchema = z.strictObject({
   id: z.uuid(),
@@ -324,7 +414,15 @@ export type AdminPayout = z.infer<typeof adminPayoutSchema>;
 
 export const adminPayoutsResponseSchema = z.strictObject({
   items: z.array(adminPayoutSchema),
-  nextCursor: z.string().nullable(),
+  ...pageInfo,
+  /** Every status for the other filters, for the summary tiles. */
+  summary: z.strictObject({
+    toPay: countAndAmount,
+    paid: countAndAmount,
+    /** TDS withheld on those paid. */
+    tds: affiliateMoneySchema,
+    closed: z.number().int(),
+  }),
 });
 export type AdminPayoutsResponse = z.infer<typeof adminPayoutsResponseSchema>;
 
@@ -390,7 +488,10 @@ export const affiliateReportSummarySchema = z.strictObject({
   shareOfRevenue: z.number().nullable(),
   orders: z.number().int(),
   clicks: z.number().int(),
+  /** Orders that followed a click, ÷ clicks; null with no clicks. */
   conversionRate: z.number().nullable(),
+  /** Orders that followed a click (the rest came by code or account). */
+  clickOrders: z.number().int(),
   commissionEarned: affiliateMoneySchema,
   owedNow: affiliateMoneySchema,
   pending: affiliateMoneySchema,
@@ -420,13 +521,34 @@ export const affiliateExportQuerySchema = z.strictObject({
   type: z.enum(["commissions", "affiliates"]),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
+  // The list's own filters, so the file holds what the screen shows.
+  q: z.string().trim().max(100).optional(),
+  states: csvOf(ADMIN_COMMISSION_STATES).optional(),
+  kinds: csvOf(AFFILIATE_COMMISSION_KINDS).optional(),
+  affiliateIds: csvIds.optional(),
+  statuses: csvOf(AFFILIATE_STATUSES).optional(),
+  owed: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+  flagged: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+  sort: z.enum(ADMIN_AFFILIATE_SORTS).default("newest"),
 });
 export type AffiliateExportQuery = z.infer<typeof affiliateExportQuerySchema>;
 
 export const affiliatePayoutExportQuerySchema = z.strictObject({
   status: z.enum(AFFILIATE_PAYOUT_STATUSES).default("requested"),
+  statuses: csvOf(AFFILIATE_PAYOUT_STATUSES).optional(),
+  methods: csvOf(AFFILIATE_PAYOUT_METHODS).optional(),
+  affiliateIds: csvIds.optional(),
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  q: z.string().trim().max(100).optional(),
 });
-export type AffiliatePayoutExportQuery = z.input<
+export type AffiliatePayoutExportQuery = z.infer<
   typeof affiliatePayoutExportQuerySchema
 >;
 

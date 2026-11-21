@@ -1,6 +1,7 @@
 import type {
   AffiliateApplyRequest,
-  AffiliateCommissionsQuery,
+  AffiliateCommissionsQueryParsed,
+  AffiliatePayoutsQuery,
   AffiliatePayoutDetailsRequest,
   AffiliateStatsQuery,
   UpdateAffiliateMeRequest,
@@ -69,16 +70,19 @@ export function createAffiliateAccountController({
     },
     async listCommissions(
       request: FastifyRequest<{
-        Querystring: AffiliateCommissionsQuery & { limit: number };
+        Querystring: AffiliateCommissionsQueryParsed;
       }>,
       reply: FastifyReply,
     ) {
       noStore(reply);
       return await service.listCommissions(caller(request), request.query);
     },
-    async listPayouts(request: FastifyRequest, reply: FastifyReply) {
+    async listPayouts(
+      request: FastifyRequest<{ Querystring: AffiliatePayoutsQuery }>,
+      reply: FastifyReply,
+    ) {
       noStore(reply);
-      return await service.listPayouts(caller(request));
+      return await service.listPayouts(caller(request), request.query);
     },
     async requestPayout(request: FastifyRequest, reply: FastifyReply) {
       const header = request.headers["idempotency-key"];

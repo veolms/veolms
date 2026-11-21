@@ -3,11 +3,13 @@ import crypto from "node:crypto";
 import {
   AFFILIATE_PAYOUT_CURRENCY,
   type AffiliateApplyRequest,
-  type AffiliateCommissionsQuery,
+  type AffiliateCommissionsQueryParsed,
   type AffiliateCommissionsResponse,
   type AffiliateMeResponse,
   type AffiliatePayout,
   type AffiliatePayoutDetailsRequest,
+  type AffiliatePayoutsQuery,
+  type AffiliatePayoutsResponse,
   type AffiliateStatsQuery,
   type AffiliateStatsResponse,
   type UpdateAffiliateMeRequest,
@@ -31,6 +33,7 @@ import {
   affiliatePayoutEncryptionReady,
   encryptPayoutSecret,
 } from "./affiliate-payout-crypto.ts";
+import { dayBounds, pageCountOf, pageWindow } from "./affiliate-cursor.ts";
 import { dayString } from "./affiliate-tds.ts";
 import { findProgramDefaultRule } from "./affiliates.repository.ts";
 
@@ -527,18 +530,8 @@ export function createAffiliateAccountService({
     };
   }
 
-  async function listCommissions(
-    user: AffiliateUser,
-    query: AffiliateCommissionsQuery & { limit: number },
-  ): Promise<AffiliateCommissionsResponse> {
-    const affiliate = await requireAffiliate(user.id);
-    const before = decodeCursor(query.cursor);
-    const rows = await account.listCommissionHistory(database, affiliate.id, {
-      status: query.status,
-      before,
-      limit: query.limit + 1,
-    });
-    const page = rows.slice(0, query.limit);
+  /** Ledger rows as the affiliate sees them: products named, buyers masked. */
+  async function toHistoryRows(page: account.CommissionHistoryRow[]) {
     const labels = await listOrderLineLabels(
       database,
       page
@@ -549,37 +542,83 @@ export function createAffiliateAccountService({
       ...new Set([...labels.values()].map((label) => label.buyerUserId)),
     ]);
     const buyerById = new Map(buyers.map((buyer) => [buyer.id, buyer]));
+    return page.map((row) => {
+      const label = row.order_item_id
+        ? labels.get(row.order_item_id)
+        : undefined;
+      const buyer = label ? buyerById.get(label.buyerUserId) : undefined;
+      return {
+        id: row.id,
+        createdAt: row.created_at.toISOString(),
+        kind: row.kind,
+        status: row.status,
+        inPayout: row.payout_id !== null && row.paid_at === null,
+        paid: row.paid_at !== null,
+        product: label?.title ?? null,
+        orderNumber: label?.orderNumber ?? null,
+        buyer: buyer ? maskBuyer(buyer.displayName, buyer.email) : null,
+        source: row.source,
+        base: row.kind === "sale" ? money(row.base_amount, row.currency) : null,
+        rateType: row.rate_type,
+        rateValue: row.rate_value,
+        amount: money(row.amount, row.currency),
+        payoutAmount:
+          row.payout_amount === null
+            ? null
+            : money(row.payout_amount, row.payout_currency),
+        availableAt: row.available_at.toISOString(),
+        note: row.note,
+      };
+    });
+  }
+
+  async function listCommissions(
+    user: AffiliateUser,
+    query: AffiliateCommissionsQueryParsed,
+  ): Promise<AffiliateCommissionsResponse> {
+    const affiliate = await requireAffiliate(user.id);
+    if (query.page !== undefined) {
+      // By page, with filters and the figures for each state.
+      const result = await account.pageCommissionHistory(
+        database,
+        affiliate.id,
+        {
+          states: query.states,
+          kinds: query.kinds,
+          text: query.q?.trim() || undefined,
+          ...dayBounds(query),
+        },
+        pageWindow(query.page, query.pageSize),
+      );
+      const figure = (key: account.AffiliateViewState) => ({
+        count: result.summary[key].count,
+        amount: money(result.summary[key].amount, "INR"),
+      });
+      return {
+        items: await toHistoryRows(result.rows),
+        nextCursor: null,
+        total: result.total,
+        page: query.page,
+        pageCount: pageCountOf(result.total, query.pageSize),
+        summary: {
+          waiting: figure("waiting"),
+          available: figure("available"),
+          inPayout: figure("in_payout"),
+          paid: figure("paid"),
+          rejected: figure("rejected"),
+        },
+      };
+    }
+    const before = decodeCursor(query.cursor);
+    const rows = await account.listCommissionHistory(database, affiliate.id, {
+      status: query.status,
+      before,
+      limit: query.limit + 1,
+    });
+    const page = rows.slice(0, query.limit);
     const last = page.at(-1);
     return {
-      items: page.map((row) => {
-        const label = row.order_item_id
-          ? labels.get(row.order_item_id)
-          : undefined;
-        const buyer = label ? buyerById.get(label.buyerUserId) : undefined;
-        return {
-          id: row.id,
-          createdAt: row.created_at.toISOString(),
-          kind: row.kind,
-          status: row.status,
-          inPayout: row.payout_id !== null && row.paid_at === null,
-          paid: row.paid_at !== null,
-          product: label?.title ?? null,
-          orderNumber: label?.orderNumber ?? null,
-          buyer: buyer ? maskBuyer(buyer.displayName, buyer.email) : null,
-          source: row.source,
-          base:
-            row.kind === "sale" ? money(row.base_amount, row.currency) : null,
-          rateType: row.rate_type,
-          rateValue: row.rate_value,
-          amount: money(row.amount, row.currency),
-          payoutAmount:
-            row.payout_amount === null
-              ? null
-              : money(row.payout_amount, row.payout_currency),
-          availableAt: row.available_at.toISOString(),
-          note: row.note,
-        };
-      }),
+      items: await toHistoryRows(page),
       nextCursor:
         rows.length > query.limit && last
           ? encodeCursor(last.created_at, last.id)
@@ -603,8 +642,26 @@ export function createAffiliateAccountService({
     };
   }
 
-  async function listPayouts(user: AffiliateUser) {
+  async function listPayouts(
+    user: AffiliateUser,
+    query: Partial<AffiliatePayoutsQuery> = {},
+  ): Promise<AffiliatePayoutsResponse> {
     const affiliate = await requireAffiliate(user.id);
+    if (query.page !== undefined) {
+      const size = query.pageSize ?? 25;
+      const result = await account.pagePayouts(
+        database,
+        affiliate.id,
+        { statuses: query.statuses, ...dayBounds(query) },
+        pageWindow(query.page, size),
+      );
+      return {
+        items: result.rows.map(toPayout),
+        total: result.total,
+        page: query.page,
+        pageCount: pageCountOf(result.total, size),
+      };
+    }
     return {
       items: (await account.listPayouts(database, affiliate.id)).map(toPayout),
     };

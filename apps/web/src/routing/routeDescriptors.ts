@@ -834,6 +834,24 @@ export const getEffectiveRouteId = (
       : "home-fallback";
   }
 
+  if (routeId === "affiliate") {
+    // The affiliate's dashboard and its tabs (see affiliateDashboardTabs.ts).
+    return /^\/affiliate(?:\/(?:overview|commissions|payouts|settings))?$/.test(
+      normalizedPath,
+    )
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "affiliate-program") {
+    // The Affiliates page and its tabs (see affiliateProgramTabs.ts).
+    return /^\/affiliate-program(?:\/(?:overview|affiliates|commissions|payouts|settings))?$/.test(
+      normalizedPath,
+    )
+      ? routeId
+      : "home-fallback";
+  }
+
   if (routeId === "invite") {
     return /^\/invite\/[A-Za-z0-9_-]{32,128}$/.test(normalizedPath)
       ? routeId

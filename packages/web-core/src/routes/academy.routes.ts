@@ -64,7 +64,7 @@ export function getAcademyRoutes(): RouteConfigEntry {
       caseSensitive: true,
     }),
     // The affiliate's dashboard, and the page to join the program.
-    route("affiliate", "routes/affiliate/dashboard.tsx", {
+    route("affiliate/:tab?", "routes/affiliate/dashboard.tsx", {
       id: "affiliate",
       caseSensitive: true,
     }),

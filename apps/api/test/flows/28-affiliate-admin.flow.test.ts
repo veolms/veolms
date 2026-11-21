@@ -885,4 +885,116 @@ await test("the overview counts attributed sales, clicks and money owed; exports
   assert.ok(audit.body.data?.items[0]?.actorName);
 });
 
+await test("the admin lists filter by several statuses, page with a total, and sum up the other filters", async () => {
+  const first = await approved("filtered");
+  const second = await approved("filtered2");
+  const pending = await applicant("filtered3");
+  await saleThrough(first.code);
+  await saleThrough(second.code);
+
+  // Several statuses at once, a search, and the counts for the status filter.
+  const list = await admin.get<{
+    items: { id: string; status: string }[];
+    total: number;
+    pageCount: number;
+    counts: { approved: number; pending: number };
+  }>(
+    `/v1/affiliates?statuses=approved,pending&q=${first.code.slice(0, 3)}&pageSize=10`,
+  );
+  assert.equal(list.status, 200, JSON.stringify(list.body));
+  assert.ok(
+    list.body.data!.items.every((row) =>
+      ["approved", "pending"].includes(row.status),
+    ),
+  );
+  assert.ok(list.body.data!.counts.approved >= 2);
+  assert.ok(list.body.data!.total >= list.body.data!.items.length);
+  const unknown = await admin.get("/v1/affiliates?statuses=approved,nope");
+  assert.equal(unknown.status, 400);
+  const sorted = await admin.get<{
+    items: { earned: { amountMinor: number } }[];
+  }>("/v1/affiliates?sort=earned&pageSize=10");
+  const earned = sorted.body.data!.items.map((row) => row.earned.amountMinor);
+  assert.deepEqual(
+    earned,
+    [...earned].sort((a, b) => b - a),
+  );
+
+  // Commissions by state and by several affiliates, with the summary.
+  const commissions = await admin.get<{
+    items: { affiliate: { id: string }; status: string }[];
+    total: number;
+    summary: { pending: { count: number; amount: { amountMinor: number } } };
+  }>(
+    `/v1/affiliates/commissions?states=pending,held&affiliateIds=${first.affiliateId},${second.affiliateId}`,
+  );
+  assert.equal(commissions.status, 200, JSON.stringify(commissions.body));
+  assert.equal(commissions.body.data!.total, 2);
+  assert.deepEqual(
+    new Set(commissions.body.data!.items.map((row) => row.affiliate.id)),
+    new Set([first.affiliateId, second.affiliateId]),
+  );
+  assert.equal(commissions.body.data!.summary.pending.count, 2);
+  assert.equal(
+    commissions.body.data!.summary.pending.amount.amountMinor,
+    200_000,
+  );
+
+  // A page beyond the end is empty, with the same total.
+  const beyond = await admin.get<{
+    items: unknown[];
+    total: number;
+    page: number;
+  }>(
+    `/v1/affiliates/commissions?affiliateIds=${first.affiliateId}&page=5&pageSize=10`,
+  );
+  assert.deepEqual(
+    {
+      items: beyond.body.data!.items.length,
+      total: beyond.body.data!.total,
+      page: beyond.body.data!.page,
+    },
+    { items: 0, total: 1, page: 5 },
+  );
+
+  // Searching by the buyer's order number finds it.
+  const order = await flow.database
+    .selectFrom("affiliate_commissions as c")
+    .innerJoin("orders as o", "o.id", "c.order_id")
+    .select("o.order_number")
+    .where("c.affiliate_id", "=", first.affiliateId)
+    .executeTakeFirstOrThrow();
+  const found = await admin.get<{ total: number }>(
+    `/v1/affiliates/commissions?q=${encodeURIComponent(order.order_number)}`,
+  );
+  assert.equal(found.body.data!.total, 1);
+
+  // Payouts: open ones first, with the figures for the other filters.
+  const payouts = await admin.get<{
+    total: number;
+    summary: { toPay: { count: number }; paid: { count: number } };
+  }>("/v1/affiliates/payouts?statuses=requested,paid&methods=upi");
+  assert.equal(payouts.status, 200, JSON.stringify(payouts.body));
+  assert.ok(payouts.body.data!.summary.paid.count >= 1);
+
+  // Conversion never passes 100%: only orders after a click count.
+  const summary = await admin.get<{
+    conversionRate: number | null;
+    clickOrders: number;
+  }>("/v1/affiliates/reports/summary");
+  assert.ok((summary.body.data!.conversionRate ?? 0) <= 1);
+  assert.ok(summary.body.data!.clickOrders >= 2);
+
+  // The affiliates file holds what the list shows: here only applicants.
+  const file = await admin.request(
+    "GET",
+    "/v1/affiliates/reports/export?type=affiliates&statuses=pending&sort=earned",
+  );
+  assert.equal(file.status, 200);
+  const text =
+    typeof file.body === "string" ? file.body : JSON.stringify(file.body);
+  assert.match(text, new RegExp(pending.code.toUpperCase(), "u"));
+  assert.doesNotMatch(text, new RegExp(`${first.code.toUpperCase()},`, "u"));
+});
+
 await flow.close();

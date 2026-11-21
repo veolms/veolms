@@ -17,6 +17,11 @@ export interface DateRangeControlProps {
   customTo: Date | null;
   onRangeChange: (range: Exclude<DateRangeKey, "custom">) => void;
   onCustomRange: (from: Date, to: Date) => void;
+  /**
+   * An "All" chip before the others, for a list that starts unbounded.
+   * While it is active no other chip or range is.
+   */
+  allTime?: { active: boolean; onSelect: () => void };
 }
 
 const chipClasses =
@@ -37,6 +42,7 @@ export function DateRangeControl({
   customTo,
   onRangeChange,
   onCustomRange,
+  allTime,
 }: DateRangeControlProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<{ from: Date | null; to: Date | null }>({
@@ -44,7 +50,9 @@ export function DateRangeControl({
     to: null,
   });
   const today = new Date();
-  const fromCalendar = !(DATE_CHIPS as readonly string[]).includes(range);
+  const allActive = Boolean(allTime?.active);
+  const fromCalendar =
+    !allActive && !(DATE_CHIPS as readonly string[]).includes(range);
   const calendarActive = open || fromCalendar;
 
   const openChange = (next: boolean) => {
@@ -77,8 +85,18 @@ export function DateRangeControl({
       aria-label="Date range"
       className="inline-flex max-w-full items-center gap-1 rounded-xl border border-(--border) bg-(--card-surface) p-1"
     >
+      {allTime && (
+        <button
+          type="button"
+          aria-pressed={allActive && !open}
+          onClick={allTime.onSelect}
+          className={`${chipClasses} ${allActive && !open ? activeChip : idleChip}`}
+        >
+          All
+        </button>
+      )}
       {DATE_CHIPS.map((chip) => {
-        const active = !calendarActive && range === chip;
+        const active = !allActive && !calendarActive && range === chip;
         return (
           <button
             key={chip}
@@ -120,12 +138,12 @@ export function DateRangeControl({
                 <button
                   key={quick}
                   type="button"
-                  aria-pressed={range === quick}
+                  aria-pressed={!allActive && range === quick}
                   onClick={() => {
                     onRangeChange(quick);
                     setOpen(false);
                   }}
-                  className={`rounded-lg px-2.5 py-2 text-left text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${range === quick ? "bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-(--accent)" : "text-(--text) hover:bg-(--hover)"}`}
+                  className={`rounded-lg px-2.5 py-2 text-left text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${!allActive && range === quick ? "bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-(--accent)" : "text-(--text) hover:bg-(--hover)"}`}
                 >
                   {dateRangeLabel(quick)}
                 </button>

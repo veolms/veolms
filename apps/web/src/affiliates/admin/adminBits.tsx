@@ -1,19 +1,16 @@
 import type { AffiliateMoney } from "@veolms/contracts";
 import { useState, type ReactNode } from "react";
 
-import { Button } from "../../components/Button";
-import { SlideOverPanel } from "../../components/SlideOverPanel";
-import {
-  inputClassName,
-  PanelBody,
-  PanelFooter,
-  secondaryButtonClassName,
-  StatusChip,
-} from "../../team/TeamBits";
+import { inputClassName } from "../../team/TeamBits";
 import { formatAffiliateMoney } from "../affiliateFormat";
+import { panelDangerButton, panelSecondaryButton } from "./AdminListBits";
 
 export const money = (value: AffiliateMoney | null | undefined) =>
   value ? formatAffiliateMoney(value) : "–";
+
+/** Rupees from a total in rupees' minor units (the summaries' amounts). */
+export const rupees = (amountMinor: number) =>
+  formatAffiliateMoney({ amountMinor, currency: "INR" });
 
 const dateFormat = new Intl.DateTimeFormat(undefined, {
   day: "numeric",
@@ -23,28 +20,19 @@ const dateFormat = new Intl.DateTimeFormat(undefined, {
 export const formatDay = (value: string | null | undefined) =>
   value ? dateFormat.format(new Date(value)) : "–";
 
+const timeFormat = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+});
+export const formatTime = (value: string | null | undefined) =>
+  value ? timeFormat.format(new Date(value)) : "";
+
+const number = new Intl.NumberFormat("en-IN");
+export const formatCount = (value: number) => number.format(value);
+
 /** Today in India as YYYY-MM-DD (payouts are dated in IST). */
 export function indiaToday(): string {
   return new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
-}
-
-const AFFILIATE_TONES = {
-  pending: "warning",
-  approved: "success",
-  rejected: "neutral",
-  suspended: "danger",
-} as const;
-
-export function AffiliateStatusChip({
-  status,
-}: {
-  status: keyof typeof AFFILIATE_TONES;
-}) {
-  return (
-    <StatusChip tone={AFFILIATE_TONES[status]}>
-      {status[0]!.toUpperCase() + status.slice(1)}
-    </StatusChip>
-  );
 }
 
 export const FLAG_LABELS: Record<string, string> = {
@@ -56,134 +44,97 @@ export const FLAG_LABELS: Record<string, string> = {
   no_settlement: "Waiting for settlement",
 };
 
-/** A filter row of pill buttons. */
-export function FilterPills<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: readonly { id: T; label: string }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label={label}
-      className="flex flex-wrap gap-1.5"
-    >
-      {options.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          role="radio"
-          aria-checked={value === option.id}
-          onClick={() => onChange(option.id)}
-          className={`h-8 rounded-full px-3 text-xs font-semibold transition-colors ${
-            value === option.id
-              ? "bg-(--accent) text-(--on-accent)"
-              : "bg-(--surface-strong) text-(--text-secondary) hover:bg-(--hover)"
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+export const fieldLabel =
+  "flex flex-col gap-1.5 text-sm font-semibold text-(--text)";
+export { inputClassName };
 
 /**
- * A side panel that asks for a reason (rejecting, suspending, a failed
- * payout). The person it is about usually sees what is written.
+ * Asks for a reason in place (rejecting, suspending, a failed payout), so
+ * no second panel opens over the first. The person it is about usually
+ * sees what is written.
  */
-export function ReasonPanel({
+export function InlineReason({
   title,
   description,
   confirmLabel,
-  danger = false,
   pending,
   error,
   onConfirm,
-  onClose,
+  onCancel,
 }: {
   title: string;
   description: ReactNode;
   confirmLabel: string;
-  danger?: boolean;
   pending: boolean;
   error?: string | null;
   onConfirm: (reason: string) => void;
-  onClose: () => void;
+  onCancel: () => void;
 }) {
   const [reason, setReason] = useState("");
   const valid = reason.trim().length >= 3;
   return (
-    <SlideOverPanel label={title} title={title} onClose={onClose}>
-      <PanelBody>
-        <p className="mb-4 text-sm text-(--muted)">{description}</p>
-        <label
-          className="block text-sm font-semibold text-(--text)"
-          htmlFor="affiliate-reason"
-        >
-          Reason
-        </label>
+    <section
+      role="group"
+      aria-label={title}
+      className="rounded-2xl border border-rose-500/30 bg-rose-500/6 p-4"
+    >
+      <h3 className="m-0 text-sm font-bold text-(--text)">{title}</h3>
+      <p className="m-0 mt-1 text-sm text-(--muted)">{description}</p>
+      <label className={`${fieldLabel} mt-3`}>
+        Reason
         <textarea
-          id="affiliate-reason"
-          className={`${inputClassName} mt-1.5 min-h-28 py-2`}
+          // Opened by a button press: the reason is the next thing typed.
+          autoFocus
+          className={`${inputClassName} min-h-24 py-2 font-normal`}
           value={reason}
           maxLength={2000}
           onChange={(event) => setReason(event.target.value)}
         />
-        {error ? (
-          <p role="alert" className="mt-3 text-sm text-rose-500">
-            {error}
-          </p>
-        ) : null}
-      </PanelBody>
-      <PanelFooter>
+      </label>
+      {error ? (
+        <p role="alert" className="m-0 mt-2 text-sm text-rose-500">
+          {error}
+        </p>
+      ) : null}
+      <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           type="button"
-          className={secondaryButtonClassName}
-          onClick={onClose}
+          className={panelSecondaryButton}
+          onClick={onCancel}
         >
           Cancel
         </button>
-        <Button
+        <button
           type="button"
-          variant={danger ? "danger" : "primary"}
-          elevation="flat"
-          motion="static"
+          className={panelDangerButton}
           disabled={!valid || pending}
           onClick={() => onConfirm(reason.trim())}
         >
           {pending ? "Saving…" : confirmLabel}
-        </Button>
-      </PanelFooter>
-    </SlideOverPanel>
+        </button>
+      </div>
+    </section>
   );
 }
 
-/** "Show more" under a list that pages. */
-export function MoreButton({
-  hasMore,
-  loading,
-  onMore,
+/** A line saying what just happened, or what went wrong. */
+export function PanelMessage({
+  tone,
+  children,
 }: {
-  hasMore: boolean;
-  loading: boolean;
-  onMore: () => void;
+  tone: "error" | "done";
+  children: ReactNode;
 }) {
-  if (!hasMore) return null;
   return (
-    <button
-      type="button"
-      className={`${secondaryButtonClassName} self-center`}
-      disabled={loading}
-      onClick={onMore}
+    <p
+      role={tone === "error" ? "alert" : "status"}
+      className={`m-0 rounded-lg px-3 py-2 text-sm ${
+        tone === "error"
+          ? "bg-rose-500/10 text-rose-700 dark:text-rose-300"
+          : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      }`}
     >
-      {loading ? "Loading…" : "Show more"}
-    </button>
+      {children}
+    </p>
   );
 }

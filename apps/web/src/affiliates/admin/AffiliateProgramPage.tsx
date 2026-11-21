@@ -1,9 +1,7 @@
 import { HandshakeIcon as Handshake } from "@phosphor-icons/react/Handshake";
-import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import { Button } from "../../components/Button";
 import { PageHeading } from "../../components/PageHeading";
 import { SwipeableTabPanel } from "../../navigation/SwipeableTabPanel";
 import { useCapabilities } from "../../services/authorization";
@@ -11,7 +9,10 @@ import { SettingsTabBar } from "../../settings/SettingsTabBar";
 import { AcademyPageFallback } from "../../shell/academyPageFallbacks";
 import { EmptyState } from "../../team/TeamBits";
 import { AffiliateCommissionsTab } from "./AffiliateCommissionsTab";
-import { AffiliateOverviewTab } from "./AffiliateOverviewTab";
+import {
+  AffiliateOverviewTab,
+  type OpenAffiliateTab,
+} from "./AffiliateOverviewTab";
 import { AffiliatePayoutsTab } from "./AffiliatePayoutsTab";
 import {
   AFFILIATE_PROGRAM_TAB_DEFINITIONS,
@@ -47,7 +48,6 @@ export function AffiliateProgramPage() {
 }
 
 function AffiliateProgramWorkspace() {
-  const { can } = useCapabilities();
   const navigate = useNavigate();
   const params = useParams();
   const tabListRef = useRef<HTMLElement>(null);
@@ -63,6 +63,14 @@ function AffiliateProgramWorkspace() {
       ),
     [navigate],
   );
+  // From the overview: a tab with its filters already chosen.
+  const openFilteredTab = useCallback<OpenAffiliateTab>(
+    (id, search) => {
+      const query = new URLSearchParams(search).toString();
+      void navigate(`/affiliate-program/${id}${query ? `?${query}` : ""}`);
+    },
+    [navigate],
+  );
 
   return (
     <div className="settings-page" aria-labelledby="affiliate-program-title">
@@ -74,17 +82,6 @@ function AffiliateProgramWorkspace() {
             description="People who share the academy for a commission: their sales, what you owe them, and paying it."
             copyClassName="settings-page__heading-copy"
           />
-          {activeTab === "affiliates" && can("affiliate.manage") ? (
-            <Button
-              elevation="flat"
-              motion="static"
-              className="shrink-0"
-              onClick={() => setInviting(true)}
-            >
-              <PaperPlaneTilt size={17} weight="bold" aria-hidden="true" />
-              Invite
-            </Button>
-          ) : null}
         </div>
         <SettingsTabBar
           tabs={AFFILIATE_PROGRAM_TAB_DEFINITIONS}
@@ -112,9 +109,9 @@ function AffiliateProgramWorkspace() {
       >
         {(panelTab) =>
           panelTab !== activeTab ? null : panelTab === "overview" ? (
-            <AffiliateOverviewTab onOpenTab={navigateTab} />
+            <AffiliateOverviewTab onOpenTab={openFilteredTab} />
           ) : panelTab === "affiliates" ? (
-            <AffiliatesTab />
+            <AffiliatesTab onInvite={() => setInviting(true)} />
           ) : panelTab === "commissions" ? (
             <AffiliateCommissionsTab />
           ) : panelTab === "payouts" ? (

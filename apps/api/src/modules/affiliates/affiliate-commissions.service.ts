@@ -15,8 +15,10 @@ import { config } from "../../config.ts";
 import { createOutboxService } from "../../events/outbox.service.ts";
 import {
   findAccountContacts,
+  listClosedAccountIds,
   listSignInAddressesSince,
 } from "../auth/shared/account-facts.ts";
+import { updateAffiliateCoupon } from "../commerce/coupons/affiliate-coupons.ts";
 import {
   findOrderForCommission,
   findRefundForReversal,
@@ -39,7 +41,13 @@ import {
   saleFraudFlags,
 } from "./affiliate-fraud.ts";
 import { CLICK_RETENTION_MONTHS, hashAddress } from "./affiliate-tracking.ts";
-import { listOverduePayouts } from "./affiliate-admin.repository.ts";
+import {
+  listActiveAffiliateAccounts,
+  listOverduePayouts,
+  purgeStalePayoutDetails,
+  readHealth,
+  suspendForClosedAccount,
+} from "./affiliate-admin.repository.ts";
 import * as repository from "./affiliate-commissions.repository.ts";
 
 /**
@@ -584,4 +592,73 @@ export async function remindOverduePayouts(
     }
   });
   return overdue.length;
+}
+
+const CLOSED_ACCOUNT_JOB = "affiliate-closed-account";
+const RETENTION_MONTHS = 24;
+
+/**
+ * Suspends affiliates whose account was closed (PRD section 16): no new
+ * credit, their coupon off, pending commissions held. The ledger stays, so
+ * the academy can pay what is owed by hand. (A deleted account is handled
+ * by the database as it is deleted; this is for a closed one.)
+ */
+export async function suspendClosedAccounts(
+  database: Kysely<Database>,
+  options: { now?: Date } = {},
+): Promise<number> {
+  const now = options.now ?? new Date();
+  const active = await listActiveAffiliateAccounts(database);
+  const closed = new Set(
+    await listClosedAccountIds(
+      database,
+      active.map((row) => row.user_id),
+    ),
+  );
+  let suspended = 0;
+  for (const affiliate of active.filter((row) => closed.has(row.user_id))) {
+    await runBackgroundItem(
+      CLOSED_ACCOUNT_JOB,
+      { table: "affiliates", id: affiliate.id },
+      async () => {
+        await database.transaction().execute(async (trx) => {
+          const moved = await suspendForClosedAccount(trx, affiliate.id, now);
+          if (!moved) return;
+          suspended += 1;
+          if (moved.coupon_id) {
+            await updateAffiliateCoupon(trx, moved.coupon_id, {
+              active: false,
+            });
+          }
+          await repository.addFlag(
+            trx,
+            { affiliateId: affiliate.id },
+            "affiliate_suspended",
+          );
+        });
+      },
+    );
+  }
+  return suspended;
+}
+
+/** Payout details past their use, deleted (PRD section 15.4). */
+export async function purgeOldPayoutDetails(
+  database: Kysely<Database>,
+  options: { now?: Date } = {},
+): Promise<number> {
+  const before = new Date(options.now ?? new Date());
+  before.setUTCMonth(before.getUTCMonth() - RETENTION_MONTHS);
+  return await purgeStalePayoutDetails(database, before);
+}
+
+/** Approvals behind by more than this are an alert (PRD section 16). */
+export const APPROVAL_LAG_ALERT_MINUTES = 120;
+
+/** The health numbers, logged after each approval pass. */
+export async function readAffiliateHealth(
+  database: Kysely<Database>,
+  options: { now?: Date } = {},
+) {
+  return await readHealth(database, options.now ?? new Date());
 }

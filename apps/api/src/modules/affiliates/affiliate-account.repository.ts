@@ -284,6 +284,192 @@ export async function listCommissionHistory(
     .execute();
 }
 
+/** Where a commission stands, as the affiliate sees it. */
+export type AffiliateViewState =
+  "waiting" | "available" | "in_payout" | "paid" | "rejected";
+
+const VIEW_STATE_SQL: Record<
+  AffiliateViewState,
+  ReturnType<typeof sql<boolean>>
+> = {
+  waiting: sql<boolean>`(c.status = 'pending')`,
+  available: sql<boolean>`(c.status = 'approved' and c.payout_id is null)`,
+  in_payout: sql<boolean>`(c.payout_id is not null and c.paid_at is null)`,
+  paid: sql<boolean>`(c.paid_at is not null)`,
+  rejected: sql<boolean>`(c.status = 'rejected')`,
+};
+
+export interface CommissionHistoryFilters {
+  states?: readonly AffiliateViewState[];
+  kinds?: readonly ("sale" | "reversal" | "adjustment")[];
+  from?: Date;
+  to?: Date;
+  text?: string;
+}
+
+const likePattern = (text: string) =>
+  `%${text.toLowerCase().replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;
+
+function historyFilters(
+  affiliateId: string,
+  filters: CommissionHistoryFilters,
+  options: { withState: boolean },
+) {
+  const parts: ReturnType<typeof sql<boolean>>[] = [
+    sql<boolean>`c.affiliate_id = ${affiliateId}`,
+  ];
+  if (options.withState && filters.states?.length) {
+    parts.push(
+      sql<boolean>`(${sql.join(
+        filters.states.map((state) => VIEW_STATE_SQL[state]),
+        sql` or `,
+      )})`,
+    );
+  }
+  if (filters.kinds?.length) {
+    parts.push(sql<boolean>`c.kind in (${sql.join(filters.kinds)})`);
+  }
+  if (filters.from) parts.push(sql<boolean>`c.created_at >= ${filters.from}`);
+  if (filters.to) parts.push(sql<boolean>`c.created_at < ${filters.to}`);
+  if (filters.text) {
+    parts.push(sql<boolean>`exists (select 1 from orders o
+      where o.id = c.order_id
+        and lower(o.order_number) like ${likePattern(filters.text)})`);
+  }
+  return sql<boolean>`${sql.join(parts, sql` and `)}`;
+}
+
+/** In rupees: the settled amount, or the amount itself when it was rupees. */
+const RUPEES = sql`coalesce(c.payout_amount, case when c.currency = 'INR' then c.amount else 0 end)`;
+
+/**
+ * A page of the affiliate's ledger for the filters, its total, and each
+ * state's count and rupee sum for the other filters (the summary tiles).
+ */
+export async function pageCommissionHistory(
+  executor: DatabaseExecutor,
+  affiliateId: string,
+  filters: CommissionHistoryFilters,
+  page: { offset: number; limit: number },
+): Promise<{
+  rows: CommissionHistoryRow[];
+  total: number;
+  summary: Record<AffiliateViewState, { count: number; amount: number }>;
+}> {
+  const where = historyFilters(affiliateId, filters, { withState: true });
+  const states = Object.keys(VIEW_STATE_SQL) as AffiliateViewState[];
+  const [rows, total, summary] = await Promise.all([
+    executor
+      .selectFrom("affiliate_commissions as c")
+      .leftJoin("affiliate_order_attributions as t", "t.order_id", "c.order_id")
+      .select([
+        "c.id",
+        "c.created_at",
+        "c.kind",
+        "c.status",
+        "c.order_id",
+        "c.order_item_id",
+        "c.currency",
+        "c.base_amount",
+        "c.rate_type",
+        "c.rate_value",
+        "c.amount",
+        "c.payout_currency",
+        "c.payout_amount",
+        "c.payout_id",
+        "c.paid_at",
+        "c.available_at",
+        "c.note",
+        "t.source",
+      ])
+      .where(where)
+      .orderBy("c.created_at", "desc")
+      .orderBy("c.id", "desc")
+      .offset(page.offset)
+      .limit(page.limit)
+      .execute(),
+    executor
+      .selectFrom("affiliate_commissions as c")
+      .select(sql<string>`count(*)`.as("n"))
+      .where(where)
+      .executeTakeFirstOrThrow(),
+    executor
+      .selectFrom("affiliate_commissions as c")
+      .select(
+        states.flatMap((state) => [
+          sql<string>`count(*) filter (where ${VIEW_STATE_SQL[state]})`.as(
+            `${state}_n`,
+          ),
+          sql<string>`coalesce(sum(${RUPEES}) filter (where ${VIEW_STATE_SQL[state]}), 0)`.as(
+            `${state}_amount`,
+          ),
+        ]),
+      )
+      .where(historyFilters(affiliateId, filters, { withState: false }))
+      .executeTakeFirstOrThrow(),
+  ]);
+  const raw = summary as Record<string, string>;
+  return {
+    rows: rows as CommissionHistoryRow[],
+    total: Number(total.n),
+    summary: Object.fromEntries(
+      states.map((state) => [
+        state,
+        {
+          count: Number(raw[`${state}_n`] ?? 0),
+          amount: Number(raw[`${state}_amount`] ?? 0),
+        },
+      ]),
+    ) as Record<AffiliateViewState, { count: number; amount: number }>,
+  };
+}
+
+/** A page of the affiliate's payouts for the filters, and the total. */
+export async function pagePayouts(
+  executor: DatabaseExecutor,
+  affiliateId: string,
+  filters: {
+    statuses?: readonly ("requested" | "paid" | "rejected" | "failed")[];
+    from?: Date;
+    to?: Date;
+  },
+  page: { offset: number; limit: number },
+): Promise<{ rows: PayoutRow[]; total: number }> {
+  let query = executor
+    .selectFrom("affiliate_payouts")
+    .where("affiliate_id", "=", affiliateId);
+  if (filters.statuses?.length) {
+    query = query.where("status", "in", [...filters.statuses]);
+  }
+  if (filters.from) query = query.where("created_at", ">=", filters.from);
+  if (filters.to) query = query.where("created_at", "<", filters.to);
+  const [rows, total] = await Promise.all([
+    query
+      .select([
+        "id",
+        "status",
+        "currency",
+        "gross_amount",
+        "tds_amount",
+        "net_amount",
+        "payout_method",
+        "payout_details_hint",
+        "reference",
+        "paid_on",
+        "reason",
+        "created_at",
+        "idempotency_key",
+      ])
+      .orderBy("created_at", "desc")
+      .orderBy("id", "desc")
+      .offset(page.offset)
+      .limit(page.limit)
+      .execute(),
+    query.select(sql<string>`count(*)`.as("n")).executeTakeFirstOrThrow(),
+  ]);
+  return { rows, total: Number(total.n) };
+}
+
 export async function listPayouts(
   executor: DatabaseExecutor,
   affiliateId: string,

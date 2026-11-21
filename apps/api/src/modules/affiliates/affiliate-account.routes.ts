@@ -5,6 +5,7 @@ import {
   affiliateMeResponseSchema,
   affiliatePayoutDetailsRequestSchema,
   affiliatePayoutSchema,
+  affiliatePayoutsQuerySchema,
   affiliatePayoutsResponseSchema,
   affiliateStatsQuerySchema,
   affiliateStatsResponseSchema,
@@ -203,6 +204,7 @@ const affiliateAccountRoutes: RoutePlugin = async (app, options) => {
         operationId: "listAffiliatePayouts",
         tags,
         summary: "Payout history",
+        querystring: affiliatePayoutsQuerySchema,
         response: {
           200: jsonResponse(
             "Payouts, newest first",

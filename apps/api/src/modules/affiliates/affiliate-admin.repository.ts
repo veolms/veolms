@@ -18,11 +18,6 @@ import type { AffiliateRow } from "./affiliate-account.repository.ts";
  * from another academy finds nothing (a 404), as in core's single academy.
  */
 
-export interface Cursor {
-  createdAt: Date;
-  id: string;
-}
-
 // ------------------------------------------------------------ audit
 
 export async function insertAudit(
@@ -175,58 +170,6 @@ function toListRow(
     available: Number(row.available),
     flagged: Number(row.flagged),
   };
-}
-
-/** Affiliates, newest first, with their totals. */
-export async function listAffiliates(
-  executor: DatabaseExecutor,
-  options: {
-    status?: AffiliateStatus;
-    /** Matches the code or the invited email. */
-    text?: string;
-    /** Accounts whose name or email matched the search. */
-    userIds?: readonly string[];
-    before?: Cursor;
-    limit: number;
-  },
-): Promise<AffiliateListRow[]> {
-  let query = executor
-    .selectFrom("affiliates as a")
-    .selectAll("a")
-    .select([
-      totals.clicks.as("clicks"),
-      totals.sales.as("sales"),
-      totals.earned.as("earned"),
-      totals.available.as("available"),
-      totals.flagged.as("flagged"),
-    ]);
-  if (options.status) query = query.where("a.status", "=", options.status);
-  if (options.text) {
-    const pattern = `%${options.text.toLowerCase().replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;
-    const userIds = options.userIds ?? [];
-    query = query.where((eb) =>
-      eb.or([
-        eb("a.code", "like", pattern),
-        eb("a.invited_email", "like", pattern),
-        ...(userIds.length ? [eb("a.user_id", "in", [...userIds])] : []),
-      ]),
-    );
-  }
-  if (options.before) {
-    const { createdAt, id } = options.before;
-    query = query.where((eb) =>
-      eb.or([
-        eb("a.created_at", "<", createdAt),
-        eb.and([eb("a.created_at", "=", createdAt), eb("a.id", "<", id)]),
-      ]),
-    );
-  }
-  const rows = await query
-    .orderBy("a.created_at", "desc")
-    .orderBy("a.id", "desc")
-    .limit(options.limit)
-    .execute();
-  return rows.map((row) => toListRow(row as never));
 }
 
 export async function findAffiliateWithTotals(
@@ -493,50 +436,6 @@ function commissionsQuery(executor: DatabaseExecutor) {
     ]);
 }
 
-export async function listCommissions(
-  executor: DatabaseExecutor,
-  options: {
-    status?: AffiliateCommissionStatus;
-    kind?: AffiliateCommissionKind;
-    affiliateId?: string;
-    flagged?: boolean;
-    from?: Date;
-    to?: Date;
-    before?: Cursor;
-    limit: number;
-  },
-): Promise<AdminCommissionRow[]> {
-  let query = commissionsQuery(executor);
-  if (options.status) query = query.where("c.status", "=", options.status);
-  if (options.kind) query = query.where("c.kind", "=", options.kind);
-  if (options.affiliateId) {
-    query = query.where("c.affiliate_id", "=", options.affiliateId);
-  }
-  if (options.flagged !== undefined) {
-    query = query.where(
-      options.flagged
-        ? sql<boolean>`cardinality(c.flags) > 0`
-        : sql<boolean>`cardinality(c.flags) = 0`,
-    );
-  }
-  if (options.from) query = query.where("c.created_at", ">=", options.from);
-  if (options.to) query = query.where("c.created_at", "<", options.to);
-  if (options.before) {
-    const { createdAt, id } = options.before;
-    query = query.where((eb) =>
-      eb.or([
-        eb("c.created_at", "<", createdAt),
-        eb.and([eb("c.created_at", "=", createdAt), eb("c.id", "<", id)]),
-      ]),
-    );
-  }
-  return (await query
-    .orderBy("c.created_at", "desc")
-    .orderBy("c.id", "desc")
-    .limit(options.limit)
-    .execute()) as AdminCommissionRow[];
-}
-
 export async function findCommission(
   executor: DatabaseExecutor,
   id: string,
@@ -749,36 +648,6 @@ function payoutsQuery(executor: DatabaseExecutor) {
       "p.decided_at",
       "p.created_at",
     ]);
-}
-
-export async function listPayouts(
-  executor: DatabaseExecutor,
-  options: {
-    status?: AffiliatePayoutStatus;
-    affiliateId?: string;
-    before?: Cursor;
-    limit: number;
-  },
-): Promise<AdminPayoutRow[]> {
-  let query = payoutsQuery(executor);
-  if (options.status) query = query.where("p.status", "=", options.status);
-  if (options.affiliateId) {
-    query = query.where("p.affiliate_id", "=", options.affiliateId);
-  }
-  if (options.before) {
-    const { createdAt, id } = options.before;
-    query = query.where((eb) =>
-      eb.or([
-        eb("p.created_at", "<", createdAt),
-        eb.and([eb("p.created_at", "=", createdAt), eb("p.id", "<", id)]),
-      ]),
-    );
-  }
-  return (await query
-    .orderBy("p.created_at", "desc")
-    .orderBy("p.id", "desc")
-    .limit(options.limit)
-    .execute()) as AdminPayoutRow[];
 }
 
 export async function findPayout(
@@ -1012,4 +881,527 @@ export async function topAffiliates(
     orders: Number(row.orders),
     earned: Number(row.earned),
   }));
+}
+
+// ------------------------------------------------------------ retention
+
+const NO_PAYOUT_DETAILS = {
+  payout_method: null,
+  payout_details_encrypted: null,
+  payout_details_hint: null,
+  pan_encrypted: null,
+  pan_last4: null,
+} as const;
+
+/** Forgets an affiliate's payout details and PAN (not while a payout is open). */
+export async function clearPayoutDetails(
+  executor: DatabaseExecutor,
+  affiliateId: string,
+): Promise<boolean> {
+  const updated = await executor
+    .updateTable("affiliates")
+    .set({ ...NO_PAYOUT_DETAILS, updated_at: new Date() })
+    .where("id", "=", affiliateId)
+    .where("payout_details_encrypted", "is not", null)
+    .where(({ not, exists, selectFrom }) =>
+      not(
+        exists(
+          selectFrom("affiliate_payouts as p")
+            .select("p.id")
+            .whereRef("p.affiliate_id", "=", "affiliates.id")
+            .where("p.status", "=", "requested"),
+        ),
+      ),
+    )
+    .executeTakeFirst();
+  return Number(updated.numUpdatedRows) > 0;
+}
+
+/**
+ * Payout details kept past their use (PRD section 15.4): a rejected
+ * applicant's, and those of an affiliate with no payout and no commission
+ * for 24 months. Never while a payout is open. Returns how many.
+ */
+export async function purgeStalePayoutDetails(
+  executor: DatabaseExecutor,
+  before: Date,
+): Promise<number> {
+  const updated = await executor
+    .updateTable("affiliates as a")
+    .set({ ...NO_PAYOUT_DETAILS, updated_at: new Date() })
+    .where("a.payout_details_encrypted", "is not", null)
+    .where(
+      sql<boolean>`not exists (select 1 from affiliate_payouts p
+        where p.affiliate_id = a.id and p.status = 'requested')`,
+    )
+    .where((eb) =>
+      eb.or([
+        eb("a.status", "=", "rejected"),
+        eb.and([
+          eb("a.created_at", "<", before),
+          sql<boolean>`not exists (select 1 from affiliate_payouts p
+            where p.affiliate_id = a.id
+              and coalesce(p.decided_at, p.created_at) >= ${before})`,
+          sql<boolean>`not exists (select 1 from affiliate_commissions c
+            where c.affiliate_id = a.id and c.created_at >= ${before})`,
+        ]),
+      ]),
+    )
+    .executeTakeFirst();
+  return Number(updated.numUpdatedRows);
+}
+
+/** Approved or pending affiliates with an account, for the closed-account check. */
+export async function listActiveAffiliateAccounts(
+  executor: DatabaseExecutor,
+): Promise<{ id: string; user_id: string; coupon_id: string | null }[]> {
+  const rows = await executor
+    .selectFrom("affiliates")
+    .select(["id", "user_id", "coupon_id"])
+    .where("status", "in", ["approved", "pending"])
+    .where("user_id", "is not", null)
+    .execute();
+  return rows as { id: string; user_id: string; coupon_id: string | null }[];
+}
+
+/** Suspends an affiliate whose account was closed; false if it moved first. */
+export async function suspendForClosedAccount(
+  executor: DatabaseExecutor,
+  affiliateId: string,
+  now: Date,
+): Promise<{ coupon_id: string | null } | undefined> {
+  return await executor
+    .updateTable("affiliates")
+    .set({
+      status: "suspended",
+      status_reason: "The affiliate's account was closed.",
+      decided_by: null,
+      decided_at: now,
+      updated_at: now,
+    })
+    .where("id", "=", affiliateId)
+    .where("status", "in", ["approved", "pending"])
+    .returning("coupon_id")
+    .executeTakeFirst();
+}
+
+export interface AffiliateHealth {
+  clicksLastHour: number;
+  attributionsLastHour: Record<string, number>;
+  salesLastHour: number;
+  reversalsLastHour: number;
+  /** Minutes the oldest due, unflagged pending commission has waited. */
+  approvalLagMinutes: number;
+}
+
+/** The numbers the health log line carries (PRD section 16, Observability). */
+export async function readHealth(
+  executor: DatabaseExecutor,
+  now: Date,
+): Promise<AffiliateHealth> {
+  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const [clicks, attributions, ledger] = await Promise.all([
+    executor
+      .selectFrom("affiliate_clicks")
+      .select(sql<string>`count(*)`.as("n"))
+      .where("created_at", ">=", hourAgo)
+      .executeTakeFirstOrThrow(),
+    executor
+      .selectFrom("affiliate_order_attributions")
+      .select(["source", sql<string>`count(*)`.as("n")])
+      .where("created_at", ">=", hourAgo)
+      .groupBy("source")
+      .execute(),
+    executor
+      .selectFrom("affiliate_commissions")
+      .select([
+        sql<string>`count(*) filter (where kind = 'sale' and created_at >= ${hourAgo})`.as(
+          "sales",
+        ),
+        sql<string>`count(*) filter (where kind = 'reversal' and created_at >= ${hourAgo})`.as(
+          "reversals",
+        ),
+        sql<Date | null>`min(available_at) filter (where status = 'pending' and cardinality(flags) = 0 and available_at <= ${now})`.as(
+          "oldest_due",
+        ),
+      ])
+      .executeTakeFirstOrThrow(),
+  ]);
+  const oldest = ledger.oldest_due ? new Date(ledger.oldest_due) : null;
+  return {
+    clicksLastHour: Number(clicks.n),
+    attributionsLastHour: Object.fromEntries(
+      attributions.map((row) => [row.source, Number(row.n)]),
+    ),
+    salesLastHour: Number(ledger.sales),
+    reversalsLastHour: Number(ledger.reversals),
+    approvalLagMinutes: oldest
+      ? Math.max(0, Math.floor((now.getTime() - oldest.getTime()) / 60_000))
+      : 0,
+  };
+}
+
+// ------------------------------------------------------------ paged lists
+//
+// The admin's tables: page numbers with a total, several statuses at once,
+// a date range and a search, and the figures for the same filters.
+
+const escapeLike = (text: string) =>
+  `%${text.toLowerCase().replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;
+
+export interface AffiliatePageFilters {
+  statuses?: readonly AffiliateStatus[];
+  text?: string;
+  userIds?: readonly string[];
+  owed?: boolean;
+  flagged?: boolean;
+  from?: Date;
+  to?: Date;
+}
+
+export type AffiliatePageSort =
+  "newest" | "oldest" | "earned" | "owed" | "sales" | "clicks";
+
+function affiliateFilters(
+  filters: AffiliatePageFilters,
+  options: { withStatus: boolean },
+) {
+  const parts: ReturnType<typeof sql<boolean>>[] = [];
+  if (options.withStatus && filters.statuses?.length) {
+    parts.push(sql<boolean>`a.status in (${sql.join(filters.statuses)})`);
+  }
+  if (filters.text) {
+    const pattern = escapeLike(filters.text);
+    const byUser = filters.userIds?.length
+      ? sql` or a.user_id in (${sql.join(filters.userIds)})`
+      : sql``;
+    parts.push(
+      sql<boolean>`(a.code like ${pattern} or a.invited_email like ${pattern}${byUser})`,
+    );
+  }
+  if (filters.owed) {
+    parts.push(sql<boolean>`exists (select 1 from affiliate_commissions c
+      where c.affiliate_id = a.id and c.status = 'approved' and c.payout_id is null)`);
+  }
+  if (filters.flagged) {
+    parts.push(sql<boolean>`exists (select 1 from affiliate_commissions c
+      where c.affiliate_id = a.id and c.status = 'pending' and cardinality(c.flags) > 0)`);
+  }
+  if (filters.from) parts.push(sql<boolean>`a.created_at >= ${filters.from}`);
+  if (filters.to) parts.push(sql<boolean>`a.created_at < ${filters.to}`);
+  return parts.length
+    ? sql<boolean>`${sql.join(parts, sql` and `)}`
+    : sql<boolean>`true`;
+}
+
+const AFFILIATE_SORT_SQL: Record<AffiliatePageSort, ReturnType<typeof sql>> = {
+  newest: sql`a.created_at desc, a.id desc`,
+  oldest: sql`a.created_at asc, a.id asc`,
+  earned: sql`earned desc, a.created_at desc`,
+  owed: sql`available desc, a.created_at desc`,
+  sales: sql`sales desc, a.created_at desc`,
+  clicks: sql`clicks desc, a.created_at desc`,
+};
+
+/** A page of affiliates with their totals, the total, and the status counts. */
+export async function pageAffiliates(
+  executor: DatabaseExecutor,
+  filters: AffiliatePageFilters,
+  sort: AffiliatePageSort,
+  page: { offset: number; limit: number },
+): Promise<{
+  rows: AffiliateListRow[];
+  total: number;
+  counts: Record<AffiliateStatus, number>;
+}> {
+  const where = affiliateFilters(filters, { withStatus: true });
+  const [rows, total, counts] = await Promise.all([
+    executor
+      .selectFrom("affiliates as a")
+      .selectAll("a")
+      .select([
+        totals.clicks.as("clicks"),
+        totals.sales.as("sales"),
+        totals.earned.as("earned"),
+        totals.available.as("available"),
+        totals.flagged.as("flagged"),
+      ])
+      .where(where)
+      .orderBy(AFFILIATE_SORT_SQL[sort])
+      .offset(page.offset)
+      .limit(page.limit)
+      .execute(),
+    executor
+      .selectFrom("affiliates as a")
+      .select(sql<string>`count(*)`.as("n"))
+      .where(where)
+      .executeTakeFirstOrThrow(),
+    executor
+      .selectFrom("affiliates as a")
+      .select(["a.status", sql<string>`count(*)`.as("n")])
+      .where(affiliateFilters(filters, { withStatus: false }))
+      .groupBy("a.status")
+      .execute(),
+  ]);
+  const byStatus = { pending: 0, approved: 0, suspended: 0, rejected: 0 };
+  for (const row of counts) byStatus[row.status] = Number(row.n);
+  return {
+    rows: rows.map((row) => toListRow(row as never)),
+    total: Number(total.n),
+    counts: byStatus,
+  };
+}
+
+export type CommissionState =
+  "held" | "pending" | "owed" | "in_payout" | "paid" | "rejected";
+
+const COMMISSION_STATE_SQL: Record<
+  CommissionState,
+  ReturnType<typeof sql<boolean>>
+> = {
+  held: sql<boolean>`(c.status = 'pending' and cardinality(c.flags) > 0)`,
+  pending: sql<boolean>`(c.status = 'pending' and cardinality(c.flags) = 0)`,
+  owed: sql<boolean>`(c.status = 'approved' and c.payout_id is null)`,
+  in_payout: sql<boolean>`(c.payout_id is not null and c.paid_at is null)`,
+  paid: sql<boolean>`(c.paid_at is not null)`,
+  rejected: sql<boolean>`(c.status = 'rejected')`,
+};
+
+export interface CommissionPageFilters {
+  states?: readonly CommissionState[];
+  kinds?: readonly AffiliateCommissionKind[];
+  affiliateIds?: readonly string[];
+  from?: Date;
+  to?: Date;
+  text?: string;
+}
+
+function commissionFilters(
+  filters: CommissionPageFilters,
+  options: { withState: boolean },
+) {
+  const parts: ReturnType<typeof sql<boolean>>[] = [];
+  if (options.withState && filters.states?.length) {
+    parts.push(
+      sql<boolean>`(${sql.join(
+        filters.states.map((state) => COMMISSION_STATE_SQL[state]),
+        sql` or `,
+      )})`,
+    );
+  }
+  if (filters.kinds?.length) {
+    parts.push(sql<boolean>`c.kind in (${sql.join(filters.kinds)})`);
+  }
+  if (filters.affiliateIds?.length) {
+    parts.push(
+      sql<boolean>`c.affiliate_id in (${sql.join(filters.affiliateIds)})`,
+    );
+  }
+  if (filters.from) parts.push(sql<boolean>`c.created_at >= ${filters.from}`);
+  if (filters.to) parts.push(sql<boolean>`c.created_at < ${filters.to}`);
+  if (filters.text) {
+    const pattern = escapeLike(filters.text);
+    parts.push(sql<boolean>`(
+      a.code like ${pattern}
+      or exists (select 1 from orders o where o.id = c.order_id
+        and lower(o.order_number) like ${pattern})
+      or exists (select 1 from orders o join users u on u.id = o.user_id
+        where o.id = c.order_id and lower(u.email) like ${pattern})
+    )`);
+  }
+  return parts.length
+    ? sql<boolean>`${sql.join(parts, sql` and `)}`
+    : sql<boolean>`true`;
+}
+
+/** In rupees: the settled amount, or the amount itself when it was rupees. */
+const RUPEES = sql`coalesce(c.payout_amount, case when c.currency = 'INR' then c.amount else 0 end)`;
+
+export async function pageCommissions(
+  executor: DatabaseExecutor,
+  filters: CommissionPageFilters,
+  page: { offset: number; limit: number },
+): Promise<{
+  rows: AdminCommissionRow[];
+  total: number;
+  summary: Record<CommissionState, { count: number; amount: number }>;
+}> {
+  const where = commissionFilters(filters, { withState: true });
+  const states = Object.keys(COMMISSION_STATE_SQL) as CommissionState[];
+  const [rows, total, summary] = await Promise.all([
+    commissionsQuery(executor)
+      .where(where)
+      .orderBy("c.created_at", "desc")
+      .orderBy("c.id", "desc")
+      .offset(page.offset)
+      .limit(page.limit)
+      .execute(),
+    executor
+      .selectFrom("affiliate_commissions as c")
+      .innerJoin("affiliates as a", "a.id", "c.affiliate_id")
+      .select(sql<string>`count(*)`.as("n"))
+      .where(where)
+      .executeTakeFirstOrThrow(),
+    executor
+      .selectFrom("affiliate_commissions as c")
+      .innerJoin("affiliates as a", "a.id", "c.affiliate_id")
+      .select(
+        states.flatMap((state) => [
+          sql<string>`count(*) filter (where ${COMMISSION_STATE_SQL[state]})`.as(
+            `${state}_n`,
+          ),
+          sql<string>`coalesce(sum(${RUPEES}) filter (where ${COMMISSION_STATE_SQL[state]}), 0)`.as(
+            `${state}_amount`,
+          ),
+        ]),
+      )
+      .where(commissionFilters(filters, { withState: false }))
+      .executeTakeFirstOrThrow(),
+  ]);
+  const raw = summary as Record<string, string>;
+  return {
+    rows: rows as AdminCommissionRow[],
+    total: Number(total.n),
+    summary: Object.fromEntries(
+      states.map((state) => [
+        state,
+        {
+          count: Number(raw[`${state}_n`] ?? 0),
+          amount: Number(raw[`${state}_amount`] ?? 0),
+        },
+      ]),
+    ) as Record<CommissionState, { count: number; amount: number }>,
+  };
+}
+
+export interface PayoutPageFilters {
+  statuses?: readonly AffiliatePayoutStatus[];
+  methods?: readonly ("upi" | "bank")[];
+  affiliateIds?: readonly string[];
+  from?: Date;
+  to?: Date;
+  text?: string;
+  userIds?: readonly string[];
+}
+
+function payoutFilters(
+  filters: PayoutPageFilters,
+  options: { withStatus: boolean },
+) {
+  const parts: ReturnType<typeof sql<boolean>>[] = [];
+  if (options.withStatus && filters.statuses?.length) {
+    parts.push(sql<boolean>`p.status in (${sql.join(filters.statuses)})`);
+  }
+  if (filters.methods?.length) {
+    parts.push(sql<boolean>`p.payout_method in (${sql.join(filters.methods)})`);
+  }
+  if (filters.affiliateIds?.length) {
+    parts.push(
+      sql<boolean>`p.affiliate_id in (${sql.join(filters.affiliateIds)})`,
+    );
+  }
+  if (filters.from) parts.push(sql<boolean>`p.created_at >= ${filters.from}`);
+  if (filters.to) parts.push(sql<boolean>`p.created_at < ${filters.to}`);
+  if (filters.text) {
+    const pattern = escapeLike(filters.text);
+    const byUser = filters.userIds?.length
+      ? sql` or a.user_id in (${sql.join(filters.userIds)})`
+      : sql``;
+    parts.push(
+      sql<boolean>`(a.code like ${pattern} or lower(coalesce(p.reference, '')) like ${pattern}${byUser})`,
+    );
+  }
+  return parts.length
+    ? sql<boolean>`${sql.join(parts, sql` and `)}`
+    : sql<boolean>`true`;
+}
+
+export async function pagePayouts(
+  executor: DatabaseExecutor,
+  filters: PayoutPageFilters,
+  page: { offset: number; limit: number },
+): Promise<{
+  rows: AdminPayoutRow[];
+  total: number;
+  summary: {
+    toPay: { count: number; amount: number };
+    paid: { count: number; amount: number };
+    tds: number;
+    closed: number;
+  };
+}> {
+  const where = payoutFilters(filters, { withStatus: true });
+  const [rows, total, summary] = await Promise.all([
+    payoutsQuery(executor)
+      .where(where)
+      .orderBy(sql`p.status = 'requested'`, "desc")
+      .orderBy("p.created_at", "desc")
+      .orderBy("p.id", "desc")
+      .offset(page.offset)
+      .limit(page.limit)
+      .execute(),
+    executor
+      .selectFrom("affiliate_payouts as p")
+      .innerJoin("affiliates as a", "a.id", "p.affiliate_id")
+      .select(sql<string>`count(*)`.as("n"))
+      .where(where)
+      .executeTakeFirstOrThrow(),
+    executor
+      .selectFrom("affiliate_payouts as p")
+      .innerJoin("affiliates as a", "a.id", "p.affiliate_id")
+      .select([
+        sql<string>`count(*) filter (where p.status = 'requested')`.as(
+          "to_pay_n",
+        ),
+        sql<string>`coalesce(sum(p.gross_amount) filter (where p.status = 'requested'), 0)`.as(
+          "to_pay_amount",
+        ),
+        sql<string>`count(*) filter (where p.status = 'paid')`.as("paid_n"),
+        sql<string>`coalesce(sum(p.net_amount) filter (where p.status = 'paid'), 0)`.as(
+          "paid_amount",
+        ),
+        sql<string>`coalesce(sum(p.tds_amount) filter (where p.status = 'paid'), 0)`.as(
+          "tds",
+        ),
+        sql<string>`count(*) filter (where p.status in ('rejected', 'failed'))`.as(
+          "closed",
+        ),
+      ])
+      .where(payoutFilters(filters, { withStatus: false }))
+      .executeTakeFirstOrThrow(),
+  ]);
+  return {
+    rows: rows as AdminPayoutRow[],
+    total: Number(total.n),
+    summary: {
+      toPay: {
+        count: Number(summary.to_pay_n),
+        amount: Number(summary.to_pay_amount),
+      },
+      paid: {
+        count: Number(summary.paid_n),
+        amount: Number(summary.paid_amount),
+      },
+      tds: Number(summary.tds),
+      closed: Number(summary.closed),
+    },
+  };
+}
+
+/** Attributed orders in a period that followed a click (for conversion). */
+export async function countClickOrders(
+  executor: DatabaseExecutor,
+  from: Date,
+  to: Date,
+): Promise<number> {
+  const row = await executor
+    .selectFrom("affiliate_order_attributions as t")
+    .innerJoin("orders as o", "o.id", "t.order_id")
+    .select(sql<string>`count(*)`.as("n"))
+    .where("t.click_id", "is not", null)
+    .where("o.status", "in", ["paid", "partially_refunded"])
+    .where("o.paid_at", ">=", from)
+    .where("o.paid_at", "<", to)
+    .executeTakeFirstOrThrow();
+  return Number(row.n);
 }

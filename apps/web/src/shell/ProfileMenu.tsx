@@ -2,6 +2,7 @@ import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
+import { HandshakeIcon as Handshake } from "@phosphor-icons/react/Handshake";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
@@ -25,6 +26,7 @@ import { isValidPublicProfileUsername } from "@veolms/contracts/username-rules";
 import type { CourseRole } from "../courses/catalogue";
 import { getRoleDisplayName, hasAdminRole } from "./workspaceRole";
 import { useWebContributions } from "../lib/web-contributions";
+import { useAffiliateMe, useAffiliateProgram } from "../services/affiliates";
 import { ProfileHelpScreen } from "./ProfileHelpScreen";
 
 export interface ProfileIdentityData {
@@ -290,6 +292,22 @@ export function ProfileMenu({
       (!link.adminOnly || isAdmin),
   );
 
+  // The affiliate dashboard for an affiliate; the join page while the
+  // academy takes applications (not for its admins, who run the program);
+  // nothing otherwise.
+  const affiliate = useAffiliateMe({ enabled: !guest });
+  const program = useAffiliateProgram({
+    enabled: !guest && affiliate.error?.status === 404,
+  });
+  const affiliateLink = affiliate.data
+    ? { href: "/affiliate", label: "Affiliate dashboard" }
+    : !isAdmin &&
+        affiliate.error?.status === 404 &&
+        program.data?.enabled &&
+        program.data.joinMode !== "invite_only"
+      ? { href: "/affiliates/join", label: "Become an affiliate" }
+      : null;
+
   const canPreviewAsStudent = allowedRoles.includes("student");
   const canPreviewAsCreator = allowedRoles.includes("creator");
   const canSwitchWorkspace = canPreviewAsStudent && canPreviewAsCreator;
@@ -481,6 +499,28 @@ export function ProfileMenu({
                       }
                     />
                     <span>Purchase History</span>
+                  </a>
+                ) : null}
+                {affiliateLink ? (
+                  <a
+                    className={`profile-menu__item ${currentPageItemClasses}${isCurrentPage(affiliateLink.href) ? " is-active" : ""}`}
+                    role="menuitem"
+                    href={affiliateLink.href}
+                    aria-current={
+                      isCurrentPage(affiliateLink.href) ? "page" : undefined
+                    }
+                    onClick={(event) =>
+                      openDestination(event, affiliateLink.href)
+                    }
+                  >
+                    <Handshake
+                      className="profile-menu__item-icon text-[#34d399]"
+                      size={21}
+                      weight={
+                        isCurrentPage(affiliateLink.href) ? "fill" : "regular"
+                      }
+                    />
+                    <span>{affiliateLink.label}</span>
                   </a>
                 ) : null}
               </div>
