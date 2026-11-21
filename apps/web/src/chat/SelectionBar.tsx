@@ -1,5 +1,6 @@
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { ShareFatIcon as ShareFat } from "@phosphor-icons/react/ShareFat";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { CHAT_FORWARD_MAX_MESSAGES } from "@veolms/contracts";
 import { useEffect } from "react";
@@ -7,7 +8,7 @@ import { useEffect } from "react";
 import { chatIconButton } from "./ChatControls";
 
 /**
- * WhatsApp's bar while choosing messages: how many, Copy, Forward, and ✕
+ * WhatsApp's bar while choosing messages: how many, Copy, Forward, Delete and ✕
  * (or Esc) to stop. Takes the chat header's place.
  */
 export function SelectionBar({
@@ -15,11 +16,13 @@ export function SelectionBar({
   onCancel,
   onCopy,
   onForward,
+  onDelete,
 }: {
   count: number;
   onCancel: () => void;
   onCopy: () => void;
   onForward: () => void;
+  onDelete: () => void;
 }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -72,6 +75,15 @@ export function SelectionBar({
         onClick={onForward}
       >
         <ShareFat size={20} />
+      </button>
+      <button
+        type="button"
+        className={chatIconButton}
+        aria-label="Delete"
+        title="Delete"
+        onClick={onDelete}
+      >
+        <Trash size={20} />
       </button>
     </div>
   );

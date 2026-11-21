@@ -112,9 +112,16 @@ export function readVapidKeys(input: {
 export function generateVapidKeys(): { publicKey: string; privateKey: string } {
   const ecdh = crypto.createECDH("prime256v1");
   ecdh.generateKeys();
+  // getPrivateKey() drops leading zero bytes, so about 1 key in 256 came
+  // out 31 bytes long and was refused as "not 32 bytes" (the unit test
+  // failed now and then). The scalar is always written as 32 bytes.
+  const scalar = ecdh.getPrivateKey();
   return {
     publicKey: ecdh.getPublicKey().toString("base64url"),
-    privateKey: ecdh.getPrivateKey().toString("base64url"),
+    privateKey: Buffer.concat([
+      Buffer.alloc(Math.max(0, 32 - scalar.length)),
+      scalar,
+    ]).toString("base64url"),
   };
 }
 

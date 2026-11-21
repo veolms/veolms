@@ -68,20 +68,43 @@ function renamed(name: string, extension: string) {
   return name.replace(/\.[^.]+$/, "") + extension;
 }
 
-function loadImage(file: Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("This photo could not be read."));
-    };
-    image.src = url;
-  });
+/**
+ * The photo, decoded and ready to draw. Its address is kept until it is
+ * drawn: Android Chrome may decode a picture only when it is first drawn,
+ * and with the address already gone it drew nothing (photos sent as blank
+ * 5 KB pictures, 21 Nov 2026).
+ */
+async function loadImage(
+  file: Blob,
+): Promise<{ image: HTMLImageElement; release: () => void }> {
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  image.src = url;
+  try {
+    await image.decode();
+  } catch {
+    URL.revokeObjectURL(url);
+    throw new Error("This photo could not be read.");
+  }
+  return { image, release: () => URL.revokeObjectURL(url) };
+}
+
+/**
+ * True when a drawn canvas holds one flat colour (nothing was drawn). It
+ * is looked at small, 16 × 16, across which any real photo varies.
+ */
+function looksBlank(canvas: HTMLCanvasElement): boolean {
+  const probe = document.createElement("canvas");
+  probe.width = 16;
+  probe.height = 16;
+  const context = probe.getContext("2d", { willReadFrequently: true });
+  if (!context) return false;
+  context.drawImage(canvas, 0, 0, 16, 16);
+  const { data } = context.getImageData(0, 0, 16, 16);
+  for (let i = 4; i < data.length; i += 1) {
+    if (Math.abs(data[i]! - data[i % 4]!) > 6) return false;
+  }
+  return true;
 }
 
 function canvasBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
@@ -97,7 +120,7 @@ export async function encodePhoto(
   quality: SendQuality,
 ): Promise<Prepared> {
   const settings = PHOTO[quality];
-  const image = await loadImage(file);
+  const { image, release } = await loadImage(file);
   const scale = Math.min(
     1,
     settings.edge / Math.max(image.naturalWidth, image.naturalHeight),
@@ -107,7 +130,14 @@ export async function encodePhoto(
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  canvas.getContext("2d")!.drawImage(image, 0, 0, width, height);
+  try {
+    canvas.getContext("2d")!.drawImage(image, 0, 0, width, height);
+  } finally {
+    release();
+  }
+  // Never a blank picture in place of the photo: the original is sent
+  // instead (the caller sends it when this throws).
+  if (looksBlank(canvas)) throw new Error("The photo came out blank.");
   let blob = await canvasBlob(canvas, "image/webp", settings.webp);
   let mimeType = "image/webp";
   if (!blob || blob.type !== "image/webp") {

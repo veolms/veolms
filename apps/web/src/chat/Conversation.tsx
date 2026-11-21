@@ -81,7 +81,7 @@ import {
 const myReactions = new Map<string, string>();
 
 type DialogState =
-  | { kind: "delete"; message: ChatMessage }
+  | { kind: "delete"; messages: ChatMessage[] }
   | { kind: "report"; message: ChatMessage }
   | { kind: "restrict"; message: ChatMessage; mode: "mute" | "ban" }
   | { kind: "react"; message: ChatMessage }
@@ -475,7 +475,13 @@ export function Conversation({
         setDialog({ kind: "react", message });
         return;
       case "delete":
-        setDialog({ kind: "delete", message });
+        // Not sent yet (still on its way, or failed): the server has no
+        // such message; it is taken off this device's queue instead.
+        if (message.seq === 0) {
+          discardMessage(room.id, message.id);
+          return;
+        }
+        setDialog({ kind: "delete", messages: [message] });
         return;
       case "report":
         setDialog({ kind: "report", message });
@@ -610,6 +616,16 @@ export function Conversation({
               .then(() => onToast("Messages copied"));
           }}
           onForward={() => setForwarding([...selected].sort((a, b) => a - b))}
+          onDelete={() => {
+            const chosen = (thread.data?.messages ?? []).filter(
+              (m) => selected.has(m.seq) && !m.deleted,
+            );
+            if (chosen.length === 0) {
+              onToast("These messages are already deleted.");
+              return;
+            }
+            setDialog({ kind: "delete", messages: chosen });
+          }}
         />
       ) : null}
       <header
@@ -935,16 +951,36 @@ export function Conversation({
       ) : null}
       {dialog?.kind === "delete" ? (
         <DeleteMessageDialog
-          message={dialog.message}
-          own={dialog.message.sender?.id === viewerId}
+          messages={dialog.messages}
+          viewerId={viewerId}
           asAdmin={room.me.canModerate || room.me.isHelper}
           onClose={() => setDialog(null)}
           onDelete={(scope) => {
-            deleteMessage.mutate(
-              { roomId: room.id, seq: dialog.message.seq, scope },
-              { onError: fail },
-            );
+            const seqs = dialog.messages.map((m) => m.seq);
+            void (async () => {
+              let failed = 0;
+              for (const seq of seqs) {
+                try {
+                  await deleteMessage.mutateAsync({
+                    roomId: room.id,
+                    seq,
+                    scope,
+                  });
+                } catch (error) {
+                  failed += 1;
+                  if (seqs.length === 1) fail(error);
+                }
+              }
+              if (seqs.length > 1) {
+                onToast(
+                  failed === 0
+                    ? `${seqs.length} messages deleted`
+                    : `${seqs.length - failed} of ${seqs.length} messages deleted. Try the rest again.`,
+                );
+              }
+            })();
             setDialog(null);
+            setSelected(null);
           }}
         />
       ) : null}

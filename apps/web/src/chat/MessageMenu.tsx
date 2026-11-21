@@ -83,7 +83,11 @@ export function MessageMenu({
   onAction: (action: MessageAction) => void;
   trigger: ReactNode;
 }) {
+  // A message still on its way (no number yet) can't be reacted to,
+  // starred, pinned or edited: the server doesn't have it.
+  const sent = message.seq > 0;
   const editable =
+    sent &&
     outgoing &&
     message.body !== "" &&
     Date.now() - new Date(message.createdAt).getTime() <
@@ -91,7 +95,7 @@ export function MessageMenu({
   const senderLevel = ROLE_LEVEL[message.sender?.role ?? "learner"] ?? 1;
   const canActOnSender =
     !outgoing && (ctx.canModerate || (ctx.isHelper && senderLevel === 1));
-  const canPin = ctx.isDirect || ctx.canModerate;
+  const canPin = sent && (ctx.isDirect || ctx.canModerate);
   const mine = ctx.myReactions.get(message.id) ?? null;
   const starred = ctx.starred.has(message.id);
 
@@ -108,33 +112,35 @@ export function MessageMenu({
         align={outgoing ? "end" : "start"}
         className="w-60 min-w-0"
       >
-        <div
-          role="group"
-          aria-label="React"
-          className="flex items-center gap-0.5 px-1 pb-1"
-        >
-          {QUICK_REACTIONS.map((emoji) => (
-            <DropdownMenuItem
-              key={emoji}
-              aria-label={`React ${emoji}`}
-              onClick={() => onAction(`react:${emoji}`)}
-              className={cn(
-                "size-8 justify-center rounded-full p-0 text-lg",
-                mine === emoji && "bg-(--chat-selected)",
-              )}
-            >
-              {emoji}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuItem
-            aria-label="More reactions"
-            onClick={() => onAction("react-more")}
-            className="size-8 justify-center rounded-full p-0"
+        {sent ? (
+          <div
+            role="group"
+            aria-label="React"
+            className="flex items-center gap-0.5 px-1 pb-1"
           >
-            <Plus size={16} />
-          </DropdownMenuItem>
-        </div>
-        <DropdownMenuSeparator />
+            {QUICK_REACTIONS.map((emoji) => (
+              <DropdownMenuItem
+                key={emoji}
+                aria-label={`React ${emoji}`}
+                onClick={() => onAction(`react:${emoji}`)}
+                className={cn(
+                  "size-8 justify-center rounded-full p-0 text-lg",
+                  mine === emoji && "bg-(--chat-selected)",
+                )}
+              >
+                {emoji}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuItem
+              aria-label="More reactions"
+              onClick={() => onAction("react-more")}
+              className="size-8 justify-center rounded-full p-0"
+            >
+              <Plus size={16} />
+            </DropdownMenuItem>
+          </div>
+        ) : null}
+        {sent ? <DropdownMenuSeparator /> : null}
         <DropdownMenuGroup>
           {outgoing && message.seq > 0 ? (
             <DropdownMenuItem onClick={() => onAction("info")}>
@@ -192,11 +198,14 @@ export function MessageMenu({
               {message.pinned ? "Unpin" : "Pin"}
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuItem
-            onClick={() => onAction(starred ? "unstar" : "star")}
-          >
-            <Star size={16} aria-hidden="true" /> {starred ? "Unstar" : "Star"}
-          </DropdownMenuItem>
+          {sent ? (
+            <DropdownMenuItem
+              onClick={() => onAction(starred ? "unstar" : "star")}
+            >
+              <Star size={16} aria-hidden="true" />{" "}
+              {starred ? "Unstar" : "Star"}
+            </DropdownMenuItem>
+          ) : null}
           {ctx.isGroup && !outgoing && message.sender && !message.deleted ? (
             // WhatsApp's "Reply privately", for every member of the group.
             <DropdownMenuItem onClick={() => onAction("reply-privately")}>
