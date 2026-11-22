@@ -205,8 +205,19 @@ export const coursesService = {
     return api.get<CourseValidationResponse>(`/courses/${courseId}/validation`);
   },
 
-  publishCourse: (courseId: string): Promise<CourseStatusResponse> => {
-    return api.post<CourseStatusResponse>(`/courses/${courseId}/publish`);
+  /** `notifyLearners`: the admin ticked "Send notification" (off: nobody is told). */
+  publishCourse: (
+    courseId: string,
+    notifyLearners = false,
+  ): Promise<CourseStatusResponse> => {
+    return api.post<CourseStatusResponse>(`/courses/${courseId}/publish`, {
+      notifyLearners,
+    });
+  },
+
+  /** "Send notification" for a published course: tells its learners. */
+  notifyCourseLearners: (courseId: string): Promise<{ queued: true }> => {
+    return api.post<{ queued: true }>(`/courses/${courseId}/notify-learners`);
   },
 
   unpublishCourse: (courseId: string): Promise<CourseStatusResponse> => {

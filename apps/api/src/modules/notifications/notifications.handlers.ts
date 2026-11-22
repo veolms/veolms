@@ -35,8 +35,13 @@ import type {
   NotificationIntent,
 } from "./notifications.types.ts";
 
-/** New quizzes notify the course's learners: off until admins choose per quiz. */
-const QUIZ_ASSIGNED_NOTIFIES = false;
+/** The course's admin turned quiz notifications on (course settings). */
+async function quizNotificationsOn(
+  dependencies: NotificationHandlerDependencies,
+  courseId: string,
+): Promise<boolean> {
+  return (await dependencies.quizNotificationsEnabled?.(courseId)) === true;
+}
 
 export class UnknownNotificationEventError extends Error {
   constructor(eventType: string) {
@@ -79,6 +84,9 @@ function discussionEmailData(event: {
 const notificationHandlers: Record<string, NotificationHandler> = {
   "course.published": async (payload, dependencies) => {
     const event = coursePublishedEventSchema.parse(payload);
+    // Only when the admin asked for it (publish popup, or "Send
+    // notification" later): every republish used to notify every learner.
+    if (event.notifyLearners !== true) return [];
     const recipientUserIds =
       await dependencies.listActiveCourseRecipientUserIds(event.courseId);
     return recipientUserIds.map((recipientUserId) => ({
@@ -511,8 +519,9 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
     ];
   },
-  "quiz.attempt.passed": async (payload) => {
+  "quiz.attempt.passed": async (payload, dependencies) => {
     const event = quizAttemptPassedEventSchema.parse(payload);
+    if (!(await quizNotificationsOn(dependencies, event.courseId))) return [];
     return [
       {
         recipientUserId: event.recipientUserId,
@@ -530,8 +539,9 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
     ];
   },
-  "quiz.attempt.failed_final": async (payload) => {
+  "quiz.attempt.failed_final": async (payload, dependencies) => {
     const event = quizAttemptFailedFinalEventSchema.parse(payload);
+    if (!(await quizNotificationsOn(dependencies, event.courseId))) return [];
     return [
       {
         recipientUserId: event.recipientUserId,
@@ -552,11 +562,8 @@ const notificationHandlers: Record<string, NotificationHandler> = {
   },
   "quiz.assigned": async (payload, dependencies) => {
     const event = quizAssignedEventSchema.parse(payload);
-    // Off for now (owner, 22 Nov 2026): a new quiz notified every learner
-    // of the course. An admin will choose per quiz whether to notify; until
-    // then nobody is. The event is still published, so that choice can turn
-    // this back on without touching quiz authoring.
-    if (!QUIZ_ASSIGNED_NOTIFIES) return [];
+    // Only for a course whose admin turned quiz notifications on.
+    if (!(await quizNotificationsOn(dependencies, event.courseId))) return [];
     const recipientUserIds =
       await dependencies.listActiveCourseRecipientUserIds(event.courseId);
     return recipientUserIds.map((recipientUserId) => ({

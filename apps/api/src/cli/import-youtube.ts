@@ -1899,6 +1899,7 @@ ${bold("Examples:")}
         allow_notes: true,
         allow_downloads: false,
         certificate_enabled: false,
+        quiz_notifications_enabled: false,
         show_instructor_name: true,
         language: "en",
         estimated_duration: null,
