@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkOldSafariSyntax } from "./check-old-safari-syntax.mjs";
 import { inlineCriticalCss } from "./inline-critical-css.mjs";
 import { writeLegacyStylesheets } from "./legacy-stylesheets.mjs";
 import { writeAppPaths } from "./write-app-paths.mjs";
@@ -118,6 +119,10 @@ export const runPerformanceBuild = async (
         )
         // The app's own path segments, which short links may not take.
         .then(() => writeAppPaths(clientBuildDirectory))
+        // No script syntax that Safari before iOS 16.4 rejects (it would
+        // fail every page that loads the file).
+        .then(() => checkOldSafariSyntax(clientBuildDirectory))
+        .then((summary) => console.log(summary))
         .then(
           () => resolve(0),
           (error) => {

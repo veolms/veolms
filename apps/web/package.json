@@ -17,6 +17,7 @@
     "test:browser": "playwright test",
     "test:browser:watch": "playwright test --headed",
     "test:browser:report": "playwright show-report",
+    "check:old-safari": "node scripts/check-old-safari-syntax.mjs",
     "check": "pnpm typecheck",
     "check:ci": "pnpm typecheck"
   },
@@ -90,6 +91,7 @@
   "devDependencies": {
     "@csstools/postcss-cascade-layers": "^6.0.2",
     "@csstools/postcss-media-minmax": "^3.0.8",
+    "@eslint-community/regexpp": "^4.12.2",
     "@playwright/test": "^1.63.0",
     "@react-router/dev": "8.3.0",
     "@tailwindcss/vite": "^4.3.3",
@@ -97,6 +99,7 @@
     "@types/react-dom": "19.2.4",
     "@types/turndown": "5.0.6",
     "@typescript/native": "catalog:",
+    "acorn": "^8.18.0",
     "container-query-polyfill": "^1.0.2",
     "css-has-pseudo": "^8.0.2",
     "postcss": "^8.5.25",

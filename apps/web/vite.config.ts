@@ -898,6 +898,11 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
             if (id.replaceAll("\\", "/").includes("/shaka-player/")) {
               return "shaka-player";
             }
+            // Named, so the old Safari syntax check can tell its class
+            // static blocks (left for now) from ours and other packages'.
+            if (id.replaceAll("\\", "/").includes("/pdfjs-dist/")) {
+              return "pdfjs-dist";
+            }
             const iconName = getPhosphorIconName(id);
             if (iconName && shellPhosphorIcons.has(iconName))
               return "shell-icons";

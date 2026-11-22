@@ -16,6 +16,12 @@ catalogs:
       specifier: ^4.4.3
       version: 4.6.5
 
+overrides:
+  mdast-util-gfm-autolink-literal: 2.0.0
+
+patchedDependencies:
+  '@atomic-editor/editor@0.6.2': d2dfedd9f59e7ef4be64d2b4b09eba1ae35320dacdded1cf8976dabc8bacbd99
+
 importers:
 
   .:
@@ -167,7 +173,7 @@ importers:
     dependencies:
       '@atomic-editor/editor':
         specifier: 0.6.2
-        version: 0.6.2(@codemirror/autocomplete@6.20.3)(@codemirror/commands@6.11.0)(@codemirror/lang-cpp@6.0.3)(@codemirror/lang-css@6.3.1)(@codemirror/lang-go@6.0.1)(@codemirror/lang-html@6.4.12)(@codemirror/lang-java@6.0.2)(@codemirror/lang-javascript@6.2.5)(@codemirror/lang-json@6.0.2)(@codemirror/lang-markdown@6.5.2)(@codemirror/lang-php@6.0.2)(@codemirror/lang-python@6.2.1)(@codemirror/lang-rust@6.0.2)(@codemirror/lang-sql@6.10.0)(@codemirror/lang-xml@6.1.0)(@codemirror/lang-yaml@6.1.3)(@codemirror/language@6.12.4)(@codemirror/legacy-modes@6.5.3)(@codemirror/search@6.7.1)(@codemirror/state@6.7.1)(@codemirror/view@6.43.9)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@lezer/markdown@1.7.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 0.6.2(patch_hash=d2dfedd9f59e7ef4be64d2b4b09eba1ae35320dacdded1cf8976dabc8bacbd99)(@codemirror/autocomplete@6.20.3)(@codemirror/commands@6.11.0)(@codemirror/lang-cpp@6.0.3)(@codemirror/lang-css@6.3.1)(@codemirror/lang-go@6.0.1)(@codemirror/lang-html@6.4.12)(@codemirror/lang-java@6.0.2)(@codemirror/lang-javascript@6.2.5)(@codemirror/lang-json@6.0.2)(@codemirror/lang-markdown@6.5.2)(@codemirror/lang-php@6.0.2)(@codemirror/lang-python@6.2.1)(@codemirror/lang-rust@6.0.2)(@codemirror/lang-sql@6.10.0)(@codemirror/lang-xml@6.1.0)(@codemirror/lang-yaml@6.1.3)(@codemirror/language@6.12.4)(@codemirror/legacy-modes@6.5.3)(@codemirror/search@6.7.1)(@codemirror/state@6.7.1)(@codemirror/view@6.43.9)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@lezer/markdown@1.7.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@base-ui/react':
         specifier: ^1.7.0
         version: 1.8.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -367,6 +373,9 @@ importers:
       '@csstools/postcss-media-minmax':
         specifier: ^3.0.8
         version: 3.0.8(postcss@8.5.28)
+      '@eslint-community/regexpp':
+        specifier: ^4.12.2
+        version: 4.12.2
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -388,6 +397,9 @@ importers:
       '@typescript/native':
         specifier: 'catalog:'
         version: typescript@7.0.2
+      acorn:
+        specifier: ^8.18.0
+        version: 8.18.0
       container-query-polyfill:
         specifier: ^1.0.2
         version: 1.0.2
@@ -4505,8 +4517,8 @@ packages:
   mdast-util-from-markdown@2.0.3:
     resolution: {integrity: sha512-W4mAWTvSlKvf8L6J+VN9yLSqQ9AOAAvHuoDAmPkz4dHf553m5gVj2ejadHJhoJmcmxEnOv6Pa8XJhpxE93kb8Q==}
 
-  mdast-util-gfm-autolink-literal@2.0.1:
-    resolution: {integrity: sha512-5HVP2MKaP6L+G6YaxPNjuL0BPrq9orG3TsrZ9YXbA3vDw/ACI4MEsnoDpn6ZNm7GnZgtAcONJyPhOP8tNJQavQ==}
+  mdast-util-gfm-autolink-literal@2.0.0:
+    resolution: {integrity: sha512-FyzMsduZZHSc3i0Px3PQcBT4WJY/X/RCtEJKuybiC6sjPqLv7h1yqAkmILZtuxMSsUyaLUWNp71+vQH2zqp5cg==}
 
   mdast-util-gfm-footnote@2.1.0:
     resolution: {integrity: sha512-sqpDWlsHn7Ac9GNZQMeUzPQSMzR6Wv0WKRNvQRg0KqHh02fpTz69Qc1QSseNX29bhz1ROIyNyxExfawVKTm1GQ==}
@@ -6081,7 +6093,7 @@ packages:
 
 snapshots:
 
-  '@atomic-editor/editor@0.6.2(@codemirror/autocomplete@6.20.3)(@codemirror/commands@6.11.0)(@codemirror/lang-cpp@6.0.3)(@codemirror/lang-css@6.3.1)(@codemirror/lang-go@6.0.1)(@codemirror/lang-html@6.4.12)(@codemirror/lang-java@6.0.2)(@codemirror/lang-javascript@6.2.5)(@codemirror/lang-json@6.0.2)(@codemirror/lang-markdown@6.5.2)(@codemirror/lang-php@6.0.2)(@codemirror/lang-python@6.2.1)(@codemirror/lang-rust@6.0.2)(@codemirror/lang-sql@6.10.0)(@codemirror/lang-xml@6.1.0)(@codemirror/lang-yaml@6.1.3)(@codemirror/language@6.12.4)(@codemirror/legacy-modes@6.5.3)(@codemirror/search@6.7.1)(@codemirror/state@6.7.1)(@codemirror/view@6.43.9)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@lezer/markdown@1.7.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@atomic-editor/editor@0.6.2(patch_hash=d2dfedd9f59e7ef4be64d2b4b09eba1ae35320dacdded1cf8976dabc8bacbd99)(@codemirror/autocomplete@6.20.3)(@codemirror/commands@6.11.0)(@codemirror/lang-cpp@6.0.3)(@codemirror/lang-css@6.3.1)(@codemirror/lang-go@6.0.1)(@codemirror/lang-html@6.4.12)(@codemirror/lang-java@6.0.2)(@codemirror/lang-javascript@6.2.5)(@codemirror/lang-json@6.0.2)(@codemirror/lang-markdown@6.5.2)(@codemirror/lang-php@6.0.2)(@codemirror/lang-python@6.2.1)(@codemirror/lang-rust@6.0.2)(@codemirror/lang-sql@6.10.0)(@codemirror/lang-xml@6.1.0)(@codemirror/lang-yaml@6.1.3)(@codemirror/language@6.12.4)(@codemirror/legacy-modes@6.5.3)(@codemirror/search@6.7.1)(@codemirror/state@6.7.1)(@codemirror/view@6.43.9)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@lezer/markdown@1.7.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@codemirror/autocomplete': 6.20.3
       '@codemirror/commands': 6.11.0
@@ -10241,7 +10253,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  mdast-util-gfm-autolink-literal@2.0.1:
+  mdast-util-gfm-autolink-literal@2.0.0:
     dependencies:
       '@types/mdast': 4.0.4
       ccount: 2.0.1
@@ -10289,7 +10301,7 @@ snapshots:
   mdast-util-gfm@3.1.0(supports-color@10.2.2):
     dependencies:
       mdast-util-from-markdown: 2.0.3(supports-color@10.2.2)
-      mdast-util-gfm-autolink-literal: 2.0.1
+      mdast-util-gfm-autolink-literal: 2.0.0
       mdast-util-gfm-footnote: 2.1.0(supports-color@10.2.2)
       mdast-util-gfm-strikethrough: 2.0.1(supports-color@10.2.2)
       mdast-util-gfm-table: 2.0.0(supports-color@10.2.2)
