@@ -5,7 +5,7 @@ import { XIcon as X } from "@phosphor-icons/react/X";
 import { CHAT_MAX_ATTACHMENTS_PER_MESSAGE } from "@veolms/contracts";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
-import { FileVideoPlayer } from "../components/video";
+import { ChatVideoFrame } from "./ChatVideoFrame";
 import { cn } from "../lib/utils";
 import type { OutgoingFile } from "../services/chat";
 import { formatBytes } from "./chatFormat";
@@ -186,29 +186,16 @@ export function MediaStage({
           />
         ) : active.kind === "video" && active.previewUrl ? (
           // The app's player; its keys stay with the caption box below.
-          <div
+          <ChatVideoFrame
             key={active.localId}
-            className="max-h-full w-full max-w-[min(100%,calc((100dvh-16rem)*var(--chat-video-ratio)))] overflow-hidden rounded-lg shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
-            style={
-              {
-                "--chat-video-ratio":
-                  active.width && active.height
-                    ? active.width / active.height
-                    : 16 / 9,
-                aspectRatio:
-                  active.width && active.height
-                    ? `${active.width} / ${active.height}`
-                    : "16 / 9",
-              } as CSSProperties
-            }
-          >
-            <FileVideoPlayer
-              src={active.previewUrl}
-              mimeType={active.mimeType}
-              title={active.name}
-              keyboardEnabled={false}
-            />
-          </div>
+            src={active.previewUrl}
+            mimeType={active.mimeType}
+            title={active.name}
+            width={active.width}
+            height={active.height}
+            keyboardEnabled={false}
+            className="overflow-hidden rounded-lg shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
+          />
         ) : isPdf(active) ? (
           // WhatsApp shows a PDF's first page before it is sent.
           <LocalPdfPreview

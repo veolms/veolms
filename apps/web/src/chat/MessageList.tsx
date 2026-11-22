@@ -120,13 +120,16 @@ function centre(box: HTMLElement, row: HTMLElement) {
   );
 }
 
-/** WhatsApp's blink on a message just opened: restarts if already on. */
+/**
+ * WhatsApp's highlight on a message just opened (from a reply quote, a
+ * notification, search, a pin): the whole row, the chat's full width, is
+ * tinted and fades out. Restarts if already on.
+ */
 function flash(row: HTMLElement) {
-  const bubble = row.querySelector<HTMLElement>("[data-bubble]") ?? row;
-  bubble.classList.remove("chat-flash");
-  void bubble.offsetWidth;
-  bubble.classList.add("chat-flash");
-  setTimeout(() => bubble.classList.remove("chat-flash"), FLASH_MS);
+  row.classList.remove("chat-row-flash");
+  void row.offsetWidth;
+  row.classList.add("chat-row-flash");
+  setTimeout(() => row.classList.remove("chat-row-flash"), FLASH_MS);
 }
 const RUN_GAP_MS = 5 * 60_000;
 
@@ -585,6 +588,7 @@ export function MessageList({
         // (it drifted right while scrolling on phones).
         className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain py-3 [scrollbar-gutter:stable] [overscroll-behavior-x:none]"
         role="log"
+        data-chat-thread=""
         aria-live="polite"
         aria-relevant="additions"
         aria-label="Messages"

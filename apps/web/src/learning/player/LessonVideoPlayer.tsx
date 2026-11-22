@@ -125,10 +125,7 @@ import { sendVideoProblemReport } from "./videoProblemReport";
 import { useAuthStore } from "../../store/auth.store";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
-import {
-  isVideoContentError,
-  type PlayerErrorReport,
-} from "@veolms/video-player";
+import type { PlayerErrorReport } from "@veolms/video-player";
 import type { LessonStagePlan } from "../lessonWithoutVideo";
 
 /** Whether the lesson's video is not playing (none on screen counts too). */
@@ -710,9 +707,9 @@ export function LessonVideoPlayer({
       signedIn
         ? {
             send: (error) => sendVideoProblemReport({ error, lessonTitle }),
-            // A fault in the video itself goes to the team at once (once a
-            // day per lesson and kind, see `sendVideoProblemReport`).
-            auto: isVideoContentError,
+            // Only when the learner presses Report (owner, 22 Nov 2026):
+            // an error screen is recorded for Analytics as a playback
+            // incident (playbackTelemetry "error_shown"), not as a ticket.
             icon: <Flag weight="bold" />,
             sentIcon: <Check weight="bold" />,
           }
@@ -1443,10 +1440,21 @@ export function LessonVideoPlayer({
     goToNextLesson();
   }, [goToNextLesson]);
 
-  const handleAttemptQuizFromEndScreen = useCallback(() => {
+  const handleAttemptQuizFromEndScreen = useCallback(async () => {
     quizOfferedBeforeEndRef.current = false;
     setShowEndScreen(false);
     setAutoplayCancelled(false);
+    // Leave full screen first (22 Nov 2026): the quiz opens beside the
+    // player, and while the player is still the full screen element the
+    // browser ignores every click outside it, so the quiz froze.
+    const player = playerRef.current;
+    if (player?.getSnapshot().ui.fullscreen) {
+      try {
+        await player.exitFullscreen();
+      } catch {
+        // Already left; the quiz opens either way.
+      }
+    }
     onAttemptQuiz?.();
   }, [onAttemptQuiz]);
 

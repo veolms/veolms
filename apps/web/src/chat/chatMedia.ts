@@ -93,8 +93,10 @@ function videoMeta(
     video.onloadedmetadata = () => {
       URL.revokeObjectURL(url);
       resolve({
-        width: video.videoWidth || 640,
-        height: video.videoHeight || 360,
+        // No made-up size when the browser can't tell (some phone
+        // formats): the viewer reads the real one when it plays.
+        width: video.videoWidth,
+        height: video.videoHeight,
         durationMs: Number.isFinite(video.duration)
           ? Math.round(video.duration * 1000)
           : 0,
@@ -102,7 +104,7 @@ function videoMeta(
     };
     video.onerror = () => {
       URL.revokeObjectURL(url);
-      resolve({ width: 640, height: 360, durationMs: 0 });
+      resolve({ width: 0, height: 0, durationMs: 0 });
     };
     video.src = url;
   });

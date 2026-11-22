@@ -68,7 +68,13 @@ export interface ChatPrefs {
   phoneEnterToSend: boolean;
   /** The language voice typing listens for (a BCP 47 tag). */
   dictationLang: DictationLang;
+  /** Voice messages play at this speed (WhatsApp keeps the last choice). */
+  voiceSpeed: VoiceSpeed;
 }
+
+/** WhatsApp's voice message speeds. */
+export const VOICE_SPEEDS = [1, 1.5, 2] as const;
+export type VoiceSpeed = (typeof VOICE_SPEEDS)[number];
 
 /** Languages offered for voice typing (Settings › Chats). */
 export const DICTATION_LANGS = [
@@ -109,6 +115,7 @@ const DEFAULTS: ChatPrefs = {
   quietHours: null,
   phoneEnterToSend: false,
   dictationLang: "en-IN",
+  voiceSpeed: 1,
 };
 
 /** A phone or tablet: touch only, no mouse (Enter starts a new line there). */
@@ -147,6 +154,9 @@ function read(): ChatPrefs {
     }
     if (!CHAT_PATTERN_IDS.includes(prefs.pattern)) {
       prefs.pattern = DEFAULTS.pattern;
+    }
+    if (!VOICE_SPEEDS.includes(prefs.voiceSpeed)) {
+      prefs.voiceSpeed = DEFAULTS.voiceSpeed;
     }
     if (!DICTATION_LANGS.some((l) => l.id === prefs.dictationLang)) {
       prefs.dictationLang = defaultDictationLang();
